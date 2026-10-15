@@ -3,8 +3,6 @@ export type BusinessLogicStatus = {
     state: "working" | "paused" | "idle";
     lastTaskRead?: { id: string; tracker: string; at: string };
     paused?: { tracker: string; since: string; uncheckedPullRequests: number };
-    /** Whether Kody can write the kody/business-logic check (a GitHub PAT can't). */
-    checks?: boolean;
     stats: {
         pullRequestsChecked: number;
         metRate?: number;
@@ -164,11 +162,6 @@ export type BusinessLogicTestResult = {
         reason?: string;
         body?: string;
         editsExisting: boolean;
-    };
-    check: {
-        supported: boolean;
-        conclusion: string;
-        title: string;
     };
     posted?: "created" | "updated" | "none";
 };

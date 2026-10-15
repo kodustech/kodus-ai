@@ -1,4 +1,3 @@
-import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { Injectable } from '@nestjs/common';
 
 import { BusinessValidationService } from '@libs/agents/business-validation/business-validation.service';
@@ -221,22 +220,14 @@ export class BusinessLogicReplies {
         const names = chosen.map((c) => `“${c.finding.text}”`).join(', ');
         const passed =
             published.outcome.kind === 'validated' && published.outcome.passed;
-        const checks = await this.publisher.checksWritable(
-            request.organizationAndTeamData,
-            request.platformType as PlatformType | undefined,
-        );
         return {
             handled: true,
             reply: await say(
                 [
                     `Got it.${intent.movedTo ? ` ${intent.movedTo} exists,` : ''} I marked ${names} as accepted by @${input.sender.login} and updated the table above.`,
-                    checks
-                        ? passed
-                            ? 'The kody/business-logic check is now green. This decision is recorded on the PR.'
-                            : 'Other findings still keep the kody/business-logic check from passing.'
-                        : passed
-                          ? 'Nothing left fails the business logic validation. This decision is recorded on the PR.'
-                          : 'Other findings still fail the business logic validation.',
+                    passed
+                        ? 'Nothing is left to merge. This decision is recorded on the PR.'
+                        : 'Other requirements are still listed to merge.',
                 ].join(' '),
             ),
         };

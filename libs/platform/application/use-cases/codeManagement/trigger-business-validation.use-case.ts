@@ -104,7 +104,6 @@ export interface BusinessLogicTestResult {
     }>;
     verdict: CliBusinessVerdict;
     comment: PublishPreview['comment'];
-    check: PublishPreview['check'];
     /** Set when the test was posted to the PR. */
     posted?: 'created' | 'updated' | 'none';
 }
@@ -349,7 +348,6 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
                 toRunTasks({ ...validation, outcome }),
             ),
             comment: preview.comment,
-            check: preview.check,
             ...(published ? { posted: published.comment } : {}),
         };
     }

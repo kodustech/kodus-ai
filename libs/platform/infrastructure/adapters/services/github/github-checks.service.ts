@@ -47,20 +47,6 @@ export class GithubChecksService implements IChecksAdapter {
 
     constructor(private readonly gitHubService: GithubService) {}
 
-    /** Check runs need a GitHub App; a personal access token can't write them. */
-    async canWriteChecks(
-        organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<boolean> {
-        try {
-            const authDetails = await this.gitHubService.getGithubAuthDetails(
-                organizationAndTeamData,
-            );
-            return authDetails?.authMode !== AuthMode.TOKEN;
-        } catch {
-            return false;
-        }
-    }
-
     async findCheckRun(params: FindCheckRunParams): Promise<number | null> {
         const { organizationAndTeamData, repository, headSha, name } = params;
 

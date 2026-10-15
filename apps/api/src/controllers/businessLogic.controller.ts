@@ -20,7 +20,6 @@ import {
 import { BusinessValidationService } from '@libs/agents/business-validation/business-validation.service';
 import { BusinessLogicInsightsService } from '@libs/agents/business-validation/runs/insights.service';
 import { type BusinessLogicConfig } from '@libs/agents/business-validation/settings';
-import { BusinessLogicPublisher } from '@libs/platform/application/services/business-logic-publisher.service';
 import { TriggerBusinessValidationUseCase } from '@libs/platform/application/use-cases/codeManagement/trigger-business-validation.use-case';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import {
@@ -63,7 +62,6 @@ export class BusinessLogicController {
         private readonly businessValidationService: BusinessValidationService,
         private readonly insights: BusinessLogicInsightsService,
         private readonly triggerBusinessValidation: TriggerBusinessValidationUseCase,
-        private readonly publisher: BusinessLogicPublisher,
     ) {}
 
     private organizationId(): string {
@@ -78,7 +76,7 @@ export class BusinessLogicController {
     @ApiOperation({
         summary: 'Business Logic status',
         description:
-            'Whether Business Logic is working or paused, the last task read, what happened over the last 30 days, and whether the kody/business-logic check can be written.',
+            'Whether Business Logic is working or paused, the last task read, and what happened over the last 30 days.',
     })
     @ApiQuery({ name: 'teamId', type: String, required: true })
     @ApiQuery({ name: 'repositoryId', type: String, required: false })
@@ -88,18 +86,13 @@ export class BusinessLogicController {
         @Query('teamId') teamId: string,
         @Query('repositoryId') repositoryId?: string,
     ) {
-        const organizationId = this.organizationId();
-        const [status, checks] = await Promise.all([
-            this.insights.status(organizationId, {
-                teamId,
-                repositoryId:
-                    repositoryId && repositoryId !== 'global'
-                        ? repositoryId
-                        : undefined,
-            }),
-            this.publisher.checksWritable({ organizationId, teamId }),
-        ]);
-        return { ...status, checks };
+        return this.insights.status(this.organizationId(), {
+            teamId,
+            repositoryId:
+                repositoryId && repositoryId !== 'global'
+                    ? repositoryId
+                    : undefined,
+        });
     }
 
     @Get('task-sources')

@@ -5,7 +5,7 @@ description: "Check each pull request against the task it references, requiremen
 
 ## Overview
 
-Business Logic Validation checks that a pull request delivers what its task asks for. Kody finds the task the PR references, reads it from your task tracker, and lists every requirement with where it stands in the code. The result is one comment on the PR, kept up to date, and the `kody/business-logic` check.
+Business Logic Validation checks that a pull request delivers what its task asks for. Kody finds the task the PR references, reads it from your task tracker, and lists every requirement with where it stands in the code. The result is one comment on the PR, kept up to date, the same on GitHub, GitLab, Bitbucket, Azure Repos and Forgejo.
 
 <img src="https://kodus.io/wp-content/uploads/2025/10/business-logic.gif" alt="Example of using business logic validation" />
 
@@ -44,12 +44,12 @@ Kody also reads what the task links to:
 - **Documents attached to the task** (Linear docs): read as part of the task, criteria included.
 
 - **"Closes PROJ-1"** or a key in the title or branch: the PR is checked against the whole task.
-- **"Part of PROJ-1"** or **"Refs PROJ-1"**: the PR delivers a slice. What's missing is listed, but doesn't fail the check.
+- **"Part of PROJ-1"** or **"Refs PROJ-1"**: the PR delivers a slice. What's missing is listed, but not as something to merge.
 - **Up to three tasks** are checked per PR, one section each. A PR that states more (a release or a merge) is skipped.
 
 ## The five states
 
-| State | Meaning | Fails the check |
+| State | Meaning | Listed "To merge" |
 |---|---|---|
 | **MET** | The diff implements it. | No |
 | **PARTIAL** | Part of it is implemented. | Only if you choose |
@@ -61,17 +61,17 @@ Every row cites the file and line it is based on, and says what to change.
 
 ## On the pull request
 
-- Kody checks the PR on its **first review**, then again on each push while the check fails, so a fix turns it green without anyone asking. **Re-check** can also be set to every push, or only when someone comments `@kody -v business-logic`.
+- Kody checks the PR on its **first review**, then again on each push while something is left to merge, so a fix updates the comment without anyone asking. **Re-check** can also be set to every push, or only when someone comments `@kody -v business-logic`.
 - Re-check any time with `@kody -v business-logic`. The **same comment is edited**; Kody never posts a second one.
-- A PR that meets its task gets only the green `kody/business-logic` check. Turn on **Comment when every requirement is met** to get the comment too.
-- The check exists on GitHub and Forgejo. Make it required in your branch protection to block merging on a failing check. On GitLab, Bitbucket and Azure Repos the comment is the signal.
+- A PR that meets its task gets the comment too, so the author knows it was checked. Turn off **Comment when every requirement is met** to stay quiet on those.
+- The comment is the signal on every platform: Kody doesn't write a check or a status, so it never blocks a merge by itself. Its header says what is left to merge.
 
 ### Replying to the comment
 
 Reply to the Business Logic comment and mention `@kody`:
 
 - **Disagree**: "It's covered in `useDrag.ts`". Kody re-checks what you pointed at and either marks it MET or says what it looked at and keeps it.
-- **Accept a finding** (on GitHub, anyone with write access to the repository, the author included; other platforms don't report the commenter's role, so there anyone can): "Keyboard reordering is out of scope, moved to SAA-102". Kody confirms SAA-102 exists, marks the row **ACCEPTED** with who accepted it, and the check passes if nothing else blocks it. The decision stays on later re-checks.
+- **Accept a finding** (on GitHub, anyone with write access to the repository, the author included; other platforms don't report the commenter's role, so there anyone can): "Keyboard reordering is out of scope, moved to SAA-102". Kody confirms SAA-102 exists, marks the row **ACCEPTED** with who accepted it, and it leaves the "To merge" list. The decision stays on later re-checks.
 
 ## When Kody stays quiet
 
@@ -80,10 +80,10 @@ Kody comments only when the author can do something about it:
 | Situation | On the PR |
 |---|---|
 | The task has only a title | A comment asking for acceptance criteria |
-| `SAA-999` doesn't exist, but SAA is a team in your tracker | A comment saying it looks like a typo, with the closest real tasks. With **Require a task** on, the check also fails |
-| No task referenced, or only ids no tracker has (`UTF-8` in a title) | Nothing; the check is skipped. With **Require a task** on, a comment asking for one, and the check fails |
-| A GitHub issue, but only Linear is connected | Nothing; admins see a count on the settings page. With **Require a task** on, a comment saying which tracker can't read it, and the check fails |
-| The tracker is down or its token expired | Nothing; the check is skipped, owners are notified, and Kody re-checks once the tracker answers |
+| `SAA-999` doesn't exist, but SAA is a team in your tracker | A comment saying it looks like a typo, with the closest real tasks. With **Require a task** on, the PR also counts as failing |
+| No task referenced, or only ids no tracker has (`UTF-8` in a title) | Nothing. With **Require a task** on, a comment asking for one |
+| A GitHub issue, but only Linear is connected | Nothing; admins see a count on the settings page. With **Require a task** on, a comment saying which tracker can't read it |
+| The tracker is down or its token expired | Nothing; owners are notified, and Kody re-checks once the tracker answers |
 
 The reason for every skip is recorded and shown on the Business Logic settings page.
 
@@ -101,9 +101,9 @@ Open **Code review → What to review → Business Logic → Configure**. Every 
 
 - **Task source**: every connected tracker, or one plugin. For a custom plugin (for example Azure DevOps), pick the tool that reads one task by its id; only read-only tools are offered. Use **Try it with a real task** to check what Kody reads before saving.
 - **Where acceptance criteria live**: detected automatically, under a heading in the description, or in a custom field (Jira or Azure Boards).
-- **What fails the check**: MISSING by default. PARTIAL is stricter, and where a requirement is half done is a judgment call, so a PR can go from passing to failing between two checks of the same code. NOT IN TASK suits teams where one PR is one task. With nothing selected, the check never fails.
-- **Require a task**: a PR that references no existing task fails the check and gets a comment asking for one (or pointing at the typo), instead of being skipped. A tracker that is down never fails it.
-- **Re-check**: while the check fails (default), on every push, or only on request.
+- **Left to merge**: what the comment lists as "To merge". MISSING by default. PARTIAL is stricter, and where a requirement is half done is a judgment call, so a PR can go from passing to failing between two checks of the same code. NOT IN TASK suits teams where one PR is one task. With nothing selected, the comment only reports.
+- **Require a task**: a PR that references no existing task gets a comment asking for one (or pointing at the typo), instead of being skipped. A tracker that is down never counts.
+- **Re-check**: while something is left to merge (default), on every push, or only on request.
 - **Team guidance**: notes Kody follows when it judges, for example "Feature flags count as implemented when the flag exists and defaults to off". It can't change the verdict format or make Kody invent requirements.
 
 The same settings in `kodus-config.yml`:
@@ -114,7 +114,7 @@ businessLogic:
   failOn: ['missing']
   criteriaLocation: 'heading'
   criteriaHeading: 'Acceptance criteria'
-  commentWhenMet: false
+  commentWhenMet: true
   recheckOn: 'failing' # failing | push | request
   requireTask: false
 ```

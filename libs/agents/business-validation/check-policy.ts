@@ -2,7 +2,7 @@ import type { ReferenceIntent } from './business-validation.types';
 import type { ValidationResult } from './judge/validation.types';
 import type { FailOnState } from './settings';
 
-/** What keeps the `kody/business-logic` check from passing for one task. */
+/** What keeps one task from passing: what the comment lists as "to merge". */
 export interface Blockers {
     missing: number;
     partial: number;
@@ -19,7 +19,7 @@ export function countBlockers(verdict: ValidationResult): Blockers {
 }
 
 /**
- * Whether one task lets the check pass. MISSING fails by default; PARTIAL
+ * Whether one task passes. MISSING fails by default; PARTIAL
  * and NOT IN TASK only when the team says so (UC-09). CHECK MANUALLY and
  * anything a reviewer accepted never fail. A PR that says it is "part of" a
  * task still shows what's missing, but isn't failed for it (UC-18).

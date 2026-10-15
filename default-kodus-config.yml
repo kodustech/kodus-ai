@@ -1156,7 +1156,7 @@ businessLogic:
     criteriaField: '' # when criteriaLocation is field (e.g. a Jira custom field)
     failOn: ['missing'] # missing | partial | not_in_task; CHECK MANUALLY never fails
     teamGuidance: '' # added to what Kody follows (max 2000)
-    commentWhenMet: false # off: a PR that meets its task gets only the green check
+    commentWhenMet: true # off: Kody posts nothing on a PR that meets its task
     recheckOn: 'failing' # failing | push | request: when a push re-checks a PR already checked
     requireTask: false # on: a PR that references no existing task fails instead of being skipped
 

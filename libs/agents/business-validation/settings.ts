@@ -50,7 +50,7 @@ export const DEFAULT_BUSINESS_LOGIC_SETTINGS: BusinessLogicSettings = {
     taskSource: AUTO_TASK_SOURCE,
     criteria: { location: 'auto' },
     failOn: ['missing'],
-    commentWhenMet: false,
+    commentWhenMet: true,
     recheckOn: 'failing',
     requireTask: false,
 };
@@ -81,7 +81,7 @@ export function resolveBusinessLogicSettings(
         criteria,
         failOn,
         ...(guidance ? { teamGuidance: guidance } : {}),
-        commentWhenMet: config.commentWhenMet === true,
+        commentWhenMet: config.commentWhenMet !== false,
         recheckOn: RECHECK_ON.includes(config.recheckOn as RecheckOn)
             ? (config.recheckOn as RecheckOn)
             : DEFAULT_BUSINESS_LOGIC_SETTINGS.recheckOn,

@@ -125,7 +125,6 @@ export async function driveCurrentStage(
         const publisher = new BusinessLogicPublisher(
             service,
             codeHost as never,
-            { getAdapter: () => ({}) } as never,
             runs as never,
         );
 

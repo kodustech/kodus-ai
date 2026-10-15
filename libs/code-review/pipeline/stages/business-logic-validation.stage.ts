@@ -290,7 +290,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
             case 'request':
                 return false;
             default:
-                return this.publisher.lastCheckFailed({
+                return this.publisher.lastVerdictFailed({
                     organizationId:
                         context.organizationAndTeamData.organizationId,
                     repositoryId: String(context.repository.id),

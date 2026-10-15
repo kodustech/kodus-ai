@@ -42,7 +42,7 @@ export interface RenderContext {
     trigger?: 'command' | 'push' | 'force' | 'accepted' | 'recheck';
     /** Earlier commits this PR was checked at, oldest first. */
     history?: CheckedCommit[];
-    /** The team's "fails on" choice, so only what fails the check reads as "to merge". */
+    /** The team's "fails on" choice: only that reads as "to merge". */
     failOn?: readonly FailOnState[];
 }
 
@@ -136,14 +136,14 @@ function renderTaskSection(check: TaskCheck, context: RenderContext): string {
     if (check.reference?.intent === 'part_of') {
         lines.push(
             '',
-            `> This PR says it is part of ${task.id}: what's missing is listed, but doesn't fail the check.`,
+            `> This PR says it is part of ${task.id}: what's missing is listed, but not as something to merge.`,
         );
     }
     return lines.join('\n');
 }
 
 /**
- * Which open findings keep the check from passing under the team's "fails
+ * Which open findings keep the PR from passing under the team's "fails
  * on" choice. Without it, every kind counts, as before the choice existed.
  */
 function blocking(check: TaskCheck, failOn?: readonly FailOnState[]) {
@@ -195,7 +195,7 @@ function headline(check: TaskCheck, failOn?: readonly FailOnState[]): string {
     if (check.passed || !toMerge.length) {
         return found.map((f) => f.text).join(' · ');
     }
-    // Only what fails the check is "to merge"; the rest is still listed.
+    // Only what the team fails on is "to merge"; the rest is still listed.
     return rest.length
         ? `To merge: ${toMerge.join(' · ')} · also open: ${rest.join(' · ')}`
         : `To merge: ${toMerge.join(' · ')}`;
@@ -299,60 +299,6 @@ function formatDate(iso: string): string {
     return Number.isNaN(date.getTime())
         ? iso
         : `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
-}
-
-/** The check run's title: one line saying what blocks the merge, or that nothing does. */
-export function renderCheckTitle(
-    outcome: Extract<BusinessValidationOutcome, { kind: 'validated' }>,
-    failOn?: readonly FailOnState[],
-): string {
-    const failing = outcome.checks.filter((c) => !c.passed);
-    const open = outcome.checks
-        .map((c) => {
-            const b = countBlockers(c.verdict);
-            const what = [
-                b.missing && plural(b.missing, 'requirement') + ' missing',
-                b.partial && `${b.partial} partial`,
-                b.notInTask &&
-                    plural(b.notInTask, 'change') + ' not in the task',
-            ].filter(Boolean);
-            return what.length ? `${c.task.id}: ${what.join(', ')}` : '';
-        })
-        .filter(Boolean);
-    if (!failing.length && open.length) {
-        // Passing with findings the team chose not to fail on: never "met".
-        return `Passes · open: ${open.join(' · ')}`;
-    }
-    if (!failing.length) {
-        const manual = outcome.checks.reduce(
-            (n, c) =>
-                n +
-                (c.verdict.requirements ?? []).filter(
-                    (r) => r.state === 'check_manually',
-                ).length,
-            0,
-        );
-        const ids = outcome.checks.map((c) => c.task.id).join(', ');
-        return manual
-            ? `${ids} met · ${manual} to check manually`
-            : `${ids} met`;
-    }
-    return failing
-        .map((c) => {
-            const b = countBlockers(c.verdict);
-            const blocks = blocking(c, failOn);
-            const what = [
-                blocks.missing &&
-                    b.missing &&
-                    plural(b.missing, 'requirement') + ' missing',
-                blocks.partial && b.partial && `${b.partial} partial`,
-                blocks.notInTask &&
-                    b.notInTask &&
-                    plural(b.notInTask, 'change') + ' not in the task',
-            ].filter(Boolean);
-            return `${c.task.id}: ${what.join(', ') || 'scope mismatch'}`;
-        })
-        .join(' · ');
 }
 
 /** What the CLI prints: one line per requirement, as a coding agent reads it (UC-41). */

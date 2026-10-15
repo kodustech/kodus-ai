@@ -63,10 +63,6 @@ function build(intent: any, revalidated?: any) {
     const publisher = {
         settingsFor: jest.fn(async () => DEFAULT_BUSINESS_LOGIC_SETTINGS),
         headShaOf: jest.fn(async () => 'def5678'),
-        checksWritable: jest.fn(
-            async (_org: unknown, platform?: string) =>
-                platform === PlatformType.GITHUB,
-        ),
         publish: jest.fn(async (input: any) => ({
             outcome: input.result.outcome,
             comment: 'updated',
@@ -133,7 +129,7 @@ describe('BusinessLogicReplies', () => {
         expect(publisher.publish).not.toHaveBeenCalled();
     });
 
-    it('does not talk about a check where the platform has none', async () => {
+    it('never talks about a check, on any platform', async () => {
         const { replies } = build({ intent: 'accept', findings: [1] });
 
         const result = await replies.handle({
@@ -142,12 +138,12 @@ describe('BusinessLogicReplies', () => {
             sender: { login: 'Nina' },
         });
 
-        expect(result.handled && result.reply).not.toContain(
-            'kody/business-logic',
+        expect(result.handled && result.reply).not.toMatch(
+            /kody\/business-logic|check/,
         );
     });
 
-    it("marks a reviewer's acceptance, checks the task it moved to exists, and turns the check green", async () => {
+    it("marks a reviewer's acceptance, checks the task it moved to exists, and says nothing is left to merge", async () => {
         const { replies, service, publisher } = build({
             intent: 'accept',
             findings: [1],
@@ -176,7 +172,7 @@ describe('BusinessLogicReplies', () => {
         expect(published.result.outcome.passed).toBe(true);
         expect(result).toMatchObject({
             handled: true,
-            reply: expect.stringContaining('check is now green'),
+            reply: expect.stringContaining('Nothing is left to merge'),
         });
     });
 

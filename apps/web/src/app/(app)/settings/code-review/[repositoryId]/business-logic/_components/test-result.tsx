@@ -215,12 +215,6 @@ export const TestResult = ({
 
             <Step n={judged ? 5 : 4} title="On the pull request">
                 <span>
-                    Check <code>kody/business-logic</code> would be:{" "}
-                    {result.check.supported
-                        ? `${result.check.conclusion} · ${result.check.title}`
-                        : "not written: this platform has no checks"}
-                </span>
-                <span>
                     Comment:{" "}
                     {result.comment.posted
                         ? result.comment.editsExisting
@@ -247,9 +241,9 @@ export const TestResult = ({
                 <span className="text-text-secondary text-xs">
                     {posted
                         ? posted === "none"
-                            ? "Nothing to post: the comment isn't posted for this result. The check was updated."
+                            ? "Nothing to post: the comment isn't posted for this result."
                             : `Comment ${posted} on #${pullRequest.number}.`
-                        : "Runs again and posts the comment and the check, as @kody -v business-logic does."}
+                        : "Runs again and posts the comment, as @kody -v business-logic does."}
                 </span>
                 {postError && (
                     <span className="text-danger text-xs">{postError}</span>

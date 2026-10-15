@@ -7,7 +7,7 @@ describe('resolveBusinessLogicSettings', () => {
             taskSource: 'auto',
             criteria: { location: 'auto' },
             failOn: ['missing'],
-            commentWhenMet: false,
+            commentWhenMet: true,
             recheckOn: 'failing',
             requireTask: false,
         });

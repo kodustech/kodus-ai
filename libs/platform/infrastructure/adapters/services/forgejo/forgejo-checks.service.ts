@@ -44,10 +44,6 @@ export class ForgejoChecksService implements IChecksAdapter {
 
     constructor(private readonly forgejoService: ForgejoService) {}
 
-    async canWriteChecks(): Promise<boolean> {
-        return true;
-    }
-
     // Forgejo commit statuses are keyed by (sha, context): posting with the
     // same context replaces the previous state, so there is no run to reuse.
     async findCheckRun(params: FindCheckRunParams): Promise<string | null> {

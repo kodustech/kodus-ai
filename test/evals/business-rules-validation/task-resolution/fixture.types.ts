@@ -144,7 +144,7 @@ export type ResolutionFixture = {
         /** The tracker tools called, in order: which tool read the task. */
         toolsCalled?: string[];
         /**
-         * For `validated`: whether the check passes when the judge reports one
+         * For `validated`: whether the PR passes when the judge reports one
          * requirement MISSING (the driver's judge always does).
          */
         checkPasses?: boolean;

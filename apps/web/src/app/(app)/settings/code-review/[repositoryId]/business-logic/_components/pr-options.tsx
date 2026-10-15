@@ -13,32 +13,25 @@ const SWITCHES = [
     {
         name: "commentWhenMet",
         label: "Comment when every requirement is met",
-        hint: "Off: only the kody/business-logic check turns green.",
-        hintWithoutChecks:
-            "Off: when every requirement is met, Kody posts nothing; there is no check to turn green here.",
+        hint: "Off: a PR that meets its task gets no comment, so the author can't tell Kody checked it.",
     },
     {
         name: "requireTask",
         label: "Require a task",
-        hint: "On: a PR that references no existing task fails the check, and Kody asks for one. Off: it's skipped.",
-        hintWithoutChecks:
-            "On: a PR that references no existing task gets a comment asking for one. Off: it's skipped.",
+        hint: "On: a PR that references no existing task gets a comment asking for one. Off: it's skipped.",
     },
 ] as const;
 
 const RECHECK = [
     {
         value: "failing",
-        label: "While the check fails",
-        labelWithoutChecks: "While something blocks the merge",
-        hint: "A push re-checks until the PR passes, so a fix turns it green without anyone asking.",
-        hintWithoutChecks:
-            "A push re-checks until nothing blocks the merge, so a fix updates the comment without anyone asking.",
+        label: "While something is left to merge",
+        hint: "A push re-checks until the comment lists nothing to merge, so a fix updates it without anyone asking.",
     },
     {
         value: "push",
         label: "On every push",
-        hint: "Also re-checks a PR that already passes. Costs one check per push.",
+        hint: "Also re-checks a PR that already passes. One validation per push.",
     },
     {
         value: "request",
@@ -48,18 +41,8 @@ const RECHECK = [
 ] as const;
 
 /** What Kody does on the pull request (UC-26, UC-35). */
-export const PrOptions = ({
-    canEdit,
-    platformHasChecks,
-}: {
-    canEdit: boolean;
-    platformHasChecks: boolean;
-}) => {
+export const PrOptions = ({ canEdit }: { canEdit: boolean }) => {
     const form = useFormContext<CodeReviewFormType>();
-    const hint = (option: { hint: string; hintWithoutChecks?: string }) =>
-        !platformHasChecks && option.hintWithoutChecks
-            ? option.hintWithoutChecks
-            : option.hint;
     return (
         <section className="flex flex-col gap-3">
             <Heading variant="h3">On the pull request</Heading>
@@ -91,7 +74,7 @@ export const PrOptions = ({
                                         />
                                     </span>
                                     <span className="text-text-secondary text-xs">
-                                        {hint(option)}
+                                        {option.hint}
                                     </span>
                                 </div>
                             </div>
@@ -125,13 +108,10 @@ export const PrOptions = ({
                                         />
                                         <span className="flex flex-col gap-0.5">
                                             <span className="text-text-primary">
-                                                {!platformHasChecks &&
-                                                "labelWithoutChecks" in option
-                                                    ? option.labelWithoutChecks
-                                                    : option.label}
+                                                {option.label}
                                             </span>
                                             <span className="text-text-secondary text-xs font-normal">
-                                                {hint(option)}
+                                                {option.hint}
                                             </span>
                                         </span>
                                     </Label>

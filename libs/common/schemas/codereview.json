@@ -323,7 +323,7 @@
                         "enum": ["missing", "partial", "not_in_task"]
                     },
                     "default": ["missing"],
-                    "description": "Which findings fail the kody/business-logic check. CHECK MANUALLY never does."
+                    "description": "Which findings the comment lists as \"To merge\". CHECK MANUALLY never is."
                 },
                 "teamGuidance": {
                     "type": "string",
@@ -333,8 +333,8 @@
                 },
                 "commentWhenMet": {
                     "type": "boolean",
-                    "default": false,
-                    "description": "Comment even when every requirement is met; off leaves only the green check."
+                    "default": true,
+                    "description": "Comment when every requirement is met too; off, Kody posts nothing on a PR that meets its task."
                 },
                 "recheckOn": {
                     "type": "string",

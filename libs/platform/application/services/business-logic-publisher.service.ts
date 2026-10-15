@@ -9,7 +9,6 @@ import type {
 import { carryOver } from '@libs/agents/business-validation/carry-over';
 import {
     BUSINESS_LOGIC_COMMENT_MARKER,
-    renderCheckTitle,
     type RenderContext,
 } from '@libs/agents/business-validation/render';
 import {
@@ -29,43 +28,20 @@ import {
     DEFAULT_BUSINESS_LOGIC_SETTINGS,
     resolveBusinessLogicSettings,
 } from '@libs/agents/business-validation/settings';
-import { referenceLabel } from '@libs/agents/business-validation/task-references';
-import { repositoryForLookup } from '@libs/agents/business-validation/task-resolver';
 import {
     CODE_BASE_CONFIG_SERVICE_TOKEN,
     type ICodeBaseConfigService,
 } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
-import {
-    CheckConclusion,
-    CheckStatus,
-} from '@libs/core/infrastructure/pipeline/interfaces/checks-adapter.interface';
-import { ChecksAdapterFactory } from '@libs/core/infrastructure/pipeline/services/checks-adapter.factory';
 import { createLogger } from '@libs/core/log/logger';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
-
-/** The check a team can require before merging. */
-export const BUSINESS_LOGIC_CHECK_NAME = 'kody/business-logic';
-
-const SKIP_TITLES: Record<string, string> = {
-    no_reference: 'Skipped · no task referenced',
-    too_many_references: 'Skipped · more tasks than one validation covers',
-    no_tracker: 'Skipped · no task tracker connected',
-    no_capable_tracker:
-        "Skipped · the connected tracker can't read this reference",
-    task_not_found: 'Skipped · no referenced task exists',
-    tracker_unavailable:
-        'Skipped · the task tracker is unavailable, not about this PR',
-    diff_unavailable: "Skipped · the PR diff couldn't be loaded",
-    judge_failed: "Skipped · the validation couldn't finish",
-};
 
 export interface PublishInput {
     request: BusinessValidationRequest;
     result: BusinessValidationResult;
     settings?: BusinessLogicSettings;
-    /** The commit the run read. Needed for the check. */
+    /** The commit the run read, named in the comment. */
     headSha?: string;
     trigger?: RenderContext['trigger'] | 'auto';
     commits?: CommitInfo[];
@@ -86,12 +62,6 @@ export interface PublishPreview {
         /** An earlier run's comment would be edited in place. */
         editsExisting: boolean;
     };
-    check: {
-        /** False where the platform has no checks (GitLab, Bitbucket, Azure). */
-        supported: boolean;
-        conclusion: CheckConclusion;
-        title: string;
-    };
 }
 
 export interface PublishResult {
@@ -101,10 +71,11 @@ export interface PublishResult {
 }
 
 /**
- * Puts a business-logic outcome on the PR, the same way for every door: one
- * comment, edited in place on every re-check (UC-34, UC-35), the
- * `kody/business-logic` check where the platform has checks, and the run
- * recorded for the timeline, the settings card and the Cockpit.
+ * Puts a business-logic outcome on the PR, the same way for every door and
+ * every Git platform: one comment, edited in place on every re-check (UC-34,
+ * UC-35), and the run recorded for the timeline, the settings card and the
+ * Cockpit. No check: only some platforms have one, and the comment is the
+ * signal everywhere.
  */
 @Injectable()
 export class BusinessLogicPublisher {
@@ -113,7 +84,6 @@ export class BusinessLogicPublisher {
     constructor(
         private readonly businessValidationService: BusinessValidationService,
         private readonly codeManagementService: CodeManagementService,
-        private readonly checksAdapterFactory: ChecksAdapterFactory,
         private readonly runs: ValidationRunRepository,
         @Optional()
         @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
@@ -140,34 +110,11 @@ export class BusinessLogicPublisher {
     }
 
     /**
-     * Whether Kody can put the `kody/business-logic` check on this team's
-     * PRs: a platform with checks, connected in a way that can write them
-     * (on GitHub, an app; a personal access token can't).
-     */
-    async checksWritable(
-        organizationAndTeamData: OrganizationAndTeamData,
-        platform?: PlatformType,
-    ): Promise<boolean> {
-        const type =
-            platform ??
-            (await this.codeManagementService
-                .getTypeIntegration(organizationAndTeamData)
-                .catch(() => undefined));
-        if (!hasChecks(type)) {
-            return false;
-        }
-        return this.checksAdapterFactory
-            .getAdapter(type)
-            .canWriteChecks(organizationAndTeamData)
-            .catch(() => false);
-    }
-
-    /**
      * Whether the PR's last verdict failed: no task when one is required, or
      * a requirement the team fails on and nobody accepted. A skipped run
      * (a tracker down, a diff that didn't load) doesn't change that.
      */
-    async lastCheckFailed(scope: {
+    async lastVerdictFailed(scope: {
         organizationId: string;
         repositoryId: string;
         pullRequestNumber: number;
@@ -176,7 +123,7 @@ export class BusinessLogicPublisher {
         return runs.find((r) => r.outcome !== 'skipped')?.passed === false;
     }
 
-    /** The commit a PR is at, for the check. */
+    /** The commit a PR is at, named in the comment. */
     async headShaOf(
         organizationAndTeamData: OrganizationAndTeamData,
         repository: { id: string; name: string },
@@ -196,8 +143,8 @@ export class BusinessLogicPublisher {
 
     /**
      * What `publish` would do with this result, read-only: the comment as it
-     * would read and whether it would be posted, and the check. Accepted
-     * findings from earlier runs are carried over the same way.
+     * would read and whether it would be posted. Accepted findings from
+     * earlier runs are carried over the same way.
      */
     async preview(input: PublishInput): Promise<PublishPreview> {
         const { request } = input;
@@ -209,10 +156,6 @@ export class BusinessLogicPublisher {
             outcome,
             request,
             { headSha: input.headSha, history, failOn: settings.failOn },
-        );
-        const checks = await this.checksWritable(
-            request.organizationAndTeamData,
-            request.platformType as PlatformType | undefined,
         );
         return {
             outcome,
@@ -226,14 +169,8 @@ export class BusinessLogicPublisher {
                           reason:
                               outcome.kind === 'skipped'
                                   ? 'Nothing was checked, so nothing is posted.'
-                                  : checks
-                                    ? 'Every requirement is met: only the check turns green. Turn on "Comment when every requirement is met" to post it anyway.'
-                                    : 'Every requirement is met, so Kody stays quiet: there is no check to turn green here. Turn on "Comment when every requirement is met" to post it anyway.',
+                                  : 'Every requirement is met, and "Comment when every requirement is met" is off, so Kody stays quiet.',
                       }),
-            },
-            check: {
-                supported: checks,
-                ...checkFor(outcome, settings.failOn),
             },
         };
     }
@@ -305,16 +242,6 @@ export class BusinessLogicPublisher {
             }
         }
 
-        const checkRunId =
-            scope && !input.dryRun && input.headSha
-                ? await this.writeCheck(
-                      request,
-                      outcome,
-                      input.headSha,
-                      settings.failOn,
-                  )
-                : undefined;
-
         const runId = await this.runs.create({
             ...buildRun(request, result, {
                 trigger: input.trigger,
@@ -322,7 +249,6 @@ export class BusinessLogicPublisher {
                 author: detectAuthor(input.commits, input.authorLogin),
             }),
             ...(comment ? { comment } : {}),
-            ...(checkRunId ? { checkRunId } : {}),
         });
         if (
             scope &&
@@ -338,9 +264,9 @@ export class BusinessLogicPublisher {
     }
 
     /**
-     * A passing PR gets only the green check unless the team wants a comment
-     * (UC-26), or there is already a comment to bring up to date. Anything
-     * the author can act on is always commented.
+     * A passing PR is commented unless the team turned that off (UC-26), and
+     * a comment already there is always brought up to date. Anything the
+     * author can act on is always commented.
      */
     private shouldComment(
         outcome: BusinessValidationOutcome,
@@ -462,122 +388,6 @@ export class BusinessLogicPublisher {
             : undefined;
     }
 
-    /** GitHub and Forgejo only; elsewhere the comment is the whole signal. */
-    private async writeCheck(
-        request: BusinessValidationRequest,
-        outcome: BusinessValidationOutcome,
-        headSha: string,
-        failOn?: BusinessLogicSettings['failOn'],
-    ): Promise<string | undefined> {
-        const platform = request.platformType as PlatformType;
-        if (!hasChecks(platform)) {
-            return undefined;
-        }
-        const { owner, name } = repositoryForLookup(request.repository!);
-        if (!owner) {
-            return undefined;
-        }
-        const { conclusion, title } = checkFor(outcome, failOn);
-        try {
-            const adapter = this.checksAdapterFactory.getAdapter(platform);
-            const target = {
-                organizationAndTeamData: request.organizationAndTeamData,
-                repository: { owner, name },
-            };
-            const existing = await adapter.findCheckRun({
-                ...target,
-                headSha,
-                name: BUSINESS_LOGIC_CHECK_NAME,
-            });
-            const output = {
-                title,
-                summary:
-                    outcome.kind === 'validated'
-                        ? 'See the Kody · Business Logic comment on the pull request.'
-                        : title,
-            };
-            if (existing) {
-                await adapter.updateCheckRun({
-                    ...target,
-                    checkRunId: existing,
-                    status: CheckStatus.COMPLETED,
-                    conclusion,
-                    output,
-                });
-                return String(existing);
-            }
-            const id = await adapter.createCheckRun({
-                ...target,
-                headSha,
-                status: CheckStatus.IN_PROGRESS,
-                name: BUSINESS_LOGIC_CHECK_NAME,
-                output,
-            });
-            if (id === null || id === undefined) {
-                return undefined;
-            }
-            await adapter.updateCheckRun({
-                ...target,
-                checkRunId: id,
-                status: CheckStatus.COMPLETED,
-                conclusion,
-                output,
-            });
-            return String(id);
-        } catch (error) {
-            this.logger.warn({
-                message: 'Could not write the business logic check',
-                context: BusinessLogicPublisher.name,
-                error,
-                metadata: {
-                    organizationId:
-                        request.organizationAndTeamData.organizationId,
-                    prNumber: request.pullRequest?.number,
-                },
-            });
-            return undefined;
-        }
-    }
-}
-
-export function checkFor(
-    outcome: BusinessValidationOutcome,
-    failOn?: BusinessLogicSettings['failOn'],
-): {
-    conclusion: CheckConclusion;
-    title: string;
-} {
-    switch (outcome.kind) {
-        case 'validated':
-            return {
-                conclusion: outcome.passed
-                    ? CheckConclusion.SUCCESS
-                    : CheckConclusion.FAILURE,
-                title: renderCheckTitle(outcome, failOn),
-            };
-        case 'task_too_thin':
-            return {
-                conclusion: CheckConclusion.NEUTRAL,
-                title: `${outcome.tasks.map((t) => t.id).join(', ')} has too little to check against`,
-            };
-        case 'task_missing':
-            return {
-                conclusion: outcome.required
-                    ? CheckConclusion.FAILURE
-                    : CheckConclusion.NEUTRAL,
-                title: `${outcome.references.map(referenceLabel).join(', ')} doesn't exist in ${outcome.tracker}${outcome.required ? ' · this repository requires a task' : ''}`,
-            };
-        case 'task_required':
-            return {
-                conclusion: CheckConclusion.FAILURE,
-                title: 'No task found · this repository requires one',
-            };
-        case 'skipped':
-            return {
-                conclusion: CheckConclusion.SKIPPED,
-                title: SKIP_TITLES[outcome.reason] ?? 'Skipped',
-            };
-    }
 }
 
 function commentIds(
@@ -596,11 +406,4 @@ function commentIds(
             ? { threadId: created.threadId }
             : {}),
     };
-}
-
-/** GitHub and Forgejo have checks; elsewhere the comment is the whole signal. */
-export function hasChecks(platform: PlatformType | undefined): boolean {
-    return (
-        platform === PlatformType.GITHUB || platform === PlatformType.FORGEJO
-    );
 }

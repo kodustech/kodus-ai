@@ -8,7 +8,7 @@ export type ReferenceSource = 'command' | 'title' | 'branch' | 'body';
 
 /**
  * What the PR says it does to the task. "Part of SAA-96" delivers a slice, so
- * a missing requirement is shown but doesn't fail the check (UC-18).
+ * a missing requirement is shown but doesn't fail the PR (UC-18).
  */
 export type ReferenceIntent = 'closes' | 'part_of' | 'mentions';
 
@@ -231,7 +231,7 @@ export interface TaskCheck {
     task: Task;
     reference?: TaskReference;
     verdict: ValidationResult;
-    /** Whether this task alone lets the check pass, under the team's settings. */
+    /** Whether this task alone passes, under the team's settings. */
     passed: boolean;
     /** When the task was read, so a later edit to it is visible (UC-25). */
     readAt: string;
@@ -258,12 +258,12 @@ export type BusinessValidationOutcome =
           references: TaskReference[];
           tracker: string;
           message: string;
-          /** The team requires a task, so a missing one fails the check. */
+          /** The team requires a task, so a missing one fails the PR. */
           required?: true;
       }
     /**
      * No task is referenced, or none the PR names exists, and the team requires one: the author
-     * is asked to reference it, and the check fails.
+     * is asked to reference it, and the PR fails.
      */
     | { kind: 'task_required'; message: string }
     /**

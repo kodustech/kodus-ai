@@ -47,9 +47,6 @@ function BusinessLogicContent() {
         repositoryId,
     );
     const status = useBusinessLogicStatus({ teamId, repositoryId });
-    // GitHub through a personal access token can't write checks, so the
-    // server answers rather than the platform name.
-    const platformHasChecks = status.data?.checks ?? false;
 
     const {
         isValid: formIsValid,
@@ -160,9 +157,8 @@ function BusinessLogicContent() {
                 />
                 <PrOptions
                     canEdit={canEdit}
-                    platformHasChecks={platformHasChecks}
                 />
-                <Tune canEdit={canEdit} platformHasChecks={platformHasChecks} />
+                <Tune canEdit={canEdit} />
             </Page.Content>
         </Page.Root>
     );

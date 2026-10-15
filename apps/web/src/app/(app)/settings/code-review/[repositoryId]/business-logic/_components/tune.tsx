@@ -24,14 +24,8 @@ const FAIL_ON = [
     { value: "not_in_task", label: "NOT IN TASK" },
 ] as const;
 
-/** Where criteria live, what fails the check, and the team's guidance (UC-08, UC-09, UC-23). */
-export const Tune = ({
-    canEdit,
-    platformHasChecks,
-}: {
-    canEdit: boolean;
-    platformHasChecks: boolean;
-}) => {
+/** Where criteria live, what is left to merge, and the team's guidance (UC-08, UC-09, UC-23). */
+export const Tune = ({ canEdit }: { canEdit: boolean }) => {
     const form = useFormContext<CodeReviewFormType>();
     const location =
         (useWatch({
@@ -50,11 +44,8 @@ export const Tune = ({
                             Tune to your team
                         </span>
                         <span className="text-text-secondary text-xs">
-                            Where criteria live ·{" "}
-                            {platformHasChecks
-                                ? "what fails the check"
-                                : "what blocks the merge"}{" "}
-                            · team guidance
+                            Where criteria live · what is left to merge · team
+                            guidance
                         </span>
                     </span>
                     <CollapsibleIndicator />
@@ -134,9 +125,7 @@ export const Tune = ({
                     <div className="flex flex-col gap-3">
                         <span className="flex items-center gap-2">
                             <span className="text-text-primary text-sm font-medium">
-                                {platformHasChecks
-                                    ? "The kody/business-logic check fails on"
-                                    : "The comment lists as “To merge”"}
+                                Left to merge
                             </span>
                             <OverrideIndicatorForm fieldName="businessLogic.failOn" />
                         </span>
@@ -186,9 +175,9 @@ export const Tune = ({
                                         </div>
                                         {value.length === 0 && (
                                             <p className="text-text-secondary text-xs">
-                                                {platformHasChecks
-                                                    ? "Nothing selected: the check never fails, it only reports."
-                                                    : "Nothing selected: the comment never asks to fix anything before merging."}
+                                                Nothing selected: the comment
+                                                reports, but never asks to fix
+                                                anything before merging.
                                             </p>
                                         )}
                                         {value.includes("partial") && (
@@ -206,13 +195,10 @@ export const Tune = ({
                             }}
                         />
                         <p className="text-text-secondary text-xs">
-                            CHECK MANUALLY never fails the check, and neither
-                            does a requirement a reviewer accepted. A PR that
-                            says it is “part of” a task shows what&apos;s
-                            missing without failing for it.{" "}
-                            {platformHasChecks
-                                ? "A failing check only blocks merging where your repository requires it."
-                                : "There is no check here, so the comment is the only signal. The check needs GitHub connected through the Kodus app, or Forgejo."}
+                            The comment lists these as “To merge” and the rest
+                            as still open. CHECK MANUALLY is never to merge,
+                            and neither is a requirement a reviewer accepted
+                            or what a PR “part of” a task leaves out.
                         </p>
                     </div>
 

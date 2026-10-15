@@ -10,7 +10,7 @@ const TASK = { tracker: 'Linear', id: 'PLAT-41', title: 'Scale servings' };
 function build(
     outcome: BusinessValidationOutcome | Error,
     wholeDiff?: Array<{ filename: string; status: string; patch: string }>,
-    { lastCheckFailed = false } = {},
+    { lastVerdictFailed = false } = {},
 ) {
     const service = {
         validate: jest.fn(async () => {
@@ -25,7 +25,7 @@ function build(
             outcome: input.result.outcome,
             comment: 'created',
         })),
-        lastCheckFailed: jest.fn(async () => lastCheckFailed),
+        lastVerdictFailed: jest.fn(async () => lastVerdictFailed),
     };
     const pullRequests = {
         getChangedFilesMetadata: jest.fn(async () => wholeDiff ?? []),
@@ -226,7 +226,7 @@ describe('BusinessLogicValidationStage', () => {
 
     it('re-checks a PR already validated on a push while its last check failed', async () => {
         const { stage, service, publisher } = build(validated(true), [], {
-            lastCheckFailed: true,
+            lastVerdictFailed: true,
         });
 
         await stage.execute(
@@ -237,7 +237,7 @@ describe('BusinessLogicValidationStage', () => {
             } as any),
         );
 
-        expect(publisher.lastCheckFailed).toHaveBeenCalledWith({
+        expect(publisher.lastVerdictFailed).toHaveBeenCalledWith({
             organizationId: 'org-1',
             repositoryId: 'repo-1',
             pullRequestNumber: 42,
@@ -250,7 +250,7 @@ describe('BusinessLogicValidationStage', () => {
 
     it('re-checks only on request when the team chose that, even after a failed check', async () => {
         const { stage, service } = build(validated(true), [], {
-            lastCheckFailed: true,
+            lastVerdictFailed: true,
         });
 
         const result = await stage.execute(

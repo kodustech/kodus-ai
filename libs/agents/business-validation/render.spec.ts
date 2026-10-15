@@ -1,5 +1,5 @@
 import type { BusinessValidationOutcome } from './business-validation.types';
-import { renderCheckTitle, renderCliText, renderComment } from './render';
+import { renderCliText, renderComment } from './render';
 
 type Validated = Extract<BusinessValidationOutcome, { kind: 'validated' }>;
 
@@ -161,24 +161,7 @@ describe('the trail of earlier commits', () => {
     });
 });
 
-describe('renderCheckTitle and renderCliText', () => {
-    it('names what blocks the merge', () => {
-        expect(renderCheckTitle(outcome())).toBe(
-            'AB#8: 1 requirement missing, 1 change not in the task',
-        );
-    });
-
-    it('says the task is met and what to check by hand', () => {
-        const met = outcome({ passed: true });
-        met.passed = true;
-        met.checks[0].verdict.requirements =
-            met.checks[0].verdict.requirements!.filter(
-                (r) => r.state !== 'missing',
-            );
-        met.checks[0].verdict.outOfScope = [];
-        expect(renderCheckTitle(met)).toBe('AB#8 met · 1 to check manually');
-    });
-
+describe('renderCliText', () => {
     it('prints one line per requirement for an agent to act on (UC-41)', () => {
         const text = renderCliText(outcome());
         expect(text).toContain(
@@ -189,14 +172,11 @@ describe('renderCheckTitle and renderCliText', () => {
     });
 });
 
-describe('what the check fails on, as the comment and the check say it', () => {
+describe('what the team fails on, as the comment says it', () => {
     it('lists only what fails the check as to merge, and the rest as still open', () => {
         const comment = renderComment(outcome(), { failOn: ['not_in_task'] });
         expect(comment).toContain(
             'To merge: 1 change not in the task · also open: 1 missing requirement · 1 to check manually',
-        );
-        expect(renderCheckTitle(outcome(), ['not_in_task'])).toBe(
-            'AB#8: 1 change not in the task',
         );
     });
 
@@ -207,10 +187,3 @@ describe('what the check fails on, as the comment and the check say it', () => {
     });
 });
 
-describe('the check title when the check passes with findings left open', () => {
-    it('never calls a task met when it passes only because nothing fails on what is open', () => {
-        expect(renderCheckTitle(outcome({ passed: true }), [])).toBe(
-            'Passes · open: AB#8: 1 requirement missing, 1 change not in the task',
-        );
-    });
-});
