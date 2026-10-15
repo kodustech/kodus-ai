@@ -186,6 +186,20 @@ const READERS = {
             },
         };
     },
+    // Any eval of evals/nightly-evals.js: the shared result, after
+    // evals/shared/nightly-verdict.js.
+    shared: (r) => ({
+        value: r.metric?.value,
+        floor: r.metric?.floor ?? null,
+        baseline: r.metric?.baseline ?? null,
+        extra: {
+            model: r.model || null,
+            cases: Array.isArray(r.cases) ? r.cases.length : null,
+            runs: r.runs ?? null,
+            tokens: r.tokens || null,
+            case_results: signalCases(r.cases),
+        },
+    }),
     // evals/kody-rules/real-agent.js --output (after nightly-verdict.js): the shared shape
     'kody-rules': (r) => ({
         value: r.metric?.value,

@@ -9,7 +9,7 @@ Numbers and lists (floors, tier-0 models, schedules, secrets) are not copied her
 | When | Question | What runs | Owner of the details |
 |---|---|---|---|
 | Every PR touching `libs/`, `evals/`, test fixtures or dependencies | Can the evals still drive the engine? | `evals/wiring-smoke.js`: every model-backed eval end to end against a scripted local model, plus the deterministic evals. Measures nothing. No keys, ~10s. | `.github/workflows/code-review-evals-pr.yml` |
-| Nightly, each eval only if a file it loads changed since the last green night | Did review quality get worse? | finder-recall on the `light` case set, and kody-rules on `github-cases`, with one cheap model, each gated on a calibrated floor | `.github/workflows/code-review-evals-nightly.yml`, `evals/investigation/targets.json` → `sets.light`, `evals/kody-rules/kody-targets.json` |
+| Nightly, each eval only if a file it loads changed since the last green night | Did review quality get worse? | finder-recall on the `light` case set, kody-rules on `github-cases`, and every eval in `evals/nightly-evals.js`, with one cheap model, each gated on a calibrated floor | `.github/workflows/code-review-evals-nightly.yml`, `evals/investigation/targets.json` → `sets.light`, `evals/kody-rules/kody-targets.json`, each eval's `targets.json` |
 | Friday, in the release train slot | Does every tier-0 model still run a review? | `evals/tier0-smoke.js`: one replayed PR per model (no judge), plus the PR-summary eval | `.github/workflows/code-review-evals-tier0.yml`, `evals/shared/tier0-models.js` |
 
 Nightly and Friday post to Discord (`DISCORD_WEBHOOK_TESTS`, falling back to the engineering webhook) and write an Actions job summary; results are uploaded as artifacts. The nightly message compares tonight with the last green night: recall and precision, the PRs that moved most and the known bugs they lost, the engine commits measured, time and cost. On a red night, a read-only Claude Code agent reads those facts, the engine diff and the repo, and the message adds its reading (regression, noise, eval problem or unclear) marked as an unverified hypothesis. The agent never changes the verdict. Cost: $0 per PR; ~$3.5 per measured night (measured 2026-09-16); a few dollars per Friday (one review per model).
@@ -37,7 +37,7 @@ Neither trigger is a hand-kept folder list. The wiring smoke records every repo 
 | [kody-rules](kody-rules/README.md) | Does the Kody Rules agent flag every place a rule is broken? | nightly (gated) · PR (scripted model) |
 | [anchoring](anchoring/README.md) | How many findings are lost because their lines miss the diff? | PR (scripted model) |
 | [pr-summary](pr-summary/README.md) | Is the summary generated, posted, and sent to the configured model? | PR (scripted model) · Friday (every tier-0 model) |
-| [reply-addressing](reply-addressing/README.md) | Does Kody answer unmentioned replies meant for it, and stay out of the rest? | PR (scripted model) |
+| [reply-addressing](reply-addressing/README.md) | Does Kody answer unmentioned replies meant for it, and stay out of the rest? | nightly (gated) · PR (scripted model) |
 | [review-rounds](review-rounds/README.md) | Across rounds and sandbox failures, does what reaches the PR match a correct review? | PR (scripted model) |
 | [review-chain](review-chain/README.md) | Is every LLM call in the review chain wired to the shared output recovery? | PR |
 | [dedup](dedup/README.md) · [severity](severity/README.md) · [format](format/README.md) | Do the secondary passes keep real findings? | PR (mocked model) |

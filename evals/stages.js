@@ -297,10 +297,12 @@ const STAGES = [
         label: 'Replies to Kody in PR threads',
         pipeline: null,
         eval: 'evals/reply-addressing',
-        model: 'scripted',
+        model: 'real',
         wiring: ['reply-addressing'],
-        byHand: ['evals/reply-addressing'],
-        note: 'scripted model only on a schedule',
+        nightly: 'shared',
+        metric: 'of replies handled right',
+        set: 'conversations where someone replies in a Kody thread without @kody',
+        note: 'cases.json in the nightly (evals/nightly-evals.js); the real replies of repo-cases.json run by hand',
     },
 ];
 
