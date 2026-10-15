@@ -150,14 +150,13 @@ export function repeatCandidates(
 }
 
 /** The keys under which the same rule on the same code in the same file
- *  meet: the same occurrence, without asking a model. */
+ *  meet: the same occurrence, without asking a model. Keyed on the rule ids,
+ *  not the label: a stored entry's label and rule ids are set apart. */
 export function occurrenceKeys(entry: {
-    label?: string;
     brokenKodyRulesIds?: readonly string[];
     relevantFile?: string;
     existingCode?: string;
 }): string[] {
-    if (!isRule(entry)) return [];
     const file = normalizePath(entry.relevantFile);
     const code = normalizeCode(entry.existingCode);
     if (!file || code.length < MIN_CODE_MATCH) return [];
@@ -333,9 +332,12 @@ export async function checkRepeats<T extends RepeatCheckFinding>(
     const toJudge: Array<{ finding: T; candidates: PrDecisionRecord[] }> = [];
     for (const finding of findings) {
         const candidates = repeatCandidates(finding, history);
-        const byCode = occurrenceKeys(finding)
-            .map((key) => byOccurrence.get(key))
-            .find(Boolean);
+        // Only a rule finding is matched by code.
+        const byCode = isRule(finding)
+            ? occurrenceKeys(finding)
+                  .map((key) => byOccurrence.get(key))
+                  .find(Boolean)
+            : undefined;
         if (byCode) {
             matchOf.set(finding, { finding, earlier: byCode, by: 'code' });
         } else if (candidates.length) {

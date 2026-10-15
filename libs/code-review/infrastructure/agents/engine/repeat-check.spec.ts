@@ -194,6 +194,12 @@ describe('occurrenceKeys', () => {
         expect(sameOccurrenceByCode(finding, ruleComment)).toBe(true);
     });
 
+    it('reads an earlier entry by its rule ids, whatever its label', () => {
+        expect(
+            sameOccurrenceByCode(finding, { ...ruleComment, label: 'bug' }),
+        ).toBe(true);
+    });
+
     it('a different rule on the same code is not', () => {
         expect(
             sameOccurrenceByCode(
@@ -481,6 +487,23 @@ describe('checkRepeats', () => {
         expect(result.model).toBe('no-model');
         expect(result.kept).toEqual([finding]);
         expect(runSpy).not.toHaveBeenCalled();
+    });
+
+    it('matches only a rule finding by code', async () => {
+        hasManagedModelKeyMock.mockReturnValue(false);
+        const bug = {
+            label: 'bug',
+            brokenKodyRulesIds: ['rule-no-console'],
+            relevantFile: 'src/orders.ts',
+            existingCode: "console.log('order', order)",
+        };
+
+        const result = await checkRepeats([bug], [ruleComment], {
+            organizationId: 'org-1',
+        });
+
+        expect(result.kept).toEqual([bug]);
+        expect(result.repeats).toEqual([]);
     });
 
     it('judges ten findings per call', async () => {

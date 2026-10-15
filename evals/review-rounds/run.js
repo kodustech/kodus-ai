@@ -745,9 +745,11 @@ async function main() {
     countTokens();
     const rows = [];
     let selected;
+    let narrowed = false;
     try {
         selected = selectCases(setCases(SET), ONLY);
-        if (LIMIT) selected = selected.slice(0, LIMIT);
+        narrowed = LIMIT > 0 && LIMIT < selected.length;
+        if (narrowed) selected = selected.slice(0, LIMIT);
     } catch (e) {
         console.error(`INFRA: ${e.message}`);
         process.exit(2);
@@ -822,7 +824,7 @@ async function main() {
         // was calibrated with (evals/AGENTS.md).
         const mismatch = !target?.floor
             ? `no floor for ${MODEL} in evals/review-rounds/targets.json`
-            : LIMIT
+            : narrowed
               ? `--limit=${LIMIT} measures part of the set the floor was calibrated on`
               : target.set !== SET
               ? `the floor is for --set=${target.set}, this run used ${SET || 'every case'}`
