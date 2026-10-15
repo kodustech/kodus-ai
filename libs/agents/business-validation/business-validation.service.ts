@@ -558,7 +558,21 @@ export class BusinessValidationService {
                     diff,
                     reader,
                     userLanguage: language,
-                }).catch(() => undefined),
+                }).catch((error) => {
+                    // A failed re-check keeps the requirement MISSING.
+                    this.logger.warn({
+                        message:
+                            'Business validation could not re-check a MISSING requirement; kept it',
+                        context: BusinessValidationService.name,
+                        error,
+                        metadata: {
+                            organizationId:
+                                request.organizationAndTeamData.organizationId,
+                            pullRequest: request.pullRequest?.number,
+                        },
+                    });
+                    return undefined;
+                }),
             ),
         );
         // Never silent: a run says how many gaps it re-checked and turned.
