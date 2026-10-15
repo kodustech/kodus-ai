@@ -10,6 +10,7 @@ import type {
 } from '@libs/agents/business-validation/business-validation.types';
 import { formatPullRequestDiff } from '@libs/agents/business-validation/pull-request-diff';
 import { renderCliText } from '@libs/agents/business-validation/render';
+import { repositoryForLookup } from '@libs/agents/business-validation/task-resolver';
 import {
     buildRun,
     toRunTasks,
@@ -226,11 +227,6 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
     }
 
     /**
-     * "Test on a pull request" (settings page): the whole run on a real PR,
-     * with the settings on screen, saved or not. Nothing is written unless
-     * `post` is set; then it publishes like `@kody -v business-logic`.
-     */
-    /**
      * "Try it" with a task alone: reads it as a validation would, with the
      * settings on screen. On a repository's page, `#12` is that repository's.
      */
@@ -251,12 +247,22 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
             params.organizationAndTeamData,
             params.task,
             resolveBusinessLogicSettings(params.settings),
+            // As the validation reads it: GitLab stores `group/notes` as the
+            // name and the group's display name as the owner.
             repository
-                ? { owner: repository.owner, name: repository.name }
+                ? repositoryForLookup({
+                      owner: repository.owner,
+                      name: repository.name,
+                  })
                 : undefined,
         );
     }
 
+    /**
+     * "Test on a pull request" (settings page): the whole run on a real PR,
+     * with the settings on screen, saved or not. Nothing is written unless
+     * `post` is set; then it publishes like `@kody -v business-logic`.
+     */
     async testOnPullRequest(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         prUrl: string;
@@ -599,20 +605,50 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
         }
 
         // Never another PR than the one asked for: by its link, else by the
-        // number in the link.
+        // number in the link, in the repository the link names.
         const normalizedRequestedUrl = this.normalizeUrl(requestedUrl);
-        const number = Number(
-            requestedUrl.match(
-                /\/(?:pulls?|merge_requests|pull-requests|pullrequest)\/(\d+)/i,
-            )?.[1],
+        const match = requestedUrl.match(
+            /^[a-z]+:\/\/[^/]+\/(.+?)\/(?:-\/)?(?:pulls?|merge_requests|pull-requests|pullrequest)\/(\d+)/i,
         );
+        const number = Number(match?.[2]);
+        const linkRepository = match?.[1].toLowerCase().replace('/_git/', '/');
         return (
             pullRequests.find(
                 (pr) => this.normalizeUrl(pr.prURL) === normalizedRequestedUrl,
             ) ??
             pullRequests.find(
-                (pr) => Number(pr.number || pr.pull_number) === number,
+                (pr) =>
+                    Number(pr.number || pr.pull_number) === number &&
+                    this.inRepository(pr, linkRepository, pullRequests.length),
             )
+        );
+    }
+
+    /**
+     * Whether a PR is in the repository a link names (`acme/notes`,
+     * `org/project/repo` for Azure). A PR that names no repository only
+     * counts when it is the only one listed.
+     */
+    private inRepository(
+        pr: PullRequest,
+        linkRepository: string | undefined,
+        listed: number,
+    ): boolean {
+        const names = [
+            pr.repositoryData?.name,
+            typeof pr.repository === 'string' ? pr.repository : undefined,
+            pr.head?.repo?.fullName,
+            pr.base?.repo?.fullName,
+        ]
+            .filter((n): n is string => !!n)
+            .map((n) => n.toLowerCase());
+        if (!linkRepository || !names.length) {
+            return listed === 1;
+        }
+        // A full name says more than a bare one: `other/notes` is not `acme/notes`.
+        const full = names.filter((n) => n.includes('/'));
+        return (full.length ? full : names).some(
+            (n) => linkRepository === n || linkRepository.endsWith(`/${n}`),
         );
     }
 

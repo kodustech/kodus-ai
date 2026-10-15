@@ -286,7 +286,11 @@ describe('TriggerBusinessValidationUseCase (deterministic logic)', () => {
         it('matches by the number in the link when the urls differ', () => {
             const prs = [
                 { number: 1, prURL: 'http://a.com/1' },
-                { number: 12, prURL: 'http://api.gl/projects/3/mr/12' },
+                {
+                    number: 12,
+                    prURL: 'http://api.gl/projects/3/mr/12',
+                    repositoryData: { name: 'acme/notes' },
+                },
             ] as any;
             expect(
                 target.findBestPrByUrl(
@@ -294,6 +298,42 @@ describe('TriggerBusinessValidationUseCase (deterministic logic)', () => {
                     'https://gl.com/acme/notes/-/merge_requests/12/diffs',
                 ),
             ).toBe(prs[1]);
+        });
+
+        it('never takes the same number from another repository', () => {
+            const prs = [
+                {
+                    number: 47,
+                    prURL: 'http://api.gh/repos/acme/notes/pulls/47',
+                    repositoryData: { name: 'notes' },
+                    base: { repo: { fullName: 'acme/notes' } },
+                },
+                {
+                    number: 47,
+                    prURL: 'http://api.gh/repos/acme/web/pulls/47',
+                    repositoryData: { name: 'web' },
+                },
+            ] as any;
+            expect(
+                target.findBestPrByUrl(
+                    prs,
+                    'https://github.com/acme/other/pull/47',
+                ),
+            ).toBeUndefined();
+            expect(
+                target.findBestPrByUrl(
+                    prs,
+                    'https://github.com/acme/web/pull/47',
+                ),
+            ).toBe(prs[1]);
+        });
+
+        it('takes a PR that names no repository only when it is the only one', () => {
+            const only = [{ number: 5, prURL: 'http://x/5' }] as any;
+            const two = [...only, { number: 6, prURL: 'http://x/6' }] as any;
+            const url = 'https://dev.azure.com/o/p/_git/r/pullrequest/5';
+            expect(target.findBestPrByUrl(only, url)).toBe(only[0]);
+            expect(target.findBestPrByUrl(two, url)).toBeUndefined();
         });
 
         it('never picks another PR when nothing matches', () => {
@@ -758,5 +798,41 @@ describe('TriggerBusinessValidationUseCase.testOnPullRequest', () => {
             useCase.testOnPullRequest({ organizationAndTeamData, prUrl }),
         ).rejects.toBeInstanceOf(BadRequestException);
         expect(service.validate).not.toHaveBeenCalled();
+    });
+});
+
+describe('TriggerBusinessValidationUseCase.tryReadTask', () => {
+    it("reads `#12` in the repository's namespace, not the GitLab group's display name", async () => {
+        const service = { tryRead: jest.fn(async () => ({ status: 'found' })) };
+        const integrationConfig = {
+            findIntegrationConfigFormatted: jest.fn(async () => [
+                {
+                    id: 'repo-1',
+                    name: 'acme-corp/notes',
+                    full_name: 'acme-corp/notes',
+                    organizationName: 'Acme Corp',
+                },
+            ]),
+        };
+        const useCase = new TriggerBusinessValidationUseCase(
+            {} as any,
+            integrationConfig as any,
+            service as any,
+            {} as any,
+            {} as any,
+        );
+
+        await useCase.tryReadTask({
+            organizationAndTeamData: { organizationId: 'org-1', teamId: 't' },
+            task: '#12',
+            repositoryId: 'repo-1',
+        });
+
+        expect(service.tryRead).toHaveBeenCalledWith(
+            expect.anything(),
+            '#12',
+            expect.anything(),
+            { owner: 'acme-corp', name: 'notes' },
+        );
     });
 });
