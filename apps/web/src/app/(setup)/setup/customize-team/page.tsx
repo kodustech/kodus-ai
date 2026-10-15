@@ -33,7 +33,11 @@ export default function CustomizeTeamPage() {
     const router = useRouter();
     const { teamId } = useSelectedTeamId();
     const { configValue } = useSuspenseGetCodeReviewParameter(teamId);
-    const [useAgentInstructions, setUseAgentInstructions] = useState(false);
+    const storedAgentInstructions =
+        configValue?.configs?.ideRulesSyncEnabled === true;
+    const [useAgentInstructions, setUseAgentInstructions] = useState(
+        storedAgentInstructions,
+    );
     const [isSaving, setIsSaving] = useState(false);
     const [importWindowOver, setImportWindowOver] = useState(false);
 
@@ -48,10 +52,9 @@ export default function CustomizeTeamPage() {
     const selectedRepositories = useMemo(
         () =>
             new Map(
-                (configValue?.repositories || []).map((repo) => [
-                    String(repo.id),
-                    repo.name,
-                ]),
+                (configValue?.repositories || [])
+                    .filter((repo) => repo.isSelected !== false)
+                    .map((repo) => [String(repo.id), repo.name]),
             ),
         [configValue?.repositories],
     );
@@ -120,7 +123,8 @@ export default function CustomizeTeamPage() {
     const goNext = () => router.push(NEXT_STEP);
 
     const handleContinue = async () => {
-        if (!teamId) {
+        // Saving an untouched switch would pin the default as a team choice.
+        if (!teamId || useAgentInstructions === storedAgentInstructions) {
             goNext();
             return;
         }
