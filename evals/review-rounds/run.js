@@ -822,7 +822,9 @@ async function main() {
         // was calibrated with (evals/AGENTS.md).
         const mismatch = !target?.floor
             ? `no floor for ${MODEL} in evals/review-rounds/targets.json`
-            : target.set !== SET
+            : LIMIT
+              ? `--limit=${LIMIT} measures part of the set the floor was calibrated on`
+              : target.set !== SET
               ? `the floor is for --set=${target.set}, this run used ${SET || 'every case'}`
               : target.judge !== JUDGE_MODEL
                 ? `the floor was calibrated with judge ${target.judge}, this run used ${JUDGE_MODEL}`

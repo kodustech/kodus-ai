@@ -149,19 +149,20 @@ export function repeatCandidates(
     return [...linked.slice(0, MAX_CANDIDATES), ...similar];
 }
 
-/** The same rule on the same code in the same file: the same occurrence,
- *  without asking a model. */
-export function sameOccurrenceByCode(
-    finding: RepeatCheckFinding,
-    earlier: PrDecisionRecord,
-): boolean {
-    if (!isRule(finding) || !sharesRule(finding, earlier)) return false;
-    const file = normalizePath(finding.relevantFile);
-    if (!file || normalizePath(earlier.relevantFile) !== file) return false;
-    const code = normalizeCode(finding.existingCode);
-    return (
-        code.length >= MIN_CODE_MATCH &&
-        code === normalizeCode(earlier.existingCode)
+/** The keys under which the same rule on the same code in the same file
+ *  meet: the same occurrence, without asking a model. */
+export function occurrenceKeys(entry: {
+    label?: string;
+    brokenKodyRulesIds?: readonly string[];
+    relevantFile?: string;
+    existingCode?: string;
+}): string[] {
+    if (!isRule(entry)) return [];
+    const file = normalizePath(entry.relevantFile);
+    const code = normalizeCode(entry.existingCode);
+    if (!file || code.length < MIN_CODE_MATCH) return [];
+    return (entry.brokenKodyRulesIds ?? []).map(
+        (ruleId) => `${ruleId}\u0000${file}\u0000${code}`,
     );
 }
 
@@ -319,12 +320,22 @@ export async function checkRepeats<T extends RepeatCheckFinding>(
         return result;
     }
 
+    // The by-code match reads the whole history, not the capped candidates;
+    // the most recent entry wins a key.
+    const byOccurrence = new Map<string, PrDecisionRecord>();
+    for (const earlier of history) {
+        for (const key of occurrenceKeys(earlier)) {
+            if (!byOccurrence.has(key)) byOccurrence.set(key, earlier);
+        }
+    }
+
     const matchOf = new Map<T, RepeatOf<T>>();
     const toJudge: Array<{ finding: T; candidates: PrDecisionRecord[] }> = [];
     for (const finding of findings) {
         const candidates = repeatCandidates(finding, history);
-        // Free, so it reads the whole history, not the capped candidates.
-        const byCode = history.find((c) => sameOccurrenceByCode(finding, c));
+        const byCode = occurrenceKeys(finding)
+            .map((key) => byOccurrence.get(key))
+            .find(Boolean);
         if (byCode) {
             matchOf.set(finding, { finding, earlier: byCode, by: 'code' });
         } else if (candidates.length) {

@@ -7,7 +7,7 @@ import {
     buildRepeatCheckPrompt,
     checkRepeats,
     repeatCandidates,
-    sameOccurrenceByCode,
+    occurrenceKeys,
     type RepeatCheckFinding,
 } from './repeat-check';
 
@@ -176,7 +176,13 @@ describe('repeatCandidates', () => {
     });
 });
 
-describe('sameOccurrenceByCode', () => {
+describe('occurrenceKeys', () => {
+    // Two entries meet under a key: the same occurrence by code.
+    const sameOccurrenceByCode = (
+        a: Parameters<typeof occurrenceKeys>[0],
+        b: Parameters<typeof occurrenceKeys>[0],
+    ) => occurrenceKeys(a).some((key) => occurrenceKeys(b).includes(key));
+
     const finding: RepeatCheckFinding = {
         label: 'kody_rules',
         brokenKodyRulesIds: ['rule-no-console'],
