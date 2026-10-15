@@ -709,7 +709,19 @@ export class ChatWithKodyFromGitUseCase {
                     canWrite: this.senderCanWrite(params),
                 },
             })
-            .catch(() => ({ handled: false as const }));
+            .catch((error) => {
+                this.logger.warn({
+                    message:
+                        'Could not read a reply to the business logic comment; leaving it to the chat',
+                    context: ChatWithKodyFromGitUseCase.name,
+                    error,
+                    metadata: {
+                        organizationId: organizationAndTeamData.organizationId,
+                        prNumber: pullRequestNumber,
+                    },
+                });
+                return { handled: false as const };
+            });
         if (!result.handled) {
             return false;
         }
