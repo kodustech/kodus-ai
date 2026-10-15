@@ -292,6 +292,15 @@ function extractFromText(
             titleHint: m[2],
         }));
     }
+    // ClickUp's GitHub integration names a task `CU-<id>` in branches,
+    // titles and commits (`feature/CU-86bcjxxuu-bulk-archive`).
+    collect(/(?<![A-Za-z0-9_])CU-([a-z0-9]{6,12})(?![A-Za-z0-9_])/gi, (m) => ({
+        kind: 'key',
+        id: m[1].toLowerCase(),
+        raw: m[0],
+        source,
+        host: 'clickup',
+    }));
     // Trackers write keys in capitals; a branch or a typed command lowercases
     // them (`nina/saa-96-sticky-notes`). In prose, `gpt-5` and `node-22` are
     // names far more often than `feat(kod-10)` is a task, so a lower-case key
@@ -365,6 +374,23 @@ function fromUrl(url: string, source: ReferenceSource): Candidate | undefined {
             : undefined;
     }
 
+    if (host === 'app.clickup.com' || host === 'sharing.clickup.com') {
+        // A task is /t/<id> or /t/<workspace>/<custom id>; chat threads
+        // (/v/cn/.../t/<id>) end in a message id, not a task.
+        const task = /^\/t\/(?:\d+\/)?([A-Za-z0-9][A-Za-z0-9_-]*)\/?$/.exec(
+            path,
+        );
+        return task
+            ? {
+                  kind: 'key',
+                  id: task[1],
+                  raw: url,
+                  source,
+                  host: 'clickup',
+                  url,
+              }
+            : undefined;
+    }
     if (host === 'dev.azure.com' || host.endsWith('.visualstudio.com')) {
         const id = path.match(/\/_workitems\/edit\/(\d+)/i)?.[1];
         return id

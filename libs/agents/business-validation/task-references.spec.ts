@@ -322,3 +322,34 @@ describe('Linear project ids', () => {
         expect(labels({ branch: 'feat-kod-10' })).toEqual(['KOD-10']);
     });
 });
+
+describe('ClickUp references', () => {
+    const refs = (sources: Parameters<typeof extractTaskReferences>[0]) =>
+        extractTaskReferences(sources).map((r) => [
+            r.id,
+            'host' in r ? r.host : undefined,
+        ]);
+
+    it('reads a task link, with or without the workspace, and never a chat thread', () => {
+        expect(
+            refs({ body: 'Closes https://app.clickup.com/t/86bcjxxuu' }),
+        ).toEqual([['86bcjxxuu', 'clickup']]);
+        expect(
+            refs({ body: 'https://app.clickup.com/t/90141770923/DEV-12' }),
+        ).toEqual([['DEV-12', 'clickup']]);
+        expect(
+            refs({
+                body: 'https://app.clickup.com/90141770923/v/cn/5-1/t/86b',
+            }),
+        ).toEqual([]);
+    });
+
+    it('reads the CU- prefix ClickUp puts in branches and titles', () => {
+        expect(refs({ branch: 'feature/CU-86bcjxxuu-bulk-archive' })).toEqual([
+            ['86bcjxxuu', 'clickup'],
+        ]);
+        expect(refs({ title: 'feat: bulk archive [CU-86BCJXXUU]' })).toEqual([
+            ['86bcjxxuu', 'clickup'],
+        ]);
+    });
+});

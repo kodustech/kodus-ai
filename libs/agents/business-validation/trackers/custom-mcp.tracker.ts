@@ -5,6 +5,7 @@ import type {
     TrackerLookup,
 } from '../business-validation.types';
 import { asRecord } from '../value-utils';
+import { wholeItem } from './whole-item';
 import { McpToolSession, TaskNotFoundError } from './mcp-tool-session';
 import { describeTask, mentions, recordsIn } from './task-payload';
 import { McpTaskTracker, type TrackerReadContext } from './tracker';
@@ -99,7 +100,9 @@ export class CustomMcpTracker extends McpTaskTracker {
 
     canRead(reference: TaskReference): boolean {
         return (
-            (reference.kind === 'key' && reference.host === undefined) ||
+            (reference.kind === 'key' &&
+                (reference.host === undefined ||
+                    reference.host === 'clickup')) ||
             reference.kind === 'work_item' ||
             (reference.kind === 'git_issue' && this.chosenSource)
         );
@@ -142,7 +145,7 @@ export class CustomMcpTracker extends McpTaskTracker {
             let payload: unknown;
             try {
                 payload = args
-                    ? await this.session.call(tool.name, args)
+                    ? await this.session.call(tool.name, wholeItem(tool, args))
                     : undefined;
             } catch (error) {
                 if (error instanceof TaskNotFoundError) {

@@ -89,6 +89,7 @@ export function describeTask(
             ]),
         ),
         jira.text ?? customFieldsText(namedCustomFields(item)),
+        checklistsText(item.checklists),
     ]);
     if (!title && !description) {
         return undefined;
@@ -101,6 +102,25 @@ export function describeTask(
         ...(Object.keys(named).length ? { fields: named } : {}),
         ...(links ? { links } : {}),
     };
+}
+
+/** ClickUp-style checklists, where teams often keep acceptance criteria. */
+function checklistsText(checklists: unknown): string | undefined {
+    if (!Array.isArray(checklists)) {
+        return undefined;
+    }
+    const sections = checklists
+        .map((entry) => asRecord(entry))
+        .map((list) => {
+            const items = (Array.isArray(list.items) ? list.items : [])
+                .map((item) => textField(asRecord(item), ['name', 'title']))
+                .filter((name): name is string => !!name);
+            return items.length
+                ? `## ${textField(list, ['name']) ?? 'Checklist'}\n${items.map((name) => `- ${name}`).join('\n')}`
+                : undefined;
+        })
+        .filter(Boolean);
+    return sections.length ? sections.join('\n\n') : undefined;
 }
 
 /** The most sub-tasks a judge is shown: a title each, enough to see the split. */

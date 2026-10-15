@@ -9,6 +9,7 @@ import type { MCPToolRaw } from '@libs/mcp-server/mcp-adapter';
 
 import type { Task, TaskReference } from '../business-validation.types';
 import { asRecord } from '../value-utils';
+import { wholeItem } from './whole-item';
 import { isReadOnly, isSingleItemReader, taskId } from './custom-mcp.tracker';
 import { TaskNotFoundError } from './mcp-tool-session';
 import {
@@ -233,42 +234,6 @@ function systemPrompt(input: TaskFinderInput): string {
         'You can only read; no tool you have changes anything. Answer DONE or NOT_FOUND, nothing else.',
     ].join('\n');
 }
-
-/**
- * A read of one item that can pick its fields asks for all of them: Jira
- * leaves custom fields, where teams keep criteria, out of its default answer,
- * and names them only when asked. A field list the server enumerates (Linear)
- * already answers in full by default.
- */
-function wholeItem(
-    tool: MCPToolRaw,
-    args: Record<string, unknown>,
-): Record<string, unknown> {
-    if (MANY_ITEMS.test(tool.name)) {
-        return args;
-    }
-    const properties = asRecord(asRecord(tool.inputSchema).properties);
-    const fields = asRecord(properties.fields);
-    const expand = asRecord(properties.expand);
-    const whole = { ...args };
-    if (
-        fields.type === 'array' &&
-        !Array.isArray(asRecord(fields.items).enum)
-    ) {
-        const asked = Array.isArray(args.fields) ? args.fields : [];
-        whole.fields = asked.includes('*all') ? asked : [...asked, '*all'];
-    }
-    if (expand.type === 'string' && !Array.isArray(expand.enum)) {
-        const asked = typeof args.expand === 'string' ? args.expand : '';
-        whole.expand = /\bnames\b/.test(asked)
-            ? asked
-            : [asked, 'names'].filter(Boolean).join(',');
-    }
-    return whole;
-}
-
-/** A tool that returns many items: asked for all their fields, the answer would be huge. */
-const MANY_ITEMS = /(list|search|query|find|all|batch)/i;
 
 /**
  * A server that marks its tools (Linear, Rovo) offers only those it marks

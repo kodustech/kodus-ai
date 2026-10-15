@@ -25,8 +25,8 @@ export type TaskReference =
           raw: string;
           source: ReferenceSource;
           intent: ReferenceIntent;
-          /** Set when the key came from a tracker URL. */
-          host?: 'linear' | 'jira';
+          /** Set when the key came from a tracker URL, or ClickUp's `CU-` prefix. */
+          host?: 'linear' | 'jira' | 'clickup';
           url?: string;
           /**
            * Written in lower case in a title or description (`feat(kod-10)`),
