@@ -37,6 +37,7 @@ import {
 } from '@libs/automation/domain/teamAutomation/contracts/team-automation.service';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { deepMerge } from '@libs/common/utils/deep';
+import { resolveKodyLearningSettings } from '@libs/common/utils/kody-rules/kody-learning-settings';
 import {
     IKodyRulesService,
     KODY_RULES_SERVICE_TOKEN,
@@ -246,7 +247,14 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                     title: 'CLI Review',
                     base: {
                         repo: { fullName: 'cli/cli-review' },
-                        ref: instructionsBaseRef ?? 'main',
+                        // With instructions on, an unresolved branch stays
+                        // unknown so the review skips them and logs why,
+                        // instead of reading another branch's files.
+                        ref:
+                            instructionsBaseRef ??
+                            (effectiveConfig?.repoInstructionsEnabled
+                                ? undefined
+                                : 'main'),
                     },
                     repository: {} as any,
                     isDraft: false,
@@ -557,6 +565,12 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                             : 'en-US',
                     kodyRules: standardRules,
                     kodyMemoryRules: memoryRules,
+                    // Resolved default → global → repository, as PR reviews
+                    // do; the rest of this config is global only.
+                    repoInstructionsEnabled: resolveKodyLearningSettings(
+                        paramObj.configValue,
+                        repositoryId,
+                    ).repoInstructionsEnabled,
                 } as any as CodeReviewConfig,
                 repositoryId,
                 repositoryName,
