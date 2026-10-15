@@ -33,6 +33,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { startFakeLlmServer } = require('./shared/fake-llm-server');
 const { readTrace, uncovered } = require('./shared/engine-files');
+const { DECOY: REPO_INSTRUCTIONS_DECOY } = require('./repo-instructions/cases');
 
 const ROOT = path.join(__dirname, '..');
 const PR_WORKFLOW = '.github/workflows/code-review-evals-pr.yml';
@@ -128,7 +129,17 @@ async function main() {
             },
         },
         { name: 'kody-rules', model: true, args: ['evals/kody-rules/real-agent.js', '--dataset=github-cases', '--model=eval-fake', '--runs=1', '--limit=1'] },
-        { name: 'repo-instructions', model: true, args: ['evals/repo-instructions/run.js', '--model=eval-fake', '--limit=1', `--output=${path.join(scratch, 'repo-instructions.json')}`] },
+        {
+            name: 'repo-instructions',
+            model: true,
+            args: ['evals/repo-instructions/run.js', '--model=eval-fake', '--limit=1', `--output=${path.join(scratch, 'repo-instructions.json')}`],
+            // The scripted finding is labeled repo_instruction once the block is
+            // in the prompt; the verifier must then get the instruction files.
+            check: (verdictPrompts) =>
+                verdictPrompts.some((p) => p.includes('labeled repo_instruction') && p.includes(REPO_INSTRUCTIONS_DECOY))
+                    ? null
+                    : `expected a verifier prompt carrying the CLAUDE.md, got ${verdictPrompts.length} verifier prompt(s) without it`,
+        },
         { name: 'anchoring', model: true, args: ['evals/anchoring/anchor-eval.js', '--model=eval-fake', '--limit=1'] },
         { name: 'pr-summary', model: true, args: ['evals/pr-summary/run.js', '--model=eval-fake', '--gate'] },
         { name: 'reply-addressing', model: true, args: ['evals/reply-addressing/run.js', '--model=eval-fake', '--limit=2'] },
@@ -139,6 +150,7 @@ async function main() {
     const results = [];
     for (const step of steps) {
         const before = server.stats.requests;
+        const verdictsBefore = server.stats.verdictPrompts.length;
         // eslint-disable-next-line no-await-in-loop
         const { code, timedOut, output, ms } = await run(process.execPath, step.args, { ...env, TRACE_LOADED_LABEL: step.name });
         const calls = server.stats.requests - before;
@@ -146,7 +158,7 @@ async function main() {
         if (timedOut) problem = `did not exit within ${STEP_TIMEOUT_MS / 60000} min`;
         else if (code !== 0) problem = `exit ${code}`;
         else if (step.model && calls === 0) problem = 'never reached the model';
-        else if (step.check) problem = step.check();
+        else if (step.check) problem = step.check(server.stats.verdictPrompts.slice(verdictsBefore));
         results.push({ step, problem, calls, ms, output });
         console.log(`${problem ? '❌' : '✅'} ${step.name.padEnd(17)} ${String(Math.round(ms / 1000)).padStart(3)}s${step.model ? `  model calls=${calls}` : ''}${problem ? `  — ${problem}` : ''}`);
     }
