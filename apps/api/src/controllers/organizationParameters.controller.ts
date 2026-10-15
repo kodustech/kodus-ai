@@ -83,10 +83,6 @@ import {
 import { ApiBooleanResponseDto } from '../dtos/api-response.dto';
 import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 
-@ApiTags('Organization Parameters')
-@ApiBearerAuth('jwt')
-@ApiStandardResponses()
-@UseGuards(TenantScopeGuard)
 /**
  * Keys the generic create-or-update endpoint must refuse (GHSA-vhp8 #1).
  * These are privileged/system-managed and have their own controllers; the
@@ -100,6 +96,14 @@ const SENSITIVE_ORG_PARAM_KEYS = new Set<OrganizationParametersKey>([
     OrganizationParametersKey.FIRST_REVIEW_AT,
 ]);
 
+// NOTE: class decorators must sit immediately above the class — a statement
+// between them (the const above used to live here) attaches the decorators to
+// the statement instead, silently dropping @UseGuards(TenantScopeGuard) and
+// the Swagger metadata on transpile-only builds.
+@ApiTags('Organization Parameters')
+@ApiBearerAuth('jwt')
+@ApiStandardResponses()
+@UseGuards(TenantScopeGuard)
 @Controller('organization-parameters')
 export class OrganizationParametersController {
     constructor(
