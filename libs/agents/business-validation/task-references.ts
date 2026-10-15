@@ -87,6 +87,25 @@ function strongerIntent(
 }
 
 /**
+ * How a reference reads back to a person: `#12` for an issue a branch named
+ * `gh12` or `12-add-login`, never the fragment it was cut from.
+ */
+export function referenceLabel(reference: TaskReference): string {
+    switch (reference.kind) {
+        case 'git_issue':
+            return reference.repository
+                ? `${reference.repository.owner}/${reference.repository.name}#${reference.id}`
+                : `#${reference.id}`;
+        case 'work_item':
+            return `AB#${reference.id}`;
+        case 'key':
+            return reference.id;
+        case 'page':
+            return reference.raw;
+    }
+}
+
+/**
  * The references a validation should judge. Ones the PR states (in the
  * command, title or branch, or after "Closes" / "Part of") win over ones the
  * body only mentions. More than `max` of them is a release or a merge, not one

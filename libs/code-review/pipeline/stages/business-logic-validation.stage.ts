@@ -4,6 +4,7 @@ import { BusinessValidationService } from '@libs/agents/business-validation/busi
 import type { BusinessValidationOutcome } from '@libs/agents/business-validation/business-validation.types';
 import { formatPullRequestDiff } from '@libs/agents/business-validation/pull-request-diff';
 import { RERUN_COMMAND } from '@libs/agents/business-validation/render';
+import { referenceLabel } from '@libs/agents/business-validation/task-references';
 import {
     type BusinessLogicConfig,
     resolveBusinessLogicSettings,
@@ -204,19 +205,19 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                     draft.businessLogicOutcome = outcome.required
                         ? {
                               kind: 'gap_found',
-                              message: `${outcome.references.map((r) => r.raw).join(', ')} doesn't exist in ${outcome.tracker}, and this repository requires a task.`,
+                              message: `${outcome.references.map(referenceLabel).join(', ')} doesn't exist in ${outcome.tracker}, and this repository requires a task.`,
                           }
                         : {
                               kind: 'skipped',
                               reason: 'task_missing',
-                              message: `Skipped: ${outcome.references.map((r) => r.raw).join(', ')} doesn't exist in ${outcome.tracker}.`,
+                              message: `Skipped: ${outcome.references.map(referenceLabel).join(', ')} doesn't exist in ${outcome.tracker}.`,
                           };
                     break;
                 case 'task_required':
                     draft.businessLogicOutcome = {
                         kind: 'gap_found',
                         message:
-                            'No task referenced, and this repository requires one.',
+                            'No task found, and this repository requires one.',
                     };
                     break;
                 case 'validated': {

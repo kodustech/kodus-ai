@@ -3,6 +3,7 @@ import type {
     Task,
     TaskReference,
 } from './business-validation.types';
+import { referenceLabel } from './task-references';
 
 /**
  * What the PR author reads. English here; the service rewrites it in the
@@ -127,6 +128,8 @@ export function judgeFailedMessage(): string {
 }
 
 function listReferences(references: TaskReference[]): string {
-    const raw = [...new Set(references.map((r) => `\`${r.raw}\``))];
-    return raw.join(', ');
+    const labels = [
+        ...new Set(references.map((r) => `\`${referenceLabel(r)}\``)),
+    ];
+    return labels.join(', ');
 }

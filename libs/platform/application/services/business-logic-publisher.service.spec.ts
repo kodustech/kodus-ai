@@ -480,7 +480,7 @@ describe('checkFor', () => {
     it('fails when no task is referenced and the repository requires one', () => {
         expect(checkFor({ kind: 'task_required', message: '' })).toEqual({
             conclusion: CheckConclusion.FAILURE,
-            title: 'No task referenced · this repository requires one',
+            title: 'No task found · this repository requires one',
         });
     });
     it('fails on a typo when the repository requires a task', () => {

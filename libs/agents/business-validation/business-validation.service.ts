@@ -61,7 +61,7 @@ import {
     formatTaskForJudge,
     gradeTask,
 } from './task-quality';
-import { extractTaskReferences } from './task-references';
+import { extractTaskReferences, referenceLabel } from './task-references';
 import { repositoryForLookup, resolveTasks } from './task-resolver';
 import { createAgentToolReader } from './trackers/agent-tool-reader';
 import { aiSdkAgentRun, createTaskFinder } from './trackers/task-finder';
@@ -319,16 +319,26 @@ export class BusinessValidationService {
                             .map((a) => a.tracker),
                     ),
                 ];
-                return skip(
-                    'no_capable_tracker',
-                    unset.length
-                        ? messages.noReadToolMessage(unset)
-                        : messages.noCapableTrackerMessage(
-                              references,
-                              trackerNames,
-                              settings.taskSource !== AUTO_TASK_SOURCE,
-                          ),
+                if (unset.length) {
+                    // The admin's setup, not the author's PR, is what's missing.
+                    return skip(
+                        'no_capable_tracker',
+                        messages.noReadToolMessage(unset),
+                    );
+                }
+                const unreadable = messages.noCapableTrackerMessage(
+                    references,
+                    trackerNames,
+                    settings.taskSource !== AUTO_TASK_SOURCE,
                 );
+                // `Closes #1` where only Linear is connected names no task
+                // this team can be held to.
+                return settings.requireTask
+                    ? {
+                          kind: 'task_required',
+                          message: await translate(unreadable),
+                      }
+                    : skip('no_capable_tracker', unreadable);
             }
             case 'not_found':
                 if (resolution.intended) {
@@ -544,7 +554,7 @@ export class BusinessValidationService {
         ) {
             return {
                 status: 'cant_read',
-                message: `${reference.raw} is an issue of a repository. Here, name it as owner/repo${reference.raw} or paste the issue link.`,
+                message: `${referenceLabel(reference)} is an issue of a repository. Here, name it as owner/repo${referenceLabel(reference)} or paste the issue link.`,
             };
         }
         const servers = await this.connections(organizationAndTeamData);
@@ -643,7 +653,7 @@ export class BusinessValidationService {
             default:
                 return {
                     status: 'not_found',
-                    message: `${references[0].raw} doesn't exist in the chosen task source.`,
+                    message: `${referenceLabel(references[0])} doesn't exist in the chosen task source.`,
                 };
         }
     }

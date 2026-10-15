@@ -1,4 +1,8 @@
-import { extractTaskReferences, selectReferences } from './task-references';
+import {
+    extractTaskReferences,
+    referenceLabel,
+    selectReferences,
+} from './task-references';
 
 const ids = (sources: Parameters<typeof extractTaskReferences>[0]) =>
     extractTaskReferences(sources).map((r) => `${r.kind}:${r.id}`);
@@ -249,5 +253,21 @@ describe('selectReferences (UC-17)', () => {
                 (r) => r.id,
             ),
         ).toEqual(['PLAT-7']);
+    });
+});
+
+describe('referenceLabel', () => {
+    const label = (sources: Parameters<typeof extractTaskReferences>[0]) =>
+        extractTaskReferences(sources).map(referenceLabel);
+
+    it('names an issue a branch pointed at as #N, not the fragment it was cut from', () => {
+        expect(label({ branch: 'bv/rq-gh1' })).toEqual(['#1']);
+        expect(label({ branch: 'feature/12-add-login' })).toEqual(['#12']);
+    });
+
+    it('keeps the repository, the Azure prefix and the key', () => {
+        expect(label({ body: 'Closes acme/web#7' })).toEqual(['acme/web#7']);
+        expect(label({ title: 'feat(AB#8)' })).toEqual(['AB#8']);
+        expect(label({ title: 'feat: SAA-96 reorder' })).toEqual(['SAA-96']);
     });
 });

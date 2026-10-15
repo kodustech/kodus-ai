@@ -76,7 +76,7 @@ Kody comments only when the author can do something about it:
 | The task has only a title | A comment asking for acceptance criteria |
 | `SAA-999` doesn't exist, but SAA is a team in your tracker | A comment saying it looks like a typo, with the closest real tasks. With **Require a task** on, the check also fails |
 | No task referenced, or only ids no tracker has (`UTF-8` in a title) | Nothing; the check is skipped. With **Require a task** on, a comment asking for one, and the check fails |
-| A GitHub issue, but only Linear is connected | Nothing; admins see a count on the settings page |
+| A GitHub issue, but only Linear is connected | Nothing; admins see a count on the settings page. With **Require a task** on, a comment saying which tracker can't read it, and the check fails |
 | The tracker is down or its token expired | Nothing; the check is skipped, owners are notified, and Kody re-checks once the tracker answers |
 
 The reason for every skip is recorded and shown on the Business Logic settings page.

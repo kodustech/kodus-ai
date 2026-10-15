@@ -5,7 +5,7 @@ import type {
     TaskResolution,
     TrackerLookup,
 } from './business-validation.types';
-import { selectReferences } from './task-references';
+import { referenceLabel, selectReferences } from './task-references';
 import type { TaskTracker, TrackerReadContext } from './trackers/tracker';
 
 /** A PR that states more tasks than this is a release or a merge, not one task's work. */
@@ -160,7 +160,7 @@ function attemptOf(
     lookup: TrackerLookup,
 ): ResolutionAttempt {
     return {
-        reference: reference.raw,
+        reference: referenceLabel(reference),
         tracker: tracker.name,
         status: lookup.status,
         ...(lookup.status === 'error'

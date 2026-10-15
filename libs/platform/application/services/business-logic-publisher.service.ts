@@ -29,6 +29,7 @@ import {
     DEFAULT_BUSINESS_LOGIC_SETTINGS,
     resolveBusinessLogicSettings,
 } from '@libs/agents/business-validation/settings';
+import { referenceLabel } from '@libs/agents/business-validation/task-references';
 import { repositoryForLookup } from '@libs/agents/business-validation/task-resolver';
 import {
     CODE_BASE_CONFIG_SERVICE_TOKEN,
@@ -564,12 +565,12 @@ export function checkFor(
                 conclusion: outcome.required
                     ? CheckConclusion.FAILURE
                     : CheckConclusion.NEUTRAL,
-                title: `${outcome.references.map((r) => r.raw).join(', ')} doesn't exist in ${outcome.tracker}${outcome.required ? ' · this repository requires a task' : ''}`,
+                title: `${outcome.references.map(referenceLabel).join(', ')} doesn't exist in ${outcome.tracker}${outcome.required ? ' · this repository requires a task' : ''}`,
             };
         case 'task_required':
             return {
                 conclusion: CheckConclusion.FAILURE,
-                title: 'No task referenced · this repository requires one',
+                title: 'No task found · this repository requires one',
             };
         case 'skipped':
             return {
