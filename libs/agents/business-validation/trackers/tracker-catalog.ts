@@ -129,6 +129,14 @@ export function taskSourceCandidates(
     );
 }
 
+/** Whether `auto` reads tasks from this connection. */
+export function isAutoTracker(server: MCPServerConfig): boolean {
+    return (
+        isManagedTracker(server) ||
+        (server.provider === 'custom' && isTaskPlugin(server))
+    );
+}
+
 function isTaskPlugin(server: MCPServerConfig): boolean {
     if (server.category === 'task-management') {
         return true;

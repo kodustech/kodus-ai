@@ -82,8 +82,8 @@ export const Tune = ({ canEdit }: { canEdit: boolean }) => {
                                     </Label>
                                     <Label className="flex cursor-pointer items-center gap-3 text-sm">
                                         <RadioGroup.Item value="field" />
-                                        In a custom field · Jira or Azure
-                                        Boards, the field your team fills
+                                        In a custom field · the task field your
+                                        team fills
                                     </Label>
                                 </RadioGroup.Root>
                             )}
@@ -111,12 +111,22 @@ export const Tune = ({ canEdit }: { canEdit: boolean }) => {
                                 }
                                 control={form.control}
                                 render={({ field }) => (
-                                    <Input
-                                        placeholder="Field name or id, e.g. Acceptance Criteria or customfield_10031"
-                                        value={(field.value as string) ?? ""}
-                                        onChange={field.onChange}
-                                        disabled={!canEdit || field.disabled}
-                                    />
+                                    <div className="flex flex-col gap-1">
+                                        <Input
+                                            placeholder="Field name or id, e.g. Acceptance Criteria"
+                                            value={
+                                                (field.value as string) ?? ""
+                                            }
+                                            onChange={field.onChange}
+                                            disabled={
+                                                !canEdit || field.disabled
+                                            }
+                                        />
+                                        <p className="text-text-secondary text-xs">
+                                            A task without this field is read
+                                            from its description.
+                                        </p>
+                                    </div>
                                 )}
                             />
                         )}

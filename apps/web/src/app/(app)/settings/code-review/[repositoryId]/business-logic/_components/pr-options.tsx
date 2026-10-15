@@ -13,12 +13,12 @@ const SWITCHES = [
     {
         name: "commentWhenMet",
         label: "Comment when every requirement is met",
-        hint: "Off: a PR that meets its task gets no comment, so the author can't tell Kody checked it.",
+        hint: "A PR that meets its task gets a short comment, so the author knows Kody checked it. Off, it gets none.",
     },
     {
         name: "requireTask",
         label: "Ask for a task when the PR references none",
-        hint: "On: Kody comments asking which task the PR is for. PRs opened by bots (Dependabot, Renovate) are left alone. Off: the PR is skipped.",
+        hint: "Kody comments asking which task the PR is for; bot PRs (Dependabot, Renovate) are left alone. Off, the PR is skipped.",
     },
 ] as const;
 
@@ -26,7 +26,7 @@ const RECHECK = [
     {
         value: "failing",
         label: "While something is missing",
-        hint: "A push re-checks until nothing is missing or a task is referenced, so a fix updates the comment without anyone asking.",
+        hint: "A push re-checks a PR that still misses something or names no task, so a fix updates the comment without anyone asking.",
     },
     {
         value: "push",
@@ -36,7 +36,7 @@ const RECHECK = [
     {
         value: "request",
         label: "Only on request",
-        hint: "Kody checks the first review; anyone re-checks with @kody -v business-logic.",
+        hint: "Kody checks the first review; after that, anyone re-checks with @kody -v business-logic.",
     },
 ] as const;
 

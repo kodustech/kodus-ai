@@ -12,7 +12,7 @@ import {
     TrackerUnavailableError,
     type McpToolSession,
 } from './mcp-tool-session';
-import { buildTaskTrackers } from './tracker-catalog';
+import { buildTaskTrackers, isAutoTracker } from './tracker-catalog';
 
 const server = (overrides: Partial<MCPServerConfig>): MCPServerConfig => ({
     name: 'x',
@@ -74,6 +74,20 @@ describe('buildTaskTrackers', () => {
         expect(buildTaskTrackers(servers).map((t) => t.name)).toEqual([
             'Linear',
         ]);
+    });
+
+    it('says which sources auto reads, as it builds them', () => {
+        const clickUp = server({
+            name: 'ClickUp',
+            integrationId: 'clickup-plugin',
+            provider: 'custom',
+        });
+        const all = [...servers, clickUp];
+        expect(all.filter(isAutoTracker).map((s) => s.name)).toEqual(
+            buildTaskTrackers(all).map((t) => t.name),
+        );
+        expect(isAutoTracker(clickUp)).toBe(true);
+        expect(isAutoTracker(servers[2])).toBe(false);
     });
 
     it('uses only the chosen source, custom plugins included (#1884)', () => {

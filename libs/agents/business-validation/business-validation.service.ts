@@ -73,6 +73,7 @@ import { McpToolSession } from './trackers/mcp-tool-session';
 import {
     buildTaskTrackers,
     isManagedTracker,
+    isAutoTracker,
     taskSourceCandidates,
 } from './trackers/tracker-catalog';
 
@@ -81,6 +82,8 @@ export interface TaskSourceOption {
     name: string;
     /** Read natively, or through a tool the admin picks. */
     kind: 'managed' | 'custom';
+    /** Read under "every connected tracker", not only when picked. */
+    inAuto: boolean;
 }
 
 export interface TryReadResult {
@@ -640,6 +643,7 @@ export class BusinessValidationService {
                 integrationId: s.integrationId!,
                 name: s.name,
                 kind: isManagedTracker(s) ? 'managed' : 'custom',
+                inAuto: isAutoTracker(s),
             }));
     }
 

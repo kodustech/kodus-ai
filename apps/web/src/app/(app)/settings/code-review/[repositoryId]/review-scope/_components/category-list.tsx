@@ -12,6 +12,7 @@ import { Switch } from "@components/ui/switch";
 import { useBusinessLogicStatus } from "@services/business-logic/hooks";
 import type { BusinessLogicStatus } from "@services/business-logic/types";
 import { getMCPPlugins } from "@services/mcp-manager/fetch";
+import { KODUS_ISSUES_INTEGRATION_ID } from "@services/mcp-manager/types";
 import { MCPServiceUnavailableError } from "@services/mcp-manager/utils";
 import { useGetCodeReviewLabels } from "@services/parameters/hooks";
 import { useQuery } from "@tanstack/react-query";
@@ -86,11 +87,14 @@ const InstructionsChip = ({
 const BusinessLogicSummary = ({
     status,
     hasTaskMcp,
+    gitIssuesConnected,
     lookupFailed,
     configureHref,
 }: {
     status?: BusinessLogicStatus;
     hasTaskMcp: boolean;
+    /** Git Issues reads the issues those skipped PRs referenced. */
+    gitIssuesConnected?: boolean;
     /** The plugin lookup failed: we can't say whether a tracker is connected. */
     lookupFailed?: boolean;
     configureHref: string;
@@ -127,14 +131,14 @@ const BusinessLogicSummary = ({
     return (
         <p className="text-text-secondary text-xs">
             {status?.lastTaskRead
-                ? `Reading tasks from ${status.lastTaskRead.tracker} · ${status.stats.pullRequestsChecked} PRs checked in the last 30 days`
+                ? `Last task read from ${status.lastTaskRead.tracker} · ${status.stats.pullRequestsChecked} PRs checked in the last 30 days`
                 : "Waiting for the first pull request that references a task"}
-            {status?.pointsElsewhere && (
+            {status?.pointsElsewhere && !gitIssuesConnected && (
                 <>
                     {" "}
                     · {status.pointsElsewhere.pullRequests} PRs referenced
-                    GitHub issues no connected tracker reads; they were skipped
-                    without a comment.{" "}
+                    repository issues (#12) no connected tracker reads; they
+                    were skipped without a comment.{" "}
                     <Link href="/settings/plugins">Connect Git Issues</Link>
                 </>
             )}{" "}
@@ -375,6 +379,14 @@ export const CategoryList = ({
                                             <BusinessLogicSummary
                                                 status={businessLogicStatus}
                                                 hasTaskMcp={hasTaskMcp}
+                                                gitIssuesConnected={
+                                                    !!mcpPlugins?.some(
+                                                        (plugin) =>
+                                                            plugin.isConnected &&
+                                                            plugin.id ===
+                                                                KODUS_ISSUES_INTEGRATION_ID,
+                                                    )
+                                                }
                                                 lookupFailed={
                                                     mcpPlugins === null
                                                 }

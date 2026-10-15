@@ -71,6 +71,13 @@ export const TaskSource = ({
         }) as string | undefined) ?? AUTO;
     const selectedSource = sources?.find((s) => s.integrationId === selected);
     const isCustom = selectedSource?.kind === "custom";
+    // What "every connected tracker" reads, as the server decides it.
+    const inAuto = (s: { kind: string; inAuto?: boolean }) =>
+        s.inAuto ?? s.kind === "managed";
+    const autoNames = (sources ?? []).filter(inAuto).map((s) => s.name);
+    const pickOnly = (sources ?? [])
+        .filter((s) => !inAuto(s))
+        .map((s) => s.name);
     const pattern =
         (useWatch({
             control: form.control,
@@ -102,7 +109,7 @@ export const TaskSource = ({
                 <Card color="lv1" className="px-5 py-4 text-sm">
                     No task tracker is connected.{" "}
                     <Link href="/settings/plugins">Connect one in Plugins</Link>{" "}
-                    (Linear, Jira, Notion, Git Issues, or a custom plugin).
+                    (a task tracker or a custom plugin).
                 </Card>
             ) : (
                 <Controller
@@ -137,13 +144,10 @@ export const TaskSource = ({
                                         Every connected tracker
                                     </span>
                                     <span className="text-text-secondary text-xs">
-                                        {sources
-                                            .filter((s) => s.kind === "managed")
-                                            .map((s) => s.name)
-                                            .join(", ") ||
+                                        {autoNames.join(", ") ||
                                             "None recognized yet"}
-                                        . Custom plugins are only used when
-                                        picked below.
+                                        {pickOnly.length > 0 &&
+                                            ` · ${pickOnly.join(", ")} only when picked below`}
                                     </span>
                                 </span>
                             </Label>
@@ -260,11 +264,12 @@ export const TaskSource = ({
                             </span>
                         </span>
                         <p className="text-text-secondary text-xs">
-                            Kody already finds keys like SAA-96, AB#8, #12 and
-                            tracker links. For another shape, write a regular
-                            expression; its first group, when it has one, is the
-                            id. For example <code>sc-(\d+)</code> reads 123 from
-                            the branch <code>nina/sc-123-gift-cards</code>.
+                            Kody already finds keys like SAA-96, AB#8, #12,
+                            CU-86a1b2c3d and tracker links. For another shape,
+                            write a regular expression; its first group, when it
+                            has one, is the id. For example{" "}
+                            <code>sc-(\d+)</code> reads 123 from the branch{" "}
+                            <code>nina/sc-123-gift-cards</code>.
                         </p>
                         <Controller
                             name={"businessLogic.taskIdPattern.value" as never}

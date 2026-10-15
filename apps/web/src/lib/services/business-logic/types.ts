@@ -17,6 +17,8 @@ export type TaskSourceOption = {
     integrationId: string;
     name: string;
     kind: "managed" | "custom";
+    /** Read under "every connected tracker", not only when picked. */
+    inAuto?: boolean;
 };
 
 export type ReadTool = {

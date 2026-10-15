@@ -103,6 +103,29 @@ describe('summarizeStatus', () => {
         });
     });
 
+    it('stops counting issues no tracker read once one is read', () => {
+        const issue = {
+            kind: 'git_issue' as const,
+            id: '183',
+            raw: '#183',
+            source: 'body' as const,
+            intent: 'closes' as const,
+        };
+        const status = summarizeStatus([
+            run({
+                createdAt: new Date('2026-10-06T12:00:00Z'),
+                references: [issue],
+                tasks: [task()],
+            }),
+            run({
+                outcome: 'skipped',
+                skipReason: 'no_capable_tracker',
+                references: [issue],
+            }),
+        ]);
+        expect(status.pointsElsewhere).toBeUndefined();
+    });
+
     it('measures agreement as the flagged findings nobody waived or overturned', () => {
         const status = summarizeStatus([
             run({
