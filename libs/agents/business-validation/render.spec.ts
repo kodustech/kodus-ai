@@ -179,3 +179,19 @@ describe('what is left to fix, as the comment says it', () => {
         );
     });
 });
+
+describe('a met task', () => {
+    it('says it in one line and lists only what to check by hand', () => {
+        const met = outcome({ passed: true });
+        met.passed = true;
+        const reqs = met.checks[0].verdict.requirements!;
+        met.checks[0].verdict.requirements = reqs.filter(
+            (r) => r.state !== 'missing',
+        );
+        met.checks[0].verdict.outOfScope = [];
+        const comment = renderComment(met);
+        expect(comment).toContain('✅ 1 of 2 met: AC #1');
+        expect(comment).not.toContain('Persists per user');
+        expect(comment).toContain('CHECK MANUALLY');
+    });
+});

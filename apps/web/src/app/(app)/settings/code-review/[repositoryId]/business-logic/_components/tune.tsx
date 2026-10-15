@@ -17,6 +17,14 @@ import type { CodeReviewFormType } from "../../../_types";
 
 const MAX_GUIDANCE = 2000;
 
+/** What teams most often tell a reviewer; one click adds it. */
+const GUIDANCE_EXAMPLES = [
+    "Ignore criteria about copy and visual design; QA covers those.",
+    "Feature flags count as implemented when the flag exists and defaults to off.",
+    "Tests are not a requirement unless the task asks for them.",
+    "A requirement covered by a linked sub-task is delivered there, not here.",
+] as const;
+
 /** Where criteria live and the team's guidance (UC-08, UC-23). */
 export const Tune = ({ canEdit }: { canEdit: boolean }) => {
     const form = useFormContext<CodeReviewFormType>();
@@ -27,7 +35,7 @@ export const Tune = ({ canEdit }: { canEdit: boolean }) => {
         }) as string | undefined) ?? "auto";
 
     return (
-        <Collapsible className="bg-card-lv1 rounded-xl">
+        <Collapsible className="bg-card-lv1 rounded-xl" defaultOpen>
             <CollapsibleTrigger asChild>
                 <button
                     type="button"
@@ -125,19 +133,48 @@ export const Tune = ({ canEdit }: { canEdit: boolean }) => {
                             name={"businessLogic.teamGuidance.value" as never}
                             control={form.control}
                             rules={{ maxLength: MAX_GUIDANCE }}
-                            render={({ field, fieldState }) => (
-                                <Textarea
-                                    rows={4}
-                                    maxLength={MAX_GUIDANCE}
-                                    placeholder={
-                                        "Ignore criteria about copy and visual design; QA covers those.\nFeature flags count as implemented when the flag exists and defaults to off."
-                                    }
-                                    value={(field.value as string) ?? ""}
-                                    onChange={field.onChange}
-                                    disabled={!canEdit || field.disabled}
-                                    error={fieldState.error}
-                                />
-                            )}
+                            render={({ field, fieldState }) => {
+                                const text = (field.value as string) ?? "";
+                                const add = (line: string) =>
+                                    field.onChange(
+                                        text.trim()
+                                            ? `${text.trimEnd()}\n${line}`
+                                            : line,
+                                    );
+                                return (
+                                    <div className="flex flex-col gap-2">
+                                        <Textarea
+                                            rows={4}
+                                            maxLength={MAX_GUIDANCE}
+                                            placeholder="How your team counts a requirement as done, in plain words."
+                                            value={text}
+                                            onChange={field.onChange}
+                                            disabled={
+                                                !canEdit || field.disabled
+                                            }
+                                            error={fieldState.error}
+                                        />
+                                        <div className="flex flex-wrap gap-2">
+                                            {GUIDANCE_EXAMPLES.filter(
+                                                (example) =>
+                                                    !text.includes(example),
+                                            ).map((example) => (
+                                                <button
+                                                    key={example}
+                                                    type="button"
+                                                    disabled={
+                                                        !canEdit ||
+                                                        field.disabled
+                                                    }
+                                                    onClick={() => add(example)}
+                                                    className="border-card-lv3 text-text-secondary hover:text-text-primary rounded-full border px-3 py-1 text-xs disabled:opacity-50">
+                                                    + {example}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            }}
                         />
                         <p className="text-text-secondary text-xs">
                             Added to what Kody follows. It can&apos;t change the

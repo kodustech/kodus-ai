@@ -17,24 +17,50 @@ export function withRepositoryReader(
     code: CodeManagementService,
 ): BusinessValidationRequest {
     const { repository, pullRequest, organizationAndTeamData } = request;
-    const headRef = pullRequest?.headRef;
-    if (!repository?.id || !repository.name || !pullRequest || !headRef) {
+    if (!repository?.id || !repository.name || !pullRequest?.number) {
         return request;
     }
     const type = request.platformType as PlatformType | undefined;
     const target = { id: repository.id, name: repository.name };
     let paths: Promise<string[]> | undefined;
+    // A command's webhook (an issue comment) doesn't name the PR's branch:
+    // it is read from the PR once, when the first file is.
+    let branch: Promise<string | undefined> | undefined;
+    const headRefOf = () =>
+        (branch ??= pullRequest.headRef
+            ? Promise.resolve(pullRequest.headRef)
+            : code
+                  .getPullRequest(
+                      {
+                          organizationAndTeamData,
+                          repository: target,
+                          prNumber: pullRequest.number,
+                      },
+                      type,
+                  )
+                  .then(
+                      (pr) =>
+                          (pr as { head?: { ref?: string } } | null)?.head?.ref,
+                  )
+                  .catch(() => undefined));
 
     const reader: RepositoryReader = {
         listFiles: async (filter) => {
-            paths ??= code
-                .getRepositoryAllFiles(
-                    {
-                        organizationAndTeamData,
-                        repository: target,
-                        filters: { branch: headRef, maxFiles: MAX_FILES },
-                    },
-                    type,
+            paths ??= headRefOf()
+                .then((headRef) =>
+                    headRef
+                        ? code.getRepositoryAllFiles(
+                              {
+                                  organizationAndTeamData,
+                                  repository: target,
+                                  filters: {
+                                      branch: headRef,
+                                      maxFiles: MAX_FILES,
+                                  },
+                              },
+                              type,
+                          )
+                        : [],
                 )
                 .then((files) => files.map((f) => f.path || f.filename))
                 .catch(() => []);
@@ -44,6 +70,10 @@ export function withRepositoryReader(
             );
         },
         readFile: async (path) => {
+            const headRef = await headRefOf();
+            if (!headRef) {
+                return undefined;
+            }
             const response = (await code.getRepositoryContentFile(
                 {
                     organizationAndTeamData,

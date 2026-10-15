@@ -543,6 +543,17 @@ export class BusinessValidationService {
                 }).catch(() => undefined),
             ),
         );
+        // Never silent: a run says how many gaps it re-checked and turned.
+        this.logger.log({
+            message: `[BUSINESS-LOGIC] Re-checked ${missing.length} MISSING requirement(s) across the repository; ${results.filter(Boolean).length} already in the code`,
+            context: BusinessValidationService.name,
+            metadata: {
+                organizationId: request.organizationAndTeamData.organizationId,
+                pullRequest: request.pullRequest?.number,
+                checked: missing.length,
+                overturned: results.filter(Boolean).length,
+            },
+        });
         if (!results.some(Boolean)) {
             return verdict;
         }

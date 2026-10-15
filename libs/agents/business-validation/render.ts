@@ -112,15 +112,37 @@ function renderTaskSection(check: TaskCheck, context: RenderContext): string {
     }
     lines.push(`<sub>${meta.join(' · ')}</sub>`, '');
 
+    // A met task needs no table of green rows: only what to look at by hand
+    // is listed. Plain markdown, so it reads the same on every platform.
+    const requirements = verdict.requirements ?? [];
+    const blockers = countBlockers(verdict);
+    const allMet =
+        requirements.length > 0 &&
+        !blockers.missing &&
+        !blockers.partial &&
+        !blockers.notInTask;
     const rows = [
-        ...(verdict.requirements ?? []).map(requirementRow),
+        ...requirements
+            .filter((r) => !allMet || r.state !== 'met' || r.accepted)
+            .map(requirementRow),
         ...(verdict.outOfScope ?? []).map((change) =>
             outOfScopeRow(change, task.id),
         ),
     ];
+    if (allMet) {
+        const met = requirements.filter((r) => r.state === 'met');
+        lines.push(
+            `✅ ${met.length} of ${requirements.length} met: ${met
+                .map((r) => r.source ?? r.requirement)
+                .join(', ')}`,
+        );
+        if (rows.length) {
+            lines.push('');
+        }
+    }
     if (rows.length) {
         lines.push('| | Requirement | In this PR |', '|---|---|---|', ...rows);
-    } else if (verdict.summary) {
+    } else if (!allMet && verdict.summary) {
         // A model that answered in prose: show what it said.
         lines.push(verdict.summary);
     }
