@@ -178,10 +178,10 @@ describe('tier-0 report', () => {
 describe('tier-0 stages on a few cases', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tier0-few-'));
     // A stand-in eval: writes the shared result it is given and prints `stderr`.
-    const fake = (name: string, result: unknown, stderr = '') => {
+    const fake = (name: string, result: unknown, stderr = '', stdout = '') => {
         const file = path.join(dir, `${name}.js`);
         const write = result ? `require('fs').writeFileSync(process.argv.find((a) => a.startsWith('--output=')).slice(9), ${JSON.stringify(JSON.stringify(result))});` : '';
-        fs.writeFileSync(file, `${write}\nconsole.error(${JSON.stringify(stderr)});\nprocess.exit(${result ? 0 : 1});\n`);
+        fs.writeFileSync(file, `${write}\nconsole.log(${JSON.stringify(stdout)});\nconsole.error(${JSON.stringify(stderr)});\nprocess.exit(${result ? 0 : 1});\n`);
         return { key: name, stage: name, run: [file] };
     };
     const shared = (hits: number, errored = 0) => ({ cases: [{ id: 'c1', checks: 'Checks c1', hits, total: 2 }], infra: { errored, total: 10 } });
@@ -195,6 +195,18 @@ describe('tier-0 stages on a few cases', () => {
         expect(runFewCases('m', fake('refused', shared(1, 5), '429 Too Many Requests'), dir)).toMatchObject({ status: 'infra' });
         expect(runFewCases('m', fake('noverdict', shared(1, 5), 'Reply classifier returned no verdict'), dir)).toMatchObject({ status: 'broken', reason: '5 of 10 calls failed: Reply classifier returned no verdict' });
         expect(runFewCases('m', fake('crash', null, 'TypeError: x is not a function'), dir)).toMatchObject({ status: 'broken', reason: 'TypeError: x is not a function' });
+    });
+
+    // Kody Rules says only that its rule checks failed to run; the engine's own
+    // [LLM-ERROR] log line says why.
+    it('reads a provider refusal from the engine\'s LLM error log when the eval hides it', () => {
+        const hidden = '[case a run 0] Kody Rules could not be evaluated: all 4 rule check(s) failed to run.\n[case b run 0] Kody Rules could not be evaluated: all 4 rule check(s) failed to run.';
+        const credit = 'WARN: [LLM-ERROR] kodus-rules-review-agent.shard: "managed-default" failed (QUOTA_EXCEEDED) — Your credit balance is too low';
+        expect(runFewCases('m', fake('credit', shared(0, 10), hidden, `\x1b[33m${credit}\x1b[39m`), dir)).toMatchObject({ status: 'infra', reason: '10 of 10 calls failed: Your credit balance is too low' });
+        const ciLine = JSON.stringify({ level: 'warn', context: 'runWithModelFailover', msg: '[LLM-ERROR] code-review: "managed-default" failed (QUOTA_EXCEEDED) — Your credit balance is too low' });
+        expect(runFewCases('m', fake('credit-json', shared(0, 10), hidden, ciLine), dir)).toMatchObject({ status: 'infra', reason: '10 of 10 calls failed: Your credit balance is too low' });
+        const unsupported = 'WARN: [LLM-ERROR] kodus-rules-review-agent.shard: "managed-default" failed (UNKNOWN) — Function tools with reasoning_effort are not supported';
+        expect(runFewCases('m', fake('unsupported', shared(0, 10), hidden, unsupported), dir)).toMatchObject({ status: 'broken' });
     });
 
     it('names the error most calls failed with, not the eval\'s summary line', () => {

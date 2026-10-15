@@ -121,6 +121,33 @@ function errorLine(lines) {
     return lines.find((l) => /error|failed|refused/i.test(l)) || lines[lines.length - 1] || '';
 }
 
+// The engine logs every failed LLM call as `[LLM-ERROR] <run>: "<model>" failed
+// (<CATEGORY>) — <message>` (libs/llm/model-failover.ts). A provider refusal
+// there is infra even when the eval's own error hides it: Kody Rules reports
+// only that its rule checks "failed to run".
+const PROVIDER_REFUSAL = /\[LLM-ERROR\].* failed \((AUTH_INVALID|QUOTA_EXCEEDED|RATE_LIMIT|TRANSIENT|MODEL_ACCESS_DENIED)\) — (.*)$/;
+
+// The log line's message: pino writes JSON under CI and colored text on a terminal.
+function logMessage(line) {
+    // eslint-disable-next-line no-control-regex
+    const text = line.replace(/\x1b\[[0-9;]*m/g, '').trim();
+    if (!text.startsWith('{')) return text;
+    try {
+        const entry = JSON.parse(text);
+        return String(entry.msg ?? entry.message ?? '');
+    } catch {
+        return text;
+    }
+}
+
+function providerRefusal(stdout) {
+    for (const line of String(stdout || '').split('\n')) {
+        const m = logMessage(line).match(PROVIDER_REFUSAL);
+        if (m) return m[2];
+    }
+    return null;
+}
+
 // One stage's eval on a few cases: it runs on this model when it measured (at
 // most INFRA_BUDGET of its calls failed) and got at least one item right. The
 // number is reported, never compared with a floor: floors are calibrated on
@@ -151,9 +178,11 @@ function runFewCases(model, part, outDir = path.join(__dirname, 'investigation',
     const { errored = 0, total: calls = 0 } = result?.infra || {};
     if (!result || !calls || errored / calls > INFRA_BUDGET) {
         // Only stderr: stdout echoes case ids and texts, which can look like a provider error.
-        const error = errorLine(String(r.stderr || '').split('\n').map((l) => l.trim()).filter(Boolean));
+        const printed = errorLine(String(r.stderr || '').split('\n').map((l) => l.trim()).filter(Boolean));
+        const refusal = classifyFailure(printed) === 'infra' ? null : providerRefusal(r.stdout);
+        const error = refusal || printed;
         const reason = result ? `${errored} of ${calls} calls failed: ${error || 'no error printed'}` : error || `exit ${r.status}${r.signal ? ` (${r.signal})` : ''}`;
-        return { ...base, status: classifyFailure(error), reason };
+        return { ...base, status: refusal ? 'infra' : classifyFailure(printed), reason };
     }
     if (!hits) return { ...base, status: 'broken', reason: `measured ${cases.length} cases and got nothing right` };
     return { ...base, status: 'pass', reason: null };
