@@ -9,6 +9,8 @@ const { wiringRows, nightlyRows, READERS, catalogPath } = require('./stage-signa
 const { loadCatalog, catalogProblems } = require('./shared/eval-result');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { tier0 } = require('./shared/tier0-models');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { fridayKeys, tier0Signal, FEW_CASES } = require('./tier0-smoke');
 
 type Stage = { id: string; name: string; group: string; eval: string | null; model: string; wiring: string[]; pipeline: string[] | null; nightly?: string; friday?: string; byHand?: string[] };
 type Row = { name: string; status: string; value: number | null; meta: Record<string, unknown> };
@@ -69,11 +71,19 @@ describe('evals/stages.js', () => {
 
     // The panel reads a Friday stage's outcome from this key of evals.tier0.<model>'s meta.
     it('names, for a Friday stage, a key the Friday check writes', () => {
-        const tier0Meta = fs.readFileSync(path.join(__dirname, '../.github/workflows/code-review-evals-tier0.yml'), 'utf8').match(/out\(\\?"meta\\?", JSON\.stringify\(\{ review:.*$/m)?.[0] ?? '';
-        expect(tier0Meta).not.toBe('');
+        const workflow = fs.readFileSync(path.join(__dirname, '../.github/workflows/code-review-evals-tier0.yml'), 'utf8');
+        expect(workflow).toContain('tier0Signal(');
         const keys = (STAGES as Stage[]).filter((s) => s.friday).map((s) => s.friday as string);
-        expect(keys.sort()).toEqual(['pr_summary', 'review']);
-        for (const key of keys) expect(tier0Meta).toContain(`${key}:`);
+        expect(keys.sort()).toEqual([...fridayKeys()].sort());
+        const result = { status: 'pass', prSummary: { status: 'pass' }, evals: FEW_CASES.map((p: { key: string }) => ({ key: p.key, status: 'pass' })) };
+        expect(Object.keys(tier0Signal(result).meta)).toEqual(expect.arrayContaining(keys));
+    });
+
+    // The nightly asks whether a change broke a stage on one model; Friday asks
+    // whether the same stages still run on every tier-0 model.
+    it('runs on Friday every stage the nightly measures', () => {
+        const missing = (STAGES as Stage[]).filter((s) => s.nightly && !s.friday).map((s) => s.id);
+        expect(missing).toEqual([]);
     });
 
     // The panel's "What it tests": every eval lists its cases, each with what it checks.
