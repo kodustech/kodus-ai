@@ -267,6 +267,7 @@ describe('tier-0 failure classification', () => {
         'Your account org-1 is suspended due to insufficient balance',
         'AI_APICallError: Cannot connect to API: connect ECONNREFUSED',
         '429 Too Many Requests',
+        'This request requires more credits, or fewer max_tokens. You requested up to 131072 tokens, but can only afford 470.',
     ])('provider refusal is infra: %s', (reason) => {
         expect(classifyFailure(reason)).toBe('infra');
     });
