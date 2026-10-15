@@ -183,6 +183,11 @@ function extractFromText(
     collect(/https?:\/\/[^\s<>()[\]"'`]+/gi, (m) =>
         fromUrl(trimUrl(m[0]), source),
     );
+    // `P-KOD-1` is a Linear project, not task KOD-1: it claims its text too.
+    collect(
+        /(?<![A-Za-z0-9_-])P-[A-Za-z][A-Za-z0-9_]*-\d+(?![A-Za-z0-9_])/gi,
+        () => undefined,
+    );
     if (taskIdPattern) {
         // The team's own shape (`sc-123`, `T1234`) claims its text before the
         // built-in ones: its first group, when it has one, is the id.

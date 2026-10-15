@@ -281,3 +281,17 @@ describe('referenceLabel', () => {
         expect(label({ title: 'feat: SAA-96 reorder' })).toEqual(['SAA-96']);
     });
 });
+
+describe('Linear project ids', () => {
+    it('never reads project P-KOD-1 as task KOD-1', () => {
+        const labels = (sources: Parameters<typeof extractTaskReferences>[0]) =>
+            extractTaskReferences(sources).map(referenceLabel);
+        expect(labels({ body: 'Part of project P-KOD-1' })).toEqual([]);
+        expect(labels({ title: 'feat(P-KOD-1): x' })).toEqual([]);
+        expect(labels({ branch: 'feat/p-kod-1-x' })).toEqual([]);
+        expect(labels({ body: 'Closes KOD-10, project P-KOD-1' })).toEqual([
+            'KOD-10',
+        ]);
+        expect(labels({ branch: 'feat-kod-10' })).toEqual(['KOD-10']);
+    });
+});
