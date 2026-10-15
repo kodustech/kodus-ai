@@ -10,8 +10,25 @@ const MIN_DESCRIPTION_WORDS = 6;
 const wordCount = (text: string) =>
     text.split(/\s+/).filter((w) => /\p{L}/u.test(w)).length;
 
-/** How much the task says, graded once here; the judge never regrades it. */
+/**
+ * How much the task says, graded once here; the judge never regrades it. A
+ * sub-issue that says little on its own ("Archive part of the parent") is
+ * judged with its parent: its title scopes what the parent asks.
+ */
 export function gradeTask(task: Task): TaskQuality {
+    const own = gradeOwn(task);
+    if (
+        (own === 'MINIMAL' || own === 'EMPTY') &&
+        task.title?.trim() &&
+        task.parent?.description &&
+        wordCount(task.parent.description) >= MIN_DESCRIPTION_WORDS
+    ) {
+        return 'PARTIAL';
+    }
+    return own;
+}
+
+function gradeOwn(task: Task): TaskQuality {
     const title = task.title?.trim() ?? '';
     const description = task.description?.trim() ?? '';
     const criteria = (task.acceptanceCriteria ?? []).filter((c) => c.trim());

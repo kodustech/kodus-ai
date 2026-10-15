@@ -61,6 +61,8 @@ export type TryReadResult = {
         criteriaNotWhereSaid?: boolean;
         canJudge: boolean;
         hasAttachments: boolean;
+        parent?: { id: string; title?: string };
+        subtasks?: number;
     };
     message?: string;
 };

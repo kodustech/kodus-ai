@@ -84,6 +84,35 @@ export interface Task {
     hasAttachments?: boolean;
     /** Long text fields beyond the description (Jira custom fields), by name. */
     fields?: Record<string, string>;
+    /**
+     * The task this one is part of (a sub-issue's parent), read alongside it:
+     * context for the judge, never requirements of its own.
+     */
+    parent?: RelatedTask;
+    /** The pieces the task is split into, by title and status. */
+    subtasks?: RelatedTask[];
+    /**
+     * What the tracker's answer links to, still to be read by the tracker
+     * that found it (`McpTaskTracker.relate`). Never reaches the judge.
+     */
+    links?: TaskLinks;
+}
+
+/** Another work item a task points at: its parent or one of its sub-tasks. */
+export interface RelatedTask {
+    id: string;
+    title?: string;
+    description?: string;
+    status?: string;
+}
+
+/** The ids and documents a tracker's answer names next to the task itself. */
+export interface TaskLinks {
+    parentId?: string;
+    parentTitle?: string;
+    subtasks?: RelatedTask[];
+    /** Documents attached to the task (Linear docs); `content` when the answer carries it. */
+    documents?: Array<{ id: string; title?: string; content?: string }>;
 }
 
 export interface FoundTask {

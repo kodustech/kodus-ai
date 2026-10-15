@@ -4,7 +4,12 @@ import type {
 } from '../business-validation.types';
 import { asRecord } from '../value-utils';
 import { McpToolSession, TaskNotFoundError } from './mcp-tool-session';
-import { jiraCustomFields, recordsIn, textField } from './task-payload';
+import {
+    jiraCustomFields,
+    linksIn,
+    recordsIn,
+    textField,
+} from './task-payload';
 import { McpTaskTracker } from './tracker';
 
 /** `getVisibleJiraProjects` only tells a typo from a version number; issues are never listed. */
@@ -94,6 +99,7 @@ export class JiraTracker extends McpTaskTracker {
                     hasAttachments:
                         Array.isArray(attachments) && attachments.length > 0,
                     ...(Object.keys(named).length ? { fields: named } : {}),
+                    links: linksIn(issue),
                 },
             };
         }

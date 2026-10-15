@@ -12,7 +12,7 @@ Business Logic Validation checks that a pull request delivers what its task asks
 ## Prerequisites
 
 - A task tracker connected in [Plugins](/en/how_to_use/code_review/plugins): Linear, Jira (Atlassian Rovo), Notion, Git Issues, or a custom plugin.
-- Kody only **reads** tasks, one at a time, by their id. It never searches, lists or writes to your tracker.
+- Kody only **reads** tasks by their id, and what they link to (a parent, sub-tasks, attached documents). It never searches for a task or writes to your tracker.
 - Without a tracker, you can still paste the task text in the command (see below).
 
 ## Turning it on
@@ -35,7 +35,13 @@ Kody looks for task references in the PR title, branch name and description, in 
 - `AB#123` (Azure Boards)
 - Links to Linear, Jira, Notion, GitHub/GitLab issues and Azure work items
 
-A reference only counts once the tracker returns a task with that exact id, so `UTF-8` or `gpt-5` in a title are never mistaken for tasks.
+A reference only counts once the tracker returns a task with that exact id, so `UTF-8` or `gpt-5` in a title are never mistaken for tasks. A lower-case key in the title (`feat(kod-10)`) counts when your tracker has that team or project; a Linear project id (`P-KOD-1`) never does.
+
+Kody also reads what the task links to:
+
+- **A parent** (a Linear sub-issue, a Jira sub-task, a ClickUp subtask): the PR is checked against the parent's requirements this task's title covers. A sub-issue that says "see the parent" is still checked.
+- **Sub-tasks**: a requirement one of them delivers shows as CHECK MANUALLY ("Delivered by KOD-20"), never as missing.
+- **Documents attached to the task** (Linear docs): read as part of the task, criteria included.
 
 - **"Closes PROJ-1"** or a key in the title or branch: the PR is checked against the whole task.
 - **"Part of PROJ-1"** or **"Refs PROJ-1"**: the PR delivers a slice. What's missing is listed, but doesn't fail the check.

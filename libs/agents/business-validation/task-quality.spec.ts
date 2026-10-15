@@ -24,6 +24,32 @@ describe('gradeTask', () => {
         ).toBe('PARTIAL');
     });
 
+    it("judges a sub-issue that says little against its parent's content", () => {
+        const sub = {
+            tracker: 'Linear',
+            id: 'KOD-20',
+            title: 'Bulk archive',
+            description: 'Archive part of the parent.',
+        };
+        expect(gradeTask(sub)).toBe('MINIMAL');
+        expect(
+            gradeTask({
+                ...sub,
+                parent: {
+                    id: 'KOD-19',
+                    description:
+                        'Agents select tickets with a checkbox and archive them in one request.',
+                },
+            }),
+        ).toBe('PARTIAL');
+        expect(
+            gradeTask({
+                ...sub,
+                parent: { id: 'KOD-19', title: 'Bulk actions' },
+            }),
+        ).toBe('MINIMAL');
+    });
+
     it('judges criteria however short the rest is', () => {
         expect(grade('Tickets', '- Sort by date\n- Hide closed')).toBe(
             'COMPLETE',

@@ -178,6 +178,22 @@ const TaskRead = ({ result }: { result: TryReadResult }) => (
                         criteria.
                     </span>
                 )}
+                {result.task.parent && (
+                    <span className="text-text-secondary">
+                        Part of {result.task.parent.id}
+                        {result.task.parent.title
+                            ? ` · ${result.task.parent.title}`
+                            : ""}
+                        . Kody reads it too, as context for this task.
+                    </span>
+                )}
+                {!!result.task.subtasks && (
+                    <span className="text-text-secondary">
+                        Split into {result.task.subtasks} sub-task
+                        {result.task.subtasks === 1 ? "" : "s"}. What one of
+                        them covers shows as CHECK MANUALLY, not MISSING.
+                    </span>
+                )}
                 {result.task.hasAttachments && (
                     <span className="text-text-secondary">
                         It has attachments. Kody doesn&apos;t read them;

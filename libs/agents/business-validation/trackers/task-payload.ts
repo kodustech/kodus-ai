@@ -1,4 +1,8 @@
-import type { Task } from '../business-validation.types';
+import type {
+    RelatedTask,
+    Task,
+    TaskLinks,
+} from '../business-validation.types';
 import { asRecord } from '../value-utils';
 
 type JsonRecord = Record<string, unknown>;
@@ -60,7 +64,9 @@ export function carriesDescription(item: JsonRecord): boolean {
 export function describeTask(
     item: JsonRecord,
     payload?: unknown,
-): Pick<Task, 'title' | 'description' | 'url' | 'fields'> | undefined {
+):
+    | Pick<Task, 'title' | 'description' | 'url' | 'fields' | 'links'>
+    | undefined {
     const fields = { ...item, ...asRecord(item.fields) };
     const title = textField(fields, [
         'System.Title',
@@ -87,12 +93,114 @@ export function describeTask(
     if (!title && !description) {
         return undefined;
     }
+    const links = linksIn(item);
     return {
         title,
         description,
         url: textField(fields, ['html_url', 'web_url', 'app_url', 'url']),
         ...(Object.keys(named).length ? { fields: named } : {}),
+        ...(links ? { links } : {}),
     };
+}
+
+/** The most sub-tasks a judge is shown: a title each, enough to see the split. */
+export const MAX_SUBTASKS = 25;
+
+/**
+ * The parent, sub-tasks and documents a task record names, in any tracker's
+ * shape: Linear `parentId` and `documents`, Jira `fields.parent` and
+ * `fields.subtasks`, ClickUp `parent` and `subtasks`, GitHub `sub_issues`.
+ */
+export function linksIn(item: JsonRecord): TaskLinks | undefined {
+    const fields = { ...item, ...asRecord(item.fields) };
+    const parent = fields.parent;
+    const parentRecord = asRecord(parent);
+    const parentId =
+        idOf(parentRecord) ??
+        (typeof parent === 'string' || typeof parent === 'number'
+            ? String(parent)
+            : undefined) ??
+        firstString(fields, [
+            'parentId',
+            'parent_id',
+            'parentKey',
+            'parent_key',
+        ]);
+    const subtasks = SUBTASK_FIELDS.flatMap((key) =>
+        Array.isArray(fields[key]) ? (fields[key] as unknown[]) : [],
+    )
+        .map((entry) => relatedTask(asRecord(entry)))
+        .filter((task): task is RelatedTask => !!task)
+        .slice(0, MAX_SUBTASKS);
+    const documents = (Array.isArray(fields.documents) ? fields.documents : [])
+        .map((entry) => asRecord(entry))
+        .filter((doc) => typeof doc.id === 'string')
+        .map((doc) => ({
+            id: doc.id as string,
+            title: textField(doc, ['title', 'name']),
+            content: textField(doc, ['content', 'body', 'text']),
+        }));
+    const links: TaskLinks = {
+        ...(parentId ? { parentId } : {}),
+        ...(parentId && relatedTask(parentRecord)?.title
+            ? { parentTitle: relatedTask(parentRecord)!.title }
+            : {}),
+        ...(subtasks.length ? { subtasks } : {}),
+        ...(documents.length ? { documents } : {}),
+    };
+    return Object.keys(links).length ? links : undefined;
+}
+
+const SUBTASK_FIELDS = [
+    'subtasks',
+    'subTasks',
+    'sub_tasks',
+    'subIssues',
+    'sub_issues',
+    'children',
+];
+
+/** A linked item as `{ id, title, status }`, from its own shape or Jira's `fields`. */
+export function relatedTask(record: JsonRecord): RelatedTask | undefined {
+    const id = idOf(record);
+    if (!id) {
+        return undefined;
+    }
+    const fields = { ...record, ...asRecord(record.fields) };
+    const status = fields.status ?? fields.state;
+    return {
+        id,
+        title: textField(fields, ['title', 'summary', 'name']),
+        status:
+            typeof status === 'string'
+                ? status
+                : textField(asRecord(status), ['name', 'status']),
+    };
+}
+
+/** The id a person would type for the item: its key or identifier before an internal id. */
+function idOf(record: JsonRecord): string | undefined {
+    // A GitHub issue's `id` is internal; its `number` is what people type.
+    return firstString(record, [
+        'identifier',
+        'key',
+        'custom_id',
+        'number',
+        'id',
+    ]);
+}
+
+function firstString(record: JsonRecord, keys: string[]): string | undefined {
+    for (const key of keys) {
+        const value = record[key];
+        if (typeof value === 'string' && value.trim()) {
+            return value.trim();
+        }
+        if (typeof value === 'number') {
+            return String(value);
+        }
+    }
+    return undefined;
 }
 
 /**

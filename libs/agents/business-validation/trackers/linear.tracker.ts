@@ -6,11 +6,29 @@ import type { MCPToolRaw } from '@libs/mcp-server/mcp-adapter';
 
 import { asRecord } from '../value-utils';
 import { McpToolSession, TaskNotFoundError } from './mcp-tool-session';
-import { mentions, recordsIn, textField } from './task-payload';
+import type { RelatedTask, Task } from '../business-validation.types';
+import {
+    linksIn,
+    MAX_SUBTASKS,
+    mentions,
+    recordsIn,
+    relatedTask,
+    textField,
+} from './task-payload';
 import { McpTaskTracker } from './tracker';
 
-/** `get_team` and `list_teams` only tell a typo (`SAA-999`) from a version number (`UTF-8`); tasks are never listed. */
-export const LINEAR_TOOLS = ['get_issue', 'get_team', 'list_teams'];
+/**
+ * `get_team` and `list_teams` only tell a typo (`SAA-999`) from a version
+ * number (`UTF-8`). `list_issues` lists one issue's sub-issues, never a
+ * search for the task; `get_document` reads a doc attached to it.
+ */
+export const LINEAR_TOOLS = [
+    'get_issue',
+    'get_team',
+    'list_teams',
+    'list_issues',
+    'get_document',
+];
 
 /** The most teams one `list_teams` call returns. */
 const TEAMS_PAGE = 250;
@@ -62,6 +80,7 @@ export class LinearTracker extends McpTaskTracker {
                     hasAttachments:
                         Array.isArray(issue.attachments) &&
                         issue.attachments.length > 0,
+                    links: linksIn(issue),
                 },
             };
         }
@@ -118,6 +137,26 @@ export class LinearTracker extends McpTaskTracker {
             );
         }
         return this.teams.get(prefix)!;
+    }
+
+    /** `get_issue` names the parent, not the sub-issues: they are listed by parent. */
+    protected async childrenOf(task: Task): Promise<RelatedTask[]> {
+        const payload = await this.session.call('list_issues', {
+            parentId: task.id,
+            limit: MAX_SUBTASKS,
+        });
+        return recordsIn(payload)
+            .map((record) => relatedTask(record))
+            .filter(
+                (child): child is RelatedTask =>
+                    !!child && child.id.toUpperCase() !== task.id,
+            );
+    }
+
+    protected async documentText(id: string): Promise<string | undefined> {
+        const payload = await this.session.call('get_document', { id });
+        const doc = recordsIn(payload).find((record) => record.id === id);
+        return doc ? textField(doc, ['content']) : undefined;
     }
 
     private loadTools(): Promise<MCPToolRaw[]> {

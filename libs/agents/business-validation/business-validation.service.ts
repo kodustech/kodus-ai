@@ -101,6 +101,9 @@ export interface TryReadResult {
         criteriaNotWhereSaid: boolean;
         canJudge: boolean;
         hasAttachments: boolean;
+        /** The larger task this one is part of, read alongside it. */
+        parent?: { id: string; title?: string };
+        subtasks: number;
     };
     message?: string;
 }
@@ -624,6 +627,15 @@ export class BusinessValidationService {
                             !fromSettings,
                         canJudge: canJudgeAgainst(gradeTask(task)),
                         hasAttachments: !!task.hasAttachments,
+                        ...(task.parent
+                            ? {
+                                  parent: {
+                                      id: task.parent.id,
+                                      title: task.parent.title,
+                                  },
+                              }
+                            : {}),
+                        subtasks: task.subtasks?.length ?? 0,
                     },
                 };
             }

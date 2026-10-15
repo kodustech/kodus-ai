@@ -209,3 +209,105 @@ describe('McpTaskTracker', () => {
         );
     });
 });
+
+describe('McpTaskTracker.relate: what a found task links to', () => {
+    const issues: Record<string, Record<string, unknown>> = {
+        'KOD-20': {
+            id: 'KOD-20',
+            title: 'Bulk archive',
+            description: 'Archive part of the parent issue.',
+            parentId: 'KOD-19',
+            documents: [],
+        },
+        'KOD-19': {
+            id: 'KOD-19',
+            title: 'Ticket list: bulk actions',
+            description:
+                '## Acceptance criteria\n- A checkbox selects the ticket\n- "Archive selected" archives every selected ticket',
+        },
+        'KOD-22': {
+            id: 'KOD-22',
+            title: 'Ticket export',
+            description: 'Spec in the attached document.',
+            documents: [{ id: 'doc-1', title: 'Export spec' }],
+        },
+    };
+    const linear = () =>
+        session({
+            call: (name, args) => {
+                if (name === 'get_issue') {
+                    return issues[args.id as string];
+                }
+                if (name === 'list_issues') {
+                    return args.parentId === 'KOD-19'
+                        ? {
+                              issues: [
+                                  {
+                                      id: 'KOD-20',
+                                      title: 'Bulk archive',
+                                      status: 'Todo',
+                                  },
+                                  { id: 'KOD-21', title: 'Row checkboxes' },
+                              ],
+                          }
+                        : { issues: [] };
+                }
+                if (name === 'get_document') {
+                    return {
+                        id: 'doc-1',
+                        content:
+                            '## Acceptance criteria\n- Export downloads a CSV',
+                    };
+                }
+            },
+        });
+    const context = { organizationAndTeamData: { organizationId: 'org-1' } };
+    const found = async (s: ReturnType<typeof linear>, id: string) => {
+        const tracker = new LinearTracker(s);
+        const read = await tracker.read(ref(id), context);
+        if (read.status !== 'found') {
+            throw new Error(`${id} not found`);
+        }
+        return tracker.relate(read.task, context);
+    };
+
+    it("reads a sub-issue's parent whole, and never hands the raw links on", async () => {
+        const task = await found(linear(), 'KOD-20');
+        expect(task.parent).toMatchObject({
+            id: 'KOD-19',
+            title: 'Ticket list: bulk actions',
+        });
+        expect(task.parent?.description).toContain('Archive selected');
+        expect(task.links).toBeUndefined();
+    });
+
+    it('lists the sub-issues of a parent by title and status', async () => {
+        const task = await found(linear(), 'KOD-19');
+        expect(task.subtasks).toEqual([
+            { id: 'KOD-20', title: 'Bulk archive', status: 'Todo' },
+            { id: 'KOD-21', title: 'Row checkboxes', status: undefined },
+        ]);
+    });
+
+    it('folds an attached document into the description', async () => {
+        const task = await found(linear(), 'KOD-22');
+        expect(task.description).toContain('## Document: Export spec');
+        expect(task.description).toContain('Export downloads a CSV');
+    });
+
+    it('keeps the task as found when the parent cannot be read', async () => {
+        const s = session({
+            call: (name, args) =>
+                name === 'get_issue' && args.id === 'KOD-20'
+                    ? issues['KOD-20']
+                    : name === 'list_issues'
+                      ? { issues: [] }
+                      : (() => {
+                            throw new TrackerUnavailableError('down');
+                        })(),
+        });
+        const task = await found(s, 'KOD-20');
+        expect(task.parent).toEqual({ id: 'KOD-19', title: undefined });
+        expect(task.description).toBe('Archive part of the parent issue.');
+    });
+});

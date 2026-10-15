@@ -27,4 +27,34 @@ describe('buildBusinessRulesAnalysisPrompt', () => {
             'TEAM_GUIDANCE',
         );
     });
+
+    it('shows the parent and the sub-tasks as context, with how to use them', () => {
+        const prompt = buildBusinessRulesAnalysisPrompt({
+            ...input,
+            task: {
+                ...input.task,
+                parent: {
+                    id: '#3',
+                    title: 'Ticket list',
+                    description: 'Agents filter and sort tickets.',
+                },
+                subtasks: [{ id: '#8', title: 'Sort by date', status: 'Todo' }],
+            },
+        });
+        expect(prompt).toContain(
+            'PARENT_TASK (context: the larger task this one is part of):\n#3 — Ticket list\nAgents filter and sort tickets.',
+        );
+        expect(prompt).toContain('- #8: Sort by date (Todo)');
+        expect(prompt).toContain('Its requirements are not this task');
+        expect(prompt).toContain('"Delivered by <id>:"');
+        expect(prompt.indexOf('PARENT_TASK')).toBeLessThan(
+            prompt.indexOf('PR_DIFF:'),
+        );
+    });
+
+    it('says nothing of a parent or sub-tasks the task has none of', () => {
+        const prompt = buildBusinessRulesAnalysisPrompt(input);
+        expect(prompt).not.toContain('PARENT_TASK');
+        expect(prompt).not.toContain('SUB_TASKS');
+    });
 });

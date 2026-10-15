@@ -58,7 +58,7 @@
             "Amounts are rounded to two decimals",
             "Servings below 1 are rejected"
         ],
-        "toolsCalled": ["get_issue"]
+        "toolsCalled": ["get_issue", "list_issues"]
     },
     "settings": {
         "criteriaLocation": "heading",

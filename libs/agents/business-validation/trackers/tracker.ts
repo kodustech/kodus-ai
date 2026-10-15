@@ -1,6 +1,8 @@
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
 import type {
+    RelatedTask,
+    Task,
     TaskReference,
     TrackerLookup,
 } from '../business-validation.types';
@@ -45,6 +47,11 @@ export interface TaskTracker {
         context: TrackerReadContext,
         direct: TrackerLookup,
     ): Promise<TrackerLookup | undefined>;
+    /**
+     * Reads what a found task links to (its parent, sub-tasks, attached
+     * documents) through the same tools, and drops the raw links.
+     */
+    relate?(task: Task, context: TrackerReadContext): Promise<Task>;
     close(): Promise<void>;
 }
 
@@ -62,6 +69,17 @@ const UNREACHABLE =
     /time[sd]?\s?out|ECONN|ENOTFOUND|EAI_AGAIN|socket|fetch failed|network|\b5\d\d\b|\b429\b|rate.?limit|unauthori[sz]ed|\b401\b|\b403\b|forbidden|expired|invalid.?token|connect/i;
 
 const logger = createLogger('McpTaskTracker');
+
+/** Attached documents read per task; more is a wiki, not this task's spec. */
+const MAX_DOCUMENTS = 3;
+/** A parent or a document longer than this is cut: it is context, not the task. */
+const MAX_RELATED_CHARS = 6_000;
+
+function clipText(text: string): string {
+    return text.length > MAX_RELATED_CHARS
+        ? `${text.slice(0, MAX_RELATED_CHARS)}… (cut)`
+        : text;
+}
 
 const READ_ATTEMPTS = 2;
 const READ_BUDGET_MS = 30_000;
@@ -176,6 +194,83 @@ export abstract class McpTaskTracker implements TaskTracker {
         }
         return { status: 'error', message, tools: tools() };
     }
+
+    /**
+     * The parent read whole, the sub-tasks by title, and attached documents
+     * folded into the description, so a sub-issue that says "see the parent"
+     * or a task whose spec is a doc can still be judged. Each read is best
+     * effort: a miss leaves the task as it was found.
+     */
+    async relate(task: Task, context: TrackerReadContext): Promise<Task> {
+        const { links, ...found } = task;
+        if (!links && !this.childrenOf) {
+            return found;
+        }
+        const [parent, subtasks, documents] = await Promise.all([
+            this.parentOf(found, links, context),
+            links?.subtasks?.length
+                ? Promise.resolve(links.subtasks)
+                : (this.childrenOf?.(found).catch(() => []) ??
+                  Promise.resolve([])),
+            Promise.all(
+                (links?.documents ?? [])
+                    .slice(0, MAX_DOCUMENTS)
+                    .map(async (doc) => {
+                        const content =
+                            doc.content ??
+                            (await this.documentText?.(doc.id).catch(
+                                () => undefined,
+                            ));
+                        return content?.trim()
+                            ? `## Document: ${doc.title ?? doc.id}\n\n${clipText(content)}`
+                            : undefined;
+                    }),
+            ),
+        ]);
+        const attached = documents.filter((d): d is string => !!d);
+        return {
+            ...found,
+            ...(attached.length
+                ? {
+                      description: [found.description, ...attached]
+                          .filter(Boolean)
+                          .join('\n\n'),
+                  }
+                : {}),
+            ...(parent ? { parent } : {}),
+            ...(subtasks.length ? { subtasks } : {}),
+        };
+    }
+
+    private async parentOf(
+        task: Task,
+        links: Task['links'],
+        context: TrackerReadContext,
+    ): Promise<RelatedTask | undefined> {
+        const id = links?.parentId;
+        if (!id || id.toUpperCase() === task.id.toUpperCase()) {
+            return undefined;
+        }
+        const read = await this.lookup(
+            { kind: 'key', id, raw: id, source: 'body', intent: 'mentions' },
+            context,
+        ).catch(() => undefined);
+        if (read?.status !== 'found') {
+            return { id, title: links?.parentTitle };
+        }
+        return {
+            id,
+            title: read.task.title ?? links?.parentTitle,
+            description: read.task.description
+                ? clipText(read.task.description)
+                : undefined,
+        };
+    }
+
+    /** The task's sub-tasks, for a tracker whose answer doesn't list them. */
+    protected childrenOf?(task: Task): Promise<RelatedTask[]>;
+    /** A document attached to the task, for a tracker that names docs by id. */
+    protected documentText?(id: string): Promise<string | undefined>;
 
     /** The tracker's team or project keys (`SAA`), when it can list them. */
     protected projectKeys?(): Promise<string[]>;

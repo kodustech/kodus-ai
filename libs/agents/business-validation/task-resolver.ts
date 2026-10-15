@@ -1,6 +1,7 @@
 import type {
     FoundTask,
     ResolutionAttempt,
+    Task,
     TaskReference,
     TaskResolution,
     TrackerLookup,
@@ -49,6 +50,7 @@ export async function resolveTasks(
         const missed: Array<{ tracker: TaskTracker; lookup: TrackerLookup }> =
             [];
         let hit: TrackerLookup | undefined;
+        let hitBy: TaskTracker | undefined;
         for (const tracker of capable) {
             const lookup = confirmed(
                 reference,
@@ -57,6 +59,7 @@ export async function resolveTasks(
             attempts.push(attemptOf(reference, tracker, lookup));
             if (lookup.status === 'found') {
                 hit = lookup;
+                hitBy = tracker;
                 break;
             }
             missed.push({ tracker, lookup });
@@ -84,11 +87,16 @@ export async function resolveTasks(
             attempts.push(attemptOf(reference, tracker, checked));
             if (checked.status === 'found') {
                 hit = checked;
+                hitBy = tracker;
                 break;
             }
         }
         if (hit?.status === 'found') {
-            found.push({ reference, task: hit.task });
+            const task =
+                (await hitBy
+                    ?.relate?.(hit.task, context)
+                    .catch(() => undefined)) ?? withoutLinks(hit.task);
+            found.push({ reference, task });
             continue;
         }
         const missingFrom: TaskTracker[] = [];
@@ -153,6 +161,11 @@ function confirmed(
         !matchesTitleHint(reference, lookup.task.title)
         ? { status: 'not_found', tools: lookup.tools }
         : lookup;
+}
+
+function withoutLinks(task: Task): Task {
+    const { links: _links, ...rest } = task;
+    return rest;
 }
 
 /**
