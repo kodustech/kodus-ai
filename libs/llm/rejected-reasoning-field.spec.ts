@@ -517,6 +517,7 @@ describe('an OpenAI reasoning model with tools', () => {
         await run(proxied);
         expect(up.bodies).toHaveLength(4);
         expect(up.bodies[3].tools).toBeUndefined();
+        expect(up.bodies[3].reasoning_effort).toBeDefined();
         expect(up.bodies[3].reasoning_effort).not.toBe('none');
     });
 });
