@@ -382,13 +382,24 @@ function adfToText(doc: JsonRecord): string | undefined {
     return text || undefined;
 }
 
-/** Tags that mark a field as HTML. Once it is, every tag is removed. */
+/** Tags that mark a field as HTML. */
 const HTML_TAG =
     /<\/?(?:div|p|br|span|b|i|u|strong|em|ul|ol|li|h[1-6]|table|thead|tbody|tr|td|th|a|img|code|pre|blockquote|hr)\b[^>]*>/i;
 
 /**
+ * The tags removed once a field is HTML: the ones above and other elements
+ * a tracker field holds. Anything else between angle brackets is text
+ * (`Array<string>`, `Map<String, List<Order>>`) and stays, escaped.
+ */
+const REMOVED_TAG =
+    /<\/?(?:div|p|br|span|b|i|u|strong|em|ul|ol|li|h[1-6]|table|thead|tbody|tfoot|tr|td|th|a|img|code|pre|blockquote|hr|section|article|aside|header|footer|nav|figure|figcaption|details|summary|dl|dt|dd|del|ins|sub|sup|strike|kbd|samp|abbr|cite|script|style|iframe|svg|video|audio|embed|noscript|textarea|canvas)\b[^<>]*>|<!--[^<>]*-->/gi;
+/** Removal passes: each one undoes one level of `<scr<script>ipt>`. */
+const MAX_TAG_PASSES = 5;
+
+/**
  * Plain text from the HTML some trackers store (Azure DevOps). Text without
- * HTML is returned as is. `&lt;` stays escaped, so no tag comes back.
+ * HTML is returned as is. Whatever `<` is left is escaped, so no tag comes
+ * back however deep the nesting.
  */
 export function htmlToText(text: string | undefined): string | undefined {
     if (!text || !HTML_TAG.test(text)) {
@@ -397,10 +408,14 @@ export function htmlToText(text: string | undefined): string | undefined {
     let plain = text
         .replace(/<li\b[^>]*>/gi, '- ')
         .replace(/<br\s*\/?>|<\/(?:p|div|li|h[1-6]|tr|blockquote)>/gi, '\n');
-    // Repeated, so `<scr<script>ipt>` leaves no tag either.
-    for (let previous = ''; previous !== plain;) {
-        previous = plain;
-        plain = plain.replace(/<[^<>]*>/g, '');
+    // A bounded number of passes, so a crafted body costs linear time; a tag
+    // nested deeper is escaped below like any other `<`.
+    for (let pass = 0; pass < MAX_TAG_PASSES; pass++) {
+        const before = plain.length;
+        plain = plain.replace(REMOVED_TAG, '');
+        if (plain.length >= before) {
+            break;
+        }
     }
     plain = plain
         .replace(/</g, '&lt;')

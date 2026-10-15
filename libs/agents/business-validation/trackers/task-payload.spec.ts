@@ -17,6 +17,32 @@ describe('htmlToText', () => {
         expect(text).toContain('Hi');
     });
 
+    it('removes a tag it does not list by name too', () => {
+        const text = htmlToText(
+            '<section>Total drops<svg onload="x"></svg></section><p>Balance shown</p>',
+        );
+        expect(text).not.toMatch(/</);
+        expect(text).toContain('Total drops');
+    });
+
+    it('keeps generics in a field that is HTML', () => {
+        expect(
+            htmlToText(
+                '<div>Returns Array<string> sorted, as Map<String, List<Order>></div>',
+            ),
+        ).toBe(
+            'Returns Array&lt;string> sorted, as Map&lt;String, List&lt;Order>>',
+        );
+    });
+
+    it('costs linear time on markup nested to any depth', () => {
+        const nested = `<div>${'<scr'.repeat(20_000)}ipt>${'ipt>'.repeat(20_000)}x</div>`;
+        const started = Date.now();
+        const text = htmlToText(nested);
+        expect(Date.now() - started).toBeLessThan(1_000);
+        expect(text).not.toMatch(/</);
+    });
+
     it('returns text without HTML as is, generics included', () => {
         expect(htmlToText('Returns Array<string> sorted')).toBe(
             'Returns Array<string> sorted',
