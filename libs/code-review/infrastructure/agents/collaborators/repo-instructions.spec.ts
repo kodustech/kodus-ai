@@ -155,12 +155,22 @@ describe('collectRepoInstructions', () => {
                 '---\nglobs: *.py\nalwaysApply: false\n---\nUse Decimal.',
         });
 
-        const result = await collectRepoInstructions({
+        const outside = await collectRepoInstructions({
             ...repo,
             changedFiles: ['services/billing/README.md', 'services/auth/a.py'],
         });
+        const inside = await collectRepoInstructions({
+            ...repo,
+            changedFiles: ['services/billing/src/invoice.py'],
+        });
 
-        expect(result.files).toEqual([]);
+        expect(outside.files).toEqual([]);
+        expect(inside.files).toEqual([
+            expect.objectContaining({
+                path: 'services/billing/.cursor/rules/python.mdc',
+                appliesTo: '*.py',
+            }),
+        ]);
     });
 
     it('truncates a long file and stops at the total budget', async () => {
