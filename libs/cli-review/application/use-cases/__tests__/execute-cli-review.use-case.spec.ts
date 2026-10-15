@@ -70,6 +70,7 @@ function createMocks() {
 
     const codeManagementService = {
         getTypeIntegration: jest.fn().mockResolvedValue(null),
+        getDefaultBranch: jest.fn().mockResolvedValue('develop'),
     };
 
     const useCase = new ExecuteCliReviewUseCase(
@@ -193,6 +194,52 @@ describe('ExecuteCliReviewUseCase', () => {
                     { remote: 'https://gitlab.acme.com/group/repo.git' },
                     false,
                 ),
+            ).resolves.toBeUndefined();
+        });
+    });
+
+    describe('resolveInstructionsBaseRef', () => {
+        const org = { organizationId: 'org-1', teamId: 'team-1' };
+        const resolve = (useCase: any, config: any, repoId: string) =>
+            useCase.resolveInstructionsBaseRef(
+                org,
+                config,
+                { id: repoId, name: 'api' },
+                false,
+            );
+
+        it("reads the repository's real default branch when instructions are on", async () => {
+            const { useCase, codeManagementService } = createMocks();
+
+            await expect(
+                resolve(useCase, { repoInstructionsEnabled: true }, 'repo-1'),
+            ).resolves.toBe('develop');
+            expect(codeManagementService.getDefaultBranch).toHaveBeenCalledWith({
+                organizationAndTeamData: org,
+                repository: { id: 'repo-1', name: 'api' },
+            });
+        });
+
+        it('asks the git host nothing when instructions are off or the repository is unknown', async () => {
+            const { useCase, codeManagementService } = createMocks();
+
+            await expect(
+                resolve(useCase, { repoInstructionsEnabled: false }, 'repo-1'),
+            ).resolves.toBeUndefined();
+            await expect(
+                resolve(useCase, { repoInstructionsEnabled: true }, 'global'),
+            ).resolves.toBeUndefined();
+            expect(codeManagementService.getDefaultBranch).not.toHaveBeenCalled();
+        });
+
+        it('gives no branch when the lookup fails, so the review skips them and says why', async () => {
+            const { useCase, codeManagementService } = createMocks();
+            codeManagementService.getDefaultBranch.mockRejectedValue(
+                new Error('404'),
+            );
+
+            await expect(
+                resolve(useCase, { repoInstructionsEnabled: true }, 'repo-1'),
             ).resolves.toBeUndefined();
         });
     });

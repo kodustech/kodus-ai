@@ -201,6 +201,13 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 isTrialMode,
             );
 
+            const instructionsBaseRef = await this.resolveInstructionsBaseRef(
+                organizationAndTeamData,
+                effectiveConfig,
+                { id: resolvedRepoId, name: resolvedRepoName },
+                isTrialMode,
+            );
+
             const context: CliReviewPipelineContext = {
                 // CLI-specific fields
                 isFastMode,
@@ -239,7 +246,7 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                     title: 'CLI Review',
                     base: {
                         repo: { fullName: 'cli/cli-review' },
-                        ref: 'main',
+                        ref: instructionsBaseRef ?? 'main',
                     },
                     repository: {} as any,
                     isDraft: false,
@@ -374,6 +381,49 @@ export class ExecuteCliReviewUseCase implements IUseCase {
      * Load user's code review configuration from database,
      * including kody rules resolved for the repository matched by git remote.
      */
+    /**
+     * The branch the review reads coding-agent instructions from. A CLI review
+     * has no pull request, so it is the repository's default branch, asked of
+     * the git host; `undefined` (instructions skipped, with the stage's log)
+     * when the setting is off, the repository is unknown or the lookup fails.
+     */
+    private async resolveInstructionsBaseRef(
+        organizationAndTeamData: OrganizationAndTeamData,
+        config: { repoInstructionsEnabled?: boolean } | undefined,
+        repository: { id: string; name?: string | null },
+        isTrialMode?: boolean,
+    ): Promise<string | undefined> {
+        if (
+            config?.repoInstructionsEnabled !== true ||
+            isTrialMode ||
+            !repository.id ||
+            repository.id === 'global'
+        ) {
+            return undefined;
+        }
+
+        try {
+            return (
+                (await this.codeManagementService.getDefaultBranch({
+                    organizationAndTeamData,
+                    repository: { id: repository.id, name: repository.name },
+                })) || undefined
+            );
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not resolve the default branch for coding-agent instructions in the CLI review',
+                context: ExecuteCliReviewUseCase.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository.id,
+                },
+            });
+            return undefined;
+        }
+    }
+
     /**
      * Platform backing this CLI review.
      *
