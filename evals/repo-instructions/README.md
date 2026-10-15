@@ -3,7 +3,7 @@
 > - **Answers:** Does the generalist report changes that break the repository's coding-agent instructions (CLAUDE.md), quoting them, without inventing violations or leaking the label when the setting is off?
 > - **Runs:** every engine PR, against the scripted model (`evals/wiring-smoke.js`). Not gated in CI.
 > - **Run it:** `pnpm eval:repo-instructions` · `node evals/repo-instructions/run.js --model=deepseek-v4-flash@fireworks --gate --output=<result.json>`
-> - **Gate:** `--gate` fails below the model's floor in `evals/repo-instructions/targets.json` (violation sites reported with the setting on), and on any `repo_instruction` finding with the setting off. The result is the shared shape (`evals/shared/eval-result.js`).
+> - **Gate:** `--gate` fails below the model's floor in `evals/repo-instructions/targets.json` (violation sites reported with the setting on), and on any `repo_instruction` finding with the setting off; a model with no floor there exits 2, not gated. The result is the shared shape (`evals/shared/eval-result.js`).
 > - **Cost:** two generalist runs per case (instructions on and off) with a real model; none under the scripted model.
 
 The generalist reads the coding-agent instructions that cover a pull request's changed files (`libs/code-review/infrastructure/agents/collaborators/repo-instructions.ts`) and may report a finding labeled `repo_instruction`. This eval measures that finding type.

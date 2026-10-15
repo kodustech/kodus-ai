@@ -247,7 +247,11 @@ async function main() {
             console.error(`gate: ${leaks} repo_instruction finding(s) with the setting off`);
             return 1;
         }
-        if (floor !== null && result.metric.value !== null && result.metric.value < floor) {
+        if (floor === null) {
+            console.error(`not gated: no floor for ${args.model} in evals/repo-instructions/targets.json; calibrate it first`);
+            return 2;
+        }
+        if (result.metric.value !== null && result.metric.value < floor) {
             console.error(`gate: ${result.metric.value} below the floor ${floor} for ${args.model}`);
             return 1;
         }
