@@ -474,7 +474,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             0,
         );
         this.logger[result.error ? 'warn' : 'log']({
-            message: `[repo-instructions] PR#${prNumber}: indexed=${result.indexedCount} inlined=${result.files.length} dropped=${result.dropped.length} bytes=${bytes} truncated=${result.truncated}${result.error ? ` error=${result.error}` : ''}`,
+            message: `[repo-instructions] PR#${prNumber}: indexed=${result.indexedCount} listed=${result.files.length} dropped=${result.dropped.length} bytes=${bytes} truncated=${result.truncated}${result.error ? ` error=${result.error}` : ''}`,
             context: this.stageName,
             metadata: {
                 ...logMetadata,

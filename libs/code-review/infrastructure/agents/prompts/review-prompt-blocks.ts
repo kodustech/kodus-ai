@@ -204,11 +204,7 @@ export function buildGeneralistReviewPrompt(
 ): string {
     const instructionsCategory = options.repoInstructions
         ? `
-    - repo_instruction: an added or modified line that breaks a convention stated in <RepositoryInstructions>, quoted from the file it comes from`
-        : '';
-    const instructionsLens = options.repoInstructions
-        ? `
-    4. repository-instructions lens — for each file in <RepositoryInstructions>, check the changed lines it applies to against what it states. Report only conventions the file states and the diff breaks; this lens never replaces the other three.`
+    - repo_instruction: an added or modified line that breaks a convention stated in one of the files listed in <RepositoryInstructions>, quoted from that file`
         : '';
 
     return `  <Mission>
@@ -241,10 +237,10 @@ ${renderLens('Performance', PROMPT_BLOCKS.performance)}
 
   <CoordinationPolicy>
     Investigate broadly, then classify narrowly.
-    Run ${options.repoInstructions ? 'four' : 'three'} explicit review lenses before you finalize:
+    Run three explicit review lenses before you finalize:
     1. bug lens — correctness, regressions, bad state transitions, wrong contracts
     2. security lens — exploit paths, trust boundaries, auth/access-control, unsafe inputs
-    3. performance lens — material slowdowns, query amplification, unbounded loading, blocking or fanout blowups${instructionsLens}
+    3. performance lens — material slowdowns, query amplification, unbounded loading, blocking or fanout blowups
     Do not stop after finding a bug. You must still run the security and performance lenses against the changed code before finalizing.
     - Start by understanding what the changed code now does differently.
     - Trace callers and callees before making cross-file claims.

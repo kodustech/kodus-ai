@@ -150,7 +150,7 @@ async function main(): Promise<number> {
         });
         out[caseId] = { repo: upstream, ref, repoInstructions };
         console.log(
-            `${repoInstructions.files.length ? 'HAS ' : 'none'} ${caseId} inlined=${repoInstructions.files.map((f) => f.path).join(',')}`,
+            `${repoInstructions.files.length ? 'HAS ' : 'none'} ${caseId} listed=${repoInstructions.files.map((f) => f.path).join(',')}`,
         );
     }
 

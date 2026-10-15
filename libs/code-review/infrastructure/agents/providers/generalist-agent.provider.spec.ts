@@ -44,10 +44,16 @@ describe('GeneralistAgentProvider — coding-agent instructions', () => {
         ).toEqual(['security', 'repo_instruction']);
     });
 
-    it('adds the instructions lens to the category prompt only when instructions were collected', () => {
+    it('adds the repo_instruction category to the category prompt only when instructions were collected', () => {
         expect(categoryPrompt({})).not.toContain('repo_instruction');
         expect(categoryPrompt({ repoInstructions: instructions })).toContain(
             'repo_instruction',
         );
+    });
+
+    it('keeps three review lenses when instructions were collected', () => {
+        const prompt = categoryPrompt({ repoInstructions: instructions });
+        expect(prompt).toContain('Run three explicit review lenses');
+        expect(prompt).not.toContain('repository-instructions lens');
     });
 });
