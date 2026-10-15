@@ -1,4 +1,5 @@
 import type {
+    TaskLinks,
     TaskReference,
     TrackerLookup,
 } from '../business-validation.types';
@@ -80,7 +81,42 @@ export class GitIssuesTracker extends McpTaskTracker {
                 description:
                     typeof issue.body === 'string' ? issue.body : undefined,
                 url: typeof issue.url === 'string' ? issue.url : undefined,
+                links: hierarchy(issue, repository),
             },
         };
     }
+}
+
+/**
+ * The parent and sub-issues the host links (GitHub). A parent in another
+ * repository is named, not read: reading it needs that repository's access.
+ */
+function hierarchy(
+    issue: Record<string, unknown>,
+    repository: { owner?: string; name: string },
+): TaskLinks | undefined {
+    const parent = asRecord(issue.parent);
+    const sameRepository =
+        typeof parent.repository === 'string' &&
+        parent.repository.toLowerCase() ===
+            `${repository.owner}/${repository.name}`.toLowerCase();
+    const subtasks = (Array.isArray(issue.subIssues) ? issue.subIssues : [])
+        .map((entry) => asRecord(entry))
+        .filter((sub) => typeof sub.number === 'number')
+        .map((sub) => ({
+            id: `#${sub.number}`,
+            title: typeof sub.title === 'string' ? sub.title : undefined,
+            status: typeof sub.state === 'string' ? sub.state : undefined,
+        }));
+    const links: TaskLinks = {
+        ...(typeof parent.number === 'number'
+            ? sameRepository
+                ? { parentId: String(parent.number) }
+                : {
+                      parentId: `${parent.repository}#${parent.number}`,
+                  }
+            : {}),
+        ...(subtasks.length ? { subtasks } : {}),
+    };
+    return Object.keys(links).length ? links : undefined;
 }

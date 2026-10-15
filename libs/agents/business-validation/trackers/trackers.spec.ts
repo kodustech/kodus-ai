@@ -2,6 +2,7 @@ import type { MCPServerConfig, MCPToolRaw } from '@libs/mcp-server/mcp-adapter';
 
 import { extractTaskReferences } from '../task-references';
 import { CustomMcpTracker, rankReadTools } from './custom-mcp.tracker';
+import { GitIssuesTracker } from './git-issues.tracker';
 import { LinearTracker } from './linear.tracker';
 import {
     TrackerUnavailableError,
@@ -309,5 +310,67 @@ describe('McpTaskTracker.relate: what a found task links to', () => {
         const task = await found(s, 'KOD-20');
         expect(task.parent).toEqual({ id: 'KOD-19', title: undefined });
         expect(task.description).toBe('Archive part of the parent issue.');
+    });
+});
+
+describe('GitIssuesTracker: the parent and sub-issues GitHub links', () => {
+    const context = {
+        organizationAndTeamData: { organizationId: 'org-1' },
+        repository: { owner: 'acme', name: 'web' },
+    };
+    const issues: Record<number, Record<string, unknown>> = {
+        12: {
+            number: 12,
+            title: 'Bulk archive',
+            body: 'Archive part of the parent.',
+            parent: { number: 11, repository: 'acme/web' },
+        },
+        11: {
+            number: 11,
+            title: 'Bulk actions',
+            body: '- A checkbox selects the ticket\n- Archive selected archives them',
+            subIssues: [{ number: 12, title: 'Bulk archive', state: 'open' }],
+        },
+        20: {
+            number: 20,
+            title: 'Export',
+            body: 'Export the list.',
+            parent: { number: 3, repository: 'acme/specs' },
+        },
+    };
+    const git = () =>
+        new GitIssuesTracker(
+            session({
+                call: (_name, args) => ({
+                    success: true,
+                    data: issues[args.issueNumber as number] ?? null,
+                }),
+            }),
+        );
+    const found = async (n: string) => {
+        const tracker = git();
+        const read = await tracker.read(ref(n), context);
+        if (read.status !== 'found') {
+            throw new Error(`${n} not found`);
+        }
+        return tracker.relate(read.task, context);
+    };
+
+    it("reads a sub-issue's parent in the same repository", async () => {
+        const task = await found('#12');
+        expect(task.parent).toMatchObject({ id: '#11', title: 'Bulk actions' });
+        expect(task.parent?.description).toContain('Archive selected');
+    });
+
+    it('lists the sub-issues of a parent as #N', async () => {
+        const task = await found('#11');
+        expect(task.subtasks).toEqual([
+            { id: '#12', title: 'Bulk archive', status: 'open' },
+        ]);
+    });
+
+    it('names a parent in another repository without reading it', async () => {
+        const task = await found('#20');
+        expect(task.parent).toEqual({ id: 'acme/specs#3', title: undefined });
     });
 });

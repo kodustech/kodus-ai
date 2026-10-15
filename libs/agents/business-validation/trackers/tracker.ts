@@ -259,7 +259,7 @@ export abstract class McpTaskTracker implements TaskTracker {
             return { id, title: links?.parentTitle };
         }
         return {
-            id,
+            id: read.task.id,
             title: read.task.title ?? links?.parentTitle,
             description: read.task.description
                 ? clipText(read.task.description)

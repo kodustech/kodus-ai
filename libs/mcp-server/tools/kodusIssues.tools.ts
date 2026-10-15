@@ -25,6 +25,19 @@ const IssueSchema = z.strictObject({
     updatedAt: z.string(),
     closedAt: z.string().nullable(),
     platform: z.string(),
+    parent: z
+        .strictObject({ number: z.number(), repository: z.string() })
+        .nullable()
+        .optional(),
+    subIssues: z
+        .array(
+            z.strictObject({
+                number: z.number(),
+                title: z.string(),
+                state: z.enum(['open', 'closed']),
+            }),
+        )
+        .optional(),
 });
 
 const repositorySchema = z.strictObject({
