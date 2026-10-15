@@ -23,17 +23,29 @@ export class RemoveIdeRulesSyncEnabled2026101500000000 implements MigrationInter
     name = 'RemoveIdeRulesSyncEnabled2026101500000000';
 
     public async up(queryRunner: QueryRunner): Promise<void> {
-        const rows: Array<{
-            uuid: string;
-            configValue: CodeReviewConfigValue | null;
-        }> = await queryRunner.query(`
-            SELECT uuid, "configValue"
+        // Only the rows that still hold the key, read and rewritten one at a
+        // time under a row lock, so a settings save that lands meanwhile is
+        // neither overwritten nor lost.
+        const candidates: Array<{ uuid: string }> = await queryRunner.query(`
+            SELECT uuid
               FROM "parameters"
              WHERE "configKey" = 'code_review_config'
+               AND "configValue"::text LIKE '%"${RETIRED_KEY}"%'
         `);
 
-        for (const row of rows) {
-            if (!removeRetiredKey(row.configValue)) {
+        for (const { uuid } of candidates) {
+            const [row]: Array<{ configValue: CodeReviewConfigValue | null }> =
+                await queryRunner.query(
+                    `
+                        SELECT "configValue"
+                          FROM "parameters"
+                         WHERE uuid = $1
+                           FOR UPDATE
+                    `,
+                    [uuid],
+                );
+
+            if (!row || !removeRetiredKey(row.configValue)) {
                 continue;
             }
 
@@ -44,7 +56,7 @@ export class RemoveIdeRulesSyncEnabled2026101500000000 implements MigrationInter
                            "updatedAt" = NOW()
                      WHERE uuid = $2
                 `,
-                [JSON.stringify(row.configValue), row.uuid],
+                [JSON.stringify(row.configValue), uuid],
             );
         }
     }
@@ -60,11 +72,13 @@ function removeRetiredKey(configValue?: CodeReviewConfigValue | null): boolean {
         return false;
     }
 
+    const asArray = <T>(value: T[] | undefined): T[] =>
+        Array.isArray(value) ? value : [];
     const scopes = [
         configValue.configs,
-        ...(configValue.repositories ?? []).flatMap((repository) => [
+        ...asArray(configValue.repositories).flatMap((repository) => [
             repository?.configs,
-            ...(repository?.directories ?? []).map(
+            ...asArray(repository?.directories).map(
                 (directory) => directory?.configs,
             ),
         ]),
@@ -72,7 +86,13 @@ function removeRetiredKey(configValue?: CodeReviewConfigValue | null): boolean {
 
     let changed = false;
     for (const configs of scopes) {
-        if (configs && RETIRED_KEY in configs) {
+        // Stored jsonb is unvalidated: skip a scope that is not an object.
+        if (
+            configs &&
+            typeof configs === 'object' &&
+            !Array.isArray(configs) &&
+            RETIRED_KEY in configs
+        ) {
             delete configs[RETIRED_KEY];
             changed = true;
         }
