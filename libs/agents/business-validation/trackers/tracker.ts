@@ -31,13 +31,14 @@ export interface TaskTracker {
     ): Promise<TrackerLookup>;
     /**
      * Whether the reference's prefix is a team or project in this tracker, so
-     * a missing `SAA-999` reads as a typo and `UTF-8` doesn't. Absent when the
-     * tracker can't tell.
+     * a missing `SAA-999` reads as a typo and `UTF-8` doesn't. Undefined (or
+     * absent) when the tracker can't list its keys; rejects when listing them
+     * failed, so an outage is never read as "not ours".
      */
     ownsReference?(
         reference: TaskReference,
         context: TrackerReadContext,
-    ): Promise<boolean>;
+    ): Promise<boolean | undefined>;
     /**
      * A second look, by an agent, at a reference the direct read missed.
      * Undefined when there is nothing to try or it found nothing.
@@ -121,14 +122,32 @@ export abstract class McpTaskTracker implements TaskTracker {
         if (
             direct.status === 'not_found' &&
             reference.kind === 'key' &&
-            !(await this.ownsReference(reference).catch(() => false))
+            (await this.ownsReference(reference, context).catch((error) => {
+                // Can't tell whose key it is: the agent may still look.
+                warnFailure(
+                    this.name,
+                    'list its keys',
+                    reference.id,
+                    context,
+                    error,
+                );
+                return undefined;
+            })) === false
         ) {
             // `KOD-10` with no team KOD here: another tracker's, nothing to find.
             return undefined;
         }
-        const found = await this.finder(reference, context).catch(
-            () => undefined,
-        );
+        const found = await this.finder(reference, context).catch((error) => {
+            // The direct read stands as the tracker's answer.
+            warnFailure(
+                this.name,
+                'run the task finder',
+                reference.id,
+                context,
+                error,
+            );
+            return undefined;
+        });
         if (!found) {
             return undefined;
         }
@@ -210,8 +229,16 @@ export abstract class McpTaskTracker implements TaskTracker {
             this.parentOf(found, links, context),
             links?.subtasks?.length
                 ? Promise.resolve(links.subtasks)
-                : (this.childrenOf?.(found).catch(() => []) ??
-                  Promise.resolve([])),
+                : (this.childrenOf?.(found).catch((error) => {
+                      warnFailure(
+                          this.name,
+                          'read sub-tasks',
+                          found.id,
+                          context,
+                          error,
+                      );
+                      return [];
+                  }) ?? Promise.resolve([])),
             Promise.all(
                 (links?.documents ?? [])
                     .slice(0, MAX_DOCUMENTS)
@@ -219,7 +246,16 @@ export abstract class McpTaskTracker implements TaskTracker {
                         const content =
                             doc.content ??
                             (await this.documentText?.(doc.id).catch(
-                                () => undefined,
+                                (error) => {
+                                    warnFailure(
+                                        this.name,
+                                        `read document ${doc.id}`,
+                                        found.id,
+                                        context,
+                                        error,
+                                    );
+                                    return undefined;
+                                },
                             ));
                         return content?.trim()
                             ? `## Document: ${doc.title ?? doc.id}\n\n${clipText(content)}`
@@ -254,7 +290,16 @@ export abstract class McpTaskTracker implements TaskTracker {
         const read = await this.lookup(
             { kind: 'key', id, raw: id, source: 'body', intent: 'mentions' },
             context,
-        ).catch(() => undefined);
+        ).catch((error) => {
+            warnFailure(
+                this.name,
+                `read parent ${id}`,
+                task.id,
+                context,
+                error,
+            );
+            return undefined;
+        });
         if (read?.status !== 'found') {
             return { id, title: links?.parentTitle };
         }
@@ -276,11 +321,19 @@ export abstract class McpTaskTracker implements TaskTracker {
     protected projectKeys?(): Promise<string[]>;
     private keys?: Promise<string[]>;
 
-    async ownsReference(reference: TaskReference): Promise<boolean> {
-        if (reference.kind !== 'key' || !this.projectKeys) {
+    async ownsReference(
+        reference: TaskReference,
+        _context?: TrackerReadContext,
+    ): Promise<boolean | undefined> {
+        if (reference.kind !== 'key') {
             return false;
         }
-        this.keys ??= this.projectKeys().catch(() => []);
+        if (!this.projectKeys) {
+            return undefined;
+        }
+        // A failed listing rejects, for every caller of this run: a tracker
+        // that is down has not said the key isn't its own.
+        this.keys ??= this.projectKeys();
         const prefix = reference.id.split('-')[0];
         return (await this.keys).some((key) => key.toUpperCase() === prefix);
     }
@@ -288,6 +341,27 @@ export abstract class McpTaskTracker implements TaskTracker {
     close(): Promise<void> {
         return this.session.close();
     }
+}
+
+/** A best-effort read that failed: the run goes on without it, the log keeps it. */
+function warnFailure(
+    tracker: string,
+    what: string,
+    taskId: string,
+    context: TrackerReadContext,
+    error: unknown,
+): void {
+    logger.warn({
+        message: `[BUSINESS-LOGIC] ${tracker} could not ${what} for ${taskId}`,
+        context: 'McpTaskTracker',
+        error: error instanceof Error ? error : undefined,
+        metadata: {
+            organizationId: context.organizationAndTeamData?.organizationId,
+            tracker,
+            taskId,
+            reason: error instanceof Error ? error.message : String(error),
+        },
+    });
 }
 
 /**

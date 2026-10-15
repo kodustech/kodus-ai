@@ -3,6 +3,7 @@ import {
     noCapableTrackerMessage,
     noReadToolMessage,
     noTrackerMessage,
+    taskNotFoundMessage,
 } from './messages';
 
 const issue: TaskReference = {
@@ -50,5 +51,23 @@ describe('noReadToolMessage', () => {
             'no tool that reads one task by its id is picked',
         );
         expect(text).not.toContain("didn't answer");
+    });
+});
+
+describe('taskNotFoundMessage', () => {
+    it('names only the trackers that answered the task is not there', () => {
+        const text = taskNotFoundMessage([
+            {
+                reference: 'SAA-999',
+                tracker: 'Acme Tracker',
+                status: 'error',
+                message:
+                    'Acme Tracker has no tool that reads one task by its id',
+                setup: true,
+            },
+            { reference: 'SAA-999', tracker: 'Linear', status: 'not_found' },
+        ]);
+        expect(text).toContain('SAA-999 in Linear');
+        expect(text).not.toContain('Acme Tracker');
     });
 });

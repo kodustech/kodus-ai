@@ -3,6 +3,7 @@ import type { MCPToolRaw } from '@libs/mcp-server/mcp-adapter';
 
 import { resolveTasks } from '../task-resolver';
 import { extractTaskReferences } from '../task-references';
+import { CustomMcpTracker } from './custom-mcp.tracker';
 import { LinearTracker } from './linear.tracker';
 import { TaskNotFoundError, type McpToolSession } from './mcp-tool-session';
 import {
@@ -348,6 +349,23 @@ describe('task finder', () => {
         expect(agent.offered).toEqual(['get_issue', 'list_teams']);
     });
 
+    it('keeps the tool that reads one task when a server lists too many', async () => {
+        const agent = scripted([]);
+        await createTaskFinder(agent)({
+            reference: ref('SAA-96'),
+            tracker: 'Plugin',
+            tools: [
+                ...Array.from({ length: 45 }, (_, i) =>
+                    tool(`get_report_${i}`),
+                ),
+                tool('get_task', { task_id: { type: 'string' } }),
+            ],
+            call: async () => undefined,
+        });
+        expect(agent.offered).toHaveLength(40);
+        expect(agent.offered[0]).toBe('get_task');
+    });
+
     it('offers only tools marked read-only when the server marks them (Linear, Rovo)', async () => {
         const agent = scripted([]);
         await createTaskFinder(agent)({
@@ -465,6 +483,24 @@ describe('the resolver asks the finder only after every direct read missed', () 
         await resolveTasks([ref('KOD-10')], [linear], context);
 
         expect(finder).not.toHaveBeenCalled();
+    });
+
+    it('searches a plugin that cannot list its keys', async () => {
+        const finder = jest.fn(async () => undefined);
+        const plugin = new CustomMcpTracker('Acme', {
+            called: [] as string[],
+            tools: async () => [
+                tool('get_task', { task_id: { type: 'string' } }),
+            ],
+            call: async () => {
+                throw new TaskNotFoundError('not found');
+            },
+            close: async () => undefined,
+        } as any).useFinder(finder);
+
+        await resolveTasks([ref('KOD-10')], [plugin], context);
+
+        expect(finder).toHaveBeenCalled();
     });
 
     it('leaves a tracker that is down to the re-check, not to an agent', async () => {

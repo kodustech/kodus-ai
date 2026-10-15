@@ -1,6 +1,10 @@
 import type { TaskReference, TrackerLookup } from './business-validation.types';
 import { extractTaskReferences } from './task-references';
-import { repositoryForLookup, resolveTasks } from './task-resolver';
+import {
+    FIND_BUDGET_MS,
+    repositoryForLookup,
+    resolveTasks,
+} from './task-resolver';
 import type { TaskTracker } from './trackers/tracker';
 
 const context = { organizationAndTeamData: { organizationId: 'org-1' } };
@@ -93,6 +97,23 @@ describe('resolveTasks', () => {
         expect(linear.reads).toEqual(['KOD-10']);
     });
 
+    it('reads a key the branch states, even when the title wrote it in lower case first', async () => {
+        const plugin = {
+            ...tracker('Acme', { 'KOD-10': 'Sticky notes' }),
+            ownsReference: async () => undefined,
+        };
+        const result = await resolveTasks(
+            extractTaskReferences({
+                title: 'feat(kod-10): sticky notes',
+                branch: 'nina/kod-10-sticky-notes',
+            }),
+            [plugin],
+            context,
+        );
+        expect(result.kind).toBe('found');
+        expect(plugin.reads).toEqual(['KOD-10']);
+    });
+
     it('never sends a lowercase version to a tracker, nor counts it toward a release (UC-14, UC-17)', async () => {
         const linear = tracker('Linear', { 'KOD-10': 'x' }, { teams: ['KOD'] });
         const noTask = await resolveTasks(
@@ -165,6 +186,63 @@ describe('resolveTasks', () => {
             context,
         );
         expect(result.kind).toBe('no_capable_tracker');
+    });
+
+    it('keeps a lowercase key when listing the teams failed, so the outage shows', async () => {
+        const linear = {
+            ...tracker('Linear', {}, { down: true }),
+            ownsReference: async () => {
+                throw new Error('list_teams timed out');
+            },
+        };
+        const result = await resolveTasks(
+            refs('', 'feat(kod-10): sticky notes'),
+            [linear],
+            context,
+        );
+        expect(result.kind).toBe('tracker_unavailable');
+    });
+
+    it('still reports the miss when the typo check cannot list the keys', async () => {
+        const linear = {
+            ...tracker('Linear', {}),
+            ownsReference: async () => {
+                throw new Error('list_teams timed out');
+            },
+        };
+        const result = await resolveTasks(
+            refs('', 'feat(SAA-999): bulk archive'),
+            [linear],
+            context,
+        );
+        expect(result).toMatchObject({
+            kind: 'not_found',
+            looksIntended: false,
+        });
+    });
+
+    it('stops the agents once their shared budget is spent', async () => {
+        let now = 1_000;
+        const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+        const finds: string[] = [];
+        const linear: TaskTracker = {
+            ...tracker('Linear', {}),
+            find: async (r) => {
+                finds.push(r.id);
+                now += FIND_BUDGET_MS;
+                return undefined;
+            },
+        };
+        try {
+            await resolveTasks(
+                refs('', 'feat: PLAT-1 and PLAT-2'),
+                [linear],
+                context,
+            );
+        } finally {
+            clock.mockRestore();
+        }
+        expect(finds).toEqual(['PLAT-1']);
     });
 
     it('never reads a #N the description only mentions as the task', async () => {

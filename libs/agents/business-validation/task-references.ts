@@ -61,6 +61,15 @@ export function extractTaskReferences(
             // "feat(SAA-96)" in the title and "Part of SAA-96" in the body:
             // the PR said it delivers a slice, so that is what counts.
             earlier.intent = strongerIntent(earlier.intent, reference.intent);
+            // `feat(kod-10)` in the title and `nina/kod-10-…` as the branch:
+            // stated where keys are trusted, it is no longer loose.
+            if (
+                earlier.kind === 'key' &&
+                earlier.loose &&
+                !(reference.kind === 'key' && reference.loose)
+            ) {
+                delete earlier.loose;
+            }
             // `fix/12-add-login` and "Closes #12": the PR named the issue
             // outright, so its title no longer has to match.
             if (

@@ -7,10 +7,20 @@ import type {
     TrackerLookup,
 } from './business-validation.types';
 import { referenceLabel, selectReferences } from './task-references';
+import { createLogger } from '@libs/core/log/logger';
+
 import type { TaskTracker, TrackerReadContext } from './trackers/tracker';
 
 /** A PR that states more tasks than this is a release or a merge, not one task's work. */
 export const MAX_REFERENCES = 3;
+
+/**
+ * How long the agents' second looks may take in all. Each run is bounded on
+ * its own; this keeps references times trackers within the stage's budget.
+ */
+export const FIND_BUDGET_MS = 90_000;
+
+const logger = createLogger('TaskResolver');
 
 /**
  * Every task the PR states that a connected tracker confirms, asked in
@@ -40,6 +50,7 @@ export async function resolveTasks(
     }
 
     const found: FoundTask[] = [];
+    const findUntil = Date.now() + FIND_BUDGET_MS;
     let readable = false;
     let failed = false;
     let looksIntended = false;
@@ -67,6 +78,10 @@ export async function resolveTasks(
         // An agent looks again only when no tracker read it directly: a
         // Linear key Jira doesn't know never costs a search in Jira.
         for (const miss of hit ? [] : missed) {
+            if (Date.now() >= findUntil) {
+                // Out of time: the direct reads stand as the answer.
+                break;
+            }
             const second = await miss.tracker.find?.(
                 reference,
                 context,
@@ -93,9 +108,14 @@ export async function resolveTasks(
         }
         if (hit?.status === 'found') {
             const task =
-                (await hitBy
-                    ?.relate?.(hit.task, context)
-                    .catch(() => undefined)) ?? withoutLinks(hit.task);
+                (await hitBy?.relate?.(hit.task, context).catch((error) => {
+                    warn(
+                        `${hitBy.name} could not read what ${hit.task.id} links to`,
+                        context,
+                        error,
+                    );
+                    return undefined;
+                })) ?? withoutLinks(hit.task);
             found.push({ reference, task });
             continue;
         }
@@ -116,7 +136,16 @@ export async function resolveTasks(
                 break;
             }
             looksIntended =
-                (await tracker.ownsReference?.(reference, context)) ?? false;
+                (await tracker
+                    .ownsReference?.(reference, context)
+                    .catch((error) => {
+                        warn(
+                            `${tracker.name} could not list its keys for ${referenceLabel(reference)}`,
+                            context,
+                            error,
+                        );
+                        return undefined;
+                    })) ?? false;
             if (looksIntended) {
                 intended = { reference, tracker };
             }
@@ -171,31 +200,55 @@ function withoutLinks(task: Task): Task {
 /**
  * Drops a lower-case key from a title or description (`node-22`) unless a
  * connected tracker has its team or project, so `feat(kod-10)` reads KOD-10
- * and a version number never reaches a tracker.
+ * and a version number never reaches a tracker. A tracker that can't list
+ * its keys vouches for none; one whose listing failed keeps the key, so the
+ * read, not a guess, says whether the tracker is down.
  */
 async function withoutStrayKeys(
     references: TaskReference[],
     trackers: TaskTracker[],
     context: TrackerReadContext,
 ): Promise<TaskReference[]> {
-    const kept: TaskReference[] = [];
-    for (const reference of references) {
-        if (reference.kind !== 'key' || !reference.loose) {
-            kept.push(reference);
-            continue;
-        }
-        for (const tracker of trackers) {
-            if (
-                await tracker
-                    .ownsReference?.(reference, context)
-                    .catch(() => false)
-            ) {
-                kept.push(reference);
-                break;
+    const keep = await Promise.all(
+        references.map(async (reference) => {
+            if (reference.kind !== 'key' || !reference.loose) {
+                return true;
             }
-        }
-    }
-    return kept;
+            for (const tracker of trackers) {
+                const owns = await tracker
+                    .ownsReference?.(reference, context)
+                    .catch((error) => {
+                        warn(
+                            `${tracker.name} could not list its keys for ${referenceLabel(reference)}`,
+                            context,
+                            error,
+                        );
+                        return true;
+                    });
+                if (owns) {
+                    return true;
+                }
+            }
+            return false;
+        }),
+    );
+    return references.filter((_, i) => keep[i]);
+}
+
+function warn(
+    message: string,
+    context: TrackerReadContext,
+    error: unknown,
+): void {
+    logger.warn({
+        message: `[BUSINESS-LOGIC] ${message}`,
+        context: 'TaskResolver',
+        error: error instanceof Error ? error : undefined,
+        metadata: {
+            organizationId: context.organizationAndTeamData?.organizationId,
+            reason: error instanceof Error ? error.message : String(error),
+        },
+    });
 }
 
 function attemptOf(

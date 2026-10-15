@@ -99,8 +99,13 @@ Kody reads tasks from ${names}, but no tool that reads one task by its id is pic
 }
 
 export function taskNotFoundMessage(attempts: ResolutionAttempt[]): string {
+    // A tracker that couldn't read (no tool picked) never said it isn't there.
     const tried = [
-        ...new Set(attempts.map((a) => `${a.reference} in ${a.tracker}`)),
+        ...new Set(
+            attempts
+                .filter((a) => a.status === 'not_found')
+                .map((a) => `${a.reference} in ${a.tracker}`),
+        ),
     ];
     return `## 🤔 Task not found
 

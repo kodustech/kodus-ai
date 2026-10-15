@@ -4,11 +4,12 @@ import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-s
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
 import type { NormalizedModel } from '@libs/llm/byok-config';
+import { createLogger } from '@libs/core/log/logger';
 import type { MCPToolRaw } from '@libs/mcp-server/mcp-adapter';
 
 import type { Task, TaskReference } from '../business-validation.types';
 import { asRecord } from '../value-utils';
-import { isReadOnly, taskId } from './custom-mcp.tracker';
+import { isReadOnly, isSingleItemReader, taskId } from './custom-mcp.tracker';
 import { TaskNotFoundError } from './mcp-tool-session';
 import {
     carriesDescription,
@@ -22,6 +23,8 @@ const TIMEOUT_MS = 45_000;
 /** A server with more tools than this is cut to its readers first. */
 const MAX_TOOLS = 40;
 const MAX_OUTPUT_CHARS = 6000;
+
+const logger = createLogger('TaskFinder');
 
 export interface TaskFinderInput {
     reference: TaskReference;
@@ -61,7 +64,14 @@ export type AgentRun = (spec: AgentSpec, prompt: string) => Promise<void>;
 export function createTaskFinder(run: AgentRun): TaskFinder {
     return async (input) => {
         const { reference } = input;
-        const readable = readOnlyTools(input.tools).slice(0, MAX_TOOLS);
+        // Readers of one item first, so a cut never drops the one that reads it.
+        const readable = readOnlyTools(input.tools)
+            .sort(
+                (a, b) =>
+                    Number(isSingleItemReader(b)) -
+                    Number(isSingleItemReader(a)),
+            )
+            .slice(0, MAX_TOOLS);
         if (!readable.length) {
             return undefined;
         }
@@ -152,7 +162,21 @@ export function createTaskFinder(run: AgentRun): TaskFinder {
                 maxOutputTokens: 800,
             },
             `Find ${reference.raw} in ${input.tracker}.`,
-        ).catch(() => undefined);
+        ).catch((error) => {
+            // A run cut short still keeps a task a tool already returned.
+            logger.warn({
+                message: `[BUSINESS-LOGIC] The task finder stopped early looking for ${reference.raw} in ${input.tracker}`,
+                context: 'TaskFinder',
+                error: error instanceof Error ? error : undefined,
+                metadata: {
+                    tracker: input.tracker,
+                    reference: reference.raw,
+                    found: !!found,
+                    reason:
+                        error instanceof Error ? error.message : String(error),
+                },
+            });
+        });
 
         if (found) {
             return { task: found, tools: called };
