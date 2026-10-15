@@ -165,6 +165,33 @@ describe("the team's own id pattern (#1884)", () => {
             ).map((r) => r.id),
         ).toEqual(['T1234']);
     });
+
+    it('reads its id from a link Kody does not know, as the settings preview does', () => {
+        expect(
+            extractTaskReferences(
+                { body: 'https://app.shortcut.com/acme/story/123' },
+                { taskIdPattern: 'story/(\\d+)' },
+            ).map((r) => r.id),
+        ).toEqual(['123']);
+    });
+
+    it('leaves a tracker link Kody knows to the built-in reader', () => {
+        expect(
+            extractTaskReferences(
+                { body: 'https://acme.atlassian.net/browse/PLAT-7' },
+                { taskIdPattern: 'PLAT-(\\d+)' },
+            ).map((r) => `${r.id}:${'host' in r ? r.host : ''}`),
+        ).toEqual(['PLAT-7:jira']);
+    });
+
+    it('still keeps the built-in shapes out of a link that is not a task', () => {
+        expect(
+            extractTaskReferences(
+                { body: 'See https://github.com/acme/app/pull/70' },
+                { taskIdPattern: 'story/(\\d+)' },
+            ),
+        ).toEqual([]);
+    });
 });
 
 describe('task keys by case', () => {

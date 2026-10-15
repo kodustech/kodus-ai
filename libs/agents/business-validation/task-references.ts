@@ -8,7 +8,7 @@ export type ReferenceSources = Partial<Record<ReferenceSource, string>>;
 
 const SOURCE_ORDER: ReferenceSource[] = ['command', 'title', 'branch', 'body'];
 
-type Match = { index: number; end: number; reference?: TaskReference };
+type Match = { index: number; end: number; reference: TaskReference };
 type Candidate = TaskReference extends infer R
     ? R extends TaskReference
         ? Omit<R, 'intent'>
@@ -131,8 +131,9 @@ function intentBefore(
     index: number,
     source: ReferenceSource,
 ): ReferenceIntent {
-    const lineStart = text.lastIndexOf('\n', index - 1) + 1;
-    const before = text.slice(Math.max(lineStart, index - 40), index);
+    // The 40 characters before it, on its own line.
+    const window = text.slice(Math.max(0, index - 40), index);
+    const before = window.slice(window.lastIndexOf('\n') + 1);
     if (PART_OF.test(before)) {
         return 'part_of';
     }
@@ -152,11 +153,18 @@ function extractFromText(
     taskIdPattern?: string,
 ): TaskReference[] {
     const matches: Match[] = [];
+    // One flag per character a reference already read: an overlap test costs
+    // the match's length, not a scan of every match so far.
+    const claimed = new Uint8Array(text.length);
     const taken = (index: number, end: number) =>
-        matches.some((m) => index < m.end && end > m.index);
+        claimed.subarray(index, end).includes(1);
+    const claim = (index: number, end: number) => {
+        claimed.fill(1, index, end);
+    };
     const collect = (
         pattern: RegExp,
         toReference: (m: RegExpExecArray) => Candidate | undefined,
+        notATask: (index: number, end: number) => void = claim,
     ) => {
         for (const m of text.matchAll(pattern)) {
             const index = m.index ?? 0;
@@ -164,24 +172,31 @@ function extractFromText(
             if (taken(index, end)) {
                 continue;
             }
-            // A URL that is not a task still claims its text, so the `/70` of
-            // a pull request link is never read again as `#70`.
             const candidate = toReference(m);
+            if (!candidate) {
+                notATask(index, end);
+                continue;
+            }
+            claim(index, end);
             matches.push({
                 index,
                 end,
-                reference: candidate
-                    ? ({
-                          ...candidate,
-                          intent: intentBefore(text, index, source),
-                      } as TaskReference)
-                    : undefined,
+                reference: {
+                    ...candidate,
+                    intent: intentBefore(text, index, source),
+                } as TaskReference,
             });
         }
     };
 
-    collect(/https?:\/\/[^\s<>()[\]"'`]+/gi, (m) =>
-        fromUrl(trimUrl(m[0]), source),
+    // A URL that is not a task still claims its text, so the `/70` of a pull
+    // request link is never read again as `#70`. It does so after the team's
+    // pattern, which may read its ids from a link (`…/story/123`).
+    const urlsNotTasks: Array<[number, number]> = [];
+    collect(
+        /https?:\/\/[^\s<>()[\]"'`]+/gi,
+        (m) => fromUrl(trimUrl(m[0]), source),
+        (index, end) => urlsNotTasks.push([index, end]),
     );
     // `P-KOD-1` is a Linear project, not task KOD-1: it claims its text too.
     collect(
@@ -190,15 +205,19 @@ function extractFromText(
     );
     if (taskIdPattern) {
         // The team's own shape (`sc-123`, `T1234`) claims its text before the
-        // built-in ones: its first group, when it has one, is the id.
+        // built-in ones: its first group, when it has one, is the id. The
+        // pattern already passed `isRegexSafe` and compiled in
+        // `resolveBusinessLogicSettings`.
         const own = new RegExp(taskIdPattern, 'g');
         for (const m of text.slice(0, MAX_PATTERN_INPUT).matchAll(own)) {
             const id = (m[1] ?? m[0]).trim();
             const index = m.index ?? 0;
-            if (id && !taken(index, index + m[0].length)) {
+            const end = index + m[0].length;
+            if (id && !taken(index, end)) {
+                claim(index, end);
                 matches.push({
                     index,
-                    end: index + m[0].length,
+                    end,
                     reference: {
                         kind: 'key',
                         id,
@@ -209,6 +228,9 @@ function extractFromText(
                 });
             }
         }
+    }
+    for (const [index, end] of urlsNotTasks) {
+        claim(index, end);
     }
     collect(/(?<![A-Za-z0-9_])AB#(\d+)\b/gi, (m) => ({
         kind: 'work_item',
@@ -286,10 +308,7 @@ function extractFromText(
         }),
     );
 
-    return matches
-        .sort((a, b) => a.index - b.index)
-        .map((m) => m.reference)
-        .filter((r): r is TaskReference => r !== undefined);
+    return matches.sort((a, b) => a.index - b.index).map((m) => m.reference);
 }
 
 function fromUrl(url: string, source: ReferenceSource): Candidate | undefined {
