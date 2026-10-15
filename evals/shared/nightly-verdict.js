@@ -13,6 +13,8 @@
 //   regression   the pooled metric is below, and the last measured night was
 //                not, or it fell more than WORSE (mentions people)
 //   still-red    below, as the last measured night already was (no mention)
+//   ungated      measured, but the model has no floor to compare with (yellow,
+//                as the finder's gate does): never reported as a pass
 //   infra        a run did not measure: never a quality result
 //
 // Writes the final result (with `verdict`), the state the next night compares
@@ -55,6 +57,7 @@ function nextState(verdict, final, previous) {
 
 function decide({ first, confirm, previous }) {
     if (!measured(first)) return { verdict: 'infra', final: first || null, mention: false };
+    if (!Number.isFinite(first.metric.floor)) return { verdict: 'ungated', final: first, mention: false };
     if (!belowFloor(first)) return { verdict: 'pass', final: first, mention: false };
     if (!measured(confirm)) return { verdict: 'infra', final: first, mention: false };
     const final = pool(first, confirm);
@@ -73,6 +76,7 @@ function message(verdict, final, stageName) {
         regression: { status: 'failure', title: `🔴 ${stageName} dropped below the floor`, description: `${what}. Confirmed by a second run.` },
         'still-red': { status: 'failure', title: `🔴 ${stageName} still below the floor`, description: `${what}. Already alerted; no change made it better.` },
         oscillation: { status: 'success', title: `🟡 ${stageName} dipped below the floor, the second run passed`, description: what },
+        ungated: { status: 'cancelled', title: `🟡 ${stageName} measured but not compared with a floor`, description: `${final?.metric ? `${pct(final.metric.value)} ${final.metric.name}` : ''}; no floor for ${final?.model || 'this model'} in the eval's targets file.` },
         infra: { status: 'cancelled', title: `⚪ ${stageName} not measured`, description: 'A run did not measure (key, quota or crash); see the run log. Not a quality result.' },
         pass: { status: 'success', title: `🟢 ${stageName} above the floor`, description: what },
     }[verdict];

@@ -302,7 +302,7 @@ const STAGES = [
         nightly: 'shared',
         metric: 'of replies handled right',
         set: 'conversations where someone replies in a Kody thread without @kody',
-        note: 'cases.json in the nightly (evals/nightly-evals.js); the 373 real replies of repo-cases.json run by hand',
+        note: 'cases.json in the nightly (evals/nightly-evals.js); the real replies of repo-cases.json run by hand',
     },
 ];
 

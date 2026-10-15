@@ -419,8 +419,10 @@ jobs:
                   content: ${{ steps.run.outputs.mention == 'true' && '@here' || '' }}
             - name: Not measured
               if: always() && steps.run.outputs.verdict != 'pass' && steps.run.outputs.verdict != 'oscillation' && steps.run.outputs.verdict != 'regression' && steps.run.outputs.verdict != 'still-red'
+              env:
+                  VERDICT: ${{ steps.run.outputs.verdict }}
               run: |
-                  echo "::error::$EVAL did not measure tonight (key, quota or crash); see the step above"
+                  echo "::error::$EVAL ${VERDICT:-infra} tonight: not a quality result (no floor for the model, or a key, quota or crash); see the step above"
                   exit 1
 
     measure:

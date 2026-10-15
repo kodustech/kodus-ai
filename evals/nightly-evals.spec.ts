@@ -64,6 +64,12 @@ describe('evals/shared/nightly-verdict.js', () => {
         expect(nextState('infra', null, red)).toEqual(red);
     });
 
+    it('never reports a model without a floor as a pass', () => {
+        const noFloor = result([2, 2, 2, 2, 2]);
+        noFloor.metric.floor = null as unknown as number;
+        expect(decide({ first: noFloor })).toMatchObject({ verdict: 'ungated', mention: false });
+    });
+
     it('pools the cases both runs measured into one metric', () => {
         const pooled = pool(result([2, 0]), result([2, 2]));
         expect(pooled.metric.value).toBeCloseTo(6 / 8);

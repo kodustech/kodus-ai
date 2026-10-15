@@ -242,7 +242,11 @@ async function main() {
             `${failed.length}/${rows.length} calls failed (budget ${result.infraBudget.allowed})`,
         );
     }
-    if (args.gate && result.metric.floor !== null && result.metric.value < result.metric.floor) {
+    if (args.gate && result.metric.floor === null) {
+        console.error(`\n⚠️ GATE NOT EVALUATED: no floor for ${MODEL} in evals/reply-addressing/targets.json`);
+        process.exit(2);
+    }
+    if (args.gate && result.metric.value < result.metric.floor) {
         console.error(`\n❌ GATE FAILED: ${(result.metric.value * 100).toFixed(1)}% of replies handled right < floor ${(result.metric.floor * 100).toFixed(1)}%`);
         process.exit(1);
     }
