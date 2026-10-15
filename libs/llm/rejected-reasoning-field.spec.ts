@@ -304,8 +304,23 @@ describe('rejectedReasoningField', () => {
             'Unrecognized request argument supplied: reasoning_effort',
             'reasoning_effort',
         ],
+        [
+            'OpenAI tools-with-effort',
+            "Function tools with reasoning_effort are not supported for gpt-6-sol in /v1/chat/completions. To use function tools, use /v1/responses or set reasoning_effort to 'none'.",
+            'reasoning_effort',
+        ],
     ])('reads the field from a %s refusal', (_k, body, field) => {
         expect(rejectedReasoningField(apiError(400, body))).toBe(field);
+    });
+
+    // Only the effort has an off value to send; a `thinking` sent beside it is
+    // not what that refusal is about.
+    it('reads the tools refusal as one about the effort only', () => {
+        expect(
+            rejectedReasoningField(
+                apiError(400, 'Function tools with thinking are not supported'),
+            ),
+        ).toBeUndefined();
     });
 
     it('ignores an envelope that only names the field', () => {
@@ -498,5 +513,10 @@ describe('an OpenAI reasoning model with tools', () => {
         await withTool(proxied);
         expect(up.bodies).toHaveLength(3);
         expect(up.bodies[2].reasoning_effort).toBe('none');
+        // A call without tools keeps its effort: the refusal is about the pair.
+        await run(proxied);
+        expect(up.bodies).toHaveLength(4);
+        expect(up.bodies[3].tools).toBeUndefined();
+        expect(up.bodies[3].reasoning_effort).not.toBe('none');
     });
 });

@@ -66,7 +66,9 @@ const REFUSALS: { re: RegExp; off: boolean }[] = [
     // came through a proxy, which may not serve that endpoint.
     {
         re: new RegExp(
-            `function tools with ${FIELD} (?:is|are) not supported`,
+            // Only the effort: it is the field OpenAI names, and the only one
+            // with an off value to send.
+            `function tools with (reasoning_effort) (?:is|are) not supported`,
             'i',
         ),
         off: true,
@@ -225,9 +227,13 @@ export function rememberRefusal(
     refusals.set(key, fields);
 }
 
-/** The params without every field this slot's upstream refused recently. */
+/**
+ * The params without every field this slot's upstream refused recently. A field
+ * refused only next to tools is turned off only on a call that carries tools:
+ * the same upstream accepts the effort on a call without them.
+ */
 export function withoutRefusedFields<
-    P extends { providerOptions?: Record<string, unknown> },
+    P extends { providerOptions?: Record<string, unknown>; tools?: unknown },
 >(
     params: P,
     slot: NormalizedModel | undefined,
@@ -237,12 +243,15 @@ export function withoutRefusedFields<
     const key = slotKey(slot, organizationId);
     const fields = key ? refusals.get(key) : undefined;
     if (!fields) return params;
+    const carriesTools =
+        Array.isArray(params?.tools) && params.tools.length > 0;
     let out = params;
     for (const [field, { until, off }] of fields) {
         if (until <= now) {
             fields.delete(field);
             continue;
         }
+        if (off && !carriesTools) continue;
         out =
             (off
                 ? withReasoningOff(out, field)
