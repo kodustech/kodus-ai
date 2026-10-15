@@ -86,3 +86,28 @@ describe('extractTaskReferenceLines', () => {
         expect(extractTaskReferenceLines('### Changes')).toEqual([]);
     });
 });
+
+describe('extractTaskReferenceLines with a caller reader', () => {
+    const none = () => false;
+
+    it('keeps a tracker link on a host the reader does not know', () => {
+        expect(
+            extractTaskReferenceLines(
+                'Closes https://youtrack.jetbrains.com/issue/XYZ-123\nhttps://bugs.mycorp.com/browse/PROJ-1\nPlain prose.',
+                none,
+            ),
+        ).toEqual([
+            'Closes https://youtrack.jetbrains.com/issue/XYZ-123',
+            'https://bugs.mycorp.com/browse/PROJ-1',
+        ]);
+    });
+
+    it('adds the lines the reader recognizes', () => {
+        expect(
+            extractTaskReferenceLines(
+                'Part of ab#12\nPlain prose.',
+                (line) => line.includes('ab#12'),
+            ),
+        ).toEqual(['Part of ab#12']);
+    });
+});
