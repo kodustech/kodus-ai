@@ -82,9 +82,11 @@ export default function CustomizeTeamPage() {
         [syncedRules, selectedRepositories],
     );
 
-    const { data: agentFiles, isLoading: isLoadingAgentFiles } = useFetch<
-        AgentInstructionFilesByRepository[]
-    >(
+    const {
+        data: agentFiles,
+        isLoading: isLoadingAgentFiles,
+        isError: agentFilesFailed,
+    } = useFetch<AgentInstructionFilesByRepository[]>(
         KODY_RULES_PATHS.AGENT_INSTRUCTION_FILES,
         { params: { teamId } },
         !!teamId,
@@ -286,8 +288,12 @@ export default function CustomizeTeamPage() {
                                 <>
                                     {repositoriesWithAgentFiles.length === 0 ? (
                                         <span>
-                                            No coding-agent files found in the
-                                            selected repositories.
+                                            {agentFilesFailed
+                                                ? "Couldn't check the selected repositories for coding-agent files."
+                                                : unavailableRepositories.length >
+                                                    0
+                                                  ? "No coding-agent files found in the repositories Kody could check."
+                                                  : "No coding-agent files found in the selected repositories."}
                                         </span>
                                     ) : (
                                         <>
