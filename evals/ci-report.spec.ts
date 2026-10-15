@@ -178,7 +178,7 @@ describe('tier-0 report', () => {
 describe('tier-0 stages on a few cases', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tier0-few-'));
     // A stand-in eval: writes the shared result its data file holds, prints its
-    // stdout and stderr, and exits 1 when it has no result.
+    // stdout and stderr, and exits with `exit` (0 with a result, else 1).
     const runner = path.join(dir, 'fake-eval.js');
     fs.writeFileSync(
         runner,
@@ -189,15 +189,15 @@ describe('tier-0 stages on a few cases', () => {
             "if (data.result) fs.writeFileSync(arg('output'), JSON.stringify(data.result));",
             'console.log(data.stdout);',
             'console.error(data.stderr);',
-            'process.exit(data.result ? 0 : 1);',
+            'process.exit(data.exit ?? (data.result ? 0 : 1));',
         ].join('\n'),
     );
-    const fake = (name: string, result: unknown, stderr = '', stdout = '') => {
+    const fake = (name: string, result: unknown, stderr = '', stdout = '', exit?: number) => {
         const data = path.join(dir, `${name}.json`);
-        fs.writeFileSync(data, JSON.stringify({ result, stderr, stdout }));
+        fs.writeFileSync(data, JSON.stringify({ result, stderr, stdout, exit }));
         return { key: name, stage: name, run: [runner, `--data=${data}`] };
     };
-    const shared = (hits: number, errored = 0) => ({ cases: [{ id: 'c1', checks: 'Checks c1', hits, total: 2 }], infra: { errored, total: 10 } });
+    const shared = (hits: number, errored = 0, total = 10) => ({ cases: [{ id: 'c1', checks: 'Checks c1', hits, total: 2 }], infra: { errored, total } });
 
     it('runs when it measured and got something right; is broken when it got nothing right', () => {
         expect(runFewCases('m', fake('ok', shared(1)), dir)).toMatchObject({ status: 'pass', hits: 1, total: 2 });
@@ -220,6 +220,15 @@ describe('tier-0 stages on a few cases', () => {
         expect(runFewCases('m', fake('credit-json', shared(0, 10), hidden, ciLine), dir)).toMatchObject({ status: 'infra', reason: '10 of 10 calls failed: Your credit balance is too low' });
         const unsupported = 'WARN: [LLM-ERROR] kodus-rules-review-agent.shard: "managed-default" failed (UNKNOWN) — Function tools with reasoning_effort are not supported';
         expect(runFewCases('m', fake('unsupported', shared(0, 10), hidden, unsupported), dir)).toMatchObject({ status: 'broken' });
+    });
+
+    // Each eval holds its own budget: it exits 2 above it. Kody Rules exits 2 only
+    // under --gate, so at least half the calls must have run.
+    it('takes the eval\'s own word on whether it measured', () => {
+        expect(runFewCases('m', fake('one-of-four', shared(1, 1, 4)), dir)).toMatchObject({ status: 'pass' });
+        expect(runFewCases('m', fake('half', shared(1, 2, 4), '[case a run 0] Kody Rules could not be evaluated'), dir)).toMatchObject({ status: 'broken' });
+        const oneRefused = 'reply-addressing: 16 cases\nc1#0: 429 Too Many Requests\n❌ INFRA ERROR: 1/16 calls failed (budget 0)';
+        expect(runFewCases('m', fake('one-refused', shared(1, 1, 16), oneRefused, '', 2), dir)).toMatchObject({ status: 'infra', reason: '1 of 16 calls failed: 429 Too Many Requests' });
     });
 
     it('names the error most calls failed with, not the eval\'s summary line', () => {

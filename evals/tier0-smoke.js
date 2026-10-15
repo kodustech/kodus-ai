@@ -37,8 +37,6 @@ const MIN_FINDINGS = 1;
 const RETRY_DELAY_MS = 60 * 1000;
 const INFRA = /\b(401|403|429|402)\b|unauthori[sz]ed|no api key|(invalid|incorrect|missing|expired).{0,20}(api.?key|x-api-key|token|credential)|(api.?key|x-api-key|token|credential).{0,20}(invalid|incorrect|expired|revoked)|suspended|permission.?denied|quota|rate.?limit|insufficient|billing|credit balance|exceeded your|cannot connect|ECONNREFUSED|ENOTFOUND|ECONNRESET|ETIMEDOUT|EAI_AGAIN|fetch failed|socket hang up|overloaded|\b50[234]\b/i;
 const ROOT = path.join(__dirname, '..');
-// As in evals/AGENTS.md: up to 5% of an eval's calls may fail and it still measured.
-const INFRA_BUDGET = 0.05;
 
 // The stages the nightly measures beyond the review, each cut to a few cases.
 // Kody Rules keeps its own nightly job; the rest come from evals/nightly-evals.js.
@@ -107,17 +105,18 @@ function runPrSummary(model) {
     return { status, reason: status === 'pass' ? null : detail || `exit ${r.status}` };
 }
 
-// The error a failed eval run stands for: the one most of its calls printed
-// (without the case prefix, `id#0:` or `[case … run 0]`), else the first line
-// naming an error. Its summary line ("16/16 calls failed") says nothing more.
+// The error a failed eval run stands for: among the lines its calls printed
+// (`id#0: …`, `[case … run 0] …`), the one most of them failed with; the eval's
+// own summary ("1/16 calls failed") never names the cause. Without such lines,
+// the first line naming an error.
+const CALL_PREFIX = /^(\[[^\]]*\]|\S+#\d+:)\s*/;
 function errorLine(lines) {
-    const counts = new Map();
-    for (const line of lines) {
-        const bare = line.replace(/^(\[[^\]]*\]|\S+#\d+:)\s*/, '');
-        counts.set(bare, (counts.get(bare) || 0) + 1);
+    const calls = lines.filter((l) => CALL_PREFIX.test(l)).map((l) => l.replace(CALL_PREFIX, ''));
+    if (calls.length) {
+        const counts = new Map();
+        for (const c of calls) counts.set(c, (counts.get(c) || 0) + 1);
+        return [...counts].sort((a, b) => b[1] - a[1])[0][0];
     }
-    const [top, n] = [...counts].sort((a, b) => b[1] - a[1])[0] || [];
-    if (n > 1) return top;
     return lines.find((l) => /error|failed|refused/i.test(l)) || lines[lines.length - 1] || '';
 }
 
@@ -148,10 +147,12 @@ function providerRefusal(stdout) {
     return null;
 }
 
-// One stage's eval on a few cases: it runs on this model when it measured (at
-// most INFRA_BUDGET of its calls failed) and got at least one item right. The
-// number is reported, never compared with a floor: floors are calibrated on
-// the full set.
+// One stage's eval on a few cases: it runs on this model when the eval says it
+// measured (exit 0; each eval holds its own budget of failed calls, exit 2
+// above it, evals/AGENTS.md), at least half its calls ran (Kody Rules exits 2
+// only under --gate; its nightly verdict reads the same half), and it got at
+// least one item right. The number is reported, never compared with a floor:
+// floors are calibrated on the full set.
 function runFewCases(model, part, outDir = path.join(__dirname, 'investigation', 'results')) {
     fs.mkdirSync(outDir, { recursive: true });
     const output = path.join(outDir, `tier0-part-${part.key}-${model.replace(/[^\w.-]+/g, '-')}.json`);
@@ -176,7 +177,7 @@ function runFewCases(model, part, outDir = path.join(__dirname, 'investigation',
     const total = cases.reduce((n, c) => n + (c.total || 0), 0);
     const base = { key: part.key, stage: part.stage, seconds, hits, total };
     const { errored = 0, total: calls = 0 } = result?.infra || {};
-    if (!result || !calls || errored / calls > INFRA_BUDGET) {
+    if (!result || r.status !== 0 || !calls || errored / calls >= 0.5) {
         // Only stderr: stdout echoes case ids and texts, which can look like a provider error.
         const printed = errorLine(String(r.stderr || '').split('\n').map((l) => l.trim()).filter(Boolean));
         const refusal = classifyFailure(printed) === 'infra' ? null : providerRefusal(r.stdout);
