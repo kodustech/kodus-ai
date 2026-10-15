@@ -202,6 +202,8 @@ describe('isKodyRuleTemplateFile', () => {
         ['.rules/bar.md', true],
         ['.kody/other/file.md', false],
         ['CLAUDE.md', false],
+        ['.claude/skills/review/rules/_template.md', false],
+        ['apps/api/.claude/skills/db/rules/naming.md', false],
         ['docs/coding-standards/style.md', true],
         ['apps/api/docs/coding-standards/errors.md', true],
         ['docs/coding-standards', false],

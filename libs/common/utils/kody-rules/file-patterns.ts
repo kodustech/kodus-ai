@@ -29,6 +29,7 @@ export const AGENT_INSTRUCTION_FILE_PATTERNS = [
     // Claude
     'CLAUDE.md',
     '.claude/settings.json',
+    '.claude/skills/**',
 
     // Windsurf
     '.windsurfrules',
@@ -45,11 +46,13 @@ export const AGENT_INSTRUCTION_FILE_PATTERNS = [
 ] as const;
 
 /**
- * Tool configuration that matches an agent pattern but carries no prose a
- * reviewer could check a diff against.
+ * Agent files a review never reads: tool configuration, which carries no prose
+ * a reviewer could check a diff against, and Claude skills, which Claude loads
+ * only when a task calls for one.
  */
-const AGENT_INSTRUCTION_CONFIG_FILE_PATTERNS = [
+const AGENT_INSTRUCTION_UNREAD_FILE_PATTERNS = [
     '.claude/settings.json',
+    '.claude/skills/**',
     '.opencode.json',
     '.aider.conf.yml',
     '.aiderignore',
@@ -101,8 +104,8 @@ export const KODY_RULE_FILE_DISCOVERY_PATTERNS: ReadonlyArray<string> =
 export const RULE_FILE_DISCOVERY_PATTERNS: ReadonlyArray<string> =
     withNestedVariants(RULE_FILE_PATTERNS);
 
-const AGENT_INSTRUCTION_CONFIG_DISCOVERY_PATTERNS: ReadonlyArray<string> =
-    withNestedVariants(AGENT_INSTRUCTION_CONFIG_FILE_PATTERNS);
+const AGENT_INSTRUCTION_UNREAD_DISCOVERY_PATTERNS: ReadonlyArray<string> =
+    withNestedVariants(AGENT_INSTRUCTION_UNREAD_FILE_PATTERNS);
 
 // Case-insensitive to stay consistent with discovery: a lowercase `claude.md`
 // found by the sync must be recognised the same way afterwards.
@@ -121,13 +124,13 @@ export function isAgentInstructionSource(
     return matchesAny(sourcePath, AGENT_INSTRUCTION_FILE_DISCOVERY_PATTERNS);
 }
 
-/** An agent instruction file written in prose (not tool configuration). */
+/** An agent instruction file a review reads (see the unread list above). */
 export function isAgentInstructionProseFile(
     sourcePath: string | null | undefined,
 ): boolean {
     return (
         isAgentInstructionSource(sourcePath) &&
-        !matchesAny(sourcePath, AGENT_INSTRUCTION_CONFIG_DISCOVERY_PATTERNS)
+        !matchesAny(sourcePath, AGENT_INSTRUCTION_UNREAD_DISCOVERY_PATTERNS)
     );
 }
 

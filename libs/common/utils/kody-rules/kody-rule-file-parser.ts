@@ -208,9 +208,10 @@ export function isKodyRuleTemplateFile(
     if (!filePath) return false;
     const lower = filePath.replace(/\\/g, '/').toLowerCase();
 
-    // `.agents/rules/` is a coding-agent location; the generic `rules/`
-    // segment below would otherwise claim it.
+    // `.agents/rules/` and Claude skills are coding-agent locations; the
+    // generic `rules/` segment below would otherwise claim them.
     if (hasDirSegment(lower, '.agents/rules/') >= 0) return false;
+    if (hasDirSegment(lower, '.claude/skills/') >= 0) return false;
 
     for (const dir of ['.kody/rules/', '.rules/', 'docs/coding-standards/']) {
         const end = hasDirSegment(lower, dir);

@@ -33,6 +33,9 @@ describe('file-patterns — agent instructions are not Kody Rules', () => {
         '.agents/rules/architecture.md',
         '.windsurfrules',
         '.claude/settings.json',
+        '.claude/skills/review/SKILL.md',
+        '.claude/skills/review/rules/_template.md',
+        'apps/api/.claude/skills/db/rules/naming.md',
     ])('classifies %s as a coding-agent instruction file', (file) => {
         expect(isAgentInstructionSource(file)).toBe(true);
         expect(isKodyRuleFileSource(file)).toBe(false);
@@ -69,6 +72,15 @@ describe('file-patterns — agent instructions are not Kody Rules', () => {
         expect(isAgentInstructionProseFile('.aider.conf.yml')).toBe(false);
         expect(isAgentInstructionProseFile('.aiderignore')).toBe(false);
         expect(isAgentInstructionProseFile('src/CLAUDE.ts')).toBe(false);
+    });
+
+    it('never reads Claude skills in reviews: Claude loads them only when a task needs one', () => {
+        expect(
+            isAgentInstructionProseFile('.claude/skills/review/SKILL.md'),
+        ).toBe(false);
+        expect(
+            isAgentInstructionProseFile('.claude/skills/review/rules/a.md'),
+        ).toBe(false);
     });
 });
 
