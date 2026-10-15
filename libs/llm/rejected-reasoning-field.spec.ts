@@ -475,21 +475,28 @@ describe('an OpenAI reasoning model with tools', () => {
         ]);
     });
 
-    it('behind a proxy that forwards to chat completions is asked again without the effort', async () => {
+    // OpenAI refuses the pair even when the effort is left off: the model
+    // reasons by default (measured live, 2026-10-15). Only 'none' passes.
+    it('behind a proxy that forwards to chat completions is asked again with the effort off', async () => {
         up = upstream({
             respond: (body) =>
-                body?.reasoning_effort !== undefined && body?.tools?.length
+                body?.reasoning_effort !== 'none' && body?.tools?.length
                     ? TOOLS_WITH_EFFORT
                     : undefined,
         });
-        await withTool({
+        const proxied = {
             provider: 'openai_compatible',
             model: 'gpt-6-sol',
             baseURL: 'https://litellm.example.com/v1',
-        });
+        };
+        await withTool(proxied);
         expect(up.bodies).toHaveLength(2);
         expect(up.bodies[0].reasoning_effort).toBeDefined();
-        expect(up.bodies[1].reasoning_effort).toBeUndefined();
+        expect(up.bodies[1].reasoning_effort).toBe('none');
         expect(up.bodies[1].tools).toHaveLength(1);
+        // Remembered: the next call on the slot pays no 400.
+        await withTool(proxied);
+        expect(up.bodies).toHaveLength(3);
+        expect(up.bodies[2].reasoning_effort).toBe('none');
     });
 });

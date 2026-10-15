@@ -18,7 +18,7 @@
  *
  * Any other host (a gateway, LiteLLM, a self-hosted proxy) may not serve
  * /v1/responses, so it is not assumed to: it stays on chat completions, where a
- * refusal of the pair is asked again without the effort
+ * refusal of the pair is asked again with the effort set to 'none'
  * (rejected-reasoning-field.ts).
  */
 import { isOpenAiReasonerId } from '../kernel/model-family';

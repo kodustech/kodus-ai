@@ -1916,7 +1916,7 @@ describe('#1916 — the json_object keyword rule, live', () => {
  *  - an OpenAI-compatible credential on api.openai.com, through routing, which
  *    serves it on the native SDK;
  *  - the same model through `OPENAI_PROXY`, over chat completions, where
- *    OpenAI's refusal is asked again without the effort.
+ *    OpenAI's refusal is asked again with the effort set to 'none'.
  */
 describe('#2135 — an OpenAI reasoner with a tool, live', () => {
     const apiKey = key('openai');
@@ -1982,7 +1982,7 @@ describe('#2135 — an OpenAI reasoner with a tool, live', () => {
     );
 
     run(
-        'the same model behind a proxy is asked again without the effort and runs the tool',
+        'the same model behind a proxy is asked again with the effort off and runs the tool',
         async () => {
             const result = await ask({
                 provider: 'openai_compatible',

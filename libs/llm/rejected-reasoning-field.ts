@@ -8,7 +8,8 @@
  * (2026-09-30). Which upstream answers is the gateway's choice, so no fact about
  * the host or the model can say in advance whether the field is welcome.
  *
- * So the call is asked again without the field the 400 names, once per field
+ * So the call is asked again without the field the 400 names (or with it set
+ * to off, when that is what the upstream asks for), once per field
  * and only when we are the ones who put it there. The refusal is remembered for the slot for
  * a few minutes, because the gateway keeps a session on the same upstream and
  * every call would otherwise pay the 400 first; after that the field is tried
@@ -36,25 +37,40 @@ const FIELD = '(thinking|reasoning_effort)';
 // together with function tools on that endpoint. A 400 about the field's VALUE
 // ("reasoning_effort 'max' is not supported", or an error envelope's `param`)
 // is a configuration the user has to see, so it is not matched.
-const REFUSALS = [
+// `off`: the upstream wants the field set to its off value rather than removed.
+const REFUSALS: { re: RegExp; off: boolean }[] = [
     // Go's encoding/json with DisallowUnknownFields (OpenCode Go upstreams).
-    new RegExp(`unknown field\\W{1,4}${FIELD}\\b`, 'i'),
+    { re: new RegExp(`unknown field\\W{1,4}${FIELD}\\b`, 'i'), off: false },
     // pydantic extra="forbid".
-    new RegExp(
-        `extra inputs are not permitted\\W+field\\W{1,4}${FIELD}\\b`,
-        'i',
-    ),
+    {
+        re: new RegExp(
+            `extra inputs are not permitted\\W+field\\W{1,4}${FIELD}\\b`,
+            'i',
+        ),
+        off: false,
+    },
     // OpenAI's own wording for an argument it does not know.
-    new RegExp(
-        `unrecognized request argument supplied\\W{1,4}${FIELD}\\b`,
-        'i',
-    ),
+    {
+        re: new RegExp(
+            `unrecognized request argument supplied\\W{1,4}${FIELD}\\b`,
+            'i',
+        ),
+        off: false,
+    },
     // OpenAI's chat completions for the gpt-5.6 / gpt-6 line: the effort and an
     // agent loop's tools cannot go together there ("…use /v1/responses or set
-    // reasoning_effort to 'none'"). A call on OpenAI's own host is served on
-    // /v1/responses instead (providers/openai/endpoint.ts); this one came
-    // through a proxy, which may not serve that endpoint.
-    new RegExp(`function tools with ${FIELD} (?:is|are) not supported`, 'i'),
+    // reasoning_effort to 'none'"). Removing the field is not enough — the model
+    // reasons by default and the same 400 comes back (measured live,
+    // 2026-10-15) — so it is sent as 'none'. A call on OpenAI's own host is
+    // served on /v1/responses instead (providers/openai/endpoint.ts); this one
+    // came through a proxy, which may not serve that endpoint.
+    {
+        re: new RegExp(
+            `function tools with ${FIELD} (?:is|are) not supported`,
+            'i',
+        ),
+        off: true,
+    },
 ];
 
 /**
@@ -86,23 +102,30 @@ function sentBody(
  * `reasoning.effort`, never `reasoning_effort`) is not about our body, and an
  * error that does not say what was sent gets no second request either.
  */
-export function rejectedReasoningField(
+export function rejectedReasoning(
     err: unknown,
-): ReasoningField | undefined {
+): { field: ReasoningField; off: boolean } | undefined {
     const status = extractHttpStatus(err);
     if (status !== 400 && status !== 422) return undefined;
     const body = sentBody(err);
     if (!body) return undefined;
     const text = extractErrorText(err);
-    for (const re of REFUSALS) {
+    for (const { re, off } of REFUSALS) {
         const m = text.match(re);
         if (!m) continue;
         const field = m[1].toLowerCase() as ReasoningField;
         // Defined, not merely present: the SDK keeps `reasoning_effort:
         // undefined` in the recorded values, and JSON leaves it off the wire.
-        return body[field] !== undefined ? field : undefined;
+        return body[field] !== undefined ? { field, off } : undefined;
     }
     return undefined;
+}
+
+/** The reasoning field a 400 refuses, or undefined for any other error. */
+export function rejectedReasoningField(
+    err: unknown,
+): ReasoningField | undefined {
+    return rejectedReasoning(err)?.field;
 }
 
 /**
@@ -133,9 +156,40 @@ export function withoutReasoningField<
     return removed ? { ...params, providerOptions: next } : undefined;
 }
 
+/**
+ * The call params with `field` set to off, or undefined when no provider option
+ * carries it or it is already off. Only the effort has an off value ('none').
+ */
+export function withReasoningOff<
+    P extends { providerOptions?: Record<string, unknown> },
+>(params: P, field: ReasoningField): P | undefined {
+    const options = params?.providerOptions;
+    if (!options || field !== 'reasoning_effort') return undefined;
+    let changed = false;
+    const next: Record<string, unknown> = {};
+    for (const [ns, value] of Object.entries(options)) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+            next[ns] = value;
+            continue;
+        }
+        const kept = { ...(value as Record<string, unknown>) };
+        for (const key of OPTION_KEYS[field]) {
+            if (key in kept && kept[key] !== 'none') {
+                kept[key] = 'none';
+                changed = true;
+            }
+        }
+        next[ns] = kept;
+    }
+    return changed ? { ...params, providerOptions: next } : undefined;
+}
+
 export const REFUSAL_MEMORY_MS = 10 * 60 * 1000;
 
-const refusals = new Map<string, Map<ReasoningField, number>>();
+const refusals = new Map<
+    string,
+    Map<ReasoningField, { until: number; off: boolean }>
+>();
 
 function slotKey(slot: NormalizedModel | undefined, organizationId?: string) {
     if (!slot) return undefined;
@@ -152,19 +206,22 @@ export function rememberRefusal(
     organizationId: string | undefined,
     field: ReasoningField,
     now = Date.now(),
+    off = false,
 ): void {
     const key = slotKey(slot, organizationId);
     if (!key) return;
     // Refusals are rare, so sweeping here keeps a slot that is never called
     // again from staying in memory for the life of the process.
     for (const [k, byField] of refusals) {
-        for (const [f, until] of byField) {
+        for (const [f, { until }] of byField) {
             if (until <= now) byField.delete(f);
         }
         if (byField.size === 0) refusals.delete(k);
     }
-    const fields = refusals.get(key) ?? new Map<ReasoningField, number>();
-    fields.set(field, now + REFUSAL_MEMORY_MS);
+    const fields =
+        refusals.get(key) ??
+        new Map<ReasoningField, { until: number; off: boolean }>();
+    fields.set(field, { until: now + REFUSAL_MEMORY_MS, off });
     refusals.set(key, fields);
 }
 
@@ -181,12 +238,15 @@ export function withoutRefusedFields<
     const fields = key ? refusals.get(key) : undefined;
     if (!fields) return params;
     let out = params;
-    for (const [field, until] of fields) {
+    for (const [field, { until, off }] of fields) {
         if (until <= now) {
             fields.delete(field);
             continue;
         }
-        out = withoutReasoningField(out, field) ?? out;
+        out =
+            (off
+                ? withReasoningOff(out, field)
+                : withoutReasoningField(out, field)) ?? out;
     }
     if (fields.size === 0) refusals.delete(key!);
     return out;
