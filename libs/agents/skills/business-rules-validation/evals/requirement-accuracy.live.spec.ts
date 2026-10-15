@@ -8,6 +8,7 @@ import type {
     RequirementState,
     ValidationResult,
 } from '@libs/agents/business-validation/judge/validation.types';
+import type { Task } from '@libs/agents/business-validation/business-validation.types';
 import { formatTaskForJudge } from '@libs/agents/business-validation/task-quality';
 import { SkillLoaderService } from '@libs/agents/skills/skill-loader.service';
 
@@ -34,6 +35,8 @@ type Gold = {
     match: string;
     /** States that count as right. */
     accept: RequirementState[];
+    /** Leaving it out is right too: it belongs to another piece of the work. */
+    absentOk?: boolean;
 };
 
 type Case = {
@@ -44,6 +47,8 @@ type Case = {
         title: string;
         description: string;
         acceptanceCriteria: string[];
+        parent?: Task['parent'];
+        subtasks?: Task['subtasks'];
     };
     diff: string;
     gold: Gold[];
@@ -153,6 +158,78 @@ const CASES: Case[] = [
             { match: 'tone', accept: ['met'] },
         ],
     },
+    {
+        // A sub-issue that says little on its own: its parent holds the
+        // criteria, and only the archive part is this PR's work.
+        name: 'sub-task judged against its parent, scoped by its title',
+        language: 'en-US',
+        task: {
+            id: 'KOD-20',
+            title: 'Bulk archive',
+            description: 'Archive part of the parent issue.',
+            acceptanceCriteria: [],
+            parent: {
+                id: 'KOD-19',
+                title: 'Ticket list: bulk actions',
+                description: [
+                    '## Acceptance criteria',
+                    '- A checkbox on each row selects the ticket',
+                    '- "Archive selected" archives every selected ticket in one request',
+                    '- Archiving more than 50 tickets asks for confirmation first',
+                ].join('\n'),
+            },
+        },
+        diff: file('src/tickets/bulkArchive.ts', [
+            "+import { api } from '../api';",
+            '+export async function archiveSelected(ids: string[]) {',
+            '+  if (ids.length > 50 && !(await confirm(`Archive ${ids.length} tickets?`))) return;',
+            "+  await api.post('/tickets/archive', { ids });",
+            '+}',
+        ]),
+        gold: [
+            { match: 'archive selected', accept: ['met'] },
+            { match: '50', accept: ['met'] },
+            { match: 'checkbox', accept: ['check_manually'], absentOk: true },
+        ],
+    },
+    {
+        // The parent of two sub-issues: what one of them delivers is not
+        // a gap of this PR, which only adds the checkboxes.
+        name: 'parent split into sub-tasks: their work is not a gap here',
+        language: 'en-US',
+        task: {
+            id: 'KOD-19',
+            title: 'Ticket list: bulk actions',
+            description:
+                'Support agents act on many tickets at once from the ticket list.',
+            acceptanceCriteria: [
+                'A checkbox on each row selects the ticket',
+                '"Archive selected" archives every selected ticket in one request',
+            ],
+            subtasks: [
+                { id: 'KOD-20', title: 'Bulk archive', status: 'Todo' },
+                {
+                    id: 'KOD-21',
+                    title: 'Row checkboxes',
+                    status: 'In Progress',
+                },
+            ],
+        },
+        diff: file('src/tickets/TicketRow.tsx', [
+            ' export function TicketRow({ ticket, selected, onSelect }: Props) {',
+            '   return (',
+            '     <tr>',
+            '+      <td><input type="checkbox" checked={selected} onChange={() => onSelect(ticket.id)} /></td>',
+            '       <td>{ticket.title}</td>',
+            '     </tr>',
+            '   );',
+            ' }',
+        ]),
+        gold: [
+            { match: 'checkbox', accept: ['met'] },
+            { match: 'archive', accept: ['check_manually'] },
+        ],
+    },
 ];
 
 async function judge(c: Case): Promise<ValidationResult> {
@@ -192,7 +269,7 @@ function score(c: Case, result: ValidationResult) {
         return {
             match: gold.match,
             state: found?.state ?? 'not listed',
-            right: !!found && gold.accept.includes(found.state),
+            right: found ? gold.accept.includes(found.state) : !!gold.absentOk,
         };
     });
 }
