@@ -117,6 +117,15 @@ describe('toRecord', () => {
         });
     });
 
+    // #2097: the repeat check matches the same rule on the same code without
+    // a model call.
+    it('carries the code the suggestion pointed at', () => {
+        expect(
+            toRecord(makeSuggestion({ existingCode: 'let x = 1;' }))
+                .existingCode,
+        ).toBe('let x = 1;');
+    });
+
     it('passes brokenKodyRulesIds through so the sharded judge can resolve the rule identity (PR #1895 review)', () => {
         const record = toRecord(
             makeSuggestion({
@@ -247,6 +256,24 @@ describe('PrDecisionStoreService.load', () => {
             MAX_PR_DECISIONS,
         );
         expect(result).toHaveLength(1);
+    });
+
+    // #2097: the repeat check reads past the prompts' cap.
+    it('reads up to the requested limit from both sources', async () => {
+        const { service, repo } = makeService({
+            findSuggestionsOnPR: jest.fn().mockResolvedValue([]),
+            findPrLevelSuggestionsByPR: jest.fn().mockResolvedValue([]),
+        });
+
+        await service.load({
+            organizationId: 'org-1',
+            prNumber: 42,
+            repositoryFullName: 'kodustech/kodus-ai',
+            limit: 500,
+        });
+
+        expect(repo.findSuggestionsOnPR.mock.calls[0][4]).toBe(500);
+        expect(repo.findPrLevelSuggestionsByPR.mock.calls[0][4]).toBe(500);
     });
 
     it('also queries PR-level suggestions scoped to org + PR + repo fullName (no file filter)', async () => {
