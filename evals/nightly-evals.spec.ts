@@ -29,6 +29,11 @@ describe('evals/nightly-evals.js', () => {
         }
     });
 
+    // Friday runs each entry on every tier-0 model, on a few cases.
+    it('cuts every entry to a few cases for Friday', () => {
+        for (const e of NIGHTLY_EVALS) expect([e.id, e.friday.some((a: string) => /^--limit=\d+$/.test(a))]).toEqual([e.id, true]);
+    });
+
     it('lists every stage the shared job measures', () => {
         const shared = STAGES.filter((s: { nightly?: string }) => s.nightly === 'shared').map((s: { id: string }) => s.id);
         expect(shared.sort()).toEqual(NIGHTLY_EVALS.map((e: { stage: string }) => e.stage).sort());

@@ -5,10 +5,14 @@
  * night or a Friday that did not measure is never reported as healthy, and that
  * the message says what moved and what to do.
  */
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { nightlyReport, tier0Report } = require('./ci-report');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { classifyFailure } = require('./tier0-smoke');
+const { classifyFailure, runFewCases } = require('./tier0-smoke');
 
 const row = (caseId: string, recall: number, found: string[] = [], missed: string[] = []) => ({
     caseId,
@@ -146,6 +150,18 @@ describe('tier-0 report', () => {
         expect(report.description).toContain('✅ a\n❌ **b** · review: no findings\n   `no finding parsed` → customers on this model are affected\n❓ **c** · no result, the job crashed');
     });
 
+    it('names a stage that no longer runs on the model, after a review that passed', () => {
+        const stages = [
+            { key: 'kody_rules', stage: 'kody-rules', status: 'broken', reason: 'measured 4 cases and got nothing right' },
+            { key: 'reply_addressing', stage: 'reply-addressing', status: 'pass', reason: null },
+        ];
+        const report = tier0Report(['a'], read({ a: { ...pass('a'), evals: stages } }));
+        expect(report.status).toBe('failure');
+        expect(report.description).toContain('❌ **a** · kody-rules: measured 4 cases and got nothing right');
+        expect(report.description).toContain('measured 4 cases and got nothing right\n   customers on this model are affected');
+        expect(report.markdown).toContain('❌ **a**: review ok (30 tool calls, 5 findings, 100s) · summary ok · kody-rules broken · reply-addressing ok');
+    });
+
     it('treats a broken PR summary as a broken model', () => {
         expect(tier0Report(['a'], read({ a: { ...pass('a'), prSummary: { status: 'broken', reason: 'GATE FAILED' } } })).status).toBe('failure');
     });
@@ -156,6 +172,36 @@ describe('tier-0 report', () => {
         expect(report.title).toBe('⚠️ Tier-0 · 0/1 model ok');
         expect(report.description).toContain('⚠️ **a** · review: no credit (same as last week)');
         expect(report.markdown).toContain('_(same as last week)_');
+    });
+});
+
+describe('tier-0 stages on a few cases', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tier0-few-'));
+    // A stand-in eval: writes the shared result it is given and prints `stderr`.
+    const fake = (name: string, result: unknown, stderr = '') => {
+        const file = path.join(dir, `${name}.js`);
+        const write = result ? `require('fs').writeFileSync(process.argv.find((a) => a.startsWith('--output=')).slice(9), ${JSON.stringify(JSON.stringify(result))});` : '';
+        fs.writeFileSync(file, `${write}\nconsole.error(${JSON.stringify(stderr)});\nprocess.exit(${result ? 0 : 1});\n`);
+        return { key: name, stage: name, run: [file] };
+    };
+    const shared = (hits: number, errored = 0) => ({ cases: [{ id: 'c1', checks: 'Checks c1', hits, total: 2 }], infra: { errored, total: 10 } });
+
+    it('runs when it measured and got something right; is broken when it got nothing right', () => {
+        expect(runFewCases('m', fake('ok', shared(1)), dir)).toMatchObject({ status: 'pass', hits: 1, total: 2 });
+        expect(runFewCases('m', fake('none', shared(0)), dir)).toMatchObject({ status: 'broken', reason: 'measured 1 cases and got nothing right' });
+    });
+
+    it('tells a provider refusal from a stage that fails on the model when calls failed', () => {
+        expect(runFewCases('m', fake('refused', shared(1, 5), '429 Too Many Requests'), dir)).toMatchObject({ status: 'infra' });
+        expect(runFewCases('m', fake('noverdict', shared(1, 5), 'Reply classifier returned no verdict'), dir)).toMatchObject({ status: 'broken', reason: '5 of 10 calls failed: Reply classifier returned no verdict' });
+        expect(runFewCases('m', fake('crash', null, 'TypeError: x is not a function'), dir)).toMatchObject({ status: 'broken', reason: 'TypeError: x is not a function' });
+    });
+
+    it('names the error most calls failed with, not the eval\'s summary line', () => {
+        const noVerdict = 'reply-addressing: 2 cases\nc1#0: Reply classifier returned no verdict\nc2#0: Reply classifier returned no verdict\n❌ INFRA ERROR: 2/2 calls failed (budget 0)';
+        expect(runFewCases('m', fake('noverdict2', shared(0, 10), noVerdict), dir)).toMatchObject({ status: 'broken', reason: '10 of 10 calls failed: Reply classifier returned no verdict' });
+        const refused = '[case a run 0] 429 Too Many Requests\n[case b run 0] 429 Too Many Requests\n❌ INFRA ERROR: 2/2 calls failed';
+        expect(runFewCases('m', fake('refused2', shared(0, 10), refused), dir)).toMatchObject({ status: 'infra', reason: '10 of 10 calls failed: 429 Too Many Requests' });
     });
 });
 
