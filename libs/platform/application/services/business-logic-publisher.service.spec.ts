@@ -483,6 +483,28 @@ describe('checkFor', () => {
             title: 'No task referenced · this repository requires one',
         });
     });
+    it('fails on a typo when the repository requires a task', () => {
+        expect(
+            checkFor({
+                kind: 'task_missing',
+                references: [
+                    {
+                        kind: 'key',
+                        id: 'KOD-999',
+                        raw: 'KOD-999',
+                        source: 'title',
+                        intent: 'closes',
+                    },
+                ],
+                tracker: 'Linear',
+                message: '',
+                required: true,
+            }),
+        ).toEqual({
+            conclusion: CheckConclusion.FAILURE,
+            title: "KOD-999 doesn't exist in Linear · this repository requires a task",
+        });
+    });
 });
 
 describe('lastCheckFailed', () => {

@@ -223,9 +223,11 @@ export type BusinessValidationOutcome =
           references: TaskReference[];
           tracker: string;
           message: string;
+          /** The team requires a task, so a missing one fails the check. */
+          required?: true;
       }
     /**
-     * No task is referenced and the team requires one: the author
+     * No task is referenced, or none the PR names exists, and the team requires one: the author
      * is asked to reference it, and the check fails.
      */
     | { kind: 'task_required'; message: string }

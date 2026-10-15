@@ -201,11 +201,16 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                     };
                     break;
                 case 'task_missing':
-                    draft.businessLogicOutcome = {
-                        kind: 'skipped',
-                        reason: 'task_missing',
-                        message: `Skipped: ${outcome.references.map((r) => r.raw).join(', ')} doesn't exist in ${outcome.tracker}.`,
-                    };
+                    draft.businessLogicOutcome = outcome.required
+                        ? {
+                              kind: 'gap_found',
+                              message: `${outcome.references.map((r) => r.raw).join(', ')} doesn't exist in ${outcome.tracker}, and this repository requires a task.`,
+                          }
+                        : {
+                              kind: 'skipped',
+                              reason: 'task_missing',
+                              message: `Skipped: ${outcome.references.map((r) => r.raw).join(', ')} doesn't exist in ${outcome.tracker}.`,
+                          };
                     break;
                 case 'task_required':
                     draft.businessLogicOutcome = {

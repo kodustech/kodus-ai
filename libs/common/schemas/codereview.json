@@ -345,7 +345,7 @@
                 "requireTask": {
                     "type": "boolean",
                     "default": false,
-                    "description": "A PR that references no task fails instead of being skipped."
+                    "description": "A PR that references no existing task fails instead of being skipped."
                 }
             },
             "additionalProperties": false

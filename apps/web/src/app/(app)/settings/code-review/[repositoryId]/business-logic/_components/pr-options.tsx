@@ -20,9 +20,9 @@ const SWITCHES = [
     {
         name: "requireTask",
         label: "Require a task",
-        hint: "On: a PR that references no task fails the check, and Kody asks for one. Off: it's skipped.",
+        hint: "On: a PR that references no existing task fails the check, and Kody asks for one. Off: it's skipped.",
         hintWithoutChecks:
-            "On: a PR that references no task gets a comment asking for one. Off: it's skipped.",
+            "On: a PR that references no existing task gets a comment asking for one. Off: it's skipped.",
     },
 ] as const;
 

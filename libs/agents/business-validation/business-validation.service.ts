@@ -337,12 +337,25 @@ export class BusinessValidationService {
                         kind: 'task_missing',
                         references: [reference],
                         tracker,
+                        ...(settings.requireTask
+                            ? { required: true as const }
+                            : {}),
                         message: await translate(
                             messages.taskMissingMessage(
                                 reference,
                                 tracker,
                                 nearby,
                             ),
+                        ),
+                    };
+                }
+                // `UTF-8` in a title names no task: a team that requires one
+                // still has none.
+                if (settings.requireTask) {
+                    return {
+                        kind: 'task_required',
+                        message: await translate(
+                            messages.taskRequiredMessage(),
                         ),
                     };
                 }

@@ -561,8 +561,10 @@ export function checkFor(
             };
         case 'task_missing':
             return {
-                conclusion: CheckConclusion.NEUTRAL,
-                title: `${outcome.references.map((r) => r.raw).join(', ')} doesn't exist in ${outcome.tracker}`,
+                conclusion: outcome.required
+                    ? CheckConclusion.FAILURE
+                    : CheckConclusion.NEUTRAL,
+                title: `${outcome.references.map((r) => r.raw).join(', ')} doesn't exist in ${outcome.tracker}${outcome.required ? ' · this repository requires a task' : ''}`,
             };
         case 'task_required':
             return {

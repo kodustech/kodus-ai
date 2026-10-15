@@ -74,8 +74,8 @@ Kody comments only when the author can do something about it:
 | Situation | On the PR |
 |---|---|
 | The task has only a title | A comment asking for acceptance criteria |
-| `SAA-999` doesn't exist, but SAA is a team in your tracker | A comment saying it looks like a typo, with the closest real tasks |
-| No task referenced | Nothing; the check is skipped. With **Require a task** on, a comment asking for one, and the check fails |
+| `SAA-999` doesn't exist, but SAA is a team in your tracker | A comment saying it looks like a typo, with the closest real tasks. With **Require a task** on, the check also fails |
+| No task referenced, or only ids no tracker has (`UTF-8` in a title) | Nothing; the check is skipped. With **Require a task** on, a comment asking for one, and the check fails |
 | A GitHub issue, but only Linear is connected | Nothing; admins see a count on the settings page |
 | The tracker is down or its token expired | Nothing; the check is skipped, owners are notified, and Kody re-checks once the tracker answers |
 
@@ -96,7 +96,7 @@ Open **Code review → What to review → Business Logic → Configure**. Every 
 - **Task source**: every connected tracker, or one plugin. For a custom plugin (for example Azure DevOps), pick the tool that reads one task by its id; only read-only tools are offered. Use **Try it with a real task** to check what Kody reads before saving.
 - **Where acceptance criteria live**: detected automatically, under a heading in the description, or in a custom field (Jira or Azure Boards).
 - **What fails the check**: MISSING by default. PARTIAL is stricter, and where a requirement is half done is a judgment call, so a PR can go from passing to failing between two checks of the same code. NOT IN TASK suits teams where one PR is one task. With nothing selected, the check never fails.
-- **Require a task**: a PR that references no task fails the check and gets a comment asking for one, instead of being skipped.
+- **Require a task**: a PR that references no existing task fails the check and gets a comment asking for one (or pointing at the typo), instead of being skipped. A tracker that is down never fails it.
 - **Re-check**: while the check fails (default), on every push, or only on request.
 - **Team guidance**: notes Kody follows when it judges, for example "Feature flags count as implemented when the flag exists and defaults to off". It can't change the verdict format or make Kody invent requirements.
 

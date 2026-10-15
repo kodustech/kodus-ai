@@ -286,6 +286,22 @@ describe('BusinessLogicValidationStage', () => {
         expect(result.businessLogicValidatedAt).toBeDefined();
     });
 
+    it('fails the review outcome on a typo when the repository requires a task', async () => {
+        const { stage } = build({
+            kind: 'task_missing',
+            references: [],
+            tracker: 'Linear',
+            message: '',
+            required: true,
+        });
+
+        const result = await stage.execute(context());
+
+        expect(result.businessLogicOutcome).toMatchObject({
+            kind: 'gap_found',
+        });
+    });
+
     it('re-checks a PR already validated when the team turned on re-check on every push (UC-35)', async () => {
         const { stage, service, publisher } = build(validated(true));
 
