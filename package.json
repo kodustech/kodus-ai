@@ -110,6 +110,7 @@
         "mutation": "stryker run",
         "mutation:diff": "bash scripts/dev/mutation-diff.sh",
         "mutation:file": "bash scripts/dev/mutation-safe.sh",
+        "eval:new": "node evals/shared/new-eval.js",
         "eval:kody-rules": "node evals/kody-rules/real-agent.js --dataset=github-cases",
         "eval:kody-rules:gate": "node evals/kody-rules/real-agent.js --dataset=github-cases --gate",
         "eval:kody-rules:bench": "node evals/kody-rules/build-bench-cases.js && node evals/kody-rules/real-agent.js --dataset=bench-cases",

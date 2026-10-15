@@ -135,3 +135,6 @@ module.exports = async () => {
     }
     return tests;
 };
+
+// The named sets, for the catalog (catalog.js) and anyone listing what a set runs.
+module.exports.CASE_SETS = CASE_SETS;
