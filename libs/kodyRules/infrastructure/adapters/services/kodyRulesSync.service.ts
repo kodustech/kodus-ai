@@ -83,6 +83,8 @@ export type IdeSyncRuleCounts = {
     deleted: number;
 };
 
+const NOT_A_RULE_TEMPLATE = 'not a rule template';
+
 type FileSyncOutcome =
     | { outcome: 'imported'; rule: unknown }
     | { outcome: 'removed' }
@@ -203,7 +205,9 @@ export class KodyRulesSyncService {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
         sourcePath: string;
-    }): Promise<Partial<{ uuid: string; status: KodyRulesStatus }> | null> {
+    }): Promise<Partial<
+        Pick<IKodyRule, 'uuid' | 'status' | 'sourceFileIssue'>
+    > | null> {
         try {
             const { organizationAndTeamData, repositoryId, sourcePath } =
                 params;
@@ -244,7 +248,13 @@ export class KodyRulesSyncService {
                     (r) => r?.status !== KodyRulesStatus.DELETED,
                 ) ?? newestFirst[0];
 
-            return found ? { uuid: found.uuid, status: found.status } : null;
+            return found
+                ? {
+                      uuid: found.uuid,
+                      status: found.status,
+                      sourceFileIssue: found.sourceFileIssue,
+                  }
+                : null;
         } catch (error) {
             this.logger.error({
                 message: 'Failed to find rule by sourcePath',
@@ -725,19 +735,27 @@ export class KodyRulesSyncService {
             defaultStatus: params.defaultStatus,
         });
 
-        if (converted.kind === 'skipped') {
-            return { outcome: 'skipped', reason: converted.reason };
-        }
-
         const existing = await this.findRuleBySourcePath({
             organizationAndTeamData,
             repositoryId: repository.id,
             sourcePath: previousPath ?? filePath,
         });
 
+        if (converted.kind === 'skipped') {
+            if (converted.reason === NOT_A_RULE_TEMPLATE) {
+                await this.flagUnparsableSource({
+                    organizationAndTeamData,
+                    rule: existing,
+                    sourcePath: filePath,
+                });
+            }
+            return { outcome: 'skipped', reason: converted.reason };
+        }
+
         const dto = {
             ...converted.rule,
             uuid: existing?.uuid,
+            ...(existing?.sourceFileIssue ? { sourceFileIssue: null } : {}),
             sourcePath: filePath,
             repositoryId: repository.id,
             directoryId: (
@@ -1178,6 +1196,56 @@ export class KodyRulesSyncService {
     }
 
     /**
+     * A `.kody/rules` file that no longer parses keeps its rule as it was:
+     * pausing would silently turn off a rule the team wrote on purpose. The
+     * rule is flagged instead, so the Kody Rules page asks for the fix.
+     */
+    private async flagUnparsableSource(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        rule: Partial<
+            Pick<IKodyRule, 'uuid' | 'status' | 'sourceFileIssue'>
+        > | null;
+        sourcePath: string;
+    }): Promise<void> {
+        const { organizationAndTeamData, rule, sourcePath } = params;
+        if (
+            !rule?.uuid ||
+            rule.status === KodyRulesStatus.DELETED ||
+            rule.sourceFileIssue === 'not_a_rule_template'
+        ) {
+            return;
+        }
+        try {
+            await this.kodyRulesService.updateRuleSourceFileIssue(
+                organizationAndTeamData.organizationId,
+                rule.uuid,
+                'not_a_rule_template',
+            );
+            this.logger.warn({
+                message:
+                    '[kody-rules-sync] rule kept with its last text: its file no longer parses as a rule template',
+                context: KodyRulesSyncService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    ruleId: rule.uuid,
+                    sourcePath,
+                },
+            });
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to flag a rule whose file no longer parses',
+                context: KodyRulesSyncService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    ruleId: rule.uuid,
+                    sourcePath,
+                },
+            });
+        }
+    }
+
+    /**
      * The only way a repository file becomes a Kody Rule: the template parsed
      * verbatim (`parseKodyRuleFile`). Anything else (a coding-agent file, a
      * README under `rules/`, a file whose frontmatter broke) is skipped and
@@ -1213,7 +1281,7 @@ export class KodyRulesSyncService {
                         params.organizationAndTeamData?.organizationId,
                 },
             });
-            return { kind: 'skipped', reason: 'not a rule template' };
+            return { kind: 'skipped', reason: NOT_A_RULE_TEMPLATE };
         }
 
         if (!parsed.enabled) {
@@ -2130,6 +2198,7 @@ export class KodyRulesSyncService {
         uuid: string;
         status: KodyRulesStatus;
         lastContentHash: string;
+        sourceFileIssue: IKodyRule['sourceFileIssue'];
     }> | null {
         const matches =
             (rules ?? []).filter(
@@ -2156,6 +2225,7 @@ export class KodyRulesSyncService {
                   uuid: found.uuid,
                   status: found.status,
                   lastContentHash: (found as any).lastContentHash,
+                  sourceFileIssue: (found as any).sourceFileIssue,
               }
             : null;
     }
@@ -2310,6 +2380,13 @@ export class KodyRulesSyncService {
                 });
 
                 if (converted.kind === 'skipped') {
+                    if (converted.reason === NOT_A_RULE_TEMPLATE) {
+                        await this.flagUnparsableSource({
+                            organizationAndTeamData,
+                            rule: existing,
+                            sourcePath: file.path,
+                        });
+                    }
                     syncOutcome.skipped.push({
                         file: file.path,
                         reason: converted.reason,
@@ -2368,6 +2445,10 @@ export class KodyRulesSyncService {
                 // signal, so a stale UI rejection must not block re-import.
                 if (existing?.status === KodyRulesStatus.REJECTED) {
                     (dto as any).status = KodyRulesStatus.ACTIVE;
+                }
+                // The file parses again: drop the "no longer syncs" flag.
+                if (existing?.sourceFileIssue) {
+                    (dto as any).sourceFileIssue = null;
                 }
 
                 await this.kodyRulesService.createOrUpdate(

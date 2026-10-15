@@ -28,6 +28,8 @@ export type KodyRule = {
      * resume toggle.
      */
     lockedByPlan?: boolean;
+    /** The rule's .kody/rules file stopped parsing; the rule keeps its last text. */
+    sourceFileIssue?: "not_a_rule_template" | null;
     centralizedConfig?: {
         path: string;
         status: KodyRuleCentralizedStatus;

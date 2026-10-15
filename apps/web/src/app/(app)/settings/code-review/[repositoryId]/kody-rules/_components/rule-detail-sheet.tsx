@@ -26,6 +26,7 @@ import {
     type KodyRuleWithInheritanceDetails,
 } from "@services/kodyRules/types";
 import {
+    AlertTriangleIcon,
     ArrowDownIcon,
     ArrowRightToLineIcon,
     ArrowUpIcon,
@@ -241,6 +242,14 @@ export const KodyRuleDetailSheet = ({
                                         <code className="font-mono break-all">
                                             {rule.sourcePath}
                                         </code>
+                                    </span>
+                                )}
+                                {rule.sourceFileIssue && (
+                                    <span className="text-warning flex items-center gap-1">
+                                        <AlertTriangleIcon className="size-3 shrink-0" />
+                                        Its file no longer syncs: a .kody/rules
+                                        file needs a frontmatter with a title.
+                                        Kody keeps the last version that synced.
                                     </span>
                                 )}
                                 {isInherited && (

@@ -453,6 +453,20 @@ export const KodyRuleRow = ({
                                 </TooltipContent>
                             </Tooltip>
                         )}
+                        {rule.sourceFileIssue && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <span className="text-warning flex shrink-0 items-center">
+                                        <AlertTriangleIcon className="size-3.5" />
+                                    </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs text-xs">
+                                    Its file no longer syncs: a .kody/rules file
+                                    needs a frontmatter with a title. Kody keeps
+                                    the last version that synced.
+                                </TooltipContent>
+                            </Tooltip>
+                        )}
                     </div>
 
                     <div className="text-text-secondary mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">

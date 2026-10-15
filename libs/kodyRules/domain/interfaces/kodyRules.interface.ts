@@ -197,7 +197,16 @@ export interface IKodyRule {
      * is false (i.e., the org is on a paid plan). See #1626.
      */
     lockedByPlan?: boolean;
+    /**
+     * Set by the repository sync when this rule's `.kody/rules` file stopped
+     * parsing as a rule template (no frontmatter with a title and a body).
+     * The rule keeps its last text and status; the Kody Rules page asks the
+     * team to fix the file. Cleared (`null`) when the file parses again.
+     */
+    sourceFileIssue?: KodyRuleSourceFileIssue | null;
 }
+
+export type KodyRuleSourceFileIssue = 'not_a_rule_template';
 
 export interface IKodyRuleCentralizedConfig {
     path: string;

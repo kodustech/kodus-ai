@@ -66,6 +66,7 @@ import {
     FindMemoriesResult,
     IKodyRule,
     IKodyRuleContextNeed,
+    KodyRuleSourceFileIssue,
     IKodyRuleFileScope,
     IKodyRuleCompileAttempt,
     IKodyRuleDetector,
@@ -1080,6 +1081,34 @@ export class KodyRulesService implements IKodyRulesService {
 
         const updated = updatedKodyRules.rules.find((r) => r.uuid === ruleId);
         return updated ? (updated as IKodyRule) : null;
+    }
+
+    /**
+     * Flag a rule whose `.kody/rules` file stopped parsing as a template, or
+     * clear the flag with `null`. Only the flag changes: the rule keeps its
+     * text and status, so a broken edit never turns off what the team wrote.
+     */
+    async updateRuleSourceFileIssue(
+        organizationId: string,
+        ruleId: string,
+        issue: KodyRuleSourceFileIssue | null,
+    ): Promise<IKodyRule | null> {
+        const existing = await this.findByOrganizationId(organizationId);
+        const existingRule = existing?.rules?.find((r) => r.uuid === ruleId);
+        if (!existing || !existingRule) {
+            throw new NotFoundException('Rule not found');
+        }
+
+        const updatedKodyRules = await this.updateRule(existing.uuid, ruleId, {
+            ...existingRule,
+            // `null` passes through: updateRule skips only `undefined`.
+            sourceFileIssue: issue,
+        } as IKodyRule);
+
+        return (
+            (updatedKodyRules?.rules.find((r) => r.uuid === ruleId) as
+                IKodyRule | undefined) ?? null
+        );
     }
 
     /**

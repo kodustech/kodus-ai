@@ -1051,6 +1051,7 @@ describe('KodyRulesSyncService — repository rule files vs coding-agent files',
                     ...dto,
                     uuid: dto.uuid ?? `new-${dto.sourcePath}`,
                 })),
+            updateRuleSourceFileIssue: jest.fn().mockResolvedValue(null),
         };
         const parametersService = {
             findByKey: jest.fn().mockResolvedValue({
@@ -1378,6 +1379,80 @@ describe('KodyRulesSyncService — repository rule files vs coding-agent files',
         });
     });
 
+    describe('a .kody/rules file that stops parsing', () => {
+        const existingRule = (over: Record<string, unknown> = {}) => ({
+            uuid: 'rule-a',
+            repositoryId: REPO.id,
+            sourcePath: '.kody/rules/a.md',
+            origin: KodyRulesOrigin.REPO_FILE_SYNC,
+            status: KodyRulesStatus.ACTIVE,
+            ...over,
+        });
+
+        it('keeps its rule active and flags it, instead of pausing a rule the team wrote', async () => {
+            const { service, written, kodyRulesService } = makeService({
+                allFiles: [{ path: '.kody/rules/a.md', size: 20 }],
+                files: { '.kody/rules/a.md': 'Use integer cents for money.' },
+                orgRules: [existingRule()],
+            });
+
+            await service.syncRepositoryMainFast({
+                organizationAndTeamData: ORG,
+                repository: REPO,
+            });
+
+            expect(written()).toEqual([]);
+            expect(
+                kodyRulesService.updateRuleSourceFileIssue,
+            ).toHaveBeenCalledWith(
+                ORG.organizationId,
+                'rule-a',
+                'not_a_rule_template',
+            );
+        });
+
+        it('does not flag it twice', async () => {
+            const { service, kodyRulesService } = makeService({
+                allFiles: [{ path: '.kody/rules/a.md', size: 20 }],
+                files: { '.kody/rules/a.md': 'Use integer cents for money.' },
+                orgRules: [
+                    existingRule({ sourceFileIssue: 'not_a_rule_template' }),
+                ],
+            });
+
+            await service.syncRepositoryMainFast({
+                organizationAndTeamData: ORG,
+                repository: REPO,
+            });
+
+            expect(
+                kodyRulesService.updateRuleSourceFileIssue,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('clears the flag once the file parses again', async () => {
+            const { service, written } = makeService({
+                allFiles: [{ path: '.kody/rules/a.md', size: 200 }],
+                files: { '.kody/rules/a.md': TEMPLATE },
+                orgRules: [
+                    existingRule({ sourceFileIssue: 'not_a_rule_template' }),
+                ],
+            });
+
+            await service.syncRepositoryMainFast({
+                organizationAndTeamData: ORG,
+                repository: REPO,
+            });
+
+            expect(written()).toEqual([
+                expect.objectContaining({
+                    uuid: 'rule-a',
+                    sourceFileIssue: null,
+                }),
+            ]);
+        });
+    });
+
     describe('syncRepositoryGlobal', () => {
         it('keeps global rules from a source repo coding-agent file frozen, and deletes removed templates', async () => {
             const { service, deleteRuleUseCase, codeManagementService } =
@@ -1415,6 +1490,65 @@ describe('KodyRulesSyncService — repository rule files vs coding-agent files',
             expect(
                 deleteRuleUseCase.execute.mock.calls.map(([uuid]: [string]) => uuid),
             ).toEqual(['from-template']);
+        });
+
+        const globalRule = (over: Record<string, unknown> = {}) => ({
+            uuid: 'global-a',
+            repositoryId: 'global',
+            sourceRepositoryId: REPO.id,
+            origin: KodyRulesOrigin.GLOBAL_REPO_FILE_SYNC,
+            sourcePath: '.kody/rules/a.md',
+            status: KodyRulesStatus.ACTIVE,
+            ...over,
+        });
+
+        it('flags a global rule whose file stopped parsing, and keeps it', async () => {
+            const { service, kodyRulesService, deleteRuleUseCase } =
+                makeService({
+                    allFiles: [
+                        { path: '.kody/rules/a.md', size: 20, sha: 'new' },
+                    ],
+                    files: {
+                        '.kody/rules/a.md': 'Use integer cents for money.',
+                    },
+                    orgRules: [globalRule()],
+                });
+
+            await service.syncRepositoryGlobal({
+                organizationAndTeamData: ORG,
+                repository: REPO,
+            });
+
+            expect(
+                kodyRulesService.updateRuleSourceFileIssue,
+            ).toHaveBeenCalledWith(
+                ORG.organizationId,
+                'global-a',
+                'not_a_rule_template',
+            );
+            expect(deleteRuleUseCase.execute).not.toHaveBeenCalled();
+        });
+
+        it('clears the flag on a global rule once its file parses again', async () => {
+            const { service, written } = makeService({
+                allFiles: [{ path: '.kody/rules/a.md', size: 200, sha: 'new' }],
+                files: { '.kody/rules/a.md': TEMPLATE },
+                orgRules: [
+                    globalRule({ sourceFileIssue: 'not_a_rule_template' }),
+                ],
+            });
+
+            await service.syncRepositoryGlobal({
+                organizationAndTeamData: ORG,
+                repository: REPO,
+            });
+
+            expect(written()).toEqual([
+                expect.objectContaining({
+                    uuid: 'global-a',
+                    sourceFileIssue: null,
+                }),
+            ]);
         });
     });
 });

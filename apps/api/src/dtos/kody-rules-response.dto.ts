@@ -244,6 +244,14 @@ export class KodyRuleDto {
     pinnedSync?: boolean;
 
     @ApiPropertyOptional({
+        nullable: true,
+        enum: ['not_a_rule_template'],
+        description:
+            "Set when the rule's .kody/rules file stopped parsing as a rule template; the rule keeps its last text.",
+    })
+    sourceFileIssue?: 'not_a_rule_template' | null;
+
+    @ApiPropertyOptional({
         description:
             'True when this rule is PAUSED because activating it would exceed the free plan\'s active-rule quota, rather than a user-initiated pause. The web UI renders these as "Locked" with an upgrade CTA instead of a plain resume toggle.',
     })
