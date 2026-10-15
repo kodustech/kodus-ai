@@ -1,0 +1,1740 @@
+{
+ "model": "deepseek-v4.1-flash",
+ "verificador": "deepseek-v4.1-flash@together",
+ "versao": "pf1",
+ "versaoDedup": "v9-cobertura",
+ "teto": 40,
+ "prs": {
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "EnableTwoFactorModal.tsx:134-136 now only does setStep(DisplayBackupCodes) on success instead of calling onEnable(); onEnable is invoked solely from the Close button (line 269). The Dialog (line 166) wires onOpenChange, so dismissing via ESC/overlay closes the modal without calling onEnable, so the parent handler (two-factor-auth.tsx:65-68, setEnableModalOpen(false)+utils.viewer.me.invalidate()) never runs and the Switch stays unchecked even though the server enabled 2FA."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "next-auth-options.ts:121 verifies the password only when `!credentials.totpCode`, while the new branch at line 131 fires on any truthy `credentials.backupCode` regardless of totpCode. A request supplying a valid backup code plus any non-empty totpCode therefore skips the password check at 121 and matches the backup branch, granting a session using only the static backup code with no password verification."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "TwoFactorAuthAPI.disable now requires a third `backupCode` argument (TwoFactorAuthAPI.ts:22), but apps/web/components/security/DisableTwoFactorModal.tsx:38 still calls `TwoFactorAuthAPI.disable(password, totpCode)` with two args, which is a TS compile error (Expected 3 arguments, but got 2) at PR head."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "The default export in BackupCode.tsx:7 is named TwoFactor, a naming mismatch only; it has no behavioural effect and is pure style, not worth a review comment."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "The copy test (login.2fa.e2e.ts:119-122) only waits for the toast, which the handler (EnableTwoFactorModal.tsx:278-279) shows unconditionally; it is a weak test, but the author already left a `// TODO: check clipboard content` acknowledging it, so the comment adds little value and remains a test-quality nitpick."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": true,
+     "kind": "preexisting",
+     "reason": "The `expect(page.locator(...).isChecked()).toBeTruthy()` assertion at login.2fa.e2e.ts:53 already existed at the base (readBaseFile confirms line 49), is unrelated to the backup-code feature, and the PR itself added the FIXME noting it; it is a pre-existing test issue, not introduced or fixed here."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S3",
+      "S8"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "next-auth-options.ts:139-156 decrypts, checks index, then re-encrypts and updates in a non-atomic read-modify-write. Two concurrent logins with the same backup code both pass `index !== -1` before either prisma.user.update commits, so the single-use invariant for backup codes is violated."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": true,
+     "kind": "speculative",
+     "reason": "Using indexOf/=== on the backup code in next-auth-options.ts:144 is a theoretical timing side-channel; with rate limiting (checkRateLimitAndThrowError at line 109) and the practical difficulty of exploiting string-compare timing over HTTP, this is not a defect anyone meaningfully hits."
+    }
+   ],
+   "passos": 15,
+   "tokensEntrada": 469201,
+   "tokensSaida": 21366,
+   "segundos": 103
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "handleNewBooking.ts:1063-1067 defaults evt.destinationCalendar to null when neither eventType nor organizerUser has a destination calendar, so the optional-chained `evt.destinationCalendar?.push(...teamDestinationCalendars)` at line 1078 silently no-ops and the other hosts' destination calendars (collected at 987-993) are dropped, defeating the multi-host fix."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "EventManager.ts:170 now stores `credentialId: isCalendarType ? result.credentialId : undefined`, whereas the base stored `result.credentialId` for non-calendar results; video results do carry credentialId (videoClient.ts:78), and handleCancelBooking.ts:491-501 relies on the persisted reference's credentialId to call deleteMeeting, so video meetings are no longer cleaned up."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "The per-destination prisma.credential.findUnique (EventManager.ts:344, 517) is only a performance concern; host counts are small and it is not a correctness defect, i.e. micro-optimization not worth blocking the change."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S1",
+      "S6",
+      "S7",
+      "S8",
+      "S11",
+      "S13",
+      "S14"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "EventManager.ts:118-119 destructures `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []` then reads `.integration` with no optional chaining; when the array is empty/undefined (handleNewBooking.ts:1067 sets null, handleCancelBooking.ts:532 sets []), `mainHostDestinationCalendar` is undefined and, whenever location is Meet, the condition throws TypeError instead of falling back to daily video as before."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S9",
+      "S10",
+      "S12"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "googlecalendar CalendarService.ts:254-256 (and 315-317) only evaluate the `find((cal) => cal.externalId === externalCalendarId)` fallback when externalCalendarId is falsy, so it compares against null/undefined and always yields undefined; with callers passing null (CalendarManager.ts:290) or no external id (CalendarManager.ts:332) updateEvent gets an undefined calendarId and deleteEvent silently targets \"primary\" instead of the host's destination calendar."
+    }
+   ],
+   "passos": 21,
+   "tokensEntrada": 447680,
+   "tokensSaida": 6648,
+   "segundos": 27
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "addGuests.handler.ts:52 (`attendee.email === user.email`) and :76 (`guest === attendee.email`) compare emails case-sensitively while the handler lowercases the blacklist on :71; attendee emails are stored verbatim (handleNewBooking.ts:751-758), so casing differences wrongly deny a legitimate attendee and duplicate an existing attendee."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "kind": "hallucination",
+     "reason": "Newly added attendees store the exact submitted guest string (addGuests.handler.ts:83-90) and that same `guests` array is passed as `newGuests` (:168), so email-manager.ts:541 `newGuests.includes(attendee.email)` matches for every added guest; the claimed casing divergence between newGuests and the stored value cannot occur."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "Hard-coded `content=\"Remove email\"` in packages/ui/form/MultiEmail.tsx:46 is an i18n/style issue on a tooltip label, not a behavioral defect in the change."
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "The unreachable `|| t(\"unable_to_add_guests\")` fallback (AddGuestsDialog.tsx:43-44) is a dead-code/UX detail; the translated text still reaches the user via `t(err.message)`, so this is not a meaningful behavioral defect."
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "The wire schema (addGuests.schema.ts:3-6) has no uniqueness refine and the handler only filters written attendees vs the existing list/blacklist (addGuests.handler.ts:74-78); with no unique constraint on Attendee (schema.prisma:526-539) a request containing the same email twice inserts duplicate attendee rows. The server cannot trust the client-only refine in AddGuestsDialog."
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": true,
+     "kind": "speculative",
+     "reason": "The read-then-insert race requires two simultaneous addGuests requests for the same guest; it is a theoretical concurrency edge case and produces the same duplicate-attendee outcome already covered by S14, so it is not worth a separate comment."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S9",
+      "S16",
+      "S18"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "addGuests.handler.ts:46-48 uses `isTeamAdmin(...) && isTeamOwner(...)`, but isTeamAdmin (teams/index.ts:264-284) already returns truthy for ADMIN or OWNER, so the AND makes the flag owner-only and denies team ADMINs with FORBIDDEN, contradicting the `isTeamAdminOrOwner` intent; should be `||`."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "addGuests.handler.ts:71 lowercases the blacklist entries but line 77 compares the raw `guest`, so a differently-cased address (Foo@Bar.com vs foo@bar.com) passes the filter and is persisted, defeating BLACKLISTED_GUEST_EMAILS (contrast the existing case-insensitive check in handleNewBooking.ts:741-743)."
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S3",
+      "S8",
+      "S12",
+      "S13",
+      "S17"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "addGuests.handler.ts:168 passes raw `guests` to sendAddGuestsEmails, but email-manager.ts:541 uses `newGuests.includes(attendee.email)` to decide the template. A re-submitted existing attendee is filtered out of `uniqueGuests` (not actually added) yet remains in `guests`, so they get a duplicate AttendeeScheduledEmail/ICS instead of the intended AddGuests email; should pass `uniqueGuests`."
+    }
+   ],
+   "passos": 13,
+   "tokensEntrada": 228032,
+   "tokensSaida": 7675,
+   "segundos": 31
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "salesforce/lib/CalendarService.ts:75-99 fetches and persists a fresh token (`accessTokenParsed.data`), yet the connection returned at lines 101-108 still uses the stale `credentialKey.access_token`/`credentialKey.refresh_token`, so the just-refreshed token is written to the DB but never used for the connection."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "apps/web/pages/api/webhook/app-credential.ts:24-29 compares the caller-supplied header to CALCOM_WEBHOOK_SECRET with `!==`, a non-constant-time comparison of a shared secret guarding an endpoint that can create/update arbitrary user credentials; a timing-safe comparison is the standard hardening."
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "This is only a JSDoc wording duplication (createOAuthAppCredential.ts:13-14); the code behavior is unaffected, which the task explicitly excludes as a docs/comment nitpick."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S8",
+      "S9",
+      "S12",
+      "S16"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "zoho-bigin/lib/CalendarService.ts:85-93 passes `credentialId` (defined at line 53 as `credential.id`) as the third `userId` arg of refreshOAuthTokens, while every other app passes `credential.userId`; in credential-sync mode the sync endpoint receives a credential id instead of a user id, so the feature targets the wrong user."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6",
+      "S10",
+      "S11",
+      "S13"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "parseRefreshTokenResponse.ts:29 returns the zod `safeParse` result (`{success, data}`), and googlecalendar/lib/CalendarService.ts:97 assigns it directly to `key`, which is persisted at line 100; on the next load googleCredentialSchema.parse(credential.key) (line 75) throws because the stored object lacks access_token/refresh_token, unlike office365/salesforce which unwrap `.data`."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S7",
+      "S14"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "refreshOAuthTokens.ts:8-15 returns the raw `fetch` Response in the sharing branch, but callers that treat the result as a parsed token break: hubspot/lib/CalendarService.ts:192 reads `.expiresIn`, zoho-bigin:96 and zohocrm:217 read `.data.error`, googlecalendar:94 reads `res?.data` — a Response has none, so the primary sync path yields undefined/NaN/TypeError."
+    }
+   ],
+   "passos": 5,
+   "tokensEntrada": 141698,
+   "tokensSaida": 9633,
+   "segundos": 36
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "Performance/index concern only: the deleteMany is a single statement per cron run, and there is no correctness bug. schema.prisma:1005 already has @@index([method, scheduled, scheduledDate]); missing index on retryCount is a micro-performance nitpick, not a behavior defect."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "kind": "absurd",
+     "reason": "Not a finding: the diff (scheduleSMSReminders.ts:178-187) intentionally increments retryCount only in the failed-send else-branch. Not incrementing on success is the desired behavior, so the comment describes no defect."
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "The increment is indeed duplicated (scheduleSMSReminders.ts:184 and 195), but as stated this is pure code-duplication/style feedback with no behavior bug, so it is a nitpick."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "nit": true,
+     "kind": "speculative",
+     "reason": "Non-atomic read-modify-write (scheduleSMSReminders.ts:184,195) only matters if cron invocations overlap; the claimed 'loop forever' outcome is a hypothetical concurrency edge case, not a demonstrated defect introduced by the change."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S7"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "The new prisma.workflowReminder.update in the catch (scheduleSMSReminders.ts:190-197) is itself unguarded, so a P2025/transient error escapes the for-loop, rejects the handler and skips all remaining reminders, whereas the previous catch only logged and the batch always completed."
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S4",
+      "S5",
+      "S8",
+      "S10",
+      "S12",
+      "S13"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "The method filter was moved inside only the first OR arm (scheduleSMSReminders.ts:31-43), so the retryCount>1 arm is no longer SMS-scoped and would delete reminders of other methods; the code comment at line 28 states the intent is SMS-only, so the scope was silently widened."
+    }
+   ],
+   "passos": 4,
+   "tokensEntrada": 23717,
+   "tokensSaida": 5021,
+   "segundos": 19
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "The rewritten getBaseConditions test at insightsBooking.integration-test.ts:438-491 only creates one booking (userBooking) that matches auth (userId=user.id AND teamId IS NULL) and the filter (eventTypeId=userEventType.id) simultaneously; testData.booking has teamId=team.id and a different eventTypeId, so it matches neither alone. Thus auth-only, filter-only and the AND all yield exactly [{id: userBooking.id}], so the test cannot fail if getBaseConditions drops either branch — a meaningful gap in the test rewritten by this PR to exercise the new SQL combination."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "nit": true,
+     "kind": "hallucination",
+     "reason": "Repo-wide grep shows InsightsBookingService is referenced only by its own file and the integration test (no production/route callers), so removing findMany and changing the return types breaks no other consumer; the 'find and migrate remaining call sites' premise is false."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "nit": true,
+     "kind": "defensive",
+     "reason": "getAuthorizationConditions always returns a truthy Prisma.Sql (buildAuthorizationConditions returns NOTHING_CONDITION or a Sql object, never null/falsy), so the `else if (filterConditions)` branch at insightsBooking.ts:76-77 is unreachable; the described authorization-bypass state cannot occur."
+    }
+   ],
+   "passos": 11,
+   "tokensEntrada": 193248,
+   "tokensSaida": 6385,
+   "segundos": 24
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "In mixins.scss:126-127 the freshly-added @mixin order($val) emits -webkit-box-ordinal-group: $val / -moz-box-ordinal-group: $val, but the legacy box model is 1-based (default 1) while order is 0-based (default 0), so the abstraction does not reproduce caller intent on those engines; the +1 correction is the standard fix, and this is core to the PR's stated purpose of cross-prefix consistency."
+    }
+   ],
+   "passos": 2,
+   "tokensEntrada": 7361,
+   "tokensSaida": 2525,
+   "segundos": 15
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "kind": "speculative",
+     "reason": "app/models/topic.rb:868-870 now requires only embed_truncate? && has_topic_embed?; because has_topic_embed? is true only for topics actually created through embedding, the removed SiteSetting.embeddable_hosts.present? guard was a redundant global proxy for 'embedding configured', and the described regression (host later deleted) is a contrived state."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "kind": "preexisting",
+     "reason": "The lower() is applied to the column, so a stored 'Example.com' is still matched by a lowercase param; the param (uri.host) case issue is identical to the base implementation SiteSetting.allows_embeddable_host? (app/models/site_setting.rb before this PR), which also compared case-sensitively, so it is not introduced by this change."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "db/migrate/20150818190757_create_embeddable_hosts.rb:11 does `execute(...)[0]['id']`; the SELECT joins site_settings on name='embed_category', and that setting was removed from config/site_settings.yml by this PR, so on any install where the row is absent (or its value matches no category) the query returns zero rows, `[0]` is nil and `nil['id']` raises, aborting the migration; the `if category_id == 0` fallback at lines 14-16 is unreachable."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S12"
+     ],
+     "nit": true,
+     "kind": "defensive",
+     "reason": "The admin form's {{input value=buffered.host}} submits an empty string, not nil, so `''.sub!` is safe; the nil-host crash in app/models/embeddable_host.rb:5-8 only arises from a hand-crafted request, which is a defensive/edge state rather than a defect the UI reaches."
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S4",
+      "S13"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "The example at spec/models/topic_spec.rb:1403 is now vacuous (passes because embed_truncate defaults false), but this is a test-naming/vacuity nit and not a behavior defect; there is no remaining host condition for it to assert, and the sibling examples still cover embed_truncate and has_topic_embed."
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S7",
+      "S14"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "The migration inserts legacy embeddable_hosts values raw (line 25), while EmbeddableHost.record_for_host (app/models/embeddable_host.rb:17) matches `lower(host) = uri.host` on the parsed incoming URL. Legacy values like 'http://discourse.org' (tolerated by the old SiteSetting.allows_embeddable_host?, which stripped the scheme) are stored unmodified, so lower(host) never equals 'discourse.org' and host_allowed? returns false, silently breaking embedding for existing installs."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S15"
+     ],
+     "nit": true,
+     "kind": "hallucination",
+     "reason": "AMS `embed: :ids` side-loads the associated records into the root (lib/freedom_patches/ams_include_without_root.rb:46-53 merges `association.serializables` into the root hash), exactly as UserSerializer's `has_many :featured_user_badges, embed: :ids` (app/serializers/user_serializer.rb:73) sideloads user_badges; so EmbeddingSerializer emits both embeddable_host_ids and the embeddable_hosts array the client needs, and the claim that it never sidloads is false."
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": true,
+     "kind": "defensive",
+     "reason": "update/destroy use EmbeddableHost.where(id:).first without check (app/controllers/admin/embeddable_hosts_controller.rb:9-18), but ids come from the loaded admin list and a missing id is only reachable via a crafted/stale request; this is defensive guarding for an unreachable state, not a defect in normal behavior."
+    }
+   ],
+   "passos": 23,
+   "tokensEntrada": 748130,
+   "tokensSaida": 17017,
+   "segundos": 64
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "optimize selects the animated branch only when `from =~ /\\.GIF$/i` (optimized_image.rb:155), but uploads_controller.rb:67 passes Rack's multipart tempfile path, which has no extension (compare OptimizedImage.create_for:41 and FileHelper.download:13-14, which deliberately append the extension for exactly this reason). So a GIF upload goes through downsize_instructions -> `convert #{from}[0]` (optimized_image.rb:129), flattening the animation despite allow_animated_thumbnails being on."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "This is about the wording of the code comment, not runtime behaviour; the file is still size-checked by Validators::UploadValidator#maximum_file_size (upload_validator.rb:80-88), and the loop intentionally approximates via 80% steps."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "The 10MB literal is an intentional part of this feature (mirrored server-side at uploads_controller.rb:55 and the 413 branch), and the comment gives no concrete failing behaviour - it is a vague style/peripheral remark."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": true,
+     "kind": "hallucination",
+     "reason": "The premise is false: downsize_instructions just interpolates the value into `-resize #{dimensions}` (optimized_image.rb:132) and ImageMagick accepts `-resize 80%`, so the downsize does shrink the image; it does not require an explicit WxH string."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5",
+      "S7",
+      "S9"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "downsize is declared at optimized_image.rb:145 as (from,to,max_width,max_height,opts) and immediately re-declared at :149 as (from,to,dimensions,opts); Ruby keeps only the last, so the 5-arg call in resize_emoji.rb:14 no longer binds and raises ArgumentError (3..4 params), breaking emoji resizing."
+    }
+   ],
+   "passos": 18,
+   "tokensEntrada": 347872,
+   "tokensSaida": 20015,
+   "segundos": 71
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "kind": "hallucination",
+     "reason": "i18n normalizes I18n.locale to a Symbol (the setter converts with to_sym; spec/controllers/application_controller_spec.rb:97 asserts I18n.locale == :fr after assigning a user locale), so FallbackLocaleList#[] receives a Symbol and [locale, SiteSetting.default_locale.to_sym, :en].uniq already dedupes. The claimed String/Symbol mix does not exist."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "kind": "hallucination",
+     "reason": "I18n.translate loads the requested locale before the cache lookup (translate_accelerator.rb:68 load_locale(config.locale)), so a lookup never occurs for a 'not-yet-loaded' requested locale and the described stale-fallback-value cache scenario cannot happen."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "Fallbacks is now included (config/initializers/i18n.rb:9) but the fallback locales are only ensured in ApplicationController#set_locale (application_controller.rb:159); the real gate I18n.translate loads only config.locale (translate_accelerator.rb:68), and app/jobs/base.rb:151 sets a locale without loading the chain, so outside the request cycle (jobs/mailers/POSTAlerter at app/services/post_alerter.rb:138) the advertised default/:en fallback never engages."
+    }
+   ],
+   "passos": 14,
+   "tokensEntrada": 205474,
+   "tokensSaida": 23862,
+   "segundos": 110
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "Post#cook returns the un-sanitized `raw` for raw_html posts (app/models/post.rb:133), and the PollFeed path feeds raw RSS content straight into TopicEmbed.import (app/jobs/scheduled/poll_feed.rb:35-36, app/models/topic_embed.rb:22-28) which stores it as `cooked`; that value is emitted with `raw post.cooked` (app/views/embed/best.html.erb:19 and app/views/topics/show.html.erb:12), giving stored XSS from feed content on the forum origin."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "The hard-coded `strftime(\"%e %b %Y\")` (best.html.erb:14) is a minor localization shortcoming in a brand-new low-traffic view; not a behavioral defect worth blocking on."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "The case-sensitive host comparison (embed_controller.rb:26, lib/topic_retriever.rb:15) is technically imprecise but browsers normalize URL hosts to lowercase, so it is an unlikely edge case, not a defect the change introduces in practice."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "feed_polling_enabled defaults to false (config/site_settings.yml:355) and the tests at spec/jobs/poll_feed_spec.rb:18-28 never stub it true, so `execute` short-circuits before checking feed_polling_url/embed_by_username; those two examples pass even if those checks were deleted."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "embeddable_host defaults to '' (config/site_settings.yml:354), so in spec/controllers/embed_controller_spec.rb:8-11 `ensure_embeddable` raises at the blank-host check before `params.require(:embed_url)` is reached; the example passes for the wrong reason and would pass even without the embed_url requirement."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "TopicEmbed.import does check-then-insert (topic_embed.rb:15-28) against the unique index on embed_url (db/migrate/20131217174004_create_topic_embeds.rb:11) with no rescue for ActiveRecord::RecordNotUnique; the only guard is the Redis throttle which staff bypass (app/jobs/regular/retrieve_topic.rb:17), so concurrent retrievals for the same URL can raise and abort the job."
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S20"
+     ],
+     "nit": true,
+     "kind": "hallucination",
+     "reason": "The premise is false: `queue_jobs` defaults to false in test (config/site_settings.yml:348-351), so Jobs.enqueue executes the job inline (app/jobs/base.rb:162-173) and the RetrieveTopic job calls TopicRetriever.new(...).retrieve (retrieve_topic.rb:17), satisfying the spec's mock at spec/controllers/embed_controller_spec.rb:40-46."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "best.html.erb:6 closes the `if` from line 2 with `<%- end if %>`; Erubis compiles this tag to `end if ;` (a modifier `if` with no condition), which is a SyntaxError, so the view cannot compile. Should be `<%- end %>`."
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S3",
+      "S11"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "poll_feed.rb:35 calls `i.content.scrub` unconditionally; RSS 2.0 items that carry only `<description>`/no `<link>` (some items have no title) yield a missing/blank value, so `i.content` is nil (or raises) and `.scrub` aborts the whole hourly job instead of skipping the item."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "app/assets/javascripts/embed.js:17 uses `discourseUrl.indexOf(e.origin) === -1`, a substring test that accepts any origin contained in the forum URL (e.g. `https://discourse` for `https://discourse.example.com`); the origin should be compared exactly."
+    }
+   ],
+   "passos": 12,
+   "tokensEntrada": 559147,
+   "tokensSaida": 52872,
+   "segundos": 312
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "database.go:109-118 does CountDevices then a separate INSERT/ON CONFLICT with no transaction, lock, or unique enforcement on the cap, so two concurrent first-time devices can both observe count < limit and both insert, exceeding the configured AnonymousDeviceLimit the feature is meant to enforce."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "kind": "speculative",
+     "reason": "The early-return for ErrDeviceLimitReached at client.go:45-46 is a deliberate part of the feature (blocking new devices once the cap is hit), not an unintended regression, and the claim that a DB count+write runs synchronously on every anonymous request is false because tagDeviceUI returns early on the localCache hit (impl.go:83-84), so the DB is only touched on a cache miss."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "In database_test.go:51-70 the at-limit call reuses the never-inserted id \"keep\", so it only reaches the rowsAffected==0 -> ErrDeviceLimitReached branch; the success path of the new updateDevice (an existing in-window device updated while at the limit) is never exercised by any test because all other calls use deviceLimit 0."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "impl.go:87 sets the localCache key before the DB write at impl.go:93 and never evicts on error, while impl.go:83-84 returns early on a cache hit; so when the new ErrDeviceLimitReached is returned (client.go:45-46) the key is already poisoned and every retry from the same device hits the cache and authenticates successfully, bypassing the limit."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S3",
+      "S5"
+     ],
+     "nit": true,
+     "kind": "speculative",
+     "reason": "updateDevice is only called when count >= deviceLimit (database.go:115), and its WHERE window (database.go:78-82) matches the same 30-day window used by CountDevices; a row falling outside it is effectively a new/expired device, for which the same auth refusal is the intended policy, so the conflated sentinel has no distinct behavioral effect."
+    }
+   ],
+   "passos": 5,
+   "tokensEntrada": 72782,
+   "tokensSaida": 8551,
+   "segundos": 111
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "Confirmed at webassets.go:41-49: the fast path is only taken for non-Dev (`cfg.Env != setting.Dev && ret != nil`), so in Dev every request takes the exclusive lock, and the write lock is held via `defer` across the blocking `readWebAssetsFromFile` (and, if ever enabled, `readWebAssetsFromCDN`), with no re-check after Lock(); callers index.go:82, frontendsettings.go:62, recovery.go:141 all funnel through here. This serializes all concurrent page loads in Dev and does N redundant loads on a cold cache, a real contention regression relative to the pre-PR unlocked fast path; adding a double-check after Lock() and releasing before the I/O is the correct fix. (Minor: the CDN branch is currently dead code since cdn is hardcoded to \"\".)"
+    }
+   ],
+   "passos": 4,
+   "tokensEntrada": 18756,
+   "tokensSaida": 2919,
+   "segundos": 23
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "Correct that spec line 115 uses `xhr :put` while the route is DELETE (config/routes.rb:49) and the sibling at line 125 uses `:delete`, but controller specs bypass the router, so the verb is irrelevant to what this example verifies (the automatic-group 422 guard). Fixing it changes nothing; low-value nitpick, not a behavior defect."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "nit": true,
+     "kind": "hallucination",
+     "reason": "The premise is false. Routes defined inside `resources :groups` (config/routes.rb:45-51) are served with `:group_id`: the analogous non-admin custom routes (`resources :groups do get 'members'` at config/routes.rb:271-275) are consumed as `params.require(:group_id)` in app/controllers/groups_controller.rb:20/8/14, while only the standard member route `show` uses `:id` (groups_controller.rb:4). Same pattern in admin users (`put \"suspend\"` -> `fetch_user` reads `params[:user_id]`, admin/users_controller.rb:338), so `params.require(:group_id)` at admin/groups_controller.rb:66,85 is correct."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S2",
+      "S4",
+      "S5",
+      "S7"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "app/assets/javascripts/admin/controllers/admin-group.js.es6:11-14 sets totalPages = Math.floor(user_count/limit)+1, so with user_count == limit it returns 2 while only page 1 has data; showingLast (line 17) is false on the last real page, so `next` (line 30) requests offset=limit and renders an empty list labelled '2/2'. Should be Math.ceil."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "app/controllers/groups_controller.rb:22-26 now always applies limit/offset (default 50); previously limit/offset were applied only for automatic groups, so non-automatic groups returned the full list. The user-facing app/assets/javascripts/discourse/templates/group/members.hbs:6 renders `members` with no pager, so a group with >50 members is silently truncated with no way to reach the rest."
+    }
+   ],
+   "passos": 22,
+   "tokensEntrada": 1095234,
+   "tokensSaida": 53001,
+   "segundos": 303
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "The central claim (\"can never fail\", \"would still pass if the storage call were removed and nil returned\") is false: if d.Storage.Delete weren't called, obj would be nil and assert.Equal(t, nil, exampleObj) fails. The assertions are weak (they don't check argument pass-through), but this style is copied from the pre-existing mode1 tests (dualwriter_mode1_test.go:149-150), so it's a low-value test-improvement suggestion, not a defect."
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "Correct and material test gap: the mock embeds a single shared *mock.Mock (storage_mocks_test.go:14-22, instantiated as legacyStoreMock{m,l}/storageMock{m,s} at dualwriter_mode3_test.go:53-54), and no test calls AssertExpectations/AssertCalled; grep shows zero such calls in pkg/apiserver/rest. Deleting every d.Legacy.* call from dualwriter_mode3.go would leave all new tests green, so the dual-write contract is unverified."
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "Correct: dualwriter_mode3.go:97 does ctx = klog.NewContext(ctx, d.Log) instead of the composed `log` built on line 96, unlike every other method in the file (lines 39, 66, 82, 123, 150). Delete's storage call and legacy goroutine therefore log without the per-request kind/method fields this PR adds."
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "Correct observation but pure naming/wording: dualwriter_mode3_test.go:145 still says \"is not implemented\" while List is now implemented at dualwriter_mode3.go:79 and the case simply checks error propagation. Renaming a test case is not a behavioral defect."
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S5",
+      "S6",
+      "S7",
+      "S11",
+      "S12",
+      "S13",
+      "S18",
+      "S19",
+      "S20"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "Correct: the storage-failure paths of Create (line 45) and Update (line 129) call recordLegacyDuration while recording the storage start time, and the legacy DeleteCollection goroutine (line 166) calls recordStorageDuration on a legacy start time. recordLegacyDuration writes to DualWriterLegacyDuration and recordStorageDuration to DualWriterStorageDuration (metrics.go:54-62), so the two series are misattributed for these paths."
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S4",
+      "S16"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "Correct: the detached legacy writes (dualwriter_mode3.go:50-57, 108-114, 134-141, 161-167) derive their context from the request-scoped ctx passed to the handler. net/http cancels that context when the handler returns, so the fire-and-forget legacy write (and its 10s timeout) can be aborted, defeating the mode's stated purpose of durably mirroring writes to legacy. Mode1's goroutine has the same shape (dualwriter_mode1.go:53-72), but there it only records a comparison metric, not the actual write."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S9",
+      "S10"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "Correct: dualwriter_mode3.go:106 passes `name` in the kind slot while lines 48, 103, 113, 156, 159 pass options.Kind, and the metric's label is literally \"kind\" (metrics.go:18-23). Within the same Delete function the error sample (line 103) and success sample (line 106) therefore label the same series with different semantics. (The same slip exists in mode1:155, but this is new code in the changed file.)"
+    }
+   ],
+   "passos": 8,
+   "tokensEntrada": 235090,
+   "tokensSaida": 9623,
+   "segundos": 43
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "server.go:258-262 returns nil,err without calling s.cancel() (the ContextFunc created at 229 and only invoked in Stop at 333), so on an Init failure after search.init succeeded the goroutine started at resource/search.go:207-213 (bound to context.Background()) plus any initWatcher goroutines keep running with no way to stop them."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "The new t.Skip at module_server_test.go:35-38 returns before InitializeModuleServer (line 47) and before the assert.Equal(t, 200, res.StatusCode) on /metrics (line 63), so the only test exercising the storage-server target's instrumentation HTTP startup no longer runs on postgres, the DB used in CI."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "kind": "speculative",
+     "reason": "It is mostly design commentary on the intended fail-fast change; the sync.Once/context argument is moot because this same PR removed every lazy s.Init(ctx) call site (see server.go diff in Create/Update/Read/List/Watch/Search/etc.), so there is no other caller whose ctx could be shadowed. No concrete defect is identified."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "The new line resource/search.go:216 calls s.search.TotalDocs(), which iterates b.cache without taking cacheMu (search/bleve.go:144-151), while the watch goroutine started at search.go:207-213 can concurrently reach BuildIndex's unprotected map write (bleve.go:137-139), causing a data race / 'concurrent map iteration and map write' panic."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "Base bleve.go:88-89 held cacheMu (write lock) across the whole BuildIndex body, so a concurrent GetIndex (RLock, bleve.go:60-68) blocked until the index was cached and then saw it; the PR moves the lock to only the cache write (bleve.go:137-139), so getOrCreateIndex (resource/search.go:287-307) can read nil while a build runs and two goroutines build the same key, yielding divergent index instances (writes to the non-cached one become invisible) and two bleve.New on the same on-disk dir (bleve.go:96-98)."
+    }
+   ],
+   "passos": 24,
+   "tokensEntrada": 451473,
+   "tokensSaida": 15772,
+   "segundos": 67
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "FilterView.tsx:156-162 renders <GrafanaRuleListItem> inside rules.map without a key, whereas the replaced element had key={key} (still destructured on line 152); React will warn and reconcile the async list by index, so it's a genuine regression introduced by this change."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "useAbilities.ts:349-355: useIsGrafanaPromRuleEditable(undefined) returns loading:false, so line 309 gives MaybeSupported=AlwaysSupported and Duplicate at line 318 becomes [true, AlertingRuleCreate]. AlertRuleMenu.tsx:73 passes skipToken for non-Grafana rules and ORs the resulta with the ruler pair, so a cloud/datasource rule can gain Duplicate from a Grafana-only create permission."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "It's true that the test at GrafanaGroupLoader.test.tsx:85-102 only asserts the More button, but the menu items it claims are uncovered are actually verified by the next test 'should render correct menu actions when More button is clicked' (lines 171-208), so this is a test-naming redundancy, not a meaningful gap."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "kind": "hallucination",
+     "reason": "The premise is false: Rule is the prom-rule union (unified-alerting.ts:73 'AlertingRule | RecordingRule'), not the combined-rule type, and prometheusRuleType.grafana.rule (rules.ts:132-136) checks runtime shape (type + folderUid/uid), so a GrafanaPromRuleDTO passed via the RulesTable path (RuleActionsButtons.tsx:112) is still detected; the guard does not return false for combined-rule callers."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S2",
+      "S4",
+      "S5"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "useAbilities.ts:222-229 now delegates useAllAlertRuleAbilities to useAllRulerRuleAbilities, whose body hardcodes isFederated=false (line 245) and no longer imports isFederatedRuleGroup, dropping the base 'isFederated = isFederatedRuleGroup(rule.group)' (base line 233); useAlertRuleAbility (line 179-185) still feeds RuleActionsButtons V1/RuleDetailsButtons, so federated Mimir rules now report Update/Delete/Pause as supported."
+    }
+   ],
+   "passos": 16,
+   "tokensEntrada": 550701,
+   "tokensSaida": 16226,
+   "segundos": 69
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "Javadoc at OAuth2GrantTypeFactory.java:30 says 'usually like 3-letters shortcut' while implementations return 2 chars; this is a docs/wording inconsistency only, no behavioural impact, so it is a nitpick."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4",
+      "S5",
+      "S11",
+      "S15"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "AccessTokenContext.java:73 validates grantType again instead of rawTokenId (copy-paste error), so a null rawTokenId is silently accepted and encodeTokenId can emit a ':null' id; genuine bug introduced by this PR."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S3",
+      "S7",
+      "S8",
+      "S9",
+      "S10",
+      "S12",
+      "S13",
+      "S14",
+      "S16",
+      "S17"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "AssertEvents.java:483 uses substring(3,5) (grant shortcut is at indices 4-5 per decoder substring(4,6)) and the condition returns false on a match, so isAccessTokenId never validates the grant shortcut and all four callers pass regardless of the encoded grant."
+    }
+   ],
+   "passos": 3,
+   "tokensEntrada": 44898,
+   "tokensSaida": 2266,
+   "segundos": 14
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "kind": "preexisting",
+     "reason": "The exact `imw.next = next` shared-instance pattern already exists identically in the base file instrumentation_middleware.go:80-84; this PR only renames the middleware (metrics_middleware.go:77-81), so it does not introduce the race and pre-dates the change."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "kind": "preexisting",
+     "reason": "The HELP string 'histogram of plugin request sizes returned' is copied verbatim from the base instrumentation_middleware.go:51 (metrics_middleware.go:50); the behavior is unchanged by this rename-only PR and it is at most a doc wording issue."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "TestInstrumentationMiddleware (metrics_middleware_test.go:21) is only a test-function name; the underlying code was renamed, but this is a pure naming/style nitpick with no behavioral impact."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "The request-size check at metrics_middleware_test.go:101-109 is gated behind `if tc.shouldInstrumentRequestSize`, so the `false` cases (CheckHealth line 45, CollectMetrics line 68) assert nothing; a regression adding instrumentPluginRequestSize to CheckHealth/CollectMetrics would not be caught, leaving the negative behavior of the change untested."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "nit": true,
+     "kind": "speculative",
+     "reason": "The described helper bug only misbehaves when a metric family has more than one series, but every subtest uses a fresh prometheus.NewRegistry() with a single endpoint/observation (metrics_middleware_test.go:72-85), so the multi-series state is never reached."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S5",
+      "S8",
+      "S9"
+     ],
+     "nit": true,
+     "kind": "hallucination",
+     "reason": "The traceID is not lost: ConcreteLogger.FromContext (pkg/infra/log/log.go:203-217) runs all registered ctxLogProviders, and tracing.ProvideService registers a provider that adds traceID via TraceIDFromContext(ctx, false) (pkg/infra/tracing/tracing.go:91-97), so m.logger.FromContext(ctx).Info(...) still logs it."
+    }
+   ],
+   "passos": 13,
+   "tokensEntrada": 292089,
+   "tokensSaida": 8760,
+   "segundos": 138
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S4",
+      "S5"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "GroupTest.java:139-149 starts the reader thread but never captures/joins it, and the emptiness assert at line 157 runs immediately after deletedAll.set(true) (155). A read that throws the getSubGroupsCount NPE (GroupAdapter.java:274-275) could complete after the assertion, so the test can pass even if the bug is reintroduced. Joining the thread is needed for the test to actually verify the fix."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "GroupTest.java:152-155: deletedAll.set(true) only runs if the whole forEach completes; if any group(uuid).remove() throws (admin client throws on non-2xx), the non-daemon thread at line 139 loops on `while (!deletedAll.get())` forever, hanging the test JVM. Wrapping deletion in try/finally (and/or daemonizing the thread) is a genuine robustness fix for this new test."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S3",
+      "S7",
+      "S8"
+     ],
+     "nit": true,
+     "kind": "speculative",
+     "reason": "The only production caller is GroupUtils.java:90 `representation.setSubGroupCount(group.getSubGroupsCount())`, and GroupRepresentation.setSubGroupCount takes a boxed Long (GroupRepresentation.java:94), so null is handled; no caller unboxes. Also the old code did getGroupModel().getSubGroupsCount() and threw NPE for a null delegate, so unboxing callers would have NPE'd before too. The claimed regression for unboxing consumers does not exist in the code."
+    }
+   ],
+   "passos": 7,
+   "tokensEntrada": 59411,
+   "tokensSaida": 8021,
+   "segundos": 35
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "kind": "speculative",
+     "reason": "configuredFor returning true for a passkey-only user (PasswordForm.java:62-64) is the intended change enabling passkey login on the password form during re-authentication; the added test removes the password and still logs in with the passkey. The alreadyAuthenticatedUsingPasswordlessCredential short-circuit already exists in authenticate() (lines 46-49), and the 'stranded if passkey fails' scenario is inherent to passkey login, not a new defect."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "The claim about the guard is true (UsernamePasswordForm.isConditionalPasskeysEnabled at lines 160-163 requires the selected user to have a passkey), but the comment only concerns the wording of an added code comment ('setup webauthn data when passkeys enabled'), which is a documentation nitpick with no behavioral impact."
+    }
+   ],
+   "passos": 5,
+   "tokensEntrada": 79627,
+   "tokensSaida": 3309,
+   "segundos": 15
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "kind": "hallucination",
+     "reason": "The premise is false: ResourceServer.getClientId() returns getId() in both implementations (model/jpa/.../ResourceServerAdapter.java:91-93 and model/infinispan/.../ResourceServerAdapter.java:121-123), so passing server.getId() as ownerId in ClientPermissionsV2.java:214/244 is identical to the 2-arg default (ResourceStore.java:143) and matches the owner used at AdminPermissionsSchema.java:104. No lookup mismatch exists."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "kind": "hallucination",
+     "reason": "A realm using the V1 (non-V2) permission model must have ADMIN_FINE_GRAINED_AUTHZ enabled (the permission endpoints are gated by it, e.g. ClientResource.java:706/739), so the new guard at AdminPermissions.java:77 passes and the cleanup still runs; when the feature is off no V1 permission resources exist to orphan, so no regression."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "Confirmed dead code (grep shows getEvaluationContext only defined at ClientPermissionsV2.java:262, and canExchangeTo is overridden to throw at 148-150), but an unused private helper is a cleanliness nitpick with no behavioral impact."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S6",
+      "S8",
+      "S9"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "MgmtPermissionsV2.clients() now returns ClientPermissionsV2 (MgmtPermissionsV2.java:63-68) whose setPermissionsEnabled throws (ClientPermissionsV2.java:192-195), while the listener calls clients().setPermissionsEnabled on ClientRemovedEvent (AdminPermissions.java:89-91). With both ADMIN_FINE_GRAINED_AUTHZ and ADMIN_FINE_GRAINED_AUTHZ_V2 enabled the guard passes and management() returns the V2 instance, so client deletion throws UnsupportedOperationException; V2 is not dependent on V1 (Profile.java:56,58)."
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S4",
+      "S5",
+      "S11"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "The javadoc mismatch is real (ClientPermissionEvaluator.java:95-103 documents void requireView/requireViewClientScopes as boolean accessors), but it is a documentation-only issue, which the guidelines exclude."
+    }
+   ],
+   "passos": 30,
+   "tokensEntrada": 1002203,
+   "tokensSaida": 14404,
+   "segundos": 63
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "kind": "hallucination",
+     "reason": "Linking/unlinking routes through JpaOrganizationProvider.addIdentityProvider/removeIdentityProvider (model/jpa/.../JpaOrganizationProvider.java:342,371), which call session.identityProviders().update(...) — the Infinispan provider's update, which runs registerIDPLoginInvalidationOnUpdate and invalidates cacheKeyForLogin. The premise that org-link mutations never trigger login-cache invalidation is false (the new test step 4 confirms the caches are cleared after linking)."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "Purely a javadoc wording inconsistency about LoginFilter (server-spi/.../IdentityProviderStorageProvider.java:215-217); no behavioral impact, documentation nitpick."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "Every caller of getForLogin sorts the result (IdentityProviderBean.java:241, OrganizationAwareIdentityProviderBean.java:61,71,77,82), so the HashSet ordering at InfinispanIdentityProviderStorageProvider.java:244 has no observable effect; the pre-existing getByOrganization uses the same HashSet pattern."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "kind": "hallucination",
+     "reason": "The cache-hit loop calls session.identityProviders().getById(id), and InfinispanIdentityProviderStorageProvider.getById always returns createOrganizationAwareIdentityProviderModel(...) (lines 135,139,141), so the cached path already yields the organization-aware model; the claim that a raw model is added is false."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S4",
+      "S8"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "The literal \"alias\" is passed instead of the created provider alias at OrganizationCacheTest.java:381 and 425, so the cleanup never removes the 21 created IDPs; TestCleanup.addCleanup swallows the resulting 404 (TestCleanup.java:65-74), leaving them leaked into the shared test realm."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": true,
+     "kind": "hallucination",
+     "reason": "The default getForLogin applies BROKER_PUBLIC=true to the organization portion for ORG_ONLY and ALL (server-spi/.../IdentityProviderStorageProvider.java:173-182), so a non-public org-linked IDP never appears in any getForLogin result; the predicate's org/BROKER_PUBLIC condition is consistent and the described stale-cache scenario cannot occur."
+    }
+   ],
+   "passos": 29,
+   "tokensEntrada": 872663,
+   "tokensSaida": 15486,
+   "segundos": 60
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "The same raw payload is already logged unconditionally at browser_reporting_collector.py:93 (`logger.info('browser_report_received', extra={'request_body': request.data})`, present in the base file line 78), so the new warning line 111-114 introduces no additional exposure; the concern is not introduced by this change."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "kind": "speculative",
+     "reason": "organization_preprod_artifact_assemble.py:81-91 does record the event before the feature check, but the event is named 'preprod_artifact.api.assemble' and there is no contract/test requiring it to fire only after assembly; whether recording the API attempt is over-counting is a design opinion, not a demonstrable defect."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "useGetTraceItemAttributeValues.spec.tsx:120 does use `query.query` instead of `substringMatch`, but the test still witnesses the number-type guard: an unmatched request never resolves (static/app/__mocks__/api.tsx:237-253 records an error and calls neither success nor error), so removing the short-circuit would hang the `await` and fail the test. The assertion is redundant, not misleading."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5",
+      "S9"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "Verified: project_replay_summarize_breadcrumbs.py:118 pairs `zip(error_ids, events.values())` positionally, while nodestore base.py:184 dedupes ids and base.py:205 appends cached entries after uncached ones, so the dict value order need not match error_ids, mis-associating ids and payloads (impact is limited since `id` isn't emitted by generate_error_log_message, but the pairing is genuinely wrong)."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S2",
+      "S8"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "chart.tsx:165-174 renders TableWidgetVisualization with hardcoded `columns={[]}` and `data: []`, discarding `result.data`/`result.meta` computed just above (lines 157-160); and `columns ?? Object.keys(...)` in tableWidgetVisualization.tsx:92-99 treats `[]` as truthy, so the enabled branch shows an empty table with no columns."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "browser_reporting_collector.py:52,58 use truthiness (`initial_data.get('age')` / `get('timestamp')`); since `age=0` and `timestamp=0` are allowed (timestamp has min_value=0), a report carrying both fields with a falsy value bypasses the mutual-exclusion check. Key-presence checks would be correct."
+    }
+   ],
+   "passos": 24,
+   "tokensEntrada": 865750,
+   "tokensSaida": 16370,
+   "segundos": 77
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "messages_zh_CN.properties:112 now has 'totpStep1=在您的手機上安裝以下應用程式之一：' using Traditional forms (機/裝/應) while the neighbouring unchanged line 113 uses Simplified (打开应用…). zh_CN must be Simplified, so the new string is the wrong script variant - a real regression."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "VerifyMessageProperties.java:74-75 uses '_ [a-zA-Z-_]*\\.properties'; the class range '-'..'_' also covers '/', '.', digits and punctuation, so with an underscore anywhere earlier in the absolute path the greedy match spans path separators and rewrites the whole tail to '_en.properties', then the FileInputStream at line 76 fails and line 79 throws a raw RuntimeException, aborting the build opaquely. Genuine regex bug in new code (fix is to anchor to the filename)."
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "Confirmed: illegalHtmlTag_en.properties uses <div>, which both POLICY_SOME_HTML and POLICY_NO_HTML reject, and no fixture (changedAnchor_en, noHtml_de) asserts that an allowed tag (br/p/strong/b) is accepted. Emptying POLICY_SOME_HTML's allow-list at lines 58-61 leaves all four tests green, so the central 'English has HTML => allow the HTML subset' behaviour is untested - a meaningful test gap for this change."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "Confirmed in the diff: both themes/.../account/messages/messages_lt.properties:101 and themes/.../login/messages/messages_lt.properties:71 now read 'Installa una delle seguenti applicazioni sul tuo cellulare:' (Italian) in the Lithuanian bundle, so lt users get Italian instructions. Real regression introduced by this PR."
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S2",
+      "S6",
+      "S12"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "VerifyMessageProperties.java:102-111: start and end are longest-common-prefix/suffix lengths computed independently, and line 111 does value.substring(start, value.length()-end). When the sanitizer output is longer and shares a suffix (e.g. an unclosed opening tag at the end, value 'a<p>' -> sanitized 'a<p></p>' gives start=4, end=2), start+end exceeds value.length(), producing begin>end and a StringIndexOutOfBoundsException instead of the intended diagnostic message. Real logic bug in the new trimming code (the comment's numeric example is slightly off but the crash conclusion holds)."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S8",
+      "S9",
+      "S10",
+      "S11"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "account-ui consumes this bundle through i18next (js/apps/account-ui/src/i18n.ts, default {{ }} interpolation; every other error-* key e.g. line 27/29 uses {{0}}/{{1}}). Changing error-invalid-multivalued-size at line 188 to '{0} ... {2,choice,...}' means i18next substitutes nothing and has no ICU support, so the account UI renders the raw placeholders and literal choice text. Real regression introduced by the PR (same issue in the admin-ui bundle)."
+    }
+   ],
+   "passos": 26,
+   "tokensEntrada": 999026,
+   "tokensSaida": 35906,
+   "segundos": 158
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "kind": "hallucination",
+     "reason": "A repo-wide search for `def should_sync` finds only the two definitions updated in this PR (mixins/issues.py:66 and :382); no concrete integration overrides `should_sync` with the old signature, so the claimed `TypeError` at sync_assignee_outbound.py:56 cannot occur."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S5"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "assignment_source.py:18 `queued: datetime = timezone.now()` is a dataclass default evaluated once at import, and both `from_integration` (:21) and `from_dict` (:31) create instances without passing `queued`, so every AssignmentSource reports import time instead of the actual queue time."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "tests/sentry/integrations/services/test_assignment_source.py:8 does pass `{}` while named `test_from_dict_empty_array`; this is only a test-name/wording issue, not a behavioural defect."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "nit": true,
+     "kind": "hallucination",
+     "reason": "The task kwargs are serialized with the pickle serializer (src/sentry/conf/server.py:739 `CELERY_TASK_SERIALIZER = \"pickle\"`), so the `datetime` round-trips intact; there is no JSON serialization failure or string coercion as claimed."
+    }
+   ],
+   "passos": 6,
+   "tokensEntrada": 66466,
+   "tokensSaida": 4203,
+   "segundos": 18
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "buffer.py:382-384 computes max_segments_per_shard = ceil(max_flush_segments/len(self.assigned_shards)); the PR replaces the single all-shards SpansBuffer with P per-process buffers (flusher.py:92-93) each holding only ~total_shards/P shards, so every process flushes up to max_flush_segments and the aggregate per-cycle cap becomes P×500 (default max-flush-segments=500, defaults.py:2717-2722), multiplying Redis memory/COGS and making the any_shard_at_limit backpressure threshold (buffer.py:411) P× harder to hit."
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "grep confirms _create_process_for_shard (flusher.py:127) has no caller and is dead code; the live restart path is _create_process_for_shards (line 259). Dead code has no behavioural impact, so it is a nitpick rather than a defect."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "flusher.py:32 docstring overstates parallelization versus the shard-sharing code at lines 60-66, but the CLI help (consumers/__init__.py:436) documents 'Defaults to 1'; this is a docs/wording issue, not a behavioural defect."
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "kind": "speculative",
+     "reason": "The click option deliberately sets default=1 with help 'Defaults to 1' (consumers/__init__.py:432-437), so a single flusher process by default is the author's explicit choice; whether the auto/per-shard fallback in flusher.py:51 should be reachable from the CLI is a design preference, not a verifiable bug."
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "kind": "defensive",
+     "reason": "Passing --flusher-processes=0 is a nonsensical configuration; treating the falsy value as 'unset' (flusher.py:51) falls back to auto, so this is defensive programming for an unrealistic input rather than a real defect."
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": true,
+     "kind": "defensive",
+     "reason": "A negative --flusher-processes would indeed crash at flusher.py:65-66, but reaching it requires an operator deliberately setting an invalid negative value; this is defensive/edge-case validation, not a defect the change realistically hits."
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "test_consumer.py:15 monkeypatches time.sleep on the shared time module to a no-op, so the newly added time.sleep(0.1) at line 62 (import time at line 1) does not actually wait; unlike test_flusher.py:2 which imports sleep directly, the intended post-drift synchronization is defeated and the test still races the flusher thread before step.join()."
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S4",
+      "S10"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "flusher.py:199 tags the wait_produce timer with key 'shards' while lines 185/195 use 'shard'; the emitted shard_tag string is identical, so this is a tag-naming inconsistency (minor, no behaviour change) rather than a correctness defect."
+    }
+   ],
+   "passos": 8,
+   "tokensEntrada": 165867,
+   "tokensSaida": 10030,
+   "segundos": 83
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "kind": "preexisting",
+     "reason": "The docstring examples are byte-identical to the pre-PR mark_failed.py (readBaseFile lines 300-304); this PR only relocates the function, and wording/doc examples are a nitpick anyway."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "kind": "speculative",
+     "reason": "Grep shows no remaining importer of SimpleCheckIn from the old path (only sentry/monitors/types.py defines it and the two new modules import from it), so the hypothesized ImportError does not exist; it is a 'confirm that...' request."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "nit": true,
+     "kind": "preexisting",
+     "reason": "get_monitor_environment_context returning monitor.config instead of the mutated local config is byte-identical in the base mark_failed.py, so the dead mutation predates and is unrelated to this pure relocation refactor."
+    }
+   ],
+   "passos": 4,
+   "tokensEntrada": 39491,
+   "tokensSaida": 2172,
+   "segundos": 12
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "detector.py:230 docstring still says 'returns a list' while the method now returns a dict; accurate but a docs-only nitpick, which the rubric excludes."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S7"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "MetricAlertDetectorHandler (grouptype.py:11-12) subclasses abc StatefulDetectorHandler with only `pass` and implements none of the four abstract methods (detector.py:142-170); it stays abstract, so Detector.detector_handler's group_type.detector_handler(self) (models/detector.py:86) raises TypeError. Base version was a concrete handler, so the PR newly breaks this."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S6"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "The `value` param of build_mock_occurrence_and_event (test_detector.py:244-275) is genuinely unused and expected values are mismatched (e.g. line 191 uses 6 vs packet 10), but this is a test-rigor/style issue: the threshold path is already exercised by test_above_below_threshold, and ignoring a signature arg in a stub override is harmless."
+    }
+   ],
+   "passos": 7,
+   "tokensEntrada": 112222,
+   "tokensSaida": 7913,
+   "segundos": 31
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "Purely a naming issue: get_document_origin(org) dereferences org.organization (integration.py:150-151) but all callers pass self.active_organization, so the code works; the misleading parameter name is style, not a behavior defect."
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "kind": "nitpick",
+     "reason": "pipeline.signature is a deterministic md5 of the pipeline view class names (pipeline/base.py:133), not a secret per-flow nonce, so the 'timing leak about the state nonce' premise is unfounded and a constant-time compare adds nothing here."
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "test_integration.py:388-396 passes state=ddd023d87a913d5226e2a882c4c4cc05, which differs from the deterministic pipeline signature 9cae5e88803f35ed7970fc131e6e65d3 (md5 of view class names, pipeline/base.py:133), so OAuthLoginView returns error() at integration.py:412 before GitHubInstallation runs; the Integration.DoesNotExist path (integration.py:481-482/493-498) is never exercised, so the test no longer covers its named scenario."
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "kind": "speculative",
+     "reason": "GitHubInstallation is referenced only in GitHubIntegrationProvider.get_pipeline_views (integration.py:344); the only subclass, GitHubEnterpriseIntegrationProvider, overrides get_pipeline_views with its own views (github_enterprise/integration.py:328-336), so no existing consumer drives GitHubInstallation without OAuthLoginView."
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "nit": false,
+     "kind": "real_defect",
+     "reason": "integration.py:503 indexes integration.metadata['sender']['login'] unconditionally, but build_integration only sets sender when state.get('sender') (integration.py:376-377) and pipeline-created integrations carry no sender (test_integration.py:303-310). Reachable: the branch at integration.py:492 handles an ACTIVE integration with no OrganizationIntegration, e.g. a pipeline-created integration whose org integration was removed (details.py:86-95 leaves the Integration ACTIVE since GitHub's uninstall is a no-op), raising KeyError/500; sibling code guards this (installation.py:44)."
+    }
+   ],
+   "passos": 21,
+   "tokensEntrada": 511683,
+   "tokensSaida": 14893,
+   "segundos": 61
+  }
+ }
+}
