@@ -22,6 +22,8 @@ import {
 import { isOpenCodeGoBaseUrl, openCodeSessionId } from '@libs/llm/opencode-go';
 import { registerProvider } from '../kernel/registry';
 import { isOpenAiReasoner, openaiReasoningConfig } from './reasoning';
+import { isOpenAiHost } from './endpoint';
+import { notStoredByOpenAi } from './not-stored';
 import { openAiModelListing } from './listing';
 import type {
     ModelCapabilities,
@@ -211,7 +213,7 @@ export const openaiModule: ProviderModule = {
         // proxies), so a slot pointed at opencode.ai/zen through THIS provider
         // id needs the header too, or it 400s exactly like the compatible one
         // did before #1880.
-        return createOpenAI({
+        const native = createOpenAI({
             apiKey,
             ...(baseURL ? { baseURL } : {}),
             ...(opts?.fetch ? { fetch: opts.fetch } : {}),
@@ -219,6 +221,11 @@ export const openaiModule: ProviderModule = {
                 ? { headers: { 'x-opencode-session': openCodeSessionId(cfg) } }
                 : {}),
         })(cfg.model);
+        // On OpenAI's own API, nothing is stored (not-stored.ts). Another host on
+        // the native id (a gateway) keeps whatever it does today.
+        return !baseURL || isOpenAiHost(baseURL)
+            ? notStoredByOpenAi(native, cfg.model)
+            : native;
     },
 
     reasoning(

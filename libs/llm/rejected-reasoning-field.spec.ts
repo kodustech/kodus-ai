@@ -459,6 +459,36 @@ describe('an OpenAI reasoning model with tools', () => {
         expect(urls[0]).toBe('https://api.openai.com/v1/responses');
         expect(bodies[0].reasoning?.effort).toBeDefined();
         expect(bodies[0].tools).toHaveLength(1);
+        // OpenAI keeps nothing, and the reasoning travels between steps encrypted.
+        expect(bodies[0].store).toBe(false);
+        expect(bodies[0].include).toContain('reasoning.encrypted_content');
+    });
+
+    // `store` defaults to true on /v1/responses: no native call on OpenAI's API
+    // leaves it there; a gateway on the native id keeps what it does today.
+    it('is not stored by OpenAI on any native call to its API, and a gateway is left alone', async () => {
+        const bodies: any[] = [];
+        globalThis.fetch = (async (_input: any, init: any) => {
+            bodies.push(init?.body ? JSON.parse(String(init.body)) : undefined);
+            return new Response(
+                JSON.stringify({ error: { message: 'stop here' } }),
+                {
+                    status: 400,
+                    headers: { 'content-type': 'application/json' },
+                },
+            );
+        }) as typeof fetch;
+        await run({ provider: 'openai', model: 'gpt-4o' }).catch(
+            () => undefined,
+        );
+        await run({
+            provider: 'openai',
+            model: 'gpt-6-sol',
+            baseURL: 'https://gateway.example.com/v1',
+        }).catch(() => undefined);
+        expect(bodies[0].store).toBe(false);
+        expect(bodies[0].include).toBeUndefined();
+        expect(bodies[1].store).toBeUndefined();
     });
 
     // One transport per stored slot: an explicit slot handed to LLM.run, and the
