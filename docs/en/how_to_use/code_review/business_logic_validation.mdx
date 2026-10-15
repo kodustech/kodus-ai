@@ -59,11 +59,13 @@ Kody also reads what the task links to:
 
 Every row cites the file and line it is based on, and says what to change.
 
+Before a requirement is shown as MISSING, Kody looks for it across the repository at the PR's head, not only in the diff: code the PR reuses (a default, a check in a file it didn't touch) often already does it. A row turns MET only on a file and line Kody read, and says it is already in the code, outside the diff.
+
 ## On the pull request
 
 - Kody checks the PR on its **first review**, then again on each push while something is missing, so a fix updates the comment without anyone asking. **Re-check** can also be set to every push, or only when someone comments `@kody -v business-logic`.
 - Re-check any time with `@kody -v business-logic`. The **same comment is edited**; Kody never posts a second one.
-- A PR that meets its task gets the comment too, so the author knows it was checked. Turn off **Comment when every requirement is met** to stay quiet on those.
+- A PR that meets its task gets a one-line comment ("✅ 4 of 4 met"), plus anything to check by hand, so the author knows it was checked. Turn off **Comment when every requirement is met** to stay quiet on those.
 - The comment is the signal on every platform: Kody doesn't write a check or a status, so it never blocks a merge by itself. Its header says what is left to fix.
 
 ### Replying to the comment
