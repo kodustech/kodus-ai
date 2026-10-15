@@ -581,6 +581,17 @@ describe('resolveTaskSlot — an OpenAI-compatible credential on OpenAI itself',
         expect(slot?.fallback?.baseURL).toBeUndefined();
     });
 
+    it('moves an override pasted for the compatible adapter under openai', () => {
+        const withOverride = (override: string) => {
+            const config: any = compat('https://api.openai.com/v1', 'gpt-6-sol');
+            config.models[0].reasoningConfigOverride = override;
+            return resolveTaskSlot(config, 'codeReview', {}).slot?.reasoningConfigOverride;
+        };
+        expect(JSON.parse(withOverride('{"openaiCompatible":{"reasoningEffort":"high"}}')!)).toEqual({ openai: { reasoningEffort: 'high' } });
+        expect(withOverride('{"reasoningEffort":"high"}')).toBe('{"reasoningEffort":"high"}');
+        expect(withOverride('not json')).toBe('not json');
+    });
+
     it('leaves a proxy and a non-reasoning model on openai_compatible', () => {
         expect(resolveTaskSlot(compat('https://litellm.example.com/v1', 'gpt-6-sol'), 'codeReview', {}).slot).toMatchObject({
             provider: 'openai_compatible',

@@ -25,29 +25,10 @@ import {
 import type { RequestContext, RoutingVerdict } from './routing-strategy';
 import { StaticTaskStrategy } from './static-task-strategy';
 import { resolveModelSlot } from './resolve-model-slot';
-import { BYOKProvider } from './model-providers';
-import { servedByOpenAi } from './providers/openai/endpoint';
+import { asServedSlot } from './served-slot';
 
 // Manual routing policy (Phase 4). Stateless + dependency-free — instantiated once.
 const strategy = new StaticTaskStrategy();
-
-/**
- * The slot as the call is made: an `openai_compatible` credential on
- * api.openai.com running one of OpenAI's reasoning models is served as `openai`,
- * so it is built on the native SDK (/v1/responses) and reasoned and typed as
- * OpenAI (providers/openai/endpoint.ts). The base URL is dropped: the native SDK
- * already targets that host, and a pasted URL without `/v1` would miss it. The
- * stored config keeps the provider the user chose; only the call changes.
- */
-function asServed(slot: NormalizedModel): NormalizedModel {
-    if (
-        slot.provider !== BYOKProvider.OPENAI_COMPATIBLE ||
-        !servedByOpenAi(slot.model, slot.baseURL)
-    ) {
-        return slot;
-    }
-    return { ...slot, provider: BYOKProvider.OPENAI, baseURL: undefined };
-}
 
 /**
  * Resolve `task` over the org's config to a slot (ciphertext-bearing) WITHOUT
@@ -87,7 +68,7 @@ export function resolveTaskSlot(
     // above), giving the usage span its per-task dimension; `usedFallback` is the
     // one boolean the verdict adds (primary tiers all gated out).
     const slot = routed
-        ? asServed({
+        ? asServedSlot({
               ...routed,
               ...(verdict.modelName ? { model: verdict.modelName } : {}),
               route: task,
@@ -133,7 +114,7 @@ function attachFallback(
     }
     return {
         ...primarySlot,
-        fallback: asServed({ ...fbRouted, route: task, usedFallback: true }),
+        fallback: asServedSlot({ ...fbRouted, route: task, usedFallback: true }),
     };
 }
 

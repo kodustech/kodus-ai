@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { LLM } from './llm';
 import { resolveTaskSlot } from './resolve-task-model';
+import { probeSlotCall } from './probe-slot-call';
 import {
     clearRefusals,
     MAX_REFUSAL_RETRIES,
@@ -443,6 +444,35 @@ describe('an OpenAI reasoning model with tools', () => {
         expect(urls[0]).toBe('https://api.openai.com/v1/responses');
         expect(bodies[0].reasoning?.effort).toBeDefined();
         expect(bodies[0].tools).toHaveLength(1);
+    });
+
+    // One transport per stored slot: an explicit slot handed to LLM.run, and the
+    // connection probe, are served the way routing serves them.
+    it('is served the same way when the slot is handed to LLM.run or to the connection probe', async () => {
+        const urls: string[] = [];
+        globalThis.fetch = (async (input: any) => {
+            urls.push(String(input?.url ?? input));
+            return new Response(
+                JSON.stringify({ error: { message: 'stop here' } }),
+                {
+                    status: 400,
+                    headers: { 'content-type': 'application/json' },
+                },
+            );
+        }) as typeof fetch;
+        const stored = {
+            provider: 'openai_compatible',
+            model: 'gpt-6-sol',
+            baseURL: 'https://api.openai.com/v1',
+        };
+        await withTool(stored).catch(() => undefined);
+        await probeSlotCall({ ...stored, apiKey: 'k' } as any).catch(
+            () => undefined,
+        );
+        expect(urls).toEqual([
+            'https://api.openai.com/v1/responses',
+            'https://api.openai.com/v1/responses',
+        ]);
     });
 
     it('behind a proxy that forwards to chat completions is asked again without the effort', async () => {
