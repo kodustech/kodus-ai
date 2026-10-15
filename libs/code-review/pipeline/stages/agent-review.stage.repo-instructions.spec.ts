@@ -70,6 +70,13 @@ describe('AgentReviewStage — repo instructions source branch', () => {
             'deep mode runs only category agents, which never render them',
             { repoInstructionsEnabled: true, reviewMode: 'deep' },
         ],
+        [
+            'bug, security and performance are all off, so the generalist does not run',
+            {
+                repoInstructionsEnabled: true,
+                reviewOptions: { bug: false, security: false, performance: false },
+            },
+        ],
     ])('reads nothing when %s', async (_label, codeReviewConfig) => {
         const { stage, codeManagementService } = makeStage();
 

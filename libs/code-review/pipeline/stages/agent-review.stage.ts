@@ -403,6 +403,22 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             return undefined;
         }
 
+        // The generalist, the only agent that reads them, runs only when at
+        // least one of these categories is on.
+        const options = context.codeReviewConfig?.reviewOptions;
+        if (
+            options?.bug === false &&
+            options?.security === false &&
+            options?.performance === false
+        ) {
+            this.logger.warn({
+                message: `[repo-instructions] skipped for PR#${prNumber}: bug, security and performance are all off, so no agent reads them`,
+                context: this.stageName,
+                metadata: logMetadata,
+            });
+            return undefined;
+        }
+
         const organizationAndTeamData = context.organizationAndTeamData;
         const repository = {
             id: String(context.repository?.id ?? ''),
@@ -457,7 +473,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             (sum, f) => sum + Buffer.byteLength(f.content),
             0,
         );
-        this.logger.log({
+        this.logger[result.error ? 'warn' : 'log']({
             message: `[repo-instructions] PR#${prNumber}: indexed=${result.indexedCount} inlined=${result.files.length} dropped=${result.dropped.length} bytes=${bytes} truncated=${result.truncated}${result.error ? ` error=${result.error}` : ''}`,
             context: this.stageName,
             metadata: {
