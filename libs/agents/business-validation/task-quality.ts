@@ -104,7 +104,7 @@ export function criteriaPlaceText(
     return text?.trim() || undefined;
 }
 
-/** Headings teams put acceptance criteria under, normalized. */
+/** Headings teams put acceptance criteria under, normalized, most specific first. */
 const CRITERIA_HEADINGS = [
     'acceptance criteria',
     'acceptance criterion',
@@ -128,11 +128,13 @@ function detectCriteria(task: Task): Task {
         return task;
     }
     // A field named for criteria (a Jira "Acceptance Criteria" field) beats
-    // a list in the description, which is as often context as criteria.
-    const field = Object.entries(task.fields ?? {}).find(
-        ([name, text]) =>
-            CRITERIA_HEADINGS.includes(normalize(name)) && text.trim(),
-    );
+    // a list in the description, which is as often context as criteria. With
+    // two of them ("Requirements" and "Acceptance Criteria"), the most
+    // specific name wins, not the one the tracker happens to list first.
+    const rank = (name: string) => CRITERIA_HEADINGS.indexOf(normalize(name));
+    const field = Object.entries(task.fields ?? {})
+        .filter(([name, text]) => rank(name) >= 0 && text.trim())
+        .sort(([a], [b]) => rank(a) - rank(b))[0];
     if (field) {
         return { ...task, acceptanceCriteria: criteriaIn(field[1]) };
     }

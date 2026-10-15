@@ -13,6 +13,17 @@ describe('gradeTask', () => {
             'MINIMAL',
         );
         expect(canJudgeAgainst(grade('Export recipes'))).toBe(false);
+        expect(
+            canJudgeAgainst(grade('Improve tickets', 'Make tickets better.')),
+        ).toBe(false);
+        expect(
+            canJudgeAgainst(
+                grade(
+                    'Add a logout button',
+                    'Put it in the header, next to the avatar.',
+                ),
+            ),
+        ).toBe(true);
     });
 
     it('judges a title with a description that says what to do', () => {
@@ -48,6 +59,12 @@ describe('gradeTask', () => {
                 parent: { id: 'KOD-19', title: 'Bulk actions' },
             }),
         ).toBe('MINIMAL');
+        expect(
+            gradeTask({
+                ...sub,
+                parent: { id: 'KOD-19', description: 'Archive it.' },
+            }),
+        ).toBe('MINIMAL');
     });
 
     it('judges criteria however short the rest is', () => {
@@ -74,6 +91,24 @@ describe('applyCriteriaLocation, detecting automatically', () => {
         expect(
             applyCriteriaLocation(task, { location: 'auto' })
                 .acceptanceCriteria,
+        ).toEqual([
+            'The filter defaults to All.',
+            'The priority is kept in the URL.',
+        ]);
+    });
+
+    it('takes the most specific criteria field when two are named for criteria', () => {
+        expect(
+            applyCriteriaLocation(
+                {
+                    ...task,
+                    fields: {
+                        Requirements: 'Agents triage by priority.',
+                        ...task.fields,
+                    },
+                },
+                { location: 'auto' },
+            ).acceptanceCriteria,
         ).toEqual([
             'The filter defaults to All.',
             'The priority is kept in the URL.',
