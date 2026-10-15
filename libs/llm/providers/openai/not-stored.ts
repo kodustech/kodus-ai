@@ -6,24 +6,21 @@
  * `store: false` (#2135 review).
  *
  * Without the stored item, a multi-step tool loop has nothing to point its
- * reasoning at (the SDK resends it as an `item_reference`), so a reasoning model
- * also asks for `reasoning.encrypted_content` and carries it between steps, as
- * the Codex route already does (codex-subscription-model.ts). An option the
- * caller set explicitly (a pasted override) still wins.
+ * reasoning at (the SDK resends it as an `item_reference`), so every call also
+ * asks for `reasoning.encrypted_content` and carries it between steps, as the
+ * Codex route does (codex-subscription-model.ts). Always, not only for ids
+ * recognized as reasoners: a fine-tune or an aliased deployment reasons too,
+ * and OpenAI accepts the include on a model that does not (gpt-4o and
+ * gpt-4.1-mini answer 200, 2026-10-15). An option the caller set explicitly (a
+ * pasted override) still wins.
  */
 import type { LanguageModel } from 'ai';
-import { isOpenAiReasonerId } from '../kernel/model-family';
 
-export function notStoredByOpenAi(
-    model: LanguageModel,
-    modelId: string,
-): LanguageModel {
+export function notStoredByOpenAi(model: LanguageModel): LanguageModel {
     if (typeof model !== 'object' || model === null) return model;
     const notStored = {
         store: false,
-        ...(isOpenAiReasonerId(modelId)
-            ? { include: ['reasoning.encrypted_content'] }
-            : {}),
+        include: ['reasoning.encrypted_content'],
     };
     const withOptions = (options: any) => ({
         ...options,

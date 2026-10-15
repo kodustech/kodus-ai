@@ -224,7 +224,7 @@ export const openaiModule: ProviderModule = {
         // On OpenAI's own API, nothing is stored (not-stored.ts). Another host on
         // the native id (a gateway) keeps whatever it does today.
         return !baseURL || isOpenAiHost(baseURL)
-            ? notStoredByOpenAi(native, cfg.model)
+            ? notStoredByOpenAi(native)
             : native;
     },
 

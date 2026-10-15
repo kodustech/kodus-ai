@@ -486,8 +486,10 @@ describe('an OpenAI reasoning model with tools', () => {
             model: 'gpt-6-sol',
             baseURL: 'https://gateway.example.com/v1',
         }).catch(() => undefined);
+        // The include goes out for every model: a fine-tune or an alias reasons
+        // without being recognized, and OpenAI accepts it on one that does not.
         expect(bodies[0].store).toBe(false);
-        expect(bodies[0].include).toBeUndefined();
+        expect(bodies[0].include).toContain('reasoning.encrypted_content');
         expect(bodies[1].store).toBeUndefined();
     });
 
