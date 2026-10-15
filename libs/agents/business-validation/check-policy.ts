@@ -1,8 +1,7 @@
 import type { ReferenceIntent } from './business-validation.types';
 import type { ValidationResult } from './judge/validation.types';
-import type { FailOnState } from './settings';
 
-/** What keeps one task from passing: what the comment lists as "to merge". */
+/** What the verdict leaves open on one task. */
 export interface Blockers {
     missing: number;
     partial: number;
@@ -19,14 +18,14 @@ export function countBlockers(verdict: ValidationResult): Blockers {
 }
 
 /**
- * Whether one task passes. MISSING fails by default; PARTIAL
- * and NOT IN TASK only when the team says so (UC-09). CHECK MANUALLY and
+ * Whether one task passes: nothing MISSING. PARTIAL is a judgment call that
+ * can flip between two runs of the same code, and NOT IN TASK is often a
+ * fair refactor, so both are shown without failing. CHECK MANUALLY and
  * anything a reviewer accepted never fail. A PR that says it is "part of" a
  * task still shows what's missing, but isn't failed for it (UC-18).
  */
 export function taskPasses(
     verdict: ValidationResult,
-    failOn: FailOnState[],
     intent: ReferenceIntent | undefined,
 ): boolean {
     if (verdict.scopeMismatch && intent !== 'part_of') {
@@ -37,11 +36,5 @@ export function taskPasses(
         // prose) is read by its status.
         return verdict.status === 'compliant';
     }
-    const blockers = countBlockers(verdict);
-    const slice = intent === 'part_of';
-    return !(
-        (failOn.includes('missing') && !slice && blockers.missing > 0) ||
-        (failOn.includes('partial') && !slice && blockers.partial > 0) ||
-        (failOn.includes('not_in_task') && blockers.notInTask > 0)
-    );
+    return intent === 'part_of' || countBlockers(verdict).missing === 0;
 }

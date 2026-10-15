@@ -1154,7 +1154,6 @@ businessLogic:
     criteriaLocation: 'auto' # auto | heading | field
     criteriaHeading: '' # when criteriaLocation is heading
     criteriaField: '' # when criteriaLocation is field (e.g. a Jira custom field)
-    failOn: ['missing'] # missing | partial | not_in_task; CHECK MANUALLY never fails
     teamGuidance: '' # added to what Kody follows (max 2000)
     commentWhenMet: true # off: Kody posts nothing on a PR that meets its task
     recheckOn: 'failing' # failing | push | request: when a push re-checks a PR already checked

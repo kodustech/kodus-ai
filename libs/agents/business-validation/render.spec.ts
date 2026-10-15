@@ -70,7 +70,7 @@ describe('renderComment', () => {
             '[AB#8 · Compact density toggle](https://dev.azure.com/acme/_workitems/edit/8)',
         );
         expect(body).toContain(
-            'To merge: 1 missing requirement · 1 change not in the task · also open: 1 to check manually',
+            'To fix: 1 missing requirement · also open: 1 to check manually · 1 change not in the task',
         );
         expect(body).toContain(
             '✅ **MET** | Persists per user <sub>AC #1</sub> | `settings/density.ts:14`',
@@ -172,18 +172,10 @@ describe('renderCliText', () => {
     });
 });
 
-describe('what the team fails on, as the comment says it', () => {
-    it('lists only what fails the check as to merge, and the rest as still open', () => {
-        const comment = renderComment(outcome(), { failOn: ['not_in_task'] });
-        expect(comment).toContain(
-            'To merge: 1 change not in the task · also open: 1 missing requirement · 1 to check manually',
-        );
-    });
-
-    it('keeps CHECK MANUALLY out of what blocks the merge', () => {
-        expect(renderComment(outcome(), { failOn: ['missing'] })).toContain(
-            'To merge: 1 missing requirement · also open: 1 to check manually · 1 change not in the task',
+describe('what is left to fix, as the comment says it', () => {
+    it('lists only MISSING as to fix, and the rest as still open', () => {
+        expect(renderComment(outcome())).toContain(
+            'To fix: 1 missing requirement · also open: 1 to check manually · 1 change not in the task',
         );
     });
 });
-

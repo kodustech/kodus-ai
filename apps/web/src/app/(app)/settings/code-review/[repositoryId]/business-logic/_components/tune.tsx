@@ -1,6 +1,5 @@
 "use client";
 
-import { Checkbox } from "@components/ui/checkbox";
 import {
     Collapsible,
     CollapsibleContent,
@@ -18,13 +17,7 @@ import type { CodeReviewFormType } from "../../../_types";
 
 const MAX_GUIDANCE = 2000;
 
-const FAIL_ON = [
-    { value: "missing", label: "MISSING" },
-    { value: "partial", label: "PARTIAL" },
-    { value: "not_in_task", label: "NOT IN TASK" },
-] as const;
-
-/** Where criteria live, what is left to merge, and the team's guidance (UC-08, UC-09, UC-23). */
+/** Where criteria live and the team's guidance (UC-08, UC-23). */
 export const Tune = ({ canEdit }: { canEdit: boolean }) => {
     const form = useFormContext<CodeReviewFormType>();
     const location =
@@ -44,8 +37,7 @@ export const Tune = ({ canEdit }: { canEdit: boolean }) => {
                             Tune to your team
                         </span>
                         <span className="text-text-secondary text-xs">
-                            Where criteria live · what is left to merge · team
-                            guidance
+                            Where criteria live · team guidance
                         </span>
                     </span>
                     <CollapsibleIndicator />
@@ -120,86 +112,6 @@ export const Tune = ({ canEdit }: { canEdit: boolean }) => {
                                 )}
                             />
                         )}
-                    </div>
-
-                    <div className="flex flex-col gap-3">
-                        <span className="flex items-center gap-2">
-                            <span className="text-text-primary text-sm font-medium">
-                                Left to merge
-                            </span>
-                            <OverrideIndicatorForm fieldName="businessLogic.failOn" />
-                        </span>
-                        <Controller
-                            name={"businessLogic.failOn.value" as never}
-                            control={form.control}
-                            render={({ field }) => {
-                                const value = ((field.value as string[]) ?? [
-                                    "missing",
-                                ]) as string[];
-                                return (
-                                    <div className="flex flex-col gap-2">
-                                        <div className="flex flex-wrap gap-4">
-                                            {FAIL_ON.map((option) => (
-                                                <Label
-                                                    key={option.value}
-                                                    className="flex cursor-pointer items-center gap-2 text-sm">
-                                                    <Checkbox
-                                                        className="size-5 rounded-md"
-                                                        checked={value.includes(
-                                                            option.value,
-                                                        )}
-                                                        disabled={
-                                                            !canEdit ||
-                                                            field.disabled
-                                                        }
-                                                        onCheckedChange={(
-                                                            checked,
-                                                        ) =>
-                                                            field.onChange(
-                                                                checked
-                                                                    ? [
-                                                                          ...value,
-                                                                          option.value,
-                                                                      ]
-                                                                    : value.filter(
-                                                                          (v) =>
-                                                                              v !==
-                                                                              option.value,
-                                                                      ),
-                                                            )
-                                                        }
-                                                    />
-                                                    {option.label}
-                                                </Label>
-                                            ))}
-                                        </div>
-                                        {value.length === 0 && (
-                                            <p className="text-text-secondary text-xs">
-                                                Nothing selected: the comment
-                                                reports, but never asks to fix
-                                                anything before merging.
-                                            </p>
-                                        )}
-                                        {value.includes("partial") && (
-                                            <p className="text-warning text-xs">
-                                                Whether a requirement is half
-                                                done is a judgment call, so the
-                                                same code can pass one run and
-                                                fail the next. Use PARTIAL where
-                                                a stricter, less stable gate is
-                                                worth it.
-                                            </p>
-                                        )}
-                                    </div>
-                                );
-                            }}
-                        />
-                        <p className="text-text-secondary text-xs">
-                            The comment lists these as “To merge” and the rest
-                            as still open. CHECK MANUALLY is never to merge,
-                            and neither is a requirement a reviewer accepted
-                            or what a PR “part of” a task leaves out.
-                        </p>
                     </div>
 
                     <div className="flex flex-col gap-3">

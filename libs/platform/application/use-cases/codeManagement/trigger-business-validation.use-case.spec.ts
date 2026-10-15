@@ -702,7 +702,7 @@ describe('TriggerBusinessValidationUseCase.testOnPullRequest', () => {
         const result = await useCase.testOnPullRequest({
             organizationAndTeamData,
             prUrl,
-            settings: { failOn: ['missing', 'partial'] },
+            settings: { recheckOn: 'push' },
         });
 
         expect(service.validate).toHaveBeenCalledWith(
@@ -711,9 +711,7 @@ describe('TriggerBusinessValidationUseCase.testOnPullRequest', () => {
                     number: 47,
                     body: 'Closes SAA-96',
                 }),
-                settings: expect.objectContaining({
-                    failOn: ['missing', 'partial'],
-                }),
+                settings: expect.objectContaining({ recheckOn: 'push' }),
             }),
         );
         // The list names it `acme/notes`; the diff needs the stored name.

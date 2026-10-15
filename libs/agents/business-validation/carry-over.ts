@@ -6,7 +6,6 @@ import { taskPasses } from './check-policy';
 import type { ValidationResult } from './judge/validation.types';
 import { deriveStatus } from './judge/validation-verdict';
 import type { RunTask } from './runs/validation-run.model';
-import type { FailOnState } from './settings';
 
 /**
  * A re-check on top of the PR's previous run: what a reviewer accepted stays
@@ -16,23 +15,18 @@ import type { FailOnState } from './settings';
 export function carryOver(
     outcome: BusinessValidationOutcome,
     previous: RunTask[] | undefined,
-    failOn: FailOnState[],
 ): BusinessValidationOutcome {
     if (outcome.kind !== 'validated' || !previous?.length) {
         return outcome;
     }
     const checks = outcome.checks.map((check) => {
         const before = previous.find((t) => t.id === check.task.id);
-        return before ? applyPrevious(check, before, failOn) : check;
+        return before ? applyPrevious(check, before) : check;
     });
     return { ...outcome, checks, passed: checks.every((c) => c.passed) };
 }
 
-function applyPrevious(
-    check: TaskCheck,
-    before: RunTask,
-    failOn: FailOnState[],
-): TaskCheck {
+function applyPrevious(check: TaskCheck, before: RunTask): TaskCheck {
     const earlier = new Map(
         before.requirements.map((r) => [requirementKey(r.requirement), r]),
     );
@@ -67,7 +61,7 @@ function applyPrevious(
     return {
         ...check,
         verdict,
-        passed: taskPasses(verdict, failOn, check.reference?.intent),
+        passed: taskPasses(verdict, check.reference?.intent),
     };
 }
 

@@ -32,7 +32,6 @@ export type BusinessLogicSettingsValue = {
     criteriaLocation?: "auto" | "heading" | "field";
     criteriaHeading?: string;
     criteriaField?: string;
-    failOn?: Array<"missing" | "partial" | "not_in_task">;
     teamGuidance?: string;
     commentWhenMet?: boolean;
     recheckOn?: "failing" | "push" | "request";

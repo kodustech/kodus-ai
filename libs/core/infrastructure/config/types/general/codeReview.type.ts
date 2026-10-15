@@ -365,7 +365,6 @@ export type BusinessLogicConfig = {
     criteriaHeading?: string;
     /** The field the criteria live in, when `criteriaLocation` is `field`. */
     criteriaField?: string;
-    failOn?: Array<'missing' | 'partial' | 'not_in_task'>;
     teamGuidance?: string;
     commentWhenMet?: boolean;
     /**

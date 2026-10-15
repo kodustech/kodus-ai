@@ -3,7 +3,6 @@ import type {
     TaskCheck,
 } from './business-validation.types';
 import { countBlockers } from './check-policy';
-import type { FailOnState } from './settings';
 import type {
     CodeLocation,
     OutOfScopeChange,
@@ -42,8 +41,6 @@ export interface RenderContext {
     trigger?: 'command' | 'push' | 'force' | 'accepted' | 'recheck';
     /** Earlier commits this PR was checked at, oldest first. */
     history?: CheckedCommit[];
-    /** The team's "fails on" choice: only that reads as "to merge". */
-    failOn?: readonly FailOnState[];
 }
 
 /** One earlier commit and how it stood, for the comment's trail. */
@@ -98,7 +95,7 @@ function renderTaskSection(check: TaskCheck, context: RenderContext): string {
     const { task, verdict } = check;
     const lines: string[] = [
         `**${taskTitle(task.id, task.title, task.url)}**`,
-        headline(check, context.failOn),
+        headline(check),
     ];
     const meta = [`Task read ${formatDate(check.readAt)}`];
     if (context.headSha) {
@@ -136,42 +133,30 @@ function renderTaskSection(check: TaskCheck, context: RenderContext): string {
     if (check.reference?.intent === 'part_of') {
         lines.push(
             '',
-            `> This PR says it is part of ${task.id}: what's missing is listed, but not as something to merge.`,
+            `> This PR says it is part of ${task.id}: what's missing is listed, but not as something to fix here.`,
         );
     }
     return lines.join('\n');
 }
 
-/**
- * Which open findings keep the PR from passing under the team's "fails
- * on" choice. Without it, every kind counts, as before the choice existed.
- */
-function blocking(check: TaskCheck, failOn?: readonly FailOnState[]) {
-    const slice = check.reference?.intent === 'part_of';
-    const on = (state: FailOnState) => !failOn || failOn.includes(state);
-    return {
-        missing: on('missing') && !slice,
-        partial: on('partial') && !slice,
-        notInTask: on('not_in_task'),
-    };
-}
-
-function headline(check: TaskCheck, failOn?: readonly FailOnState[]): string {
+function headline(check: TaskCheck): string {
     const blockers = countBlockers(check.verdict);
     const manual = (check.verdict.requirements ?? []).filter(
         (r) => r.state === 'check_manually',
     ).length;
-    const blocks = blocking(check, failOn);
+    // Only MISSING is left to fix; a "part of" PR delivers a slice, so
+    // nothing is.
+    const toFix = check.reference?.intent !== 'part_of';
     const found = [
         {
             n: blockers.missing,
             text: plural(blockers.missing, 'missing requirement'),
-            blocks: blocks.missing,
+            blocks: toFix,
         },
         {
             n: blockers.partial,
             text: `${blockers.partial} partial`,
-            blocks: blocks.partial,
+            blocks: false,
         },
         { n: manual, text: `${manual} to check manually`, blocks: false },
         {
@@ -181,7 +166,7 @@ function headline(check: TaskCheck, failOn?: readonly FailOnState[]): string {
                 'change not in the task',
                 'changes not in the task',
             ),
-            blocks: blocks.notInTask,
+            blocks: false,
         },
     ].filter((f) => f.n);
 
@@ -195,10 +180,9 @@ function headline(check: TaskCheck, failOn?: readonly FailOnState[]): string {
     if (check.passed || !toMerge.length) {
         return found.map((f) => f.text).join(' · ');
     }
-    // Only what the team fails on is "to merge"; the rest is still listed.
     return rest.length
-        ? `To merge: ${toMerge.join(' · ')} · also open: ${rest.join(' · ')}`
-        : `To merge: ${toMerge.join(' · ')}`;
+        ? `To fix: ${toMerge.join(' · ')} · also open: ${rest.join(' · ')}`
+        : `To fix: ${toMerge.join(' · ')}`;
 }
 
 function requirementRow(requirement: RequirementVerdict): string {

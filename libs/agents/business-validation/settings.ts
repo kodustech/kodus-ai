@@ -9,14 +9,6 @@ import type { BusinessLogicConfig } from '@libs/core/infrastructure/config/types
 
 export type { BusinessLogicConfig };
 
-export type FailOnState = NonNullable<BusinessLogicConfig['failOn']>[number];
-
-export const FAIL_ON_STATES: readonly FailOnState[] = [
-    'missing',
-    'partial',
-    'not_in_task',
-];
-
 export type CriteriaLocation = NonNullable<
     BusinessLogicConfig['criteriaLocation']
 >;
@@ -39,7 +31,6 @@ export interface BusinessLogicSettings {
         | { location: 'auto' }
         | { location: 'heading'; heading: string }
         | { location: 'field'; field: string };
-    failOn: FailOnState[];
     teamGuidance?: string;
     commentWhenMet: boolean;
     recheckOn: RecheckOn;
@@ -49,7 +40,6 @@ export interface BusinessLogicSettings {
 export const DEFAULT_BUSINESS_LOGIC_SETTINGS: BusinessLogicSettings = {
     taskSource: AUTO_TASK_SOURCE,
     criteria: { location: 'auto' },
-    failOn: ['missing'],
     commentWhenMet: true,
     recheckOn: 'failing',
     requireTask: false,
@@ -69,9 +59,6 @@ export function resolveBusinessLogicSettings(
             : config.criteriaLocation === 'field' && field
               ? { location: 'field', field }
               : { location: 'auto' };
-    const failOn = Array.isArray(config.failOn)
-        ? FAIL_ON_STATES.filter((state) => config.failOn!.includes(state))
-        : DEFAULT_BUSINESS_LOGIC_SETTINGS.failOn;
     const guidance = config.teamGuidance?.trim().slice(0, MAX_TEAM_GUIDANCE);
 
     return {
@@ -79,7 +66,6 @@ export function resolveBusinessLogicSettings(
         taskSourceTool: config.taskSourceTool?.trim() || undefined,
         taskIdPattern: usablePattern(config.taskIdPattern),
         criteria,
-        failOn,
         ...(guidance ? { teamGuidance: guidance } : {}),
         commentWhenMet: config.commentWhenMet !== false,
         recheckOn: RECHECK_ON.includes(config.recheckOn as RecheckOn)

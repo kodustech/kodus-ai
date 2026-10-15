@@ -13,6 +13,8 @@ import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import { PipelineError } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-context.interface';
 import { createLogger } from '@libs/core/log/logger';
+import { isBotUser } from '@libs/common/utils/bot-user';
+import { isBotAuthor } from '@libs/platform/application/use-cases/codeManagement/implicit-reply';
 import { BusinessLogicPublisher } from '@libs/platform/application/services/business-logic-publisher.service';
 import {
     type IPullRequestManagerService,
@@ -84,6 +86,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                     body: context.pullRequest.body,
                     headRef: context.pullRequest.head?.ref,
                     baseRef: context.pullRequest.base?.ref,
+                    authorIsBot: authorIsBot(context.pullRequest.user),
                 },
                 platformType: context.platformType,
                 diff: formatPullRequestDiff(
@@ -205,7 +208,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                     draft.businessLogicOutcome = outcome.required
                         ? {
                               kind: 'gap_found',
-                              message: `${outcome.references.map(referenceLabel).join(', ')} doesn't exist in ${outcome.tracker}, and this repository requires a task.`,
+                              message: `${outcome.references.map(referenceLabel).join(', ')} doesn't exist in ${outcome.tracker}, and this repository asks for a task.`,
                           }
                         : {
                               kind: 'skipped',
@@ -217,7 +220,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                     draft.businessLogicOutcome = {
                         kind: 'gap_found',
                         message:
-                            'No task found, and this repository requires one.',
+                            'No task found, and this repository asks for one.',
                     };
                     break;
                 case 'validated': {
@@ -347,4 +350,17 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
             clearTimeout(timer);
         }
     }
+}
+
+/** Dependabot, Renovate, an app or a token user, as each platform names them. */
+function authorIsBot(
+    user:
+        | { login?: string; username?: string; type?: string; bot?: boolean }
+        | undefined,
+): boolean {
+    const login = user?.login ?? user?.username;
+    return (
+        isBotUser(login) ||
+        isBotAuthor({ login, type: user?.type, bot: user?.bot })
+    );
 }

@@ -200,7 +200,7 @@ export class BusinessLogicReplies {
                 ...task,
                 requirements,
                 outOfScope,
-                passed: taskPasses(verdict, settings.failOn, task.intent),
+                passed: taskPasses(verdict, task.intent),
             };
         });
 

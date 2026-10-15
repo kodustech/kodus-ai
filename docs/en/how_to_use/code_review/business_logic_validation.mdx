@@ -49,29 +49,29 @@ Kody also reads what the task links to:
 
 ## The five states
 
-| State | Meaning | Listed "To merge" |
+| State | Meaning | Left to fix |
 |---|---|---|
 | **MET** | The diff implements it. | No |
-| **PARTIAL** | Part of it is implemented. | Only if you choose |
-| **MISSING** | No evidence in this PR diff. | Yes, by default |
+| **PARTIAL** | Part of it is implemented. | No, shown: half done is a judgment call that can change between two runs |
+| **MISSING** | No evidence in this PR diff. | Yes |
 | **CHECK MANUALLY** | A visual or flow requirement, one Kody isn't sure about, or one that may live in a file too large to read. | Never |
-| **NOT IN TASK** | A change the task doesn't ask for. | Only if you choose |
+| **NOT IN TASK** | A change the task doesn't ask for. | No, shown |
 
 Every row cites the file and line it is based on, and says what to change.
 
 ## On the pull request
 
-- Kody checks the PR on its **first review**, then again on each push while something is left to merge, so a fix updates the comment without anyone asking. **Re-check** can also be set to every push, or only when someone comments `@kody -v business-logic`.
+- Kody checks the PR on its **first review**, then again on each push while something is missing, so a fix updates the comment without anyone asking. **Re-check** can also be set to every push, or only when someone comments `@kody -v business-logic`.
 - Re-check any time with `@kody -v business-logic`. The **same comment is edited**; Kody never posts a second one.
 - A PR that meets its task gets the comment too, so the author knows it was checked. Turn off **Comment when every requirement is met** to stay quiet on those.
-- The comment is the signal on every platform: Kody doesn't write a check or a status, so it never blocks a merge by itself. Its header says what is left to merge.
+- The comment is the signal on every platform: Kody doesn't write a check or a status, so it never blocks a merge by itself. Its header says what is left to fix.
 
 ### Replying to the comment
 
 Reply to the Business Logic comment and mention `@kody`:
 
 - **Disagree**: "It's covered in `useDrag.ts`". Kody re-checks what you pointed at and either marks it MET or says what it looked at and keeps it.
-- **Accept a finding** (on GitHub, anyone with write access to the repository, the author included; other platforms don't report the commenter's role, so there anyone can): "Keyboard reordering is out of scope, moved to SAA-102". Kody confirms SAA-102 exists, marks the row **ACCEPTED** with who accepted it, and it leaves the "To merge" list. The decision stays on later re-checks.
+- **Accept a finding** (on GitHub, anyone with write access to the repository, the author included; other platforms don't report the commenter's role, so there anyone can): "Keyboard reordering is out of scope, moved to SAA-102". Kody confirms SAA-102 exists, marks the row **ACCEPTED** with who accepted it, and it is no longer left to fix. The decision stays on later re-checks.
 
 ## When Kody stays quiet
 
@@ -80,9 +80,9 @@ Kody comments only when the author can do something about it:
 | Situation | On the PR |
 |---|---|
 | The task has only a title | A comment asking for acceptance criteria |
-| `SAA-999` doesn't exist, but SAA is a team in your tracker | A comment saying it looks like a typo, with the closest real tasks. With **Require a task** on, the PR also counts as failing |
-| No task referenced, or only ids no tracker has (`UTF-8` in a title) | Nothing. With **Require a task** on, a comment asking for one |
-| A GitHub issue, but only Linear is connected | Nothing; admins see a count on the settings page. With **Require a task** on, a comment saying which tracker can't read it |
+| `SAA-999` doesn't exist, but SAA is a team in your tracker | A comment saying it looks like a typo, with the closest real tasks. With **Ask for a task** on, it stays open until fixed |
+| No task referenced, or only ids no tracker has (`UTF-8` in a title) | Nothing. With **Ask for a task** on, a comment asking for one (never on a bot's PR) |
+| A GitHub issue, but only Linear is connected | Nothing; admins see a count on the settings page. With **Ask for a task** on, a comment saying which tracker can't read it |
 | The tracker is down or its token expired | Nothing; owners are notified, and Kody re-checks once the tracker answers |
 
 The reason for every skip is recorded and shown on the Business Logic settings page.
@@ -101,9 +101,8 @@ Open **Code review → What to review → Business Logic → Configure**. Every 
 
 - **Task source**: every connected tracker, or one plugin. For a custom plugin (for example Azure DevOps), pick the tool that reads one task by its id; only read-only tools are offered. Use **Try it with a real task** to check what Kody reads before saving.
 - **Where acceptance criteria live**: detected automatically, under a heading in the description, or in a custom field (Jira or Azure Boards).
-- **Left to merge**: what the comment lists as "To merge". MISSING by default. PARTIAL is stricter, and where a requirement is half done is a judgment call, so a PR can go from passing to failing between two checks of the same code. NOT IN TASK suits teams where one PR is one task. With nothing selected, the comment only reports.
-- **Require a task**: a PR that references no existing task gets a comment asking for one (or pointing at the typo), instead of being skipped. A tracker that is down never counts.
-- **Re-check**: while something is left to merge (default), on every push, or only on request.
+- **Ask for a task when the PR references none**: Kody comments asking which task the PR is for (or pointing at the typo), instead of skipping it. PRs opened by bots, like Dependabot or Renovate, are left alone. A tracker that is down never counts.
+- **Re-check**: while something is missing (default), on every push, or only on request.
 - **Team guidance**: notes Kody follows when it judges, for example "Feature flags count as implemented when the flag exists and defaults to off". It can't change the verdict format or make Kody invent requirements.
 
 The same settings in `kodus-config.yml`:
@@ -111,7 +110,6 @@ The same settings in `kodus-config.yml`:
 ```yaml
 businessLogic:
   taskSource: 'auto'
-  failOn: ['missing']
   criteriaLocation: 'heading'
   criteriaHeading: 'Acceptance criteria'
   commentWhenMet: true

@@ -2,6 +2,12 @@
 
 import { useState } from "react";
 import { Card } from "@components/ui/card";
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleIndicator,
+    CollapsibleTrigger,
+} from "@components/ui/collapsible";
 import { Heading } from "@components/ui/heading";
 import { Input } from "@components/ui/input";
 import { Label } from "@components/ui/label";
@@ -215,57 +221,78 @@ export const TaskSource = ({
                 </Card>
             )}
 
-            <Card color="lv1" className="flex flex-col gap-2 px-5 py-4">
-                <span className="text-text-primary text-sm font-medium">
-                    How your task ids look{" "}
-                    <span className="text-text-secondary font-normal">
-                        (optional)
-                    </span>
-                </span>
-                <p className="text-text-secondary text-xs">
-                    Kody already finds keys like SAA-96, AB#8, #12 and tracker
-                    links. For another shape, write a regular expression; its
-                    first group, when it has one, is the id. For example{" "}
-                    <code>sc-(\d+)</code> reads 123 from the branch{" "}
-                    <code>nina/sc-123-gift-cards</code>.
-                </p>
-                <Controller
-                    name={"businessLogic.taskIdPattern.value" as never}
-                    control={form.control}
-                    render={({ field }) => (
-                        <Input
-                            placeholder="e.g. sc-(\d+)"
-                            value={(field.value as string) ?? ""}
-                            onChange={field.onChange}
-                            maxLength={MAX_PATTERN}
-                            disabled={!canEdit || field.disabled}
-                        />
-                    )}
-                />
-                {pattern.trim() && (
-                    <>
-                        <Input
-                            placeholder="Paste a title, branch or description to preview"
-                            value={sample}
-                            onChange={(e) => setSample(e.target.value)}
-                        />
-                        <span
-                            className={
-                                preview === "invalid"
-                                    ? "text-danger text-xs"
-                                    : "text-text-secondary text-xs"
-                            }>
-                            {preview === "invalid"
-                                ? "Not a valid regular expression."
-                                : !sample.trim()
-                                  ? "Kody drops a pattern that could take too long to run, like (a+)+."
-                                  : preview.length
-                                    ? `Reads: ${preview.join(", ")}`
-                                    : "No id in this text."}
+            <Collapsible
+                className="bg-card-lv1 rounded-xl"
+                defaultOpen={!!pattern.trim()}>
+                <CollapsibleTrigger asChild>
+                    <button
+                        type="button"
+                        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left">
+                        <span className="flex flex-col">
+                            <span className="text-text-primary text-sm font-medium">
+                                Advanced
+                            </span>
+                            <span className="text-text-secondary text-xs">
+                                Task ids Kody doesn&apos;t recognize yet
+                            </span>
                         </span>
-                    </>
-                )}
-            </Card>
+                        <CollapsibleIndicator />
+                    </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                    <div className="border-card-lv3/60 flex flex-col gap-2 border-t px-5 py-4">
+                        <span className="text-text-primary text-sm font-medium">
+                            How your task ids look{" "}
+                            <span className="text-text-secondary font-normal">
+                                (optional)
+                            </span>
+                        </span>
+                        <p className="text-text-secondary text-xs">
+                            Kody already finds keys like SAA-96, AB#8, #12 and
+                            tracker links. For another shape, write a regular
+                            expression; its first group, when it has one, is the
+                            id. For example <code>sc-(\d+)</code> reads 123 from
+                            the branch <code>nina/sc-123-gift-cards</code>.
+                        </p>
+                        <Controller
+                            name={"businessLogic.taskIdPattern.value" as never}
+                            control={form.control}
+                            render={({ field }) => (
+                                <Input
+                                    placeholder="e.g. sc-(\d+)"
+                                    value={(field.value as string) ?? ""}
+                                    onChange={field.onChange}
+                                    maxLength={MAX_PATTERN}
+                                    disabled={!canEdit || field.disabled}
+                                />
+                            )}
+                        />
+                        {pattern.trim() && (
+                            <>
+                                <Input
+                                    placeholder="Paste a title, branch or description to preview"
+                                    value={sample}
+                                    onChange={(e) => setSample(e.target.value)}
+                                />
+                                <span
+                                    className={
+                                        preview === "invalid"
+                                            ? "text-danger text-xs"
+                                            : "text-text-secondary text-xs"
+                                    }>
+                                    {preview === "invalid"
+                                        ? "Not a valid regular expression."
+                                        : !sample.trim()
+                                          ? "Kody drops a pattern that could take too long to run, like (a+)+."
+                                          : preview.length
+                                            ? `Reads: ${preview.join(", ")}`
+                                            : "No id in this text."}
+                                </span>
+                            </>
+                        )}
+                    </div>
+                </CollapsibleContent>
+            </Collapsible>
         </section>
     );
 };

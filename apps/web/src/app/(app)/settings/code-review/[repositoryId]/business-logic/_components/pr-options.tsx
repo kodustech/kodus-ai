@@ -17,16 +17,16 @@ const SWITCHES = [
     },
     {
         name: "requireTask",
-        label: "Require a task",
-        hint: "On: a PR that references no existing task gets a comment asking for one. Off: it's skipped.",
+        label: "Ask for a task when the PR references none",
+        hint: "On: Kody comments asking which task the PR is for. PRs opened by bots (Dependabot, Renovate) are left alone. Off: the PR is skipped.",
     },
 ] as const;
 
 const RECHECK = [
     {
         value: "failing",
-        label: "While something is left to merge",
-        hint: "A push re-checks until the comment lists nothing to merge, so a fix updates it without anyone asking.",
+        label: "While something is missing",
+        hint: "A push re-checks until nothing is missing or a task is referenced, so a fix updates the comment without anyone asking.",
     },
     {
         value: "push",

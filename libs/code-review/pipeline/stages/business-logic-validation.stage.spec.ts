@@ -147,7 +147,7 @@ describe('BusinessLogicValidationStage', () => {
                     reviewOptions: { business_logic: true },
                     byokModel: 'gpt-5.4',
                     byokModelId: 'model-main',
-                    businessLogic: { failOn: ['missing', 'partial'] },
+                    businessLogic: { recheckOn: 'push' },
                 },
             } as any),
         );
@@ -169,9 +169,7 @@ describe('BusinessLogicValidationStage', () => {
                 diff: expect.stringContaining('=== FILE: a.ts ==='),
                 byokModel: 'gpt-5.4',
                 byokModelId: 'model-main',
-                settings: expect.objectContaining({
-                    failOn: ['missing', 'partial'],
-                }),
+                settings: expect.objectContaining({ recheckOn: 'push' }),
             }),
         );
     });

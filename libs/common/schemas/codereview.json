@@ -316,15 +316,6 @@
                     "default": "",
                     "description": "The field the criteria live in, when criteriaLocation is 'field'."
                 },
-                "failOn": {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "enum": ["missing", "partial", "not_in_task"]
-                    },
-                    "default": ["missing"],
-                    "description": "Which findings the comment lists as \"To merge\". CHECK MANUALLY never is."
-                },
                 "teamGuidance": {
                     "type": "string",
                     "maxLength": 2000,

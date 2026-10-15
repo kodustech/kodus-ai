@@ -6,7 +6,6 @@ describe('resolveBusinessLogicSettings', () => {
         expect(resolveBusinessLogicSettings(undefined)).toEqual({
             taskSource: 'auto',
             criteria: { location: 'auto' },
-            failOn: ['missing'],
             commentWhenMet: true,
             recheckOn: 'failing',
             requireTask: false,
@@ -20,7 +19,6 @@ describe('resolveBusinessLogicSettings', () => {
                 taskSourceTool: 'wit_work_item',
                 criteriaLocation: 'heading',
                 criteriaHeading: 'Acceptance criteria',
-                failOn: ['partial', 'bogus' as any, 'missing'],
                 teamGuidance: '  Ignore copy.  ',
                 recheckOn: 'push',
                 requireTask: true,
@@ -29,7 +27,6 @@ describe('resolveBusinessLogicSettings', () => {
             taskSource: 'azure-plugin',
             taskSourceTool: 'wit_work_item',
             criteria: { location: 'heading', heading: 'Acceptance criteria' },
-            failOn: ['missing', 'partial'],
             teamGuidance: 'Ignore copy.',
             recheckOn: 'push',
             requireTask: true,

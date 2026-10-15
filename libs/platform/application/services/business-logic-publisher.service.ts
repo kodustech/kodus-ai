@@ -155,7 +155,7 @@ export class BusinessLogicPublisher {
         const body = await this.businessValidationService.commentFor(
             outcome,
             request,
-            { headSha: input.headSha, history, failOn: settings.failOn },
+            { headSha: input.headSha, history },
         );
         return {
             outcome,
@@ -202,7 +202,6 @@ export class BusinessLogicPublisher {
         const outcome = carryOver(
             input.result.outcome,
             previousVerdict?.tasks,
-            settings.failOn,
         );
         const history = checkedCommits(earlier, input.headSha);
         return { scope, outcome, previousComment, history };
@@ -228,7 +227,6 @@ export class BusinessLogicPublisher {
                 {
                     headSha: input.headSha,
                     history,
-                    failOn: settings.failOn,
                     trigger:
                         input.trigger === 'auto' ? undefined : input.trigger,
                 },

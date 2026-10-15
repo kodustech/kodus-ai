@@ -292,9 +292,12 @@ export class BusinessValidationService {
             message: this.answers(request) ? await translate(message) : message,
         });
 
+        // A bot's PR (a dependency bump) has no task to name.
+        const askForTask =
+            settings.requireTask && !request.pullRequest?.authorIsBot;
         switch (resolution.kind) {
             case 'no_reference':
-                return settings.requireTask
+                return askForTask
                     ? {
                           kind: 'task_required',
                           message: await translate(
@@ -336,7 +339,7 @@ export class BusinessValidationService {
                 );
                 // `Closes #1` where only Linear is connected names no task
                 // this team can be held to.
-                return settings.requireTask
+                return askForTask
                     ? {
                           kind: 'task_required',
                           message: await translate(unreadable),
@@ -350,9 +353,7 @@ export class BusinessValidationService {
                         kind: 'task_missing',
                         references: [reference],
                         tracker,
-                        ...(settings.requireTask
-                            ? { required: true as const }
-                            : {}),
+                        ...(askForTask ? { required: true as const } : {}),
                         message: await translate(
                             messages.taskMissingMessage(
                                 reference,
@@ -364,7 +365,7 @@ export class BusinessValidationService {
                 }
                 // `UTF-8` in a title names no task: a team that requires one
                 // still has none.
-                if (settings.requireTask) {
+                if (askForTask) {
                     return {
                         kind: 'task_required',
                         message: await translate(
@@ -487,11 +488,7 @@ export class BusinessValidationService {
             task: found.task,
             ...(found.reference ? { reference: found.reference } : {}),
             verdict: settled,
-            passed: taskPasses(
-                settled,
-                settings.failOn,
-                found.reference?.intent,
-            ),
+            passed: taskPasses(settled, found.reference?.intent),
             readAt,
         };
     }

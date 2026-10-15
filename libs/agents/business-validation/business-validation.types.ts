@@ -198,6 +198,8 @@ export interface BusinessValidationRequest {
         body?: string;
         headRef?: string;
         baseRef?: string;
+        /** Opened by a bot (dependabot, renovate): never asked for a task. */
+        authorIsBot?: boolean;
     };
     platformType?: string;
     /** What the user passed with the command or CLI: a task id, a URL or the task text itself. */

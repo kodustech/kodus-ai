@@ -19,6 +19,7 @@ function decide(
     requireTask: boolean,
     resolution: Record<string, unknown>,
     references: TaskReference[],
+    pullRequest?: { number: number; authorIsBot?: boolean },
 ) {
     const service = new BusinessValidationService(
         {} as any,
@@ -27,7 +28,11 @@ function decide(
         {} as any,
     );
     return (service as any).decide(
-        { door: 'auto', organizationAndTeamData: { organizationId: 'org-1' } },
+        {
+            door: 'auto',
+            organizationAndTeamData: { organizationId: 'org-1' },
+            ...(pullRequest ? { pullRequest } : {}),
+        },
         resolveBusinessLogicSettings({ requireTask }),
         { attempts: [], ...resolution },
         references,
@@ -120,5 +125,22 @@ describe('BusinessValidationService · a reference no connected tracker reads', 
             kind: 'skipped',
             reason: 'no_capable_tracker',
         });
+    });
+});
+
+describe("BusinessValidationService · a bot's pull request", () => {
+    it('never asks Dependabot or Renovate for a task', async () => {
+        await expect(
+            decide(true, { kind: 'no_reference' }, [], {
+                number: 7,
+                authorIsBot: true,
+            }),
+        ).resolves.toMatchObject({ kind: 'skipped', reason: 'no_reference' });
+    });
+
+    it("asks a person's PR for one", async () => {
+        await expect(
+            decide(true, { kind: 'no_reference' }, [], { number: 8 }),
+        ).resolves.toMatchObject({ kind: 'task_required' });
     });
 });

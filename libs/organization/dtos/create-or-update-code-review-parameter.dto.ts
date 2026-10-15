@@ -428,11 +428,6 @@ class BusinessLogicDto {
     criteriaField?: string;
 
     @IsOptional()
-    @IsArray()
-    @IsIn(['missing', 'partial', 'not_in_task'], { each: true })
-    failOn?: Array<'missing' | 'partial' | 'not_in_task'>;
-
-    @IsOptional()
     @IsString()
     @MaxLength(2000)
     teamGuidance?: string;
