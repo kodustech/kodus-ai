@@ -60,10 +60,10 @@ export interface RepeatCheckResult<T> {
 }
 
 export interface RepeatCheckOptions {
+    organizationId: string;
     byokConfig?: NormalizedModel;
     /** Renders a rule finding's or entry's rule by title. */
     ruleTitleByUuid?: ReadonlyMap<string, string>;
-    organizationId?: string;
     telemetryMetadata?: LangfuseTelemetryMetadata;
     prNumber?: number;
 }
@@ -307,7 +307,7 @@ function parseRepeats(
 export async function checkRepeats<T extends RepeatCheckFinding>(
     findings: T[],
     history: readonly PrDecisionRecord[] | undefined,
-    options: RepeatCheckOptions = {},
+    options: RepeatCheckOptions,
 ): Promise<RepeatCheckResult<T>> {
     const result: RepeatCheckResult<T> = {
         kept: [],
@@ -323,7 +323,8 @@ export async function checkRepeats<T extends RepeatCheckFinding>(
     const toJudge: Array<{ finding: T; candidates: PrDecisionRecord[] }> = [];
     for (const finding of findings) {
         const candidates = repeatCandidates(finding, history);
-        const byCode = candidates.find((c) => sameOccurrenceByCode(finding, c));
+        // Free, so it reads the whole history, not the capped candidates.
+        const byCode = history.find((c) => sameOccurrenceByCode(finding, c));
         if (byCode) {
             matchOf.set(finding, { finding, earlier: byCode, by: 'code' });
         } else if (candidates.length) {
@@ -370,6 +371,11 @@ export async function checkRepeats<T extends RepeatCheckFinding>(
                         message: `[REPEAT-CHECK] PR#${options.prNumber}: model call failed, posting the ${batches[b].length} finding(s) it had to judge`,
                         context: 'RepeatCheck',
                         error: outcome.reason,
+                        metadata: {
+                            organizationId: options.organizationId,
+                            prNumber: options.prNumber,
+                            batchSize: batches[b].length,
+                        },
                     });
                     return;
                 }

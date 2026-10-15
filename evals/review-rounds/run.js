@@ -491,6 +491,7 @@ async function once(c, judgeKey) {
         checkRepeats,
     } = require('../../libs/code-review/infrastructure/agents/engine/repeat-check.ts');
     const repeatCheck = await checkRepeats(out.suggestions, wholeHistory, {
+        organizationId: 'eval-org',
         byokConfig: byokSlot() ?? undefined,
         ruleTitleByUuid: new Map(
             (c.kodyRules || []).map((r) => [r.uuid, r.title]),

@@ -2219,6 +2219,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     message: `[REPEAT-CHECK] PR#${prNumber}: could not read the whole history, checking against the ${history.length} loaded for the prompts`,
                     context: this.stageName,
                     error,
+                    metadata: {
+                        organizationId:
+                            context.organizationAndTeamData?.organizationId,
+                        prNumber,
+                    },
                 });
             }
         }
@@ -2230,7 +2235,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         const result = await checkRepeats(findings, history, {
             byokConfig: context.codeReviewConfig?.resolvedModelSlot,
             ruleTitleByUuid,
-            organizationId: context.organizationAndTeamData?.organizationId,
+            organizationId: context.organizationAndTeamData.organizationId,
             telemetryMetadata: telemetryMeta,
             prNumber,
         });

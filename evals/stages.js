@@ -174,7 +174,7 @@ const STAGES = [
         nightly: 'shared',
         metric: 'of claims handled right',
         set: 'later rounds of a PR: reposts that must stay off it, new problems and revisions that must post',
-        caveat: 'One model (DeepSeek, reasoning off) on 13 cases; the full set, the lifecycle chains and other models run by hand.',
+        caveat: 'The nightly runs one model on a subset (evals/nightly-evals.js, targets.json sets.nightly); the full set, the lifecycle chains and other models run by hand.',
         note: 'targets.json sets.nightly in the nightly (evals/nightly-evals.js); the full set runs by hand',
     },
     {

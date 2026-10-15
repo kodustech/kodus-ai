@@ -262,7 +262,7 @@ describe('checkRepeats', () => {
 
     it('without history, posts everything and calls no model', async () => {
         const findings = [{ label: 'bug', relevantFile: 'src/a.ts' }];
-        const result = await checkRepeats(findings, [], { byokConfig: slot });
+        const result = await checkRepeats(findings, [], { organizationId: 'org-1', byokConfig: slot });
         expect(result.kept).toEqual(findings);
         expect(result.model).toBe('not-needed');
         expect(runSpy).not.toHaveBeenCalled();
@@ -276,9 +276,36 @@ describe('checkRepeats', () => {
             existingCode: "console.log('order', order)",
         };
         const result = await checkRepeats([finding], [ruleComment], {
-            byokConfig: slot,
+            organizationId: 'org-1', byokConfig: slot,
         });
         expect(result.kept).toEqual([]);
+        expect(result.repeats).toEqual([
+            { finding, earlier: ruleComment, by: 'code' },
+        ]);
+        expect(runSpy).not.toHaveBeenCalled();
+    });
+
+    it('matches by code against the whole history, not only the candidates shown to the model', async () => {
+        const newer = Array.from({ length: 15 }, (_, i) =>
+            earlier({
+                suggestionId: `newer-${i}`,
+                label: 'kody_rules',
+                brokenKodyRulesIds: ['rule-no-console'],
+                existingCode: `console.log('step', ${i})`,
+            }),
+        );
+        const finding = {
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['rule-no-console'],
+            relevantFile: 'src/orders.ts',
+            existingCode: "console.log('order', order)",
+        };
+
+        const result = await checkRepeats([finding], [...newer, ruleComment], {
+            organizationId: 'org-1',
+            byokConfig: slot,
+        });
+
         expect(result.repeats).toEqual([
             { finding, earlier: ruleComment, by: 'code' },
         ]);
@@ -304,7 +331,7 @@ describe('checkRepeats', () => {
         });
 
         const result = await checkRepeats([repeat, newPlace], [declined], {
-            byokConfig: slot,
+            organizationId: 'org-1', byokConfig: slot,
             prNumber: 7,
         });
 
@@ -314,7 +341,7 @@ describe('checkRepeats', () => {
         ]);
         expect(runSpy).toHaveBeenCalledTimes(1);
         expect(runSpy.mock.calls[0][0]).toMatchObject({
-            byokConfig: slot,
+            organizationId: 'org-1', byokConfig: slot,
             spanName: 'code-review::repeat-check',
         });
     });
@@ -333,7 +360,7 @@ describe('checkRepeats', () => {
         });
 
         const result = await checkRepeats([back], [applied], {
-            byokConfig: slot,
+            organizationId: 'org-1', byokConfig: slot,
         });
 
         expect(result.kept).toEqual([]);
@@ -359,7 +386,7 @@ describe('checkRepeats', () => {
         });
 
         const result = await checkRepeats([still], [applied], {
-            byokConfig: slot,
+            organizationId: 'org-1', byokConfig: slot,
         });
 
         expect(result.kept).toEqual([]);
@@ -377,7 +404,7 @@ describe('checkRepeats', () => {
         });
 
         const result = await checkRepeats([newPlace, consequence], [bugComment], {
-            byokConfig: slot,
+            organizationId: 'org-1', byokConfig: slot,
         });
 
         expect(result.kept).toEqual([newPlace, consequence]);
@@ -395,7 +422,7 @@ describe('checkRepeats', () => {
         });
 
         const result = await checkRepeats([finding], [bugComment, other], {
-            byokConfig: slot,
+            organizationId: 'org-1', byokConfig: slot,
         });
 
         expect(result.kept).toEqual([finding]);
@@ -410,7 +437,7 @@ describe('checkRepeats', () => {
         );
 
         const result = await checkRepeats([finding], [bugComment], {
-            byokConfig: slot,
+            organizationId: 'org-1', byokConfig: slot,
         });
 
         expect(result.repeats).toHaveLength(1);
@@ -429,7 +456,7 @@ describe('checkRepeats', () => {
         const result = await checkRepeats(
             [byCode, toJudge],
             [ruleComment, bugComment],
-            { byokConfig: slot },
+            { organizationId: 'org-1', byokConfig: slot },
         );
 
         expect(result.model).toBe('failed');
@@ -441,7 +468,9 @@ describe('checkRepeats', () => {
         hasManagedModelKeyMock.mockReturnValue(false);
         const finding = { label: 'bug', relevantFile: 'src/retry.ts' };
 
-        const result = await checkRepeats([finding], [bugComment]);
+        const result = await checkRepeats([finding], [bugComment], {
+            organizationId: 'org-1',
+        });
 
         expect(result.model).toBe('no-model');
         expect(result.kept).toEqual([finding]);
@@ -457,7 +486,7 @@ describe('checkRepeats', () => {
         runSpy.mockResolvedValue({ verdicts: [] });
 
         const result = await checkRepeats(findings, [bugComment], {
-            byokConfig: slot,
+            organizationId: 'org-1', byokConfig: slot,
         });
 
         expect(runSpy).toHaveBeenCalledTimes(3);
