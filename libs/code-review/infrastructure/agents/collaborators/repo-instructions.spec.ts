@@ -15,19 +15,27 @@ const files = (map: Record<string, string>) => ({
 describe('shouldCollectRepoInstructions', () => {
     it('collects only when the repository opted in', () => {
         expect(
-            shouldCollectRepoInstructions({ ideRulesSyncEnabled: true }),
+            shouldCollectRepoInstructions({ repoInstructionsEnabled: true }),
         ).toBe(true);
         expect(
-            shouldCollectRepoInstructions({ ideRulesSyncEnabled: false }),
+            shouldCollectRepoInstructions({ repoInstructionsEnabled: false }),
         ).toBe(false);
         expect(shouldCollectRepoInstructions({})).toBe(false);
         expect(shouldCollectRepoInstructions(undefined)).toBe(false);
     });
 
+    it('ignores the retired ideRulesSyncEnabled, which meant something else', () => {
+        expect(
+            shouldCollectRepoInstructions({
+                ideRulesSyncEnabled: true,
+            } as Parameters<typeof shouldCollectRepoInstructions>[0]),
+        ).toBe(false);
+    });
+
     it('skips under the adaptive profiles that drop optional context', () => {
         expect(
             shouldCollectRepoInstructions(
-                { ideRulesSyncEnabled: true },
+                { repoInstructionsEnabled: true },
                 { dropCallGraph: true },
             ),
         ).toBe(false);

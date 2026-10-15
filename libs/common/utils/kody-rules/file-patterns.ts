@@ -8,7 +8,7 @@ import {
 /**
  * Files written to instruct coding agents (Cursor, Copilot, Claude, ...).
  * They are NOT review policy: they are never converted into Kody Rules. When a
- * repository opts in (`ideRulesSyncEnabled`), the review reads the ones that
+ * repository opts in (`repoInstructionsEnabled`), the review reads the ones that
  * govern the changed files as context (see `collectRepoInstructions`).
  */
 export const AGENT_INSTRUCTION_FILE_PATTERNS = [

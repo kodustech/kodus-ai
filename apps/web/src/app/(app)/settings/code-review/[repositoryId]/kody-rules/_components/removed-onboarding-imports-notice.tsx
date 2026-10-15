@@ -51,7 +51,7 @@ export const RemovedOnboardingImportsNotice = ({
     );
 
     const count = syncStatus.removedOnboardingImports ?? 0;
-    if (count === 0 || config?.ideRulesSyncEnabled?.value || dismissed) {
+    if (count === 0 || config?.repoInstructionsEnabled?.value || dismissed) {
         return null;
     }
 

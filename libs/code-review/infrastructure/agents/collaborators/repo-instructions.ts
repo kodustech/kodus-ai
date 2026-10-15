@@ -4,7 +4,7 @@
  *
  * These files tell coding agents how the team works. They are not review
  * policy, so they never become Kody Rules. When a repository opts in
- * (`ideRulesSyncEnabled`), the generalist reads the ones that govern the
+ * (`repoInstructionsEnabled`), the generalist reads the ones that govern the
  * changed files and may report a `repo_instruction` finding that quotes the
  * instruction a change breaks.
  *
@@ -64,10 +64,10 @@ const EMPTY: RepoInstructionsContext = {
  * (the same profiles that drop the call graph drop this).
  */
 export function shouldCollectRepoInstructions(
-    config: { ideRulesSyncEnabled?: boolean } | null | undefined,
+    config: { repoInstructionsEnabled?: boolean } | null | undefined,
     adaptiveProfile?: { dropCallGraph?: boolean } | null,
 ): boolean {
-    if (config?.ideRulesSyncEnabled !== true) return false;
+    if (config?.repoInstructionsEnabled !== true) return false;
     return !adaptiveProfile?.dropCallGraph;
 }
 

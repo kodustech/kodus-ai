@@ -1055,7 +1055,7 @@ describe('KodyRulesSyncService — repository rule files vs coding-agent files',
         const parametersService = {
             findByKey: jest.fn().mockResolvedValue({
                 configValue: opts.configValue ?? {
-                    configs: { ideRulesSyncEnabled: false },
+                    configs: { repoInstructionsEnabled: false },
                     repositories: [{ id: REPO.id, configs: {} }],
                 },
             }),
@@ -1193,7 +1193,7 @@ describe('KodyRulesSyncService — repository rule files vs coding-agent files',
             async (toggle) => {
                 const { service, written, fetched } = makeService({
                     configValue: {
-                        configs: { ideRulesSyncEnabled: toggle },
+                        configs: { repoInstructionsEnabled: toggle },
                         repositories: [{ id: REPO.id, configs: {} }],
                     },
                     files: {

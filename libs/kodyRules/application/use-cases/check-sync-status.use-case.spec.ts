@@ -52,7 +52,7 @@ describe('CheckSyncStatusUseCase — kodyRulesGeneratorEnabledFirstTime', () => 
     it('is true when the repo has no past-review rules yet, regardless of the toggle', async () => {
         const { useCase } = build({
             repoConfig: repo({
-                ideRulesSyncEnabled: true,
+                repoInstructionsEnabled: true,
                 kodyRulesGeneratorEnabled: true,
             }),
             rules: [],
@@ -66,7 +66,7 @@ describe('CheckSyncStatusUseCase — kodyRulesGeneratorEnabledFirstTime', () => 
     it('is false once the repo already has past-review rules', async () => {
         const { useCase } = build({
             repoConfig: repo({
-                ideRulesSyncEnabled: true,
+                repoInstructionsEnabled: true,
                 kodyRulesGeneratorEnabled: false,
             }),
             rules: [{ rules: [{ origin: KodyRulesOrigin.PAST_REVIEWS }] }],
@@ -80,7 +80,7 @@ describe('CheckSyncStatusUseCase — kodyRulesGeneratorEnabledFirstTime', () => 
     it('stays true when the only existing rules are non-past-review (e.g. IDE files)', async () => {
         const { useCase } = build({
             repoConfig: repo({
-                ideRulesSyncEnabled: true,
+                repoInstructionsEnabled: true,
                 kodyRulesGeneratorEnabled: false,
             }),
             rules: [{ rules: [{ origin: KodyRulesOrigin.REPO_FILE_SYNC }] }],
@@ -105,7 +105,7 @@ describe('CheckSyncStatusUseCase — kodyRulesGeneratorEnabledFirstTime', () => 
 
     it('no longer reports a first-time flag for coding-agent files, which import nothing', async () => {
         const { useCase } = build({
-            repoConfig: repo({ ideRulesSyncEnabled: false }),
+            repoConfig: repo({ repoInstructionsEnabled: false }),
             rules: [],
         });
 

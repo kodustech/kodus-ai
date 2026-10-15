@@ -900,9 +900,9 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             const before = resolveBefore(id);
             const after = resolveAfter(id);
 
-            if (before.ideRulesSyncEnabled !== after.ideRulesSyncEnabled) {
+            if (before.repoInstructionsEnabled !== after.repoInstructionsEnabled) {
                 this.logger.log({
-                    message: `Coding-agent instructions in review turned ${after.ideRulesSyncEnabled ? 'on' : 'off'} for repository`,
+                    message: `Coding-agent instructions in review turned ${after.repoInstructionsEnabled ? 'on' : 'off'} for repository`,
                     context: UpdateOrCreateCodeReviewParameterUseCase.name,
                     metadata: {
                         organizationAndTeamData,

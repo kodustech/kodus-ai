@@ -16,7 +16,7 @@ To make a convention an enforced review rule, write it as a [Repository Rule](/e
 - **During onboarding**, the **Teach Kody how your team builds software** step lists the coding-agent files found in each selected repository and asks whether Kody should use them. It is off unless you turn it on.
 - **Later**, pick **Global** or a repository in the scope picker at the top of the **Code review** group, open **Kody Rules**, click **Configuration**, and turn on **Use coding-agent instructions in reviews**. The global value is the default for every repository that doesn't set its own.
 
-The setting is stored as `ideRulesSyncEnabled` in the code review configuration (and in `kodus-config.yml`).
+The setting is stored as `repoInstructionsEnabled` in the code review configuration (and in `kodus-config.yml`). The older `ideRulesSyncEnabled` is no longer read, so a value set there does not turn this on.
 
 ## Files Kody reads
 

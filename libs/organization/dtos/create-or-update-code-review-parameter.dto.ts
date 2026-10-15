@@ -470,7 +470,7 @@ class CodeReviewConfigWithoutLLMProviderDto {
      */
     @IsOptional()
     @IsBoolean()
-    ideRulesSyncEnabled?: boolean;
+    repoInstructionsEnabled?: boolean;
 
     @IsOptional()
     @IsBoolean()

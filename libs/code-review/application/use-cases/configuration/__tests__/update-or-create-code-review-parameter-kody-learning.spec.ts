@@ -99,12 +99,12 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — Kody Rules learning inher
             ['a repo save', { repositoryId: 'repo-1' }],
         ])('touches no rules on %s', async (_label, scope) => {
             const { save, emittedEvents } = build(
-                { ideRulesSyncEnabled: true },
+                { repoInstructionsEnabled: true },
                 [{ id: 'repo-1' }],
             );
 
             await save(
-                { ideRulesSyncEnabled: false, ideSyncDisableAction: 'delete' },
+                { repoInstructionsEnabled: false, ideSyncDisableAction: 'delete' },
                 scope,
             );
 

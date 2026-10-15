@@ -192,7 +192,7 @@ export const codeReviewConfigRemovePropertiesNotInType = (
         "reviewCadence",
         "baseBranches",
         "ignoredTitleKeywords",
-        "ideRulesSyncEnabled",
+        "repoInstructionsEnabled",
         "ignorePaths",
         "reviewOptions",
         "kodusConfigFileOverridesWebPreferences",

@@ -34,7 +34,7 @@ export default function CustomizeTeamPage() {
     const { teamId } = useSelectedTeamId();
     const { configValue } = useSuspenseGetCodeReviewParameter(teamId);
     const storedAgentInstructions =
-        configValue?.configs?.ideRulesSyncEnabled === true;
+        configValue?.configs?.repoInstructionsEnabled === true;
     const [useAgentInstructions, setUseAgentInstructions] = useState(
         storedAgentInstructions,
     );
@@ -133,7 +133,7 @@ export default function CustomizeTeamPage() {
             // Saved once at global level: every repository follows it unless
             // it sets its own value later in Settings.
             const result = await createOrUpdateCodeReviewParameter(
-                { ideRulesSyncEnabled: useAgentInstructions },
+                { repoInstructionsEnabled: useAgentInstructions },
                 teamId,
                 "global",
             );

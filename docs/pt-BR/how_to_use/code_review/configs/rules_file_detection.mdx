@@ -16,7 +16,7 @@ Para transformar uma convenção em uma regra de review aplicada, escreva-a como
 - **Durante o onboarding**, a etapa **Teach Kody how your team builds software** lista os arquivos de agentes de código encontrados em cada repositório selecionado e pergunta se o Kody deve usá-los. Fica desativado a menos que você ative.
 - **Depois**, escolha **Global** ou um repositório no seletor de escopo no topo do grupo **Code review**, abra **Kody Rules**, clique em **Configuration** e ative **Use coding-agent instructions in reviews**. O valor global é o padrão para todo repositório que não define o próprio.
 
-A configuração é armazenada como `ideRulesSyncEnabled` na configuração de code review (e no `kodus-config.yml`).
+A configuração é armazenada como `repoInstructionsEnabled` na configuração de code review (e no `kodus-config.yml`). A antiga `ideRulesSyncEnabled` não é mais lida, então um valor definido nela não ativa esta opção.
 
 ## Arquivos que o Kody lê
 

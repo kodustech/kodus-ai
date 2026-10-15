@@ -345,7 +345,7 @@ export class KodyRulesSyncService {
         try {
             // Coding-agent files (CLAUDE.md, .cursor/rules, ...) are not review
             // policy and are never converted; only Kody rule files sync, and
-            // they sync regardless of `ideRulesSyncEnabled`.
+            // they sync regardless of `repoInstructionsEnabled`.
             const ruleChanges = files.filter(
                 (f) =>
                     isKodyRuleFileSource(f.filename) ||

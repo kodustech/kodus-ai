@@ -25,11 +25,11 @@ describe('KodyRulesSyncService.syncRepositoryMain', () => {
 
     function createService(
         opts: {
-            ideRulesSyncEnabled?: boolean;
+            repoInstructionsEnabled?: boolean;
             fileContent?: string;
         } = {},
     ) {
-        const ideRulesSyncEnabled = opts.ideRulesSyncEnabled ?? false;
+        const repoInstructionsEnabled = opts.repoInstructionsEnabled ?? false;
         const fileContent =
             opts.fileContent ??
             ['---', 'title: Logging Rule', '---', 'Use log'].join('\n');
@@ -43,7 +43,7 @@ describe('KodyRulesSyncService.syncRepositoryMain', () => {
                     repositories: [
                         {
                             id: 'repo-1',
-                            configs: { ideRulesSyncEnabled },
+                            configs: { repoInstructionsEnabled },
                             directories: [
                                 {
                                     id: 'dir-1',

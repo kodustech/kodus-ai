@@ -16,7 +16,7 @@ Para que una convención sea una regla de revisión obligatoria, escríbela como
 - **Durante el onboarding**, el paso **Teach Kody how your team builds software** muestra los archivos para agentes de código encontrados en cada repositorio seleccionado y pregunta si Kody debe usarlos. Está desactivado a menos que lo actives.
 - **Más adelante**, elige **Global** o un repositorio en el selector de alcance en la parte superior del grupo **Code review**, abre **Kody Rules**, haz clic en **Configuration** y activa **Use coding-agent instructions in reviews**. El valor global es el predeterminado para todos los repositorios que no definan el suyo.
 
-La opción se guarda como `ideRulesSyncEnabled` en la configuración de revisión de código (y en `kodus-config.yml`).
+La opción se guarda como `repoInstructionsEnabled` en la configuración de revisión de código (y en `kodus-config.yml`). La antigua `ideRulesSyncEnabled` ya no se lee, así que un valor guardado allí no la activa.
 
 ## Archivos que lee Kody
 

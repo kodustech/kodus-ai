@@ -117,7 +117,7 @@ export type CodeReviewGlobalConfig = {
     codeReviewVersion?: "legacy" | "v2" | "v3-agent";
     /** Reviews read the repo's coding-agent instructions (CLAUDE.md,
      *  AGENTS.md, .cursor/rules). Never imports them as Kody Rules. */
-    ideRulesSyncEnabled: boolean;
+    repoInstructionsEnabled: boolean;
     v2PromptOverrides?: {
         categories?: {
             descriptions?: {

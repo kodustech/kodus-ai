@@ -31,7 +31,7 @@ const HELPER_PATH = path.resolve(
 const HELPER_SOURCE = fs.readFileSync(HELPER_PATH, "utf-8");
 
 const REQUIRED_WHITELIST_KEYS = [
-    "ideRulesSyncEnabled",
+    "repoInstructionsEnabled",
     "kodyRulesGeneratorEnabled",
     // Denylist of git reviewers to exclude from past-review learning. Must be
     // whitelisted or the picker's selection never reaches the backend.

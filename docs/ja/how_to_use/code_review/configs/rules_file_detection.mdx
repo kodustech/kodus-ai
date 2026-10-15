@@ -16,7 +16,7 @@ description: "チームがコーディングエージェント向けに書いた
 - **オンボーディング中**：**Teach Kody how your team builds software** ステップで、選択した各リポジトリで見つかったコーディングエージェント向けファイルが一覧表示され、Kody にそれらを使わせるかどうかを尋ねられます。オンにしない限りオフのままです。
 - **あとから**：サイドバーで、**Code review** グループ上部のスコープピッカーで **Global** またはリポジトリを選択し、**Kody Rules** を開いて **Configuration** をクリックし、**Use coding-agent instructions in reviews** をオンにします。Global の値は、独自の値を設定していないすべてのリポジトリのデフォルトになります。
 
-この設定は、コードレビュー設定（および `kodus-config.yml`）に `ideRulesSyncEnabled` として保存されます。
+この設定は、コードレビュー設定（および `kodus-config.yml`）に `repoInstructionsEnabled` として保存されます。以前の `ideRulesSyncEnabled` はもう読み取られないため、そこに設定した値でこの機能が有効になることはありません。
 
 ## Kody が読むファイル
 

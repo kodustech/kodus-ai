@@ -37,7 +37,7 @@ const context = {
         head: { ref: 'feature/x' },
         base: { ref: 'release/2.0' },
     },
-    codeReviewConfig: { ideRulesSyncEnabled: true },
+    codeReviewConfig: { repoInstructionsEnabled: true },
 } as any;
 
 describe('AgentReviewStage — repo instructions source branch', () => {
@@ -65,10 +65,10 @@ describe('AgentReviewStage — repo instructions source branch', () => {
     });
 
     it.each([
-        ['the repository did not opt in', { ideRulesSyncEnabled: false }],
+        ['the repository did not opt in', { repoInstructionsEnabled: false }],
         [
             'deep mode runs only category agents, which never render them',
-            { ideRulesSyncEnabled: true, reviewMode: 'deep' },
+            { repoInstructionsEnabled: true, reviewMode: 'deep' },
         ],
     ])('reads nothing when %s', async (_label, codeReviewConfig) => {
         const { stage, codeManagementService } = makeStage();

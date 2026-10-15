@@ -172,7 +172,7 @@ export class CodeReviewConfigDataDto {
     summary: ReviewSummaryDto;
 
     @ApiProperty()
-    ideRulesSyncEnabled: boolean;
+    repoInstructionsEnabled: boolean;
 
     @ApiProperty()
     kodyRulesGeneratorEnabled: boolean;

@@ -359,7 +359,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     /**
      * The repository's coding-agent instructions (CLAUDE.md, AGENTS.md,
      * .cursor/rules, ...) that govern the changed files, read from the PR's
-     * target branch when the repository opted in (`ideRulesSyncEnabled`). Never fails
+     * target branch when the repository opted in (`repoInstructionsEnabled`). Never fails
      * the review: a git host error just means the review runs without them.
      */
     private async resolveRepoInstructions(
@@ -368,7 +368,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         adaptiveProfile: { kind?: string; dropCallGraph?: boolean },
         prNumber: number,
     ): Promise<RepoInstructionsContext | undefined> {
-        const enabled = context.codeReviewConfig?.ideRulesSyncEnabled === true;
+        const enabled = context.codeReviewConfig?.repoInstructionsEnabled === true;
         const logMetadata = {
             organizationId: context.organizationAndTeamData?.organizationId,
             teamId: context.organizationAndTeamData?.teamId,

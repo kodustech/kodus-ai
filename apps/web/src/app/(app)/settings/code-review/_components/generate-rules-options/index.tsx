@@ -151,10 +151,10 @@ export const GenerateRulesOptions = () => {
     const [handleAgentInstructionsToggle, { loading: isLoadingAgentToggle }] =
         useAsyncAction(async () => {
             try {
-                const newValue = !config?.ideRulesSyncEnabled?.value;
+                const newValue = !config?.repoInstructionsEnabled?.value;
 
                 const mutationResult = await createOrUpdateCodeReviewParameter(
-                    { ideRulesSyncEnabled: newValue },
+                    { repoInstructionsEnabled: newValue },
                     teamId,
                     repositoryId,
                 );
@@ -245,13 +245,13 @@ export const GenerateRulesOptions = () => {
                                             Use coding-agent instructions in
                                             reviews
                                         </Section.Title>
-                                        {config?.ideRulesSyncEnabled && (
+                                        {config?.repoInstructionsEnabled && (
                                             <OverrideIndicator
                                                 initialState={
-                                                    config.ideRulesSyncEnabled
+                                                    config.repoInstructionsEnabled
                                                 }
                                                 currentValue={
-                                                    config.ideRulesSyncEnabled
+                                                    config.repoInstructionsEnabled
                                                         .value
                                                 }
                                                 handleRevert={
@@ -282,7 +282,7 @@ export const GenerateRulesOptions = () => {
                             <Switch
                                 decorative
                                 loading={isLoadingAgentToggle}
-                                checked={config?.ideRulesSyncEnabled?.value}
+                                checked={config?.repoInstructionsEnabled?.value}
                             />
                         </div>
                     </CardHeader>

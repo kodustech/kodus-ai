@@ -16,7 +16,7 @@ description: "让 Kody 读取团队为编码代理编写的指令(CLAUDE.md、AG
 - **在入门引导中**,**Teach Kody how your team builds software** 步骤会列出在每个所选代码库中找到的编码代理文件,并询问 Kody 是否应使用它们。除非您开启,否则它保持关闭。
 - **之后**,在侧边栏 **Code review** 分组顶部的范围选择器中选择 **Global** 或某个代码库,打开 **Kody Rules**,点击 **Configuration**,并开启 **Use coding-agent instructions in reviews**。全局值是所有未设置自身值的代码库的默认值。
 
-该设置以 `ideRulesSyncEnabled` 的形式存储在代码审查配置中(以及 `kodus-config.yml` 中)。
+该设置以 `repoInstructionsEnabled` 的形式存储在代码审查配置中(以及 `kodus-config.yml` 中)。旧的 `ideRulesSyncEnabled` 不再被读取,在其中设置的值不会开启此功能。
 
 ## Kody 读取的文件
 
