@@ -21,9 +21,7 @@
                                 "type": "string"
                             }
                         },
-                        "required": [
-                            "id"
-                        ]
+                        "required": ["id"]
                     }
                 },
                 {
@@ -68,10 +66,7 @@
                                 "type": "string"
                             }
                         },
-                        "required": [
-                            "title",
-                            "teamId"
-                        ]
+                        "required": ["title", "teamId"]
                     }
                 },
                 {
@@ -91,9 +86,7 @@
                                 "type": "string"
                             }
                         },
-                        "required": [
-                            "id"
-                        ]
+                        "required": ["id"]
                     }
                 },
                 {
@@ -110,17 +103,11 @@
                                 "type": "string"
                             }
                         },
-                        "required": [
-                            "issueId",
-                            "body"
-                        ]
+                        "required": ["issueId", "body"]
                     }
                 }
             ],
-            "extraWriteTools": [
-                "create_project",
-                "update_project"
-            ],
+            "extraWriteTools": ["create_project", "update_project"],
             "tasks": [
                 {
                     "id": "PLAT-41",
@@ -141,10 +128,7 @@
     },
     "expect": {
         "outcome": "validated",
-        "taskContains": [
-            "recalculated",
-            "rounded to two decimals"
-        ],
+        "taskContains": ["recalculated", "rounded to two decimals"],
         "checkPasses": false
     }
 }
