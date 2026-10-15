@@ -957,7 +957,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                             noteId: existingCommentData.noteId,
                             threadId: existingCommentData.threadId,
                         },
-                        undefined,
+                        platformType,
                     );
 
                 // #1877: when the stored note was deleted on the provider,
@@ -1009,7 +1009,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                         },
                         body: commentBody,
                     },
-                    undefined,
+                    platformType,
                 );
 
             if (
@@ -1246,7 +1246,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                 const updated =
                     await this.codeManagementService.updateSingleIssueComment(
                         updateParams,
-                        undefined,
+                        platformType,
                     );
                 if (updated?.id !== undefined && updated?.id !== null) {
                     const adoptedId = Number(updated.id);
@@ -1258,7 +1258,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             } else {
                 await this.codeManagementService.updateIssueComment(
                     updateParams,
-                    undefined,
+                    platformType,
                 );
             }
 
@@ -3150,7 +3150,7 @@ ${reviewOptions}
                     prNumber,
                     body: commentBody,
                 },
-                undefined,
+                platformType,
             );
 
         if (

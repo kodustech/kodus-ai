@@ -1,5 +1,6 @@
 import {
     CommitSchema,
+    DiscussionSchema,
     Gitlab,
     MergeRequestSchema,
     MergeRequestSchemaWithBasicLabels,
@@ -2968,9 +2969,14 @@ export class GitlabService implements Omit<
                         // return the raw response: the callers' NaN guard keeps
                         // the previous ids, and since the edit succeeded, the
                         // noteId we already hold is still the right target.
-                        const discussionShape = edited as {
-                            notes?: Array<{ id?: number | string }>;
-                        };
+                        // The SDK types editNote as a
+                        // MergeRequestDiscussionNoteSchema, but GitLab can
+                        // return the parent Discussion instead (its `id` is a
+                        // string hash and the edited note lives on `notes`).
+                        // Narrow through the SDK's own DiscussionSchema rather
+                        // than an ad-hoc shape, so a changed field is caught.
+                        const discussionShape =
+                            edited as unknown as DiscussionSchema;
                         if (Array.isArray(discussionShape?.notes)) {
                             const targetNote = discussionShape.notes.find(
                                 (note) =>
@@ -3007,7 +3013,11 @@ export class GitlabService implements Omit<
                 serviceName: 'GitlabService updateSingleIssueComment',
                 error: error,
                 metadata: {
-                    ...params,
+                    organizationAndTeamData: params.organizationAndTeamData,
+                    repositoryId: params.repository?.id,
+                    prNumber: params.prNumber,
+                    commentId: params.commentId,
+                    noteId: params.noteId,
                 },
             });
             throw error;
