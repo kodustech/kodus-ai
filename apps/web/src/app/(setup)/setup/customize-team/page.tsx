@@ -90,10 +90,17 @@ export default function CustomizeTeamPage() {
         !!teamId,
     );
 
-    const repositoriesWithAgentFiles =
-        safeArray<AgentInstructionFilesByRepository>(agentFiles).filter(
-            (repo) => repo.files.length > 0,
-        );
+    const listedRepositories =
+        safeArray<AgentInstructionFilesByRepository>(agentFiles);
+    const repositoriesWithAgentFiles = listedRepositories.filter(
+        (repo) => repo.files.length > 0,
+    );
+    const unavailableRepositories = listedRepositories.filter(
+        (repo) => repo.unavailable,
+    );
+    // The API checks at most 20 repositories (MAX_REPOSITORIES).
+    const hitRepositoryCap =
+        listedRepositories.length === 20 && selectedRepositories.size > 20;
 
     const highlightItems = [
         { label: "Bugs" },
@@ -275,22 +282,54 @@ export default function CustomizeTeamPage() {
                                     <Spinner className="size-3" />
                                     Looking for coding-agent files…
                                 </span>
-                            ) : repositoriesWithAgentFiles.length === 0 ? (
-                                <span>
-                                    No coding-agent files found in the selected
-                                    repositories.
-                                </span>
                             ) : (
                                 <>
-                                    <span>Files Kody would read:</span>
-                                    {repositoriesWithAgentFiles.map((repo) => (
-                                        <span key={repo.repositoryId}>
-                                            <span className="text-text-primary font-medium">
-                                                {repo.repositoryName}
-                                            </span>
-                                            : {repo.files.join(", ")}
+                                    {repositoriesWithAgentFiles.length === 0 ? (
+                                        <span>
+                                            No coding-agent files found in the
+                                            selected repositories.
                                         </span>
-                                    ))}
+                                    ) : (
+                                        <>
+                                            <span>
+                                                Files Kody reads when they cover
+                                                the changed files:
+                                            </span>
+                                            {repositoriesWithAgentFiles.map(
+                                                (repo) => (
+                                                    <span
+                                                        key={repo.repositoryId}>
+                                                        <span className="text-text-primary font-medium">
+                                                            {
+                                                                repo.repositoryName
+                                                            }
+                                                        </span>
+                                                        :{" "}
+                                                        {repo.files.join(", ")}
+                                                    </span>
+                                                ),
+                                            )}
+                                        </>
+                                    )}
+                                    {unavailableRepositories.length > 0 && (
+                                        <span>
+                                            Couldn&apos;t check{" "}
+                                            {unavailableRepositories
+                                                .map(
+                                                    (repo) =>
+                                                        repo.repositoryName,
+                                                )
+                                                .join(", ")}
+                                            .
+                                        </span>
+                                    )}
+                                    {hitRepositoryCap && (
+                                        <span>
+                                            Only the first{" "}
+                                            {listedRepositories.length}{" "}
+                                            repositories were checked.
+                                        </span>
+                                    )}
                                 </>
                             )}
                         </div>
