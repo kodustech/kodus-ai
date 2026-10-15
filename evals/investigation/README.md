@@ -89,6 +89,16 @@ it (`checkTypes`, `findNearestProjectFile`, `findFile`'s fd/find path) are
 missing: a smaller tool set than production's, shown as `sandboxExec: false` in
 each row. Not a production-parity run until that changes.
 
+### With the coding-agent instructions setting on (`RECALL_REPO_INSTRUCTIONS`)
+
+`RECALL_REPO_INSTRUCTIONS=<file>` gives each case the instructions a review
+would read with `repoInstructionsEnabled` on; without it every case runs off.
+`build-repo-instructions.ts` writes that file with the production collector:
+`--at=base` reads each PR's base commit, `--at=pinned` reads the commits in
+`repo-instructions-pins.json` (the ones the #1823 on/off check used). The
+header of the script has the commands. Compare an on run with an off run of the
+same commit, per case, against the noise between two off runs.
+
 ### Execution-based replays (`extract-replay-from-trace.js`)
 
 The per-PR datasets are built from **real finder executions**, not a fabricated diff
