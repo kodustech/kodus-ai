@@ -392,6 +392,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             return undefined;
         }
 
+        // Deep mode dispatches only the category agents, which never render
+        // the instructions block.
+        if (context.codeReviewConfig?.reviewMode === 'deep') {
+            this.logger.log({
+                message: `[repo-instructions] skipped for PR#${prNumber}: deep review mode does not read them`,
+                context: this.stageName,
+                metadata: logMetadata,
+            });
+            return undefined;
+        }
+
         const organizationAndTeamData = context.organizationAndTeamData;
         const repository = {
             id: String(context.repository?.id ?? ''),

@@ -64,6 +64,29 @@ describe('AgentReviewStage — repo instructions source branch', () => {
         expect(read.pullRequest.base.ref).toBe('release/2.0');
     });
 
+    it.each([
+        ['the repository did not opt in', { ideRulesSyncEnabled: false }],
+        [
+            'deep mode runs only category agents, which never render them',
+            { ideRulesSyncEnabled: true, reviewMode: 'deep' },
+        ],
+    ])('reads nothing when %s', async (_label, codeReviewConfig) => {
+        const { stage, codeManagementService } = makeStage();
+
+        const result = await (stage as any).resolveRepoInstructions(
+            { ...context, codeReviewConfig },
+            [{ filename: 'src/a.ts' }],
+            { kind: 'full' },
+            7,
+        );
+
+        expect(result).toBeUndefined();
+        expect(codeManagementService.getRepositoryAllFiles).not.toHaveBeenCalled();
+        expect(
+            codeManagementService.getRepositoryContentFile,
+        ).not.toHaveBeenCalled();
+    });
+
     it('reads nothing when the target branch is unknown', async () => {
         const { stage, codeManagementService } = makeStage();
 
