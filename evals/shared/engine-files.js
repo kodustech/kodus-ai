@@ -30,6 +30,11 @@ const NIGHTLY_EXTRA_FILES = [
 const NIGHTLY_EVALS = {
     'evals/investigation/run-recall.js': ['evals/investigation/targets.json'],
     'evals/kody-rules/real-agent.js': ['evals/kody-rules/kody-targets.json', 'evals/kody-rules/nightly-verdict.js'],
+    // The evals measured through the shared job (evals/nightly-evals.js), with
+    // the verdict and the list that job reads.
+    ...Object.fromEntries(
+        require('../nightly-evals').NIGHTLY_EVALS.map((e) => [e.run[0], [...e.files, 'evals/shared/nightly-verdict.js', 'evals/nightly-evals.js']]),
+    ),
 };
 const FINDER_RUNNER = 'evals/investigation/run-recall.js';
 

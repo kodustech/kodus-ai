@@ -1,0 +1,13 @@
+{
+    "__doc": [
+        "Floors per model for the share of replies handled right on cases.json (run.js --gate), as ratios.",
+        "floor = observed - 2 binomial SE over the 70 conversations, rounded down, like evals/kody-rules/kody-targets.json.",
+        "deepseek-v4-flash@fireworks (the nightly model): calibrated 2026-10-14 from 3 runs on one commit. All three",
+        "answered 68 of 70 and missed the same two (rhetorical-comment, pr-template-text, both expected respond); no",
+        "reply meant for someone else was answered. Run-to-run noise was zero, so the binomial SE is the margin.",
+        "RATCHET: when a PR moves this on purpose, recalibrate here with two runs as evidence."
+    ],
+    "models": {
+        "deepseek-v4-flash@fireworks": { "floor": 0.93, "observed": 0.971 }
+    }
+}
