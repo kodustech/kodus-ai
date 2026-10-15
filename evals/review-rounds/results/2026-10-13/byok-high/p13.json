@@ -1,0 +1,867 @@
+{
+ "model": "deepseek-v4-flash@fireworks",
+ "byokReasoning": "high",
+ "judge": "gemini-3-flash-preview",
+ "judgeReasoningEffort": null,
+ "reps": 5,
+ "engine": {
+  "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+  "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+ },
+ "startedAt": "2026-10-13T21:44:50.742Z",
+ "updatedAt": "2026-10-13T23:03:00.358Z",
+ "complete": true,
+ "selectedCases": [
+  "P13-rule-log-operation-still-missing",
+  "P13-rule-log-operation-still-missing-control",
+  "P14-rule-mock-undefined-moved",
+  "P14-rule-mock-undefined-moved-control",
+  "P15-rule-nth-called-listed-site",
+  "P15-rule-nth-called-listed-site-control",
+  "P16-rule-no-overwrite-listed-site",
+  "P16-rule-no-overwrite-listed-site-control",
+  "P17-rule-partial-fixture-label-comment",
+  "P17-rule-partial-fixture-label-comment-control"
+ ],
+ "summary": {
+  "measured": 43,
+  "infra": 7,
+  "problems": {
+   "unverified-shipped (#2040)": {
+    "n": 0,
+    "violations": 0,
+    "rate": null
+   },
+   "repeat-of-sent": {
+    "n": 19,
+    "violations": 0,
+    "rate": 0
+   },
+   "revision-unlinked (#2039/#2020)": {
+    "n": 0,
+    "violations": 0,
+    "rate": null
+   },
+   "refuted-shipped (control)": {
+    "n": 0,
+    "violations": 0,
+    "rate": null
+   },
+   "true-bug-missed (guard)": {
+    "n": 47,
+    "violations": 6,
+    "rate": 0.128
+   },
+   "index-reference (#2039)": {
+    "n": 62,
+    "violations": 0,
+    "rate": 0
+   }
+  },
+  "byCase": {
+   "P13-rule-log-operation-still-missing · log-operation-repeat [not_deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 0
+   },
+   "P13-rule-log-operation-still-missing · success-log-operation-new-site [deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 5
+   },
+   "P13-rule-log-operation-still-missing-control · log-operation-control [deliver]": {
+    "pass": 1,
+    "n": 4,
+    "delivered": 1
+   },
+   "P13-rule-log-operation-still-missing-control · success-log-operation-new-site [deliver]": {
+    "pass": 4,
+    "n": 4,
+    "delivered": 4
+   },
+   "P14-rule-mock-undefined-moved · mock-undefined-repeat [not_deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 0
+   },
+   "P14-rule-mock-undefined-moved-control · mock-undefined-control [deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 5
+   },
+   "P15-rule-nth-called-listed-site · audit-nth-called-repeat [not_deliver]": {
+    "pass": 1,
+    "n": 1,
+    "delivered": 0
+   },
+   "P15-rule-nth-called-listed-site · opt-out-nth-called-new-site [deliver]": {
+    "pass": 0,
+    "n": 1,
+    "delivered": 0
+   },
+   "P15-rule-nth-called-listed-site-control · audit-nth-called-control [deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 5
+   },
+   "P15-rule-nth-called-listed-site-control · opt-out-nth-called-new-site [deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 5
+   },
+   "P16-rule-no-overwrite-listed-site · snapshot-overwrite-repeat [not_deliver]": {
+    "pass": 3,
+    "n": 3,
+    "delivered": 0
+   },
+   "P16-rule-no-overwrite-listed-site · merge-overwrite-new-site [deliver]": {
+    "pass": 1,
+    "n": 3,
+    "delivered": 1
+   },
+   "P16-rule-no-overwrite-listed-site-control · snapshot-overwrite-control [deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 5
+   },
+   "P16-rule-no-overwrite-listed-site-control · merge-overwrite-new-site [deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 5
+   },
+   "P17-rule-partial-fixture-label-comment · partial-fixture-comment-repeat [not_deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 0
+   },
+   "P17-rule-partial-fixture-label-comment-control · partial-fixture-comment-control [deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 5
+   }
+  }
+ },
+ "rows": [
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 1,
+   "case": "P14-rule-mock-undefined-moved",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 26451,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [],
+   "claims": [
+    {
+     "id": "mock-undefined-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": false,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": null,
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 2,
+   "case": "P14-rule-mock-undefined-moved",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 54855,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [],
+   "claims": [
+    {
+     "id": "mock-undefined-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": false,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": null,
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 3,
+   "case": "P14-rule-mock-undefined-moved",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 51857,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [],
+   "claims": [
+    {
+     "id": "mock-undefined-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": false,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": null,
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 4,
+   "case": "P14-rule-mock-undefined-moved",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 60438,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [],
+   "claims": [
+    {
+     "id": "mock-undefined-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": false,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": null,
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 5,
+   "case": "P14-rule-mock-undefined-moved",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 34834,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [],
+   "claims": [
+    {
+     "id": "mock-undefined-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": false,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": null,
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 1,
+   "case": "P14-rule-mock-undefined-moved-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 28682,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/mocks/orders.mock.ts",
+     "line": 20,
+     "severity": "medium",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-mock-null-not-undefined"
+     ],
+     "marked": false,
+     "text": "Because JSON drops `undefined` during serialization, code tested against this mock never encounters the `null` the real API sends for an undispatched order. Set `dispatchedAt` to `null`, as `cartOrder` already does for its absent fields."
+    }
+   ],
+   "claims": [
+    {
+     "id": "mock-undefined-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "medium",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 2,
+   "case": "P14-rule-mock-undefined-moved-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 49180,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/mocks/orders.mock.ts",
+     "line": 20,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-mock-null-not-undefined"
+     ],
+     "marked": false,
+     "text": "Because JSON has no `undefined`, `dispatchedAt: undefined` is dropped entirely when the mock is serialized, so a strict `=== null` check or a `'dispatchedAt' in order` check behaves differently against this mock than against the real API's `null` (which `cartOrder` on line 10 already uses correctly). Change the line to `dispatchedAt: null,` and apply the same fix to the pre-existing `trackingNumber: undefined` on the next line."
+    }
+   ],
+   "claims": [
+    {
+     "id": "mock-undefined-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 3,
+   "case": "P14-rule-mock-undefined-moved-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 48272,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/mocks/orders.mock.ts",
+     "line": 20,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-mock-null-not-undefined"
+     ],
+     "marked": false,
+     "text": "Because JSON has no `undefined`, `pendingOrder` with `dispatchedAt: undefined` never exposes the `null` an undispatched order actually carries on the wire, and under strict optional-property settings `undefined` may not even be assignable to the response type. Set `dispatchedAt` to `null` so the mock matches the API payload."
+    }
+   ],
+   "claims": [
+    {
+     "id": "mock-undefined-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 4,
+   "case": "P14-rule-mock-undefined-moved-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 45309,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/mocks/orders.mock.ts",
+     "line": 20,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-mock-null-not-undefined"
+     ],
+     "marked": false,
+     "text": "Because JSON has no `undefined`, this fixture never exposes the `null` that the real API returns for an absent timestamp, so code tested against it misses production behavior. Set `pendingOrder.dispatchedAt` to `null`, matching how `cartOrder` handles its absent `dispatchedAt` and `trackingNumber`."
+    }
+   ],
+   "claims": [
+    {
+     "id": "mock-undefined-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 5,
+   "case": "P14-rule-mock-undefined-moved-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 27792,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/mocks/orders.mock.ts",
+     "line": 20,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-mock-null-not-undefined"
+     ],
+     "marked": false,
+     "text": "Because JSON has no `undefined`, `dispatchedAt` vanishes when the `pendingOrder` mock is serialized, so code exercised against it never meets the `null` the real API sends for an absent dispatch date. Set `dispatchedAt` to `null`, matching the pattern already used in `cartOrder`, so the mock mirrors the API's serialization."
+    }
+   ],
+   "claims": [
+    {
+     "id": "mock-undefined-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 1,
+   "case": "P17-rule-partial-fixture-label-comment",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 32291,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [],
+   "claims": [
+    {
+     "id": "partial-fixture-comment-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": false,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": null,
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 2,
+   "case": "P17-rule-partial-fixture-label-comment",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 5165,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [],
+   "claims": [
+    {
+     "id": "partial-fixture-comment-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": false,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": null,
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 3,
+   "case": "P17-rule-partial-fixture-label-comment",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 29300,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [],
+   "claims": [
+    {
+     "id": "partial-fixture-comment-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": false,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": null,
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 4,
+   "case": "P17-rule-partial-fixture-label-comment",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 3953,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [],
+   "claims": [
+    {
+     "id": "partial-fixture-comment-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": false,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": null,
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 5,
+   "case": "P17-rule-partial-fixture-label-comment",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 9864,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [],
+   "claims": [
+    {
+     "id": "partial-fixture-comment-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": false,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": null,
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 1,
+   "case": "P17-rule-partial-fixture-label-comment-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 17731,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "spec/billing/late_fee_calculator_spec.rb",
+     "line": 17,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-partial-fixture-justified"
+     ],
+     "marked": false,
+     "text": "The `overdue_invoice` let builds an `Invoice` with only `amount_cents` and `due_on`, while the `# fixture` comment merely labels it, so Rule 1's requirement for a partial fixture to explain why omitted attributes do not matter is unmet and readers cannot tell whether the omissions are deliberate. Replace `# fixture` with a comment stating that the calculator reads only `amount_cents` and `due_on`, so the omitted `Invoice` attributes (`id`, `customer_id`, `currency`, `status`) are irrelevant to these examples."
+    }
+   ],
+   "claims": [
+    {
+     "id": "partial-fixture-comment-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 2,
+   "case": "P17-rule-partial-fixture-label-comment-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 21077,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "spec/billing/late_fee_calculator_spec.rb",
+     "line": 17,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-partial-fixture-justified"
+     ],
+     "marked": false,
+     "text": "The `# fixture` comment on the `overdue_invoice` fixture only labels it, so it fails rule [1]'s requirement that a comment directly above a partial fixture explain why the omitted attributes do not matter. Replace it with a comment stating that the calculator only reads `amount_cents` and `due_on` (and the day count derived from them), so `id`, `customer_id`, `currency` and `status` never affect the expectations."
+    }
+   ],
+   "claims": [
+    {
+     "id": "partial-fixture-comment-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 3,
+   "case": "P17-rule-partial-fixture-label-comment-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 17912,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "spec/billing/late_fee_calculator_spec.rb",
+     "line": 17,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-partial-fixture-justified"
+     ],
+     "marked": false,
+     "text": "The `# fixture` comment above `overdue_invoice` only labels the fixture and leaves the omitted `id`, `customer_id`, `currency`, and `status` attributes unexplained, so it does not satisfy rule [1] for partial fixtures. Replace it with a justification stating that `Billing::LateFeeCalculator` only reads `amount_cents` and `due_on`, making the other `Invoice.new` fields irrelevant to these assertions."
+    }
+   ],
+   "claims": [
+    {
+     "id": "partial-fixture-comment-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 4,
+   "case": "P17-rule-partial-fixture-label-comment-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 11855,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "spec/billing/late_fee_calculator_spec.rb",
+     "line": 17,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-partial-fixture-justified"
+     ],
+     "marked": false,
+     "text": "Rule [1] requires a comment directly above a partial fixture explaining why the omitted `Invoice` attributes (`id`, `customer_id`, `currency`, `status`) do not matter to the tests that use it, and the label-only `# fixture` comment does not satisfy that. Replace `# fixture` with a comment stating that only `amount_cents` and `due_on` affect the late-fee calculation, so the remaining attributes are irrelevant for these examples."
+    }
+   ],
+   "claims": [
+    {
+     "id": "partial-fixture-comment-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 5,
+   "case": "P17-rule-partial-fixture-label-comment-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 20777,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "spec/billing/late_fee_calculator_spec.rb",
+     "line": 17,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-partial-fixture-justified"
+     ],
+     "marked": false,
+     "text": "The `# fixture` comment above `overdue_invoice` only labels the fixture and does not explain why the omitted `id`, `customer_id`, `currency`, and `status` attributes are irrelevant, so it fails Rule 1's requirement to justify a partial fixture. Replace it with a comment such as `# Only amount_cents and due_on affect the fee; the calculator ignores the other attributes.`"
+    }
+   ],
+   "claims": [
+    {
+     "id": "partial-fixture-comment-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  }
+ ],
+ "note": "P13 (spec fixed later), P15 and P16 (shard timeouts) dropped: see re-p13.json, re-p15.json, re-p16.json"
+}

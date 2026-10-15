@@ -411,7 +411,17 @@ function matchByMessage(lower: string): LlmErrorCategory {
         // 502/503 status phrases: all that is left of the status once the
         // review path has rebuilt the error from its text.
         lower.includes('service unavailable') ||
-        lower.includes('bad gateway')
+        lower.includes('bad gateway') ||
+        // More 5xx phrasings, the text-only safety net for an upstream outage
+        // whose HTTP status never reached the classifier (a passthrough or a
+        // RetryError whose embedded text carries no status field). The real
+        // status now rides in via lastError (#1875), so a *bare* 5xx digit in
+        // a message body is deliberately not read as a status: a permanent
+        // 400/422 body can carry one (`max_tokens must be <= 503`,
+        // `530 credits remaining`, `id 503-abc`) and must not bill the BYOK
+        // fallback (#1898 review).
+        lower.includes('gateway timeout') ||
+        lower.includes('internal server error')
     ) {
         return LlmErrorCategory.TRANSIENT;
     }

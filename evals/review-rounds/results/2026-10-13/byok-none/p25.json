@@ -1,0 +1,1180 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:31:35.001Z",
+  "updatedAt": "2026-10-13T22:26:23.982Z",
+  "complete": true,
+  "selectedCases": [
+    "P25-casefold-offsets-on-original",
+    "P25-casefold-offsets-on-original-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 15,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 15,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P25-casefold-offsets-on-original · highlight-offsets-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P25-casefold-offsets-on-original · page-off-by-one-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P25-casefold-offsets-on-original-control · highlight-offsets-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P25-casefold-offsets-on-original-control · page-off-by-one-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 167568,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: `page_of` computes `start = page * per_page` while its docstring states `page` comes from `?page=` and \"starts at 1\", so the function is 0-based but its caller-facing contract is 1-based. WHY: a request for `?page=1` returns `results[20:40]`, silently skipping the first page of results, and `?page=0` returns the first page — every page is off by one. HOW: convert the 1-based page to a 0-based offset, e.g. `start = (page - 1) * per_page`, and guard against `page < 1`.",
+          "keep": true,
+          "rationale": "The docstring explicitly states `page` comes from `?page=` and \"starts at 1\", but the body computes `start = page * per_page`, which is a 0-based offset. Following the documented contract, `?page=1` returns `results[20:40]` (skipping the first page) and `?page=0` returns the first page — a genuine off-by-one in behavior, not a pure documentation/style nit. No guard against `page < 1` exists either. The claim matches the actual code (highlight.py:39-40) and is not covered by any PreviousReviewDecisions entry (which concern casefold offsets and CSV escaping). Cannot refute.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 39,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `page_of` computes `start = page * per_page` despite the docstring saying `page` starts at 1, every page is off by one: `?page=1` returns `results[20:40]` and skips the first page, while `?page=0` returns the first page. Convert the 1-based page to a 0-based offset, for example `start = (page - 1) * per_page`, and guard against `page < 1`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 373488,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of computes `start = page * per_page` although its docstring says the page number comes from ?page= and starts at 1. WHY: with a 1-based page, page=1 returns results[20:40], so the first page of results is unreachable and every page is shifted by one (the caller's page 1 shows the second page). HOW: use the 1-based offset.",
+          "keep": true,
+          "rationale": "page_of's docstring documents a 1-based page, but the code uses start = page * per_page, a 0-based offset, so page=1 returns results[20:40] and the first page is unreachable. No callers in the repo contradict the documented contract, and the earlier decisions concern casefold offsets and CSV escaping, not paging. The off-by-one produces a concrete wrong result and cannot be refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page",
+                "glob": "*.py"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 39,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `page_of` treats `page` as 0-based while the `?page=` parameter is 1-based, `page=1` returns `results[20:40]`, making the first page unreachable and shifting every page by one. Compute the offset as `start = (page - 1) * per_page` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 378180,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of computes start = page * per_page, but its docstring states the page starts at 1. WHY: with page=1 the function returns results[20:40], silently skipping the first 20 results and serving the second page as page 1 (page 0 returns the real first page), so pagination is off by one and the first page is unreachable. HOW: use start = (page - 1) * per_page.",
+          "keep": true,
+          "rationale": "The cited code matches the claim: the docstring states page starts at 1, but start = page * per_page yields zero-based pagination. page=1 returns results[20:40], skipping the first page, and page 0 returns the real first page — a genuine off-by-one wrong-result bug. The finding is not covered by any previous review decision (those concern highlight casefold offsets and CSV escaping). No refuting evidence found.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of|page\\b",
+                "path": "catalog/search"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "\\?page=|\\bpage\\b",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 37,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`page_of` computes `start = page * per_page` even though its docstring states the page starts at 1, so `page=1` returns `results[20:40]` and silently skips the first 20 results, making the real first page reachable only as `page=0` and leaving pagination off by one. Use `start = (page - 1) * per_page` so `page=1` returns the first page."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 527637,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of documents that `page` starts at 1 but computes the slice offset as `page * per_page`, so page 1 returns results[20:40] instead of results[0:20]. WHY: the first page of results is silently skipped (and its items are unreachable for every page value), producing wrong paginated output. HOW: use a 1-based offset: `start = (page - 1) * per_page`.",
+          "keep": true,
+          "rationale": "Confirmed: page_of's docstring states page is 1-based, but start = page * per_page makes page=1 return results[20:40], skipping the first page and making results[0:20] unreachable for every page value. No caller pre-adjusts page (grep shows only the definition). This is a real wrong-result bug, distinct from PreviousDecision #1 (casefold offset drift in highlight/snippet).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 39,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The first page is silently skipped and its items are unreachable for every `page` value, because `page` starts at 1 while the offset uses `page * per_page`, so page 1 returns `results[20:40]` instead of `results[0:20]`. Use a 1-based offset with `start = (page - 1) * per_page`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 393897,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of computes start = page * per_page while its docstring states the page number starts at 1, making the slice 1-based-off. WHY: for page=1 (the first page requested) it returns results[20:40], so the first page of results is never shown and the final page is silently dropped/empty. HOW: use the 1-based offset (page - 1) * per_page (and guard page < 1 if the query param can be 0 or negative).",
+          "keep": true,
+          "rationale": "page_of's docstring states the page is 1-based, but start = page * per_page yields results[20:40] for page=1, so the first 20 results are skipped and the first page is never returned. There are no callers that could normalize the page index, and no guard prevents it, so the off-by-one is real. The prior review decisions (casefold offsets in highlight, CSV escaping in export.ts) are unrelated problems, not a repeat of this one.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page",
+                "glob": "*.py"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 37,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `page_of` computes `start = page * per_page` while its docstring documents 1-based pages, `page=1` returns `results[20:40]`, so the first page of results is never shown and the final page is silently dropped or empty. Compute the offset as `max(0, page - 1) * per_page` so the slice matches the documented 1-based numbering and cannot go negative."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P25-casefold-offsets-on-original-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 122515,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of() is documented as 1-indexed but computes `start = page * per_page`, which is 0-indexed. WHY: for `page=1` it returns `results[20:40]`, silently skipping the entire first page of results, and any page N is off by one full page. HOW: convert the 1-based page to a 0-based offset and guard non-positive values.",
+          "keep": true,
+          "rationale": "Confirmed: the docstring states page is 1-indexed (?page= starts at 1), but start = page * per_page treats it as 0-indexed, so page=1 returns results[20:40] and skips the entire first page. No non-positive guard exists. The bug is real and independent of the earlier CSV-injection suggestion on this PR.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of\\("
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: highlight() computes `start`/`end` on `text.casefold()` but slices the original `text`, and `casefold()` is not length-preserving (e.g. \"ß\".casefold()==\"ss\", \"İ\".casefold() has length 2). WHY: any expanding character before or inside the match shifts the offsets, so the wrong substring gets wrapped — e.g. text=\"Straße Haus\", term=\"HAUS\" yields `start=8,end=12` and wraps `\"aus\"` as `<mark>aus</mark>` instead of `\"Haus\"`. HOW: locate the match with a case-insensitive regex so indices stay in the original string's coordinate space.",
+          "keep": true,
+          "rationale": "Confirmed technically correct. `highlight()` computes offsets on `text.casefold()` but slices the original `text`. casefold() is not length-preserving (`ß`→`ss`, `İ`→length-2), so expanding characters before/inside a match shift offsets. Verified the example: \"Straße Haus\".casefold()=\"strasse haus\", find(\"haus\")=8, end=12, and text[8:12]=\"aus\", so `<mark>aus</mark>` is wrapped instead of \"Haus\". The described failure path is real and reachable via the only caller snippet(). The sole PreviousReviewDecisions entry is about CSV escaping in src/reports/export.ts — a different file and failure — so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "highlight\\("
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `casefold()` is not length-preserving, any expanding character before or inside a match shifts the offsets and wraps the wrong substring — for `text=\"Straße Haus\"` and `term=\"HAUS\"`, `start=8,end=12` wraps `\"aus\"` as `<mark>aus</mark>` instead of `\"Haus\"`. Locate the match with a case-insensitive regex so indices stay in the original string's coordinate space."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "catalog/search/highlight.py",
+          "line": 37,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`page_of()` is documented as 1-indexed but computes `start = page * per_page`, so `page=1` returns `results[20:40]` and silently skips the entire first page of results, with any page N off by one full page. Convert the 1-based page to a 0-based offset and guard non-positive values."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P25-casefold-offsets-on-original-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 358805,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: highlight() takes the match offset from `folded = text.casefold()` but slices the original `text` with it, and casefold() can change string length (e.g. 'ß'->'ss'). WHY: any length-expanding character before the match shifts the index, so the wrong region is wrapped — e.g. text='Straße foo', term='foo' yields 'Straße f<mark>oo</mark>' instead of highlighting 'foo'. HOW: derive the match position from the original string, or map the folded index back to text before slicing (e.g. build the folded string with an index map, or locate the match in `text` directly).",
+          "keep": true,
+          "rationale": "Confirmed: Python's str.casefold() is length-changing for characters like 'ß'->'ss'. `folded.find(term.casefold())` yields an index in the folded string, but lines 17-21 slice the ORIGINAL `text` with that index. For text='Straße foo', term='foo': folded='strasse foo' gives start=8, but in text the match starts at index 7, so the code produces 'Straße f<mark>oo</mark>' — the wrong region. The root cause and failure path are both factually correct. The lone PreviousReviewDecision concerns CSV escaping in export.ts, a different file/operation, so it does not resolve this finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of() computes `start = page * per_page` for a 1-based page while its docstring states page starts at 1. WHY: page=1 returns items 20-39 instead of 0-19, so every page is off by one and the first page of results is unreachable from ?page=1. HOW: use `start = (page - 1) * per_page` (guarding page < 1).",
+          "keep": true,
+          "rationale": "The cited code contradicts its own documented contract. The docstring on line 38 explicitly states the page comes from ?page= and 'starts at 1', yet line 39 computes `start = page * per_page`. With per_page=20, page=1 yields start=20 and returns results[20:40], so the first 20 results (indices 0-19) are unreachable and every page is off by one. This is a concrete wrong-result bug (off-by-one pagination), not style or documentation: for a 1-based page the correct start is (page-1)*per_page. No caller in the repo contradicts the documented 1-based contract, so the mismatch stands and I cannot refute it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of\\(",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of|page=",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of|per_page"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `casefold()` can change string length, any length-expanding character before the match (such as 'ß' becoming 'ss') shifts the offset, so the wrong region is wrapped — `text='Straße foo'` with `term='foo'` yields 'Straße f<mark>oo</mark>' instead of highlighting 'foo'. Derive the match position from the original string, or map the folded index back to `text` before slicing, for example by building the folded string with an index map or locating the match in `text` directly."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "catalog/search/highlight.py",
+          "line": 39,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Since `page` comes from `?page=` and starts at 1, `start = page * per_page` skips the first page, so `page=1` returns items 20-39 instead of 0-19 and the first page of results is unreachable. Compute `start = (page - 1) * per_page` while guarding against `page < 1`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P25-casefold-offsets-on-original-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 525516,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: `start` is an index into `folded = text.casefold()` but is used to slice the original `text`, and `end = start + len(term.casefold())` mixes a folded length with an unfolded string. WHY: when a character's casefold changes length (e.g. 'ß' → 'ss'), the marked region is shifted and over-long: highlight(\"aßb\", \"ß\") returns \"a<mark>ßb</mark>\" instead of \"a<mark>ß</mark>b\"; the pre-PR lower()-based code was correct for this input. HOW: locate the match on the original text and slice with its own offsets, e.g. `m = re.search(re.escape(term), text, re.IGNORECASE)` then use `m.start()`/`m.end()` for the slice bounds.",
+          "keep": true,
+          "rationale": "Confirmed. `start` is an offset into `text.casefold()` but slices the original `text`, and `end` adds the folded length of `term`. Since casefold can change length ('ß'→'ss'), the marked region is shifted and over-long: highlight(\"aßb\",\"ß\") → \"a<mark>ßb</mark>\" instead of \"a<mark>ß</mark>b\". The pre-PR lower()-based code (where 'ß'.lower()=='ß', length 1) was correct for this input. No guard prevents it, and the unrelated PreviousReviewDecision (CSV escaping in export.ts) does not cover this problem.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: `start = page * per_page` computes a 0-based offset even though the docstring states `page` comes from `?page=` and starts at 1. WHY: the first page requested with page=1 returns results[20:40], so the first 20 results are never shown and every page is shifted by one. HOW: compute the offset as `start = (page - 1) * per_page` and guard against page < 1.",
+          "keep": true,
+          "rationale": "Line 39 computes a 0-based offset (start = page * per_page) while the docstring on line 38 states page starts at 1. With page=1, per_page=20, start=20, returning results[20:40] and skipping the first 20 results. The finding's root cause and failure path are factually correct and match the code.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 39,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `start = page * per_page` is 0-based while `page` comes from `?page=` and starts at 1, the first page returns `results[20:40]`, so the first 20 results are never shown and every page is shifted by one. Compute `start = (page - 1) * per_page` and guard against `page < 1`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "catalog/search/highlight.py",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `start` indexes `folded = text.casefold()` but slices the original `text`, and `end` mixes a folded length with an unfolded string, inputs where casefolding changes length (e.g. 'ß' → 'ss') shift and over-extend the marked region, so `highlight(\"aßb\", \"ß\")` returns `\"a<mark>ßb</mark>\"` instead of `\"a<mark>ß</mark>b\"`. Locate the match on the original text and slice with its own offsets, e.g. `m = re.search(re.escape(term), text, re.IGNORECASE)` using `m.start()` and `m.end()`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P25-casefold-offsets-on-original-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 278214,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of computes start = page * per_page even though its own docstring states page starts at 1. WHY: for page=1 the slice starts at index 20, so the first 20 results are never returned and every page is shifted by one (page N returns page N+1's rows), silently dropping results. HOW: compute the offset for 1-based pages: start = (page - 1) * per_page.",
+          "keep": true,
+          "rationale": "The code literally computes start = page * per_page (line 39) while its own docstring (line 38) states page comes from ?page= and starts at 1. For page=1 the slice begins at index 20, dropping the first per_page results and shifting every page by one. The claim is factually accurate and no caller or guard refutes it; the only prior review decision concerns CSV export in an unrelated file. Off-by-one data loss is a real behavior bug, not style.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 25,
+                "endLine": 55
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of|page",
+                "excludeTests": true,
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: start/end are offsets into the casefolded string (folded = text.casefold(), folded.find(...), start + len(term.casefold())) but are used to slice the original text. WHY: casefold() can change string length (e.g. 'ß'->'ss'), so the offsets no longer line up with text: for text='ßx' and term='x', folded='ssx' gives start=2, end=3, and text[:2]+'<mark>'+text[2:3] yields 'ßx<mark></mark>' — the match is not highlighted and an empty <mark> is emitted (wrong output). Switching from lower() to casefold() makes length-changing folds much more likely, so this is newly reachable. HOW: find the match position on the original text using a fold that preserves indices, or locate the match with a regex on text (re.search(re.escape(term), text, re.IGNORECASE)) as snippet() does, and slice text with match.start()/match.end().",
+          "keep": true,
+          "rationale": "Verified in catalog/search/highlight.py: start/end are derived from text.casefold() but used to index the original text. casefold() can change length ('ß'->'ss'), so for text='ßx', term='x' the code yields start=2, end=3 and outputs 'ßx<mark></mark>' — match not highlighted plus an empty <mark>. Reachable via snippet(). Not related to the previous CSV-injection decision.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "highlight\\(",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 37,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `page_of` computes `start = page * per_page` despite its docstring stating `page` starts at 1, `page=1` slices from index 20, so the first 20 results are never returned and every page N returns page N+1's rows, silently dropping results. Compute the offset for 1-based pages with `start = (page - 1) * per_page`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "catalog/search/highlight.py",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The offsets come from the casefolded string but are used to slice the original `text`, and since `casefold()` can change string length (e.g. 'ß'→'ss'), the match is not highlighted and an empty `<mark>` is emitted, which switching from `lower()` to `casefold()` makes newly reachable. Locate the match on the original text with a fold that preserves indices or a regex such as `re.search(re.escape(term), text, re.IGNORECASE)` as `snippet()` does, then slice `text` with `match.start()`/`match.end()`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P25-casefold-offsets-on-original-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 162119,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of computes start = page * per_page while its docstring states the page number starts at 1, so the first page is skipped. WHY: page=1 returns results[20:40] instead of results[0:20] — the first 20 results are never shown and every page is off by one. HOW: use the 1-indexed formula start = (page - 1) * per_page.",
+          "keep": true,
+          "rationale": "The function's own docstring declares 'page comes from ?page= and starts at 1', yet line 39 computes start = page * per_page. With page=1 this yields results[20:40], skipping the first 20 results and shifting every page by one — a direct contradiction between the stated contract and the implementation. No caller in the repo redefines page as 0-indexed, so the docstring is the authoritative spec and the code is off by one. The prior review decision concerns unrelated CSV formula escaping in src/reports/export.ts and is not the same problem.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of\\("
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: highlight finds `start` in the casefolded copy of text but computes `end = start + len(term.casefold())` and slices the original `text`, which is only valid when casefold preserves string length. WHY: casefold can expand characters (e.g. 'ß'.casefold()=='ss', 'ﬁ'=='fi'), so when such a character precedes the match the folded index does not map to the same position in text and the <mark> wraps the wrong characters (text='ßabc', term='abc' → 'ßa<mark>bc</mark>' instead of '<mark>abc</mark>'). The previous lower()-based code did not expand 'ß', so this is a regression. HOW: locate the match with a case-insensitive regex over the original text (as snippet already does) and slice text by the match offsets, or highlight via re.sub with an escaped pattern.",
+          "keep": true,
+          "rationale": "Confirmed. `text.casefold()` can expand characters ('ß'→'ss', 'ﬁ'→'fi'), producing a folded string whose indices do not map back to the original `text`. The code finds `start` in `folded` but slices the original `text`, so for text='ßabc', term='abc' it yields 'ßa<mark>bc</mark>' (wrapping 'bc') instead of '<mark>abc</mark>'. The prior lower()-based code did not expand 'ß', so this is a genuine regression, and `snippet()` demonstrates the correct IGNORECASE-regex alternative. No related previous decision (the CSV entry is a different file/failure).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "casefold|\\.lower\\(\\)",
+                "path": "catalog/search"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 37,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `page_of` computes `start = page * per_page` while its docstring states the page number starts at 1, `page=1` returns `results[20:40]` instead of `results[0:20]`, so the first 20 results are never shown and every page is off by one. Use the 1-indexed formula `start = (page - 1) * per_page`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "catalog/search/highlight.py",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `highlight` finds `start` in the casefolded copy of `text` but slices the original `text` using `end = start + len(term.casefold())`, any character that `casefold` expands (e.g. `'ß'.casefold() == 'ss'`, `'ﬁ' == 'fi'`) before the match shifts the index so the `<mark>` wraps the wrong characters (`text='ßabc'`, `term='abc'` → `'ßa<mark>bc</mark>'` instead of `'<mark>abc</mark>'`), a regression from the previous `lower()`-based code. Locate the match with a case-insensitive regex over the original `text` (as `snippet` already does) and slice `text` by the match offsets, or highlight via `re.sub` with an escaped pattern."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

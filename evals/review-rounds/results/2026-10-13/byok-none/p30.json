@@ -1,0 +1,766 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:36:59.974Z",
+  "updatedAt": "2026-10-13T22:16:30.339Z",
+  "complete": true,
+  "selectedCases": [
+    "P30-probe-retries-timeouts-only",
+    "P30-probe-retries-timeouts-only-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 7,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P30-probe-retries-timeouts-only · probe-reset-not-retried-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P30-probe-retries-timeouts-only-control · probe-reset-not-retried-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 201977,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 29,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 513334,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 32,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 212481,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 193541,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 146822,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P30-probe-retries-timeouts-only-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 204633,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/gateway/health.ts",
+          "claim": "WHAT: adding PROBE_RETRIES makes a single hanging upstream consume up to 3 x PROBE_TIMEOUT_MS = 6000ms inside probeUpstream. WHY: refreshHealth (health.ts:26-30) awaits each probe sequentially, so a refresh across unreachable-but-hanging upstreams is up to 3x slower than before, delaying the `upstream.healthy` transition that the fail-closed router (router.ts:8) relies on; with enough upstreams a refresh can also overlap the 30s interval that schedules it. HOW: either probe upstreams concurrently (e.g. `await Promise.all(list.map(async (u) => { u.healthy = await probeUpstream(u); }))`) or add a small backoff/cap so total probe time stays bounded.",
+          "keep": true,
+          "rationale": "The finding's mechanics are factually correct. With PROBE_TIMEOUT_MS=2000 and PROBE_RETRIES=2, probeUpstream loops attempt=0,1,2 and each hanging attempt costs the full 2s timeout before returning false, i.e. up to 6000ms for one unreachable-but-hanging upstream. refreshHealth (health.ts:26-30) awaits probes sequentially, so total refresh latency scales linearly and is 3x the pre-retry latency. router.ts:8 confirms the fail-closed path depends on `upstream.healthy`, and upstreams.ts:3 confirms a 30s refresh interval, so a large set of hanging upstreams can delay the healthy transition and even overlap the scheduling interval. The stated root cause, code path, and arithmetic all hold; no upstream guard caps or parallelizes the probes. No PreviousReviewDecisions entry concerns health.ts, so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/health.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "health.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/router.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "refreshHealth|setInterval|30",
+                "path": "src/gateway"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/gateway/health.ts",
+          "claim": "WHAT: the retry guard `isTimeout(err) && attempt < PROBE_RETRIES` only retries DOMException/TimeoutError, so the 'transient network failures' the comment on line 18 promises to retry (ECONNRESET, ECONNREFUSED, DNS/socket errors) are never retried. WHY: those errors reject immediately with a plain Error (not a TimeoutError), so the very first blip falls straight through to `logger.warn` + `return false` and the upstream is marked unhealthy and taken out of rotation — the resilience this PR adds does not work for the failure class it names. HOW: retry any failed attempt (bounded by PROBE_RETRIES) instead of only timeouts, e.g. `if (attempt < PROBE_RETRIES) continue;` (or widen isTimeout into an isRetryable that also matches transient socket error codes).",
+          "keep": true,
+          "rationale": "Confirmed: isTimeout (lines 8-10) matches only DOMException/'TimeoutError', i.e. AbortSignal.timeout aborts. All other transient fetch failures (ECONNRESET, ECONNREFUSED, DNS/socket) reject with a TypeError, so the guard on line 19 is false and the first non-timeout blip falls through to logger.warn + return false, taking the upstream out of rotation. This contradicts the line-18 comment's stated intent to retry transient network failures — a concrete behavior bug, not style/doc. No previous decision covers this file.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/health.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 33,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/gateway/health.ts",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the guard only retries `isTimeout(err)`, transient network failures such as `ECONNRESET`, `ECONNREFUSED`, and DNS/socket errors reject as plain `Error` and the first blip falls through to `logger.warn` and `return false`, marking the upstream unhealthy and taking it out of rotation despite the comment on line 18 promising to retry them. Retry any failed attempt bounded by `PROBE_RETRIES` instead of only timeouts, e.g. `if (attempt < PROBE_RETRIES) continue;`, or widen `isTimeout` into an `isRetryable` that also matches transient socket error codes."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/gateway/health.ts",
+          "line": 13,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "performance",
+          "marked": false,
+          "text": "With `PROBE_RETRIES`, a single hanging upstream can consume up to 3 x `PROBE_TIMEOUT_MS` = 6000ms inside `probeUpstream`, and because `refreshHealth` (health.ts:26-30) awaits each probe sequentially, a refresh across unreachable-but-hanging upstreams is up to 3x slower, delaying the `upstream.healthy` transition that the fail-closed router (router.ts:8) relies on and potentially overlapping the 30s interval that schedules it. Either probe upstreams concurrently, e.g. `await Promise.all(list.map(async (u) => { u.healthy = await probeUpstream(u); }))`, or add a small backoff/cap so total probe time stays bounded."
+        }
+      ],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P30-probe-retries-timeouts-only-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 172300,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/gateway/health.ts",
+          "claim": "WHAT: the retry guard only fires on timeouts (`isTimeout(err) && attempt < PROBE_RETRIES`), but the comment on the line above says it retries transient network failures. WHY: a transient connection blip (ECONNREFUSED/ECONNRESET/DNS) makes `fetch` reject with a TypeError, not a DOMException, so `isTimeout` is false and the probe returns false on the first attempt — the upstream is taken out of rotation and, since `upstreams.auth.healthy` gates routing (router.ts:8), the gateway fails closed with 503 for every request, which is precisely the failure the retry was added to prevent. HOW: retry any fetch rejection (fetch only rejects on network/abort errors, never on an HTTP status), e.g. drop the isTimeout gate from the retry condition and keep isTimeout only for distinguishing logging if desired.",
+          "keep": true,
+          "rationale": "Confirmed. isTimeout (health.ts:8-10) only matches DOMException TimeoutError, so the retry at line 19 fires only for abort timeouts. Node's fetch (undici) rejects with a TypeError on connection-level failures (ECONNREFUSED/ECONNRESET/DNS), which isTimeout returns false for, so the probe returns false on the first attempt despite the comment claiming it retries transient network failures. refreshHealth (line 28) writes that result to upstream.healthy, and router.ts:8 fails closed with 503 for every request while auth is unhealthy — so a single transient blip takes the upstream out of rotation for a refresh cycle. The described root cause and failure path are accurate; no prior review decision covers this file or issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/health.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "isTimeout"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/router.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "healthy|probeUpstream|refreshHealth",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/gateway/health.ts",
+          "line": 18,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A transient connection blip (`ECONNREFUSED`/`ECONNRESET`/DNS) makes `fetch` reject with a `TypeError` rather than a `DOMException`, so `isTimeout` is false and the probe returns false on the first attempt, taking the upstream out of rotation and — because `upstreams.auth.healthy` gates routing (router.ts:8) — failing the gateway closed with 503 for every request, which is exactly the failure the retry was added to prevent. Retry any fetch rejection, since `fetch` only rejects on network or abort errors and never on an HTTP status, by dropping the `isTimeout` gate from the retry condition and keeping `isTimeout` only for distinguishing logging if desired."
+        }
+      ],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P30-probe-retries-timeouts-only-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 243325,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/gateway/health.ts",
+          "claim": "WHAT: The retry guard only continues for errors that are `instanceof DOMException` with name 'TimeoutError', so connection-level transient failures (ECONNREFUSED/ECONNRESET/ENOTFOUND, which undici surfaces as `TypeError: fetch failed` with a system-error cause, not a DOMException) fall through to `return false` on the first attempt. WHY: The comment claims the retry exists \"so one blip does not take the upstream out of rotation\", but an upstream that briefly refuses connections (e.g. mid-restart) is still marked unhealthy immediately; router.ts:8 then fails closed and returns 503 for every request until the next successful refresh (up to 30s later), which is exactly the blip the retry was added to absorb. HOW: Broaden the retry predicate to cover transient network errors as well as timeouts, e.g. retry whenever a fetch-level failure occurs and attempts remain (or add an explicit isNetworkError check on the error/cause code).",
+          "keep": true,
+          "rationale": "Confirmed: health.ts:19 retries only when `isTimeout(err)` is true, which requires `err instanceof DOMException && err.name === 'TimeoutError'`. Connection-level transient failures are surfaced by undici as `TypeError: fetch failed` (with a system-error `cause`), not a DOMException, so they are not retried and the function returns false on the first attempt — contradicting the adjacent comment's stated intent to retry transient network failures. The consequence is real: router.ts:8 fails closed (503) for every request while the upstream is marked unhealthy until the next refresh. No PreviousReviewDecision addresses health.ts or this failure, so it is not a repeat. The claim is technically accurate; not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/health.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "isTimeout|PROBE_RETRIES|isNetworkError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/router.ts",
+                "endLine": 20,
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/gateway/health.ts",
+          "claim": "",
+          "keep": true,
+          "rationale": "Verified src/gateway/health.ts:12-24. The catch block retries only when isTimeout(err) is true; any other transient network error (e.g. ECONNRESET/ECONNREFUSED) falls through to return false immediately, contradicting the comment's stated intent of retrying transient network failures. The catch is reachable, no upstream guard prevents it, and no previous review decision covers this file. The behavior described is real and cannot be refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/health.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "isTimeout|PROBE_RETRIES",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/health.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 29,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/gateway/health.ts",
+          "line": 17,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": ""
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/gateway/health.ts",
+          "line": 18,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Connection-level transient failures such as `ECONNREFUSED`, `ECONNRESET`, and `ENOTFOUND` are surfaced by undici as `TypeError: fetch failed` rather than a `DOMException`, so the retry guard falls through to `return false` on the first attempt and `router.ts:8` fails closed with a 503 for every request until the next successful refresh, up to 30s later. Broaden the predicate to retry any fetch-level failure while attempts remain, for example via an `isTransient` check that also matches `TypeError` and `AbortError`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P30-probe-retries-timeouts-only-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 184563,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/gateway/health.ts",
+          "claim": "WHAT: The retry gate `isTimeout(err)` only matches a `DOMException` named `TimeoutError`, so non-timeout transient failures (connection reset, DNS blip, ECONNREFUSED — which `fetch` reports as `TypeError: fetch failed`) are never retried, while timeouts (a hung upstream) are retried up to 2 extra times. WHY: A network blip still marks the upstream unhealthy on the first failure (the exact case the comment on line 18 claims to protect against), while a genuinely unresponsive upstream keeps its previous `healthy: true` for up to 6s instead of 2s, and since router.ts:8 fails closed only once `healthy` flips, requests continue being forwarded to a dead auth upstream for ~4 extra seconds. HOW: If the intent is to absorb transient failures, drop the error-class filter and retry any failure: `if (attempt < PROBE_RETRIES) continue;`. If the intent is timeout-only, fix the comment on line 18 to say so.",
+          "keep": true,
+          "rationale": "Verified in src/gateway/health.ts:8-10 that isTimeout only returns true for `err instanceof DOMException && err.name === 'TimeoutError'`. Node's fetch reports non-timeout transient failures (ECONNRESET, DNS failure, ECONNREFUSED) as `TypeError: fetch failed`, so isTimeout is false and the retry branch on line 19 is skipped — the first blip sets upstream.healthy=false via refreshHealth (line 28). Meanwhile a genuinely hung upstream is retried up to PROBE_RETRIES (2) extra times at PROBE_TIMEOUT_MS (2000ms) each, so `healthy` stays true for ~6s. router.ts:8-9 confirms requests are forwarded while healthy is true and fail closed only after it flips, matching the described failure path. The root cause and failure path are factually correct, and the code contradicts its own comment on line 18 ('Retry transient network failures'). None of the PreviousReviewDecisions concern src/gateway/health.ts, so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/health.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "isTimeout|PROBE_RETRIES|healthy",
+                "path": "src/gateway"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/router.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 24,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/gateway/health.ts",
+          "line": 19,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `isTimeout(err)` only matches a `DOMException` named `TimeoutError`, connection resets, DNS blips, and `ECONNREFUSED` reported by `fetch` as `TypeError: fetch failed` are never retried, so a network blip marks the upstream unhealthy on the first failure while a hung upstream can keep `healthy: true` for up to 6s instead of 2s and, since `router.ts:8` fails closed only after `healthy` flips, requests keep going to a dead auth upstream for about 4 extra seconds. If the goal is to absorb transient failures, drop the error-class filter and retry any failure with `if (attempt < PROBE_RETRIES) continue;`; if the goal is timeout-only, correct the comment on line 18."
+        }
+      ],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P30-probe-retries-timeouts-only-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 296281,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/gateway/health.ts",
+          "claim": "WHAT: The retry guard `isTimeout(err) && attempt < PROBE_RETRIES` only retries when the error is a DOMException named 'TimeoutError', but the comment on the line above claims it retries 'transient network failures'. WHY: the common transient blips (ECONNRESET / socket hang-up / DNS failure) surface as a non-timeout `TypeError: fetch failed`, so on the very first such blip probeUpstream returns false and refreshHealth marks the upstream unhealthy — the fail-closed path in router.ts:8 then 503s every request, which is exactly the outage the retry was added to prevent. HOW: retry on any probe failure (or at least any fetch/network failure), e.g. `if (attempt < PROBE_RETRIES) continue;`, and keep isTimeout only if the intent is genuinely timeout-specific (then fix the comment).",
+          "keep": true,
+          "rationale": "The code confirms the claim. isTimeout (line 8-9) only matches `err instanceof DOMException && err.name === 'TimeoutError'`, and line 19 gates the retry on that check, so only AbortSignal.timeout rejections are retried. In Node/undici, other transient failures (ECONNRESET, socket hang-up, DNS failure) reject fetch with a non-DOMException `TypeError: fetch failed`, which falls through to `return false` on the very first attempt. refreshHealth then sets `upstream.healthy = false`, and router.ts:8 fails closed with a 503 on every request. This is a concrete behavior bug (retry does not cover the transient failures the comment claims), not style or a generic missing-guard suggestion, and no PreviousReviewDecisions entry addresses it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/health.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "isTimeout"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 30,
+                "path": "src/gateway/router.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 32,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/gateway/health.ts",
+          "line": 18,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the guard only retries a `DOMException` named 'TimeoutError', common transient blips such as `ECONNRESET`, socket hang-up, or DNS failure surface as `TypeError: fetch failed`, so the first one makes `probeUpstream` return false and `refreshHealth` mark the upstream unhealthy, after which the fail-closed path in `router.ts:8` 503s every request — exactly the outage the retry was added to prevent. Retry on any probe failure (or at least any fetch/network failure) with `if (attempt < PROBE_RETRIES) continue;`, keeping `isTimeout` only if the intent is genuinely timeout-specific, and in that case fix the comment above it."
+        }
+      ],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

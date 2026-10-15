@@ -1,5 +1,5 @@
 name: 'Report quality signal'
-description: 'Write one row to BigQuery quality.signals (see docs/quality-signals.md)'
+description: 'Write one row, or a list of rows, to BigQuery quality.signals (see docs/quality-signals.md)'
 
 # One block per workflow, always with `if: always()`, so red runs are rows too.
 # Auth is Workload Identity Federation: the caller needs
@@ -17,11 +17,17 @@ description: 'Write one row to BigQuery quality.signals (see docs/quality-signal
 
 inputs:
     name:
-        description: '<area>.<gate>[.<dimension>], e.g. evals.nightly.recall'
-        required: true
+        description: '<area>.<gate>[.<dimension>], e.g. evals.nightly.recall. Required unless rows is set'
+        required: false
+        default: ''
     status:
-        description: 'green | yellow | red | skipped | infra, or a GitHub job status (success | failure | cancelled | skipped), which is mapped'
-        required: true
+        description: 'green | yellow | red | skipped | infra, or a GitHub job status (success | failure | cancelled | skipped), which is mapped. Required unless rows is set'
+        required: false
+        default: ''
+    rows:
+        description: 'Path to a JSON array of {name, status, value, unit, meta}: several rows in one insert, each checked like a single one (a bad row is dropped with a warning). Replaces name/status/value/unit/meta'
+        required: false
+        default: ''
     value:
         description: 'Optional number'
         required: false
@@ -89,6 +95,7 @@ runs:
               IN_META: ${{ inputs.meta }}
               IN_RUN_URL: ${{ inputs.run_url }}
               IN_SOURCE: ${{ inputs.source }}
+              IN_ROWS: ${{ inputs.rows }}
               GH_REPO: ${{ github.repository }}
               GH_WORKFLOW_REF: ${{ github.workflow_ref }}
               GH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -99,34 +106,54 @@ runs:
               node -e '
                 const map = { success: "green", failure: "red", cancelled: "infra", skipped: "skipped" };
                 const allowed = new Set(["green", "yellow", "red", "skipped", "infra"]);
-                const raw = (process.env.IN_STATUS || "").trim().toLowerCase();
-                const status = map[raw] || raw;
-                if (!allowed.has(status)) { console.error(`report-signal: unknown status "${raw}"`); process.exit(1); }
-                // Producers interpolate model ids and similar into names: fold them to the contract
-                // (lowercase, [a-z0-9._-]) instead of failing, e.g. evals.tier0.minimax-m3@nvidia -> ..._nvidia.
-                const name = (process.env.IN_NAME || "").trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "_");
-                // Accept exactly what the fold can produce. Only a name without a dot is still a producer bug.
-                if (!/^[a-z0-9_-]+(\.[a-z0-9_-]+)+$/.test(name)) { console.error(`report-signal: bad name "${name}": want <area>.<gate>[.<dimension>]`); process.exit(1); }
-                const value = process.env.IN_VALUE.trim() === "" ? null : Number(process.env.IN_VALUE);
-                if (value !== null && Number.isNaN(value)) { console.error(`report-signal: value is not a number: ${process.env.IN_VALUE}`); process.exit(1); }
-                let meta = null;
-                if (process.env.IN_META.trim() !== "") {
-                  // A producer that interpolated an empty step output ends up with {"total": } (invalid).
-                  // Telemetry must not fail the job: keep the raw text and warn.
-                  try { meta = JSON.stringify(JSON.parse(process.env.IN_META)); }
-                  catch { console.log(`::warning::report-signal: meta is not valid JSON, recorded as raw text`); meta = JSON.stringify({ raw_meta: process.env.IN_META }); }
-                }
                 // github.workflow_ref = owner/repo/.github/workflows/<file>@<ref>
                 const file = (process.env.GH_WORKFLOW_REF.match(/\.github\/workflows\/([^@]+)@/) || [])[1] || "unknown";
                 const source = process.env.IN_SOURCE.trim() || `${process.env.GH_REPO.split("/")[1]}/${file}`;
-                const row = {
-                  ts: new Date().toISOString(), source, name, status, value,
-                  unit: process.env.IN_UNIT.trim() || null,
-                  run_url: process.env.IN_RUN_URL.trim() || process.env.GH_RUN_URL,
-                  commit: process.env.GH_SHA, branch: process.env.GH_REF, meta,
+                // One row, or an Error naming what the producer got wrong.
+                const build = (input) => {
+                  const raw = String(input.status ?? "").trim().toLowerCase();
+                  const status = map[raw] || raw;
+                  if (!allowed.has(status)) throw new Error(`unknown status "${raw}"`);
+                  // Producers interpolate model ids and similar into names: fold them to the contract
+                  // (lowercase, [a-z0-9._-]) instead of failing, e.g. evals.tier0.minimax-m3@nvidia -> ..._nvidia.
+                  const name = String(input.name ?? "").trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "_");
+                  // Accept exactly what the fold can produce. Only a name without a dot is still a producer bug.
+                  if (!/^[a-z0-9_-]+(\.[a-z0-9_-]+)+$/.test(name)) throw new Error(`bad name "${name}": want <area>.<gate>[.<dimension>]`);
+                  const rawValue = input.value === null || input.value === undefined ? "" : String(input.value).trim();
+                  const value = rawValue === "" ? null : Number(rawValue);
+                  if (value !== null && Number.isNaN(value)) throw new Error(`value is not a number: ${rawValue}`);
+                  let meta = null;
+                  if (input.meta !== null && typeof input.meta === "object") meta = JSON.stringify(input.meta);
+                  else if (String(input.meta ?? "").trim() !== "") {
+                    // A producer that interpolated an empty step output ends up with {"total": } (invalid).
+                    // Telemetry must not fail the job: keep the raw text and warn.
+                    try { meta = JSON.stringify(JSON.parse(input.meta)); }
+                    catch { console.log(`::warning::report-signal: meta is not valid JSON, recorded as raw text`); meta = JSON.stringify({ raw_meta: input.meta }); }
+                  }
+                  return {
+                    ts: new Date().toISOString(), source, name, status, value,
+                    unit: String(input.unit ?? "").trim() || null,
+                    run_url: process.env.IN_RUN_URL.trim() || process.env.GH_RUN_URL,
+                    commit: process.env.GH_SHA, branch: process.env.GH_REF, meta,
+                  };
                 };
-                require("fs").writeFileSync("quality-signal-row.json", JSON.stringify(row) + "\n");
-                console.log(JSON.stringify(row));
+                let rows = [];
+                if (process.env.IN_ROWS.trim()) {
+                  let inputs;
+                  try { inputs = JSON.parse(require("fs").readFileSync(process.env.IN_ROWS.trim(), "utf8")); }
+                  catch (e) { console.error(`report-signal: cannot read rows from ${process.env.IN_ROWS}: ${e.message}`); process.exit(1); }
+                  if (!Array.isArray(inputs)) { console.error("report-signal: rows must be a JSON array"); process.exit(1); }
+                  for (const input of inputs) {
+                    try { rows.push(build(input)); }
+                    catch (e) { console.log(`::warning::report-signal: row dropped: ${e.message}`); }
+                  }
+                  if (!rows.length) { console.error("report-signal: no valid row to write"); process.exit(1); }
+                } else {
+                  try { rows = [build({ name: process.env.IN_NAME, status: process.env.IN_STATUS, value: process.env.IN_VALUE, unit: process.env.IN_UNIT, meta: process.env.IN_META })]; }
+                  catch (e) { console.error(`report-signal: ${e.message}`); process.exit(1); }
+                }
+                require("fs").writeFileSync("quality-signal-row.json", rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
+                for (const r of rows) console.log(JSON.stringify(r));
               '
 
         - name: Authenticate to GCP (WIF)

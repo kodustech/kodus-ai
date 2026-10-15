@@ -47,9 +47,10 @@ describe('AzureReposService.getPullRequestByNumber — body/description normaliz
             orgName: 'fake-org',
             token: 'fake-token',
         });
-        jest.spyOn(service as any, 'getProjectIdFromRepository').mockResolvedValue(
-            stubRepository.project.id,
-        );
+        jest.spyOn(
+            service as any,
+            'getProjectIdFromRepository',
+        ).mockResolvedValue(stubRepository.project.id);
     });
 
     it('maps Azure `description` onto `body` while preserving the original `description` field', async () => {
@@ -108,6 +109,58 @@ describe('AzureReposService.getPullRequestByNumber — body/description normaliz
         });
 
         expect(result?.body).toBe('');
+    });
+
+    it('carries the source branch head commit as `head.sha` (issue #2028)', async () => {
+        // `getPullRequest` is the NORMALIZED read the code-review automation uses
+        // (libs/ee/automation/runCodeReview.use-case.ts), and the object it
+        // builds through `transformPullRequest` exposed `head` as `{ ref, repo }`
+        // only. The reviewed-commit pin that anchors inline review comments on
+        // the commit the review actually read reads `pullRequest.head.sha`, so on
+        // Azure it could never activate: a push landing mid-review moved every
+        // anchor, and the returned `lastAnalyzedCommit` reported the pushed
+        // commits as already analyzed so the next incremental run skipped them —
+        // the bug #2012 fixes, left in place on this platform (#2028 review).
+        azureReposRequestHelper.getPullRequestDetails.mockResolvedValue({
+            id: 2028,
+            title: 'feat: anchored comments',
+            description: 'body',
+            sourceRefName: 'refs/heads/feature/anchors',
+            repository: stubRepository,
+            lastMergeSourceCommit: { commitId: 'a1b2c3d4e5f6' },
+        });
+
+        const result = await service.getPullRequest({
+            organizationAndTeamData: stubOrg,
+            repository: stubRepository,
+            prNumber: 2028,
+        });
+
+        expect(result?.head?.sha).toBe('a1b2c3d4e5f6');
+        // The ref keeps its existing shape (the `refs/heads/` prefix stripped).
+        expect(result?.head?.ref).toBe('feature/anchors');
+    });
+
+    it('normalizes a missing source commit to an empty sha, not an invented one', async () => {
+        // `transformPullRequest` maps `lastMergeSourceCommit?.commitId ?? ''`
+        // (main's normalization), and an empty string is what keeps the pin off:
+        // the caller reads `pullRequest.head.sha` and only pins when it is
+        // truthy, so "Azure reported no commit" falls back to the live head
+        // exactly as before.
+        azureReposRequestHelper.getPullRequestDetails.mockResolvedValue({
+            id: 2029,
+            title: 'chore: no commit info',
+            sourceRefName: 'refs/heads/main',
+            repository: stubRepository,
+        });
+
+        const result = await service.getPullRequest({
+            organizationAndTeamData: stubOrg,
+            repository: stubRepository,
+            prNumber: 2029,
+        });
+
+        expect(result?.head?.sha).toBe('');
     });
 
     it('returns null when the upstream helper returns null (no PR found)', async () => {
@@ -199,9 +252,10 @@ describe('AzureReposService.getCommitsForPullRequestForCodeReview — transient-
             orgName: 'fake-org',
             token: 'fake-token',
         });
-        jest.spyOn(service as any, 'getProjectIdFromRepository').mockResolvedValue(
-            'proj-1',
-        );
+        jest.spyOn(
+            service as any,
+            'getProjectIdFromRepository',
+        ).mockResolvedValue('proj-1');
     });
 
     it('rethrows on a transient (undici) fetch failure instead of returning null', async () => {
@@ -293,9 +347,7 @@ describe('AzureReposService.getFilesByPullRequestId — current behavior (charac
     beforeEach(() => {
         azureReposRequestHelper = {
             getPullRequestDetails: jest.fn().mockResolvedValue(prDetails()),
-            getIterations: jest
-                .fn()
-                .mockResolvedValue([{ id: 1 }, { id: 2 }]),
+            getIterations: jest.fn().mockResolvedValue([{ id: 1 }, { id: 2 }]),
             getChanges: jest.fn().mockResolvedValue([]),
             getFileContent: jest
                 .fn()

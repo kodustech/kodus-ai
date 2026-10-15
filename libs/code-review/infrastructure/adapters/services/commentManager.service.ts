@@ -1205,6 +1205,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         fallbackSuggestionsBySeverity?: FallbackSuggestionsBySeverity,
         platformType?: PlatformType,
         onPromptReplyError?: (error: Error) => void,
+        reviewedCommit?: string,
     ): Promise<{
         lastAnalyzedCommit: any;
         commits: any[];
@@ -1228,7 +1229,33 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                 };
             }
 
-            const lastAnalyzedCommit = commits[commits.length - 1];
+            // Anchor the comments on the commit the review actually read (the
+            // head the pipeline started from), not on the PR head re-read here
+            // at posting time. A push landing during the review would otherwise
+            // move every anchor to a tree this review never looked at, and the
+            // returned commit would report the pushed commits as already
+            // analyzed so the next incremental run skips them. The live fetch
+            // above is still returned to the caller, and stays the fallback
+            // when no reviewed commit was supplied.
+            // The providers read `commit?.sha` (GitHub commit_id, GitLab
+            // position.headSha), so the reviewed commit is carried in the same
+            // shape as the commits read from the provider.
+            //
+            // Only while the PR still CONTAINS it, though: a force-push or a
+            // rebase during the review rewrites the reviewed commit away, and
+            // both providers then reject an anchor that is not part of the PR
+            // (GitHub validates `commit_id`, GitLab matches `position.headSha`
+            // against a diff version) — which loses the whole inline review
+            // instead of merely anchoring it on a stale tree. The live list
+            // read above is the source of truth for "is it still part of the
+            // PR", so the pin is conditional on it.
+            const reviewedCommitBelongsToPr = reviewedCommit
+                ? commits.some((commit) => commit?.sha === reviewedCommit)
+                : false;
+
+            const lastAnalyzedCommit = reviewedCommitBelongsToPr
+                ? { sha: reviewedCommit }
+                : commits[commits.length - 1];
             const commentResults = [];
 
             if (!lineComments?.length) {
@@ -2582,12 +2609,29 @@ ${reviewOptions}
                 },
             });
 
+            // Which platform the PR lives on decides whether the raw marker may
+            // be added: Bitbucket escapes raw HTML, so the comment body skips
+            // it there. The caller knows it — the pipeline context carries the
+            // PR's OWN platform — and that is authoritative: resolving it from
+            // the org/team integration returns a single row (findOne by
+            // organization/team/category/status), so a team with more than one
+            // code-management integration can resolve the wrong platform, which
+            // re-appends the raw marker on Bitbucket (the regression this gate
+            // fixes) or drops it on the platforms that need it (#2055 review).
+            // The integration lookup stays as the fallback for a caller that
+            // cannot supply the value.
+            const resolvedPlatformType =
+                platformType ??
+                (await this.codeManagementService.getTypeIntegration(
+                    organizationAndTeamData,
+                ));
+
             const commentResults = [];
 
             for (const suggestion of prLevelSuggestions) {
                 try {
                     // Use standardized formatting method
-                    const commentBody =
+                    let commentBody =
                         await this.codeManagementService.formatReviewCommentBody(
                             {
                                 suggestion,
@@ -2598,8 +2642,33 @@ ${reviewOptions}
                                 organizationAndTeamData,
                                 suggestionCopyPrompt,
                             },
-                            undefined,
+                            // The authoritative platform, same as the marker
+                            // gate below: the dispatcher resolves it from the
+                            // org/team integration when it is omitted, and that
+                            // lookup returns a single row — a Bitbucket PR
+                            // formatted by the GitHub adapter loses the
+                            // visible chip and gets GitHub's `<details>`
+                            // markup, which Bitbucket renders as text
+                            // (#2055 review).
+                            resolvedPlatformType,
                         );
+
+                    // PR-level comments carry the same recognition marker as
+                    // inline review comments and the "Code Review Completed"
+                    // comment, so webhook consumers can tell them apart. The
+                    // inline marker lives in the interaction footer, which is
+                    // intentionally omitted here (includeFooter: false), so it
+                    // is appended to the body directly (#2050). Bitbucket
+                    // escapes raw HTML and already injects a visible
+                    // "kody|code-review" chip in the header, so the raw marker
+                    // is skipped there.
+                    if (
+                        commentBody &&
+                        resolvedPlatformType !== PlatformType.BITBUCKET &&
+                        !commentBody.includes('<!-- kody-codereview -->')
+                    ) {
+                        commentBody = `${commentBody}\n\n<!-- kody-codereview -->\n&#8203;`;
+                    }
 
                     // Create general comment
                     const createdComment =

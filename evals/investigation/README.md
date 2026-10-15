@@ -76,6 +76,19 @@ env -u ANTHROPIC_API_KEY -u BYOK_ANTHROPIC_API_KEY \
 Scope/model env: `RECALL_ALL=1` (all PRs) or `RECALL_CASES=id1,id2` (subset);
 `RECALL_MODEL=<id>` overrides the model from this one config.
 
+Real repository instead of the replay: `RECALL_REAL_REPO=1` checks out the PR's
+head in a worktree (`prepare-repo.js`) and answers grep, readFile and listDir with
+the commands production's local sandbox builds (`libs/sandbox/infrastructure/providers/local-sandbox.service.ts`),
+so a call outside the recording gets the answer the repository would give. Needs
+`rg` on the PATH. Clones live under `BENCH_REPOS_ROOT` (default
+`~/projects/benchmark`, one folder per repo, names in `prepare-repo.js`); with
+none there, only the PR's head is fetched, shallow. A case whose commit can't be
+fetched falls back to the replay; `repoPrepared` in its row says which one ran.
+Neither mode gives the agent `exec`, so the tools production registers only with
+it (`checkTypes`, `findNearestProjectFile`, `findFile`'s fd/find path) are
+missing: a smaller tool set than production's, shown as `sandboxExec: false` in
+each row. Not a production-parity run until that changes.
+
 ### Execution-based replays (`extract-replay-from-trace.js`)
 
 The per-PR datasets are built from **real finder executions**, not a fabricated diff

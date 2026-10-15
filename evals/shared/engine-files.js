@@ -13,17 +13,30 @@ const fs = require('fs');
 const path = require('path');
 
 // Files that change what the nightly measures without being loaded by the
-// one-case run the smoke records: dependency versions, the floors, and the
-// harness that builds the record itself (loaded by the smoke's parent process,
-// which isn't traced). A change to how the watch list is made gets measured
-// once, instead of possibly never.
+// one-case run the smoke records: dependency versions and the harness that
+// builds the record itself (loaded by the smoke's parent process, which isn't
+// traced). A change to how the watch list is made gets measured once, instead
+// of possibly never.
 const NIGHTLY_EXTRA_FILES = [
     'pnpm-lock.yaml',
-    'evals/investigation/targets.json',
     'evals/wiring-smoke.js',
     'evals/shared/trace-loaded.js',
     'evals/shared/engine-files.js',
 ];
+
+// Each eval the nightly measures, by its runner: a trace that does not list the
+// runner is incomplete. With it, the eval's own files that change its verdict
+// without being loaded by the one-case run (its floors, its verdict script).
+const NIGHTLY_EVALS = {
+    'evals/investigation/run-recall.js': ['evals/investigation/targets.json'],
+    'evals/kody-rules/real-agent.js': ['evals/kody-rules/kody-targets.json', 'evals/kody-rules/nightly-verdict.js'],
+    // The evals measured through the shared job (evals/nightly-evals.js), with
+    // the verdict and the list that job reads.
+    ...Object.fromEntries(
+        require('../nightly-evals').NIGHTLY_EVALS.map((e) => [e.run[0], [...e.files, 'evals/shared/nightly-verdict.js', 'evals/nightly-evals.js']]),
+    ),
+};
+const FINDER_RUNNER = 'evals/investigation/run-recall.js';
 
 // Local env files are read when present but are never part of the repo.
 const IGNORED = /^\.env(\..*)?$/;
@@ -51,8 +64,8 @@ function uncovered(files, patterns) {
     return files.filter((file) => !IGNORED.test(file) && !regexes.some((re) => re.test(file)));
 }
 
-function changedEngineFiles(changedFiles, engineFiles) {
-    const watched = new Set([...engineFiles, ...NIGHTLY_EXTRA_FILES]);
+function changedEngineFiles(changedFiles, engineFiles, runner = FINDER_RUNNER) {
+    const watched = new Set([...engineFiles, ...NIGHTLY_EXTRA_FILES, ...(NIGHTLY_EVALS[runner] || [])]);
     return changedFiles.filter((file) => watched.has(file));
 }
 
@@ -69,22 +82,23 @@ function readTrace(dir, label) {
     return [...files].sort();
 }
 
-module.exports = { globToRegExp, uncovered, changedEngineFiles, readTrace, NIGHTLY_EXTRA_FILES };
+module.exports = { globToRegExp, uncovered, changedEngineFiles, readTrace, NIGHTLY_EXTRA_FILES, NIGHTLY_EVALS };
 
-// node evals/shared/engine-files.js changed <engine-files.txt> <changed-files.txt>
-// Prints the changed files that the nightly measures, one per line.
+// node evals/shared/engine-files.js changed <engine-files.txt> <changed-files.txt> [--runner=<eval runner>]
+// Prints the changed files that the nightly measures for that eval (default:
+// finder-recall), one per line.
 if (require.main === module) {
     const [mode, engineList, changedList] = process.argv.slice(2);
-    if (mode !== 'changed' || !engineList || !changedList) {
-        console.error('usage: node evals/shared/engine-files.js changed <engine-files.txt> <changed-files.txt>');
+    const runner = (process.argv.find((a) => a.startsWith('--runner=')) || `--runner=${FINDER_RUNNER}`).slice('--runner='.length);
+    if (mode !== 'changed' || !engineList || !changedList || !NIGHTLY_EVALS[runner]) {
+        console.error(`usage: node evals/shared/engine-files.js changed <engine-files.txt> <changed-files.txt> [--runner=${Object.keys(NIGHTLY_EVALS).join('|')}]`);
         process.exit(2);
     }
     const lines = (file) => fs.readFileSync(file, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean);
     const engineFiles = lines(engineList);
-    const runner = 'evals/investigation/run-recall.js';
     if (!engineFiles.includes(runner) || !engineFiles.some((file) => file.startsWith('libs/'))) {
         console.error(`${engineList} does not list ${runner} and the engine it loads — the trace is incomplete; refusing to decide`);
         process.exit(2);
     }
-    for (const file of changedEngineFiles(lines(changedList), engineFiles)) console.log(file);
+    for (const file of changedEngineFiles(lines(changedList), engineFiles, runner)) console.log(file);
 }

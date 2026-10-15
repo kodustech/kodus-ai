@@ -67,7 +67,7 @@ const START = '<!-- kody-pr-summary:start -->';
 const END = '<!-- kody-pr-summary:end -->';
 const MOCK_SUMMARY = 'MOCK_GENERATED_SUMMARY_BODY';
 
-const { applyModelEnv } = require('../shared/tier0-models');
+const { applyModelEnv, TIER0 } = require('../shared/tier0-models');
 const { buildEvalModel } = require('../shared/build-model');
 
 // exit-2 helper — infra errors ALWAYS fail (a broken model must never look green).
@@ -93,7 +93,7 @@ if (!MOCK) {
 let lastPromptSeen = null;
 let lastModelError = null;
 
-const INFRA_RE = /quota|rate.?limit|429|timeout|cannot connect|ECONNREFUSED|ETIMEDOUT|ECONNRESET|ENOTFOUND|EAI_AGAIN|socket hang up|api key|unauthorized|forbidden|permission|denied|access|401|403|invalid.*(key|authentication)|overloaded|503|502|depleted|prepayment|insufficient|exhausted|resource_exhausted|billing|payment required/i;
+const INFRA_RE = /quota|rate.?limit|429|timeout|cannot connect|ECONNREFUSED|ETIMEDOUT|ECONNRESET|ENOTFOUND|EAI_AGAIN|socket hang up|api key|unauthorized|forbidden|permission|denied|access|401|403|invalid.*(key|authentication)|overloaded|503|502|depleted|prepayment|insufficient|exhausted|resource_exhausted|billing|payment required|more credits|can only afford/i;
 // Classify from the whole error, not just .message — provider SDK errors carry
 // the real cause in statusCode / responseBody (e.g. Google's 403 PERMISSION_DENIED
 // puts "denied access" in the body, a generic string in .message).
@@ -316,8 +316,11 @@ function routingChecks() {
     //    assertion: gpt-mini stays gpt-mini, gemini-flash stays gemini-flash.
     if (!MOCK) {
         const m = buildEvalModel({}, SUMMARY_DEFAULT);
-        if (m.modelId !== MODEL) {
-            failures.push(`self-hosted summary routed to '${m.modelId}', expected the configured '${MODEL}'`);
+        // A route served by another host (`@fireworks`) configures its
+        // doModel; that is the id the summary must use.
+        const configured = TIER0[MODEL]?.doModel || MODEL;
+        if (m.modelId !== configured) {
+            failures.push(`self-hosted summary routed to '${m.modelId}', expected the configured '${configured}'`);
         }
     }
     return failures;

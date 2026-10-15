@@ -11,14 +11,17 @@
  *
  *   node evals/reply-addressing/run.js --model=gpt-5.4-mini [--repeats=3]
  *                                      [--dataset=cases|repo-cases]
- *                                      [--concurrency=6] [--output=<file>]
+ *                                      [--concurrency=6] [--output=<file>] [--gate]
  *
  * Reports precision (answered replies that were for Kody), recall, and the
- * same two numbers on multi-human threads alone. No floor yet: the issue
- * leaves the ship bar to be set from the first runs.
+ * same two numbers on multi-human threads alone. The headline metric is the
+ * share of replies handled right (answered when meant for Kody, quiet when
+ * not), gated with --gate on the model's floor in targets.json. --output writes
+ * the shared result (evals/shared/eval-result.js), one case per conversation.
  *
- * EXIT CODES: 0 = measured, 2 = infra (unroutable model, or more than 5% of
- *   calls failed; those are listed with their reason).
+ * EXIT CODES: 0 = measured, 1 = below the floor (--gate), 2 = infra
+ *   (unroutable model, or more than 5% of calls failed; those are listed with
+ *   their reason).
  */
 const fs = require('fs');
 const path = require('path');
@@ -73,6 +76,9 @@ function infra(msg) {
 }
 
 const { applyModelEnv } = require('../shared/tier0-models');
+const { countTokens, tokensUsed } = require('../shared/eval-kit');
+const { evalQuestion } = require('../shared/eval-result');
+const TARGET = (require('./targets.json').models || {})[MODEL] || {};
 try {
     applyModelEnv(MODEL);
 } catch (e) {
@@ -146,7 +152,20 @@ function score(rows) {
     };
 }
 
+// One conversation in the shared result: what it checks, and the repeats it
+// got right out of those that measured.
+function caseResults(rows) {
+    return cases.map((c) => {
+        const mine = rows.filter((r) => r.id === c.id && !r.error);
+        const right = mine.filter((r) => r.answered === (r.expected === 'respond')).length;
+        const who = isMultiHuman(c) ? ', two people talking' : '';
+        const checks = `${c.expected === 'respond' ? 'Answers' : 'Stays quiet on'} the reply in "${c.id}" (${c.category}${who})`;
+        return { id: c.id, checks: checks.length > 160 ? `${checks.slice(0, 159)}…` : checks, hits: right, total: mine.length, ...(mine.length ? {} : { unmeasured: true }) };
+    });
+}
+
 async function main() {
+    countTokens();
     const jobs = cases.flatMap((c) =>
         Array.from({ length: REPEATS }, (_, repeat) => ({ c, repeat })),
     );
@@ -177,7 +196,21 @@ async function main() {
     });
 
     const failed = rows.filter((r) => r.error);
+    const perCase = caseResults(rows);
+    const hits = perCase.reduce((n, c) => n + c.hits, 0);
+    const total = perCase.reduce((n, c) => n + c.total, 0);
     const result = {
+        eval: 'reply-addressing',
+        question: evalQuestion('evals/reply-addressing'),
+        metric: {
+            name: 'of replies handled right',
+            value: total ? hits / total : null,
+            floor: TARGET.floor ?? null,
+            baseline: TARGET.observed ?? null,
+        },
+        runs: REPEATS,
+        tokens: tokensUsed(),
+        infra: { errored: failed.length, total: rows.length },
         model: MODEL,
         dataset: DATASET,
         repeats: REPEATS,
@@ -194,12 +227,13 @@ async function main() {
             )
             .map((r) => `${r.id}#${r.repeat} expected ${r.expected}`),
         rows,
+        cases: perCase,
     };
 
     const output = args.output ? String(args.output) : null;
     if (output) fs.writeFileSync(output, JSON.stringify(result, null, 2));
 
-    console.log(JSON.stringify({ ...result, rows: undefined }, null, 2));
+    console.log(JSON.stringify({ ...result, rows: undefined, cases: undefined }, null, 2));
 
     if (failed.length > result.infraBudget.allowed) {
         for (const r of failed.slice(0, 5))
@@ -207,6 +241,14 @@ async function main() {
         infra(
             `${failed.length}/${rows.length} calls failed (budget ${result.infraBudget.allowed})`,
         );
+    }
+    if (args.gate && result.metric.floor === null) {
+        console.error(`\n⚠️ GATE NOT EVALUATED: no floor for ${MODEL} in evals/reply-addressing/targets.json`);
+        process.exit(2);
+    }
+    if (args.gate && result.metric.value < result.metric.floor) {
+        console.error(`\n❌ GATE FAILED: ${(result.metric.value * 100).toFixed(1)}% of replies handled right < floor ${(result.metric.floor * 100).toFixed(1)}%`);
+        process.exit(1);
     }
     process.exit(0);
 }

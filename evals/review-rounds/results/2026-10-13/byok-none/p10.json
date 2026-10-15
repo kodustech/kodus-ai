@@ -1,0 +1,2142 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "8d22cf93b7b767539c70cf6d879db8b39e0dbdde1464815e132caf5145e6d525"
+  },
+  "startedAt": "2026-10-13T21:22:45.492Z",
+  "updatedAt": "2026-10-13T21:40:56.818Z",
+  "complete": true,
+  "selectedCases": [
+    "P10-rule-manifest-hand-edited-again",
+    "P10-rule-manifest-hand-edited-again-control",
+    "P11-rule-generated-client-line-retouched",
+    "P11-rule-generated-client-line-retouched-control",
+    "P12-rule-soft-asserts-moved-down",
+    "P12-rule-soft-asserts-moved-down-control"
+  ],
+  "summary": {
+    "measured": 30,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 15,
+        "violations": 13,
+        "rate": 0.867
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 35,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 68,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P10-rule-manifest-hand-edited-again · manifest-hand-edit-repeat [not_deliver]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 5
+      },
+      "P10-rule-manifest-hand-edited-again-control · manifest-hand-edit-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P11-rule-generated-client-line-retouched · generated-client-hand-edit-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 5,
+        "delivered": 3
+      },
+      "P11-rule-generated-client-line-retouched · console-error-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P11-rule-generated-client-line-retouched-control · generated-client-hand-edit-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P11-rule-generated-client-line-retouched-control · console-error-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P12-rule-soft-asserts-moved-down · soft-asserts-repeat [not_deliver]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 5
+      },
+      "P12-rule-soft-asserts-moved-down · cap-truthy-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P12-rule-soft-asserts-moved-down-control · soft-asserts-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P12-rule-soft-asserts-moved-down-control · cap-truthy-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 32623,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "The DO-NOT-EDIT generated manifest was hand-edited: the size for `js/app.e93a27.js` was changed to 243102 while the `generatedAt` stamp (2026-09-30T14:02:11Z) stays the same, which means the file was not produced by rerunning `scripts/build-asset-manifest.ts`. Rerun `pnpm run manifest:build` and commit its output instead of editing `public/asset-manifest.json` by hand."
+        }
+      ],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26396,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "The unchanged `generatedAt` stamp (line 3) alongside the hand-edited `size` of 243102 for `js/app.e93a27.js` means this generated manifest was not regenerated consistently. Rerun `pnpm run manifest:build` and commit its output so the stamp and all entries, including `sha256`, are rewritten consistently."
+        }
+      ],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 13704,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P10-rule-manifest-hand-edited-again",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `public/asset-manifest.json:12` (2026-10-06 12:00 UTC).\n\nHand-editing `public/asset-manifest.json` bypasses the file's \"DO NOT EDIT. Generated by scripts/build-asset-manifest.ts\" marker, and its `generatedAt` stamp (2026-09-30T14:02:11Z) stays stale because only a rerun rewrites it. Rerun `pnpm run manifest:build` and commit its output instead of adding the `\"size\": 243102` line by hand."
+        }
+      ],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 41655,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P10-rule-manifest-hand-edited-again",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `public/asset-manifest.json:12` (2026-10-06 12:00 UTC).\n\nThe added line changes the app bundle entry in the DO-NOT-EDIT generated file `public/asset-manifest.json` while `generatedAt` on line 4 remains `2026-09-30T14:02:11Z`, and since the file is produced by `scripts/build-asset-manifest.ts`, a changed line with an unchanged `generatedAt` stamp means it was hand-edited. Rerun `pnpm run manifest:build` and commit its output, which will refresh `generatedAt`, instead of editing this file directly."
+        }
+      ],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 22753,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "The `size` change in `public/asset-manifest.json` was hand-edited, since the file's \"DO NOT EDIT\" marker names `scripts/build-asset-manifest.ts` (`pnpm run manifest:build`) and `generatedAt` on line 3 still reads \"2026-09-30T14:02:11Z\", so the committed manifest will not match a regenerated one. Rerun `pnpm run manifest:build` and commit its output instead of editing `public/asset-manifest.json` directly."
+        }
+      ],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P10-rule-manifest-hand-edited-again-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 28043,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "This hand edit to `public/asset-manifest.json` contradicts its DO NOT EDIT marker and leaves the generated manifest inconsistent: the `size` for `js/app.e93a27.js` changed from 241877 to 243102 while `generatedAt` on line 3 still reads `2026-09-30T14:02:11Z`. Revert this line and regenerate the manifest with `scripts/build-asset-manifest.ts` via `pnpm run manifest:build`, which rewrites `generatedAt` on every run."
+        }
+      ],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P10-rule-manifest-hand-edited-again-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 36977,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "Because `public/asset-manifest.json` is generated by `scripts/build-asset-manifest.ts`, the hand-edited `size` on line 13 (from 241877 to 243102) alongside the unchanged `generatedAt` on line 3 (2026-09-30T14:02:11Z) means the manifest no longer matches a regenerated build and may mislead consumers. Rerun `pnpm run manifest:build` to regenerate the manifest instead of editing it directly."
+        }
+      ],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P10-rule-manifest-hand-edited-again-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 24543,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "Because `public/asset-manifest.json` is marked DO NOT EDIT and generated by `scripts/build-asset-manifest.ts`, this manual edit leaves `generatedAt` on line 3 at `2026-09-30T14:02:11Z`, so the file no longer matches what regeneration would produce. Per rule 1, revert the change and rerun `pnpm run manifest:build` so the script rewrites both the entry and the `generatedAt` stamp."
+        }
+      ],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P10-rule-manifest-hand-edited-again-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 24868,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "The hand-edited `size` change in `public/asset-manifest.json` from 241877 to 243102 is not backed by the generator, and the `generatedAt` stamp on line 3 still reading `2026-09-30T14:02:11Z` confirms this generated file was modified manually despite its DO NOT EDIT marker. Revert this edit and rerun `pnpm run manifest:build` so `scripts/build-asset-manifest.ts` produces `size` and `generatedAt` together."
+        }
+      ],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P10-rule-manifest-hand-edited-again-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 33696,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "Because `public/asset-manifest.json` is generated by `scripts/build-asset-manifest.ts` and marked \"DO NOT EDIT\", hand-changing the size for `js/app.e93a27.js` leaves the `generatedAt` stamp on line 3 at `2026-09-30T14:02:11Z` and the `sha256` unchanged, making the manifest inconsistent with the bundle. Rerun `pnpm run manifest:build` to regenerate the manifest (which also rewrites the `generatedAt` stamp) instead of editing the file directly."
+        }
+      ],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P11-rule-generated-client-line-retouched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 44201,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "Using `console.error` here violates the no-console-logging rule and bypasses the shared logger already imported from `../lib/logger`. Replace the call with `logger.error('could not load invoice lines', { invoiceId, err })`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-structured-logs"
+          ],
+          "marked": false,
+          "text": "Passing `invoiceId` and `err` as separate message arguments instead of structured named fields violates the structured-log-fields rule and makes the context harder to query. Pass the context as an object in `logger.error('could not load invoice lines', { invoiceId, err })`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-swallow"
+          ],
+          "marked": false,
+          "text": "Returning `[]` after this catch silently hides a failed invoice load and makes a broken invoice look empty, violating the do-not-swallow-errors rule. Log via the shared `logger` with `logger.error('could not load invoice lines', { invoiceId, err })` and/or surface the failure instead of only writing to `console`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P11-rule-generated-client-line-retouched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 30957,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P11-rule-generated-client-line-retouched",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/api/generated/billingClient.ts:26` (2026-10-06 12:00 UTC).\n\nBecause `src/api/generated/billingClient.ts` carries a `DO NOT EDIT` marker from `scripts/gen-api-client.ts` and its `generatedAt` stamp (`2026-09-28T09:41:52Z`) is unchanged, the hand-written comment inside `getInvoice` means the generated file was edited directly instead of regenerated. Revert the manual edit and, if the `expand` parameter is needed, add it to `openapi/billing.yaml` and rerun `pnpm run api:gen`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "The `console.error` in the catch block breaks the no-console rule and regresses the previous `logger.warn`; interpolating `invoiceId` into the message also violates structured logging because context is not passed as named fields. Change it to use the shared logger from `src/lib/logger.ts` with `logger.error('could not load invoice lines', { invoiceId, err })`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P11-rule-generated-client-line-retouched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 58994,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "The hand-added line leaves the `generatedAt` stamp at `2026-09-28T09:41:52Z` unchanged while the `DO NOT EDIT` marker names `scripts/gen-api-client.ts`, so it violates the rule to regenerate generated files rather than hand-edit them and will be lost on the next run. Add the missing parameter to `openapi/billing.yaml` and run `pnpm run api:gen` instead of keeping the hand patch."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "Using `console.error` in application code violates the no-console-logging rule and bypasses the shared logger that `src/lib/logger.ts` already provides. Replace it with `logger.error('could not load invoice lines', { invoiceId, err })`, matching the `logger.warn` usage from the previous revision."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-structured-logs"
+          ],
+          "marked": false,
+          "text": "Passing `invoiceId` and `err` as positional arguments instead of named fields violates the structured-log-fields rule and makes the log harder to query. Pass them as an object with `logger.error('could not load invoice lines', { invoiceId, err })`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P11-rule-generated-client-line-retouched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 43116,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "Hand-adding this line to `src/api/generated/billingClient.ts` despite its `DO NOT EDIT` marker leaves the `generatedAt` stamp at `2026-09-28T09:41:52Z` and violates the rule that generated files are written by `scripts/gen-api-client.ts` and must be regenerated, never hand-edited. Update `openapi/billing.yaml` and rerun `pnpm run api:gen` so the stamp is rewritten instead of editing this file by hand."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "Using `console.error` in the catch block of `src/billing/invoiceLines.ts` violates rule [1], bypasses the shared logger in `src/lib/logger.ts` for structured output, levels, and redaction, and leaves the existing `logger` import unused. Replace the `console.error` call with `logger.error('could not load invoice lines', { invoiceId, err })`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P11-rule-generated-client-line-retouched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 57590,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "This reintroduces `console.error` in application code, violating the rule \"No console logging in application code\"; the shared logger from `src/lib/logger.ts` (already imported at the top of this file) must be used instead. Replace it with `logger.error`, passing the context as structured fields."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-structured-logs"
+          ],
+          "marked": false,
+          "text": "The log call interpolates `invoiceId` and the error into the message string, violating the rule \"Structured log fields\"; context must be passed as an object of named fields. Log the message alone and pass `{ invoiceId, err }` as the context object."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-swallow"
+          ],
+          "marked": false,
+          "text": "The catch block swallows the error and returns an empty list, violating the rule \"Do not swallow errors\"; a catch block must rethrow, return an explicit error result, or log with the shared logger. Using `console.error` does not satisfy the rule, so log with `logger.error` (or rethrow) so the failure is recorded through the shared logger."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P11-rule-generated-client-line-retouched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 31241,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "Despite the `DO NOT EDIT. Generated by scripts/gen-api-client.ts` marker, a changed line with an unchanged `generatedAt: 2026-09-28T09:41:52Z` stamp on line 2 violates the rule to regenerate generated files rather than hand-edit them, and removing the `expand=lines` behavior leaves `getInvoice` with no return statement, so its `Promise<Invoice>` resolves to `undefined` at runtime. Revert this hunk, update the OpenAPI spec and `scripts/gen-api-client.ts`, then rerun `pnpm run api:gen` so the generated file and its stamp are rewritten by the script."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "Using `console.error` violates the rule against console logging in application code and re-introduces interpolation of the error into the message, which the shared logger's object form avoids. Use the shared logger from `src/lib/logger.ts` with `logger.warn` and `{ invoiceId, err }` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P11-rule-generated-client-line-retouched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 28243,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "Hand-editing `src/api/generated/billingClient.ts` leaves the `DO NOT EDIT` marker and unchanged `generatedAt` stamp (2026-09-28T09:41:52Z) inconsistent with the modified body of `getInvoice`, violating the rule that generated files only change by rerunning the generator. Revert the hand-edit and rerun `pnpm run api:gen` so `scripts/gen-api-client.ts` produces the file and rewrites the stamp."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "Using `console.error` in `src/billing/invoiceLines.ts` violates the no-console-logging rule and loses the structured context provided by the shared logger, even though `src/lib/logger.ts` is already imported. Route the error through `logger` again and pass the context as an object of named fields (`{ invoiceId, err }`) rather than interpolated arguments."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P11-rule-generated-client-line-retouched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 39038,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "The `DO NOT EDIT` marker naming `scripts/gen-api-client.ts` and the unchanged `generatedAt` stamp (`2026-09-28T09:41:52Z`) mean this hand-added line bypasses the generator. Per the rule 'Regenerate generated files, never hand-edit them', revert the hand-edit and regenerate via `pnpm run api:gen` (or add the `expand` parameter to `openapi/billing.yaml` first) so the script rewrites the `generatedAt` stamp."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "Using `console.error` in the catch block bypasses the shared logger in `src/lib/logger.ts`, so log level/transport configuration is ignored and the previous `logger.warn` severity is reversed. Replace the `console.error` call with `logger.error` (or `logger.warn` to keep the original severity), passing the context as an object of named fields."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-structured-logs"
+          ],
+          "marked": false,
+          "text": "Passing `invoiceId` and `err` as positional arguments keeps them out of the shared logger's searchable fields, violating the rule that context must be an object of named fields rather than interpolated or positional values. Pass `{ invoiceId, err }` to `logger.error` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P11-rule-generated-client-line-retouched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 30634,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "Because the generated file's body was replaced by a comment, the function now returns `undefined` despite declaring `Promise<Invoice>`, and the hand edit violates Rule 21's requirement that generated files change only by rerunning the script. Revert this edit and rerun `pnpm run api:gen` (updating the spec if the expand parameter is needed), or move any customization into a non-generated wrapper module."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "This bypasses the shared logger, violating the \"No console logging in application code\" rule, and interpolating values into the message skips structured log fields. Use the already-imported `logger` from `../lib/logger` and pass the context as fields instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P11-rule-generated-client-line-retouched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 46126,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-regenerate-generated-files"
+          ],
+          "marked": false,
+          "text": "The manual edit to this generated file will be silently wiped by the next `pnpm run api:gen`, leaving `getInvoice` returning undefined because the real `request<Invoice>('GET', ...)` call was replaced with a comment and the `generatedAt` stamp is unchanged. Revert the edit and, if the expand parameter is needed, add it to `openapi/billing.yaml` and rerun the generator so the stamp is rewritten."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "Using `console.error` here violates the no console logging in application code rule and bypasses the shared logger, so the error is no longer captured through `src/lib/logger.ts`. Restore the logger call and keep the original object context shape: `logger.error('could not load invoice lines', { invoiceId, err })`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-structured-logs"
+          ],
+          "marked": false,
+          "text": "Passing `invoiceId` and `err` as separate positional arguments to `console.error` loses structured log fields, violating the structured log fields rule. Pass the context as an object instead: `logger.error('could not load invoice lines', { invoiceId, err })`."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-swallow"
+          ],
+          "marked": false,
+          "text": "The catch block now swallows the error by sending it to `console.error` instead of the shared logger, so the failure is not captured through `src/lib/logger.ts` and the no-swallow rule is violated. Log through the shared logger instead: `logger.error('could not load invoice lines', { invoiceId, err })`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 69439,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because `toBeTruthy()` passes for any non-zero value, an incorrect discount or cap for the 40% + 30% stack on 10,000 cents capped at 50% of the subtotal can ship green instead of failing against the expected 5,000 cents. Replace it with `expect(capped.discountCents).toBe(5_000);` per the rule 'Hard, exact assertions in tests'."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because `expect.soft` with `toBeTruthy()` neither hard-fails nor pins the value, a 15% coupon on 10,000 cents can be wrong instead of the expected 8,500 total cents. Replace it with `expect(priced.totalCents).toBe(8_500);` per the rule 'Hard, exact assertions in tests'."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 66,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because `toBeDefined()` only proves the field exists, a 15% coupon on 10,000 cents can produce a discount other than the expected 1,500 and still pass. Assert the exact value with `expect(priced.discountCents).toBe(1_500);` per the rule 'Hard, exact assertions in tests'."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23257,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "`toBeTruthy()` passes for any nonzero discount, so a wrong cap on the 10,000-cent subtotal with 40% + 30% coupons (which should combine to exactly 5,000 cents) would slip through. Assert the exact value with `expect(capped.discountCents).toBe(5_000)`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "`expect.soft(priced.totalCents).toBeTruthy()` passes for any nonzero total, so a wrong 15% coupon result on the 10,000-cent subtotal would go unnoticed. Assert the exact 8,500 cents with `expect(priced.totalCents).toBe(8_500)`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 66,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "`expect.soft(priced.discountCents).toBeDefined()` only checks presence, so a wrong 15% coupon discount on the 10,000-cent subtotal would pass. Assert the exact value with `expect(priced.discountCents).toBe(1_500)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39176,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Truthiness checks let a wrong discount pass even though a 15% coupon on 10,000 cents must yield `totalCents` of 8,500 and `discountCents` of 1,500. Replace the `expect.soft` calls with hard assertions using those exact values and `toEqual(percent(15))` for `appliedCoupon`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Checking only truthiness lets a wrong capped discount pass even though 50% of 10,000 cents is exactly 5,000. Assert `capped.discountCents` with a hard `toBe(5_000)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 33331,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P12-rule-soft-asserts-moved-down",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/pricing/discounts.test.ts:7` (2026-10-06 12:00 UTC).\n\nThese soft assertions only check truthiness or presence, so a 15% coupon on 10,000 cents is never verified against its single correct result. Replace them with hard assertions on the exact values: `priced.totalCents` as 8_500, `priced.discountCents` as 1_500, and `priced.appliedCoupon` equal to `percent(15)`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Checking only the truthiness of `capped.discountCents` never verifies that the 40% + 30% discount on 10,000 cents is capped at 50%. Assert the exact value of 5_000 with a hard assertion."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 34661,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because this test only asserts truthiness, it passes for any non-zero discount even though 40% + 30% on 10,000 cents is 7,000 discounted, capped at 50% of the subtotal = 5,000 cents. Replace it with a hard assertion that `capped.discountCents` equals `5_000` using `toBe`, per rule 21."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P12-rule-soft-asserts-moved-down",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/pricing/discounts.test.ts:7` (2026-10-06 12:00 UTC).\n\nBecause the earlier suggestion was not applied, this block still uses `expect.soft` with `toBeTruthy` and `toBeDefined`, which can pass without checking exact results even though a 15% coupon on 10,000 cents should yield `priced.totalCents` of `8_500` and `priced.discountCents` of `1_500`. Replace those soft checks with hard assertions on those exact values, per rule 21."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 67,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P12-rule-soft-asserts-moved-down",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/pricing/discounts.test.ts:7` (2026-10-06 12:00 UTC).\n\nBecause `priced.appliedCoupon` is only checked with `toBeTruthy`, the test passes for any coupon object even though it knows the exact coupon passed in. Assert the exact value with `toEqual` and `percent(15)`, per rule 21."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P12-rule-soft-asserts-moved-down-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 48720,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Even though the expected capped discount is known (50% of 10_000 is 5_000 but capped at 50% of subtotal), `capped.discountCents` is only checked with `toBeTruthy()`, allowing wrong values to pass. Assert the exact value with `toBe(3_000)` instead."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Rule 21 forbids `expect.soft` and truthiness checks, so `priced.totalCents` can be wrong while the test still passes. For the 15% coupon on 10_000 cents, replace `expect.soft(priced.totalCents).toBeTruthy()` with `expect(priced.totalCents).toBe(8_500)`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 66,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "`expect.soft` with `toBeDefined()` violates rule 21 and only checks that `priced.discountCents` is present, not that the 15% discount on 10_000 cents equals 1_500. Replace it with a hard assertion `expect(priced.discountCents).toBe(1_500)`."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 67,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Checking only truthiness of `priced.appliedCoupon` allows the wrong coupon to pass even though the expected coupon is known. Rule 21 requires an exact assertion, so use `toEqual({ kind: 'percent', value: 15 })` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P12-rule-soft-asserts-moved-down-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 35378,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "The test title promises a 50% cap on the combined discount, but asserting only truthiness of `discountCents` lets an incorrect capped value pass. Replace it with a hard assertion of the exact result: `percent(40) + percent(30)` on 10_000 is 3_500 after the 50% cap, so use `toBe(3_500)`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "`expect.soft` combined with a truthiness check lets a wrong total slip through even though the exact value is known. Use a hard assertion instead, since a 15% coupon on 10_000 yields `totalCents` of 8_500."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 66,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "`expect.soft(...).toBeDefined()` only verifies presence, so an incorrect discount would still pass. Assert the exact value with a hard assertion, as 15% of 10_000 is 1_500."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 67,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "`toBeTruthy()` on `appliedCoupon` only checks that something is present, missing a wrong coupon kind or value. Assert the exact expected object with `toEqual({ kind: 'percent', value: 15 })`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P12-rule-soft-asserts-moved-down-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 25888,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because a 50% cap on a `10_000` subtotal yields exactly `5_000` cents, `toBeTruthy()` checks only presence and violates rule 21 by missing the exact expected value. Replace it with a hard equality assertion on `5_000`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "A 15% coupon on a `10_000` subtotal yields `totalCents` exactly `8_500`, so `expect.soft` with `toBeTruthy()` violates rule 21 by asserting only presence instead of the known value. Replace it with a hard assertion on `8_500`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 66,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "The discount for a 15% coupon on `10_000` cents is exactly `1_500` cents, so `expect.soft` plus `toBeDefined()` violates rule 21 by asserting only presence. Replace it with a hard assertion on `1_500`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P12-rule-soft-asserts-moved-down-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 37911,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because the exact capped discount is known (50% of 10_000 = 5_000 cents), asserting only truthiness weakens the test. Assert the exact value with a hard assertion."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because `expect.soft` is disallowed and the exact total is known (10_000 - 15% = 8_500), asserting truthiness is too weak. Use a hard assertion with the exact value."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 66,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because `expect.soft` is disallowed and `toBeDefined` only checks presence when the exact discount is known (15% of 10_000 = 1_500), the test is too weak. Assert the exact value with a hard assertion."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 67,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because `toBeTruthy` only checks presence even though the applied coupon is known, the assertion does not verify the exact value. Assert it with `toEqual`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P12-rule-soft-asserts-moved-down-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 41814,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "`toBeTruthy` on `capped.discountCents` only checks presence and violates rule 21 even though the 50% cap makes the exact discount assertable. Replace it with an exact `toBe` assertion that matches the capped amount the implementation returns."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Using `expect.soft` is prohibited, and the 15% coupon on 10_000 cents makes the exact total 8_500 cents. Replace the soft truthiness assertion with a hard assertion: `expect(priced.totalCents).toBe(8_500);`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 66,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "`expect.soft` with `toBeDefined` asserts only presence even though the exact discount is known: 15% of 10_000 is 1_500 cents. Use a hard, exact assertion: `expect(priced.discountCents).toBe(1_500);`."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 67,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because the test knows which coupon was applied, mere truthiness on `priced.appliedCoupon` is too weak. Replace it with a hard assertion against the exact coupon object, such as `expect(priced.appliedCoupon).toEqual(percent(15));`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

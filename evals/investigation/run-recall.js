@@ -242,6 +242,12 @@ function traceSummaryFromOutput(output) {
         coverage: trace.coverage ?? null,
         anomalies: trace.anomalies ?? null,
         verification: trace.verification ?? null,
+        // RECALL_REAL_REPO=1: true when the tools searched the PR's real
+        // repository, false when the case fell back to the replay.
+        repoPrepared: trace.repoPrepared ?? null,
+        // false: no exec, so checkTypes, findNearestProjectFile and findFile's
+        // fd/find path were not registered (replay, and RECALL_REAL_REPO=1).
+        sandboxExec: trace.sandboxExec ?? null,
     };
 }
 

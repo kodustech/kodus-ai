@@ -411,10 +411,13 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 });
                 (tracedGenerateText as jest.Mock)
                     .mockRejectedValueOnce(overflow)
-                    .mockImplementation(async ({ prompt }: { prompt?: string }) => {
-                        if (prompt) capturedPrompts.push({ prompt, role: 'user' });
-                        return { text: NEW_SUMMARY_TEXT };
-                    });
+                    .mockImplementation(
+                        async ({ prompt }: { prompt?: string }) => {
+                            if (prompt)
+                                capturedPrompts.push({ prompt, role: 'user' });
+                            return { text: NEW_SUMMARY_TEXT };
+                        },
+                    );
 
                 const result = await service.generateSummaryPR(
                     stubPR,
@@ -444,10 +447,13 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 });
                 (tracedGenerateText as jest.Mock)
                     .mockRejectedValueOnce(new Error('Service Unavailable'))
-                    .mockImplementation(async ({ prompt }: { prompt?: string }) => {
-                        if (prompt) capturedPrompts.push({ prompt, role: 'user' });
-                        return { text: NEW_SUMMARY_TEXT };
-                    });
+                    .mockImplementation(
+                        async ({ prompt }: { prompt?: string }) => {
+                            if (prompt)
+                                capturedPrompts.push({ prompt, role: 'user' });
+                            return { text: NEW_SUMMARY_TEXT };
+                        },
+                    );
 
                 await service.generateSummaryPR(
                     stubPR,
@@ -772,7 +778,10 @@ describe('CommentManagerService — pure helpers', () => {
 
         it('returns undefined when no warning, no rule-context warning, or no titles', () => {
             expect(
-                svc().resolveSkippedRulesNotice(undefined, LanguageValue.ENGLISH),
+                svc().resolveSkippedRulesNotice(
+                    undefined,
+                    LanguageValue.ENGLISH,
+                ),
             ).toBeUndefined();
             expect(
                 svc().resolveSkippedRulesNotice([], LanguageValue.ENGLISH),
@@ -1055,7 +1064,10 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
             expect(arg.runName).toBe('repeatedCodeReviewSuggestionClustering');
             expect(arg.organizationId).toBe('org-1');
             expect(arg.byokConfig).toBe(byok);
-            expect(arg.attrs).toEqual({ organizationId: 'org-1', prNumber: PR });
+            expect(arg.attrs).toEqual({
+                organizationId: 'org-1',
+                prNumber: PR,
+            });
         });
 
         it('resolves the language from ParametersService before assembling the prompt', async () => {
@@ -1077,12 +1089,11 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
         // Row 1 — exact D (happy). Enrichment applies a+b clustering.
         it('[1] exact D → applies the clustering (a=PARENT, b=RELATED)', async () => {
             runSpy.mockResolvedValue(cleanClusterAB());
-            const result =
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    input3(),
-                );
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                input3(),
+            );
             expect(clusteringWasApplied(result)).toBe(true);
             // Non-clustered c survives untouched.
             expect(result.find((r) => r.id === 'c')).toEqual({
@@ -1311,12 +1322,11 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
                     },
                 ],
             });
-            const result =
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    input3(),
-                );
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                input3(),
+            );
             expect(clusteringWasApplied(result)).toBe(true);
         });
 
@@ -1324,12 +1334,11 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
         it('[14] empty object {} → safe-default returns the original suggestions', async () => {
             runSpy.mockResolvedValue({});
             const original = input3();
-            const result =
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    original,
-                );
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                original,
+            );
             expect(result).toEqual(original);
         });
 
@@ -1337,12 +1346,11 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
         it('[15] empty array [] → safe-default returns the original suggestions', async () => {
             runSpy.mockResolvedValue([]);
             const original = input3();
-            const result =
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    original,
-                );
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                original,
+            );
             expect(result).toEqual(original);
         });
 
@@ -1351,12 +1359,11 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
         it('[16] empty string → fail-safe returns the original suggestions', async () => {
             runSpy.mockResolvedValue('' as any);
             const original = input3();
-            const result =
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    original,
-                );
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                original,
+            );
             expect(result).toEqual(original);
         });
 
@@ -1381,24 +1388,22 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
         it('[17] null return → fail-safe returns the original suggestions', async () => {
             runSpy.mockResolvedValue(null as any);
             const original = input3();
-            const result =
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    original,
-                );
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                original,
+            );
             expect(result).toEqual(original);
         });
 
         it('[17b] undefined return → fail-safe returns the original suggestions', async () => {
             runSpy.mockResolvedValue(undefined as any);
             const original = input3();
-            const result =
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    original,
-                );
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                original,
+            );
             expect(result).toEqual(original);
         });
 
@@ -1406,12 +1411,11 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
         it('[18a] primitive 0 → fail-safe returns the original suggestions', async () => {
             runSpy.mockResolvedValue(0 as any);
             const original = input3();
-            const result =
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    original,
-                );
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                original,
+            );
             expect(result).toEqual(original);
         });
 
@@ -1463,12 +1467,11 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
                 thinking: 'let me analyze the duplicates...',
             });
             const original = input3();
-            const result =
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    original,
-                );
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                original,
+            );
             expect(result).toEqual(original);
         });
     });
@@ -1523,14 +1526,15 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
                     },
                 ],
             });
-            const result =
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    input3(),
-                );
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                input3(),
+            );
             const parent = result.find((r) => r.id === 'a');
-            expect(parent?.clusteringInformation?.problemDescription).toBe(desc);
+            expect(parent?.clusteringInformation?.problemDescription).toBe(
+                desc,
+            );
             expect(parent?.clusteringInformation?.actionStatement).toBe(
                 'fix ✅',
             );
@@ -1543,12 +1547,11 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
         it('[30] LLM.run rejects → fail-safe returns the original suggestions', async () => {
             runSpy.mockRejectedValue(new Error('network down'));
             const original = input3();
-            const result =
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    original,
-                );
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                original,
+            );
             expect(result).toEqual(original);
         });
 
@@ -1557,12 +1560,11 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
         it('[31] {error} object → safe-default returns the original suggestions', async () => {
             runSpy.mockResolvedValue({ error: 'rate_limited' } as any);
             const original = input3();
-            const result =
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    original,
-                );
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                original,
+            );
             expect(result).toEqual(original);
         });
 
@@ -1571,12 +1573,11 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
         it('[32] empty-success (empty string) → fail-safe returns the original suggestions', async () => {
             runSpy.mockResolvedValue('' as any);
             const original = input3();
-            const result =
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    original,
-                );
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                original,
+            );
             expect(result).toEqual(original);
         });
 
@@ -1606,12 +1607,11 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
                 Object.assign(new Error('aborted'), { name: 'AbortError' }),
             );
             const original = input3();
-            const result =
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    original,
-                );
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                original,
+            );
             expect(result).toEqual(original);
         });
     });
@@ -1621,12 +1621,11 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
         // Row 35 — empty input.
         it('[35] empty input [] → returns [] and still assembles one call', async () => {
             runSpy.mockResolvedValue({ codeSuggestions: [] });
-            const result =
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    [],
-                );
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                [],
+            );
             expect(result).toEqual([]);
             expect(runSpy).toHaveBeenCalledTimes(1);
             expect(runSpy.mock.calls[0][0].user).toContain(
@@ -1640,12 +1639,11 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
             const original = [
                 { id: 'only', relevantFile: 'x.ts', suggestionContent: 'X' },
             ];
-            const result =
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    original,
-                );
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                original,
+            );
             expect(result).toEqual(original);
         });
 
@@ -1656,12 +1654,11 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
                 { id: 'a', relevantFile: 'a.ts', suggestionContent: 'A1' },
                 { id: 'a', relevantFile: 'a.ts', suggestionContent: 'A2' },
             ];
-            const result =
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    original,
-                );
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                original,
+            );
             expect(result).toEqual(original);
         });
 
@@ -1672,12 +1669,11 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
                 { id: 'a', relevantFile: null, suggestionContent: undefined },
                 { id: undefined },
             ];
-            const result =
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    original,
-                );
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                original,
+            );
             expect(result).toEqual(original);
         });
 
@@ -1691,12 +1687,11 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
                     suggestionContent: 'weird "quotes" \n \t 🚀 </xml>',
                 },
             ];
-            const result =
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    original,
-                );
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                original,
+            );
             expect(result).toEqual(original);
             // JSON.stringify escaped the embedded double-quotes.
             expect(runSpy.mock.calls[0][0].user).toContain('\\"quotes\\"');
@@ -1739,8 +1734,14 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
     // A/B/C zoo above, which stands in for the json_object-fallback outputs.
     describe('E. provider/model threading (policy is downstream)', () => {
         it.each([
-            ['strict json_schema model', { provider: 'moonshotai', model: 'kimi-k2' }],
-            ['json_object fallback model', { provider: 'z-ai', model: 'glm-4' }],
+            [
+                'strict json_schema model',
+                { provider: 'moonshotai', model: 'kimi-k2' },
+            ],
+            [
+                'json_object fallback model',
+                { provider: 'z-ai', model: 'glm-4' },
+            ],
         ])(
             'threads the byokConfig verbatim into LLM.run for a %s',
             async (_label, slot) => {
@@ -1835,8 +1836,7 @@ describe('LLMResponseProcessor.processResponse — raw-string parse rows', () =>
 
     // Row 26 — duplicate keys resolve last-wins (JSON5/JSON semantics).
     it('[26] duplicate codeSuggestions keys → last-wins, deterministic', () => {
-        const raw =
-            '{"codeSuggestions":[],"codeSuggestions":[{"id":"z"}]}';
+        const raw = '{"codeSuggestions":[],"codeSuggestions":[{"id":"z"}]}';
         const out = proc().processResponse(org, 1, raw);
         expect(out?.codeSuggestions).toEqual([{ id: 'z' }]);
     });
@@ -1920,5 +1920,290 @@ describe('CommentManagerService.createReviewCommentWithRetry — line mismatch',
         await expect(result).rejects.toBeDefined();
         expect(createReviewComment).toHaveBeenCalledTimes(3);
         expect(createReviewComment.mock.calls[2][0].lineComment.line).toBe(5);
+    });
+});
+
+describe('CommentManagerService.createPrLevelReviewComments carries the kody-codereview marker (#2050)', () => {
+    let service: CommentManagerService;
+    const codeManagementService = {
+        getPullRequestByNumber: jest.fn(),
+        formatReviewCommentBody: jest.fn(),
+        createIssueComment: jest.fn(),
+        getTypeIntegration: jest.fn(),
+    } as any;
+
+    const suggestion = () => ({
+        id: 'uuid-1',
+        oneSentenceSummary: 'PR description must reference a tracking ticket',
+        suggestionContent:
+            '![kody code-review](https://img.shields.io/badge/...)\n' +
+            'PR description must reference a tracking ticket.\n\n' +
+            'Kody rule violation: [PR description must reference a ticket](https://rules/1)',
+    });
+
+    beforeEach(() => {
+        codeManagementService.formatReviewCommentBody.mockReset();
+        codeManagementService.createIssueComment.mockReset();
+        codeManagementService.getTypeIntegration.mockReset();
+        codeManagementService.formatReviewCommentBody.mockResolvedValue(
+            '![badge](https://img.shields.io/badge/...)\n\nrule body',
+        );
+        codeManagementService.createIssueComment.mockResolvedValue({ id: 101 });
+        // Non-Bitbucket by default: the raw marker is appended.
+        codeManagementService.getTypeIntegration.mockResolvedValue(undefined);
+        service = new CommentManagerService(
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            codeManagementService,
+        );
+    });
+
+    const call = (platformType?: PlatformType) =>
+        service.createPrLevelReviewComments(
+            { organizationId: 'org-1', teamId: 'team-1' } as never,
+            7,
+            { name: 'sample', id: 'repo-id', language: 'typescript' } as never,
+            [suggestion()] as never,
+            'typescript',
+            undefined,
+            platformType,
+        );
+
+    it('appends the marker to a PR-level comment body that lacks it', async () => {
+        const { commentResults } = await call();
+
+        expect(commentResults[0].comment.body).toContain(
+            '<!-- kody-codereview -->',
+        );
+        // The body that is actually posted is the marked one.
+        expect(codeManagementService.createIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prNumber: 7,
+                body: expect.stringContaining('<!-- kody-codereview -->'),
+            }),
+            undefined,
+        );
+    });
+
+    it('does not duplicate the marker when the formatted body already carries it', async () => {
+        codeManagementService.formatReviewCommentBody.mockResolvedValue(
+            '![badge](https://img.shields.io/badge/...)\n\nrule body\n\n' +
+                '<!-- kody-codereview -->\n&#8203;',
+        );
+
+        const { commentResults } = await call();
+
+        const body = commentResults[0].comment.body;
+        expect(body.split('<!-- kody-codereview -->').length - 1).toBe(1);
+    });
+
+    it('skips the raw marker on Bitbucket, which escapes it', async () => {
+        // Bitbucket renders raw HTML as visible text, so the raw
+        // `<!-- kody-codereview -->` marker must not be appended there; the
+        // platform already injects a visible "kody|code-review" chip in the
+        // header instead (#2050).
+        codeManagementService.getTypeIntegration.mockResolvedValue(
+            PlatformType.BITBUCKET,
+        );
+
+        const { commentResults } = await call();
+
+        expect(commentResults[0].comment.body).not.toContain(
+            '<!-- kody-codereview -->',
+        );
+        expect(
+            codeManagementService.createIssueComment.mock.calls[0][0].body,
+        ).not.toContain('<!-- kody-codereview -->');
+    });
+
+    it('keeps the marker on another platform', async () => {
+        codeManagementService.getTypeIntegration.mockResolvedValue(
+            PlatformType.GITHUB,
+        );
+
+        const { commentResults } = await call();
+
+        expect(commentResults[0].comment.body).toContain(
+            '<!-- kody-codereview -->',
+        );
+    });
+
+    it("follows the PR's own platform when the integration lookup disagrees", async () => {
+        // The integration lookup answers with ONE row per organization/team, so
+        // a team running GitHub and Bitbucket together can resolve the wrong
+        // platform — and then a Bitbucket PR gets the raw marker it renders as
+        // visible text. The caller passes the platform the comment actually
+        // lands on, which is authoritative (#2055 review).
+        codeManagementService.getTypeIntegration.mockResolvedValue(
+            PlatformType.GITHUB,
+        );
+
+        const { commentResults } = await call(PlatformType.BITBUCKET);
+
+        expect(commentResults[0].comment.body).not.toContain(
+            '<!-- kody-codereview -->',
+        );
+        expect(
+            codeManagementService.createIssueComment.mock.calls[0][0].body,
+        ).not.toContain('<!-- kody-codereview -->');
+    });
+
+    it('keeps the marker when the PR is on a platform that renders it', async () => {
+        // The mirror case: the lookup says Bitbucket while the PR is on GitHub.
+        codeManagementService.getTypeIntegration.mockResolvedValue(
+            PlatformType.BITBUCKET,
+        );
+
+        const { commentResults } = await call(PlatformType.GITHUB);
+
+        expect(commentResults[0].comment.body).toContain(
+            '<!-- kody-codereview -->',
+        );
+    });
+
+    it("formats the body with the PR's own platform, not the integration lookup", async () => {
+        // The marker gate is not the only place the platform decides: the
+        // formatter is dispatched on it too, and the dispatcher re-resolves it
+        // from the same single-row lookup when it is omitted — a Bitbucket PR
+        // formatted by the GitHub adapter loses the visible chip and gets
+        // `<details>` markup Bitbucket renders as text (#2055 review).
+        codeManagementService.getTypeIntegration.mockResolvedValue(
+            PlatformType.GITHUB,
+        );
+
+        await call(PlatformType.BITBUCKET);
+
+        expect(
+            codeManagementService.formatReviewCommentBody,
+        ).toHaveBeenCalledWith(expect.anything(), PlatformType.BITBUCKET);
+    });
+});
+
+// The anchor for every inline comment used to be re-derived at posting time
+// from the PR commit list, whose last element is the head as of the post — not
+// the commit the review actually read. A push landing during the review then
+// moved every anchor to a tree the review never looked at, and the commits
+// pushed meanwhile were reported to the pipeline as already analyzed, so the
+// next incremental run skipped them. The reviewed commit is known to the
+// caller (the pipeline context head sha), so createLineComments takes it as an
+// optional argument and anchors on it when present.
+describe('CommentManagerService.createLineComments — anchors on the reviewed commit', () => {
+    const REVIEWED = { sha: 'reviewed-commit-sha', message: 'reviewed' };
+    const PUSHED = { sha: 'pushed-during-review-sha', message: 'pushed' };
+
+    const build = () => {
+        const createReviewComment = jest
+            .fn()
+            .mockResolvedValue({ id: 'c-1', pull_request_review_id: 42 });
+        const codeManagementService = {
+            getCommitsForPullRequestForCodeReview: jest
+                .fn()
+                .mockResolvedValue([REVIEWED, PUSHED]),
+            createReviewComment,
+        };
+        const svc = new CommentManagerService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            codeManagementService as any,
+        );
+        return { svc, createReviewComment };
+    };
+
+    const lineComments = [
+        {
+            path: 'a.ts',
+            start_line: 3,
+            line: 10,
+            side: 'RIGHT',
+            body: {},
+            suggestion: { id: 's-1' },
+        },
+    ] as any;
+
+    it('posts against the reviewed commit and returns it, not the head at posting time', async () => {
+        const { svc, createReviewComment } = build();
+
+        const result = await svc.createLineComments(
+            { organizationId: 'o', teamId: 't' } as any,
+            7,
+            { name: 'repo', id: '1', language: 'ts' },
+            lineComments,
+            'en-US',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            REVIEWED.sha,
+        );
+
+        // The per-comment posting call must anchor on the commit the review read.
+        expect(createReviewComment.mock.calls[0][0].commit).toEqual({
+            sha: REVIEWED.sha,
+        });
+        // The commit handed back to the caller drives the next incremental run:
+        // returning the post-time head would mark the push as already analyzed.
+        expect(result.lastAnalyzedCommit).toEqual({ sha: REVIEWED.sha });
+        // The live fetch still returns the full list, head included.
+        expect(result.commits).toEqual([REVIEWED, PUSHED]);
+        expect(result.commentResults).toHaveLength(1);
+    });
+
+    it('falls back to the live head when no reviewed commit is supplied', async () => {
+        const { svc, createReviewComment } = build();
+
+        const result = await svc.createLineComments(
+            { organizationId: 'o', teamId: 't' } as any,
+            7,
+            { name: 'repo', id: '1', language: 'ts' },
+            lineComments,
+            'en-US',
+        );
+
+        expect(createReviewComment.mock.calls[0][0].commit).toBe(PUSHED);
+        expect(result.lastAnalyzedCommit).toBe(PUSHED);
+    });
+
+    it('falls back to the live head when the reviewed commit was force-pushed away', async () => {
+        // A rebase or force-push during the review rewrites the reviewed commit
+        // out of the PR, and both providers reject an anchor that is not part of
+        // it (GitHub commit_id, GitLab position.headSha). Pinning a vanished sha
+        // would lose every inline comment rather than anchor them on a stale
+        // tree, so the pin is conditional on the live list still containing it.
+        const createReviewComment = jest
+            .fn()
+            .mockResolvedValue({ id: 'c-1', pull_request_review_id: 42 });
+        const codeManagementService = {
+            getCommitsForPullRequestForCodeReview: jest
+                .fn()
+                .mockResolvedValue([PUSHED]),
+            createReviewComment,
+        };
+        const svc = new CommentManagerService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            codeManagementService as any,
+        );
+
+        const result = await svc.createLineComments(
+            { organizationId: 'o', teamId: 't' } as any,
+            7,
+            { name: 'repo', id: '1', language: 'ts' },
+            lineComments,
+            'en-US',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            REVIEWED.sha, // rewritten away by the force-push
+        );
+
+        expect(createReviewComment.mock.calls[0][0].commit).toBe(PUSHED);
+        expect(result.lastAnalyzedCommit).toBe(PUSHED);
     });
 });

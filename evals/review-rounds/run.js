@@ -1,7 +1,7 @@
 // review-rounds — across review rounds and sandbox failures, does what reaches
 // the PR match what a correct review delivers? Issues #2039, #2040, #2020.
 //
-//   node evals/review-rounds/run.js --model=deepseek-v4-flash --reps=3
+//   node evals/review-rounds/run.js --model=deepseek-v4-flash@fireworks --byok-reasoning=none --reps=5
 //   node evals/review-rounds/run.js --model=gpt-5.4 --case=R2 --reps=1
 //   node evals/review-rounds/run.js --model=eval-fake          # wiring smoke
 //
@@ -78,6 +78,10 @@ const arg = (n, d) => {
 const MODEL = arg('model');
 const REPS = Number(arg('reps', 1));
 const ONLY = arg('case');
+// --byok-reasoning=<none|low|medium|high>: route both agents through a BYOK
+// slot — the path production customers take, each with the reasoning effort
+// they configured — instead of the env/managed default (family effort).
+const BYOK_REASONING = arg('byok-reasoning');
 const GATE = process.argv.includes('--gate');
 const STARTED_AT = new Date().toISOString();
 const OUT = arg(
@@ -260,6 +264,8 @@ function buildPrompts(c) {
         requestedCategories: ['bug', 'security', 'performance'],
         baseBranch: 'main',
         previousDecisions: c.previousDecisions,
+        // Production always passes the PR's commits (review-orchestrator).
+        commits: c.commits,
     };
     return {
         input,
@@ -301,7 +307,7 @@ async function runFinder(c, counter, runAgentLoopViaCore, buildEvalModel) {
                 c.sandbox === 'none'
                     ? undefined
                     : sandbox(c.sandbox, c.repo, counter),
-            byokConfig: undefined,
+            byokConfig: byokSlot() ?? undefined,
             byokErrorReporter: undefined,
         },
     );
@@ -311,6 +317,26 @@ async function runFinder(c, counter, runAgentLoopViaCore, buildEvalModel) {
         suggestions: out.findings?.suggestions || [],
         out,
     };
+}
+
+let slot;
+function byokSlot() {
+    if (!BYOK_REASONING) return null;
+    if (slot) return slot;
+    const { TIER0 } = require('../shared/tier0-models');
+    const spec = TIER0[MODEL];
+    const key = spec?.keyEnvs.map((n) => process.env[n]).find(Boolean);
+    if (!key) throw new Error(`INFRA: --byok-reasoning needs a key for ${MODEL}`);
+    const { encrypt } = require('../../libs/common/utils/crypto.ts');
+    // A stored BYOK model: the key encrypted as the config keeps it.
+    slot = {
+        provider: spec.provider,
+        apiKey: encrypt(key),
+        model: spec.doModel || MODEL,
+        baseURL: spec.baseURL,
+        reasoningEffort: BYOK_REASONING,
+    };
+    return slot;
 }
 
 // The production Kody Rules agent (sharded rule judge), same entry point as
@@ -323,7 +349,7 @@ async function runKodyRules(c, counter) {
         buildRepoLookup,
     } = require('../../libs/code-review/infrastructure/agents/collaborators/repo-lookup.ts');
     const provider = new KodyRulesAgentProvider(
-        { resolveTaskSlot: async () => null, getBYOKConfig: async () => null },
+        { resolveTaskSlot: async () => byokSlot(), getBYOKConfig: async () => null },
         {
             runInSpan: async (_n, fn) =>
                 typeof fn === 'function' ? fn() : undefined,
@@ -350,6 +376,7 @@ async function runKodyRules(c, counter) {
         prTitle: c.prTitle || 'Review round',
         prBody: c.prBody || '',
         previousDecisions: c.previousDecisions,
+        commits: c.commits,
         kodyRules: c.kodyRules.map((r) => ({
             ...r,
             type: 'standard',
@@ -367,6 +394,14 @@ async function runKodyRules(c, counter) {
 }
 
 async function once(c, judgeKey) {
+    // The history reaches the agents the way production builds it: most
+    // recent first, capped at MAX_PR_DECISIONS (capDecisions).
+    if (c.previousDecisions?.length) {
+        const {
+            capDecisions,
+        } = require('../../libs/code-review/application/use-cases/previousReviewDecisions/build-previous-review-decisions.use-case.ts');
+        c = { ...c, previousDecisions: capDecisions(c.previousDecisions) };
+    }
     const {
         runAgentLoopViaCore,
     } = require('../../libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.ts');
@@ -632,6 +667,7 @@ async function main() {
             JSON.stringify(
                 {
                     model: MODEL,
+                    byokReasoning: BYOK_REASONING || null,
                     judge: JUDGE_MODEL,
                     judgeReasoningEffort:
                         process.env.JUDGE_REASONING_EFFORT || null,
