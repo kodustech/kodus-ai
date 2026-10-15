@@ -67,6 +67,15 @@ describe('McpToolSession', () => {
         await expect(
             session().call('get_issue', { id: 'QA-17' }),
         ).rejects.toBeInstanceOf(TaskNotFoundError);
+        // The same answer, thrown by the MCP adapter.
+        executeTool.mockRejectedValueOnce(
+            new Error(
+                'Tool clickup_get_task failed: {"error":"Team not authorized"}',
+            ),
+        );
+        await expect(
+            session().call('get_issue', { id: 'QA-17' }),
+        ).rejects.toBeInstanceOf(TaskNotFoundError);
         executeTool.mockResolvedValueOnce(
             errorResult('Team not authorized: token expired'),
         );

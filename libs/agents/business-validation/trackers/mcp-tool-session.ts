@@ -151,10 +151,14 @@ export function readToolPayload(result: unknown): unknown {
     }
 }
 
+/** What the MCP adapter puts before a tool's own answer when it throws it. */
+const ADAPTER_PREFIX = /^\s*Tool \S+ failed:\s*/i;
+
 function trackerError(message: string): Error {
+    const answer = message.replace(ADAPTER_PREFIX, '').trim();
     return NOT_FOUND_PATTERN.test(message) ||
-        RETRIEVE_FAILED_FOR_ID.test(message.trim()) ||
-        CLICKUP_NO_SUCH_TASK.test(message.trim())
+        RETRIEVE_FAILED_FOR_ID.test(answer) ||
+        CLICKUP_NO_SUCH_TASK.test(answer)
         ? new TaskNotFoundError(message)
         : new TrackerUnavailableError(message);
 }
