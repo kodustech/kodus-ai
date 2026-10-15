@@ -1,0 +1,1219 @@
+{
+ "resumo": {
+  "versao": "s11",
+  "modelo": "deepseek-v4.1-flash@together",
+  "gold": "deepseek-v4.1-flash",
+  "n": 169,
+  "erros": 0,
+  "exato": 81.7,
+  "ateUm": 100,
+  "porConjunto": {
+   "light": 82.6,
+   "holdout": 80
+  },
+  "chamadas": 169,
+  "tokensEntrada": 290333,
+  "tokensSaida": 107088,
+  "tokensPorSugestao": 2352,
+  "latenciaMedianaMs": 2020,
+  "paredeS": 97,
+  "acima": 7,
+  "abaixo": 24,
+  "confusao": {
+   "medium>medium": 67,
+   "high>high": 43,
+   "low>low": 26,
+   "critical>high": 3,
+   "medium>high": 5,
+   "high>medium": 14,
+   "medium>low": 7,
+   "low>medium": 2,
+   "critical>critical": 2
+  }
+ },
+ "itens": {
+  "light|oauth-credential-sync-and-app-integration-enhancements-cal-com|S4": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|oauth-credential-sync-and-app-integration-enhancements-cal-com|S5": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|oauth-credential-sync-and-app-integration-enhancements-cal-com|S15": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|oauth-credential-sync-and-app-integration-enhancements-cal-com|S1": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|oauth-credential-sync-and-app-integration-enhancements-cal-com|S2": {
+   "gold": "critical",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|oauth-credential-sync-and-app-integration-enhancements-cal-com|S3": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|add-guest-management-functionality-to-existing-bookings-cal-com|S5": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|add-guest-management-functionality-to-existing-bookings-cal-com|S11": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|add-guest-management-functionality-to-existing-bookings-cal-com|S14": {
+   "gold": "medium",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|add-guest-management-functionality-to-existing-bookings-cal-com|S15": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|add-guest-management-functionality-to-existing-bookings-cal-com|S1": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|add-guest-management-functionality-to-existing-bookings-cal-com|S4": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|add-guest-management-functionality-to-existing-bookings-cal-com|S13": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|fix-handle-collective-multiple-host-on-destinationcalendar-cal-com|S3": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|fix-handle-collective-multiple-host-on-destinationcalendar-cal-com|S4": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|fix-handle-collective-multiple-host-on-destinationcalendar-cal-com|S7": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|fix-handle-collective-multiple-host-on-destinationcalendar-cal-com|S2": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|sms-workflow-reminder-retry-count-tracking-cal-com|S11": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|sms-workflow-reminder-retry-count-tracking-cal-com|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|sms-workflow-reminder-retry-count-tracking-cal-com|S7": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|sms-workflow-reminder-retry-count-tracking-cal-com|S12": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com|S2": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feat-2fa-backup-codes-cal-com|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feat-2fa-backup-codes-cal-com|S2": {
+   "gold": "critical",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|feat-2fa-backup-codes-cal-com|S10": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feat-2fa-backup-codes-cal-com|S8": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|feat-2fa-backup-codes-cal-com|S6": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|enhance-embed-url-handling-and-validation-system-discourse-cursor|S2": {
+   "gold": "critical",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|enhance-embed-url-handling-and-validation-system-discourse-cursor|S6": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|enhance-embed-url-handling-and-validation-system-discourse-cursor|S7": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|enhance-embed-url-handling-and-validation-system-discourse-cursor|S10": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|enhance-embed-url-handling-and-validation-system-discourse-cursor|S1": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|enhance-embed-url-handling-and-validation-system-discourse-cursor|S11": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|enhance-embed-url-handling-and-validation-system-discourse-cursor|S5": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|S6": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|S1": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|S2": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|S13": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|S14": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|S10": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|S11": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feature-automatically-downsize-large-images-discourse-cursor|S2": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feature-automatically-downsize-large-images-discourse-cursor|S6": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|feature-automatically-downsize-large-images-discourse-cursor|S8": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feature-automatically-downsize-large-images-discourse-cursor|S10": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|feature-automatically-downsize-large-images-discourse-cursor|S9": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|fix-proper-handling-of-group-memberships-discourse-cursor|S1": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|fix-proper-handling-of-group-memberships-discourse-cursor|S7": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|fix-proper-handling-of-group-memberships-discourse-cursor|S6": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|frontend-asset-optimization-grafana-codex|S1": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|anonymous-add-configurable-device-limit-grafana-codex|S2": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|anonymous-add-configurable-device-limit-grafana-codex|S4": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|anonymous-add-configurable-device-limit-grafana-codex|S1": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|anonymous-add-configurable-device-limit-grafana-codex|S5": {
+   "gold": "medium",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|feature-localization-fallbacks-server-side-discourse-cursor|S1": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|feature-localization-fallbacks-server-side-discourse-cursor|S3": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex|S1": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex|S6": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|dual-storage-architecture-grafana-codex|S17": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|dual-storage-architecture-grafana-codex|S18": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|dual-storage-architecture-grafana-codex|S16": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|dual-storage-architecture-grafana-codex|S8": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|unified-storage-performance-optimizations-grafana-codex|S2": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|unified-storage-performance-optimizations-grafana-codex|S5": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|unified-storage-performance-optimizations-grafana-codex|S6": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|unified-storage-performance-optimizations-grafana-codex|S1": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|implement-access-token-context-encoding-framework-keycloak|S6": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|implement-access-token-context-encoding-framework-keycloak|S1": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|implement-access-token-context-encoding-framework-keycloak|S8": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak|S4": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak|S2": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak|S7": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|notification-rule-processing-engine-grafana-codex|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|notification-rule-processing-engine-grafana-codex|S6": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|notification-rule-processing-engine-grafana-codex|S4": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|fixing-re-authentication-with-passkeys-keycloak|S1": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|add-client-resource-type-and-scopes-to-authorization-schema-keycloak|S2": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|add-client-resource-type-and-scopes-to-authorization-schema-keycloak|S7": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|add-client-resource-type-and-scopes-to-authorization-schema-keycloak|S10": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|add-client-resource-type-and-scopes-to-authorization-schema-keycloak|S1": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|add-client-resource-type-and-scopes-to-authorization-schema-keycloak|S11": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|add-html-sanitizer-for-translated-message-resources-keycloak|S5": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|add-html-sanitizer-for-translated-message-resources-keycloak|S7": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|add-html-sanitizer-for-translated-message-resources-keycloak|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|add-html-sanitizer-for-translated-message-resources-keycloak|S12": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|replays-self-serve-bulk-delete-system-sentry|S6": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|replays-self-serve-bulk-delete-system-sentry|S7": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|replays-self-serve-bulk-delete-system-sentry|S10": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|replays-self-serve-bulk-delete-system-sentry|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|replays-self-serve-bulk-delete-system-sentry|S8": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|replays-self-serve-bulk-delete-system-sentry|S4": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak|S3": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak|S8": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|feat-ecosystem-implement-cross-system-issue-synchronization-sentry|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feat-ecosystem-implement-cross-system-issue-synchronization-sentry|S3": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry|S7": {
+   "gold": "medium",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry|S8": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry|S9": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry|S2": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry|S10": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|github-oauth-security-enhancement-sentry|S5": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|github-oauth-security-enhancement-sentry|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry|S2": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry|S4": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry|S5": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry|S4": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry|S1": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com|S1": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com|S2": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com|S7": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com|S8": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|async-import-of-the-appstore-packages-cal-com|S1": {
+   "gold": "medium",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|add-comprehensive-email-validation-for-blocked-users-discourse-cursor|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|add-comprehensive-email-validation-for-blocked-users-discourse-cursor|S9": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|add-comprehensive-email-validation-for-blocked-users-discourse-cursor|S4": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|add-comprehensive-email-validation-for-blocked-users-discourse-cursor|S6": {
+   "gold": "low",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|feat-add-calendar-cache-status-and-actions-22532-cal-com|S3": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|feat-add-calendar-cache-status-and-actions-22532-cal-com|S4": {
+   "gold": "low",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|feat-add-calendar-cache-status-and-actions-22532-cal-com|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|feature-per-topic-unsubscribe-option-in-emails-discourse-cursor|S2": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|feature-per-topic-unsubscribe-option-in-emails-discourse-cursor|S1": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor|S3": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor|S5": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor|S1": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor|S9": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|advanced-query-processing-architecture-grafana-codex|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|advanced-sql-analytics-framework-grafana-codex|S1": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|advanced-sql-analytics-framework-grafana-codex|S13": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|authzservice-improve-authz-caching-grafana-codex|S3": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|authzservice-improve-authz-caching-grafana-codex|S1": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|database-performance-optimizations-grafana-codex|S6": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|database-performance-optimizations-grafana-codex|S10": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|database-performance-optimizations-grafana-codex|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|database-performance-optimizations-grafana-codex|S5": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|add-groups-resource-type-and-scopes-to-authorization-schema-keycloak|S3": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|add-groups-resource-type-and-scopes-to-authorization-schema-keycloak|S8": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|add-groups-resource-type-and-scopes-to-authorization-schema-keycloak|S1": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|add-groups-resource-type-and-scopes-to-authorization-schema-keycloak|S2": {
+   "gold": "critical",
+   "pred": "critical",
+   "membros": [
+    "critical"
+   ]
+  },
+  "holdout|implement-recovery-key-support-for-user-storage-providers-keycloak|S1": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|implement-recovery-key-support-for-user-storage-providers-keycloak|S3": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|implement-recovery-key-support-for-user-storage-providers-keycloak|S5": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak|S4": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak|S8": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak|S9": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak|S1": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak|S2": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak|S10": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|add-rolling-updates-feature-flag-and-compatibility-framework-keycloak|S1": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|enhanced-pagination-performance-for-high-volume-audit-logs-sentry|S1": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|enhanced-pagination-performance-for-high-volume-audit-logs-sentry|S9": {
+   "gold": "medium",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry|S1": {
+   "gold": "critical",
+   "pred": "critical",
+   "membros": [
+    "critical"
+   ]
+  },
+  "holdout|feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry|S2": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry|S4": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry|S6": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry|S11": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry|S2": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry|S3": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry|S4": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry|S5": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry|S6": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry|S7": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry|S11": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry|S12": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|optimize-spans-buffer-insertion-with-eviction-during-insert-sentry|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|optimize-spans-buffer-insertion-with-eviction-during-insert-sentry|S9": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|optimize-spans-buffer-insertion-with-eviction-during-insert-sentry|S6": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  }
+ }
+}

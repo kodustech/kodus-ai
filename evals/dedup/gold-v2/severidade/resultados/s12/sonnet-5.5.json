@@ -1,0 +1,983 @@
+{
+ "resumo": {
+  "versao": "s12",
+  "modelo": "claude-sonnet-5.5@sdk",
+  "gold": "sonnet-5.5",
+  "n": 135,
+  "erros": 0,
+  "exato": 61.5,
+  "ateUm": 99.3,
+  "porConjunto": {
+   "light": 63.5,
+   "holdout": 58
+  },
+  "chamadas": 48,
+  "tokensEntrada": 178034,
+  "tokensSaida": 2535,
+  "tokensPorSugestao": 1338,
+  "latenciaMedianaMs": 1960,
+  "paredeS": 34,
+  "acima": 5,
+  "abaixo": 47,
+  "confusao": {
+   "high>medium": 26,
+   "high>high": 22,
+   "medium>medium": 47,
+   "critical>critical": 3,
+   "low>low": 11,
+   "high>critical": 1,
+   "medium>high": 3,
+   "critical>high": 3,
+   "medium>low": 17,
+   "low>medium": 1,
+   "high>low": 1
+  }
+ },
+ "itens": {
+  "light|fix-handle-collective-multiple-host-on-destinationcalendar-cal-com|S12": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|fix-handle-collective-multiple-host-on-destinationcalendar-cal-com|S10": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|fix-handle-collective-multiple-host-on-destinationcalendar-cal-com|S7": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|fix-handle-collective-multiple-host-on-destinationcalendar-cal-com|S14": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|add-guest-management-functionality-to-existing-bookings-cal-com|S2": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|add-guest-management-functionality-to-existing-bookings-cal-com|S10": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|add-guest-management-functionality-to-existing-bookings-cal-com|S8": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|add-guest-management-functionality-to-existing-bookings-cal-com|S12": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|add-guest-management-functionality-to-existing-bookings-cal-com|S4": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|add-guest-management-functionality-to-existing-bookings-cal-com|S13": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|oauth-credential-sync-and-app-integration-enhancements-cal-com|S5": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|oauth-credential-sync-and-app-integration-enhancements-cal-com|S1": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|oauth-credential-sync-and-app-integration-enhancements-cal-com|S8": {
+   "gold": "critical",
+   "pred": "critical",
+   "membros": [
+    "critical"
+   ]
+  },
+  "light|oauth-credential-sync-and-app-integration-enhancements-cal-com|S6": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|oauth-credential-sync-and-app-integration-enhancements-cal-com|S21": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com|S1": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|sms-workflow-reminder-retry-count-tracking-cal-com|S2": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|sms-workflow-reminder-retry-count-tracking-cal-com|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|sms-workflow-reminder-retry-count-tracking-cal-com|S3": {
+   "gold": "high",
+   "pred": "critical",
+   "membros": [
+    "critical"
+   ]
+  },
+  "light|feat-2fa-backup-codes-cal-com|S1": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feat-2fa-backup-codes-cal-com|S2": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feature-automatically-downsize-large-images-discourse-cursor|S4": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|S4": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|S15": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|S7": {
+   "gold": "medium",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|S11": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|S3": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|S10": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|enhance-embed-url-handling-and-validation-system-discourse-cursor|S1": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|enhance-embed-url-handling-and-validation-system-discourse-cursor|S2": {
+   "gold": "critical",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|enhance-embed-url-handling-and-validation-system-discourse-cursor|S3": {
+   "gold": "critical",
+   "pred": "critical",
+   "membros": [
+    "critical"
+   ]
+  },
+  "light|enhance-embed-url-handling-and-validation-system-discourse-cursor|S4": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|enhance-embed-url-handling-and-validation-system-discourse-cursor|S5": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|enhance-embed-url-handling-and-validation-system-discourse-cursor|S7": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|enhance-embed-url-handling-and-validation-system-discourse-cursor|S8": {
+   "gold": "critical",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|enhance-embed-url-handling-and-validation-system-discourse-cursor|S10": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|enhance-embed-url-handling-and-validation-system-discourse-cursor|S11": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|enhance-embed-url-handling-and-validation-system-discourse-cursor|S9": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|fix-proper-handling-of-group-memberships-discourse-cursor|S2": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|fix-proper-handling-of-group-memberships-discourse-cursor|S7": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|fix-proper-handling-of-group-memberships-discourse-cursor|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feature-localization-fallbacks-server-side-discourse-cursor|S1": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|frontend-asset-optimization-grafana-codex|S1": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|anonymous-add-configurable-device-limit-grafana-codex|S8": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|anonymous-add-configurable-device-limit-grafana-codex|S6": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|anonymous-add-configurable-device-limit-grafana-codex|S9": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|anonymous-add-configurable-device-limit-grafana-codex|S7": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex|S2": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|dual-storage-architecture-grafana-codex|S1": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|dual-storage-architecture-grafana-codex|S14": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|dual-storage-architecture-grafana-codex|S4": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|dual-storage-architecture-grafana-codex|S16": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|dual-storage-architecture-grafana-codex|S6": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|unified-storage-performance-optimizations-grafana-codex|S2": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|unified-storage-performance-optimizations-grafana-codex|S3": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|unified-storage-performance-optimizations-grafana-codex|S1": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|implement-access-token-context-encoding-framework-keycloak|S9": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|implement-access-token-context-encoding-framework-keycloak|S12": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|implement-access-token-context-encoding-framework-keycloak|S11": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|notification-rule-processing-engine-grafana-codex|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|notification-rule-processing-engine-grafana-codex|S5": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|notification-rule-processing-engine-grafana-codex|S6": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|add-html-sanitizer-for-translated-message-resources-keycloak|S10": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|add-html-sanitizer-for-translated-message-resources-keycloak|S2": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|add-html-sanitizer-for-translated-message-resources-keycloak|S8": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|add-html-sanitizer-for-translated-message-resources-keycloak|S5": {
+   "gold": "low",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak|S1": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|add-client-resource-type-and-scopes-to-authorization-schema-keycloak|S5": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|add-client-resource-type-and-scopes-to-authorization-schema-keycloak|S3": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|replays-self-serve-bulk-delete-system-sentry|S2": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|replays-self-serve-bulk-delete-system-sentry|S5": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|replays-self-serve-bulk-delete-system-sentry|S7": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|replays-self-serve-bulk-delete-system-sentry|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|fixing-re-authentication-with-passkeys-keycloak|S2": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry|S1": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry|S2": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "light|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry|S4": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry|S7": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feat-ecosystem-implement-cross-system-issue-synchronization-sentry|S3": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry|S1": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|github-oauth-security-enhancement-sentry|S1": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "light|github-oauth-security-enhancement-sentry|S3": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "light|github-oauth-security-enhancement-sentry|S6": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com|S7": {
+   "gold": "medium",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com|S1": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com|S2": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com|S2": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com|S4": {
+   "gold": "medium",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com|S1": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|async-import-of-the-appstore-packages-cal-com|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|async-import-of-the-appstore-packages-cal-com|S4": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|add-comprehensive-email-validation-for-blocked-users-discourse-cursor|S4": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|add-comprehensive-email-validation-for-blocked-users-discourse-cursor|S2": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|feat-add-calendar-cache-status-and-actions-22532-cal-com|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|feat-add-calendar-cache-status-and-actions-22532-cal-com|S2": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|feat-add-calendar-cache-status-and-actions-22532-cal-com|S4": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|feature-per-topic-unsubscribe-option-in-emails-discourse-cursor|S3": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|feature-per-topic-unsubscribe-option-in-emails-discourse-cursor|S5": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor|S1": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|S5": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|S10": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|S9": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|S7": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|S4": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|advanced-sql-analytics-framework-grafana-codex|S6": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|advanced-sql-analytics-framework-grafana-codex|S7": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|advanced-sql-analytics-framework-grafana-codex|S1": {
+   "gold": "high",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|advanced-query-processing-architecture-grafana-codex|S1": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|database-performance-optimizations-grafana-codex|S6": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|database-performance-optimizations-grafana-codex|S3": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|database-performance-optimizations-grafana-codex|S2": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|authzservice-improve-authz-caching-grafana-codex|S1": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|authzservice-improve-authz-caching-grafana-codex|S3": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|authzservice-improve-authz-caching-grafana-codex|S5": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak|S1": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|add-groups-resource-type-and-scopes-to-authorization-schema-keycloak|S7": {
+   "gold": "critical",
+   "pred": "critical",
+   "membros": [
+    "critical"
+   ]
+  },
+  "holdout|add-groups-resource-type-and-scopes-to-authorization-schema-keycloak|S5": {
+   "gold": "high",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  },
+  "holdout|implement-recovery-key-support-for-user-storage-providers-keycloak|S1": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|implement-recovery-key-support-for-user-storage-providers-keycloak|S3": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry|S1": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|enhanced-pagination-performance-for-high-volume-audit-logs-sentry|S3": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|enhanced-pagination-performance-for-high-volume-audit-logs-sentry|S13": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|enhanced-pagination-performance-for-high-volume-audit-logs-sentry|S10": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|enhanced-pagination-performance-for-high-volume-audit-logs-sentry|S12": {
+   "gold": "low",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|optimize-spans-buffer-insertion-with-eviction-during-insert-sentry|S2": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|optimize-spans-buffer-insertion-with-eviction-during-insert-sentry|S3": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry|S1": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry|S5": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry|S10": {
+   "gold": "medium",
+   "pred": "low",
+   "membros": [
+    "low"
+   ]
+  },
+  "holdout|feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry|S2": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry|S4": {
+   "gold": "medium",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry|S9": {
+   "gold": "high",
+   "pred": "medium",
+   "membros": [
+    "medium"
+   ]
+  },
+  "holdout|feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry|S11": {
+   "gold": "critical",
+   "pred": "high",
+   "membros": [
+    "high"
+   ]
+  }
+ }
+}
