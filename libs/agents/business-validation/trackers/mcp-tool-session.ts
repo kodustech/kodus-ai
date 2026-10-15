@@ -17,7 +17,14 @@ export class TaskNotFoundError extends Error {}
 export class TrackerUnavailableError extends Error {}
 
 const NOT_FOUND_PATTERN =
-    /\b(?:not[\s_-]?found|object_not_found|failed to retrieve [\w\s]{0,40}? with (?:public )?id|does(?: not|n't) exist|could(?: not|n't) find|unable to find|no (?:such )?(?:issue|task|ticket|work ?item|page|record)s?\b|404)\b/i;
+    /\b(?:not[\s_-]?found|object_not_found|does(?: not|n't) exist|could(?: not|n't) find|unable to find|no (?:such )?(?:issue|task|ticket|work ?item|page|record)s?\b|404)\b/i;
+/**
+ * Shortcut's answer for a missing story, and nothing more: the same words
+ * followed by a cause (`…: Request failed with status code 503`) are a
+ * failure to read, not an absence.
+ */
+const RETRIEVE_FAILED_FOR_ID =
+    /\bfailed to retrieve [\w\s]{0,40}? with (?:public )?id\W*[\w-]+\W*$/i;
 
 /**
  * One MCP server, opened only for the tools a tracker reads with. Tools the
@@ -139,7 +146,8 @@ export function readToolPayload(result: unknown): unknown {
 }
 
 function trackerError(message: string): Error {
-    return NOT_FOUND_PATTERN.test(message)
+    return NOT_FOUND_PATTERN.test(message) ||
+        RETRIEVE_FAILED_FOR_ID.test(message.trim())
         ? new TaskNotFoundError(message)
         : new TrackerUnavailableError(message);
 }

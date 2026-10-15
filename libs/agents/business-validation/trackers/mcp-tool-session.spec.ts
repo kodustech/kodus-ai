@@ -66,6 +66,46 @@ describe('McpToolSession', () => {
         ).rejects.toBeInstanceOf(TrackerUnavailableError);
     });
 
+    it('reads "failed to retrieve … with id" as missing only when no cause follows', async () => {
+        executeTool.mockResolvedValueOnce(
+            errorResult(
+                'Failed to retrieve Shortcut story with public ID: 123.',
+            ),
+        );
+        await expect(
+            session().call('get_issue', { id: 'SAA-9' }),
+        ).rejects.toBeInstanceOf(TaskNotFoundError);
+
+        executeTool.mockResolvedValueOnce(
+            errorResult(
+                'Failed to retrieve Shortcut story with public ID: 123: Request failed with status code 503',
+            ),
+        );
+        await expect(
+            session().call('get_issue', { id: 'SAA-9' }),
+        ).rejects.toBeInstanceOf(TrackerUnavailableError);
+    });
+
+    it('reports a server it cannot reach as unavailable, with the arguments it was given', async () => {
+        executeTool.mockRejectedValueOnce(new Error('connect ECONNREFUSED'));
+        await expect(
+            session().call('get_issue', { id: 'SAA-9' }),
+        ).rejects.toBeInstanceOf(TrackerUnavailableError);
+        expect(executeTool).toHaveBeenLastCalledWith(
+            'get_issue',
+            { id: 'SAA-9' },
+            'tracker',
+        );
+    });
+
+    it('never calls a tool the session was not opened for', async () => {
+        executeTool.mockClear();
+        await expect(
+            session().call('update_issue', { id: 'SAA-9' }),
+        ).rejects.toBeInstanceOf(TrackerUnavailableError);
+        expect(executeTool).not.toHaveBeenCalled();
+    });
+
     it('returns what a tool answered, without the envelope', async () => {
         executeTool.mockResolvedValueOnce({
             content: [{ type: 'text', text: '{"title":"Sticky notes"}' }],
