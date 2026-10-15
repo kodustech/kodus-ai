@@ -22,11 +22,10 @@ describe('SkillLoaderService', () => {
             'business-rules-validation',
         );
 
-        expect(instructions).toContain('No evidence in this PR diff');
-        expect(instructions).toContain('scope mismatch');
         expect(instructions).toContain(
-            'Do not state current system or backend behavior as fact unless that behavior appears in the PR_DIFF',
+            '`missing`: no evidence in this PR diff. Say so in `note`; never claim how the rest of the system behaves.',
         );
+        expect(instructions).toContain('Scope mismatch is valid');
     });
 
     it('loads business-rules instructions that require intent and alignment analysis before detailed findings', () => {
@@ -36,10 +35,9 @@ describe('SkillLoaderService', () => {
             'business-rules-validation',
         );
 
-        expect(instructions).toContain('Task Intent');
-        expect(instructions).toContain('PR Intent');
-        expect(instructions).toContain('Alignment');
-        expect(instructions).toContain('scope_mismatch');
+        expect(instructions).toContain("1. Read the task's intent");
+        expect(instructions).toContain("2. Read the PR's intent");
+        expect(instructions).toContain('scopeMismatch');
     });
 
     it('loads business-rules instructions that enforce generated prose in USER LANGUAGE', () => {
@@ -50,14 +48,12 @@ describe('SkillLoaderService', () => {
         );
 
         expect(instructions).toContain(
-            'Write all generated prose, headings, status labels, findings, explanations, and suggested actions in `USER LANGUAGE`.',
+            'Write `note`, `action`, `change`, `summary` and `missingInfo` in USER LANGUAGE',
         );
         expect(instructions).toContain(
-            'Only quoted requirement text copied from the task may remain in the original source language.',
+            "`requirement` stays quoted in the task's own language",
         );
-        expect(instructions).toContain(
-            'Do not mix languages in generated prose.',
-        );
+        expect(instructions).toContain('Do not mix languages in one field.');
     });
 
     it('loads business-rules instructions that ask for one verdict per requirement', () => {
