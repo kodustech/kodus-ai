@@ -230,20 +230,10 @@ export class BusinessValidationService {
                     repository: this.repositoryOf(request),
                 });
             } finally {
-                const closed = await Promise.allSettled(
-                    trackers.map((t) => t.close()),
+                await this.release(
+                    trackers,
+                    request.organizationAndTeamData.organizationId,
                 );
-                if (closed.some((c) => c.status === 'rejected')) {
-                    this.logger.warn({
-                        message:
-                            'Business validation could not release every MCP client',
-                        context: BusinessValidationService.name,
-                        metadata: {
-                            organizationId:
-                                request.organizationAndTeamData.organizationId,
-                        },
-                    });
-                }
             }
         }
 
@@ -697,7 +687,10 @@ export class BusinessValidationService {
                 ...(repository ? { repository } : {}),
             });
         } finally {
-            await Promise.all(trackers.map((t) => t.close()));
+            await this.release(
+                trackers,
+                organizationAndTeamData.organizationId,
+            );
         }
         switch (resolution.kind) {
             case 'found': {
@@ -859,6 +852,32 @@ export class BusinessValidationService {
                 },
             });
             return [];
+        }
+    }
+
+    /**
+     * Closes every tracker's MCP client. One that fails to close is logged,
+     * never thrown: it would hide the resolution or the error before it.
+     */
+    private async release(
+        trackers: Array<{ name: string; close: () => Promise<void> }>,
+        organizationId: string | undefined,
+    ): Promise<void> {
+        const closed = await Promise.allSettled(
+            trackers.map((t) => t.close()),
+        );
+        const failed = closed.flatMap((c, i) =>
+            c.status === 'rejected'
+                ? [`${trackers[i].name}: ${String(c.reason)}`]
+                : [],
+        );
+        if (failed.length) {
+            this.logger.warn({
+                message:
+                    'Business validation could not release every MCP client',
+                context: BusinessValidationService.name,
+                metadata: { organizationId, failed },
+            });
         }
     }
 

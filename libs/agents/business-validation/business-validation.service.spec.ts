@@ -1,6 +1,17 @@
 import type { TaskReference } from './business-validation.types';
 import { BusinessValidationService } from './business-validation.service';
 import { resolveBusinessLogicSettings } from './settings';
+import { resolveTasks } from './task-resolver';
+import { buildTaskTrackers } from './trackers/tracker-catalog';
+
+jest.mock('./task-resolver', () => {
+    const actual = jest.requireActual('./task-resolver');
+    return { ...actual, resolveTasks: jest.fn(actual.resolveTasks) };
+});
+jest.mock('./trackers/tracker-catalog', () => {
+    const actual = jest.requireActual('./trackers/tracker-catalog');
+    return { ...actual, buildTaskTrackers: jest.fn(actual.buildTaskTrackers) };
+});
 
 function ref(raw: string): TaskReference {
     return raw.startsWith('#')
@@ -229,5 +240,39 @@ describe('BusinessValidationService · a MISSING the repository refutes', () => 
                 )
             ).requirements[0].state,
         ).toBe('missing');
+    });
+});
+
+describe('BusinessValidationService · releasing the trackers', () => {
+    it('closes every tracker and still answers when one fails to close', async () => {
+        const closed = jest.fn(async () => undefined);
+        (buildTaskTrackers as jest.Mock).mockReturnValueOnce([
+            {
+                name: 'Linear',
+                close: async () => {
+                    throw new Error('socket hang up');
+                },
+            },
+            { name: 'Jira', close: closed },
+        ]);
+        (resolveTasks as jest.Mock).mockResolvedValueOnce({
+            kind: 'not_found',
+            attempts: [],
+        });
+        const service = new BusinessValidationService(
+            { getConnections: async () => [] } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+
+        await expect(
+            service.tryRead(
+                { organizationId: 'org-1' } as any,
+                'KOD-1',
+                resolveBusinessLogicSettings({}),
+            ),
+        ).resolves.toMatchObject({ status: 'not_found' });
+        expect(closed).toHaveBeenCalled();
     });
 });
