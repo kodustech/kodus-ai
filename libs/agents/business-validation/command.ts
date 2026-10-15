@@ -35,7 +35,7 @@ export function replyFor(
     }
     if (!commented) {
         return outcome.kind === 'validated'
-            ? `Business logic re-checked: ${outcome.checks.map((c) => c.task.id).join(', ')} ${outcome.passed ? 'met' : 'has open requirements'}. See the kody/business-logic check.`
+            ? `Business logic re-checked: ${outcome.checks.map((c) => c.task.id).join(', ')} ${outcome.passed ? 'met' : 'has open requirements'}.`
             : outcome.message;
     }
     return 'Business logic re-checked. The Kody · Business Logic comment on this pull request is updated.';

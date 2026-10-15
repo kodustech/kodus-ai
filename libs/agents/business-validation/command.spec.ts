@@ -1,4 +1,4 @@
-import { inlineTask } from './command';
+import { inlineTask, replyFor } from './command';
 import { gradeTask, canJudgeAgainst } from './task-quality';
 
 describe('inlineTask', () => {
@@ -17,5 +17,20 @@ describe('inlineTask', () => {
                 { source: 'command' } as any,
             ]),
         ).toBeUndefined();
+    });
+});
+
+describe('replyFor', () => {
+    it('never points at a check: the comment is the only signal', () => {
+        const reply = replyFor(
+            {
+                kind: 'validated',
+                checks: [{ task: { id: 'SAA-96' } }],
+                passed: true,
+            } as any,
+            false,
+        );
+        expect(reply).toBe('Business logic re-checked: SAA-96 met.');
+        expect(reply).not.toMatch(/kody\/business-logic/);
     });
 });
