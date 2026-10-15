@@ -325,6 +325,23 @@ describe('BusinessLogicValidationStage', () => {
         });
     });
 
+    it('leaves a typo as skipped when the repository does not require a task', async () => {
+        const { stage } = build({
+            kind: 'task_missing',
+            references: [],
+            tracker: 'Linear',
+            message: '',
+            required: false,
+        });
+
+        const result = await stage.execute(context());
+
+        expect(result.businessLogicOutcome).toMatchObject({
+            kind: 'skipped',
+            reason: 'task_missing',
+        });
+    });
+
     it('re-checks a PR already validated when the team turned on re-check on every push (UC-35)', async () => {
         const { stage, service, publisher } = build(validated(true));
 
