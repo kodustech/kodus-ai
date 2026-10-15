@@ -149,14 +149,14 @@ function BusinessLogicContent() {
                     status={status.data}
                     isLoading={status.isLoading}
                 />
-                <TaskSource
+                <TaskSource teamId={teamId} canEdit={canEdit} />
+                <PrOptions canEdit={canEdit} />
+                <Tune canEdit={canEdit} />
+                <TryIt
                     teamId={teamId}
                     repositoryId={repositoryId}
                     canEdit={canEdit}
                 />
-                <PrOptions canEdit={canEdit} />
-                <Tune canEdit={canEdit} />
-                <TryIt teamId={teamId} canEdit={canEdit} />
             </Page.Content>
         </Page.Root>
     );

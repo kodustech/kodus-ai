@@ -20,7 +20,6 @@ import { Controller, useFormContext, useWatch } from "react-hook-form";
 
 import { OverrideIndicatorForm } from "../../../_components/override";
 import type { CodeReviewFormType } from "../../../_types";
-import { ReadTask } from "./try-it";
 
 const AUTO = "auto";
 
@@ -58,11 +57,9 @@ const previewIds = (
  */
 export const TaskSource = ({
     teamId,
-    repositoryId,
     canEdit,
 }: {
     teamId: string;
-    repositoryId: string;
     canEdit: boolean;
 }) => {
     const form = useFormContext<CodeReviewFormType>();
@@ -234,14 +231,10 @@ export const TaskSource = ({
                     <p className="text-text-secondary text-xs">
                         Only tools that read one task by its id are listed.
                         Search and list tools can return a different task, and
-                        tools that write are never used. Check it with Read a
-                        task below.
+                        tools that write are never used. Check it with Try it
+                        below.
                     </p>
                 </Card>
-            )}
-
-            {!!sources?.length && (
-                <ReadTask teamId={teamId} repositoryId={repositoryId} />
             )}
 
             <Collapsible

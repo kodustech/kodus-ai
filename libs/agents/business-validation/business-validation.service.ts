@@ -668,7 +668,7 @@ export class BusinessValidationService {
         }
     }
 
-    /** "Read a task": reads one task the way a validation would (UC-01, UC-03, UC-05). */
+    /** "Try it" with a task alone: reads one task the way a validation would (UC-01, UC-03, UC-05). */
     async tryRead(
         organizationAndTeamData: OrganizationAndTeamData,
         taskInput: string,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type KeyboardEvent, type ReactNode } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { Button } from "@components/ui/button";
 import { Card } from "@components/ui/card";
 import { Input } from "@components/ui/input";
@@ -15,103 +15,29 @@ import { errorMessage, TestResult } from "./test-result";
 import { useScreenSettings } from "./use-screen-settings";
 
 /**
- * Reads one task the way a validation would, with the settings on screen,
- * saved or not (UC-01, UC-03, UC-05): where the admin picks the source, so a
- * wrong source or plugin shows before anything else is set.
- */
-export const ReadTask = ({
-    teamId,
-    repositoryId,
-}: {
-    teamId: string;
-    repositoryId: string;
-}) => {
-    const settings = useScreenSettings();
-    const [task, setTask] = useState("");
-    const tryRead = useTryReadTask();
-    const run = () =>
-        tryRead.mutate({
-            teamId,
-            task: task.trim(),
-            settings: settings(),
-            repositoryId,
-        });
-
-    return (
-        <TestCard
-            title="Read a task"
-            hint="See what Kody reads from a task with the source above.">
-            <div className="flex items-center gap-2">
-                <div className="min-w-0 flex-1">
-                    <Input
-                        size="md"
-                        placeholder="Task id or link, e.g. SAA-96 or #12"
-                        value={task}
-                        onChange={(e) => setTask(e.target.value)}
-                        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-                            if (e.key === "Enter" && task.trim()) run();
-                        }}
-                    />
-                </div>
-                <Button
-                    size="md"
-                    variant="secondary"
-                    disabled={!task.trim()}
-                    loading={tryRead.isPending}
-                    onClick={run}>
-                    Read task
-                </Button>
-            </div>
-            {tryRead.isError && (
-                <p className="text-danger text-sm">
-                    Couldn&apos;t reach Kodus to read the task. Try again.
-                </p>
-            )}
-            {tryRead.data && <TaskRead result={tryRead.data} />}
-        </TestCard>
-    );
-};
-
-/** The frame both tests share, so they read as one kind of thing. */
-const TestCard = ({
-    title,
-    hint,
-    children,
-}: {
-    title: string;
-    hint: string;
-    children: ReactNode;
-}) => (
-    <Card color="lv1" className="flex flex-col gap-3 px-5 py-4">
-        <span className="flex flex-col">
-            <span className="text-text-primary text-sm font-medium">
-                {title}
-            </span>
-            <span className="text-text-secondary text-xs">{hint}</span>
-        </span>
-        {children}
-    </Card>
-);
-
-/**
- * The whole check on a pull request, with the settings on screen, saved or
- * not: against the task it references, or the one named here. Nothing is
- * posted until "Post to the pull request".
+ * One test for the settings on screen, saved or not. A task alone shows how
+ * Kody reads it (UC-01, UC-03, UC-05); a pull request runs the whole check,
+ * against the task it references or the one named here. Nothing is posted
+ * until "Post to the pull request".
  */
 export const TryIt = ({
     teamId,
+    repositoryId,
     canEdit,
 }: {
     teamId: string;
+    repositoryId: string;
     canEdit: boolean;
 }) => {
     const settings = useScreenSettings();
     const [prUrl, setPrUrl] = useState("");
     const [task, setTask] = useState("");
+    const tryRead = useTryReadTask();
     const test = useTestOnPullRequest();
     const post = useTestOnPullRequest();
 
-    const canRun = !!prUrl.trim() && canEdit;
+    const onPr = !!prUrl.trim();
+    const canRun = onPr ? canEdit : !!task.trim();
     const payload = () => ({
         teamId,
         prUrl: prUrl.trim(),
@@ -119,32 +45,54 @@ export const TryIt = ({
         settings: settings(),
     });
     const run = () => {
+        tryRead.reset();
         test.reset();
         post.reset();
-        test.mutate(payload());
+        if (onPr) {
+            test.mutate(payload());
+        } else {
+            tryRead.mutate({
+                teamId,
+                task: task.trim(),
+                settings: settings(),
+                repositoryId,
+            });
+        }
     };
     const runOnEnter = (e: KeyboardEvent<HTMLInputElement>) => {
         if (e.key === "Enter" && canRun) run();
     };
 
     return (
-        <TestCard
-            title="Check a pull request"
-            hint="Runs the full check with the settings on this page, saved or not. Nothing is posted until you choose to.">
+        <Card color="lv1" className="flex flex-col gap-3 px-5 py-4">
+            <span className="flex flex-col">
+                <span className="text-text-primary text-sm font-medium">
+                    Try it
+                </span>
+                <span className="text-text-secondary text-xs">
+                    A task alone shows what Kody reads from it. Add a pull
+                    request to run the full check. Uses the settings on this
+                    page, saved or not; nothing is posted until you choose to.
+                </span>
+            </span>
             <div className="flex items-center gap-2">
                 <div className="min-w-0 flex-[3]">
                     <Input
                         size="md"
-                        placeholder="Pull request link"
+                        placeholder="Pull request link (optional)"
                         value={prUrl}
                         onChange={(e) => setPrUrl(e.target.value)}
                         onKeyDown={runOnEnter}
                     />
                 </div>
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-[2]">
                     <Input
                         size="md"
-                        placeholder="Task (optional)"
+                        placeholder={
+                            onPr
+                                ? "Task (optional), else the one the PR references"
+                                : "Task id or link, e.g. SAA-96 or #12"
+                        }
                         value={task}
                         onChange={(e) => setTask(e.target.value)}
                         onKeyDown={runOnEnter}
@@ -154,12 +102,12 @@ export const TryIt = ({
                     size="md"
                     variant="secondary"
                     disabled={!canRun}
-                    loading={test.isPending}
+                    loading={tryRead.isPending || test.isPending}
                     onClick={run}>
-                    Run check
+                    {onPr ? "Run check" : "Read task"}
                 </Button>
             </div>
-            {!canEdit && (
+            {onPr && !canEdit && (
                 <p className="text-text-secondary text-xs">
                     Checking a pull request needs permission to edit these
                     settings.
@@ -177,6 +125,13 @@ export const TryIt = ({
                     {errorMessage(test.error)}
                 </p>
             )}
+            {tryRead.isError && (
+                <p className="text-danger text-sm">
+                    Couldn&apos;t reach Kodus to read the task. Try again.
+                </p>
+            )}
+
+            {tryRead.data && <TaskRead result={tryRead.data} />}
             {test.data && !test.isPending && (
                 <TestResult
                     result={test.data}
@@ -187,7 +142,7 @@ export const TryIt = ({
                     onPost={() => post.mutate({ ...payload(), post: true })}
                 />
             )}
-        </TestCard>
+        </Card>
     );
 };
 
@@ -259,7 +214,7 @@ const TaskRead = ({ result }: { result: TryReadResult }) => (
                     </span>
                 )}
                 <span className="text-text-tertiary text-xs">
-                    Check a pull request against it at the end of this page.
+                    Add a pull request above to check it against this task.
                 </span>
             </>
         ) : (
