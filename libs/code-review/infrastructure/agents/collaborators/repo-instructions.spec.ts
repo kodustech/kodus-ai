@@ -149,6 +149,20 @@ describe('collectRepoInstructions', () => {
         });
     });
 
+    it("matches a nested rule's bare glob only against files in its directory", async () => {
+        const repo = files({
+            'services/billing/.cursor/rules/python.mdc':
+                '---\nglobs: *.py\nalwaysApply: false\n---\nUse Decimal.',
+        });
+
+        const result = await collectRepoInstructions({
+            ...repo,
+            changedFiles: ['services/billing/README.md', 'services/auth/a.py'],
+        });
+
+        expect(result.files).toEqual([]);
+    });
+
     it('truncates a long file and stops at the total budget', async () => {
         const big = 'x'.repeat(REPO_INSTRUCTIONS_LIMITS.maxBytesPerFile + 500);
         const map: Record<string, string> = { 'CLAUDE.md': big };

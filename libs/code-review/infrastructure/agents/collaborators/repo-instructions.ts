@@ -174,12 +174,15 @@ function matchesDeclared(
             ? changed.slice(scope.length + 1)
             : changed;
     const basename = changed.slice(changed.lastIndexOf('/') + 1);
-    // A glob without a slash (`*.spec.tsx`) matches the file name anywhere.
+    // A glob without a slash (`*.spec.tsx`) matches the file name anywhere
+    // under the rule's directory.
     return globs.some(
         (g) =>
             isFileMatchingGlob(changed, [g]) ||
             isFileMatchingGlob(relative, [g]) ||
-            (!g.includes('/') && isFileMatchingGlob(basename, [g])),
+            (!g.includes('/') &&
+                governsByDirectory(scope, changed) &&
+                isFileMatchingGlob(basename, [g])),
     );
 }
 
