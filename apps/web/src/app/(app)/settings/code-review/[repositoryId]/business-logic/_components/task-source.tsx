@@ -14,6 +14,7 @@ import { Label } from "@components/ui/label";
 import { Link } from "@components/ui/link";
 import { RadioGroup } from "@components/ui/radio-group";
 import { Skeleton } from "@components/ui/skeleton";
+import { isRegexSafe, MAX_PATTERN_LEN } from "@libs/common/utils/safe-regex";
 import { useReadTools, useTaskSources } from "@services/business-logic/hooks";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
 
@@ -22,15 +23,26 @@ import type { CodeReviewFormType } from "../../../_types";
 
 const AUTO = "auto";
 
-/** The server drops longer or backtracking-prone patterns. */
-const MAX_PATTERN = 200;
-
-/** The ids a pattern finds in a sample, as Kody reads them: the first group, or the whole match. */
-const previewIds = (pattern: string, sample: string): string[] | "invalid" => {
-    if (!pattern.trim()) return [];
-    if (pattern.length > MAX_PATTERN) return "invalid";
+/**
+ * The ids a pattern finds in a sample, as Kody reads them: the first group, or
+ * the whole match. A pattern the server drops (`isRegexSafe`, as in
+ * `resolveBusinessLogicSettings`) is never run here either.
+ */
+const previewIds = (
+    pattern: string,
+    sample: string,
+): string[] | "invalid" | "unsafe" => {
+    const trimmed = pattern.trim();
+    if (!trimmed) return [];
+    if (trimmed.length > MAX_PATTERN_LEN) return "invalid";
     try {
-        return [...sample.matchAll(new RegExp(pattern, "g"))]
+        new RegExp(trimmed);
+    } catch {
+        return "invalid";
+    }
+    if (!isRegexSafe(trimmed)) return "unsafe";
+    try {
+        return [...sample.matchAll(new RegExp(trimmed, "g"))]
             .map((m) => (m[1] ?? m[0]).trim())
             .filter(Boolean);
     } catch {
@@ -262,7 +274,7 @@ export const TaskSource = ({
                                     placeholder="e.g. sc-(\d+)"
                                     value={(field.value as string) ?? ""}
                                     onChange={field.onChange}
-                                    maxLength={MAX_PATTERN}
+                                    maxLength={MAX_PATTERN_LEN}
                                     disabled={!canEdit || field.disabled}
                                 />
                             )}
@@ -276,17 +288,20 @@ export const TaskSource = ({
                                 />
                                 <span
                                     className={
-                                        preview === "invalid"
+                                        preview === "invalid" ||
+                                        preview === "unsafe"
                                             ? "text-danger text-xs"
                                             : "text-text-secondary text-xs"
                                     }>
                                     {preview === "invalid"
                                         ? "Not a valid regular expression."
-                                        : !sample.trim()
+                                        : preview === "unsafe"
                                           ? "Kody drops a pattern that could take too long to run, like (a+)+."
-                                          : preview.length
-                                            ? `Reads: ${preview.join(", ")}`
-                                            : "No id in this text."}
+                                          : !sample.trim()
+                                            ? "Paste a title, branch or description to see what the pattern reads."
+                                            : preview.length
+                                              ? `Reads: ${preview.join(", ")}`
+                                              : "No id in this text."}
                                 </span>
                             </>
                         )}
