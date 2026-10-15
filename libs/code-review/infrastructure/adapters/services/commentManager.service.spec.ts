@@ -1862,352 +1862,6 @@ describe('LLMResponseProcessor.processResponse — raw-string parse rows', () =>
     });
 });
 
-// A single-line suggestion has no start_line, so the old attempt 3
-// (`line = start_line`) sent a comment with no line at all and GitHub answered
-// "No subschema in oneOf matched … line, path weren't supplied" (30/day).
-describe('CommentManagerService.createReviewCommentWithRetry — line mismatch', () => {
-    const lineMismatch = () =>
-        Object.assign(new Error('line could not be resolved'), {
-            errorType: 'failed_lines_mismatch',
-        });
-
-    const retryWith = (lineComment: any) => {
-        const createReviewComment = jest.fn().mockRejectedValue(lineMismatch());
-        const svc = new CommentManagerService(
-            {} as any,
-            {} as any,
-            {} as any,
-            {} as any,
-            { createReviewComment } as any,
-        ) as any;
-        const result = svc.createReviewCommentWithRetry({
-            organizationAndTeamData: { organizationId: 'o', teamId: 't' },
-            repository: { name: 'r', id: '1', language: 'ts' },
-            commit: {},
-            prNumber: 1,
-            lineComment,
-            language: 'en-US',
-        });
-        return { result, createReviewComment };
-    };
-
-    it('never sends a comment without a line for a single-line suggestion', async () => {
-        const { result, createReviewComment } = retryWith({
-            path: 'a.ts',
-            start_line: undefined,
-            line: 10,
-            side: 'RIGHT',
-            body: {},
-        });
-
-        await expect(result).rejects.toMatchObject({
-            errorType: 'failed_lines_mismatch',
-        });
-        for (const [args] of createReviewComment.mock.calls) {
-            expect(args.lineComment.line).toBe(10);
-        }
-    });
-
-    it('still tries the start of a multi-line range as the last attempt', async () => {
-        const { result, createReviewComment } = retryWith({
-            path: 'a.ts',
-            start_line: 5,
-            line: 10,
-            side: 'RIGHT',
-            body: {},
-        });
-
-        await expect(result).rejects.toBeDefined();
-        expect(createReviewComment).toHaveBeenCalledTimes(3);
-        expect(createReviewComment.mock.calls[2][0].lineComment.line).toBe(5);
-    });
-});
-
-describe('CommentManagerService.createPrLevelReviewComments carries the kody-codereview marker (#2050)', () => {
-    let service: CommentManagerService;
-    const codeManagementService = {
-        getPullRequestByNumber: jest.fn(),
-        formatReviewCommentBody: jest.fn(),
-        createIssueComment: jest.fn(),
-        getTypeIntegration: jest.fn(),
-    } as any;
-
-    const suggestion = () => ({
-        id: 'uuid-1',
-        oneSentenceSummary: 'PR description must reference a tracking ticket',
-        suggestionContent:
-            '![kody code-review](https://img.shields.io/badge/...)\n' +
-            'PR description must reference a tracking ticket.\n\n' +
-            'Kody rule violation: [PR description must reference a ticket](https://rules/1)',
-    });
-
-    beforeEach(() => {
-        codeManagementService.formatReviewCommentBody.mockReset();
-        codeManagementService.createIssueComment.mockReset();
-        codeManagementService.getTypeIntegration.mockReset();
-        codeManagementService.formatReviewCommentBody.mockResolvedValue(
-            '![badge](https://img.shields.io/badge/...)\n\nrule body',
-        );
-        codeManagementService.createIssueComment.mockResolvedValue({ id: 101 });
-        // Non-Bitbucket by default: the raw marker is appended.
-        codeManagementService.getTypeIntegration.mockResolvedValue(undefined);
-        service = new CommentManagerService(
-            {} as never,
-            {} as never,
-            {} as never,
-            {} as never,
-            codeManagementService,
-        );
-    });
-
-    const call = (platformType?: PlatformType) =>
-        service.createPrLevelReviewComments(
-            { organizationId: 'org-1', teamId: 'team-1' } as never,
-            7,
-            { name: 'sample', id: 'repo-id', language: 'typescript' } as never,
-            [suggestion()] as never,
-            'typescript',
-            undefined,
-            platformType,
-        );
-
-    it('appends the marker to a PR-level comment body that lacks it', async () => {
-        const { commentResults } = await call();
-
-        expect(commentResults[0].comment.body).toContain(
-            '<!-- kody-codereview -->',
-        );
-        // The body that is actually posted is the marked one.
-        expect(codeManagementService.createIssueComment).toHaveBeenCalledWith(
-            expect.objectContaining({
-                prNumber: 7,
-                body: expect.stringContaining('<!-- kody-codereview -->'),
-            }),
-            undefined,
-        );
-    });
-
-    it('does not duplicate the marker when the formatted body already carries it', async () => {
-        codeManagementService.formatReviewCommentBody.mockResolvedValue(
-            '![badge](https://img.shields.io/badge/...)\n\nrule body\n\n' +
-                '<!-- kody-codereview -->\n&#8203;',
-        );
-
-        const { commentResults } = await call();
-
-        const body = commentResults[0].comment.body;
-        expect(body.split('<!-- kody-codereview -->').length - 1).toBe(1);
-    });
-
-    it('skips the raw marker on Bitbucket, which escapes it', async () => {
-        // Bitbucket renders raw HTML as visible text, so the raw
-        // `<!-- kody-codereview -->` marker must not be appended there; the
-        // platform already injects a visible "kody|code-review" chip in the
-        // header instead (#2050).
-        codeManagementService.getTypeIntegration.mockResolvedValue(
-            PlatformType.BITBUCKET,
-        );
-
-        const { commentResults } = await call();
-
-        expect(commentResults[0].comment.body).not.toContain(
-            '<!-- kody-codereview -->',
-        );
-        expect(
-            codeManagementService.createIssueComment.mock.calls[0][0].body,
-        ).not.toContain('<!-- kody-codereview -->');
-    });
-
-    it('keeps the marker on another platform', async () => {
-        codeManagementService.getTypeIntegration.mockResolvedValue(
-            PlatformType.GITHUB,
-        );
-
-        const { commentResults } = await call();
-
-        expect(commentResults[0].comment.body).toContain(
-            '<!-- kody-codereview -->',
-        );
-    });
-
-    it("follows the PR's own platform when the integration lookup disagrees", async () => {
-        // The integration lookup answers with ONE row per organization/team, so
-        // a team running GitHub and Bitbucket together can resolve the wrong
-        // platform — and then a Bitbucket PR gets the raw marker it renders as
-        // visible text. The caller passes the platform the comment actually
-        // lands on, which is authoritative (#2055 review).
-        codeManagementService.getTypeIntegration.mockResolvedValue(
-            PlatformType.GITHUB,
-        );
-
-        const { commentResults } = await call(PlatformType.BITBUCKET);
-
-        expect(commentResults[0].comment.body).not.toContain(
-            '<!-- kody-codereview -->',
-        );
-        expect(
-            codeManagementService.createIssueComment.mock.calls[0][0].body,
-        ).not.toContain('<!-- kody-codereview -->');
-    });
-
-    it('keeps the marker when the PR is on a platform that renders it', async () => {
-        // The mirror case: the lookup says Bitbucket while the PR is on GitHub.
-        codeManagementService.getTypeIntegration.mockResolvedValue(
-            PlatformType.BITBUCKET,
-        );
-
-        const { commentResults } = await call(PlatformType.GITHUB);
-
-        expect(commentResults[0].comment.body).toContain(
-            '<!-- kody-codereview -->',
-        );
-    });
-
-    it("formats the body with the PR's own platform, not the integration lookup", async () => {
-        // The marker gate is not the only place the platform decides: the
-        // formatter is dispatched on it too, and the dispatcher re-resolves it
-        // from the same single-row lookup when it is omitted — a Bitbucket PR
-        // formatted by the GitHub adapter loses the visible chip and gets
-        // `<details>` markup Bitbucket renders as text (#2055 review).
-        codeManagementService.getTypeIntegration.mockResolvedValue(
-            PlatformType.GITHUB,
-        );
-
-        await call(PlatformType.BITBUCKET);
-
-        expect(
-            codeManagementService.formatReviewCommentBody,
-        ).toHaveBeenCalledWith(expect.anything(), PlatformType.BITBUCKET);
-    });
-});
-
-// The anchor for every inline comment used to be re-derived at posting time
-// from the PR commit list, whose last element is the head as of the post — not
-// the commit the review actually read. A push landing during the review then
-// moved every anchor to a tree the review never looked at, and the commits
-// pushed meanwhile were reported to the pipeline as already analyzed, so the
-// next incremental run skipped them. The reviewed commit is known to the
-// caller (the pipeline context head sha), so createLineComments takes it as an
-// optional argument and anchors on it when present.
-describe('CommentManagerService.createLineComments — anchors on the reviewed commit', () => {
-    const REVIEWED = { sha: 'reviewed-commit-sha', message: 'reviewed' };
-    const PUSHED = { sha: 'pushed-during-review-sha', message: 'pushed' };
-
-    const build = () => {
-        const createReviewComment = jest
-            .fn()
-            .mockResolvedValue({ id: 'c-1', pull_request_review_id: 42 });
-        const codeManagementService = {
-            getCommitsForPullRequestForCodeReview: jest
-                .fn()
-                .mockResolvedValue([REVIEWED, PUSHED]),
-            createReviewComment,
-        };
-        const svc = new CommentManagerService(
-            {} as any,
-            {} as any,
-            {} as any,
-            {} as any,
-            codeManagementService as any,
-        );
-        return { svc, createReviewComment };
-    };
-
-    const lineComments = [
-        {
-            path: 'a.ts',
-            start_line: 3,
-            line: 10,
-            side: 'RIGHT',
-            body: {},
-            suggestion: { id: 's-1' },
-        },
-    ] as any;
-
-    it('posts against the reviewed commit and returns it, not the head at posting time', async () => {
-        const { svc, createReviewComment } = build();
-
-        const result = await svc.createLineComments(
-            { organizationId: 'o', teamId: 't' } as any,
-            7,
-            { name: 'repo', id: '1', language: 'ts' },
-            lineComments,
-            'en-US',
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            REVIEWED.sha,
-        );
-
-        // The per-comment posting call must anchor on the commit the review read.
-        expect(createReviewComment.mock.calls[0][0].commit).toEqual({
-            sha: REVIEWED.sha,
-        });
-        // The commit handed back to the caller drives the next incremental run:
-        // returning the post-time head would mark the push as already analyzed.
-        expect(result.lastAnalyzedCommit).toEqual({ sha: REVIEWED.sha });
-        // The live fetch still returns the full list, head included.
-        expect(result.commits).toEqual([REVIEWED, PUSHED]);
-        expect(result.commentResults).toHaveLength(1);
-    });
-
-    it('falls back to the live head when no reviewed commit is supplied', async () => {
-        const { svc, createReviewComment } = build();
-
-        const result = await svc.createLineComments(
-            { organizationId: 'o', teamId: 't' } as any,
-            7,
-            { name: 'repo', id: '1', language: 'ts' },
-            lineComments,
-            'en-US',
-        );
-
-        expect(createReviewComment.mock.calls[0][0].commit).toBe(PUSHED);
-        expect(result.lastAnalyzedCommit).toBe(PUSHED);
-    });
-
-    it('falls back to the live head when the reviewed commit was force-pushed away', async () => {
-        // A rebase or force-push during the review rewrites the reviewed commit
-        // out of the PR, and both providers reject an anchor that is not part of
-        // it (GitHub commit_id, GitLab position.headSha). Pinning a vanished sha
-        // would lose every inline comment rather than anchor them on a stale
-        // tree, so the pin is conditional on the live list still containing it.
-        const createReviewComment = jest
-            .fn()
-            .mockResolvedValue({ id: 'c-1', pull_request_review_id: 42 });
-        const codeManagementService = {
-            getCommitsForPullRequestForCodeReview: jest
-                .fn()
-                .mockResolvedValue([PUSHED]),
-            createReviewComment,
-        };
-        const svc = new CommentManagerService(
-            {} as any,
-            {} as any,
-            {} as any,
-            {} as any,
-            codeManagementService as any,
-        );
-
-        const result = await svc.createLineComments(
-            { organizationId: 'o', teamId: 't' } as any,
-            7,
-            { name: 'repo', id: '1', language: 'ts' },
-            lineComments,
-            'en-US',
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            REVIEWED.sha, // rewritten away by the force-push
-        );
-
-        expect(createReviewComment.mock.calls[0][0].commit).toBe(PUSHED);
-        expect(result.lastAnalyzedCommit).toBe(PUSHED);
-    });
-});
-
 describe('CommentManagerService — GitLab status notes (#1721)', () => {
     let service: CommentManagerService;
     let codeManagementService: {
@@ -2520,5 +2174,377 @@ describe('CommentManagerService — GitLab status notes (#1721)', () => {
                 false,
             ),
         ).rejects.toThrow('Failed to create end-of-review comment for PR#5');
+    });
+});
+
+// A single-line suggestion has no start_line, so the old attempt 3
+// (`line = start_line`) sent a comment with no line at all and GitHub answered
+// "No subschema in oneOf matched … line, path weren't supplied" (30/day).
+describe('CommentManagerService.createReviewCommentWithRetry — line mismatch', () => {
+    const lineMismatch = () =>
+        Object.assign(new Error('line could not be resolved'), {
+            errorType: 'failed_lines_mismatch',
+        });
+
+    const retryWith = (lineComment: any) => {
+        const createReviewComment = jest.fn().mockRejectedValue(lineMismatch());
+        const svc = new CommentManagerService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            { createReviewComment } as any,
+        ) as any;
+        const result = svc.createReviewCommentWithRetry({
+            organizationAndTeamData: { organizationId: 'o', teamId: 't' },
+            repository: { name: 'r', id: '1', language: 'ts' },
+            commit: {},
+            prNumber: 1,
+            lineComment,
+            language: 'en-US',
+        });
+        return { result, createReviewComment };
+    };
+
+    it('never sends a comment without a line for a single-line suggestion', async () => {
+        const { result, createReviewComment } = retryWith({
+            path: 'a.ts',
+            start_line: undefined,
+            line: 10,
+            side: 'RIGHT',
+            body: {},
+        });
+
+        await expect(result).rejects.toMatchObject({
+            errorType: 'failed_lines_mismatch',
+        });
+        for (const [args] of createReviewComment.mock.calls) {
+            expect(args.lineComment.line).toBe(10);
+        }
+    });
+
+    it('still tries the start of a multi-line range as the last attempt', async () => {
+        const { result, createReviewComment } = retryWith({
+            path: 'a.ts',
+            start_line: 5,
+            line: 10,
+            side: 'RIGHT',
+            body: {},
+        });
+
+        await expect(result).rejects.toBeDefined();
+        expect(createReviewComment).toHaveBeenCalledTimes(3);
+        expect(createReviewComment.mock.calls[2][0].lineComment.line).toBe(5);
+    });
+});
+
+describe('CommentManagerService.createPrLevelReviewComments carries the kody-codereview marker (#2050)', () => {
+    let service: CommentManagerService;
+    const codeManagementService = {
+        getPullRequestByNumber: jest.fn(),
+        formatReviewCommentBody: jest.fn(),
+        createIssueComment: jest.fn(),
+        createSingleIssueComment: jest.fn(),
+        getTypeIntegration: jest.fn(),
+    } as any;
+
+    const suggestion = () => ({
+        id: 'uuid-1',
+        oneSentenceSummary: 'PR description must reference a tracking ticket',
+        suggestionContent:
+            '![kody code-review](https://img.shields.io/badge/...)\n' +
+            'PR description must reference a tracking ticket.\n\n' +
+            'Kody rule violation: [PR description must reference a ticket](https://rules/1)',
+    });
+
+    beforeEach(() => {
+        codeManagementService.formatReviewCommentBody.mockReset();
+        codeManagementService.createIssueComment.mockReset();
+        codeManagementService.createSingleIssueComment.mockReset();
+        codeManagementService.getTypeIntegration.mockReset();
+        codeManagementService.formatReviewCommentBody.mockResolvedValue(
+            '![badge](https://img.shields.io/badge/...)\n\nrule body',
+        );
+        codeManagementService.createIssueComment.mockResolvedValue({ id: 101 });
+        codeManagementService.createSingleIssueComment.mockResolvedValue({
+            id: 101,
+        });
+        // Non-Bitbucket by default: the raw marker is appended.
+        codeManagementService.getTypeIntegration.mockResolvedValue(undefined);
+        service = new CommentManagerService(
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            codeManagementService,
+        );
+    });
+
+    const call = (platformType?: PlatformType) =>
+        service.createPrLevelReviewComments(
+            { organizationId: 'org-1', teamId: 'team-1' } as never,
+            7,
+            { name: 'sample', id: 'repo-id', language: 'typescript' } as never,
+            [suggestion()] as never,
+            'typescript',
+            undefined,
+            platformType,
+        );
+
+    it('appends the marker to a PR-level comment body that lacks it', async () => {
+        const { commentResults } = await call();
+
+        expect(commentResults[0].comment.body).toContain(
+            '<!-- kody-codereview -->',
+        );
+        // The body that is actually posted is the marked one.
+        expect(
+            codeManagementService.createSingleIssueComment,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prNumber: 7,
+                body: expect.stringContaining('<!-- kody-codereview -->'),
+            }),
+            undefined,
+        );
+    });
+
+    it('does not duplicate the marker when the formatted body already carries it', async () => {
+        codeManagementService.formatReviewCommentBody.mockResolvedValue(
+            '![badge](https://img.shields.io/badge/...)\n\nrule body\n\n' +
+                '<!-- kody-codereview -->\n&#8203;',
+        );
+
+        const { commentResults } = await call();
+
+        const body = commentResults[0].comment.body;
+        expect(body.split('<!-- kody-codereview -->').length - 1).toBe(1);
+    });
+
+    it('skips the raw marker on Bitbucket, which escapes it', async () => {
+        // Bitbucket renders raw HTML as visible text, so the raw
+        // `<!-- kody-codereview -->` marker must not be appended there; the
+        // platform already injects a visible "kody|code-review" chip in the
+        // header instead (#2050).
+        codeManagementService.getTypeIntegration.mockResolvedValue(
+            PlatformType.BITBUCKET,
+        );
+
+        const { commentResults } = await call();
+
+        expect(commentResults[0].comment.body).not.toContain(
+            '<!-- kody-codereview -->',
+        );
+        expect(
+            codeManagementService.createSingleIssueComment.mock.calls[0][0]
+                .body,
+        ).not.toContain('<!-- kody-codereview -->');
+    });
+
+    it('keeps the marker on another platform', async () => {
+        codeManagementService.getTypeIntegration.mockResolvedValue(
+            PlatformType.GITHUB,
+        );
+
+        const { commentResults } = await call();
+
+        expect(commentResults[0].comment.body).toContain(
+            '<!-- kody-codereview -->',
+        );
+    });
+
+    it("follows the PR's own platform when the integration lookup disagrees", async () => {
+        // The integration lookup answers with ONE row per organization/team, so
+        // a team running GitHub and Bitbucket together can resolve the wrong
+        // platform — and then a Bitbucket PR gets the raw marker it renders as
+        // visible text. The caller passes the platform the comment actually
+        // lands on, which is authoritative (#2055 review).
+        codeManagementService.getTypeIntegration.mockResolvedValue(
+            PlatformType.GITHUB,
+        );
+
+        const { commentResults } = await call(PlatformType.BITBUCKET);
+
+        expect(commentResults[0].comment.body).not.toContain(
+            '<!-- kody-codereview -->',
+        );
+        expect(
+            codeManagementService.createSingleIssueComment.mock.calls[0][0]
+                .body,
+        ).not.toContain('<!-- kody-codereview -->');
+    });
+
+    it('keeps the marker when the PR is on a platform that renders it', async () => {
+        // The mirror case: the lookup says Bitbucket while the PR is on GitHub.
+        codeManagementService.getTypeIntegration.mockResolvedValue(
+            PlatformType.BITBUCKET,
+        );
+
+        const { commentResults } = await call(PlatformType.GITHUB);
+
+        expect(commentResults[0].comment.body).toContain(
+            '<!-- kody-codereview -->',
+        );
+    });
+
+    it("formats the body with the PR's own platform, not the integration lookup", async () => {
+        // The marker gate is not the only place the platform decides: the
+        // formatter is dispatched on it too, and the dispatcher re-resolves it
+        // from the same single-row lookup when it is omitted — a Bitbucket PR
+        // formatted by the GitHub adapter loses the visible chip and gets
+        // `<details>` markup Bitbucket renders as text (#2055 review).
+        codeManagementService.getTypeIntegration.mockResolvedValue(
+            PlatformType.GITHUB,
+        );
+
+        await call(PlatformType.BITBUCKET);
+
+        expect(
+            codeManagementService.formatReviewCommentBody,
+        ).toHaveBeenCalledWith(expect.anything(), PlatformType.BITBUCKET);
+    });
+
+    it('routes PR-level summaries through the plain-note path, not a discussion (#1721)', async () => {
+        // On GitLab createIssueComment opens a resolvable discussion, so a team
+        // that requires every discussion resolved cannot merge an MR whose only
+        // unresolved thread is a "looks good / nothing to do" PR-level comment.
+        // The plain-note dispatcher keeps GitLab on MergeRequestNotes while
+        // every other platform still lands on createIssueComment.
+        await call(PlatformType.GITLAB);
+
+        expect(
+            codeManagementService.createSingleIssueComment,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({ prNumber: 7 }),
+            PlatformType.GITLAB,
+        );
+        expect(codeManagementService.createIssueComment).not.toHaveBeenCalled();
+    });
+});
+
+// The anchor for every inline comment used to be re-derived at posting time
+// from the PR commit list, whose last element is the head as of the post — not
+// the commit the review actually read. A push landing during the review then
+// moved every anchor to a tree the review never looked at, and the commits
+// pushed meanwhile were reported to the pipeline as already analyzed, so the
+// next incremental run skipped them. The reviewed commit is known to the
+// caller (the pipeline context head sha), so createLineComments takes it as an
+// optional argument and anchors on it when present.
+describe('CommentManagerService.createLineComments — anchors on the reviewed commit', () => {
+    const REVIEWED = { sha: 'reviewed-commit-sha', message: 'reviewed' };
+    const PUSHED = { sha: 'pushed-during-review-sha', message: 'pushed' };
+
+    const build = () => {
+        const createReviewComment = jest
+            .fn()
+            .mockResolvedValue({ id: 'c-1', pull_request_review_id: 42 });
+        const codeManagementService = {
+            getCommitsForPullRequestForCodeReview: jest
+                .fn()
+                .mockResolvedValue([REVIEWED, PUSHED]),
+            createReviewComment,
+        };
+        const svc = new CommentManagerService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            codeManagementService as any,
+        );
+        return { svc, createReviewComment };
+    };
+
+    const lineComments = [
+        {
+            path: 'a.ts',
+            start_line: 3,
+            line: 10,
+            side: 'RIGHT',
+            body: {},
+            suggestion: { id: 's-1' },
+        },
+    ] as any;
+
+    it('posts against the reviewed commit and returns it, not the head at posting time', async () => {
+        const { svc, createReviewComment } = build();
+
+        const result = await svc.createLineComments(
+            { organizationId: 'o', teamId: 't' } as any,
+            7,
+            { name: 'repo', id: '1', language: 'ts' },
+            lineComments,
+            'en-US',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            REVIEWED.sha,
+        );
+
+        // The per-comment posting call must anchor on the commit the review read.
+        expect(createReviewComment.mock.calls[0][0].commit).toEqual({
+            sha: REVIEWED.sha,
+        });
+        // The commit handed back to the caller drives the next incremental run:
+        // returning the post-time head would mark the push as already analyzed.
+        expect(result.lastAnalyzedCommit).toEqual({ sha: REVIEWED.sha });
+        // The live fetch still returns the full list, head included.
+        expect(result.commits).toEqual([REVIEWED, PUSHED]);
+        expect(result.commentResults).toHaveLength(1);
+    });
+
+    it('falls back to the live head when no reviewed commit is supplied', async () => {
+        const { svc, createReviewComment } = build();
+
+        const result = await svc.createLineComments(
+            { organizationId: 'o', teamId: 't' } as any,
+            7,
+            { name: 'repo', id: '1', language: 'ts' },
+            lineComments,
+            'en-US',
+        );
+
+        expect(createReviewComment.mock.calls[0][0].commit).toBe(PUSHED);
+        expect(result.lastAnalyzedCommit).toBe(PUSHED);
+    });
+
+    it('falls back to the live head when the reviewed commit was force-pushed away', async () => {
+        // A rebase or force-push during the review rewrites the reviewed commit
+        // out of the PR, and both providers reject an anchor that is not part of
+        // it (GitHub commit_id, GitLab position.headSha). Pinning a vanished sha
+        // would lose every inline comment rather than anchor them on a stale
+        // tree, so the pin is conditional on the live list still containing it.
+        const createReviewComment = jest
+            .fn()
+            .mockResolvedValue({ id: 'c-1', pull_request_review_id: 42 });
+        const codeManagementService = {
+            getCommitsForPullRequestForCodeReview: jest
+                .fn()
+                .mockResolvedValue([PUSHED]),
+            createReviewComment,
+        };
+        const svc = new CommentManagerService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            codeManagementService as any,
+        );
+
+        const result = await svc.createLineComments(
+            { organizationId: 'o', teamId: 't' } as any,
+            7,
+            { name: 'repo', id: '1', language: 'ts' },
+            lineComments,
+            'en-US',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            REVIEWED.sha, // rewritten away by the force-push
+        );
+
+        expect(createReviewComment.mock.calls[0][0].commit).toBe(PUSHED);
+        expect(result.lastAnalyzedCommit).toBe(PUSHED);
     });
 });

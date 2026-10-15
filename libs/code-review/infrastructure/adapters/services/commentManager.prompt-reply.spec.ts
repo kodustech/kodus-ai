@@ -38,6 +38,7 @@ const makeService = (over: Record<string, any> = {}) => {
         createResponseToComment: jest.fn().mockResolvedValue({ id: 102 }),
         formatReviewCommentBody: jest.fn().mockResolvedValue('PR-level body'),
         createIssueComment: jest.fn().mockResolvedValue({ id: 201 }),
+        createSingleIssueComment: jest.fn().mockResolvedValue({ id: 201 }),
         ...over,
     };
     const service = new CommentManagerService(

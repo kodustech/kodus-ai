@@ -2807,9 +2807,19 @@ ${reviewOptions}
                         commentBody = `${commentBody}\n\n<!-- kody-codereview -->\n&#8203;`;
                     }
 
-                    // Create general comment
+                    // #1721: PR-level comments are summaries/status — the
+                    // "looks good / nothing to do" message being the clearest
+                    // case — not findings. On GitLab createIssueComment opens a
+                    // resolvable discussion, so an MR with "all threads must be
+                    // resolved" cannot merge on a comment whose text says there
+                    // is nothing to fix. createSingleIssueComment posts a plain
+                    // MergeRequestNotes note there (the same non-blocking path
+                    // start/end comments use) and still delegates to
+                    // createIssueComment on every other platform. Line-level
+                    // findings keep going through createLineComments and stay
+                    // resolvable so they can still block merge.
                     const createdComment =
-                        await this.codeManagementService.createIssueComment(
+                        await this.codeManagementService.createSingleIssueComment(
                             {
                                 organizationAndTeamData,
                                 repository: {
@@ -2818,9 +2828,8 @@ ${reviewOptions}
                                 },
                                 prNumber,
                                 body: commentBody,
-                                suggestion,
                             },
-                            undefined,
+                            resolvedPlatformType,
                         );
 
                     if (createdComment?.id) {
