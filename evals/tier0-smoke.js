@@ -139,12 +139,12 @@ function logMessage(line) {
     }
 }
 
-function providerRefusal(stdout) {
-    for (const line of String(stdout || '').split('\n')) {
-        const m = logMessage(line).match(PROVIDER_REFUSAL);
-        if (m) return m[2];
-    }
-    return null;
+function providerRefusals(stdout) {
+    return String(stdout || '')
+        .split('\n')
+        .map((line) => logMessage(line).match(PROVIDER_REFUSAL))
+        .filter(Boolean)
+        .map((m) => m[2]);
 }
 
 // One stage's eval on a few cases: it runs on this model when the eval says it
@@ -180,7 +180,10 @@ function runFewCases(model, part, outDir = path.join(__dirname, 'investigation',
     if (!result || r.status !== 0 || !calls || errored / calls >= 0.5) {
         // Only stderr: stdout echoes case ids and texts, which can look like a provider error.
         const printed = errorLine(String(r.stderr || '').split('\n').map((l) => l.trim()).filter(Boolean));
-        const refusal = classifyFailure(printed) === 'infra' ? null : providerRefusal(r.stdout);
+        // Refusals explain the run only when there are as many as failed calls:
+        // one 429 among calls that failed for another reason is not the cause.
+        const refusals = classifyFailure(printed) === 'infra' ? [] : providerRefusals(r.stdout);
+        const refusal = refusals.length && refusals.length >= errored ? refusals[0] : null;
         const error = refusal || printed;
         const reason = result ? `${errored} of ${calls} calls failed: ${error || 'no error printed'}` : error || `exit ${r.status}${r.signal ? ` (${r.signal})` : ''}`;
         return { ...base, status: refusal ? 'infra' : classifyFailure(printed), reason };

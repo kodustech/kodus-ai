@@ -215,11 +215,17 @@ describe('tier-0 stages on a few cases', () => {
     it('reads a provider refusal from the engine\'s LLM error log when the eval hides it', () => {
         const hidden = '[case a run 0] Kody Rules could not be evaluated: all 4 rule check(s) failed to run.\n[case b run 0] Kody Rules could not be evaluated: all 4 rule check(s) failed to run.';
         const credit = 'WARN: [LLM-ERROR] kodus-rules-review-agent.shard: "managed-default" failed (QUOTA_EXCEEDED) — Your credit balance is too low';
-        expect(runFewCases('m', fake('credit', shared(0, 10), hidden, `\x1b[33m${credit}\x1b[39m`), dir)).toMatchObject({ status: 'infra', reason: '10 of 10 calls failed: Your credit balance is too low' });
+        // One refused call per failed one, as the engine logs them.
+        const each = (line: string) => Array.from({ length: 10 }, () => line).join('\n');
+        expect(runFewCases('m', fake('credit', shared(0, 10), hidden, each(`\x1b[33m${credit}\x1b[39m`)), dir)).toMatchObject({ status: 'infra', reason: '10 of 10 calls failed: Your credit balance is too low' });
         const ciLine = JSON.stringify({ level: 'warn', context: 'runWithModelFailover', msg: '[LLM-ERROR] code-review: "managed-default" failed (QUOTA_EXCEEDED) — Your credit balance is too low' });
-        expect(runFewCases('m', fake('credit-json', shared(0, 10), hidden, ciLine), dir)).toMatchObject({ status: 'infra', reason: '10 of 10 calls failed: Your credit balance is too low' });
+        expect(runFewCases('m', fake('credit-json', shared(0, 10), hidden, each(ciLine)), dir)).toMatchObject({ status: 'infra', reason: '10 of 10 calls failed: Your credit balance is too low' });
         const unsupported = 'WARN: [LLM-ERROR] kodus-rules-review-agent.shard: "managed-default" failed (UNKNOWN) — Function tools with reasoning_effort are not supported';
         expect(runFewCases('m', fake('unsupported', shared(0, 10), hidden, unsupported), dir)).toMatchObject({ status: 'broken' });
+        // One rate-limited call among calls that failed for another reason: broken.
+        const oneRateLimit = 'WARN: [LLM-ERROR] classifyImplicitReply: "managed-default" failed (RATE_LIMIT) — 429 Too Many Requests';
+        const noVerdict = Array.from({ length: 9 }, (_, i) => `c${i}#0: Reply classifier returned no verdict`).join('\n');
+        expect(runFewCases('m', fake('mixed', shared(0, 10), noVerdict, oneRateLimit, 2), dir)).toMatchObject({ status: 'broken', reason: '10 of 10 calls failed: Reply classifier returned no verdict' });
     });
 
     // Each eval holds its own budget: it exits 2 above it. Kody Rules exits 2 only
