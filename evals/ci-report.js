@@ -512,7 +512,7 @@ function tier0Report(models, readResult, env = {}, readPrevious = () => null) {
     const okModels = results.filter((r) => !missing.includes(r) && !broken.includes(r) && !unreachable.includes(r));
     const icon = verdict === 'pass' ? '✅' : verdict === 'infra' ? '⚠️' : '❌';
     const secretFor = (model) =>
-        /^claude/.test(model) ? 'BYOK_ANTHROPIC_API_KEY' : /^gpt/.test(model) ? 'BYOK_OPENAI_API_KEY' : /^gemini/.test(model) ? 'BYOK_GOOGLE_API_KEY' : /^kimi/.test(model) ? 'BYOK_MOONSHOT_API_KEY' : /^glm/.test(model) ? 'BYOK_ZHIPU_API_KEY' : null;
+        /@openrouter$/.test(model) ? 'BYOK_OPENROUTER_API_KEY' : /^claude/.test(model) ? 'BYOK_ANTHROPIC_API_KEY' : /^gpt/.test(model) ? 'BYOK_OPENAI_API_KEY' : /^gemini/.test(model) ? 'BYOK_GOOGLE_API_KEY' : /^kimi/.test(model) ? 'BYOK_MOONSHOT_API_KEY' : /^glm/.test(model) ? 'BYOK_ZHIPU_API_KEY' : null;
     const compactLines = [];
     if (okModels.length) compactLines.push(`✅ ${okModels.map((r) => r.model).join(' · ')}`);
     for (const r of [...broken, ...missing, ...unreachable]) {
