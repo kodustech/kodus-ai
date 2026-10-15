@@ -177,12 +177,25 @@ describe('tier-0 report', () => {
 
 describe('tier-0 stages on a few cases', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tier0-few-'));
-    // A stand-in eval: writes the shared result it is given and prints `stderr`.
+    // A stand-in eval: writes the shared result its data file holds, prints its
+    // stdout and stderr, and exits 1 when it has no result.
+    const runner = path.join(dir, 'fake-eval.js');
+    fs.writeFileSync(
+        runner,
+        [
+            "const fs = require('fs');",
+            "const arg = (k) => (process.argv.find((a) => a.startsWith('--' + k + '=')) || '').slice(k.length + 3);",
+            "const data = JSON.parse(fs.readFileSync(arg('data'), 'utf8'));",
+            "if (data.result) fs.writeFileSync(arg('output'), JSON.stringify(data.result));",
+            'console.log(data.stdout);',
+            'console.error(data.stderr);',
+            'process.exit(data.result ? 0 : 1);',
+        ].join('\n'),
+    );
     const fake = (name: string, result: unknown, stderr = '', stdout = '') => {
-        const file = path.join(dir, `${name}.js`);
-        const write = result ? `require('fs').writeFileSync(process.argv.find((a) => a.startsWith('--output=')).slice(9), ${JSON.stringify(JSON.stringify(result))});` : '';
-        fs.writeFileSync(file, `${write}\nconsole.log(${JSON.stringify(stdout)});\nconsole.error(${JSON.stringify(stderr)});\nprocess.exit(${result ? 0 : 1});\n`);
-        return { key: name, stage: name, run: [file] };
+        const data = path.join(dir, `${name}.json`);
+        fs.writeFileSync(data, JSON.stringify({ result, stderr, stdout }));
+        return { key: name, stage: name, run: [runner, `--data=${data}`] };
     };
     const shared = (hits: number, errored = 0) => ({ cases: [{ id: 'c1', checks: 'Checks c1', hits, total: 2 }], infra: { errored, total: 10 } });
 
