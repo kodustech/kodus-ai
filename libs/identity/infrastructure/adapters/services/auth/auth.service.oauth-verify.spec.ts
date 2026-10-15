@@ -95,6 +95,28 @@ describe('AuthService.verifyOAuthProviderEmail (GHSA-95hw)', () => {
         ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
+    it('rejects a GitHub token whose only email is the unverified public profile email', async () => {
+        // The attack (GHSA-95hw): a real token that cannot read verified emails
+        // (no `user:email` scope, so /user/emails is denied) carrying a public
+        // profile email set to the victim's address. The identity must NOT fall
+        // back to that unverified email.
+        const svc = makeService();
+        mockedGet.mockImplementation((url: string) => {
+            if (url.endsWith('/user')) {
+                return Promise.resolve({
+                    data: { login: 'attacker', email: 'victim@corp.com' },
+                });
+            }
+            return Promise.reject(new Error('403'));
+        });
+        await expect(
+            svc.verifyOAuthProviderEmail(
+                AuthProvider.GITHUB,
+                'real_but_unscoped',
+            ),
+        ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
     it('returns the GitLab account email', async () => {
         const svc = makeService();
         mockedGet.mockResolvedValue({

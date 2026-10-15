@@ -44,6 +44,12 @@ describe('OAuthLoginUseCase — provider token gating (GHSA-95hw)', () => {
 
         expect(authService.login).not.toHaveBeenCalled();
         expect(signUpUseCase.execute).not.toHaveBeenCalled();
+        // The provider token (not the body email) is what gets verified, in
+        // (provider, token) order — swapping or dropping it must fail here.
+        expect(authService.verifyOAuthProviderEmail).toHaveBeenCalledWith(
+            AuthProvider.GITHUB,
+            'completely_fake',
+        );
     });
 
     it('keys the account off the provider email, not the request body', async () => {
@@ -70,6 +76,10 @@ describe('OAuthLoginUseCase — provider token gating (GHSA-95hw)', () => {
             AuthProvider.GITHUB,
         );
 
+        expect(authService.verifyOAuthProviderEmail).toHaveBeenCalledWith(
+            AuthProvider.GITHUB,
+            'valid_token',
+        );
         expect(authService.validateUser).toHaveBeenCalledWith({
             email: 'attacker@evil.com',
         });

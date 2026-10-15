@@ -465,9 +465,13 @@ export class AuthService implements IAuthService {
             timeout: INTEGRATION_REQUEST_TIMEOUT_MS,
         });
 
-        // The public profile email can be null; the verified primary email
-        // lives behind /user/emails (granted by the `user:email` scope).
-        let email: string | undefined = profile.data?.email ?? undefined;
+        // GitHub's /user `email` is the PUBLIC, user-settable, UNVERIFIED
+        // profile email. Trusting it lets a token that cannot read verified
+        // emails (no `user:email` scope, or a failed /user/emails call) set the
+        // public email to a victim's address and impersonate that account
+        // (GHSA-95hw-cx5j-2pg8). Only a verified address from /user/emails is
+        // acceptable — never seed the identity from the profile email.
+        let email: string | undefined;
         try {
             const emails = await axios.get(`${baseUrl}/user/emails`, {
                 headers,
@@ -481,11 +485,21 @@ export class AuthService implements IAuthService {
             const primary =
                 list.find((e) => e.primary && e.verified) ??
                 list.find((e) => e.verified);
-            if (primary?.email) {
-                email = primary.email;
-            }
-        } catch {
-            // Fall back to the profile email below.
+            email = primary?.email;
+        } catch (error) {
+            // A degradation, not a fatal error — but we must not fall back to
+            // the unverified profile email, so the login is rejected below.
+            // Log the sanitized reason only; never the token or the raw axios
+            // error, whose config.headers would leak the bearer token.
+            this.logger.warn({
+                message:
+                    'GitHub /user/emails lookup failed; rejecting OAuth login (no verified email)',
+                context: AuthService.name,
+                metadata: {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                },
+            });
         }
 
         if (!email) {
