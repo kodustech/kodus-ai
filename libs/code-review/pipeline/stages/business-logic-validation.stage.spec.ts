@@ -331,7 +331,6 @@ describe('BusinessLogicValidationStage', () => {
             references: [],
             tracker: 'Linear',
             message: '',
-            required: false,
         });
 
         const result = await stage.execute(context());
