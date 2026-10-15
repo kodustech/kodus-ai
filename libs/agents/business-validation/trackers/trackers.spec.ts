@@ -1,7 +1,11 @@
 import type { MCPServerConfig, MCPToolRaw } from '@libs/mcp-server/mcp-adapter';
 
 import { extractTaskReferences } from '../task-references';
-import { CustomMcpTracker, rankReadTools } from './custom-mcp.tracker';
+import {
+    CustomMcpTracker,
+    isReadOnly,
+    rankReadTools,
+} from './custom-mcp.tracker';
 import { GitIssuesTracker } from './git-issues.tracker';
 import { LinearTracker } from './linear.tracker';
 import {
@@ -138,6 +142,34 @@ describe('CustomMcpTracker with the tool the org picked', () => {
     });
 });
 
+describe('isReadOnly: a write verb is a word of the name, not part of one', () => {
+    it('blocks tools named with a verb that writes, in any casing', () => {
+        for (const name of [
+            'save_issue',
+            'createIssue',
+            'DELETE_TASK',
+            'issue.addComment',
+            'deleteissue',
+            'wit_update_work_item',
+        ]) {
+            expect([name, isReadOnly(tool(name))]).toEqual([name, false]);
+        }
+    });
+
+    it('lets through readers whose words only contain a verb', () => {
+        for (const name of [
+            'get_markdown',
+            'list_bookmarks',
+            'find_duplicates',
+            'get_shared_with_me',
+            'list_installed_apps',
+            'getIssueSettings',
+        ]) {
+            expect([name, isReadOnly(tool(name))]).toEqual([name, true]);
+        }
+    });
+});
+
 describe('rankReadTools (UC-04)', () => {
     it('offers read-by-id tools, best first, and never one that writes or lists', () => {
         const ranked = rankReadTools([
@@ -192,6 +224,25 @@ describe('McpTaskTracker', () => {
             organizationAndTeamData: {} as any,
         });
         expect(lookup).toMatchObject({ status: 'found', tools: ['get_issue'] });
+    });
+
+    it('fails to tell, rather than says no, when the teams cannot be listed', async () => {
+        const s = session({
+            call: () => {
+                throw new TrackerUnavailableError('timeout');
+            },
+        });
+        await expect(
+            new LinearTracker(s).ownsReference(ref('SAA-999')),
+        ).rejects.toThrow('timeout');
+    });
+
+    it('cannot tell whose key it is without listing keys', async () => {
+        expect(
+            await new CustomMcpTracker('Acme', session({})).ownsReference(
+                ref('SAA-999'),
+            ),
+        ).toBeUndefined();
     });
 
     it('knows SAA is a team in Linear and UTF is not (UC-14, UC-21)', async () => {
@@ -310,6 +361,87 @@ describe('McpTaskTracker.relate: what a found task links to', () => {
         const task = await found(s, 'KOD-20');
         expect(task.parent).toEqual({ id: 'KOD-19', title: undefined });
         expect(task.description).toBe('Archive part of the parent issue.');
+    });
+});
+
+describe('LinearTracker: a parent named by its internal id, sub-issues by parent', () => {
+    const context = { organizationAndTeamData: { organizationId: 'org-1' } };
+    const PARENT_UUID = '7a1f0c2e-0000-4000-8000-000000000019';
+
+    it('reads a parent the issue names by uuid, under its identifier', async () => {
+        const s = session({
+            call: (name, args) => {
+                if (name !== 'get_issue') {
+                    return { issues: [] };
+                }
+                return args.id === 'KOD-20'
+                    ? {
+                          id: 'KOD-20',
+                          title: 'Bulk archive',
+                          description: 'Part of the parent.',
+                          parentId: PARENT_UUID,
+                      }
+                    : {
+                          id: 'KOD-19',
+                          uuid: PARENT_UUID,
+                          title: 'Ticket list: bulk actions',
+                          description: 'A checkbox selects the ticket.',
+                      };
+            },
+        });
+        const tracker = new LinearTracker(s);
+        const read = await tracker.read(ref('KOD-20'), context);
+        if (read.status !== 'found') {
+            throw new Error('KOD-20 not found');
+        }
+        const task = await tracker.relate(read.task, context);
+        expect(task.parent).toMatchObject({
+            id: 'KOD-19',
+            title: 'Ticket list: bulk actions',
+        });
+    });
+
+    const parent = {
+        id: 'KOD-19',
+        title: 'Bulk actions',
+        description: 'Select and archive.',
+    };
+    const relate = async (listIssues: MCPToolRaw, answer: () => unknown) => {
+        const s = session({
+            tools: [tool('get_issue'), listIssues],
+            call: (name) => (name === 'get_issue' ? parent : answer()),
+        });
+        const tracker = new LinearTracker(s);
+        const read = await tracker.read(ref('KOD-19'), context);
+        if (read.status !== 'found') {
+            throw new Error('KOD-19 not found');
+        }
+        return { s, task: await tracker.relate(read.task, context) };
+    };
+
+    it('never lists issues through a tool that has no parent filter', async () => {
+        const { s, task } = await relate(
+            tool('list_issues', { properties: { query: {}, limit: {} } }),
+            () => ({ issues: [{ id: 'KOD-7', title: 'Unrelated' }] }),
+        );
+        expect(task.subtasks).toBeUndefined();
+        expect(s.calls.map(([name]) => name)).not.toContain('list_issues');
+    });
+
+    it('keeps the issues, not their team or state, up to the cap', async () => {
+        const { task } = await relate(
+            tool('list_issues', { properties: { parentId: {}, limit: {} } }),
+            () => ({
+                issues: Array.from({ length: 30 }, (_, i) => ({
+                    id: `KOD-${100 + i}`,
+                    title: `Piece ${i}`,
+                    team: { id: 'team-uuid', name: 'Platform' },
+                    state: { id: 'state-uuid', name: 'Todo' },
+                })),
+            }),
+        );
+        expect(task.subtasks).toHaveLength(25);
+        expect(task.subtasks?.every((t) => t.id.startsWith('KOD-'))).toBe(true);
     });
 });
 

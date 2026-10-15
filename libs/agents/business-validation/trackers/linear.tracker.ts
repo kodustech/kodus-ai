@@ -56,12 +56,13 @@ export class LinearTracker extends McpTaskTracker {
         });
 
         // The identifier (`SAA-96`) is `identifier` in older answers and
-        // `id` in current ones, where the internal id moved to `uuid`.
+        // `id` in current ones, where the internal id moved to `uuid`. A
+        // parent is named by that internal id, so it matches too.
+        const wanted = reference.id.toUpperCase();
         const issue = recordsIn(payload).find((record) =>
-            [record.identifier, record.id].some(
+            [record.identifier, record.id, record.uuid].some(
                 (key) =>
-                    typeof key === 'string' &&
-                    key.toUpperCase() === reference.id,
+                    typeof key === 'string' && key.toUpperCase() === wanted,
             ),
         );
         if (issue) {
@@ -69,7 +70,7 @@ export class LinearTracker extends McpTaskTracker {
                 status: 'found',
                 task: {
                     tracker: this.name,
-                    id: reference.id,
+                    id: identifierOf(issue) ?? reference.id,
                     title: textField(issue, ['title']),
                     description: textField(issue, ['description']),
                     url: textField(issue, ['url']),
@@ -104,7 +105,9 @@ export class LinearTracker extends McpTaskTracker {
      * Asks for the one team when the server has `get_team`: listing them
      * returns a page, and a large workspace's team may not be on it.
      */
-    async ownsReference(reference: TaskReference): Promise<boolean> {
+    async ownsReference(
+        reference: TaskReference,
+    ): Promise<boolean | undefined> {
         if (reference.kind !== 'key') {
             return false;
         }
@@ -139,18 +142,40 @@ export class LinearTracker extends McpTaskTracker {
         return this.teams.get(prefix)!;
     }
 
-    /** `get_issue` names the parent, not the sub-issues: they are listed by parent. */
+    /**
+     * `get_issue` names the parent, not the sub-issues: they are listed by
+     * parent. Not when `list_issues` declares its arguments without
+     * `parentId`: the filter would be dropped and the answer would be a page
+     * of unrelated issues.
+     */
     protected async childrenOf(task: Task): Promise<RelatedTask[]> {
+        const declared = Object.keys(
+            asRecord(
+                asRecord(
+                    (await this.loadTools()).find(
+                        (t) => t.name === 'list_issues',
+                    )?.inputSchema,
+                ).properties,
+            ),
+        );
+        if (declared.length && !declared.includes('parentId')) {
+            return [];
+        }
         const payload = await this.session.call('list_issues', {
             parentId: task.id,
-            limit: MAX_SUBTASKS,
+            ...(!declared.length || declared.includes('limit')
+                ? { limit: MAX_SUBTASKS }
+                : {}),
         });
+        // Issues only, never their nested team, state or assignee.
         return recordsIn(payload)
+            .filter((record) => identifierOf(record) !== undefined)
             .map((record) => relatedTask(record))
             .filter(
                 (child): child is RelatedTask =>
                     !!child && child.id.toUpperCase() !== task.id,
-            );
+            )
+            .slice(0, MAX_SUBTASKS);
     }
 
     protected async documentText(id: string): Promise<string | undefined> {
@@ -186,6 +211,15 @@ export class LinearTracker extends McpTaskTracker {
             ...payload.matchAll(/(?:\bkey\W+|\()([A-Z][A-Z0-9]{1,9})\b/gi),
         ].map((m) => m[1].toUpperCase());
     }
+}
+
+/** The issue's `SAA-96`, whichever field holds it. */
+function identifierOf(record: Record<string, unknown>): string | undefined {
+    const key = [record.identifier, record.id].find(
+        (value): value is string =>
+            typeof value === 'string' && /^[A-Z][A-Z0-9_]*-\d+$/i.test(value),
+    );
+    return key?.toUpperCase();
 }
 
 function teamParam(tool: MCPToolRaw): string | undefined {

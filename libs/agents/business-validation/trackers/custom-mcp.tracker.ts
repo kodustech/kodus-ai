@@ -10,8 +10,27 @@ import { describeTask, mentions, recordsIn } from './task-payload';
 import { McpTaskTracker, type TrackerReadContext } from './tracker';
 
 /** Verbs that change something. A tool named with one is never called. */
-const WRITE_VERB =
-    /(^|[_\-\s.]|[a-z](?=[A-Z]))(create|update|delete|remove|upsert|write|add|set|save|edit|patch|put|post|send|move|merge|close|reopen|assign|transition|archive|link|unlink|lock|vote|run|cancel|retry|comment|import|upload|replace|dismiss|approve|reject|mark|share|unshare|submit|resolve|retire|restore|prepare|publish|toggle|enable|disable|trigger|execute|invoke|sync|rename|duplicate|subscribe|unsubscribe|invite|grant|revoke|install|uninstall|deploy|schedule|snooze)/i;
+const WRITE_VERBS =
+    'create|update|delete|remove|upsert|write|add|set|save|edit|patch|put|post|send|move|merge|close|reopen|assign|transition|archive|link|unlink|lock|vote|run|cancel|retry|comment|import|upload|replace|dismiss|approve|reject|mark|share|unshare|submit|resolve|retire|restore|prepare|publish|toggle|enable|disable|trigger|execute|invoke|sync|rename|duplicate|subscribe|unsubscribe|invite|grant|revoke|install|uninstall|deploy|schedule|snooze';
+const WRITE_WORD = new RegExp(`^(?:${WRITE_VERBS})$`, 'i');
+const STARTS_WITH_WRITE = new RegExp(`^(?:${WRITE_VERBS})`, 'i');
+
+/**
+ * Whether a tool's name says it writes: one of its words is a write verb
+ * (`save_issue`, `createIssue`, `DELETE_TASK`), or its first word starts with
+ * one (`deleteissue`). A verb inside a later word is not one: `get_markdown`
+ * and `list_bookmarks` read.
+ */
+function namesAWrite(name: string): boolean {
+    const words = name
+        .split(/[_\-\s.]+|(?<=[a-z0-9])(?=[A-Z])/)
+        .filter(Boolean);
+    return (
+        STARTS_WITH_WRITE.test(words[0] ?? '') ||
+        words.some((word) => WRITE_WORD.test(word))
+    );
+}
+
 /** What a task is called across trackers. */
 const TASK_NOUN =
     /(issue|task|ticket|story|bug|epic|card|work_?item|workitem)/i;
@@ -58,7 +77,7 @@ type Schema = {
  * argument it can fill. Every other tool is invisible to the fetch.
  */
 export class CustomMcpTracker extends McpTaskTracker {
-    private readers?: Promise<MCPToolRaw[]>;
+    private tools?: Promise<MCPToolRaw[]>;
 
     /**
      * @param tool The tool the org picked to read a task by its id. Without
@@ -94,12 +113,19 @@ export class CustomMcpTracker extends McpTaskTracker {
             reference.kind === 'git_issue'
                 ? (reference.repository ?? context.repository)
                 : undefined;
-        const readers = await this.loadReaders();
+        const listed = await this.loadTools();
+        const readers = this.tool
+            ? listed.filter((t) => t.name === this.tool && isReadOnly(t))
+            : listed.filter(isSingleItemReader);
         if (!readers.length) {
             return {
                 status: 'error',
-                message: `${this.name} has no tool that reads one task by its id`,
-                setup: true,
+                message: listed.length
+                    ? `${this.name} has no tool that reads one task by its id`
+                    : `${this.name} listed no tools`,
+                // A server that listed nothing may have dropped the listing;
+                // only one that listed tools and none reads is set up wrong.
+                ...(listed.length ? { setup: true } : {}),
             };
         }
 
@@ -188,15 +214,9 @@ export class CustomMcpTracker extends McpTaskTracker {
         }
     }
 
-    private loadReaders(): Promise<MCPToolRaw[]> {
-        this.readers ??= this.session
-            .tools()
-            .then((tools) =>
-                this.tool
-                    ? tools.filter((t) => t.name === this.tool && isReadOnly(t))
-                    : tools.filter(isSingleItemReader),
-            );
-        return this.readers;
+    private loadTools(): Promise<MCPToolRaw[]> {
+        this.tools ??= this.session.tools();
+        return this.tools;
     }
 }
 
@@ -206,7 +226,7 @@ export function isReadOnly(tool: MCPToolRaw): boolean {
     return (
         annotations.readOnlyHint !== false &&
         annotations.destructiveHint !== true &&
-        !WRITE_VERB.test(tool.name)
+        !namesAWrite(tool.name)
     );
 }
 

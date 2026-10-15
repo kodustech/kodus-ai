@@ -584,4 +584,36 @@ describe('Shortcut as a custom plugin, with the team id pattern', () => {
             task: { title: 'Gift cards at checkout' },
         });
     });
+
+    it('calls nothing when the picked tool is gone, and says the setup is wrong', async () => {
+        const [reference] = extractTaskReferences(
+            { branch: 'nina/sc-123-gift-cards' },
+            { taskIdPattern: 'sc-(\\d+)' },
+        );
+        const s = session({
+            tools: [tool('search-stories', { query: { type: 'string' } })],
+            call: () => ({ id: 123, name: 'Gift cards at checkout' }),
+        });
+        const lookup = await new CustomMcpTracker(
+            'Shortcut',
+            s,
+            'stories-get-by-id',
+        ).read(reference, context);
+        expect(s.calls).toEqual([]);
+        expect(lookup).toMatchObject({ status: 'error', setup: true });
+    });
+
+    it('reads a server that listed no tools as down, not as set up wrong', async () => {
+        const [reference] = extractTaskReferences(
+            { branch: 'nina/sc-123-gift-cards' },
+            { taskIdPattern: 'sc-(\\d+)' },
+        );
+        const lookup = await new CustomMcpTracker(
+            'Shortcut',
+            session({ tools: [] }),
+            'stories-get-by-id',
+        ).read(reference, context);
+        expect(lookup.status).toBe('error');
+        expect(lookup).not.toHaveProperty('setup');
+    });
 });
