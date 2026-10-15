@@ -1529,6 +1529,31 @@ describe('KodyRulesSyncService — repository rule files vs coding-agent files',
             expect(deleteRuleUseCase.execute).not.toHaveBeenCalled();
         });
 
+        it('clears the flag when the file is reverted to the version it last synced', async () => {
+            const { service, written } = makeService({
+                allFiles: [{ path: '.kody/rules/a.md', size: 200, sha: 'synced' }],
+                files: { '.kody/rules/a.md': TEMPLATE },
+                orgRules: [
+                    globalRule({
+                        sourceFileIssue: 'not_a_rule_template',
+                        lastContentHash: 'synced',
+                    }),
+                ],
+            });
+
+            await service.syncRepositoryGlobal({
+                organizationAndTeamData: ORG,
+                repository: REPO,
+            });
+
+            expect(written()).toEqual([
+                expect.objectContaining({
+                    uuid: 'global-a',
+                    sourceFileIssue: null,
+                }),
+            ]);
+        });
+
         it('clears the flag on a global rule once its file parses again', async () => {
             const { service, written } = makeService({
                 allFiles: [{ path: '.kody/rules/a.md', size: 200, sha: 'new' }],

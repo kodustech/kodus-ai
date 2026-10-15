@@ -1105,8 +1105,18 @@ export class KodyRulesService implements IKodyRulesService {
             sourceFileIssue: issue,
         } as IKodyRule);
 
+        if (!updatedKodyRules) {
+            this.logger.error({
+                message: 'Could not update rule source file issue',
+                error: new Error('Could not update rule source file issue'),
+                context: KodyRulesService.name,
+                metadata: { organizationId, ruleId, issue },
+            });
+            return null;
+        }
+
         return (
-            (updatedKodyRules?.rules.find((r) => r.uuid === ruleId) as
+            (updatedKodyRules.rules.find((r) => r.uuid === ruleId) as
                 IKodyRule | undefined) ?? null
         );
     }

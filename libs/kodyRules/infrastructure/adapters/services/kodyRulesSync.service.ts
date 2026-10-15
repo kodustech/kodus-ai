@@ -2319,11 +2319,14 @@ export class KodyRulesSyncService {
                 );
 
                 // SHA short-circuit: unchanged file with a live rule → skip the
-                // content download + LLM conversion entirely.
+                // content download + LLM conversion entirely. A flagged rule is
+                // always re-read: reverting the edit that broke its file brings
+                // back the last synced bytes, and the flag must still clear.
                 const currentSha = (file as any)?.sha as string | undefined;
                 if (
                     existing &&
                     existing.status !== KodyRulesStatus.DELETED &&
+                    !existing.sourceFileIssue &&
                     currentSha &&
                     existing.lastContentHash === currentSha
                 ) {
