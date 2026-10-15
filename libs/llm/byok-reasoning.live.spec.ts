@@ -293,14 +293,21 @@ let openaiProxy: Server | undefined;
 beforeAll(async () => {
     if (!key('openai')) return;
     openaiProxy = createServer((req, res) => {
+        // Chat completions only: the one endpoint an OpenAI-compatible slot
+        // calls, so nothing else is forwarded.
+        if (req.method !== 'POST' || req.url !== '/v1/chat/completions') {
+            res.writeHead(404);
+            res.end();
+            return;
+        }
         const chunks: Buffer[] = [];
         req.on('data', (c: Buffer) => chunks.push(c));
         req.on('end', async () => {
             try {
                 const upstream = await forwardFetch(
-                    `https://api.openai.com${req.url}`,
+                    'https://api.openai.com/v1/chat/completions',
                     {
-                        method: req.method,
+                        method: 'POST',
                         headers: {
                             authorization: String(req.headers.authorization ?? ''),
                             'content-type': 'application/json',
@@ -309,13 +316,12 @@ beforeAll(async () => {
                     },
                 );
                 res.writeHead(upstream.status, {
-                    'content-type':
-                        upstream.headers.get('content-type') ?? 'application/json',
+                    'content-type': 'application/json',
                 });
                 res.end(Buffer.from(await upstream.arrayBuffer()));
-            } catch (err) {
-                res.writeHead(502);
-                res.end(String(err));
+            } catch {
+                res.writeHead(502, { 'content-type': 'text/plain' });
+                res.end('the forwarder could not reach OpenAI');
             }
         });
     });
