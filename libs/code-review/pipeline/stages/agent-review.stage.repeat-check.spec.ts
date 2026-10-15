@@ -188,6 +188,45 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
         ]);
     });
 
+    // Review of #2137: the check ran after the per-rule merge, which folds
+    // every finding of a rule into the one with the longest text, so the
+    // whole group was kept or dropped by that one. Each occurrence is judged
+    // on its own now, whichever text is longer.
+    it.each([
+        ['the repeated occurrence has the longer text', 'x'.repeat(400), ''],
+        ['the new occurrence has the longer text', '', 'x'.repeat(400)],
+    ])(
+        'posts the new occurrence of a rule and keeps the repeated one off when %s',
+        async (_name, oldPad, newPad) => {
+            const { stage, reviewOrchestrator } = makeStage([ruleComment]);
+            const repeated = {
+                ...ruleFinding,
+                suggestionContent: `${ruleFinding.suggestionContent}${oldPad}`,
+            };
+            const fresh = {
+                ...ruleFinding,
+                relevantLinesStart: 40,
+                relevantLinesEnd: 40,
+                existingCode: "console.log('order', order)",
+                suggestionContent: `This logs the whole order.${newPad}`,
+            };
+            reviewOrchestrator.execute.mockResolvedValue(
+                envelope([repeated, fresh]),
+            );
+
+            const result = await run(stage, makeContext([ruleComment]));
+
+            const posted = published(result);
+            expect(posted.map((s: any) => s.relevantLinesStart)).toEqual([40]);
+            expect(posted[0].suggestionContent).not.toContain('Also found in');
+            expect(
+                result.discardedSuggestions.map(
+                    (s: any) => `${s.relevantLinesStart}:${s.priorityStatus}`,
+                ),
+            ).toEqual([`14:${PriorityStatus.DISCARDED_BY_REPEAT}`]);
+        },
+    );
+
     it('keeps a bug still there after its comment was applied out of the review', async () => {
         const applied = earlier({
             suggestionId: 'old-bug',

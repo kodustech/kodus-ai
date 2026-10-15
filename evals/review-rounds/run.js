@@ -504,7 +504,13 @@ async function once(c, judgeKey) {
     if (repeatCheck.model === 'failed') {
         throw new Error('INFRA: the repeat check call failed');
     }
-    const kept = repeatCheck.kept;
+    // Then the stage's per-rule merge (engine/kody-rules-merge.ts): the
+    // occurrences of one rule that survive become one comment, the others
+    // listed under "Also found in".
+    const {
+        mergeKodyRuleFindings,
+    } = require('../../libs/code-review/infrastructure/agents/engine/kody-rules-merge.ts');
+    const kept = mergeKodyRuleFindings(repeatCheck.kept);
     const severity = await classifySeverity(kept);
     const formatted = await formatSuggestionContent(
         kept.map((s) => ({
@@ -522,18 +528,37 @@ async function once(c, judgeKey) {
             formatted.get(i)?.suggestionContent || s.suggestionContent,
     }));
     applyRevisionLinks(posted, wholeHistory);
-    const delivered = kept.map((s, i) => ({
-        sourceIndex: i,
-        file: s.relevantFile,
-        line: s.relevantLinesStart,
-        severity: severity.get(i) ?? s.severity,
-        text: posted[i].suggestionContent,
-        linkedById: !!posted[i].revisesSuggestionId,
-        revisesSuggestionId: posted[i].revisesSuggestionId,
-        label: s.label,
-        brokenKodyRulesIds: s.brokenKodyRulesIds,
-        marked: isMarkedUnverified(s),
-    }));
+    // A location under "Also found in" is posted too, with the same text: it
+    // can answer a claim at that location, and a repeat listed there is a
+    // repeat posted.
+    const delivered = kept.flatMap((s, i) => {
+        const others = s.kodyRuleOtherLocations || [];
+        const text = others.length
+            ? `${posted[i].suggestionContent}\n\n**Also found in:**\n${others.map((loc) => `- \`${loc}\``).join('\n')}`
+            : posted[i].suggestionContent;
+        const base = {
+            sourceIndex: i,
+            severity: severity.get(i) ?? s.severity,
+            text,
+            linkedById: !!posted[i].revisesSuggestionId,
+            revisesSuggestionId: posted[i].revisesSuggestionId,
+            label: s.label,
+            brokenKodyRulesIds: s.brokenKodyRulesIds,
+            marked: isMarkedUnverified(s),
+        };
+        return [
+            { ...base, file: s.relevantFile, line: s.relevantLinesStart },
+            ...others.map((loc) => {
+                const at = loc.lastIndexOf(':');
+                return {
+                    ...base,
+                    file: loc.slice(0, at),
+                    line: Number(loc.slice(at + 1).split('-')[0]) || null,
+                    alsoFoundIn: true,
+                };
+            }),
+        ];
+    });
 
     const claims = [];
     // A delivered comment answers one claim at most: two claims on the same
@@ -589,7 +614,9 @@ async function once(c, judgeKey) {
         ms: Date.now() - t0,
         // #2039: a delivered finding pointed at an earlier one by its prompt index
         // ("previous decision #3"), which means nothing to the reader.
-        indexRefs: delivered.filter((d) => INDEX_REF.test(d.text)).length,
+        indexRefs: delivered.filter(
+            (d) => !d.alsoFoundIn && INDEX_REF.test(d.text),
+        ).length,
         verificationEvidence: phase.verdicts,
         // What the repeat check kept off the PR, and the bugs it linked.
         alreadyPosted: repeatCheck.repeats.map((r) => ({

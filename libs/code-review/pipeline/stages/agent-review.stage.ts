@@ -120,6 +120,7 @@ import { hasManagedModelKey } from '@libs/llm/managed-slot';
 import { LLM } from '@libs/llm/llm';
 import { applyRevisionLinks } from '@libs/code-review/infrastructure/agents/engine/revision-link';
 import { checkRepeats } from '@libs/code-review/infrastructure/agents/engine/repeat-check';
+import { mergeKodyRuleFindings } from '@libs/code-review/infrastructure/agents/engine/kody-rules-merge';
 import {
     MAX_REPEAT_CHECK_DECISIONS,
     type PrDecisionRecord,
@@ -1099,11 +1100,31 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 context.analyzerFindings ?? [],
             );
 
-            const severityNormalized: Partial<CodeSuggestion>[] = [
-                ...severityNormalizedNonRules,
-                ...analyzerSuggestions,
-                ...kodyRulesWithSeverity,
-            ];
+            // #2097: what an earlier comment on this PR already raised is not
+            // posted again. Runs on each occurrence, before the dedups below
+            // fold several occurrences into one representative: judged after
+            // them, a group was kept or dropped whole by whichever occurrence
+            // had the longest text. Also before the severity and formatter
+            // passes, so a repeat costs no further model call.
+            const repeatCheck = await this.dropRepeats(
+                context,
+                [
+                    ...severityNormalizedNonRules,
+                    ...analyzerSuggestions,
+                    ...kodyRulesWithSeverity,
+                ],
+                kodyRulesById,
+                telemetryMeta,
+            );
+            for (const s of repeatCheck.repeats) {
+                allDiscarded.push({
+                    ...s,
+                    priorityStatus: PriorityStatus.DISCARDED_BY_REPEAT,
+                    deliveryStatus: DeliveryStatus.NOT_SENT,
+                });
+            }
+            const severityNormalized: Partial<CodeSuggestion>[] =
+                repeatCheck.kept;
 
             // Deduplicate Kody Rules deterministically by ruleUuid.
             // No LLM call needed — the ruleUuid unambiguously identifies
@@ -1204,24 +1225,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
 
             let deduped = [...dedupedNonRules, ...kodyRulesForDedup];
-
-            // #2097: what an earlier comment on this PR already raised is not
-            // posted again. Runs before the severity and formatter passes so
-            // a repeat costs no further model call.
-            const repeatCheck = await this.dropRepeats(
-                context,
-                deduped,
-                kodyRulesById,
-                telemetryMeta,
-            );
-            deduped = repeatCheck.kept;
-            for (const s of repeatCheck.repeats) {
-                allDiscarded.push({
-                    ...s,
-                    priorityStatus: PriorityStatus.DISCARDED_BY_REPEAT,
-                    deliveryStatus: DeliveryStatus.NOT_SENT,
-                });
-            }
 
             // NOTE: Kody Rule link enrichment happens AFTER the content
             // formatter (see block further below). Doing it before would
@@ -1914,87 +1917,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         suggestions: Partial<CodeSuggestion>[],
         prNumber: number,
     ): Partial<CodeSuggestion>[] {
-        if (suggestions.length <= 1) {
-            return suggestions;
-        }
-
-        const groupsByRuleUuid = new Map<string, Partial<CodeSuggestion>[]>();
-        const passthrough: Partial<CodeSuggestion>[] = [];
-
-        for (const s of suggestions) {
-            const ruleUuid = s.brokenKodyRulesIds?.[0];
-            if (!ruleUuid) {
-                passthrough.push(s);
-                continue;
-            }
-            const group = groupsByRuleUuid.get(ruleUuid) || [];
-            group.push(s);
-            groupsByRuleUuid.set(ruleUuid, group);
-        }
-
-        const result: Partial<CodeSuggestion>[] = [...passthrough];
-
-        for (const [ruleUuid, group] of groupsByRuleUuid) {
-            if (group.length === 1) {
-                result.push(group[0]);
-                continue;
-            }
-
-            const isPrLevel = group.every((s) => !s.relevantFile);
-            if (isPrLevel) {
-                // Keep the most detailed one, drop the rest.
-                const best = [...group].sort(
-                    (a, b) =>
-                        (b.suggestionContent?.length || 0) -
-                        (a.suggestionContent?.length || 0),
-                )[0];
-                result.push(best);
-                this.logger.log({
-                    message: `[KODY-DEDUP] PR#${prNumber} rule=${ruleUuid} (PR-level) collapsed ${group.length} findings → 1`,
-                    context: this.stageName,
-                });
-                continue;
-            }
-
-            // File-level: keep the most detailed, append "Also found in"
-            // list with the other locations.
-            const sorted = [...group].sort(
-                (a, b) =>
-                    (b.suggestionContent?.length || 0) -
-                    (a.suggestionContent?.length || 0),
-            );
-            const keep = { ...sorted[0] };
-            const otherLocations: string[] = [];
-            const keptLocation = `${keep.relevantFile}:${keep.relevantLinesStart ?? '?'}-${keep.relevantLinesEnd ?? '?'}`;
-
-            for (let i = 1; i < sorted.length; i++) {
-                const dup = sorted[i];
-                const loc = `${dup.relevantFile}:${dup.relevantLinesStart ?? '?'}-${dup.relevantLinesEnd ?? '?'}`;
-                if (loc !== keptLocation && !otherLocations.includes(loc)) {
-                    otherLocations.push(loc);
-                }
-            }
-
-            if (otherLocations.length > 0) {
-                // Carried on the suggestion instead of written into
-                // suggestionContent: the content formatter runs after this
-                // merge and rewrites suggestionContent from scratch, which
-                // folded this list into prose or dropped it, so every location
-                // but the kept one disappeared from the posted comment
-                // (#2015). executeStage renders the same list after the
-                // formatter, next to the rule-link enrichment that was moved
-                // there for the same reason.
-                keep.kodyRuleOtherLocations = otherLocations;
-            }
-
+        return mergeKodyRuleFindings(suggestions, (merge) =>
             this.logger.log({
-                message: `[KODY-DEDUP] PR#${prNumber} rule=${ruleUuid} (file-level) collapsed ${group.length} findings → 1 with ${otherLocations.length} extra locations`,
+                message:
+                    merge.scope === 'pr'
+                        ? `[KODY-DEDUP] PR#${prNumber} rule=${merge.ruleUuid} (PR-level) collapsed ${merge.collapsed} findings → 1`
+                        : `[KODY-DEDUP] PR#${prNumber} rule=${merge.ruleUuid} (file-level) collapsed ${merge.collapsed} findings → 1 with ${merge.otherLocations} extra locations`,
                 context: this.stageName,
-            });
-            result.push(keep);
-        }
-
-        return result;
+            }),
+        );
     }
 
     /** Embed a suggestion's description once per dedup run (memoized by index).
