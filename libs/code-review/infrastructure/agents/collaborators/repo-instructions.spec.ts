@@ -149,6 +149,26 @@ describe('collectRepoInstructions', () => {
         });
     });
 
+    it('lists a Cursor rule the agent loads on request instead of inlining it', async () => {
+        const repo = files({
+            '.cursor/rules/migrations.mdc':
+                '---\ndescription: How to write a migration\nalwaysApply: false\n---\nUse expand/contract.',
+            '.cursor/rules/style.mdc': '---\nalwaysApply: true\n---\nBe terse.',
+            '.cursor/rules/plain.mdc': 'No frontmatter.',
+        });
+
+        const result = await collectRepoInstructions({
+            ...repo,
+            changedFiles: ['src/a.ts'],
+        });
+
+        expect(result.files.map((f) => f.path).sort()).toEqual([
+            '.cursor/rules/plain.mdc',
+            '.cursor/rules/style.mdc',
+        ]);
+        expect(result.otherFiles).toEqual(['.cursor/rules/migrations.mdc']);
+    });
+
     it("matches a nested rule's bare glob only against files in its directory", async () => {
         const repo = files({
             'services/billing/.cursor/rules/python.mdc':

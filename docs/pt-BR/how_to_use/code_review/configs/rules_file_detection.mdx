@@ -45,7 +45,7 @@ Arquivos de configuração de ferramentas (`.claude/settings.json`, `.opencode.j
 
 ## Como um review os usa
 
-- **Só os arquivos que cobrem a mudança.** Um arquivo na raiz do repositório cobre todos os arquivos. Um arquivo aninhado como `services/billing/CLAUDE.md` cobre `services/billing/**`. Uma regra do Cursor com `globs:` (e sem `alwaysApply: true`) ou um arquivo do Copilot com `applyTo:` cobre apenas os arquivos que declara.
+- **Só os arquivos que cobrem a mudança.** Um arquivo na raiz do repositório cobre todos os arquivos. Um arquivo aninhado como `services/billing/CLAUDE.md` cobre `services/billing/**`. Uma regra do Cursor com `globs:` (e sem `alwaysApply: true`) ou um arquivo do Copilot com `applyTo:` cobre apenas os arquivos que declara. Uma regra do Cursor sem nenhum dos dois, que o Cursor só carrega quando o agente pede, não é lida.
 - **Lidos a partir da branch de destino do pull request.** Um pull request é verificado contra as instruções já mergeadas nela; mudanças que ele faz nas instruções só valem depois do merge.
 - **Com limite.** No máximo 8 arquivos e 64 KB por review, arquivos da raiz primeiro; um arquivo mais longo é cortado. O review registra no log o que ficou de fora.
 - **Os apontamentos recebem o rótulo Repo Instruction.** O Kody só reporta um quando a instrução se aplica ao arquivo alterado e a linha que a quebra foi adicionada ou modificada pelo pull request. O comentário cita a instrução e nomeia o arquivo.

@@ -164,6 +164,18 @@ function declaredGlobs(path: string, content: string): string[] | null {
     return globs.length ? globs : null;
 }
 
+/**
+ * A Cursor rule with frontmatter that neither always applies nor declares
+ * globs: Cursor's agent loads it only when it asks for it.
+ */
+function loadsOnRequest(path: string, content: string): boolean {
+    if (!path.toLowerCase().endsWith('.mdc')) return false;
+    const match = FRONTMATTER_RE.exec(content);
+    const frontmatter = match ? parseFrontmatter(match[1]) : null;
+    if (!frontmatter || frontmatter.alwaysApply === true) return false;
+    return declaredGlobs(path, content) === null;
+}
+
 function matchesDeclared(
     globs: string[],
     scope: string | null,
@@ -234,6 +246,8 @@ export async function collectRepoInstructions(params: {
             continue;
         }
         if (!content?.trim()) continue;
+
+        if (loadsOnRequest(path, content)) continue;
 
         const scope = scopeOf(path);
         const globs = declaredGlobs(path, content);

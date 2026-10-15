@@ -45,7 +45,7 @@ Tool configuration files (`.claude/settings.json`, `.opencode.json`, `.aider.con
 
 ## How a review uses them
 
-- **Only the files that cover the change.** A file at the repository root covers every file. A nested file such as `services/billing/CLAUDE.md` covers `services/billing/**`. A Cursor rule with `globs:` (and without `alwaysApply: true`) or a Copilot file with `applyTo:` covers only the files it declares.
+- **Only the files that cover the change.** A file at the repository root covers every file. A nested file such as `services/billing/CLAUDE.md` covers `services/billing/**`. A Cursor rule with `globs:` (and without `alwaysApply: true`) or a Copilot file with `applyTo:` covers only the files it declares. A Cursor rule with neither, which Cursor loads only when its agent asks for it, is not read.
 - **Read from the pull request's target branch.** A pull request is checked against the instructions already merged there; changes it makes to the instructions apply only after it merges.
 - **Bounded.** At most 8 files and 64 KB per review, root files first; a longer file is cut. The review logs what was left out.
 - **Findings are labeled Repo Instruction.** Kody reports one only when the instruction applies to the changed file and the line that breaks it was added or modified by the pull request. The comment quotes the instruction and names the file.

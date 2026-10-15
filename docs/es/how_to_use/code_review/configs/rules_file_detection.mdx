@@ -45,7 +45,7 @@ Los archivos de configuración de herramientas (`.claude/settings.json`, `.openc
 
 ## Cómo los usa una revisión
 
-- **Solo los archivos que cubren el cambio.** Un archivo en la raíz del repositorio cubre todos los archivos. Un archivo anidado como `services/billing/CLAUDE.md` cubre `services/billing/**`. Una regla de Cursor con `globs:` (y sin `alwaysApply: true`) o un archivo de Copilot con `applyTo:` cubre solo los archivos que declara.
+- **Solo los archivos que cubren el cambio.** Un archivo en la raíz del repositorio cubre todos los archivos. Un archivo anidado como `services/billing/CLAUDE.md` cubre `services/billing/**`. Una regla de Cursor con `globs:` (y sin `alwaysApply: true`) o un archivo de Copilot con `applyTo:` cubre solo los archivos que declara. Una regla de Cursor sin ninguno de los dos, que Cursor solo carga cuando su agente la pide, no se lee.
 - **Se leen desde la rama de destino del pull request.** Un pull request se revisa con las instrucciones ya fusionadas en ella; los cambios que haga en las instrucciones solo cuentan después de fusionarse.
 - **Con límites.** Como máximo 8 archivos y 64 KB por revisión, primero los archivos de la raíz; un archivo más largo se recorta. La revisión registra en el log lo que quedó fuera.
 - **Los hallazgos llevan la etiqueta Repo Instruction.** Kody reporta uno solo cuando la instrucción aplica al archivo modificado y la línea que la incumple fue agregada o modificada por el pull request. El comentario cita la instrucción y nombra el archivo.
