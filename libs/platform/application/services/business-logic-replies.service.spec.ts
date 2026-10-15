@@ -62,6 +62,7 @@ function build(intent: any, revalidated?: any) {
     };
     const publisher = {
         settingsFor: jest.fn(async () => DEFAULT_BUSINESS_LOGIC_SETTINGS),
+        withRepository: jest.fn((r: unknown) => r),
         headShaOf: jest.fn(async () => 'def5678'),
         publish: jest.fn(async (input: any) => ({
             outcome: input.result.outcome,

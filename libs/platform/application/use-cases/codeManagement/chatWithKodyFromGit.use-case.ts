@@ -2709,7 +2709,11 @@ export class ChatWithKodyFromGitUseCase {
                       )
                     : '',
         };
-        const result = await this.businessValidationService.validate(request);
+        const result = await this.businessValidationService.validate(
+            this.businessLogicPublisher
+                ? this.businessLogicPublisher.withRepository(request)
+                : request,
+        );
         if (!this.businessLogicPublisher) {
             return replyFor(result.outcome, false);
         }

@@ -98,7 +98,9 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                 settings,
             };
             const result = await this.withTimeout(
-                this.businessValidationService.validate(request),
+                this.businessValidationService.validate(
+                    this.publisher.withRepository(request),
+                ),
             );
             const published = await this.publisher.publish({
                 request,

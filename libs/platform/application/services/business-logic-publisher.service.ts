@@ -37,6 +37,8 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { createLogger } from '@libs/core/log/logger';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 
+import { withRepositoryReader } from './business-logic-repository-reader';
+
 export interface PublishInput {
     request: BusinessValidationRequest;
     result: BusinessValidationResult;
@@ -107,6 +109,13 @@ export class BusinessLogicPublisher {
         } catch {
             return DEFAULT_BUSINESS_LOGIC_SETTINGS;
         }
+    }
+
+    /** The request with the repository at the PR head to read, for the gap check. */
+    withRepository(
+        request: BusinessValidationRequest,
+    ): BusinessValidationRequest {
+        return withRepositoryReader(request, this.codeManagementService);
     }
 
     /**
@@ -199,10 +208,7 @@ export class BusinessLogicPublisher {
               ])
             : [[], undefined];
         const previousVerdict = earlier.find((r) => r.outcome === 'validated');
-        const outcome = carryOver(
-            input.result.outcome,
-            previousVerdict?.tasks,
-        );
+        const outcome = carryOver(input.result.outcome, previousVerdict?.tasks);
         const history = checkedCommits(earlier, input.headSha);
         return { scope, outcome, previousComment, history };
     }
@@ -385,7 +391,6 @@ export class BusinessLogicPublisher {
               }
             : undefined;
     }
-
 }
 
 function commentIds(

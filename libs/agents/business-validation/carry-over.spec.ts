@@ -73,7 +73,6 @@ describe('carryOver', () => {
                 },
             ]),
             before,
-            ['missing'],
         );
         if (result.kind !== 'validated') throw new Error('expected validated');
         const [keyboard, order] = result.checks[0].verdict.requirements!;
@@ -96,7 +95,6 @@ describe('carryOver', () => {
                 },
             ]),
             before,
-            ['missing'],
         );
         if (result.kind !== 'validated') throw new Error('expected validated');
         expect(
@@ -132,7 +130,6 @@ describe('carryOver', () => {
                 },
             ]),
             accepted,
-            ['missing'],
         );
         if (result.kind !== 'validated') throw new Error('expected validated');
         expect(

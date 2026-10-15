@@ -187,8 +187,9 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
             platformType,
             taskInput: taskReference,
         });
-        const validation =
-            await this.businessValidationService.validate(request);
+        const validation = await this.businessValidationService.validate(
+            this.businessLogicPublisher.withRepository(request),
+        );
         // Recorded like any other door; the CLI never writes to the PR.
         await this.runs.create(buildRun(request, validation));
         const result = renderCliText(validation.outcome);
@@ -288,7 +289,9 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
             taskInput,
         });
         const [validation, headSha] = await Promise.all([
-            this.businessValidationService.validate(request),
+            this.businessValidationService.validate(
+                this.businessLogicPublisher.withRepository(request),
+            ),
             this.businessLogicPublisher.headShaOf(
                 organizationAndTeamData,
                 executionContext.repository,

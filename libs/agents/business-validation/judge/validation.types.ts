@@ -89,6 +89,11 @@ export interface RequirementVerdict {
     judgedState?: RequirementState;
     /** A previous state this re-check replaced, e.g. "was missing". */
     previousState?: RequirementState;
+    /**
+     * The diff didn't show it, but the code at the PR head already does it:
+     * a second look across the repository found the cited line.
+     */
+    foundOutsideDiff?: true;
     accepted?: Acceptance;
     /** The author disputed it; whether Kody changed the state (UC-38). */
     disputed?: 'overturned' | 'upheld';

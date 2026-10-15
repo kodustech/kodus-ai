@@ -523,9 +523,8 @@ describe('TriggerBusinessValidationUseCase (deterministic logic)', () => {
                 }),
             };
             const publisher = {
-                settingsFor: jest
-                    .fn()
-                    .mockResolvedValue({ failOn: ['missing'] }),
+                settingsFor: jest.fn().mockResolvedValue({}),
+                withRepository: jest.fn((r: unknown) => r),
                 publish: jest.fn(),
             };
             const runs = { create: jest.fn().mockResolvedValue('run-1') };
@@ -663,6 +662,7 @@ describe('TriggerBusinessValidationUseCase.testOnPullRequest', () => {
         };
         const publisher = {
             settingsFor: jest.fn(),
+            withRepository: jest.fn((r: unknown) => r),
             headShaOf: jest.fn(async () => 'abc1234'),
             preview: jest.fn(async () => ({
                 outcome,

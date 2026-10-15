@@ -261,8 +261,9 @@ export class BusinessLogicReplies {
                 files: intent.files,
             },
         };
-        const result =
-            await this.businessValidationService.validate(fullRequest);
+        const result = await this.businessValidationService.validate(
+            this.publisher.withRepository(fullRequest),
+        );
         if (result.outcome.kind === 'validated') {
             for (const check of result.outcome.checks) {
                 for (const r of check.verdict.requirements ?? []) {

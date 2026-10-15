@@ -26,6 +26,7 @@ function build(
             comment: 'created',
         })),
         lastVerdictFailed: jest.fn(async () => lastVerdictFailed),
+        withRepository: jest.fn((request: unknown) => request),
     };
     const pullRequests = {
         getChangedFilesMetadata: jest.fn(async () => wholeDiff ?? []),

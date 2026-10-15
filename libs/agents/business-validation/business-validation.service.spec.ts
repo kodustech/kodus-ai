@@ -144,3 +144,90 @@ describe("BusinessValidationService · a bot's pull request", () => {
         ).resolves.toMatchObject({ kind: 'task_required' });
     });
 });
+
+describe('BusinessValidationService · a MISSING the repository refutes', () => {
+    class Service extends BusinessValidationService {
+        constructor(
+            private readonly found: Record<string, unknown> | undefined,
+        ) {
+            super(
+                {} as any,
+                {} as any,
+                { findByKey: async () => undefined } as any,
+                {} as any,
+            );
+        }
+        protected gapCheck() {
+            return async () => this.found as any;
+        }
+    }
+    const verdict = {
+        needsMoreInfo: false,
+        reason: 'analysis_ready',
+        status: 'issues_found',
+        summary: '',
+        requirements: [
+            {
+                requirement: 'Defaults to All',
+                state: 'missing',
+                evidence: [],
+                confidence: 'high',
+            },
+            {
+                requirement: 'Shows the filter',
+                state: 'met',
+                evidence: [],
+                confidence: 'high',
+            },
+        ],
+        outOfScope: [],
+    };
+    const check = (service: Service, reader?: unknown) =>
+        (service as any).checkGaps(
+            {
+                door: 'auto',
+                organizationAndTeamData: { organizationId: 'org-1' },
+                ...(reader ? { repositoryReader: reader } : {}),
+            },
+            verdict,
+            'task',
+            'diff',
+            'en-US',
+            async () => ({ modelSlot: undefined }),
+        );
+    const reader = {
+        listFiles: async () => [],
+        readFile: async () => undefined,
+    };
+
+    it('marks it met where the code already does it, and says so', async () => {
+        const result = await check(
+            new Service({
+                state: 'met',
+                evidence: [{ file: 'src/filter.ts', line: 3 }],
+                note: 'Already defaults to all.',
+            }),
+            reader,
+        );
+        expect(result.requirements[0]).toMatchObject({
+            state: 'met',
+            evidence: [{ file: 'src/filter.ts', line: 3 }],
+            judgedState: 'missing',
+            foundOutsideDiff: true,
+        });
+        expect(result.status).not.toBe('issues_found');
+    });
+
+    it('keeps it MISSING when nothing is found, or there is no repository to read', async () => {
+        expect(
+            (await check(new Service(undefined), reader)).requirements[0].state,
+        ).toBe('missing');
+        expect(
+            (
+                await check(
+                    new Service({ state: 'met', evidence: [], note: 'x' }),
+                )
+            ).requirements[0].state,
+        ).toBe('missing');
+    });
+});

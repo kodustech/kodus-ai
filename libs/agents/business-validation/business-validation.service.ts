@@ -9,7 +9,7 @@ import {
 } from '@libs/core/log/langfuse';
 import { createLogger } from '@libs/core/log/logger';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
-import { LLM_TASK } from '@libs/llm/byok-config';
+import { LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
 import type { MCPServerConfig } from '@libs/mcp-server/mcp-adapter';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
@@ -41,6 +41,9 @@ import {
     type ReplyIntent,
 } from './judge/reply-classifier';
 import { settleVerdict } from './judge/settle-verdict';
+import { createGapCheck, type GapCheck } from './judge/gap-check';
+import { deriveStatus } from './judge/validation-verdict';
+import type { ValidationResult } from './judge/validation.types';
 import { inlineTask } from './command';
 import * as messages from './messages';
 import {
@@ -107,6 +110,9 @@ export interface TryReadResult {
     };
     message?: string;
 }
+
+/** MISSING requirements looked for across the repository, per task. */
+const MAX_GAP_CHECKS = 5;
 
 export const BUSINESS_VALIDATION_SKILL = 'business-rules-validation';
 const DEFAULT_LANGUAGE = 'en-US';
@@ -483,7 +489,14 @@ export class BusinessValidationService {
                 ? undefined
                 : { thin: found.task };
         }
-        const settled = settleVerdict(verdict, { unseenFiles });
+        const settled = await this.checkGaps(
+            request,
+            settleVerdict(verdict, { unseenFiles }),
+            formatTaskForJudge(found.task),
+            diff,
+            language,
+            judge,
+        );
         return {
             task: found.task,
             ...(found.reference ? { reference: found.reference } : {}),
@@ -491,6 +504,81 @@ export class BusinessValidationService {
             passed: taskPasses(settled, found.reference?.intent),
             readAt,
         };
+    }
+
+    /**
+     * Looks for each MISSING requirement in the repository at the PR head:
+     * the judge read only the diff, and code that already does it is the
+     * commonest false gap. A requirement changes only on a cited line the
+     * runtime checked; anything else stays MISSING.
+     */
+    private async checkGaps(
+        request: BusinessValidationRequest,
+        verdict: ValidationResult,
+        taskText: string,
+        diff: string,
+        language: string,
+        judge: () => Promise<IntentJudge>,
+    ): Promise<ValidationResult> {
+        const reader = request.repositoryReader;
+        const missing = (verdict.requirements ?? [])
+            .map((requirement, index) => ({ requirement, index }))
+            .filter(
+                ({ requirement }) =>
+                    requirement.state === 'missing' && !requirement.accepted,
+            )
+            .slice(0, MAX_GAP_CHECKS);
+        if (!reader || !missing.length) {
+            return verdict;
+        }
+        const check = this.gapCheck((await judge()).modelSlot, request);
+        const results = await Promise.all(
+            missing.map(({ requirement }) =>
+                check({
+                    requirement,
+                    taskText,
+                    diff,
+                    reader,
+                    userLanguage: language,
+                }).catch(() => undefined),
+            ),
+        );
+        if (!results.some(Boolean)) {
+            return verdict;
+        }
+        const requirements = [...(verdict.requirements ?? [])];
+        missing.forEach(({ requirement, index }, i) => {
+            const found = results[i];
+            if (found) {
+                requirements[index] = {
+                    ...requirement,
+                    state: found.state,
+                    evidence: found.evidence,
+                    note: found.note,
+                    action: undefined,
+                    judgedState: 'missing',
+                    foundOutsideDiff: true,
+                };
+            }
+        });
+        return {
+            ...verdict,
+            requirements,
+            ...deriveStatus({ ...verdict, requirements }),
+        };
+    }
+
+    /** The second look at a MISSING requirement; a seam for tests and evals. */
+    protected gapCheck(
+        model: NormalizedModel | undefined,
+        request: BusinessValidationRequest,
+    ): GapCheck {
+        return createGapCheck(
+            aiSdkAgentRun(model, {
+                organizationId: request.organizationAndTeamData.organizationId,
+                teamId: request.organizationAndTeamData.teamId,
+            }),
+        );
     }
 
     /** The connections a team can pick as its task source. */

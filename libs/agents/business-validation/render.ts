@@ -214,6 +214,9 @@ function requirementRow(requirement: RequirementVerdict): string {
         ) {
             detail.push(`_was ${requirement.previousState.replace('_', ' ')}_`);
         }
+        if (requirement.foundOutsideDiff) {
+            detail.push("_already in the code, outside this PR's diff_");
+        }
     }
     const name = requirement.source
         ? `${requirement.requirement} <sub>${requirement.source}</sub>`

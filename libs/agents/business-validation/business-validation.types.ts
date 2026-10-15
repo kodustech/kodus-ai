@@ -1,3 +1,4 @@
+import type { RepositoryReader } from './judge/gap-check';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
 import type { ValidationResult } from './judge/validation.types';
@@ -202,6 +203,12 @@ export interface BusinessValidationRequest {
         authorIsBot?: boolean;
     };
     platformType?: string;
+    /**
+     * The repository at the PR head, read-only, so a requirement the diff
+     * doesn't show can be looked for in the code that already exists. Absent
+     * (the CLI's local diff), MISSING is judged from the diff alone.
+     */
+    repositoryReader?: RepositoryReader;
     /** What the user passed with the command or CLI: a task id, a URL or the task text itself. */
     taskInput?: string;
     /** The code to judge, or how to load it once a task was found. */

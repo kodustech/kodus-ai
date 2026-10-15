@@ -137,7 +137,9 @@ export class BusinessLogicRecheckService {
                     }),
                 ),
         };
-        const result = await this.businessValidationService.validate(request);
+        const result = await this.businessValidationService.validate(
+            this.publisher.withRepository(request),
+        );
         await this.publisher.publish({
             request,
             result,

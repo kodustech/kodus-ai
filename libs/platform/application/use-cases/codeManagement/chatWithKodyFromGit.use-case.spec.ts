@@ -352,7 +352,8 @@ describe('ChatWithKodyFromGitUseCase', () => {
             trackers: ['Linear'],
         });
         const publisher = {
-            settingsFor: jest.fn().mockResolvedValue({ failOn: ['missing'] }),
+            settingsFor: jest.fn().mockResolvedValue({}),
+            withRepository: jest.fn((r: unknown) => r),
             headShaOf: jest.fn().mockResolvedValue('abc1234'),
             publish: jest
                 .fn()
