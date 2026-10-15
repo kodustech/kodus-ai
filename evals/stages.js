@@ -41,7 +41,8 @@
 //   friday   — when the Friday check (evals/tier0-smoke.js) runs it on every
 //              tier-0 model: the key of its outcome in that check's
 //              `evals.tier0.<model>` meta. Proves it still runs there, measures
-//              nothing
+//              nothing. Every stage the nightly measures has one, so Friday
+//              covers the same stages on every model
 //   history  — an older signal carrying the same number, for the panel's chart
 //              until this stage's own rows have a history
 //   note     — shown by the panel next to the status
@@ -172,6 +173,7 @@ const STAGES = [
         model: 'real',
         wiring: ['review-rounds', 'review-lifecycle'],
         nightly: 'shared',
+        friday: 'review_rounds',
         metric: 'of claims handled right',
         set: 'later rounds of a PR: reposts that must stay off it, new problems and revisions that must post',
         caveat: 'The nightly runs one model on a subset (evals/nightly-evals.js, targets.json sets.nightly); the full set, the lifecycle chains and other models run by hand.',
@@ -242,6 +244,7 @@ const STAGES = [
         model: 'real',
         wiring: ['kody-rules'],
         nightly: 'kody-rules',
+        friday: 'kody_rules',
         metric: 'of known rule violations flagged',
         set: 'real PRs where we know every line that breaks a rule',
         caveat: 'The set holds mechanical rules only (no console, no any, no process.env, no generic Error): a green night says the rule machinery works, not that Kody is good at harder rules.',
@@ -303,6 +306,7 @@ const STAGES = [
         model: 'real',
         wiring: ['reply-addressing'],
         nightly: 'shared',
+        friday: 'reply_addressing',
         metric: 'of replies handled right',
         set: 'conversations where someone replies in a Kody thread without @kody',
         note: 'cases.json in the nightly (evals/nightly-evals.js); the real replies of repo-cases.json run by hand',

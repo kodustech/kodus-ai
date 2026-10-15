@@ -11,16 +11,22 @@
 //
 // The finder and kody-rules keep their own jobs.
 //
-//   id    — the eval, and its wiring smoke step
-//   stage — the evals/stages.js stage it measures
-//   run   — the command, without --model, --output and --gate
-//   files — what changes its verdict without being loaded by the one-case run
+// Every Friday, each entry also runs on every tier-0 model, on a few of its
+// cases (evals/tier0-smoke.js): the nightly asks whether a change broke it,
+// Friday whether it still runs on each model.
+//
+//   id     — the eval, and its wiring smoke step
+//   stage  — the evals/stages.js stage it measures
+//   run    — the command, without --model, --output and --gate
+//   files  — what changes its verdict without being loaded by the one-case run
+//   friday — what cuts `run` down to a few cases for the Friday check
 const NIGHTLY_EVALS = [
     {
         id: 'reply-addressing',
         stage: 'reply-addressing',
         run: ['evals/reply-addressing/run.js', '--dataset=cases', '--repeats=1'],
         files: ['evals/reply-addressing/targets.json'],
+        friday: ['--limit=16'],
     },
     {
         id: 'review-rounds',
@@ -40,6 +46,8 @@ const NIGHTLY_EVALS = [
             'evals/review-rounds/cases.js',
             'evals/review-rounds/prod-shapes/build.js',
         ],
+        // A Kody Rules repost with a new site, a bug repost and a revision.
+        friday: ['--limit=3'],
     },
 ];
 

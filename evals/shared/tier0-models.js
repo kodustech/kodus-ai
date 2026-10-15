@@ -42,7 +42,11 @@ const TIER0 = {
     // Google. O fetch do Node negocia HTTP/1.1, entao este caminho funciona;
     // reproduzir com curl exige --http1.1.
     'gemini-3.7-flash': { provider: 'google', keyEnvs: ['BYOK_GOOGLE_API_KEY', 'API_GOOGLE_AI_API_KEY'] },
-    'kimi-k2.7-code': { tier0: true, provider: 'openai_compatible', keyEnvs: ['BYOK_MOONSHOT_API_KEY', 'API_MOONSHOT_API_KEY'], baseURL: 'https://api.moonshot.ai/v1' },
+    'kimi-k2.7-code': { provider: 'openai_compatible', keyEnvs: ['BYOK_MOONSHOT_API_KEY', 'API_MOONSHOT_API_KEY'], baseURL: 'https://api.moonshot.ai/v1' },
+    // The tier-0 Kimi, served through OpenRouter: the Moonshot account was
+    // suspended for balance (2026-10), and OpenRouter is where the credit is.
+    // Same model; the host differs from Moonshot-native.
+    'kimi-k2.7-code@openrouter': { tier0: true, provider: 'openai_compatible', doModel: 'moonshotai/kimi-k2.7-code', openrouterProviderOrder: ['moonshotai'], keyEnvs: ['BYOK_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY'], baseURL: 'https://openrouter.ai/api/v1' },
     'glm-5.2': { provider: 'openai_compatible', keyEnvs: ['BYOK_ZHIPU_API_KEY', 'API_ZHIPU_API_KEY'], baseURL: 'https://api.z.ai/api/paas/v4' },
     // V4-Pro saiu de preview em 2026-08 (build 0813). Mesmo endpoint do flash.
     'deepseek-v4-pro': { provider: 'openai_compatible', keyEnvs: ['BYOK_DEEPSEEK_API_KEY', 'API_DEEPSEEK_API_KEY'], baseURL: 'https://api.deepseek.com' },
@@ -93,14 +97,14 @@ const TIER0 = {
     'gpt-5.6-sol@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-sol', keyEnvs: [] },
     'gpt-5.6-luna@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-luna', keyEnvs: [] },
     'gpt-5.6-terra@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-terra', keyEnvs: [] },
-    // Tier-0 models through one OpenRouter account, each pinned to its
-    // first-party upstream with fallbacks off: the route a customer's
-    // OpenRouter BYOK slot takes (`openrouterProviderOrder`). The pin only
-    // applies on the BYOK route (`--byok-reasoning`); the env route is plain
-    // OpenAI-compatible against OpenRouter.
-    'gpt-6-sol@openrouter': { provider: 'open_router', doModel: 'openai/gpt-6-sol', openrouterProviderOrder: ['openai'], keyEnvs: ['OPENROUTER_API_KEY', 'API_OPEN_ROUTER_API_KEY', 'BYOK_OPENROUTER_API_KEY'], baseURL: 'https://openrouter.ai/api/v1' },
-    'claude-sonnet-5-5@openrouter': { provider: 'open_router', doModel: 'anthropic/claude-sonnet-5.5', openrouterProviderOrder: ['anthropic'], keyEnvs: ['OPENROUTER_API_KEY', 'API_OPEN_ROUTER_API_KEY', 'BYOK_OPENROUTER_API_KEY'], baseURL: 'https://openrouter.ai/api/v1' },
-    'kimi-k2.7-code@openrouter': { provider: 'open_router', doModel: 'moonshotai/kimi-k2.7-code', openrouterProviderOrder: ['moonshotai'], keyEnvs: ['OPENROUTER_API_KEY', 'API_OPEN_ROUTER_API_KEY', 'BYOK_OPENROUTER_API_KEY'], baseURL: 'https://openrouter.ai/api/v1' },
+    // GPT-6 and Sonnet 5.5 through the same OpenRouter account as the tier-0
+    // Kimi, each pinned to its first-party upstream with fallbacks off. The
+    // pin is what a customer's OpenRouter BYOK slot sends
+    // (`openrouterProviderOrder`); it applies on the BYOK route
+    // (`--byok-reasoning`, which builds an `open_router` slot), not on the env
+    // route.
+    'gpt-6-sol@openrouter': { provider: 'openai_compatible', doModel: 'openai/gpt-6-sol', openrouterProviderOrder: ['openai'], keyEnvs: ['BYOK_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY'], baseURL: 'https://openrouter.ai/api/v1' },
+    'claude-sonnet-5-5@openrouter': { provider: 'openai_compatible', doModel: 'anthropic/claude-sonnet-5.5', openrouterProviderOrder: ['anthropic'], keyEnvs: ['BYOK_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY'], baseURL: 'https://openrouter.ai/api/v1' },
 
     // Scripted local model (evals/shared/fake-llm-server.js) for the wiring
     // smoke: the real self-hosted openai_compatible route, pointed at 127.0.0.1.

@@ -7,7 +7,8 @@
 //   node evals/review-rounds/run.js --model=deepseek-v4-flash@fireworks --set=nightly --reps=2 \
 //       --byok-reasoning=none --judge=gemini-3-flash-preview --concurrency=6 --output=<file> --gate
 //
-// --set=<name> runs targets.json `sets.<name>` (--case narrows it further);
+// --set=<name> runs targets.json `sets.<name>` (--case narrows it further,
+// --limit=<n> keeps its first n);
 // --judge pins the judge a floor was calibrated with; --concurrency runs that
 // many reviews at once. --output also carries the shared result
 // (evals/shared/eval-result.js): one case per review-rounds case, its claims
@@ -98,6 +99,7 @@ const ONLY = arg('case');
 const BYOK_REASONING = arg('byok-reasoning');
 const GATE = process.argv.includes('--gate');
 const SET = arg('set');
+const LIMIT = Number(arg('limit', 0)) || 0;
 const CONCURRENCY = Math.max(1, Number(arg('concurrency', 1)) || 1);
 const TARGETS = require('./targets.json');
 const STARTED_AT = new Date().toISOString();
@@ -371,7 +373,8 @@ function byokSlot() {
     const { encrypt } = require('../../libs/common/utils/crypto.ts');
     // A stored BYOK model: the key encrypted as the config keeps it.
     slot = {
-        provider: spec.provider,
+        // A pinned OpenRouter route is a customer's OpenRouter slot.
+        provider: spec.openrouterProviderOrder ? 'open_router' : spec.provider,
         apiKey: encrypt(key),
         model: spec.doModel || MODEL,
         baseURL: spec.baseURL,
@@ -744,6 +747,7 @@ async function main() {
     let selected;
     try {
         selected = selectCases(setCases(SET), ONLY);
+        if (LIMIT) selected = selected.slice(0, LIMIT);
     } catch (e) {
         console.error(`INFRA: ${e.message}`);
         process.exit(2);
@@ -844,11 +848,14 @@ function setCases(name) {
     if (!name) return cases;
     const ids = TARGETS.sets?.[name];
     if (!ids) throw new Error(`unknown --set=${name} (targets.json sets)`);
-    // A set measures the cases themselves; their -control twins were shown
-    // to post on the full runs (results/).
-    return selectCases(cases, ids.join(',')).filter(
+    // A set measures the cases themselves, in its own order (--limit takes
+    // the first ones); their -control twins were shown to post on the full
+    // runs (results/).
+    const picked = selectCases(cases, ids.join(',')).filter(
         (c) => c.family !== 'control',
     );
+    const at = (c) => ids.findIndex((id) => c.id === id || c.id.startsWith(`${id}-`));
+    return picked.sort((a, b) => at(a) - at(b));
 }
 
 // What a case checks, in one sentence: the shape for a production one,
