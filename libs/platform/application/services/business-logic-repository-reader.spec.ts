@@ -44,6 +44,42 @@ describe('withRepositoryReader', () => {
         );
     });
 
+    it('reads only at the head: never a path the head does not list, never the base', async () => {
+        const c = code();
+        const reader = withRepositoryReader(
+            { ...base, pullRequest: { number: 7, headRef: 'feat/x' } } as any,
+            c as any,
+        ).repositoryReader!;
+        // Removed by this PR: an adapter falling back to the base would find it.
+        await expect(
+            reader.readFile('src/removed.ts'),
+        ).resolves.toBeUndefined();
+        await reader.readFile('src/filter.ts');
+        await reader.readFile('src/filter.ts');
+        expect(c.getRepositoryContentFile).toHaveBeenCalledTimes(1);
+        expect(c.getRepositoryContentFile).toHaveBeenCalledWith(
+            expect.objectContaining({
+                pullRequest: expect.objectContaining({
+                    head: { ref: 'feat/x' },
+                    base: { ref: 'feat/x' },
+                }),
+            }),
+            undefined,
+        );
+    });
+
+    it('answers nothing, without throwing, when the code host fails', async () => {
+        const c = code();
+        c.getRepositoryAllFiles.mockRejectedValue(new Error('401'));
+        c.getRepositoryContentFile.mockRejectedValue(new Error('500'));
+        const reader = withRepositoryReader(
+            { ...base, pullRequest: { number: 7, headRef: 'feat/x' } } as any,
+            c as any,
+        ).repositoryReader!;
+        await expect(reader.listFiles('')).resolves.toEqual([]);
+        await expect(reader.readFile('src/filter.ts')).resolves.toBeUndefined();
+    });
+
     it('leaves a request with no PR (a local diff) without a reader', () => {
         expect(
             withRepositoryReader(base as any, code() as any).repositoryReader,

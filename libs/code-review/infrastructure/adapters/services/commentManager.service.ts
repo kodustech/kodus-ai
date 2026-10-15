@@ -301,6 +301,7 @@ export class CommentManagerService implements ICommentManagerService {
         platformType?: PlatformType,
         lineComments?: CommentResult[],
         prLevelCommentResults?: CommentResult[],
+        taskIdPattern?: string,
     ): Promise<string> {
         if (!summaryConfig?.generatePRSummary) {
             return null;
@@ -716,14 +717,17 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     // logic validation, `@kody -v business-logic` — with no
                     // task to resolve. Carry those lines into the replacement.
                     if (replacesDescription) {
-                        // The same reader business logic uses, so a line it
-                        // would read the task from (`AB#12`, a tracker link)
-                        // is one the summary keeps.
+                        // The same reader business logic uses, with the
+                        // team's own id format, so a line it would read the
+                        // task from (`AB#12`, a tracker link, `T1234`) is one
+                        // the summary keeps.
                         const taskReferences = extractTaskReferenceLines(
                             updatedPR?.body ?? '',
                             (line) =>
-                                extractTaskReferences({ body: line }).length >
-                                0,
+                                extractTaskReferences(
+                                    { body: line },
+                                    { taskIdPattern },
+                                ).length > 0,
                         );
 
                         if (taskReferences.length) {

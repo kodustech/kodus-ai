@@ -22,13 +22,31 @@ const CLOSES =
 const PART_OF =
     /\b(?:part\s+of|partially|partial|refs?|references?|related\s+to|relates\s+to|towards?|see|parte\s+de|relacionad[oa]\s+a)\b[\s:]*$/i;
 
+const SUMMARY_START = '<!-- kody-pr-summary:start -->';
+const SUMMARY_END = '<!-- kody-pr-summary:end -->';
+
 /**
- * The PR summary Kody writes into the description: generated text, so an id
- * in it (a team's summary template, a task the model mentions) is not a task
- * the author named.
+ * The description without the PR summary Kody writes into it: generated
+ * text, so an id in it (a team's summary template, a task the model mentions)
+ * is not a task the author named. One pass over the text; a start with no end
+ * is left as it is.
  */
-const KODY_PR_SUMMARY =
-    /<!-- kody-pr-summary:start -->[\s\S]*?<!-- kody-pr-summary:end -->/g;
+function withoutKodySummary(body: string): string {
+    let out = '';
+    let at = 0;
+    for (;;) {
+        const start = body.indexOf(SUMMARY_START, at);
+        if (start < 0) {
+            return out + body.slice(at);
+        }
+        const end = body.indexOf(SUMMARY_END, start + SUMMARY_START.length);
+        if (end < 0) {
+            return out + body.slice(at);
+        }
+        out += body.slice(at, start);
+        at = end + SUMMARY_END.length;
+    }
+}
 
 /**
  * Every task a PR could be pointing at, in the order a person would read
@@ -48,7 +66,7 @@ export function extractTaskReferences(
     for (const source of SOURCE_ORDER) {
         const text =
             source === 'body'
-                ? sources.body?.replace(KODY_PR_SUMMARY, '')
+                ? sources.body && withoutKodySummary(sources.body)
                 : sources[source];
         if (!text?.trim()) {
             continue;

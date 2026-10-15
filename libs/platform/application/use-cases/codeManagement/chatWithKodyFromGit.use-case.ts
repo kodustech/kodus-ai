@@ -1735,8 +1735,19 @@ export class ChatWithKodyFromGitUseCase {
                     platformType,
                 )) as { head?: { ref?: string } } | undefined;
             return pullRequest?.head?.ref || undefined;
-        } catch {
+        } catch (error) {
             // Without it, the task is still read from the title and body.
+            this.logger.warn({
+                message:
+                    "Couldn't read the PR's branch for business logic; reading the task from its title and body",
+                context: ChatWithKodyFromGitUseCase.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    repository: repository.name,
+                    prNumber,
+                },
+            });
             return undefined;
         }
     }

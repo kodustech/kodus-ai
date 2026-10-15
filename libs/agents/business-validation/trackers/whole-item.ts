@@ -60,5 +60,9 @@ export function wholeItem(
 const TASK_SECTIONS =
     /^(description|text_content|markdown_description|custom_fields|checklists?|subtasks|acceptance_criteria)$/i;
 
-/** A tool that returns many items: asked for all their fields, the answer would be huge. */
-const MANY_ITEMS = /(list|search|query|find|all|batch)/i;
+/**
+ * A plural noun or a list/search verb: the tool returns many items, not the
+ * one asked for (asked for all their fields, the answer would be huge).
+ */
+export const MANY_ITEMS =
+    /(list|search|query|find|all|batch|backlog)|(issues|tasks|tickets|items|stories|cards)\b/i;

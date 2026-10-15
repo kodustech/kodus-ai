@@ -47,6 +47,8 @@ const MAX_LINES = 400;
 export function createGapCheck(run: AgentRun): GapCheck {
     return async (input) => {
         const read = new Map<string, string[]>();
+        // The lines the agent was shown: a citation must be one of them.
+        const shown = new Map<string, Set<number>>();
         let refuted: GapRefuted | undefined;
 
         const registry = new InMemoryToolRegistry([
@@ -95,9 +97,15 @@ export function createGapCheck(run: AgentRun): GapCheck {
                     const lines = text.split('\n');
                     read.set(file, lines);
                     const start = Math.max(1, Number(fromLine) || 1);
+                    const window = lines.slice(
+                        start - 1,
+                        start - 1 + MAX_LINES,
+                    );
+                    const seen = shown.get(file) ?? new Set<number>();
+                    window.forEach((_, i) => seen.add(start + i));
+                    shown.set(file, seen);
                     return {
-                        output: lines
-                            .slice(start - 1, start - 1 + MAX_LINES)
+                        output: window
                             .map((line, i) => `${start + i}: ${line}`)
                             .join('\n'),
                     };
@@ -124,9 +132,9 @@ export function createGapCheck(run: AgentRun): GapCheck {
                     const lines = read.get(file);
                     // The plugin-style referee: a citation counts only when it
                     // names a line of a file this agent actually read.
-                    if (!lines || !(line >= 1 && line <= lines.length)) {
+                    if (!lines || !shown.get(file)?.has(line)) {
                         return {
-                            output: `Cite a line of a file you read with read_file; ${file}:${a.line} is not one.`,
+                            output: `Cite a line read_file showed you; ${file}:${a.line} is not one.`,
                             isError: true,
                         };
                     }

@@ -108,6 +108,72 @@ describe('createGapCheck', () => {
         }
     });
 
+    it('never takes a line read_file did not show, or a file it could not read', async () => {
+        const long = Array.from(
+            { length: 900 },
+            (_, i) => `const v${i} = ${i};`,
+        ).join('\n');
+        const big: RepositoryReader = {
+            listFiles: async () => ['src/big.ts'],
+            readFile: async (path) =>
+                path === 'src/big.ts' ? long : undefined,
+        };
+        // Shown lines 1-400; line 700 exists but was never on screen.
+        const unseen = createGapCheck(
+            scripted([
+                ['read_file', { path: 'src/big.ts' }],
+                [
+                    'report_found',
+                    {
+                        state: 'met',
+                        file: 'src/big.ts',
+                        line: 700,
+                        note: 'Here.',
+                    },
+                ],
+            ]),
+        );
+        await expect(
+            unseen({ ...input, reader: big }),
+        ).resolves.toBeUndefined();
+
+        const shownLater = createGapCheck(
+            scripted([
+                ['read_file', { path: 'src/big.ts', fromLine: 650 }],
+                [
+                    'report_found',
+                    {
+                        state: 'met',
+                        file: 'src/big.ts',
+                        line: 700,
+                        note: 'Here.',
+                    },
+                ],
+            ]),
+        );
+        await expect(
+            shownLater({ ...input, reader: big }),
+        ).resolves.toMatchObject({
+            evidence: [{ file: 'src/big.ts', line: 700 }],
+        });
+
+        const unreadable = createGapCheck(
+            scripted([
+                ['read_file', { path: 'src/gone.ts' }],
+                [
+                    'report_found',
+                    {
+                        state: 'met',
+                        file: 'src/gone.ts',
+                        line: 1,
+                        note: 'Here.',
+                    },
+                ],
+            ]),
+        );
+        await expect(unreadable(input)).resolves.toBeUndefined();
+    });
+
     it('keeps MISSING when the agent finds nothing or fails', async () => {
         await expect(
             createGapCheck(scripted([['report_missing', {}]]))(input),

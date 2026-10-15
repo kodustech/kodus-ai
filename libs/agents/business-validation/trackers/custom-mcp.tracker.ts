@@ -5,7 +5,7 @@ import type {
     TrackerLookup,
 } from '../business-validation.types';
 import { asRecord } from '../value-utils';
-import { wholeItem } from './whole-item';
+import { MANY_ITEMS as MANY, wholeItem } from './whole-item';
 import { McpToolSession, TaskNotFoundError } from './mcp-tool-session';
 import { describeTask, mentions, recordsIn } from './task-payload';
 import { McpTaskTracker, type TrackerReadContext } from './tracker';
@@ -35,9 +35,6 @@ function namesAWrite(name: string): boolean {
 /** What a task is called across trackers. */
 const TASK_NOUN =
     /(issue|task|ticket|story|bug|epic|card|work_?item|workitem)/i;
-/** A plural noun or a list/search verb: returns many items, not the one asked for. */
-const MANY =
-    /(list|search|query|find|all|batch|backlog)|(issues|tasks|tickets|items|stories|cards)\b/i;
 /**
  * What may follow the task noun in a reader's name: `get_issue`,
  * `issue_read`, `getIssueById`. Anything else reads something about the task
@@ -207,7 +204,8 @@ export class CustomMcpTracker extends McpTaskTracker {
             return await this.agentReader!({
                 tool,
                 reference,
-                call: (args) => this.session.call(tool.name, args),
+                call: (args) =>
+                    this.session.call(tool.name, wholeItem(tool, args)),
             });
         } catch (error) {
             if (error instanceof TaskNotFoundError) {

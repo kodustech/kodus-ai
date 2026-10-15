@@ -88,10 +88,14 @@ export function summarizeStatus(
 
     // Since an issue was last read: a tracker connected after those skips
     // reads them now, and the card shouldn't ask to connect one.
-    const lastIssueRead = runs.find(
-        (r) =>
-            r.tasks?.length &&
-            r.references.some((ref) => ref.kind === 'git_issue'),
+    const lastIssueRead = runs.find((r) =>
+        (r.attempts ?? []).some(
+            (a) =>
+                a.status === 'found' &&
+                r.references.some(
+                    (ref) => ref.kind === 'git_issue' && ref.id === a.reference,
+                ),
+        ),
     );
     const elsewhere = latest.filter(
         (r) =>

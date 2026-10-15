@@ -139,6 +139,34 @@ describe('CustomMcpTracker with the tool the org picked', () => {
         });
     });
 
+    it("asks for the whole item when the agent reads through a summary tool (ClickUp's include)", async () => {
+        const getTask = tool('clickup_get_task', {
+            properties: {
+                task_id: { type: 'string' },
+                include: {
+                    type: 'array',
+                    items: { enum: ['description', 'checklists', 'watchers'] },
+                },
+            },
+            required: ['task_id'],
+        });
+        const s = session({ tools: [getTask] });
+        const agentReader = jest.fn(async ({ call }) =>
+            call({ task_id: 'DEV-12' }).then(() => undefined),
+        );
+        await new CustomMcpTracker(
+            'ClickUp',
+            s,
+            'clickup_get_task',
+            agentReader,
+        ).read(ref('DEV-12'), { organizationAndTeamData: {} as any });
+
+        expect(s.calls.at(-1)).toEqual([
+            'clickup_get_task',
+            { task_id: 'DEV-12', include: ['description', 'checklists'] },
+        ]);
+    });
+
     it('never uses a picked tool that writes', async () => {
         const s = session({
             tools: [tool('update_work_item', { properties: { id: {} } })],

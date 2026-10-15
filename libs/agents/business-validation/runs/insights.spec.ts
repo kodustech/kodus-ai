@@ -115,6 +115,13 @@ describe('summarizeStatus', () => {
             run({
                 createdAt: new Date('2026-10-06T12:00:00Z'),
                 references: [issue],
+                attempts: [
+                    {
+                        reference: '183',
+                        tracker: 'Git Issues',
+                        status: 'found',
+                    },
+                ] as any,
                 tasks: [task()],
             }),
             run({
@@ -124,6 +131,44 @@ describe('summarizeStatus', () => {
             }),
         ]);
         expect(status.pointsElsewhere).toBeUndefined();
+    });
+
+    it('keeps counting when the run read another task, not the issue', () => {
+        const issue = {
+            kind: 'git_issue' as const,
+            id: '183',
+            raw: '#183',
+            source: 'body' as const,
+            intent: 'closes' as const,
+        };
+        const status = summarizeStatus([
+            run({
+                createdAt: new Date('2026-10-06T12:00:00Z'),
+                references: [
+                    issue,
+                    {
+                        kind: 'key',
+                        id: 'SAA-96',
+                        raw: 'SAA-96',
+                        source: 'title',
+                        intent: 'closes',
+                    } as any,
+                ],
+                attempts: [
+                    { reference: 'SAA-96', tracker: 'Linear', status: 'found' },
+                ] as any,
+                tasks: [task()],
+            }),
+            run({
+                outcome: 'skipped',
+                skipReason: 'no_capable_tracker',
+                references: [issue],
+            }),
+        ]);
+        expect(status.pointsElsewhere).toEqual({
+            pullRequests: 1,
+            kind: 'git_issue',
+        });
     });
 
     it('measures agreement as the flagged findings nobody waived or overturned', () => {

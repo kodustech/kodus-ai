@@ -367,4 +367,31 @@ describe('the summary Kody writes into the description', () => {
         });
         expect(references.map((r) => r.raw)).toEqual(['CU-86a1b2c3d', 'OPS-7']);
     });
+
+    it('keeps what the author wrote around it, and a start marker with no end', () => {
+        const after = extractTaskReferences({
+            body: [
+                '<!-- kody-pr-summary:start -->',
+                'QA-1750',
+                '<!-- kody-pr-summary:end -->',
+                'Closes OPS-8',
+            ].join('\n'),
+        });
+        expect(after.map((r) => r.raw)).toEqual(['OPS-8']);
+
+        const unclosed = extractTaskReferences({
+            body: '<!-- kody-pr-summary:start -->\nCloses OPS-9',
+        });
+        expect(unclosed.map((r) => r.raw)).toEqual(['OPS-9']);
+    });
+
+    it('reads a body of many unclosed summary markers in linear time', () => {
+        const body =
+            '<!-- kody-pr-summary:start -->'.repeat(20_000) + ' OPS-10';
+        const started = Date.now();
+        expect(extractTaskReferences({ body }).map((r) => r.raw)).toEqual([
+            'OPS-10',
+        ]);
+        expect(Date.now() - started).toBeLessThan(1000);
+    });
 });
