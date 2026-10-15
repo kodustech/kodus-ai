@@ -713,7 +713,7 @@ export class ChatWithKodyFromGitUseCase {
     /**
      * GitHub says how the commenter relates to the repository. Only people
      * with write access may waive a requirement; other platforms don't say,
-     * so there it stays "anyone but the author".
+     * so there anyone may.
      */
     private senderCanWrite(params: WebhookParams): boolean | undefined {
         const association = params.payload?.comment?.author_association;
