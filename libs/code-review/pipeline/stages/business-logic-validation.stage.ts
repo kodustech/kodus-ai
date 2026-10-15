@@ -14,6 +14,7 @@ import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-
 import { PipelineError } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-context.interface';
 import { createLogger } from '@libs/core/log/logger';
 import { isBotUser } from '@libs/common/utils/bot-user';
+import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import { isBotAuthor } from '@libs/platform/application/use-cases/codeManagement/implicit-reply';
 import { BusinessLogicPublisher } from '@libs/platform/application/services/business-logic-publisher.service';
 import {
@@ -161,7 +162,15 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                 context.repository,
                 context.pullRequest,
             );
-            return files?.length ? files : context.changedFiles;
+            // The same files the review reads: not what the team ignores,
+            // not deleted ones.
+            const ignorePaths = context.codeReviewConfig?.ignorePaths ?? [];
+            const reviewed = (files ?? []).filter(
+                (file) =>
+                    file.status !== 'removed' &&
+                    !isFileMatchingGlob(file.filename, ignorePaths),
+            );
+            return reviewed.length ? reviewed : context.changedFiles;
         } catch (error) {
             this.logger.warn({
                 message: `[BUSINESS-LOGIC] Could not read the whole diff of PR#${context.pullRequest?.number}; judging the files of this push`,

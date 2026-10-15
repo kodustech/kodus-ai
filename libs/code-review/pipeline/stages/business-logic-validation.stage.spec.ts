@@ -131,6 +131,30 @@ describe('BusinessLogicValidationStage', () => {
         );
     });
 
+    it('leaves out of the whole PR what the team ignores and deleted files', async () => {
+        const { stage, service } = build(validated(true), [
+            { filename: 'filter.ts', status: 'added', patch: '+filter' },
+            { filename: 'pnpm-lock.yaml', status: 'modified', patch: '+lock' },
+            { filename: 'old.ts', status: 'removed', patch: '-old' },
+        ]);
+
+        await stage.execute(
+            context({
+                lastExecution: { lastAnalyzedCommit: 'old1234' },
+                codeReviewConfig: {
+                    reviewOptions: { business_logic: true },
+                    businessLogic: { recheckOn: 'push' },
+                    ignorePaths: ['**/*.yaml'],
+                },
+            } as any),
+        );
+
+        const { diff } = (service.validate.mock.calls[0] as any)[0];
+        expect(diff).toContain('filter.ts');
+        expect(diff).not.toContain('pnpm-lock.yaml');
+        expect(diff).not.toContain('old.ts');
+    });
+
     it('uses the files it already has on the first review', async () => {
         const { stage, pullRequests } = build(validated(true));
 
