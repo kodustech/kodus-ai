@@ -674,7 +674,13 @@ export class LocalSandboxService implements ISandboxProvider {
                     // (cat/head/tail/wc/file) have no entry and pass through.
                     const dangerousFlag = DANGEROUS_FLAGS[program];
                     if (dangerousFlag) {
-                        const bad = args.find((a) => dangerousFlag.test(a));
+                        // Match the flag token only: clap-based tools (fd)
+                        // accept the joined `--exec=sh` / `--exec-batch=cmd`
+                        // form, which an anchored `^--exec$` regex would miss,
+                        // so strip any `=value` before testing.
+                        const bad = args.find((a) =>
+                            dangerousFlag.test(a.split('=', 1)[0]),
+                        );
                         if (bad) {
                             return {
                                 stdout: `Flag "${bad}" is not allowed for "${program}" in local sandbox (it can execute, write, delete, or follow symlinks out of the repo).`,

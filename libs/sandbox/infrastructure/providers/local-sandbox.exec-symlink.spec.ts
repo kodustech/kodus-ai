@@ -135,6 +135,14 @@ describe('LocalSandboxService exec — blocks executor flags (GHSA-7844)', () =>
         await expectBlocked("fd -x sh -c 'echo PWNED' . real.txt");
     });
 
+    it('blocks fd --exec=sh (clap joined form)', async () => {
+        await expectBlocked("fd . --exec=sh -c 'echo PWNED'");
+    });
+
+    it('blocks fd --exec-batch=sh (clap joined form)', async () => {
+        await expectBlocked("fd . --exec-batch=sh -c 'echo PWNED'");
+    });
+
     it('still allows a plain find over the repo', async () => {
         const r = await rc.exec('find . -name real.txt');
         expect(r.exitCode).toBe(0);
