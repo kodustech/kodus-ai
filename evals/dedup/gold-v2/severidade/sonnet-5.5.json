@@ -1,0 +1,3310 @@
+{
+ "model": "sonnet-5.5",
+ "escala": [
+  "low",
+  "medium",
+  "high",
+  "critical"
+ ],
+ "regra": "severidade alegada; Claude x Astra (gpt-6-astra) cegos a TP/FP",
+ "prs": {
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Booking creation with a Google Meet location and no destination calendar throws a TypeError; a main flow crashes for realistic input.",
+    "astra": "critical",
+    "astraMotivo": "Booking creation, a core flow, crashes for ordinary supported input with no destination calendar.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Google Calendar update/delete never fall back to the destination calendar, so events are updated in the wrong calendar for realistic bookings.",
+    "astra": "high",
+    "astraMotivo": "Losing the destination fallback breaks calendar update and deletion when the explicit calendar ID is omitted.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Google Meet bookings without a destination calendar crash with TypeError; main booking flow breaks for realistic input.",
+    "astra": "critical",
+    "astraMotivo": "Google Meet booking creation crashes for a supported configuration that many callers produce.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Fallback is dead so updates/deletes target the default calendar instead of the destination; wrong result for a main feature.",
+    "astra": "high",
+    "astraMotivo": "The broken fallback prevents update and deletion from targeting the configured destination calendar.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Events are deleted from 'primary' instead of the destination calendar, so cancellations miss the real event.",
+    "astra": "critical",
+    "astraMotivo": "Deleting an event from the wrong calendar causes loss of persisted data.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S6": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Any Google Meet booking with no destination calendar throws a TypeError, breaking booking creation for that case.",
+    "astra": "critical",
+    "astraMotivo": "Booking creation crashes on a supported Google Meet configuration instead of applying its normal fallback.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S7": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "updateEvent writes to the default calendar instead of the destination calendar; main reschedule flow returns wrong result.",
+    "astra": "high",
+    "astraMotivo": "Update and deletion target the default calendar instead of the configured destination when the explicit ID is omitted.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S8": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Booking creation crashes for Google Meet locations with no destination calendar; realistic input breaks a main flow.",
+    "astra": "critical",
+    "astraMotivo": "A supported Google Meet configuration crashes booking creation, a core flow.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S9": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Destination calendar never used on update/delete, so Google events go to the wrong calendar for realistic bookings.",
+    "astra": "high",
+    "astraMotivo": "Update and deletion lose their destination-calendar fallback, breaking targeting for callers that omit the explicit ID.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S10": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Google Meet bookings without a destination calendar throw and skip the Cal Video fallback; main booking flow breaks.",
+    "astra": "critical",
+    "astraMotivo": "Booking creation crashes on null or empty destination calendars produced by normal application paths.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S11": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Update/delete fallback to the destination calendar is lost, so events are modified in the wrong calendar.",
+    "astra": "high",
+    "astraMotivo": "The lost fallback breaks update and deletion targeting when callers rely on the event's destination calendar.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S12": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Destinations without a credentialId get events inserted into 'primary' instead of the configured calendar; wrong result for realistic bookings.",
+    "astra": "high",
+    "astraMotivo": "Events are persistently created in the wrong calendar for supported destinations without a credential ID.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S13": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Booking references are stored without externalCalendarId, breaking later update/delete targeting; persisted state inconsistent for a branch of bookings.",
+    "astra": "high",
+    "astraMotivo": "Incomplete persisted booking references break subsequent update and deletion targeting for affected destinations.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S14": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Booking references saved with undefined externalCalendarId break later updates/deletes for destinations without credentialId.",
+    "astra": "high",
+    "astraMotivo": "Booking references are persisted without their required calendar association in the no-credential-ID branch.",
+    "severidade": "high",
+    "origem": "concordancia"
+   }
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "AND instead of OR denies team admins who are not owners from adding guests, breaking the feature for a realistic group of users",
+    "astra": "high",
+    "astraMotivo": "Legitimate team admins are blocked from adding guests in a supported use case.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Any attendee can add arbitrary guests and trigger invites on the organizer's behalf, a permission weakness requiring an attendee account",
+    "astra": "critical",
+    "astraMotivo": "The stated authorization flaw lets attendees send arbitrary invitations on the organizer’s behalf.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Case-sensitive comparison lets a case variant bypass the guest blacklist and duplicate check, a security control weakness that needs a crafted input",
+    "astra": "medium",
+    "astraMotivo": "Case-variant input bypasses duplicate and blacklist filtering; no broader security impact is stated.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Calendar update uses the acting user's credentials so admins/attendees acting on another's booking update the wrong calendar or none",
+    "astra": "high",
+    "astraMotivo": "Adding guests to someone else’s booking updates the wrong calendar or fails to update it.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Case-sensitive comparison lets a case variant bypass the guest blacklist and duplicate check, a security control weakness that needs a crafted input",
+    "astra": "medium",
+    "astraMotivo": "Case-variant addresses evade filtering, producing incorrect guest acceptance for that input.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S6": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Raw guests list passed to the email sender so existing attendees receive the wrong email, a limited-case wrong notification",
+    "astra": "medium",
+    "astraMotivo": "Existing attendees receive the wrong notification when included in the input.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Raw guests list passed to the email sender so existing attendees receive the wrong email, a limited-case wrong notification",
+    "astra": "medium",
+    "astraMotivo": "Existing attendees are misclassified as new and receive a misleading scheduled email.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S8": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "AND instead of OR denies team admins who are not owners from adding guests, breaking the feature for a realistic group of users",
+    "astra": "high",
+    "astraMotivo": "Legitimate team admins cannot perform the supported add-guests action.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S9": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Hard-coded English tooltip bypasses translation; cosmetic",
+    "astra": "medium",
+    "astraMotivo": "Users of other locales receive untranslated tooltip text.",
+    "severidade": "low",
+    "origem": "um-nivel-claude"
+   },
+   "S10": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Error toast can show 'undefined: ...' or raw text because the fallback is dead, a confusing user-facing message",
+    "astra": "medium",
+    "astraMotivo": "Error handling can display undefined or untranslated text instead of a useful fallback.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S11": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "AND instead of OR denies team admins who are not owners from adding guests, breaking the feature for a realistic group of users",
+    "astra": "low",
+    "astraMotivo": "The comment states a naming-versus-logic mismatch and allows renaming as a fix, without asserting incorrect access behavior.",
+    "severidade": "medium",
+    "origem": "debate-um-nivel-claude",
+    "rodadas": 1,
+    "debate": [
+     {
+      "autor": "astra",
+      "severity": "low",
+      "texto": "The comment states a naming-versus-logic mismatch and allows renaming as a fix, without asserting incorrect access behavior."
+     },
+     {
+      "autor": "claude",
+      "severity": "medium",
+      "texto": "I'll move from high to medium, but not to low. The comment does state a behaviour, not only naming: \"the code joins the two checks with &&, so it only passes if the user is both admin and owner\". The code at the head:\n  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) &&\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));\n  if (!isTeamAdminOrOwner && !isOrganizer && !isAttendee) throw FORBIDDEN\nSo a team admin who is not owner (and is not the organizer or an attendee) is refused when adding guests to a team booking. That is wrong access behaviour for an uncommon but real group of users — medium, not a pure rename."
+     },
+     {
+      "autor": "astra",
+      "severity": "low",
+      "texto": "I would keep low. The comment identifies a mismatch between the variable name and its condition, and explicitly accepts renaming as a fix. The other reviewer infers that admins or owners should independently have access, but the comment does not assert that requirement; the quoted code establishes the denial, not that it is incorrect."
+     }
+    ]
+   },
+   "S12": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Duplicate guests and case variants pass the filter and insert duplicate attendee rows, plus blacklist bypass by case, under specific input",
+    "astra": "high",
+    "astraMotivo": "Duplicate input creates duplicate persisted attendee rows, leaving stored state inconsistent in a limited case.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S13": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Calendar update failure after the DB write returns an error with guests persisted, leaving DB and calendar inconsistent and retries failing",
+    "astra": "high",
+    "astraMotivo": "Calendar failure leaves persisted guests out of sync, skips notifications, and prevents a successful retry.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S14": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Filtered-out guests (existing or blacklisted) still receive emails because the raw list is passed, a limited-case wrong notification",
+    "astra": "medium",
+    "astraMotivo": "Filtered input causes incorrect repeat notifications and potentially unwanted emails to blacklisted addresses.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S15": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Calendar sync failure after committed attendees returns an error for a partly applied change, leaving persisted state inconsistent",
+    "astra": "high",
+    "astraMotivo": "Calendar failure leaves a partly committed operation with persisted guests but missing synchronization and notifications.",
+    "severidade": "high",
+    "origem": "concordancia"
+   }
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Zoho Bigin token refresh in credential-sync mode looks up the wrong user; a main integration flow returns wrong tokens under an opt-in mode.",
+    "astra": "high",
+    "astraMotivo": "Sync requests use the wrong user identity, breaking credential refresh for affected users.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "critical",
+    "claudeMotivo": "Every Google Calendar token refresh would persist the credential key as {success,data}, corrupting stored credentials for a core integration.",
+    "astra": "critical",
+    "astraMotivo": "Routine refresh overwrites persisted credentials with an invalid structure and loses accessible token fields.",
+    "severidade": "critical",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Non-constant-time secret comparison on the credential webhook is a security weakness that needs a timing attack to exploit.",
+    "astra": "critical",
+    "astraMotivo": "The claimed exploit enables authentication bypass and arbitrary users' credential overwrites.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Every token refresh in credential-sync mode would throw, so the sync feature stops working for all apps using it.",
+    "astra": "high",
+    "astraMotivo": "Every token refresh fails for users with credential sync enabled.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "A failed Office 365 token refresh would throw instead of keeping old credentials; error handling on an uncommon failure path.",
+    "astra": "medium",
+    "astraMotivo": "Failed refresh responses now escape as exceptions instead of receiving the previous error handling.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S6": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Timing leak on the webhook secret comparison is a security weakness requiring specific attack conditions.",
+    "astra": "critical",
+    "astraMotivo": "The claimed attack recovers the webhook authentication secret, compromising endpoint authentication.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S7": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "In sync mode Zoho Bigin may store another user's tokens on this credential; a security/correctness flaw limited to an opt-in mode and one app.",
+    "astra": "critical",
+    "astraMotivo": "Another user's tokens are retrieved and persisted on the wrong credential, crossing user security boundaries.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S8": {
+    "conjunto": "light",
+    "claude": "critical",
+    "claudeMotivo": "Google credential keys saved on every refresh would be wrapped as {success,data}, corrupting persisted credentials and breaking later token reads.",
+    "astra": "critical",
+    "astraMotivo": "Routine refresh corrupts the persisted credential structure, breaking subsequent token reads.",
+    "severidade": "critical",
+    "origem": "concordancia"
+   },
+   "S9": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Zoho Bigin refresh in sync mode fetches the wrong user's tokens; wrong result for a main flow under an opt-in mode.",
+    "astra": "critical",
+    "astraMotivo": "Fetching another user's tokens exposes credentials across user boundaries.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S10": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "With credential sync on, every Google token refresh throws on res.data, so Google Calendar stops working in that mode.",
+    "astra": "high",
+    "astraMotivo": "Google token refresh throws on normal sync responses, breaking the integration in sync mode.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S11": {
+    "conjunto": "light",
+    "claude": "critical",
+    "claudeMotivo": "Saving the safeParse result as the Google credential key corrupts persisted credentials on each refresh, breaking Google Calendar afterwards.",
+    "astra": "critical",
+    "astraMotivo": "Routine refresh writes an invalid persisted credential structure that prevents subsequent token access.",
+    "severidade": "critical",
+    "origem": "concordancia"
+   },
+   "S12": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "The schema always fails so every sync-mode refresh throws, breaking credential sync for all apps.",
+    "astra": "high",
+    "astraMotivo": "Validation rejects all normal token responses in credential-sync mode, preventing refresh.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S13": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Zoho Bigin sync-mode refresh returns wrong-user or no tokens; wrong result for an integration in an opt-in mode.",
+    "astra": "critical",
+    "astraMotivo": "The endpoint can return another user's tokens, exposing credentials across user boundaries.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S14": {
+    "conjunto": "light",
+    "claude": "critical",
+    "claudeMotivo": "Google credentials would be corrupted in the database on every token refresh, a loss of persisted data for a core integration.",
+    "astra": "critical",
+    "astraMotivo": "Routine refresh corrupts the Google credential stored in the database.",
+    "severidade": "critical",
+    "origem": "concordancia"
+   },
+   "S15": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Zoho Bigin wrongly activates sync and fetches the wrong user's tokens; main flow returns wrong result for that app.",
+    "astra": "critical",
+    "astraMotivo": "The sync flow fetches another user's tokens, crossing credential ownership boundaries.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S16": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Office365 video refresh asks the sync endpoint for the wrong app's credentials, so that integration breaks in sync mode.",
+    "astra": "high",
+    "astraMotivo": "The integration requests credentials for the wrong app, breaking its credential-sync contract.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S17": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Every sync-mode token refresh throws, so credential sync is broken for realistic input.",
+    "astra": "high",
+    "astraMotivo": "Every refresh in sync mode rejects ordinary token responses and throws.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S18": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Sync endpoint receives a credential id as a user id for Zoho Bigin, returning wrong credentials in sync mode.",
+    "astra": "high",
+    "astraMotivo": "The sync endpoint receives the wrong identity, violating the caller contract during credential refresh.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S19": {
+    "conjunto": "light",
+    "claude": "critical",
+    "claudeMotivo": "Stored Google credential is corrupted on refresh and later token reads fail, a persisted-data corruption on a core integration.",
+    "astra": "critical",
+    "astraMotivo": "Routine refresh saves malformed persisted credentials, making access and refresh tokens unreadable.",
+    "severidade": "critical",
+    "origem": "concordancia"
+   },
+   "S20": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Zoho Bigin sync-mode refresh targets the wrong user or fails; main feature broken under an opt-in mode.",
+    "astra": "high",
+    "astraMotivo": "Sync refresh operates on the wrong user or fails; the comment does not claim token disclosure.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S21": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "In sync mode the raw fetch Response breaks Google, Zoho and HubSpot callers expecting their own shape, so refreshes fail for several integrations.",
+    "astra": "high",
+    "astraMotivo": "The helper breaks its response contract for multiple integrations, causing refresh failures in sync mode.",
+    "severidade": "high",
+    "origem": "concordancia"
+   }
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "If the retry-count update in the catch throws (rare DB error or concurrent delete), the cron aborts and remaining reminders are skipped for that run.",
+    "astra": "medium",
+    "astraMotivo": "A secondary database failure during error handling aborts the cron run and skips remaining reminders; this requires an exceptional failure path.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Reminders with a missing phone number or empty message never increment retryCount and keep being retried each cron run; uncommon input.",
+    "astra": "medium",
+    "astraMotivo": "Reminders with missing recipients or empty messages bypass the retry limit and are repeatedly processed.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "The SMS cron's retry-count delete branch has no method filter, so email/WhatsApp reminders with retryCount > 1 are deleted: persisted data loss in a limited case.",
+    "astra": "critical",
+    "astraMotivo": "The cron deletes persisted email and WhatsApp reminders outside its intended SMS scope, causing data loss.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "The SMS cron's retry-count delete branch has no method filter, so email/WhatsApp reminders with retryCount > 1 are deleted: persisted data loss in a limited case.",
+    "astra": "critical",
+    "astraMotivo": "The cron deletes persisted non-SMS reminders outside its intended scope, causing data loss.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "The SMS cron's retry-count delete branch has no method filter, so email/WhatsApp reminders with retryCount > 1 are deleted: persisted data loss in a limited case.",
+    "astra": "critical",
+    "astraMotivo": "The cron deletes persisted non-SMS reminders outside its intended scope, causing data loss.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S6": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "If the retry-count update in the catch throws (rare DB error or concurrent delete), the cron aborts and remaining reminders are skipped for that run.",
+    "astra": "medium",
+    "astraMotivo": "A secondary database failure during error handling aborts processing of the remaining batch; this requires an exceptional failure path.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "The SMS cron's retry-count delete branch has no method filter, so email/WhatsApp reminders with retryCount > 1 are deleted: persisted data loss in a limited case.",
+    "astra": "critical",
+    "astraMotivo": "The cron deletes persisted email and WhatsApp reminders outside its intended SMS scope, causing data loss.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   }
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Concurrent logins can reuse the same backup code, breaking single-use; security weakness needing a race.",
+    "astra": "high",
+    "astraMotivo": "Concurrent logins can reuse a single-use authentication code and overwrite consumption state, creating a security weakness under specific race conditions.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Dismissing the modal after enabling 2FA leaves parent state stale; uncommon UI path.",
+    "astra": "medium",
+    "astraMotivo": "Alternative dismissal paths leave the parent UI stale and retain modal state and backup codes after successful enablement.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Component misnamed; naming only.",
+    "astra": "low",
+    "astraMotivo": "The misleading component name affects readability and debugging, without changing user-facing behavior.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Log message describes the wrong operation, misleading operators on a rare error.",
+    "astra": "medium",
+    "astraMotivo": "The error log identifies the wrong operation, misleading operators diagnosing a failed 2FA disable request.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Backup code compared in non-constant time; security weakness needing timing conditions.",
+    "astra": "high",
+    "astraMotivo": "Non-constant-time authentication-code comparisons create a timing side channel whose exploitation requires specific conditions.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S6": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Race lets the same backup code authenticate twice, a security weakness under concurrency.",
+    "astra": "high",
+    "astraMotivo": "Concurrent requests can authenticate using the same single-use code, creating a security weakness that requires a race condition.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Dismissing the dialog leaves the 2FA switch showing off; stale UI on an uncommon path.",
+    "astra": "medium",
+    "astraMotivo": "Dismissing the dialog through an alternative close path leaves the UI incorrectly showing that 2FA is disabled.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   }
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Unreachable branches are dead code; simplification only.",
+    "astra": "low",
+    "astraMotivo": "The comment identifies unreachable branches and a readability simplification with no change to program behavior.",
+    "severidade": "low",
+    "origem": "concordancia"
+   }
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Referer interpolated into inline script allows XSS but needs a crafted referer on the allowed host; specific conditions.",
+    "astra": "critical",
+    "astraMotivo": "Allows script injection and execution through an attacker-controlled referer.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "critical",
+    "claudeMotivo": "open() on request/feed-controlled URL allows command execution and local file read; exploitable injection.",
+    "astra": "critical",
+    "astraMotivo": "Request-controlled input can execute server commands or read local files.",
+    "severidade": "critical",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "critical",
+    "claudeMotivo": "Feed/remote HTML stored and rendered unsanitized; exploitable stored XSS.",
+    "astra": "critical",
+    "astraMotivo": "Unsanitized imported HTML enables stored XSS against viewers.",
+    "severidade": "critical",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "In-place mutation fails on frozen strings or double-appends on reuse; uncommon input.",
+    "astra": "medium",
+    "astraMotivo": "Frozen or reused input strings cause exceptions or duplicate footers in limited cases.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Substring origin check lets other origins pass for resize messages; limited-impact weakness.",
+    "astra": "high",
+    "astraMotivo": "Weak origin validation permits unauthorized resize messages under specific conditions.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S6": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Protocol-relative URLs rewritten to broken links; edge-case input.",
+    "astra": "medium",
+    "astraMotivo": "Protocol-relative URLs are mishandled, breaking affected imported links and images.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Disqus import loses category/date and aborts the whole import on a fetch failure; admin import tool breaks.",
+    "astra": "high",
+    "astraMotivo": "Breaks the import CLI contract, drops thread metadata, and aborts imports on realistic fetch failures.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S8": {
+    "conjunto": "light",
+    "claude": "critical",
+    "claudeMotivo": "Unescaped url rendered as live HTML via raw_html; exploitable stored XSS.",
+    "astra": "critical",
+    "astraMotivo": "Unescaped URLs become live HTML, enabling stored injection against viewers.",
+    "severidade": "critical",
+    "origem": "concordancia"
+   },
+   "S9": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Protocol-relative URLs rewritten incorrectly; edge-case input.",
+    "astra": "medium",
+    "astraMotivo": "Protocol-relative URLs are mishandled, breaking affected imported links and images.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S10": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Items without content abort the whole poll so later items are never imported; feed import breaks for realistic feeds.",
+    "astra": "high",
+    "astraMotivo": "Description-only feed items crash polling and prevent subsequent items from being imported.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S11": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Imports of a URL whose post was deleted keep failing; uncommon case.",
+    "astra": "medium",
+    "astraMotivo": "Reimporting a URL whose post was deleted repeatedly fails on the update path.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S12": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Tests pass even if the named conditions are removed; they do not verify the behaviour.",
+    "astra": "medium",
+    "astraMotivo": "The tests pass without verifying the required setting guards.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S13": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Test passes for a different reason than the embed_url check; does not verify the behaviour.",
+    "astra": "medium",
+    "astraMotivo": "The test passes without exercising the missing-parameter check.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S14": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Test does not isolate the InvalidURIError path; does not verify the behaviour.",
+    "astra": "medium",
+    "astraMotivo": "The test does not isolate or verify malformed-URL handling.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S15": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Mixed-case hosts wrongly rejected, fails closed; edge-case input.",
+    "astra": "medium",
+    "astraMotivo": "Mixed-case hosts cause false rejections for an uncommon input variation.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S16": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Mixed-case hosts wrongly rejected, fails closed; edge-case input.",
+    "astra": "medium",
+    "astraMotivo": "Mixed-case hosts cause false rejections for an uncommon input variation.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   }
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Embedding is wrongly denied only when the referer host has uppercase letters, an uncommon input.",
+    "astra": "medium",
+    "astraMotivo": "Embedding is incorrectly denied for the uncommon case of mixed-case hostnames.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "A create request with a missing host (admin-only path, uncommon input) returns a 500 instead of a validation error.",
+    "astra": "medium",
+    "astraMotivo": "A missing host produces a confusing 500 instead of a validation error.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Admin update/destroy with an unknown id raises and returns a 500 instead of a 404: confusing failure on an uncommon admin request.",
+    "astra": "medium",
+    "astraMotivo": "An unknown ID on an admin endpoint produces a 500 instead of a 404.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "The admin embedding update action persists nothing while appearing to succeed, so the settings-save feature does not work at all.",
+    "astra": "high",
+    "astraMotivo": "Saving embedding settings silently does nothing, breaking the save feature for ordinary use.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "The migration crashes with NoMethodError on sites with the default (unset) embed_category, blocking the upgrade for many sites; a deploy-time failure rather than data loss.",
+    "astra": "high",
+    "astraMotivo": "The migration blocks upgrades on default configuration; raw SQL interpolation also creates a weakness requiring specially crafted stored settings.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S6": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Fabricator definitions are in swapped files; test organization only, no behaviour change.",
+    "astra": "low",
+    "astraMotivo": "Swapped test filenames are an organizational issue, with no behavioral failure claimed.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Embedding is wrongly denied only when the referer host has uppercase letters, an uncommon input.",
+    "astra": "medium",
+    "astraMotivo": "Host matching fails for the uncommon case of mixed-case hostnames.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S8": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "The migration crashes with NoMethodError on sites with the default (unset) embed_category, blocking the upgrade for many sites; a deploy-time failure rather than data loss.",
+    "astra": "high",
+    "astraMotivo": "The migration aborts on default configuration, preventing installation or upgrade.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S9": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "The test named for the blank-embeddable-host case passes for an unrelated reason and does not verify the behaviour it names.",
+    "astra": "medium",
+    "astraMotivo": "The test passes without exercising the host condition it claims to verify.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S10": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "The migration crashes with NoMethodError on sites with the default (unset) embed_category, blocking the upgrade for many sites; a deploy-time failure rather than data loss.",
+    "astra": "high",
+    "astraMotivo": "Missing settings in a normal configuration abort the migration and block installation or upgrade.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S11": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "A create request with a missing host (admin-only path, uncommon input) returns a 500 instead of a validation error.",
+    "astra": "medium",
+    "astraMotivo": "Missing-host input raises an exception instead of returning a validation error.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S12": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Admin update/destroy with an unknown id raises and returns a 500 instead of a 404: confusing failure on an uncommon admin request.",
+    "astra": "medium",
+    "astraMotivo": "An unknown record ID causes an unhandled exception on admin update and delete requests.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S13": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "The migration crashes with NoMethodError on sites with the default (unset) embed_category, blocking the upgrade for many sites; a deploy-time failure rather than data loss.",
+    "astra": "high",
+    "astraMotivo": "Sites without explicitly stored settings cannot complete the migration.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S14": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Embedding is wrongly denied only when the referer host has uppercase letters, an uncommon input.",
+    "astra": "medium",
+    "astraMotivo": "Embedding is wrongly rejected for the uncommon case of mixed-case hostnames.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S15": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Forums with no embeddable hosts but embed_truncate on and a topic embed now get an expandable first post: wrong behaviour only in an uncommon configuration.",
+    "astra": "medium",
+    "astraMotivo": "The wrong expansion behavior occurs with the specific combination of no allowed hosts, truncation enabled, and an existing topic embed.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   }
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Duplicate method definition makes emoji resizing raise ArgumentError.",
+    "astra": "high",
+    "astraMotivo": "Breaks the existing caller contract, causing emoji resizing to raise ArgumentError on normal calls.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Emoji resizing breaks with ArgumentError.",
+    "astra": "high",
+    "astraMotivo": "Breaks the existing caller contract, causing emoji resizing to raise ArgumentError on normal calls.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Existing emoji resize caller raises ArgumentError.",
+    "astra": "high",
+    "astraMotivo": "The signature change breaks an existing caller, causing normal emoji resizing calls to raise ArgumentError.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Emoji resizing breaks after the override.",
+    "astra": "high",
+    "astraMotivo": "Breaks the existing caller contract, causing emoji resizing to raise ArgumentError on normal calls.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Emoji resize job raises ArgumentError.",
+    "astra": "high",
+    "astraMotivo": "The signature change breaks an existing caller, causing normal emoji resizing calls to raise ArgumentError.",
+    "severidade": "high",
+    "origem": "concordancia"
+   }
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Phantom empty page when member count is an exact multiple of limit; edge case.",
+    "astra": "medium",
+    "astraMotivo": "Exact-multiple group sizes produce an empty trailing page in the admin pager.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Unbounded limit lets a request load all members of large groups; performance/abuse risk.",
+    "astra": "medium",
+    "astraMotivo": "Unbounded limits can cause expensive loading and serialization for large groups; invalid pagination values lack handling.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Off-by-one page count for exact multiples; edge case.",
+    "astra": "medium",
+    "astraMotivo": "Exact-multiple group sizes leave next enabled and allow navigation to an empty page.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Off-by-one page count for exact multiples; edge case.",
+    "astra": "medium",
+    "astraMotivo": "The admin pager incorrectly allows an extra page when the member count exactly divides by the page size.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Off-by-one page count for exact multiples; edge case.",
+    "astra": "medium",
+    "astraMotivo": "An edge-case member count produces an empty trailing page.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S6": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Test uses an unrouted verb; does not exercise the real request.",
+    "astra": "medium",
+    "astraMotivo": "The test uses an unrouted HTTP verb, so it does not verify the production request behavior.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Public group pages silently truncate groups over 50 members; wrong result for realistic groups.",
+    "astra": "high",
+    "astraMotivo": "Regular users cannot access members beyond the first 50 in larger groups, breaking the public member-list feature for realistic input.",
+    "severidade": "high",
+    "origem": "concordancia"
+   }
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Outside controllers (jobs, mailers), keys missing in the current locale return 'translation missing' and get cached, so emails show broken text for realistic non-English sites.",
+    "astra": "high",
+    "astraMotivo": "Translation fallback fails for realistic lookups outside controllers, returning and caching 'translation missing' instead of available fallback text in jobs, mailers, and rake tasks.",
+    "severidade": "high",
+    "origem": "concordancia"
+   }
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Wire still registers a provider needing a bare int64, so dependency injection generation and the build fail.",
+    "astra": "high",
+    "astraMotivo": "The provider signature change breaks dependency injection generation and the build.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Concurrent new devices can exceed the configured device limit; race under simultaneous requests.",
+    "astra": "high",
+    "astraMotivo": "Concurrent new-device requests defeat limit enforcement and leave persisted device counts above the configured limit.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Any DB error during device tagging now propagates to callers instead of being logged; surfaces as failures only on DB errors.",
+    "astra": "high",
+    "astraMotivo": "Previously tolerated tagging failures now propagate to callers, breaking the caller-facing error contract.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Device tagging now runs synchronously, adding DB latency to every uncached anonymous request; performance regression.",
+    "astra": "medium",
+    "astraMotivo": "Synchronous database operations add meaningful latency to every uncached anonymous request, and cancellation interrupts tagging.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Device-limit test never re-submits an existing device, so update-path regressions pass; test-only.",
+    "astra": "medium",
+    "astraMotivo": "The test does not verify the introduced requirement that existing devices remain updatable at the limit.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S6": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Wire cannot provide int64 for ProvideAnonDBStore, breaking DI generation and the build.",
+    "astra": "high",
+    "astraMotivo": "The missing dependency provider breaks dependency injection generation.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Synchronous tagging blocks anonymous requests on DB writes and maps limit errors to generic auth failure; latency and confusing error.",
+    "astra": "medium",
+    "astraMotivo": "Uncached anonymous requests incur synchronous database latency, and limit rejection produces a confusing generic authentication failure.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S8": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Rejected device stays cached for ~29 minutes and gets anonymous access, bypassing the new device limit.",
+    "astra": "critical",
+    "astraMotivo": "A rejected device can retry and obtain anonymous access through the cached success path, bypassing the access restriction.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S9": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Non-atomic count-then-insert lets concurrent new devices exceed the limit; race condition.",
+    "astra": "high",
+    "astraMotivo": "Concurrent new-device requests defeat limit enforcement and leave persisted device counts above the configured limit.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   }
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Missing re-check after the write lock only causes redundant manifest reloads during a cold-start burst, a minor performance cost",
+    "astra": "medium",
+    "astraMotivo": "Concurrent cache misses cause repeated file reads and parsing under an exclusive lock, delaying callers and blocking readers.",
+    "severidade": "low",
+    "origem": "um-nivel-claude"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "A failed manifest read overwrites a valid cache with nil, causing errors only after an uncommon read failure",
+    "astra": "high",
+    "astraMotivo": "A manifest read failure discards a valid cache and causes asset retrieval to fail for every caller, breaking a main feature.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Missing re-check after the write lock only causes redundant manifest reloads during a cold-start burst, a minor performance cost",
+    "astra": "medium",
+    "astraMotivo": "Concurrent cache misses serialize redundant manifest reads and rebuilds, causing a meaningful performance regression.",
+    "severidade": "low",
+    "origem": "um-nivel-claude"
+   }
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Test never asserts the request-size metric is absent for non-instrumented endpoints; test does not verify behavior, medium.",
+    "astra": "medium",
+    "astraMotivo": "The tests do not verify that request-size instrumentation remains absent on the excluded endpoints.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Plugin request completion logs lose traceID, hurting operator trace correlation; wrong/missing log data, medium.",
+    "astra": "medium",
+    "astraMotivo": "Removing trace IDs from request-completion logs breaks trace correlation and impairs operational diagnosis.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   }
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Every dual-writer mode 3 write can have its async legacy write cancelled when the request ends, leaving the legacy store silently out of sync: persisted state inconsistent, though legacy is the secondary store.",
+    "astra": "critical",
+    "astraMotivo": "Normal request completion can silently drop legacy writes across all mutation operations, causing widespread persisted-data inconsistency.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Every mode 3 update recomputes the legacy write from the legacy's own old object, so the two stores can diverge on ordinary updates: persisted state inconsistency in the secondary store.",
+    "astra": "high",
+    "astraMotivo": "Updates can persist different content in the two stores when their prior state differs.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Delete logs lose name/kind/method context fields; no behaviour change for users, only less informative logs.",
+    "astra": "medium",
+    "astraMotivo": "Delete logs lose identifying context needed by operators to interpret them.",
+    "severidade": "low",
+    "origem": "um-nivel-claude"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Every successful delete emits a metric with the object name as the kind label, creating unbounded label cardinality and wrong kind aggregation: misleading metrics and monitoring cost.",
+    "astra": "medium",
+    "astraMotivo": "Incorrect labels break metric aggregation and introduce unbounded cardinality.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Legacy DeleteCollection latency and errors are recorded under the storage metric on every call, misleading operators about which store is slow or failing.",
+    "astra": "medium",
+    "astraMotivo": "Legacy latency and errors are attributed to storage, misleading operators.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S6": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Storage create/update failures are attributed to the legacy metric, so operators get misleading error metrics; no functional impact.",
+    "astra": "medium",
+    "astraMotivo": "Storage Create and Update failures are attributed to legacy metrics, misleading operators.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Every dual-writer mode 3 write can have its async legacy write cancelled when the request ends, leaving the legacy store silently out of sync: persisted state inconsistent, though legacy is the secondary store.",
+    "astra": "critical",
+    "astraMotivo": "Ordinary request completion can abort legacy mutations across all write operations, silently losing synchronization of persisted data.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S8": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Every mode 3 update recomputes the legacy write from the legacy's own old object, so the two stores can diverge on ordinary updates: persisted state inconsistency in the secondary store.",
+    "astra": "high",
+    "astraMotivo": "Recomputing updates from legacy state can leave persisted content inconsistent between stores.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S9": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Legacy DeleteCollection latency and errors are recorded under the storage metric on every call, misleading operators about which store is slow or failing.",
+    "astra": "medium",
+    "astraMotivo": "Storage metrics include legacy results while legacy metrics omit them, misleading operators.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S10": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Storage create/update failures are attributed to the legacy metric, so operators get misleading error metrics; no functional impact.",
+    "astra": "medium",
+    "astraMotivo": "Storage Update failures are reported under the wrong backend's metrics.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S11": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Storage create/update failures are attributed to the legacy metric, so operators get misleading error metrics; no functional impact.",
+    "astra": "medium",
+    "astraMotivo": "Storage Create failures are reported under the wrong backend's metrics.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S12": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Every successful delete emits a metric with the object name as the kind label, creating unbounded label cardinality and wrong kind aggregation: misleading metrics and monitoring cost.",
+    "astra": "medium",
+    "astraMotivo": "Object names create high-cardinality metrics with incorrect kind labels.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S13": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Logger-context inconsistency on Delete with no stated user or behaviour impact.",
+    "astra": "low",
+    "astraMotivo": "The comment states only a logging-context consistency issue, without a concrete operational consequence.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S14": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Every mode 3 update recomputes the legacy write from the legacy's own old object, so the two stores can diverge on ordinary updates: persisted state inconsistency in the secondary store.",
+    "astra": "high",
+    "astraMotivo": "Recomputing updates against legacy state can violate the synchronization guarantee and persist divergent content.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S15": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Every dual-writer mode 3 write can have its async legacy write cancelled when the request ends, leaving the legacy store silently out of sync: persisted state inconsistent, though legacy is the secondary store.",
+    "astra": "critical",
+    "astraMotivo": "Routine handler completion can silently drop legacy mutations across all write operations, compromising persisted-data synchronization.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S16": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Legacy DeleteCollection latency and errors are recorded under the storage metric on every call, misleading operators about which store is slow or failing.",
+    "astra": "medium",
+    "astraMotivo": "Legacy latency and errors are incorrectly reported as storage metrics.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S17": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Storage create/update failures are attributed to the legacy metric, so operators get misleading error metrics; no functional impact.",
+    "astra": "medium",
+    "astraMotivo": "Unified-store Create failures are misattributed to legacy metrics.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S18": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Storage create/update failures are attributed to the legacy metric, so operators get misleading error metrics; no functional impact.",
+    "astra": "medium",
+    "astraMotivo": "Unified-store Update failures are misattributed to legacy metrics.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S19": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Successful deletes record the object name in the kind label, so the storage metric is mislabeled for every delete: misleading operator metrics.",
+    "astra": "medium",
+    "astraMotivo": "The kind metric label contains object names, producing misleading metrics.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S20": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Mode 3 tests share one mock and never verify the async legacy write, so the behaviour the change introduces is not actually tested.",
+    "astra": "medium",
+    "astraMotivo": "The shared mock prevents the test from independently verifying the intended storage-failure behavior.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S21": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Mode 3 tests share one mock and never verify the async legacy write, so the behaviour the change introduces is not actually tested.",
+    "astra": "medium",
+    "astraMotivo": "The tests do not verify the asynchronous legacy writes and would pass if those calls were removed.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   }
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Concurrent builds of the same index key can fail or corrupt the file index, or leak an in-memory index; needs concurrent builds but breaks search when hit.",
+    "astra": "high",
+    "astraMotivo": "Concurrent builds for the same resource can fail for file-backed indexes, breaking indexing under realistic concurrency.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Unlocked map iteration in TotalDocs races with BuildIndex writes and can cause a fatal concurrent map access crash; startup-window race.",
+    "astra": "critical",
+    "astraMotivo": "Normal startup concurrency can trigger a fatal map access error and crash the server.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Writes between index snapshot and watcher start are never indexed, leaving the search index permanently stale for those resources.",
+    "astra": "high",
+    "astraMotivo": "Writes during initialization are permanently missed, causing search to return incorrect results for affected resources.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Concurrent builds of the same index key can fail or corrupt the file index, or leak an in-memory index; needs concurrent builds but breaks search when hit.",
+    "astra": "critical",
+    "astraMotivo": "Concurrent builds can corrupt the persisted file-backed index.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   }
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Duplicate menu item may show for cloud rules the ruler check denies; UI permission display.",
+    "astra": "medium",
+    "astraMotivo": "Incorrectly exposes the Duplicate menu item under a specific permission combination; the claim does not establish an actual authorization bypass.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Comment misdescribes the variable; documentation.",
+    "astra": "low",
+    "astraMotivo": "Misleading source comment affects reader understanding, not program behavior.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Comment out of date; documentation.",
+    "astra": "low",
+    "astraMotivo": "Incorrect loading-state documentation has no runtime effect.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Test does not verify the menu actions it names.",
+    "astra": "medium",
+    "astraMotivo": "The test does not verify the menu actions or abilities introduced by the change.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Federated rules show edit/delete abilities; uncommon rule type.",
+    "astra": "medium",
+    "astraMotivo": "Incorrectly exposes edit and delete abilities for the specialized federated-rule case; no actual mutation or data loss is claimed.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S6": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Pause/export/delete disabled for Grafana recording rules; a subset of rules.",
+    "astra": "high",
+    "astraMotivo": "Disables multiple functional actions for Grafana recording rules, breaking supported operations for a realistic rule type.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   }
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Test matcher reads wrong offset and/or inverted condition, so event assertions reject valid or accept invalid ids; test does not verify the behaviour.",
+    "astra": "medium",
+    "astraMotivo": "The test matcher rejects valid IDs or accepts invalid ones, undermining verification of token behavior.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Null check validates grantType twice and never rawTokenId; a defensive check for a null that callers do not pass, with a wrong message.",
+    "astra": "medium",
+    "astraMotivo": "Null input bypasses validation and produces a malformed token ID, an edge-case correctness failure.",
+    "severidade": "low",
+    "origem": "um-nivel-claude"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Test matcher reads wrong offset and/or inverted condition, so event assertions reject valid or accept invalid ids; test does not verify the behaviour.",
+    "astra": "medium",
+    "astraMotivo": "The test matcher checks the wrong characters with inverted logic, making its assertions unreliable.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Null check validates grantType twice and never rawTokenId; a defensive check for a null that callers do not pass, with a wrong message.",
+    "astra": "medium",
+    "astraMotivo": "Missing validation allows an invalid null token ID through the constructor.",
+    "severidade": "low",
+    "origem": "um-nivel-claude"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Null check validates grantType twice and never rawTokenId; a defensive check for a null that callers do not pass, with a wrong message.",
+    "astra": "medium",
+    "astraMotivo": "Null token IDs bypass validation, causing incorrect handling of an edge-case input.",
+    "severidade": "low",
+    "origem": "um-nivel-claude"
+   },
+   "S6": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Test matcher reads wrong offset and/or inverted condition, so event assertions reject valid or accept invalid ids; test does not verify the behaviour.",
+    "astra": "medium",
+    "astraMotivo": "The incorrect offset makes the test validate the wrong part of the token ID.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Test matcher reads wrong offset and/or inverted condition, so event assertions reject valid or accept invalid ids; test does not verify the behaviour.",
+    "astra": "medium",
+    "astraMotivo": "Event assertions accept incorrect grant shortcuts, leaving the intended behavior unverified.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S8": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Test matcher reads wrong offset and/or inverted condition, so event assertions reject valid or accept invalid ids; test does not verify the behaviour.",
+    "astra": "medium",
+    "astraMotivo": "The test compares the wrong characters and therefore does not reliably verify the grant shortcut.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S9": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Test matcher reads wrong offset and/or inverted condition, so event assertions reject valid or accept invalid ids; test does not verify the behaviour.",
+    "astra": "medium",
+    "astraMotivo": "Inverted test logic rejects matching grants and accepts mismatches, undermining test coverage.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S10": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Test matcher reads wrong offset and/or inverted condition, so event assertions reject valid or accept invalid ids; test does not verify the behaviour.",
+    "astra": "medium",
+    "astraMotivo": "The faulty matcher causes incorrect test results instead of verifying the token ID format.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S11": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Null check validates grantType twice and never rawTokenId; a defensive check for a null that callers do not pass, with a wrong message.",
+    "astra": "medium",
+    "astraMotivo": "Null input bypasses validation and produces malformed IDs ending in ':null'.",
+    "severidade": "low",
+    "origem": "um-nivel-claude"
+   },
+   "S12": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Test matcher reads wrong offset and/or inverted condition, so event assertions reject valid or accept invalid ids; test does not verify the behaviour.",
+    "astra": "medium",
+    "astraMotivo": "The test matcher fails on correct token IDs, making validation of the introduced behavior unreliable.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   }
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Reader thread is never synchronized or joined, so the test can pass with the bug present and does not verify the fix",
+    "astra": "medium",
+    "astraMotivo": "The test can pass without exercising concurrent reads and deletes or observing reader failures, so it does not reliably verify the behavior the change introduces.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   }
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Theme verifier aborts on a missing English file; build tooling confusing failure.",
+    "astra": "medium",
+    "astraMotivo": "An uncommon filename or theme layout causes verification to abort with an unhandled error.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Verifier crashes on overlapping prefix/suffix instead of reporting; edge-case input.",
+    "astra": "medium",
+    "astraMotivo": "Overlapping prefix and suffix matches cause a verifier crash for an edge-case string instead of a diagnostic.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Lithuanian login users see an Italian string; wrong user-facing message.",
+    "astra": "medium",
+    "astraMotivo": "Lithuanian users receive setup instructions in the wrong language, making the guidance confusing.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Lithuanian account users see an Italian string; wrong user-facing message.",
+    "astra": "medium",
+    "astraMotivo": "The wrong language makes authenticator setup instructions confusing for Lithuanian users.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Traditional characters in Simplified Chinese file; still readable, cosmetic.",
+    "astra": "low",
+    "astraMotivo": "The instruction retains its meaning; the issue is script and localization consistency.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S6": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Verifier crashes on overlapping prefix/suffix; edge-case input.",
+    "astra": "medium",
+    "astraMotivo": "An edge-case string causes diagnostic generation to crash the verifier.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Verification aborts when derived English file missing; confusing build failure.",
+    "astra": "medium",
+    "astraMotivo": "A missing English counterpart causes an unhandled verification failure in that limited case.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S8": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Lithuanian users see Italian text in two places; wrong user-facing message.",
+    "astra": "medium",
+    "astraMotivo": "Lithuanian users see Italian setup instructions in both account and login flows.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S9": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Traditional characters in Simplified Chinese file; cosmetic.",
+    "astra": "low",
+    "astraMotivo": "The instruction retains its meaning; the issue is script and localization consistency.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S10": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Build fails when a messages file has no English counterpart; confusing tooling failure.",
+    "astra": "medium",
+    "astraMotivo": "Files without the expected English counterpart cause a build failure through missing error handling in an uncommon layout.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   }
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "canView/canManage can wrongly deny admin access before the lazily created all-clients resource exists; an edge timing case on admin paths, medium.",
+    "astra": "high",
+    "astraMotivo": "Legitimate access to client viewing and management is denied when the lazily created resource is absent, breaking these features in a realistic state.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Javadoc says the void method returns true; docs only.",
+    "astra": "low",
+    "astraMotivo": "Incorrect Javadoc has no effect on runtime behavior.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Javadoc says the void method returns true; docs only.",
+    "astra": "low",
+    "astraMotivo": "Incorrect Javadoc has no effect on runtime behavior.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "With V2 active the management-permissions endpoint returns a 500 instead of a clean response; a confusing failure on an admin endpoint, medium.",
+    "astra": "high",
+    "astraMotivo": "The management-permissions endpoint consistently returns 500 with V2 active, breaking its API contract.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "With fine-grained authz V2 enabled the cleanup listener throws UnsupportedOperationException and aborts client deletion; a feature stops working in that configuration, high.",
+    "astra": "high",
+    "astraMotivo": "Client deletion fails when both feature flags are enabled, blocking an administrative operation in a realistic configuration.",
+    "severidade": "high",
+    "origem": "concordancia"
+   }
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Stale test comment; comment only.",
+    "astra": "low",
+    "astraMotivo": "Stale test comment; no effect on program behavior.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "Password page discloses passkey credential ids for any typed username to unauthenticated visitors, enabling account enumeration; security weakness.",
+    "astra": "high",
+    "astraMotivo": "Unauthenticated visitors can enumerate an account’s passkey enrollment and credential IDs. This exposes security-related account metadata, though no authentication bypass or secret disclosure is claimed.",
+    "severidade": "high",
+    "origem": "concordancia"
+   }
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Test cleanup targets a literal alias so created IDPs leak; test tidying.",
+    "astra": "medium",
+    "astraMotivo": "Incorrect cleanup leaves test providers behind, contaminating later tests and potentially causing misleading failures.",
+    "severidade": "low",
+    "origem": "um-nivel-claude"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Leaked IDPs from wrong cleanup alias in a test; test hygiene.",
+    "astra": "medium",
+    "astraMotivo": "The leaked providers can alter later IDP counts and login-cache tests, undermining test isolation and results.",
+    "severidade": "low",
+    "origem": "um-nivel-claude"
+   }
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Missing nodestore events misalign error IDs and titles in replay AI summaries; wrong output only when some error events are missing.",
+    "astra": "medium",
+    "astraMotivo": "Missing nodes cause misleading error attribution or omitted errors in summary logs.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "With the table-widget flag enabled, every dashboard table widget renders empty; main feature broken for flagged orgs.",
+    "astra": "high",
+    "astraMotivo": "Every dashboard table widget stops displaying results for organizations with the feature enabled.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Missing nodestore events misalign error IDs and titles in replay AI summaries; wrong output only when some error events are missing.",
+    "astra": "medium",
+    "astraMotivo": "Missing or reordered records cause misleading error attribution in replay summaries.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Missing nodestore events misalign error IDs and titles in replay AI summaries; wrong output only when some error events are missing.",
+    "astra": "medium",
+    "astraMotivo": "Missing nodes cause error identifiers to reference the wrong diagnostic data.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Validation treats age=0/timestamp=0 as absent, letting an edge-case report bypass the either/or rule.",
+    "astra": "medium",
+    "astraMotivo": "Validation incorrectly accepts mutually exclusive fields when a supplied value is zero.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S6": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Number-type test mock can never match, so the not-called assertion cannot fail; test does not verify the behaviour.",
+    "astra": "medium",
+    "astraMotivo": "The test cannot detect removal of the number-type short-circuit it is intended to verify.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Delayed workflow log now includes full event payloads with user data; privacy-sensitive data written to internal logs.",
+    "astra": "high",
+    "astraMotivo": "Logging full event payloads creates a privacy and security weakness when events contain sensitive user or request data.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S8": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Missing nodestore events misalign error IDs and titles in replay AI summaries; wrong output only when some error events are missing.",
+    "astra": "medium",
+    "astraMotivo": "Missing or reordered records produce misleading error attribution in replay summaries.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S9": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Speculative request to verify callers; no concrete failing path is stated.",
+    "astra": "high",
+    "astraMotivo": "For callers passing Visualize instances, serialization breaks the reader contract and loses values on readback.",
+    "severidade": "low",
+    "origem": "debate-consenso",
+    "rodadas": 1,
+    "debate": [
+     {
+      "autor": "astra",
+      "severity": "high",
+      "texto": "For callers passing Visualize instances, serialization breaks the reader contract and loses values on readback."
+     },
+     {
+      "autor": "claude",
+      "severity": "low",
+      "texto": "I keep low. The comment opens with \"It was not verified whether any caller passes Visualize instances\" — it states no failing path, only a request to check. The function is typed to accept only GroupBy | BaseVisualize:\nexport function updateLocationWithAggregateFields(location, aggregateFields: Array<GroupBy | BaseVisualize> | null | undefined)\nand its single caller (index.tsx:283) passes pageParams.aggregateFields, set through useSetExploreAggregateFields(aggregateFields: BaseAggregateField[]). Losing values only happens for a caller the comment never identifies; a \"please verify\" note is low."
+     },
+     {
+      "autor": "astra",
+      "severity": "low",
+      "texto": "I change to low. The comment requests verification of a hypothetical unsupported caller, while the supplied caller evidence shows the expected types; my earlier rating treated the conditional readback failure as an established reachable problem."
+     }
+    ]
+   }
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "An explicit max_processes of 0 silently becomes one process per shard; wrong behaviour only for an unusual configuration value.",
+    "astra": "medium",
+    "astraMotivo": "An explicit zero configuration unexpectedly launches one process per shard; this affects an uncommon configuration value.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "The added sleep is a no-op under the patched time.sleep, so the test does not actually wait for flusher threads and may not verify the behaviour.",
+    "astra": "medium",
+    "astraMotivo": "The ineffective wait leaves the test unsynchronized, allowing timing-dependent assertion failures.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Docstring misdescribes process-per-shard; documentation only.",
+    "astra": "low",
+    "astraMotivo": "The inaccurate docstring does not change runtime behavior.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "The wait_produce timer uses tag 'shards' instead of 'shard', splitting metric data and breaking dashboards that group by shard.",
+    "astra": "medium",
+    "astraMotivo": "The inconsistent metric tag causes shard-grouped queries and dashboards to omit relevant timing data.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "A hung flusher process is never killed before a replacement starts, so two flushers process the same shards and may double-produce segments; happens whenever a process hangs.",
+    "astra": "high",
+    "astraMotivo": "Recovery from a hung process leaves duplicate flushers operating on the same shards, breaking worker replacement behavior.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S6": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "The wait_produce timer uses tag 'shards' instead of 'shard', splitting metric data and breaking dashboards that group by shard.",
+    "astra": "medium",
+    "astraMotivo": "Splitting the same metric dimension across different tag names makes monitoring results incomplete or misleading.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "A hung flusher process is never killed before a replacement starts, so two flushers process the same shards and may double-produce segments; happens whenever a process hangs.",
+    "astra": "high",
+    "astraMotivo": "A hung worker survives replacement, allowing concurrent flushers to double-produce segments during recovery.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S8": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "A hung flusher process is never killed before a replacement starts, so two flushers process the same shards and may double-produce segments; happens whenever a process hangs.",
+    "astra": "high",
+    "astraMotivo": "Restarting a hung worker creates a second active process for the same shards, breaking worker replacement behavior.",
+    "severidade": "high",
+    "origem": "concordancia"
+   }
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Every AssignmentSource carries a stale import-time timestamp, wrong data for consumers.",
+    "astra": "medium",
+    "astraMotivo": "Produces misleading queue timestamps for every instance, without a stated failure of the assignment feature.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Queued timestamp is the process start time for every instance.",
+    "astra": "medium",
+    "astraMotivo": "Records incorrect creation timestamps across instances; no core functional failure is stated.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Stale import-time timestamp on every instance.",
+    "astra": "medium",
+    "astraMotivo": "The stale timestamp misrepresents when assignments were queued, beyond a naming issue.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Assertion cannot fail so the to_dict test does not verify the value.",
+    "astra": "medium",
+    "astraMotivo": "The test does not verify that serialization preserves the queued timestamp.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Test name mismatch; naming.",
+    "astra": "low",
+    "astraMotivo": "Only the test name is inaccurate; program behavior and test coverage are unchanged.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S6": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Every instance gets the same import-time timestamp.",
+    "astra": "medium",
+    "astraMotivo": "Instances receive incorrect timestamps, with no stated downstream feature failure.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Shared stale timestamp on every instance.",
+    "astra": "medium",
+    "astraMotivo": "Every instance carries misleading creation-time metadata, without a stated main-feature failure.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   }
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "An attacker can install with an installation_id they do not own and bypass the ownership verification, an exploitable auth bypass. [consistencia: Harmonized with siblings: the ownership-check bypass needs the installation webhook not yet processed, a security weakness under specific conditions.]",
+    "astra": "critical",
+    "astraMotivo": "An attacker can bypass installation ownership verification and proceed with an installation they do not own.",
+    "severidade": "high",
+    "origem": "um-nivel-claude"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Integrations without sender metadata crash the GitHub install flow with a 500 for realistic existing data. [consistencia: Harmonized with siblings: a missing sender key on older integrations yields a 500 instead of the error page, error handling surfacing as a confusing failure.]",
+    "astra": "medium",
+    "astraMotivo": "Missing sender metadata produces an unhandled 500 instead of the intended installation error page.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Network/API failures in token exchange surface as unhandled 500s instead of the error page; uncommon conditions.",
+    "astra": "medium",
+    "astraMotivo": "Network or API failures produce confusing, unhandled 500s instead of the expected error response.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Non-constant-time compare of OAuth state token; theoretical weakness with low practical exploitability.",
+    "astra": "high",
+    "astraMotivo": "Non-constant-time comparison of a secret OAuth token is a security weakness whose exploitation requires specific timing conditions.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Short error messages no longer extracted for translation; i18n polish.",
+    "astra": "medium",
+    "astraMotivo": "User-facing error messages lose translation support, degrading error communication for affected locales.",
+    "severidade": "low",
+    "origem": "um-nivel-claude"
+   },
+   "S6": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Existing integrations lacking sender metadata crash the install flow with 500. [consistencia: Harmonized with siblings: a missing sender key on older integrations yields a 500 instead of the error page, error handling surfacing as a confusing failure.]",
+    "astra": "medium",
+    "astraMotivo": "Existing integrations with missing sender metadata encounter an unhandled 500 instead of a controlled installation error.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Mismatch test passes for any error path, not verifying the new check.",
+    "astra": "medium",
+    "astraMotivo": "The test can pass without exercising the sender/login mismatch check it is meant to verify.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S8": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Integrations without stored sender raise KeyError and 500 in the install flow. [consistencia: Harmonized with siblings: a missing sender key on older integrations yields a 500 instead of the error page, error handling surfacing as a confusing failure.]",
+    "astra": "medium",
+    "astraMotivo": "Absent optional sender metadata causes a confusing 500 instead of the installation flow's error page.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   }
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "MetricAlertDetectorHandler is abstract so instantiating it raises TypeError, crashing detector handling/process_detectors for metric alert detectors; a main workflow-engine path crashes, high.",
+    "astra": "high",
+    "astraMotivo": "Instantiating a metric alert detector handler crashes, breaking the caller contract for that detector type.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Docstring describes a list return while the method returns a dict; docs only.",
+    "astra": "low",
+    "astraMotivo": "The outdated return-type documentation does not affect runtime behavior.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Stale TODO comment; low.",
+    "astra": "low",
+    "astraMotivo": "The stale TODO affects only comment accuracy.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "MetricAlertDetectorHandler is abstract so instantiating it raises TypeError, crashing detector handling/process_detectors for metric alert detectors; a main workflow-engine path crashes, high.",
+    "astra": "high",
+    "astraMotivo": "Metric alert detector handler construction raises TypeError, breaking the caller contract for that detector type.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "MetricAlertDetectorHandler is abstract so instantiating it raises TypeError, crashing detector handling/process_detectors for metric alert detectors; a main workflow-engine path crashes, high.",
+    "astra": "high",
+    "astraMotivo": "Handler construction crashes instead of returning the previous stub result, breaking callers for metric alert detectors.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S6": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "MetricAlertDetectorHandler is abstract so instantiating it raises TypeError, crashing detector handling/process_detectors for metric alert detectors; a main workflow-engine path crashes, high.",
+    "astra": "high",
+    "astraMotivo": "Accessing the handler raises TypeError for metric alert detectors, breaking the caller contract.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "light",
+    "claude": "high",
+    "claudeMotivo": "MetricAlertDetectorHandler is abstract so instantiating it raises TypeError, crashing detector handling/process_detectors for metric alert detectors; a main workflow-engine path crashes, high.",
+    "astra": "high",
+    "astraMotivo": "The instantiation failure prevents process_detectors from processing metric alert detectors.",
+    "severidade": "high",
+    "origem": "concordancia"
+   }
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "S1": {
+    "conjunto": "light",
+    "claude": "medium",
+    "claudeMotivo": "Event context shows raw numeric schedule_type instead of display value, a misleading message to users.",
+    "astra": "medium",
+    "astraMotivo": "Event context displays a raw numeric schedule type instead of its readable label, making user-facing diagnostic information misleading or confusing.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "light",
+    "claude": "low",
+    "claudeMotivo": "Docstring examples and typo are wrong; documentation only.",
+    "astra": "low",
+    "astraMotivo": "Incorrect docstring examples and a typo affect documentation only, with no runtime behavior change.",
+    "severidade": "low",
+    "origem": "concordancia"
+   }
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Overrunning slots pass and non-UTC hosts get wrong working-hours checks; realistic for most hosts.",
+    "astra": "high",
+    "astraMotivo": "Availability is wrong for non-UTC hosts and slots extending past working hours, both realistic scheduling inputs.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Days marked unavailable via zero-length overrides remain bookable.",
+    "astra": "high",
+    "astraMotivo": "Days explicitly marked unavailable still offer slots, breaking a main scheduling feature.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "The end check never tests the slot's real end, so overrunning slots pass.",
+    "astra": "high",
+    "astraMotivo": "The working-hours validation ignores the actual slot end, producing incorrect availability for realistic slots.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Slots ending after working hours are treated as available.",
+    "astra": "high",
+    "astraMotivo": "Slots extending beyond working hours are incorrectly available, violating normal scheduling constraints.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Zero-length overrides never mark a day unavailable.",
+    "astra": "high",
+    "astraMotivo": "The all-day unavailable override never works, breaking an explicit scheduling restriction.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S6": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Slots running past closing time pass the working-hours check.",
+    "astra": "high",
+    "astraMotivo": "Slots running past closing time pass availability validation, producing wrong scheduling results.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Only slots straddling the override end are wrongly available; edge case.",
+    "astra": "high",
+    "astraMotivo": "Slots extending beyond a date override are offered as available, violating the host's configured availability.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S8": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Unavailable-day overrides are never detected.",
+    "astra": "high",
+    "astraMotivo": "Unavailable-day overrides are never detected, breaking a supported scheduling feature.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S9": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Split shifts lose slots and non-UTC hosts are checked in the wrong timezone; realistic schedules.",
+    "astra": "high",
+    "astraMotivo": "Split shifts lose valid slots, and timezone and end-time errors produce incorrect availability for ordinary host configurations.",
+    "severidade": "high",
+    "origem": "concordancia"
+   }
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Apps still load eagerly so the intended lazy loading gives no gain, plus possible unhandled rejections.",
+    "astra": "medium",
+    "astraMotivo": "Eager loading defeats the performance benefit, and module-load failures produce unhandled rejections.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Calendar deletions are fire-and-forget and errors escape as unhandled rejections.",
+    "astra": "medium",
+    "astraMotivo": "Deletion completion is not awaited, and failures escape error handling; the comment does not establish failed deletions or persisted inconsistency.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Calendar deletions are not awaited and rejections escape the try/catch.",
+    "astra": "medium",
+    "astraMotivo": "The handler can return before deletion completes, and deletion failures bypass its error handling.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Calendar deletes are fire-and-forget with unhandled rejections.",
+    "astra": "medium",
+    "astraMotivo": "Fire-and-forget deletions create completion-ordering and error-handling problems.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Errors from calendar deletion become unhandled rejections and the handler continues early.",
+    "astra": "medium",
+    "astraMotivo": "Import and deletion failures become unhandled rejections, while the handler proceeds before cleanup completes.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S6": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Consumers call calendar methods on a Promise, breaking availability endpoints.",
+    "astra": "high",
+    "astraMotivo": "The returned calendar field breaks its caller contract, causing existing API consumers to call methods on a Promise and fail.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Unawaited calendar deletions with unhandled rejections.",
+    "astra": "medium",
+    "astraMotivo": "Calendar cleanup runs without awaited completion, and failures escape the surrounding error handling.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   }
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "One failing SendGrid cancel aborts the loop every cron run, so later reminders are never cancelled or deleted; reminder cancellation stops working.",
+    "astra": "high",
+    "astraMotivo": "One provider failure persistently blocks later reminder cancellations and leaves processed rows undeleted, breaking cancellation for other bookings.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "A Twilio cancel failure leaves the reminder row behind; inconsistent state only on the error path.",
+    "astra": "high",
+    "astraMotivo": "A provider cancellation failure leaves persisted reminder state inconsistent with a cancelled, rescheduled or deleted booking.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S3": {
+    "conjunto": "holdout",
+    "claude": "low",
+    "claudeMotivo": "Function/flag names no longer describe what they do; naming only.",
+    "astra": "low",
+    "astraMotivo": "The comment requests naming or documentation changes to reflect existing behavior, without identifying a functional change.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Immediate email-reminder cancellation never deletes the WorkflowReminder row, leaving orphan rows; persisted state inconsistency with limited user impact.",
+    "astra": "high",
+    "astraMotivo": "The immediate-delete path fails its caller-facing deletion contract and leaves persisted reminder rows behind even after successful cancellation.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S5": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "One failing SendGrid cancel aborts the loop every cron run, so later reminders are never cancelled or deleted; reminder cancellation stops working.",
+    "astra": "high",
+    "astraMotivo": "A single failing reminder persistently blocks subsequent cancellations across cron runs and prevents deletion of previously processed rows.",
+    "severidade": "high",
+    "origem": "concordancia"
+   }
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Cache refresh marker may not be recorded, misleading the cache status display.",
+    "astra": "medium",
+    "astraMotivo": "The cache-refresh timestamp stays stale, making freshness information misleading even though the cache itself is refreshed.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "holdout",
+    "claude": "low",
+    "claudeMotivo": "Dev helper script fails on GNU sed; developer tooling only.",
+    "astra": "medium",
+    "astraMotivo": "The webhook testing script fails to update an existing URL on Linux, breaking a development setup step.",
+    "severidade": "low",
+    "origem": "um-nivel-claude"
+   },
+   "S3": {
+    "conjunto": "holdout",
+    "claude": "low",
+    "claudeMotivo": "Hard-coded en-US date format in a translated string; cosmetic.",
+    "astra": "medium",
+    "astraMotivo": "Users with other locales see incorrectly localized dates, which can cause them to misinterpret the cache timestamp.",
+    "severidade": "low",
+    "origem": "um-nivel-claude"
+   },
+   "S4": {
+    "conjunto": "holdout",
+    "claude": "low",
+    "claudeMotivo": "Dev script exits 0 on failure; developer tooling only.",
+    "astra": "medium",
+    "astraMotivo": "Failure paths return a successful exit status, misleading callers about whether tunnel setup succeeded.",
+    "severidade": "low",
+    "origem": "um-nivel-claude"
+   }
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Blocked-email check is case-sensitive so a blocked address can sign up by changing case; a security/policy bypass needing a deliberate input, high.",
+    "astra": "high",
+    "astraMotivo": "Changing email case defeats the blocking feature for realistic input. The concurrent loss of match statistics is a secondary, medium-severity issue.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "holdout",
+    "claude": "low",
+    "claudeMotivo": "Non-atomic match_count increment loses counts under concurrent validations; inaccurate statistics, medium. [consistencia: Same lost-increment race as its siblings; a rare race affecting only an admin statistic.]",
+    "astra": "medium",
+    "astraMotivo": "Concurrent checks undercount matches, making operational statistics inaccurate without affecting the blocking decision.",
+    "severidade": "low",
+    "origem": "um-nivel-claude"
+   },
+   "S3": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Blocked-email check is case-sensitive so a blocked address can sign up by changing case; a security/policy bypass needing a deliberate input, high.",
+    "astra": "high",
+    "astraMotivo": "A realistic case variation lets a blocked address evade the blocking feature.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Validation now writes to blocked_emails on every valid? call, inflating match_count and adding writes in the validating transaction; misleading stats and side effects, medium.",
+    "astra": "medium",
+    "astraMotivo": "Repeated validations inflate match statistics and cause unnecessary database writes, misleading operators and adding validation overhead.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   }
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Users without a TopicUser row get a 500 on the email unsubscribe link; a main feature fails for realistic recipients.",
+    "astra": "high",
+    "astraMotivo": "Unsubscribing crashes for users without a TopicUser row or notification level, blocking the feature for realistic input.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Unsubscribe crashes with NoMethodError for recipients who never visited the topic; realistic input breaks the feature.",
+    "astra": "high",
+    "astraMotivo": "An email recipient who never visited the topic cannot unsubscribe because the handler crashes.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Unsubscribe link 500s for users emailed via category watching; main feature fails for realistic input.",
+    "astra": "high",
+    "astraMotivo": "Users receiving category-watching emails can encounter a 500 when unsubscribing, blocking a normal use case.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Spec never asserts the topic unsubscribe link, so it does not verify the new behaviour.",
+    "astra": "medium",
+    "astraMotivo": "The tests do not verify the newly introduced topic unsubscribe link and would pass if it were broken or removed.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Other mailers using add_unsubscribe_link without unsubscribe_url hit missing-interpolation errors or broken links; emails break for realistic callers.",
+    "astra": "high",
+    "astraMotivo": "The new required interpolation argument breaks existing mail-builder callers, causing email rendering failures or broken unsubscribe links.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S6": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Mailers that add the unsubscribe link without unsubscribe_url can fail rendering; email sending breaks for those callers.",
+    "astra": "high",
+    "astraMotivo": "Requiring a previously optional argument breaks the mail-builder caller contract and can prevent affected emails from rendering.",
+    "severidade": "high",
+    "origem": "concordancia"
+   }
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "The stylesheet change alters a text color/contrast for every user of the affected theme; visible on common pages but a cosmetic readability regression, not a functional break.",
+    "astra": "low",
+    "astraMotivo": "Cosmetic text-color change; no functional or usability failure is stated.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S2": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "The stylesheet change alters a text color/contrast for every user of the affected theme; visible on common pages but a cosmetic readability regression, not a functional break.",
+    "astra": "low",
+    "astraMotivo": "Changes name styling without a stated impact on functionality or usability.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S3": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "The stylesheet change alters a text color/contrast for every user of the affected theme; visible on common pages but a cosmetic readability regression, not a functional break.",
+    "astra": "low",
+    "astraMotivo": "Incorrect hint colors are cosmetic; no impaired readability or interaction is claimed.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S4": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "The stylesheet change alters a text color/contrast for every user of the affected theme; visible on common pages but a cosmetic readability regression, not a functional break.",
+    "astra": "low",
+    "astraMotivo": "Heading-color mismatch with no stated functional consequence.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S5": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "The stylesheet change alters a text color/contrast for every user of the affected theme; visible on common pages but a cosmetic readability regression, not a functional break.",
+    "astra": "low",
+    "astraMotivo": "Cosmetic mobile name-color change with no stated usability failure.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S6": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "The stylesheet change alters a text color/contrast for every user of the affected theme; visible on common pages but a cosmetic readability regression, not a functional break.",
+    "astra": "low",
+    "astraMotivo": "Lighter reply-author links change appearance without a stated functional impact.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S7": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "The stylesheet change alters a text color/contrast for every user of the affected theme; visible on common pages but a cosmetic readability regression, not a functional break.",
+    "astra": "low",
+    "astraMotivo": "Inverted hint colors affect appearance; no usability failure is stated.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S8": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "The stylesheet change alters a text color/contrast for every user of the affected theme; visible on common pages but a cosmetic readability regression, not a functional break.",
+    "astra": "low",
+    "astraMotivo": "Cosmetic heading-color regression without a stated effect on functionality.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S9": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "The stylesheet change alters a text color/contrast for every user of the affected theme; visible on common pages but a cosmetic readability regression, not a functional break.",
+    "astra": "low",
+    "astraMotivo": "Reduced text contrast is stated, but no unreadability or impaired use is claimed.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S10": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "The stylesheet change alters a text color/contrast for every user of the affected theme; visible on common pages but a cosmetic readability regression, not a functional break.",
+    "astra": "low",
+    "astraMotivo": "Lighter reply-link text is a cosmetic regression with no stated functional failure.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S11": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "The stylesheet change alters a text color/contrast for every user of the affected theme; visible on common pages but a cosmetic readability regression, not a functional break.",
+    "astra": "low",
+    "astraMotivo": "Darker hint text and inconsistent styling have no stated functional consequence.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S12": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "The stylesheet change alters a text color/contrast for every user of the affected theme; visible on common pages but a cosmetic readability regression, not a functional break.",
+    "astra": "low",
+    "astraMotivo": "Lightened heading color changes appearance without a stated usability failure.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S13": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "The stylesheet change alters a text color/contrast for every user of the affected theme; visible on common pages but a cosmetic readability regression, not a functional break.",
+    "astra": "low",
+    "astraMotivo": "Lightened name text is a cosmetic change with no stated functional impact.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   }
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Unrelated hosts sharing a suffix (e.g., github.io) show the full website path; wrong display only for uncommon inputs.",
+    "astra": "medium",
+    "astraMotivo": "Shared-suffix hosts are misclassified in an uncommon case, causing an unrelated website’s full path to be displayed. This is incorrect display behavior without a stated security or data-integrity impact.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   }
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Ad hoc filters and variables are interpolated twice on split Loki queries, producing wrong or invalid LogQL for realistic dashboards.",
+    "astra": "high",
+    "astraMotivo": "Double interpolation can produce wrong or invalid LogQL for realistic queries using variables or ad hoc filters, breaking query results.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "holdout",
+    "claude": "low",
+    "claudeMotivo": "Brittle call-count assertion in a test; test tidying.",
+    "astra": "low",
+    "astraMotivo": "The assertion still detects missing interpolation; its brittleness creates test maintenance work without affecting user behavior.",
+    "severidade": "low",
+    "origem": "concordancia"
+   }
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "enableSqlExpressions always returns false so the flag is ignored; framed mainly as confusing logic with possible intentional disablement, medium. [consistencia: States enableSqlExpressions always returns false and the flag is ignored, the same feature-never-works consequence as its siblings.]",
+    "astra": "low",
+    "astraMotivo": "Describes confusing logic and a hypothetical future mistake, while allowing intentional hard-disabling.",
+    "severidade": "high",
+    "origem": "debate-consenso",
+    "rodadas": 1,
+    "debate": [
+     {
+      "autor": "astra",
+      "severity": "low",
+      "texto": "Describes confusing logic and a hypothetical future mistake, while allowing intentional hard-disabling."
+     },
+     {
+      "autor": "claude",
+      "severity": "high",
+      "texto": "I keep high. The comment's core statement is not hypothetical: \"it always returns false and the FlagSqlExpressions value is ignored\". Whatever the intent, turning the flag on has no effect, so SQL expressions can never run through this path. The \"if one branch were later changed\" part is extra; the main claim is that a feature behind a flag cannot be enabled. The rubric puts \"a main feature stops working for realistic input\" at high. Offering a hard-disable fix does not make the stated behaviour cosmetic."
+     },
+     {
+      "autor": "astra",
+      "severity": "high",
+      "texto": "I change my rating to high: the stated problem makes enabling FlagSqlExpressions ineffective, preventing SQL expressions from working through this path. That is a current feature failure for realistic configuration, separate from the hypothetical future inversion. I previously gave too much weight to the suggested intentional hard-disable interpretation."
+     }
+    ]
+   },
+   "S2": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "enableSqlExpressions always returns false so SQL expressions are rejected even with the feature flag on; the feature stops working for all users of it, high.",
+    "astra": "high",
+    "astraMotivo": "The enabled-check returns the wrong result whenever the feature flag is on.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "enableSqlExpressions always returns false so SQL expressions are rejected even with the feature flag on; the feature stops working for all users of it, high.",
+    "astra": "high",
+    "astraMotivo": "SQL expressions are rejected even when explicitly enabled, disabling the feature.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "enableSqlExpressions always returns false so SQL expressions are rejected even with the feature flag on; the feature stops working for all users of it, high.",
+    "astra": "high",
+    "astraMotivo": "SQL expressions are rejected even when explicitly enabled, disabling the feature.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "enableSqlExpressions always returns false so SQL expressions are rejected even with the feature flag on; the feature stops working for all users of it, high.",
+    "astra": "high",
+    "astraMotivo": "Previously supported SQL expressions now always fail for callers with the flag enabled.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S6": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Calls into a stub DB that always errors, so every SQL expression execution/table extraction fails; the feature is broken for all inputs, high.",
+    "astra": "high",
+    "astraMotivo": "Every SQL expression reaching execution fails, breaking the feature.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Calls into a stub DB that always errors, so every SQL expression execution/table extraction fails; the feature is broken for all inputs, high.",
+    "astra": "high",
+    "astraMotivo": "Table extraction always fails, breaking dependent functionality such as SQL expression dependency resolution.",
+    "severidade": "high",
+    "origem": "concordancia"
+   }
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Cached denials are returned before refreshed permissions, so users granted access (e.g., right after creating a dashboard) keep being denied until TTL; realistic wrong authorization result.",
+    "astra": "high",
+    "astraMotivo": "Newly granted users are incorrectly denied access during a realistic creation or permission-grant workflow until the cache expires.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "The deny-cache test seeds a deny in permCache, so it passes without the denial cache check; the test does not verify the new behavior.",
+    "astra": "medium",
+    "astraMotivo": "The test does not verify that the permission cache is skipped because both cache paths deny access.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "The deny-cache test seeds a deny in permCache, so it passes without the denial cache check; the test does not verify the new behavior.",
+    "astra": "medium",
+    "astraMotivo": "The test would pass without the introduced denial-cache behavior, leaving that behavior unverified.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Denial cache keys collide for name/parent pairs containing underscores, wrongly denying a different resource for the TTL; only for colliding identifiers.",
+    "astra": "medium",
+    "astraMotivo": "Colliding resource-name and parent combinations cause incorrect denials for an uncommon input case.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Denial cache keys collide for name/parent pairs containing underscores, wrongly denying a different resource for the TTL; only for colliding identifiers.",
+    "astra": "medium",
+    "astraMotivo": "Specific underscore-containing UID combinations collide, incorrectly denying another resource until the cache expires.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   }
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Routine cleanup batches log at Error level with full id lists, flooding error logs and triggering false alerts for operators.",
+    "astra": "medium",
+    "astraMotivo": "Routine cleanup produces misleading error logs and false alerts, impairing operational monitoring.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "All cleanup jobs run ten times as often, a meaningful increase in database load across every instance.",
+    "astra": "medium",
+    "astraMotivo": "Running all cleanup jobs ten times as often adds meaningful database load and risks overlapping runs.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Routine cleanup batches log at Error level with full id lists, flooding error logs and triggering false alerts for operators.",
+    "astra": "medium",
+    "astraMotivo": "Normal cleanup activity is mislabeled as errors, misleading operators.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "All cleanup jobs run ten times as often, a meaningful increase in database load across every instance.",
+    "astra": "medium",
+    "astraMotivo": "The tenfold increase in frequency across all cleanup jobs creates a meaningful performance regression.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Routine cleanup batches log at Error level with full id lists, flooding error logs and triggering false alerts for operators.",
+    "astra": "medium",
+    "astraMotivo": "Repeated error-level progress messages and misleading error fields confuse operational monitoring.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S6": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Cleanup fails every batch only when the configured batch size exceeds the bind-parameter limit; uncommon configuration.",
+    "astra": "medium",
+    "astraMotivo": "Cleanup fails under an unusually large batch-size configuration that exceeds the database parameter limit.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   }
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "low",
+    "claudeMotivo": "Dead encoder calls whose results are discarded; dead code.",
+    "astra": "low",
+    "astraMotivo": "Discarded encoding results are dead computation with only minor performance overhead.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "ECDSA tests never exercise real P-384/P-521 signatures or verify the DER output, so the converter behaviour is not actually verified.",
+    "astra": "medium",
+    "astraMotivo": "The tests do not exercise real P-384 or P-521 signatures, leaving the corresponding conversion behavior unverified.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "ECDSA tests never exercise real P-384/P-521 signatures or verify the DER output, so the converter behaviour is not actually verified.",
+    "astra": "medium",
+    "astraMotivo": "The assertion can pass despite a symmetric conversion bug, so it does not verify signature correctness.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   }
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "critical",
+    "claudeMotivo": "View-only group admins pass canManage and can create/manage groups; authorization bypass in admin permissions.",
+    "astra": "critical",
+    "astraMotivo": "Permission bypass lets view-only admins perform unauthorized group management.",
+    "severidade": "critical",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "holdout",
+    "claude": "low",
+    "claudeMotivo": "Javadoc text mismatch; documentation only.",
+    "astra": "low",
+    "astraMotivo": "Incorrect Javadoc return-type description has no runtime effect.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "holdout",
+    "claude": "low",
+    "claudeMotivo": "Javadoc text mismatch; documentation only.",
+    "astra": "low",
+    "astraMotivo": "Incorrect Javadoc method reference has no runtime effect.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "holdout",
+    "claude": "critical",
+    "claudeMotivo": "View-only group admins pass canManage and can create/manage groups; authorization bypass in admin permissions.",
+    "astra": "critical",
+    "astraMotivo": "Permission bypass lets view-only callers create and manage groups.",
+    "severidade": "critical",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Group view permission lookup uses resource UUIDs, falling back to the all-groups check and returning non-group IDs, so group-scoped user search/count filtering is wrong; permission-related wrong result.",
+    "astra": "high",
+    "astraMotivo": "Incorrect permission lookups and returned identifiers break the group-ID result contract for realistic inputs.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S6": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Group view permission lookup uses resource UUIDs, falling back to the all-groups check and returning non-group IDs, so group-scoped user search/count filtering is wrong; permission-related wrong result.",
+    "astra": "high",
+    "astraMotivo": "Incorrect identifiers cause group-scoped user searches to return wrong results for realistic inputs.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "holdout",
+    "claude": "critical",
+    "claudeMotivo": "View-only group admins pass canManage and can create/manage groups; authorization bypass in admin permissions.",
+    "astra": "critical",
+    "astraMotivo": "Permission bypass allows view-only admins to create top-level groups.",
+    "severidade": "critical",
+    "origem": "concordancia"
+   },
+   "S8": {
+    "conjunto": "holdout",
+    "claude": "critical",
+    "claudeMotivo": "Removed per-user canView filter lets admins with only query/per-user permissions receive user representations they may not see; data exposure via permission bypass.",
+    "astra": "critical",
+    "astraMotivo": "Missing authorization filtering exposes user representations to admins without permission to view them.",
+    "severidade": "critical",
+    "origem": "concordancia"
+   }
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Test does not cover the check subcommand or exit code, so the feature guard is not verified.",
+    "astra": "medium",
+    "astraMotivo": "The test does not verify the check subcommand’s feature guard or the required exit codes, leaving introduced behavior untested.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   }
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Test storage provider returns recovery-code credential without id, so removal after exhausting codes gets a null id in the testsuite; test-only wrong behaviour.",
+    "astra": "medium",
+    "astraMotivo": "The test provider returns a credential without its ID, breaking cleanup when recovery codes are exhausted and undermining integration-test fidelity.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Exhausted federated recovery-code credentials are not removed from user storage; inconsistent credential state only for federated users using all codes.",
+    "astra": "high",
+    "astraMotivo": "Exhausted federated credentials remain persisted when they should be removed, leaving credential state inconsistent in a limited case.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S3": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Exhausted federated recovery-code credentials are not removed from user storage; inconsistent credential state only for federated users using all codes.",
+    "astra": "high",
+    "astraMotivo": "Cleanup fails for exhausted federated credentials, leaving persisted credential state inconsistent.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S4": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Exhausted federated recovery-code credentials are not removed from user storage; inconsistent credential state only for federated users using all codes.",
+    "astra": "high",
+    "astraMotivo": "The wrong removal path leaves exhausted federated credentials in storage, causing limited persisted-state inconsistency.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   }
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "A crafted cursor with a negative offset on the opt-in optimized audit-log path returns a 500; failure only on uncommon/crafted input with no data exposure.",
+    "astra": "medium",
+    "astraMotivo": "An uncommon negative cursor offset triggers a request-level 500 when optimized pagination is enabled.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "A negative offset in a prev cursor reaches a negative queryset slice and errors in BasePaginator endpoints; only reachable with an unusual or crafted cursor.",
+    "astra": "medium",
+    "astraMotivo": "Multiple endpoints are affected, but failures require an uncommon negative offset in a previous-page cursor.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "A query flag lets global-access users reach the negative-offset path and trigger server errors; stated consequence is 500s on crafted requests, not data exposure.",
+    "astra": "medium",
+    "astraMotivo": "Eligible users can trigger server errors with negative cursors; the comment does not establish unauthorized data access or broader service disruption.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S4": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "A crafted cursor with a negative offset on the opt-in optimized audit-log path returns a 500; failure only on uncommon/crafted input with no data exposure.",
+    "astra": "medium",
+    "astraMotivo": "A client-supplied negative offset causes a request-level failure on an edge-case input.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "A negative offset in a prev cursor reaches a negative queryset slice and errors in BasePaginator endpoints; only reachable with an unusual or crafted cursor.",
+    "astra": "medium",
+    "astraMotivo": "Previous-page pagination fails specifically for negative offsets, an uncommon input.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S6": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "A crafted cursor with a negative offset on the opt-in optimized audit-log path returns a 500; failure only on uncommon/crafted input with no data exposure.",
+    "astra": "medium",
+    "astraMotivo": "A crafted negative cursor with optimized pagination causes an unhandled 500 for that request.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S7": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "The negative-offset path raises instead of paginating for any cursor with a negative offset; wrong behavior limited to uncommon cursor values.",
+    "astra": "medium",
+    "astraMotivo": "The issue includes a runtime failure for negative offsets, beyond merely inaccurate code comments.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S8": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "The negative-offset path raises instead of paginating for any cursor with a negative offset; wrong behavior limited to uncommon cursor values.",
+    "astra": "medium",
+    "astraMotivo": "Negative previous-page offsets cause an assertion failure, making this an edge-case behavior defect.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S9": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Client-controlled negative offsets let callers slice outside the intended page window of an already org-scoped audit log; uncommon crafted input with no stated cross-tenant exposure.",
+    "astra": "medium",
+    "astraMotivo": "A negative cursor returns rows outside the intended page window; the claim does not establish access to unauthorized data.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S10": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "A crafted cursor with a negative offset on the opt-in optimized audit-log path returns a 500; failure only on uncommon/crafted input with no data exposure.",
+    "astra": "medium",
+    "astraMotivo": "The audit-log request fails for a crafted negative cursor with an optional flag, rather than ordinary pagination input.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S11": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Comments falsely claim safe negative slicing while the code forwards negative offsets that fail; error only for uncommon negative cursors.",
+    "astra": "medium",
+    "astraMotivo": "Alongside misleading comments, it identifies an assertion failure when negative offsets reach the slice.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S12": {
+    "conjunto": "holdout",
+    "claude": "low",
+    "claudeMotivo": "The comment describes negative-offset behavior the code does not have; a documentation mismatch with no stated change to what users get.",
+    "astra": "medium",
+    "astraMotivo": "The comment identifies unsupported negative slicing for previous-page cursors, an edge-case runtime defect.",
+    "severidade": "low",
+    "origem": "um-nivel-claude"
+   },
+   "S13": {
+    "conjunto": "holdout",
+    "claude": "low",
+    "claudeMotivo": "Flag and comment naming hide what the option enables; a naming/readability concern.",
+    "astra": "low",
+    "astraMotivo": "The stated issue concerns misleading names and code comments, without identifying a user-visible behavioral defect.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S14": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "A crafted cursor with a negative offset on the opt-in optimized audit-log path returns a 500; failure only on uncommon/crafted input with no data exposure.",
+    "astra": "medium",
+    "astraMotivo": "Missing validation allows an uncommon negative cursor offset to cause a request-level 500.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   }
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Substring matching treats negated or mixed queries as error-focused and returns upsampled counts; wrong counts only for uncommon query forms.",
+    "astra": "high",
+    "astraMotivo": "Realistic negated or mixed Discover queries return incorrect counts because upsampling is applied to non-error events.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S2": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "The transaction test cannot distinguish upsampled from plain counts, so it does not verify the behavior.",
+    "astra": "medium",
+    "astraMotivo": "The test would pass even if the transaction-query exclusion were broken, so it does not verify the intended behavior.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Substring matching treats negated or mixed queries as error-focused and returns upsampled counts; wrong counts only for uncommon query forms.",
+    "astra": "high",
+    "astraMotivo": "Valid negated Discover queries incorrectly receive upsampled counts, producing wrong results for realistic input.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   }
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Per-process randomized hash breaks per-subscription ordering and allows concurrent processing of the same subscription across consumers; core consumer guarantee broken.",
+    "astra": "high",
+    "astraMotivo": "Breaks per-subscription ordering and permits concurrent processing across consumers.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "An offset gap permanently blocks commits for a partition (and stale state survives rebalances), stalling progress and causing reprocessing; needs gaps/rebalance but breaks the consumer when hit.",
+    "astra": "high",
+    "astraMotivo": "Realistic offset gaps permanently stop partition commits, and rebalances retain stale tracking state.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "On Python <3.13 worker threads never exit on shutdown; affects shutdown/rebalance hygiene under a version condition rather than message processing.",
+    "astra": "high",
+    "astraMotivo": "Worker shutdown fails on older Python versions, leaving threads permanently blocked.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S4": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Unbounded queues give no backpressure, so a slow worker lets memory grow without limit until the consumer is OOM-killed under load. [consistencia: Unbounded queues growing memory under sustained backlog; harmonized with sibling comments rated medium.]",
+    "astra": "medium",
+    "astraMotivo": "Slow processing causes unbounded backlog and memory growth, a meaningful resource regression.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S5": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Committing offsets from a background thread on a non-thread-safe consumer risks races with poll/rebalance; a stated risk under concurrency rather than a deterministic failure.",
+    "astra": "high",
+    "astraMotivo": "Violates the commit callback's threading contract and introduces races during normal consumer operations.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S6": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Docstring claim does not match the implementation; documentation-only fix proposed. [consistencia: States that failed items are committed and never retried, same consequence as the sibling comments rated high.]",
+    "astra": "low",
+    "astraMotivo": "Identifies an inaccurate docstring and requests documentation of the existing commit behavior.",
+    "severidade": "low",
+    "origem": "debate-consenso",
+    "rodadas": 1,
+    "debate": [
+     {
+      "autor": "astra",
+      "severity": "low",
+      "texto": "Identifies an inaccurate docstring and requests documentation of the existing commit behavior."
+     },
+     {
+      "autor": "claude",
+      "severity": "medium",
+      "texto": "I'll move from high to medium. This one explicitly asks only to reword the docstring, so it treats commit-regardless-of-outcome as the policy. But it states a concrete fact that matters to operators: failed messages (processor exceptions, decode or enqueue failures) are committed and will not be replayed, while the docstring says the opposite. A wrong statement of the delivery guarantee misleads whoever operates or extends this consumer — medium under the rubric's \"wrong messages that mislead operators\", above pure prose."
+     },
+     {
+      "autor": "astra",
+      "severity": "low",
+      "texto": "I’m keeping low: the stated defect is an inaccurate class docstring, and the comment treats committing failed messages as existing policy rather than behavior to fix. The rubric explicitly classifies documentation issues as low; a source-code docstring is not an operational log or user-facing message."
+     },
+     {
+      "autor": "claude",
+      "severity": "low",
+      "texto": "I agree with low: the comment asks only for the docstring to be corrected, and the rubric puts comments and docs at low."
+     }
+    ]
+   },
+   "S7": {
+    "conjunto": "holdout",
+    "claude": "low",
+    "claudeMotivo": "Docstring claim does not match the implementation; documentation-only fix proposed.",
+    "astra": "low",
+    "astraMotivo": "Identifies a false backpressure claim in documentation without stating a resulting operational failure.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S8": {
+    "conjunto": "holdout",
+    "claude": "low",
+    "claudeMotivo": "Test docstring and assertion disagree; test wording tidy-up.",
+    "astra": "low",
+    "astraMotivo": "Requests consistency between a test's description and assertion without establishing which behavior is incorrect.",
+    "severidade": "low",
+    "origem": "concordancia"
+   },
+   "S9": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Doc, test and worker disagree on whether failed messages are committed; the test does not verify the actual behaviour. [consistencia: States that failed items are committed and never retried, same consequence as the sibling comments rated high.]",
+    "astra": "high",
+    "astraMotivo": "Failed processing is acknowledged as complete, violating the stated success-only commit contract.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S10": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "offsets_committed metric counts partitions instead of offsets, misleading operators reading the metric.",
+    "astra": "medium",
+    "astraMotivo": "The metric reports partition counts as offset counts, misleading operators about processing volume.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S11": {
+    "conjunto": "holdout",
+    "claude": "critical",
+    "claudeMotivo": "After the first ordinary rebalance the shared pool is dead, so every later message is silently dropped and its offset committed; data loss on the core consumer path.",
+    "astra": "critical",
+    "astraMotivo": "A routine rebalance disables processing and commits unprocessed messages, silently losing their delivery.",
+    "severidade": "critical",
+    "origem": "concordancia"
+   },
+   "S12": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Error-handling test asserts the wrong outcome and passes only by timing, so it does not verify the behaviour introduced.",
+    "astra": "medium",
+    "astraMotivo": "The test passes before the commit loop runs and therefore does not verify error-handling behavior.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S13": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "An offset gap permanently blocks commits for a partition (and stale state survives rebalances), stalling progress and causing reprocessing; needs gaps/rebalance but breaks the consumer when hit. [consistencia: Commit stall only when Kafka offsets have gaps, uncommon here; harmonized with the sibling gap comment rated medium.]",
+    "astra": "high",
+    "astraMotivo": "Realistic Kafka offset gaps permanently prevent further commits for the affected partition.",
+    "severidade": "medium",
+    "origem": "um-nivel-claude"
+   },
+   "S14": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Error-handling test asserts the wrong outcome and passes only by timing, so it does not verify the behaviour introduced.",
+    "astra": "medium",
+    "astraMotivo": "The test asserts the opposite of the intended commit behavior and fails to verify it.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S15": {
+    "conjunto": "holdout",
+    "claude": "critical",
+    "claudeMotivo": "After the first ordinary rebalance the shared pool is dead, so every later message is silently dropped and its offset committed; data loss on the core consumer path.",
+    "astra": "critical",
+    "astraMotivo": "After a routine rebalance, messages are silently dropped while their offsets are committed.",
+    "severidade": "critical",
+    "origem": "concordancia"
+   }
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "S1": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Hard key lookup raises KeyError and fails the whole span batch whenever a payload lacks the field, stalling ingestion for uncommon input",
+    "astra": "high",
+    "astraMotivo": "A span missing the field crashes processing for the entire batch, blocking ingestion of otherwise valid spans.",
+    "severidade": "high",
+    "origem": "concordancia"
+   },
+   "S2": {
+    "conjunto": "holdout",
+    "claude": "medium",
+    "claudeMotivo": "Lowered redirect loop bound splits segments only for span trees deeper than 1000, an edge case",
+    "astra": "medium",
+    "astraMotivo": "Incorrect segmentation occurs only for unusually deep span trees exceeding 1000 redirects.",
+    "severidade": "medium",
+    "origem": "concordancia"
+   },
+   "S3": {
+    "conjunto": "holdout",
+    "claude": "high",
+    "claudeMotivo": "Hard key lookup raises KeyError and fails the whole span batch whenever a payload lacks the field, stalling ingestion for uncommon input",
+    "astra": "high",
+    "astraMotivo": "Requiring a previously optional field breaks processing of previously accepted messages and fails their entire batch.",
+    "severidade": "high",
+    "origem": "concordancia"
+   }
+  }
+ }
+}
