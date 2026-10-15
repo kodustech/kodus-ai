@@ -15,6 +15,7 @@ import type { NormalizedModel } from '@libs/llm/byok-config';
 import { DEFAULT_MODEL } from './byok-defaults';
 import { vertexModelFromAdc } from './model-builders';
 import { isOpenCodeGoBaseUrl, openCodeSessionId } from './opencode-go';
+import { servedByOpenAi } from './providers/openai/endpoint';
 
 // Model-name protocol patterns, used by the self-hosted / trial default-model
 // resolution below (the BYOK provider builders moved to the provider modules
@@ -103,6 +104,14 @@ export type EnvProviderResolution =
           name: 'google_vertex';
           apiKey: string;
           vertexLocation?: string;
+      }
+    | {
+          // An OpenAI reasoning model on OpenAI's own endpoint (no
+          // API_OPENAI_FORCE_BASE_URL, or one on api.openai.com): the native SDK,
+          // so its tool calls reach /v1/responses (providers/openai/endpoint.ts).
+          kind: 'openai_native';
+          name: 'openai';
+          apiKey: string;
       }
     | {
           kind: 'openai_compat';
@@ -211,6 +220,15 @@ export function resolveEnvProvider(): EnvProviderResolution | null {
             };
         }
     }
+    // An OpenAI reasoning model on OpenAI's own endpoint → native OpenAI. Over
+    // chat completions the gpt-5.6 / gpt-6 line refuses an agent loop's tools
+    // together with reasoning_effort, so every review failed on it.
+    if (
+        openaiKey &&
+        servedByOpenAi(envMode, openaiBaseURL || 'https://api.openai.com/v1')
+    ) {
+        return { kind: 'openai_native', name: 'openai', apiKey: openaiKey };
+    }
     // Any other self-hosted model with an OpenAI-style key → OpenAI-compatible.
     if (openaiKey) {
         return {
@@ -234,6 +252,7 @@ const ENV_KIND_TO_PROVIDER: Record<
     gemini_vertex: BYOKProvider.GOOGLE_VERTEX,
     claude_vertex: BYOKProvider.GOOGLE_VERTEX,
     claude_anthropic: BYOKProvider.ANTHROPIC,
+    openai_native: BYOKProvider.OPENAI,
     openai_compat: BYOKProvider.OPENAI_COMPATIBLE,
     vertex_adc: BYOKProvider.GOOGLE_VERTEX,
 };
@@ -294,6 +313,7 @@ function managedSlot(
  * `API_LLM_PROVIDER_MODEL` (or the default model) picks the SDK/auth/protocol:
  *   gemini-*  → google_gemini (AI Studio key) / google_vertex (SA JSON key)
  *   claude-*  → anthropic (native key) / google_vertex (Claude-on-Vertex SA JSON)
+ *   an OpenAI reasoning model on OpenAI's own endpoint → openai (native SDK)
  *   any other → OpenAI-compatible (self-hosted) — the one INLINE exception
  * Cloud (managed/trial) falls back to the kimi/moonshot trial default (the
  * `moonshot` provider module) or the bundled Gemini default (`google_gemini`) —
@@ -345,6 +365,10 @@ export function resolveManagedSlot(
                         baseURL: env.baseURL,
                     },
                 );
+            case 'openai_native':
+                // The openai module's native build: no baseURL, so the SDK's own
+                // api.openai.com/v1 default, and /v1/responses.
+                return managedSlot(BYOKProvider.OPENAI, env.apiKey, envMode);
             case 'openai_compat':
                 // INLINE EXCEPTION (self-hosted OpenAI-compatible): name
                 // 'self-hosted', default baseURL api.openai.com, raw

@@ -557,3 +557,52 @@ describe('resolveTaskSlot', () => {
         });
     });
 });
+
+// gpt-6-sol on chat completions refuses an agent loop's tools together with
+// reasoning_effort. An OpenAI-compatible credential on OpenAI's own host is
+// served as `openai` (native SDK, /v1/responses); the stored config keeps its
+// provider.
+describe('resolveTaskSlot — an OpenAI-compatible credential on OpenAI itself', () => {
+    const compat = (baseURL: string, model: string) =>
+        v2(
+            { defaultModelId: 'm-C', fallbackModelId: 'm-D' },
+            [
+                { id: 'm-C', credentialId: 'c-cp', model },
+                { id: 'm-D', credentialId: 'c-cp', model: `${model}-fallback` },
+            ],
+            [{ id: 'c-cp', provider: 'openai_compatible', apiKey: 'enc-cp', settings: { baseURL } }],
+        );
+
+    it('serves an OpenAI reasoning model as openai, without the base URL, fallback included', () => {
+        const { slot } = resolveTaskSlot(compat('https://api.openai.com/v1', 'gpt-6-sol'), 'codeReview', {});
+        expect(slot).toMatchObject({ provider: 'openai', model: 'gpt-6-sol', apiKey: 'enc-cp', byokModelId: 'm-C', credentialId: 'c-cp' });
+        expect(slot?.baseURL).toBeUndefined();
+        expect(slot?.fallback).toMatchObject({ provider: 'openai', model: 'gpt-6-sol-fallback' });
+        expect(slot?.fallback?.baseURL).toBeUndefined();
+    });
+
+    it('moves an override pasted for the compatible adapter under openai, only when the slot is served as openai', () => {
+        const withOverride = (override: string, baseURL = 'https://api.openai.com/v1') => {
+            const config: any = compat(baseURL, 'gpt-6-sol');
+            config.models[0].reasoningConfigOverride = override;
+            return resolveTaskSlot(config, 'codeReview', {}).slot?.reasoningConfigOverride;
+        };
+        const compatShaped = '{"openaiCompatible":{"reasoningEffort":"high"}}';
+        expect(JSON.parse(withOverride(compatShaped)!)).toEqual({ openai: { reasoningEffort: 'high' } });
+        expect(withOverride('{"reasoningEffort":"high"}')).toBe('{"reasoningEffort":"high"}');
+        expect(withOverride('not json')).toBe('not json');
+        // Behind a proxy the slot stays openai_compatible, and so does its override.
+        expect(withOverride(compatShaped, 'https://litellm.example.com/v1')).toBe(compatShaped);
+    });
+
+    it('leaves a proxy and a non-reasoning model on openai_compatible', () => {
+        expect(resolveTaskSlot(compat('https://litellm.example.com/v1', 'gpt-6-sol'), 'codeReview', {}).slot).toMatchObject({
+            provider: 'openai_compatible',
+            baseURL: 'https://litellm.example.com/v1',
+        });
+        expect(resolveTaskSlot(compat('https://api.openai.com/v1', 'gpt-4o'), 'codeReview', {}).slot).toMatchObject({
+            provider: 'openai_compatible',
+            baseURL: 'https://api.openai.com/v1',
+        });
+    });
+});
