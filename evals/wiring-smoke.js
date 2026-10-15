@@ -16,10 +16,12 @@
 // It also records every repo file each step loads (shared/trace-loaded.js) and
 // fails if one falls outside the PR workflow's `paths` filter, so the check
 // can't stop firing for code the evals depend on. With --engine-files=<file> it
-// writes what finder-recall loaded: the nightly measures only when one of those
-// files changed.
+// writes what finder-recall loaded, and with --kody-rules-files=<file> what the
+// kody-rules eval loaded, and with --eval-files-dir=<dir> what every step
+// loaded (<dir>/<step>.txt, for evals/nightly-evals.js): the nightly measures
+// each one only when one of its files changed.
 //
-//   node evals/wiring-smoke.js [--engine-files=<file>] [--results=<file>]
+//   node evals/wiring-smoke.js [--engine-files=<file>] [--kody-rules-files=<file>] [--eval-files-dir=<dir>] [--results=<file>]
 //
 // --results writes one entry per step ({ step, ok, problem, ms, calls }), which
 // evals/stage-signals.js turns into one quality signal per review stage.
@@ -78,6 +80,8 @@ function readJson(file) {
 
 async function main() {
     const engineFilesOut = (process.argv.find((a) => a.startsWith('--engine-files=')) || '').split('=')[1];
+    const kodyRulesFilesOut = (process.argv.find((a) => a.startsWith('--kody-rules-files=')) || '').split('=')[1];
+    const evalFilesDir = (process.argv.find((a) => a.startsWith('--eval-files-dir=')) || '').split('=')[1];
     const resultsOut = (process.argv.find((a) => a.startsWith('--results=')) || '').split('=')[1];
     const server = await startFakeLlmServer();
     const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-wiring-'));
@@ -165,6 +169,19 @@ async function main() {
         const finderFiles = fs.existsSync(traceDir) ? readTrace(traceDir, 'finder-recall') : [];
         fs.writeFileSync(engineFilesOut, `${finderFiles.join('\n')}\n`);
         console.log(`   engine files for the nightly: ${finderFiles.length} → ${engineFilesOut}`);
+    }
+    if (evalFilesDir) {
+        fs.mkdirSync(evalFilesDir, { recursive: true });
+        for (const step of steps) {
+            const files = fs.existsSync(traceDir) ? readTrace(traceDir, step.name) : [];
+            fs.writeFileSync(path.join(evalFilesDir, `${step.name}.txt`), `${files.join('\n')}\n`);
+        }
+        console.log(`   files per step for the nightly: ${steps.length} lists → ${evalFilesDir}`);
+    }
+    if (kodyRulesFilesOut) {
+        const kodyRulesFiles = fs.existsSync(traceDir) ? readTrace(traceDir, 'kody-rules') : [];
+        fs.writeFileSync(kodyRulesFilesOut, `${kodyRulesFiles.join('\n')}\n`);
+        console.log(`   kody-rules files for the nightly: ${kodyRulesFiles.length} → ${kodyRulesFilesOut}`);
     }
     fs.rmSync(scratch, { recursive: true, force: true });
     if (resultsOut) {

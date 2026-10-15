@@ -4,11 +4,13 @@ import * as path from 'path';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { STAGES, GROUPS, PLUMBING } = require('./stages');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { wiringRows, nightlyRows } = require('./stage-signals');
+const { wiringRows, nightlyRows, READERS, catalogPath } = require('./stage-signals');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { loadCatalog, catalogProblems } = require('./shared/eval-result');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { tier0 } = require('./shared/tier0-models');
 
-type Stage = { id: string; name: string; group: string; eval: string | null; model: string; wiring: string[]; pipeline: string[] | null; nightly?: boolean; friday?: string; byHand?: string[] };
+type Stage = { id: string; name: string; group: string; eval: string | null; model: string; wiring: string[]; pipeline: string[] | null; nightly?: string; friday?: string; byHand?: string[] };
 type Row = { name: string; status: string; value: number | null; meta: Record<string, unknown> };
 
 // Steps of evals/wiring-smoke.js that check the harness, not a review stage.
@@ -72,6 +74,17 @@ describe('evals/stages.js', () => {
         const keys = (STAGES as Stage[]).filter((s) => s.friday).map((s) => s.friday as string);
         expect(keys.sort()).toEqual(['pr_summary', 'review']);
         for (const key of keys) expect(tier0Meta).toContain(`${key}:`);
+    });
+
+    // The panel's "What it tests": every eval lists its cases, each with what it checks.
+    it('gives every stage with an eval a catalog of its cases, read from its own data', () => {
+        for (const stage of (STAGES as Stage[]).filter((s) => s.eval)) {
+            const file = catalogPath(stage);
+            expect([stage.id, fs.existsSync(path.join(__dirname, '..', file))]).toEqual([stage.id, true]);
+            expect([stage.id, catalogProblems(loadCatalog(file))]).toEqual([stage.id, []]);
+        }
+        const posting = wiringRows(allOk(wiringSteps)).find((r: Row) => r.name === 'evals.stage.posting');
+        expect(posting?.meta.case_catalog).toBeUndefined();
     });
 
     it('points every eval at a path that exists, and only "none" at no eval', () => {
@@ -152,6 +165,68 @@ describe('stage-signals', () => {
         expect(finder.meta).toMatchObject({ floor: 0.24, baseline: 0.357, precision: 0.5 });
         expect(nightlyRows(nightly, 'pass')[0].status).toBe('green');
         expect(nightlyRows(null, 'infra')[0]).toMatchObject({ status: 'infra', value: null });
+    });
+
+    it('reports kody-rules from its own result: occurrence recall against its floor, with specificity and its cases', () => {
+        // Made-up floors and levels: the real ones live only in evals/kody-rules/kody-targets.json.
+        const result = {
+            eval: 'kody-rules',
+            question: 'Does the Kody Rules agent flag every place a rule is broken?',
+            model: 'deepseek-v4-flash@fireworks',
+            runs: 2,
+            metric: { name: 'occurrence recall', value: 0.7, floor: 0.8, baseline: 0.93 },
+            specificity: { value: 1, floor: 0.9, baseline: 1 },
+            linePrecision: 0.9,
+            counts: { sites: 86 },
+            cases: [{ id: 'n8n#1::no-console', checks: 'Flags every line that breaks "No console" in n8n#1', hits: 3, total: 4, detail: [{ what: 'a.ts:3', ok: false }] }],
+            tokens: { in: 10, out: 1 },
+            infra: { errored: 0, total: 28 },
+        };
+        const [row]: Row[] = nightlyRows(result, 'regression', 'kody-rules');
+        expect(row).toMatchObject({ name: 'evals.stage.kody-rules', status: 'red', value: 0.7 });
+        expect(row.meta).toMatchObject({ floor: 0.8, baseline: 0.93, specificity: 1, specificity_floor: 0.9, cases: 1, metric: 'of known rule violations flagged' });
+        expect(row.meta.case_results).toEqual([{ id: 'n8n#1::no-console', checks: 'Flags every line that breaks "No console" in n8n#1', hits: 3, total: 4, detail: [{ what: 'a.ts:3', ok: false }] }]);
+        expect(row.meta.caveat).toEqual(expect.stringContaining('mechanical rules only'));
+        expect(nightlyRows(null, 'infra', 'kody-rules')[0]).toMatchObject({ status: 'infra', value: null });
+        expect(nightlyRows(result, 'pass', 'finder')[0]).toMatchObject({ status: 'infra' });
+    });
+
+    it("reports the finder's cases: each PR's known bugs, found or not, by the PR's title", () => {
+        const datasets = path.join(__dirname, 'investigation', 'datasets');
+        const file = fs.readdirSync(datasets).find((f) => f.endsWith('.json')) as string;
+        const data = JSON.parse(fs.readFileSync(path.join(datasets, file), 'utf8'));
+        const { caseId, prTitle } = (Array.isArray(data) ? data[0] : data).vars;
+        const nightly = {
+            model: 'deepseek-v4-flash@fireworks',
+            metrics: { recall_mean: 0.4 },
+            gate: {},
+            rows: [
+                { caseId, metadata: { goldens: 2, matched: 1, goldenResults: [{ golden: 'bug A', found: true }, { golden: 'bug B', found: false }] } },
+                { caseId: 'did-not-run', status: 'infra' },
+            ],
+        };
+        const [finder]: Row[] = nightlyRows(nightly, 'pass');
+        expect(finder.meta.case_results).toEqual([
+            { id: caseId, checks: `Finds the known bugs in "${prTitle}"`, hits: 1, total: 2, detail: [{ what: 'bug A', ok: true }, { what: 'bug B', ok: false }] },
+            { id: 'did-not-run', checks: 'Finds the known bugs in "did-not-run"', hits: 0, total: 0, unmeasured: true },
+        ]);
+        // A confirmed night: a bug counts as found when either run found it, and
+        // the count follows the bugs shown, not the first run's `matched`.
+        const confirmed = { ...nightly, rows: [{ caseId, metadata: { goldens: 2, matched: 1, goldenResults: [{ golden: 'bug A', found: true }, { golden: 'bug B', found: true }] } }] };
+        expect(nightlyRows(confirmed, 'pass')[0].meta.case_results[0]).toMatchObject({ hits: 2, total: 2 });
+    });
+
+    it('gives every stage whose eval has a README the question that README answers', () => {
+        const rows: Row[] = wiringRows(allOk(wiringSteps));
+        for (const stage of STAGES as Stage[]) {
+            if (!stage.eval || !fs.existsSync(path.join(__dirname, '..', stage.eval, 'README.md'))) continue;
+            const meta = stage.nightly ? nightlyRows({ metrics: { recall_mean: 0.4 }, metric: { value: 0.9 } }, 'pass', stage.id)[0].meta : rows.find((r) => r.name === `evals.stage.${stage.id}`)?.meta;
+            expect([stage.id, meta?.question]).toEqual([stage.id, expect.stringMatching(/\?/)]);
+        }
+    });
+
+    it('has a reader for every nightly-measured stage', () => {
+        for (const stage of (STAGES as Stage[]).filter((s) => s.nightly)) expect(Object.keys(READERS)).toContain(stage.nightly);
     });
 
     it('lists the tier-0 models a Friday stage runs on, and no models for any other stage', () => {
