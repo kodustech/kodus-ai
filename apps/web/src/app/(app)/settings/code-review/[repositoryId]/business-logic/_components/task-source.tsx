@@ -20,6 +20,7 @@ import { Controller, useFormContext, useWatch } from "react-hook-form";
 
 import { OverrideIndicatorForm } from "../../../_components/override";
 import type { CodeReviewFormType } from "../../../_types";
+import { ReadTask } from "./try-it";
 
 const AUTO = "auto";
 
@@ -57,9 +58,11 @@ const previewIds = (
  */
 export const TaskSource = ({
     teamId,
+    repositoryId,
     canEdit,
 }: {
     teamId: string;
+    repositoryId: string;
     canEdit: boolean;
 }) => {
     const form = useFormContext<CodeReviewFormType>();
@@ -231,10 +234,14 @@ export const TaskSource = ({
                     <p className="text-text-secondary text-xs">
                         Only tools that read one task by its id are listed.
                         Search and list tools can return a different task, and
-                        tools that write are never used. Check it with Try it
-                        below.
+                        tools that write are never used. Check it with Read a
+                        task below.
                     </p>
                 </Card>
+            )}
+
+            {!!sources?.length && (
+                <ReadTask teamId={teamId} repositoryId={repositoryId} />
             )}
 
             <Collapsible
@@ -246,10 +253,14 @@ export const TaskSource = ({
                         className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left">
                         <span className="flex flex-col">
                             <span className="text-text-primary text-sm font-medium">
-                                Advanced
+                                Custom task id format{" "}
+                                <span className="text-text-secondary font-normal">
+                                    (optional)
+                                </span>
                             </span>
                             <span className="text-text-secondary text-xs">
-                                Task ids Kody doesn&apos;t recognize yet
+                                Only for ids like sc-123 that Kody doesn&apos;t
+                                find on its own
                             </span>
                         </span>
                         <CollapsibleIndicator />
@@ -257,12 +268,6 @@ export const TaskSource = ({
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                     <div className="border-card-lv3/60 flex flex-col gap-2 border-t px-5 py-4">
-                        <span className="text-text-primary text-sm font-medium">
-                            How your task ids look{" "}
-                            <span className="text-text-secondary font-normal">
-                                (optional)
-                            </span>
-                        </span>
                         <p className="text-text-secondary text-xs">
                             Kody already finds keys like SAA-96, AB#8, #12,
                             CU-86a1b2c3d and tracker links. For another shape,

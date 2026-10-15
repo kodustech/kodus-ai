@@ -668,7 +668,7 @@ export class BusinessValidationService {
         }
     }
 
-    /** "Try it with a real task": reads one task the way a validation would (UC-01, UC-03, UC-05). */
+    /** "Read a task": reads one task the way a validation would (UC-01, UC-03, UC-05). */
     async tryRead(
         organizationAndTeamData: OrganizationAndTeamData,
         taskInput: string,

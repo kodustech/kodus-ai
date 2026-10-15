@@ -16,29 +16,87 @@ import { errorMessage, TestResult } from "./test-result";
 import { useScreenSettings } from "./use-screen-settings";
 
 /**
- * One place to try the settings on screen, saved or not: a task alone shows
- * how Kody reads it (UC-01, UC-03, UC-05); a pull request runs the whole
- * check on it, against the task it references or the one named here.
- * Nothing is posted until "Post to the pull request".
+ * Reads one task the way a validation would, with the settings on screen,
+ * saved or not (UC-01, UC-03, UC-05): where the admin picks the source, so a
+ * wrong source or plugin shows before anything else is set.
  */
-export const TryIt = ({
+export const ReadTask = ({
     teamId,
     repositoryId,
-    canEdit,
 }: {
     teamId: string;
     repositoryId: string;
+}) => {
+    const settings = useScreenSettings();
+    const [task, setTask] = useState("");
+    const tryRead = useTryReadTask();
+    const run = () =>
+        tryRead.mutate({
+            teamId,
+            task: task.trim(),
+            settings: settings(),
+            repositoryId,
+        });
+
+    return (
+        <Card color="lv1" className="flex flex-col gap-3 px-5 py-4">
+            <span className="flex flex-col">
+                <span className="text-text-primary text-sm font-medium">
+                    Read a task
+                </span>
+                <span className="text-text-secondary text-xs">
+                    See what Kody reads from one of your tasks with the source
+                    above, saved or not.
+                </span>
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+                <Input
+                    className="min-w-60 flex-1"
+                    placeholder="Task id or link, e.g. SAA-96, #12 or a ClickUp link"
+                    value={task}
+                    onChange={(e) => setTask(e.target.value)}
+                    onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+                        if (e.key === "Enter" && task.trim()) run();
+                    }}
+                />
+                <Button
+                    size="md"
+                    variant="secondary"
+                    disabled={!task.trim()}
+                    loading={tryRead.isPending}
+                    onClick={run}>
+                    Read task
+                </Button>
+            </div>
+            {tryRead.isError && (
+                <p className="text-danger text-sm">
+                    Couldn&apos;t reach Kodus to read the task. Try again.
+                </p>
+            )}
+            {tryRead.data && <TaskRead result={tryRead.data} />}
+        </Card>
+    );
+};
+
+/**
+ * The whole check on a pull request, with the settings on screen, saved or
+ * not: against the task it references, or the one named here. Nothing is
+ * posted until "Post to the pull request".
+ */
+export const TryIt = ({
+    teamId,
+    canEdit,
+}: {
+    teamId: string;
     canEdit: boolean;
 }) => {
     const settings = useScreenSettings();
     const [prUrl, setPrUrl] = useState("");
     const [task, setTask] = useState("");
-    const tryRead = useTryReadTask();
     const test = useTestOnPullRequest();
     const post = useTestOnPullRequest();
 
-    const onPr = !!prUrl.trim();
-    const canRun = onPr ? canEdit : !!task.trim();
+    const canRun = !!prUrl.trim() && canEdit;
     const payload = () => ({
         teamId,
         prUrl: prUrl.trim(),
@@ -46,19 +104,9 @@ export const TryIt = ({
         settings: settings(),
     });
     const run = () => {
-        tryRead.reset();
         test.reset();
         post.reset();
-        if (onPr) {
-            test.mutate(payload());
-        } else {
-            tryRead.mutate({
-                teamId,
-                task: task.trim(),
-                settings: settings(),
-                repositoryId,
-            });
-        }
+        test.mutate(payload());
     };
     const runOnEnter = (e: KeyboardEvent<HTMLInputElement>) => {
         if (e.key === "Enter" && canRun) run();
@@ -67,25 +115,24 @@ export const TryIt = ({
     return (
         <section className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
-                <Heading variant="h3">Try it</Heading>
+                <Heading variant="h3">Check a pull request</Heading>
                 <p className="text-text-secondary text-sm">
-                    Name a task to see what Kody reads from it. Add a pull
-                    request to check it against that task, or against the one it
-                    references. Uses the settings on this page, saved or not;
-                    nothing is posted until you choose to.
+                    Runs the whole check with the settings on this page, saved
+                    or not, against the task the pull request references or the
+                    one you name. Nothing is posted until you choose to.
                 </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
                 <Input
                     className="min-w-60 flex-1"
-                    placeholder="Pull request link (optional), e.g. https://github.com/acme/web/pull/47"
+                    placeholder="Pull request link, e.g. https://github.com/acme/web/pull/47"
                     value={prUrl}
                     onChange={(e) => setPrUrl(e.target.value)}
                     onKeyDown={runOnEnter}
                 />
                 <Input
                     className="w-56"
-                    placeholder="Task id or link, e.g. SAA-96 or #12"
+                    placeholder="Task (optional), e.g. SAA-96"
                     value={task}
                     onChange={(e) => setTask(e.target.value)}
                     onKeyDown={runOnEnter}
@@ -94,14 +141,14 @@ export const TryIt = ({
                     size="md"
                     variant="secondary"
                     disabled={!canRun}
-                    loading={tryRead.isPending || test.isPending}
+                    loading={test.isPending}
                     onClick={run}>
-                    {onPr ? "Run test" : "Read task"}
+                    Run check
                 </Button>
             </div>
-            {onPr && !canEdit && (
+            {!canEdit && (
                 <p className="text-text-secondary text-xs">
-                    Testing on a pull request needs permission to edit these
+                    Checking a pull request needs permission to edit these
                     settings.
                 </p>
             )}
@@ -117,13 +164,6 @@ export const TryIt = ({
                     {errorMessage(test.error)}
                 </p>
             )}
-            {tryRead.isError && (
-                <p className="text-danger text-sm">
-                    Couldn&apos;t reach Kodus to read the task. Try again.
-                </p>
-            )}
-
-            {tryRead.data && <TaskRead result={tryRead.data} />}
             {test.data && !test.isPending && (
                 <TestResult
                     result={test.data}
@@ -162,15 +202,17 @@ const TaskRead = ({ result }: { result: TryReadResult }) => (
                         automatically”.
                     </span>
                 )}
-                {!result.task.acceptanceCriteria && result.task.canJudge && (
-                    <span className="text-warning">
-                        No acceptance criteria found, so Kody will judge against
-                        the whole description, which is less precise. Write them
-                        as a list or a checklist in the task, or, if they
-                        already live under a heading or in a custom field, say
-                        where under “Tune to your team”.
-                    </span>
-                )}
+                {!result.task.acceptanceCriteria &&
+                    result.task.canJudge &&
+                    !result.task.parent && (
+                        <span className="text-warning">
+                            No acceptance criteria found, so Kody will judge
+                            against the whole description, which is less
+                            precise. Write them as a list or a checklist in the
+                            task, or, if they already live under a heading or in
+                            a custom field, say where under “Tune to your team”.
+                        </span>
+                    )}
                 {!result.task.canJudge && (
                     <span className="text-warning">
                         This task has too little in it to check a pull request
@@ -184,7 +226,10 @@ const TaskRead = ({ result }: { result: TryReadResult }) => (
                         {result.task.parent.title
                             ? ` · ${result.task.parent.title}`
                             : ""}
-                        . Kody reads it too, as context for this task.
+                        .{" "}
+                        {result.task.acceptanceCriteria
+                            ? "Kody reads it too, as context for this task."
+                            : "This task has no criteria of its own, so Kody takes the parent's criteria this task covers."}
                     </span>
                 )}
                 {!!result.task.subtasks && (
@@ -201,7 +246,7 @@ const TaskRead = ({ result }: { result: TryReadResult }) => (
                     </span>
                 )}
                 <span className="text-text-tertiary text-xs">
-                    Add a pull request above to check it against this task.
+                    Check a pull request against it at the end of this page.
                 </span>
             </>
         ) : (
