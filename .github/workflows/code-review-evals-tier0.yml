@@ -113,14 +113,8 @@ jobs:
                     const out = (k, v) => fs.appendFileSync(process.env.GITHUB_OUTPUT, k + \"=\" + v + \"\\n\");
                     const file = fs.existsSync(dir) ? fs.readdirSync(dir).find((n) => n.startsWith(\"tier0-smoke-\") && n.endsWith(\".json\")) : null;
                     if (!file) { out(\"status\", \"infra\"); out(\"value\", \"\"); out(\"meta\", JSON.stringify({ note: \"no tier0 result file\" })); process.exit(0); }
-                    const r = JSON.parse(fs.readFileSync(dir + \"/\" + file, \"utf8\"));
-                    const map = { pass: \"green\", infra: \"infra\", broken: \"red\" };
-                    const summary = (r.prSummary && r.prSummary.status) || \"skipped\";
-                    const parts = Object.fromEntries((r.evals || []).map((e) => [e.key, e.status]));
-                    const all = [summary, ...Object.values(parts)];
-                    const status = all.includes(\"broken\") ? \"red\" : all.includes(\"infra\") ? \"infra\" : map[r.status] || \"infra\";
-                    out(\"status\", status); out(\"value\", r.seconds == null ? \"\" : String(Math.round(r.seconds * 1000)));
-                    out(\"meta\", JSON.stringify({ review: r.status, pr_summary: summary, ...parts, reason: r.reason || null, findings: r.findings, tool_calls: r.toolCalls, retried: !!r.retried }));
+                    const signal = require(\"./evals/tier0-smoke\").tier0Signal(JSON.parse(fs.readFileSync(dir + \"/\" + file, \"utf8\")));
+                    out(\"status\", signal.status); out(\"value\", signal.value); out(\"meta\", JSON.stringify(signal.meta));
                   "
 
             - name: Report quality signal

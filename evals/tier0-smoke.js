@@ -147,6 +147,22 @@ function providerRefusals(stdout) {
         .map((m) => m[2]);
 }
 
+// The evals.tier0.<model> signal for one model's result: red when any part is
+// broken (the review included), infra when one was not reached, else green.
+// Its meta carries each part's outcome under its `friday` key, which the panel
+// reads per stage.
+function tier0Signal(r) {
+    const summary = (r.prSummary && r.prSummary.status) || 'skipped';
+    const parts = Object.fromEntries((r.evals || []).map((e) => [e.key, e.status]));
+    const all = [r.status, summary, ...Object.values(parts)];
+    const status = all.includes('broken') ? 'red' : all.includes('infra') || r.status !== 'pass' ? 'infra' : 'green';
+    return {
+        status,
+        value: r.seconds == null ? '' : String(Math.round(r.seconds * 1000)),
+        meta: { review: r.status, pr_summary: summary, ...parts, reason: r.reason || null, findings: r.findings, tool_calls: r.toolCalls, retried: !!r.retried },
+    };
+}
+
 // One stage's eval on a few cases: it runs on this model when the eval says it
 // measured (exit 0; each eval holds its own budget of failed calls, exit 2
 // above it, evals/AGENTS.md), at least half its calls ran (Kody Rules exits 2
@@ -279,7 +295,7 @@ async function main() {
     return 0;
 }
 
-module.exports = { classifyFailure, fridayKeys, runFewCases, FEW_CASES };
+module.exports = { classifyFailure, fridayKeys, runFewCases, tier0Signal, FEW_CASES };
 
 if (require.main === module) {
     main()

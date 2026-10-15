@@ -12,7 +12,7 @@ import * as path from 'path';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { nightlyReport, tier0Report } = require('./ci-report');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { classifyFailure, runFewCases } = require('./tier0-smoke');
+const { classifyFailure, runFewCases, tier0Signal } = require('./tier0-smoke');
 
 const row = (caseId: string, recall: number, found: string[] = [], missed: string[] = []) => ({
     caseId,
@@ -242,6 +242,20 @@ describe('tier-0 stages on a few cases', () => {
         expect(runFewCases('m', fake('noverdict2', shared(0, 10), noVerdict), dir)).toMatchObject({ status: 'broken', reason: '10 of 10 calls failed: Reply classifier returned no verdict' });
         const refused = '[case a run 0] 429 Too Many Requests\n[case b run 0] 429 Too Many Requests\n❌ INFRA ERROR: 2/2 calls failed';
         expect(runFewCases('m', fake('refused2', shared(0, 10), refused), dir)).toMatchObject({ status: 'infra', reason: '10 of 10 calls failed: 429 Too Many Requests' });
+    });
+});
+
+describe('tier-0 signal', () => {
+    const result = (review: string, summary: string, ...parts: string[]) => ({ status: review, seconds: 12, prSummary: { status: summary }, evals: parts.map((status, i) => ({ key: `p${i}`, status })) });
+
+    // The panel's row for the model: the worst part decides, the review included.
+    it('is red when any part is broken, infra when one was not reached, green only when all ran', () => {
+        expect(tier0Signal(result('pass', 'pass', 'pass', 'pass'))).toMatchObject({ status: 'green', value: '12000', meta: { review: 'pass', pr_summary: 'pass', p0: 'pass', p1: 'pass' } });
+        expect(tier0Signal(result('broken', 'pass', 'infra', 'pass')).status).toBe('red');
+        expect(tier0Signal(result('pass', 'pass', 'broken', 'infra')).status).toBe('red');
+        expect(tier0Signal(result('pass', 'infra', 'pass', 'pass')).status).toBe('infra');
+        expect(tier0Signal(result('infra', 'pass', 'pass', 'pass')).status).toBe('infra');
+        expect(tier0Signal(result('pass', 'skipped')).status).toBe('green');
     });
 });
 
