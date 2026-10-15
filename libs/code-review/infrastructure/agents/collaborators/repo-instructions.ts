@@ -111,6 +111,29 @@ export function selectGoverningFiles(
 const FRONTMATTER_RE = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
 /**
+ * Cursor writes globs unquoted (`globs: *.spec.tsx`), which YAML rejects as an
+ * alias, so when YAML fails each top-level `key: value` line is read as text.
+ */
+function parseFrontmatter(text: string): Record<string, unknown> | null {
+    try {
+        const parsed = yaml.load(text);
+        return parsed && typeof parsed === 'object'
+            ? (parsed as Record<string, unknown>)
+            : null;
+    } catch {
+        const entries = text
+            .split(/\r?\n/)
+            .map((line) => /^([A-Za-z]\w*):\s*(.*?)\s*$/.exec(line))
+            .filter((m): m is RegExpExecArray => m !== null)
+            .map(([, key, value]): [string, unknown] => [
+                key,
+                value === 'true' ? true : value === 'false' ? false : value,
+            ]);
+        return entries.length ? Object.fromEntries(entries) : null;
+    }
+}
+
+/**
  * Globs a file declares for itself: Cursor `.mdc` `globs:` (unless
  * `alwaysApply: true`) and Copilot `.instructions.md` `applyTo:`. `null` when
  * it declares none, so the directory rule decides.
@@ -119,14 +142,8 @@ function declaredGlobs(path: string, content: string): string[] | null {
     const match = FRONTMATTER_RE.exec(content);
     if (!match) return null;
 
-    let frontmatter: Record<string, unknown>;
-    try {
-        const parsed = yaml.load(match[1]);
-        if (!parsed || typeof parsed !== 'object') return null;
-        frontmatter = parsed as Record<string, unknown>;
-    } catch {
-        return null;
-    }
+    const frontmatter = parseFrontmatter(match[1]);
+    if (!frontmatter) return null;
 
     const lower = path.toLowerCase();
     let raw: unknown;
@@ -156,10 +173,13 @@ function matchesDeclared(
         scope && changed.startsWith(`${scope}/`)
             ? changed.slice(scope.length + 1)
             : changed;
+    const basename = changed.slice(changed.lastIndexOf('/') + 1);
+    // A glob without a slash (`*.spec.tsx`) matches the file name anywhere.
     return globs.some(
         (g) =>
             isFileMatchingGlob(changed, [g]) ||
-            isFileMatchingGlob(relative, [g]),
+            isFileMatchingGlob(relative, [g]) ||
+            (!g.includes('/') && isFileMatchingGlob(basename, [g])),
     );
 }
 

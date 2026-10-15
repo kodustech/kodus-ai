@@ -126,6 +126,29 @@ describe('collectRepoInstructions', () => {
         ).toBe('**/*.ts,**/*.tsx');
     });
 
+    it('reads the unquoted globs Cursor writes, which are not valid YAML', async () => {
+        const repo = files({
+            '.cursor/rules/tsx_tests.mdc':
+                '---\ndescription: React tests\nglobs: *.spec.tsx\nalwaysApply: false\n---\nUse RTL.',
+            '.cursor/rules/py.mdc':
+                '---\nglobs: *.py, src/**/*.pyi\nalwaysApply: false\n---\nType hints.',
+            '.cursor/rules/broken-always.mdc':
+                '---\nglobs: *.md\nalwaysApply: true\n---\nBe terse.',
+        });
+
+        const result = await collectRepoInstructions({
+            ...repo,
+            changedFiles: ['src/sentry/uptime/consumer.py'],
+        });
+
+        expect(
+            Object.fromEntries(result.files.map((f) => [f.path, f.appliesTo])),
+        ).toEqual({
+            '.cursor/rules/broken-always.mdc': '**',
+            '.cursor/rules/py.mdc': '*.py,src/**/*.pyi',
+        });
+    });
+
     it('truncates a long file and stops at the total budget', async () => {
         const big = 'x'.repeat(REPO_INSTRUCTIONS_LIMITS.maxBytesPerFile + 500);
         const map: Record<string, string> = { 'CLAUDE.md': big };
