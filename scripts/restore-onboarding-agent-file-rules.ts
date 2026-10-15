@@ -44,6 +44,6 @@ async function main(): Promise<number> {
 main()
     .then((code) => process.exit(code))
     .catch((error) => {
-        console.error(error);
+        console.error(error instanceof Error ? error.stack : String(error));
         process.exit(1);
     });
