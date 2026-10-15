@@ -9,8 +9,8 @@
  *   /v1/chat/completions. To use function tools, use /v1/responses or set
  *   reasoning_effort to 'none'.
  *
- * and every agent loop sends both (the reasoning default is 'medium' for a model
- * that thinks by default). The OpenAI-compatible transport speaks chat
+ * and every agent loop sends both (a call carries a default effort when none is
+ * configured). The OpenAI-compatible transport speaks chat
  * completions only, so a reasoning model of OpenAI's own families pointed at
  * OpenAI itself is OpenAI, whichever provider id reached it: a self-hosted env
  * model (`API_LLM_PROVIDER_MODEL`) and a BYOK `openai_compatible` credential on
