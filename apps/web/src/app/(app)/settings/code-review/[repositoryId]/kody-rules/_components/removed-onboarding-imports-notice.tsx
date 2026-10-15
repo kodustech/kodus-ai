@@ -67,8 +67,7 @@ export const RemovedOnboardingImportsNotice = ({
             <div className="flex flex-col gap-1">
                 <span className="text-text-primary text-sm font-semibold">
                     {count} rule{count === 1 ? " was" : "s were"} removed: they
-                    came from coding-agent files or dependency manifests during
-                    onboarding
+                    came from coding-agent files during onboarding
                 </span>
                 <span className="text-text-secondary text-sm">
                     Kody no longer turns CLAUDE.md, AGENTS.md or .cursor/rules

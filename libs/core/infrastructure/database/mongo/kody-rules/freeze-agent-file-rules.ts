@@ -2,16 +2,19 @@
  * One-shot data change for "coding-agent files are not Kody Rules" (#1823),
  * over the embedded `rules[]` of every `kodyRules` document:
  *
- *   1. Rules the onboarding import created (origin `repo_file_sync`, stored at
- *      `repositoryId: "global"`, no `sourceRepositoryId`) that are active,
- *      pending or paused are DELETED, unless they came from a Kody rule
- *      template file. They were imported from coding-agent files or inferred
- *      from dependency manifests, "approval" was a pre-checked box nobody
- *      unchecked, each repository's copy of a file became its own org-wide
- *      rule, and the source repository was never stored to scope them back.
- *      The coding-agent instructions setting reads the same files per
- *      repository instead. Each one keeps `reason` and `previousStatus`, so
- *      `restoreAgentFileRules` can put it back.
+ *   1. Rules the onboarding import created from a repository file (origin
+ *      `repo_file_sync`, stored at `repositoryId: "global"`, no
+ *      `sourceRepositoryId`, a `sourcePath`) that are active, pending or
+ *      paused are DELETED, unless the file is under `.kody/rules/`. Every
+ *      onboarding import went through the LLM converter; outside
+ *      `.kody/rules/` the files were coding-agent instructions (CLAUDE.md,
+ *      .cursor/rules, Claude skills, ...), "approval" was a pre-checked box,
+ *      each repository's copy became its own org-wide rule, and the source
+ *      repository was never stored to scope them back. The coding-agent
+ *      instructions setting reads the same files per repository instead. Each
+ *      one keeps `reason` and `previousStatus`, so `restoreAgentFileRules` can
+ *      put it back. Onboarding rules without a `sourcePath` were inferred
+ *      from dependency manifests, not imported from a file, and stay.
  *   2. `pinnedSync` is cleared everywhere: `@kody-sync` no longer does
  *      anything.
  *
@@ -19,31 +22,22 @@
  * source repository keep their status: they are frozen, not removed.
  *
  * Idempotent. Dependency-free (only the `mongodb` driver) so the migration
- * build can compile it in isolation; the file-location check mirrors
- * `KODY_RULE_FILE_PATTERNS` in libs/common/utils/kody-rules/file-patterns.ts.
+ * build can compile it in isolation.
  */
 import { Db } from 'mongodb';
 
 export const ONBOARDING_IMPORT_REMOVED_REASON =
-    'Imported during onboarding from coding-agent files or dependency manifests; removed when those files stopped becoming rules.';
+    'Imported during onboarding from a repository file outside .kody/rules; removed when those files stopped becoming rules.';
 
 const REMOVABLE_STATUSES = new Set(['active', 'pending', 'paused']);
 
-// A Kody rule template location, at any depth (`.agents/rules/` is a
-// coding-agent location even though it ends in `rules/`).
-const AGENT_RULES_DIR = /(?:^|\/)\.agents\/rules\//i;
-const KODY_RULE_LOCATIONS: RegExp[] = [
-    /(?:^|\/)\.kody\/rules\/./i,
-    /(?:^|\/)\.rules\/./i,
-    /(?:^|\/)docs\/coding-standards\/./i,
-    /(?:^|\/)rules\/.+\.md$/i,
-];
+const KODY_RULES_DIR = /(?:^|\/)\.kody\/rules\/./i;
 
-function isKodyRuleFile(sourcePath: unknown): boolean {
-    if (typeof sourcePath !== 'string' || !sourcePath) return false;
+/** Imported from a file outside `.kody/rules/`. */
+function isRemovableSource(sourcePath: unknown): boolean {
+    if (typeof sourcePath !== 'string' || !sourcePath.trim()) return false;
     const path = sourcePath.split('#')[0].replace(/\\/g, '/');
-    if (AGENT_RULES_DIR.test(path)) return false;
-    return KODY_RULE_LOCATIONS.some((re) => re.test(path));
+    return !KODY_RULES_DIR.test(path);
 }
 
 function isOnboardingImport(rule: any): boolean {
@@ -63,7 +57,7 @@ export function freezeAgentFileRule(rule: any): any | null {
     if (
         isOnboardingImport(rule) &&
         REMOVABLE_STATUSES.has(rule.status) &&
-        !isKodyRuleFile(rule.sourcePath)
+        isRemovableSource(rule.sourcePath)
     ) {
         next.status = 'deleted';
         next.previousStatus = rule.status;

@@ -59,7 +59,7 @@ Deep review mode runs separate bug, security and performance reviewers and does 
 
 Earlier versions of Kodus converted these files into Kody Rules. Those rules are kept but **frozen**: they no longer update when the file changes, and they carry the **Agent file** origin on the Kody Rules page. The **rules from coding-agent files** chip filters the list down to them so you can pause or delete them, or move the conventions you want enforced into `.kody/rules`.
 
-Rules that onboarding imported from coding-agent files or dependency manifests without anyone choosing them were removed: each repository's copy of a file had become its own rule applying to every repository. The Kody Rules page shows how many were removed and offers **Use coding-agent instructions in reviews**, which reads the same files in each repository's reviews. To get the removed rules back, contact support.
+Rules that onboarding imported from coding-agent files without anyone choosing them were removed: each repository's copy of a file had become its own rule applying to every repository. The Kody Rules page shows how many were removed and offers **Use coding-agent instructions in reviews**, which reads the same files in each repository's reviews. To get the removed rules back, contact support.
 
 `@kody-sync` no longer does anything: Kody Rule files always sync, and coding-agent files never become rules. `@kody-ignore` still excludes a Kody Rule file from sync.
 

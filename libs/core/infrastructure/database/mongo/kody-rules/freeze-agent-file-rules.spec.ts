@@ -19,8 +19,10 @@ describe('freezeAgentFileRule', () => {
     it.each([
         ['a coding-agent file', 'CLAUDE.md'],
         ['a nested coding-agent file', 'apps/api/.cursor/rules/style.mdc'],
+        ['a Claude skill', '.claude/skills/review/rules/_template.md'],
+        ['a generic rules/ folder', 'rules/naming.md'],
+        ['docs/coding-standards', 'docs/coding-standards/errors.md'],
         ['a dependency manifest', 'package.json'],
-        ['no source file', undefined],
     ])('deletes an onboarding import from %s', (_label, sourcePath) => {
         expect(freezeAgentFileRule(onboardingRule({ sourcePath }))).toEqual(
             expect.objectContaining({
@@ -43,13 +45,19 @@ describe('freezeAgentFileRule', () => {
         },
     );
 
-    it('leaves an onboarding import of a Kody rule template alone', () => {
-        expect(
-            freezeAgentFileRule(
-                onboardingRule({ sourcePath: '.kody/rules/no-console.md' }),
-            ),
-        ).toBeNull();
-    });
+    it.each(['.kody/rules/no-console.md', 'apps/api/.kody/rules/naming.md'])(
+        'leaves an onboarding import from %s alone',
+        (sourcePath) => {
+            expect(freezeAgentFileRule(onboardingRule({ sourcePath }))).toBeNull();
+        },
+    );
+
+    it.each([undefined, null, ''])(
+        'leaves an onboarding rule without a source file alone (%p): it was inferred, not imported from an agent file',
+        (sourcePath) => {
+            expect(freezeAgentFileRule(onboardingRule({ sourcePath }))).toBeNull();
+        },
+    );
 
     it.each(['deleted', 'rejected'])(
         'leaves an onboarding import that is already %s alone',

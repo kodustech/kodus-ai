@@ -59,7 +59,7 @@ El modo de revisión profunda ejecuta revisores separados de bugs, seguridad y r
 
 Las versiones anteriores de Kodus convertían estos archivos en Kody Rules. Esas reglas se conservan pero quedan **congeladas**: ya no se actualizan cuando cambia el archivo y llevan el origen **Agent file** en la página de Kody Rules. El chip **rules from coding-agent files** filtra la lista para mostrar solo esas reglas, así puedes pausarlas o eliminarlas, o mover a `.kody/rules` las convenciones que quieras que se apliquen.
 
-Las reglas que el onboarding importó desde archivos para agentes de código o manifiestos de dependencias sin que nadie las eligiera se eliminaron: la copia de un archivo de cada repositorio se había convertido en una regla propia que se aplicaba a todos los repositorios. La página de Kody Rules muestra cuántas se eliminaron y ofrece **Use coding-agent instructions in reviews**, que lee esos mismos archivos en las revisiones de cada repositorio. Para recuperar las reglas eliminadas, contacta con soporte.
+Las reglas que el onboarding importó desde archivos para agentes de código sin que nadie las eligiera se eliminaron: la copia de un archivo de cada repositorio se había convertido en una regla propia que se aplicaba a todos los repositorios. La página de Kody Rules muestra cuántas se eliminaron y ofrece **Use coding-agent instructions in reviews**, que lee esos mismos archivos en las revisiones de cada repositorio. Para recuperar las reglas eliminadas, contacta con soporte.
 
 `@kody-sync` ya no hace nada: los archivos de Kody Rules siempre se sincronizan y los archivos para agentes de código nunca se convierten en reglas. `@kody-ignore` sigue excluyendo un archivo de Kody Rule de la sincronización.
 

@@ -2,7 +2,8 @@
 /**
  * Restores the Kody Rules that the FreezeAgentFileRulesMongo migration
  * removed from one organization: rules its onboarding import had made from
- * coding-agent files (CLAUDE.md, .cursor/rules, ...) or dependency manifests.
+ * repository files outside .kody/rules (CLAUDE.md, .cursor/rules, Claude
+ * skills, ...).
  * Each goes back to the status it had before (active, pending or paused).
  *
  * Restored rules are org-wide again, one per repository copy, as before the
