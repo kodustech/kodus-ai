@@ -1,0 +1,36 @@
+{
+    "__doc": [
+        "The nightly set and its floors per model for the share of claims handled right (run.js --set=nightly --gate), as ratios.",
+        "nightly: the repost and guard shapes the nightly measures, without their -control twins: Kody Rules reposts (K4, K7, P01, P05; P18 past the 40 shown; P22 ping-pong), a different rule on the same lines (P40), bug reposts (R1, P24; R13 moved to another file), revisions that must post linked (R2, R8), and an unrelated bug that must post (R12). Several of them also carry a new-site claim that must post.",
+        "A floor holds only for its set, judge and --byok-reasoning (run.js refuses the gate otherwise).",
+        "floor = observed - 2 binomial SE over the 36 claims of one run, rounded down, like evals/reply-addressing/targets.json.",
+        "deepseek-v4-flash@fireworks (the nightly model), calibrated 2026-10-15 from 2 runs of the nightly set on the #2097 engine (results/2026-10-15/nightly-calibration): 33 and 32 of 36, mean 90.3%. The misses are the revisions R2 and R8 (posted 1 and 0 of 4 with reasoning off; main misses them too) and one new-site claim of P18.",
+        "RATCHET: when a PR moves this on purpose, recalibrate here with two runs as evidence."
+    ],
+    "sets": {
+        "nightly": [
+            "K4",
+            "K7",
+            "P01",
+            "P05",
+            "P18",
+            "P22",
+            "P40",
+            "R1",
+            "P24",
+            "R13",
+            "R2",
+            "R8",
+            "R12"
+        ]
+    },
+    "models": {
+        "deepseek-v4-flash@fireworks": {
+            "set": "nightly",
+            "judge": "gemini-3-flash-preview",
+            "byokReasoning": "none",
+            "floor": 0.8,
+            "observed": 0.903
+        }
+    }
+}

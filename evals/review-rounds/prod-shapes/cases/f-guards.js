@@ -1,6 +1,8 @@
 // Guard cases: an earlier comment on a related problem exists, and the review
 // must still post. One problem = one thread: a new place where the same rule or
-// bug appears gets a new comment, and so does a fixed problem that came back.
+// bug appears gets a new comment. Except P38: a fixed problem that came back
+// is not posted again (#2097) — the earlier comment is its thread, and nothing
+// tells a fix that came back from one that was never complete.
 // Invented code.
 const lines = (...l) => l.join('\n') + '\n';
 
@@ -575,7 +577,7 @@ module.exports = [
     },
     {
         id: 'P38-unreachable-retry-reintroduced',
-        shape: 'Finder: fixed, then reintroduced; the earlier comment flagged an unreachable retry branch and the developer removed the check shadowing it (implemented); a refactor in this diff re-adds it; 36 earlier comments',
+        shape: 'Finder: fixed, then reintroduced; the earlier comment flagged an unreachable retry branch and the developer removed the check shadowing it (implemented); a refactor in this diff re-adds it; not posted again (#2097); 36 earlier comments',
         agent: 'finder',
         base: {
             'src/webhooks/outcome.ts': lines(
@@ -623,10 +625,10 @@ module.exports = [
         historySize: 36,
         claims: [
             {
-                id: 'retry-unreachable-reintroduced',
+                id: 'retry-unreachable-reintroduced-repeat',
                 at: { file: 'src/webhooks/outcome.ts', lines: [12, 14] },
                 golden: 'The refactored outcomeFor checks status >= 400 before the 429 and >= 500 retry checks, so both retry branches are unreachable again and rate-limited or failing endpoints are dead-lettered instead of retried: the bug that was flagged and fixed earlier is back.',
-                expect: 'deliver_linked',
+                expect: 'not_deliver',
             },
         ],
     },

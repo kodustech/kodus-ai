@@ -1,0 +1,2440 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "8c206718746410428f38bed002a490ba4fcfb0a5a9e4e86aab2b98b752a62c3d"
+  },
+  "startedAt": "2026-10-15T12:56:42.543Z",
+  "updatedAt": "2026-10-15T13:23:21.720Z",
+  "complete": true,
+  "selectedCases": [
+    "R5-unrelated-same-area",
+    "R12-unrelated-other-file",
+    "P24-create-mode-section-hidden",
+    "P31-skip-before-title-set",
+    "P41-raise-breaks-batch-caller"
+  ],
+  "casesSourceDigest": "48d3669248f20438fc1a844b17cbd9fadf13751233a7852e993666651fe28f70",
+  "summary": {
+    "measured": 25,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 10,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 4,
+        "violations": 3,
+        "rate": 0.75
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 20,
+        "violations": 1,
+        "rate": 0.05
+      },
+      "index-reference (#2039)": {
+        "n": 33,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R5-unrelated-same-area · swapped-args [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "R12-unrelated-other-file · refund-guard-inverted [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P24-create-mode-section-hidden · billing-hidden-on-create-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P31-skip-before-title-set · skip-before-title-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P31-skip-before-title-set · scope-null-match-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P41-raise-breaks-batch-caller · renew-due-abort-linked [deliver_linked]": {
+        "pass": 1,
+        "n": 5,
+        "delivered": 4
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 78014,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: `new FailedError(String(err), chargeId)` passes arguments in the wrong order — FailedError's constructor is `(chargeId: string, cause?: unknown)`, so the stringified error becomes `chargeId` and the real charge id is stored in `cause`. WHY: the thrown error's `chargeId` property (and its message, via `super(chargeId)`) now contains the error text instead of the charge id, so callers that identify the failing charge via `err.chargeId` (e.g. pollCharge's rethrow at poller.ts:17) receive the wrong value and cannot map the failure back to the charge. HOW: restore the correct order — `throw new FailedError(chargeId, err);` (no need to String() it since `cause` is `unknown`).",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts:4 declares `constructor(readonly chargeId: string, readonly cause?: unknown)`. status.ts:11 calls `new FailedError(String(err), chargeId)`, so the stringified error is stored in `chargeId` (and used in `super(chargeId)`), while the actual charge id lands in `cause`. This is a real argument-order bug producing a wrong `chargeId` property and message for any caller that reads it. Not a style issue, and distinct from the previous round's NotReadyError-propagation decision (which was about lines 8-9, not the FailedError construction at line 11).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class FailedError|FailedError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: `new FailedError(String(err), chargeId)` passes the arguments in the wrong order — FailedError's constructor is `(chargeId: string, cause?: unknown)`, so `chargeId` receives the stringified error and `cause` receives the charge id. WHY: every consumer that reads the semantically-named `err.chargeId` field gets the error message instead of the charge identifier, breaking charge correlation and any downstream reporting keyed on chargeId. HOW: pass the charge id first and the cause second: `throw new FailedError(chargeId, err);`.",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts defines `FailedError(readonly chargeId: string, readonly cause?: unknown)`. At status.ts:11, `new FailedError(String(err), chargeId)` passes the stringified error into `chargeId` and the real charge id into `cause`, so the semantically-named chargeId field holds the error message. This is a real argument-order defect, distinct from the earlier NotReadyError propagation issue (which is now guarded by the `instanceof NotReadyError` check at line 8). The failure path is concrete and reachable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class FailedError|FailedError",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 20,
+                "path": "src/billing/errors.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nBecause `new FailedError(String(err), chargeId)` passes arguments in the wrong order for the constructor `(chargeId: string, cause?: unknown)`, the thrown error's `chargeId` property and its message via `super(chargeId)` contain the error text instead of the charge id, so callers that identify the failing charge via `err.chargeId` (e.g. `pollCharge`'s rethrow at `poller.ts:17`) receive the wrong value and cannot map the failure back to the charge. Restore the correct order with `throw new FailedError(chargeId, err);` and drop the `String()` call since `cause` is `unknown`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nSince `new FailedError(String(err), chargeId)` reverses the constructor's `(chargeId: string, cause?: unknown)` order, `chargeId` receives the stringified error and `cause` receives the charge id, so every consumer reading `err.chargeId` gets the error message instead of the charge identifier, breaking charge correlation and downstream reporting keyed on `chargeId`. Pass the charge id first and the cause second with `throw new FailedError(chargeId, err);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 59847,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: the FailedError constructor arguments are swapped — `String(err)` is passed as the `chargeId` parameter and the real `chargeId` is passed as `cause`. WHY: FailedError's constructor is `constructor(readonly chargeId: string, readonly cause?: unknown)` (src/billing/errors.ts:3-5), so any caller reading `err.chargeId` now gets a stringified error (\"Error: <msg>\" or \"Error\") instead of the charge id, and `err.cause` holds the charge id string rather than the original error, breaking the error contract and any charge-id-based logging/lookup/dedup. HOW: restore the original argument order while keeping the previous fix's intent.",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts:4 declares `constructor(readonly chargeId: string, readonly cause?: unknown)`, but status.ts:11 calls `new FailedError(String(err), chargeId)`, passing the stringified error as chargeId and the real chargeId as cause. The arguments are swapped, so err.chargeId yields a stringified error and err.cause holds the charge id, breaking the error contract. This is a distinct problem from the prior decision (NotReadyError propagation, a different failure), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 25
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: `new FailedError(String(err), chargeId)` passes the arguments in the wrong order — `FailedError` is declared as `constructor(readonly chargeId: string, readonly cause?: unknown)` (src/billing/errors.ts:4), so the stringified error is stored as `chargeId` and the real charge id is stored as `cause`. WHY: every failed charge is misattributed — `error.chargeId` is now a rendered error string instead of the charge id, breaking the error's contract for any caller that reports, logs, or retries by charge id, while the actual charge id is buried in `cause`. HOW: swap the arguments to match the constructor signature.",
+          "keep": true,
+          "rationale": "Confirmed: FailedError's constructor is `(readonly chargeId: string, readonly cause?: unknown)` (errors.ts:4), while status.ts:11 calls `new FailedError(String(err), chargeId)`, so the stringified error lands in `chargeId` and the real charge id in `cause`. This is a genuine argument-order bug, and it is distinct from the previously raised NotReadyError-propagation issue (different failure, different code path). Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `FailedError`'s constructor is `constructor(readonly chargeId: string, readonly cause?: unknown)` (src/billing/errors.ts:3-5), passing `String(err)` first makes `err.chargeId` a rendered error string like `\"Error: <msg>\"` and buries the real charge id in `err.cause`, breaking the error contract and any charge-id-based logging, lookup, or dedup. Restore the original argument order while keeping the previous fix's intent."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Since `FailedError` is declared as `constructor(readonly chargeId: string, readonly cause?: unknown)` (src/billing/errors.ts:4), `new FailedError(String(err), chargeId)` misattributes every failed charge: `error.chargeId` becomes a rendered error string and the actual charge id is buried in `cause`, breaking callers that report, log, or retry by charge id. Swap the arguments to match the constructor signature."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 50594,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: `new FailedError(String(err), chargeId)` passes arguments in the wrong order — FailedError's signature is `constructor(readonly chargeId: string, readonly cause?: unknown)` (src/billing/errors.ts:4), so the stringified error is stored in `chargeId` and the original error object is dropped. WHY: consumers of `err.chargeId` (correlation, refund/DLQ keying) receive an error message like \"Error: gateway timeout\" instead of the charge id, and the underlying error is no longer retained as `cause`, so the failure can no longer be attributed to the right charge. HOW: pass the real id first and keep the original error as the cause.",
+          "keep": true,
+          "rationale": "Confirmed by reading both files: src/billing/errors.ts:4 declares `constructor(readonly chargeId: string, readonly cause?: unknown)`, but src/billing/status.ts:11 calls `new FailedError(String(err), chargeId)`, swapping the arguments. So `chargeId` holds the stringified error and the original error object is stored in `cause`'s slot (actually as cause, but the charge id is lost). The failure path is real and reachable whenever gw.status throws a non-NotReadyError. This is a distinct bug from the previous NotReadyError-propagation decision, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `FailedError`'s signature is `constructor(readonly chargeId: string, readonly cause?: unknown)` (src/billing/errors.ts:4), the stringified error lands in `chargeId` and the original error is dropped, so consumers of `err.chargeId` for correlation and refund/DLQ keying get a message like \"Error: gateway timeout\" instead of the charge id and the failure can no longer be attributed to the right charge. Pass the real id first and keep the original error as the cause: `new FailedError(chargeId, err)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 71221,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The new call `new FailedError(String(err), chargeId)` passes arguments in the wrong order — FailedError's constructor is `(chargeId: string, cause?: unknown)`. WHY: every FailedError now exposes the raw error text as its `chargeId` and stores the real charge identifier in `cause`, so any consumer reading `error.chargeId` gets the wrong value (the previous code `new FailedError(chargeId, err)` was correct). HOW: swap the arguments back: `throw new FailedError(chargeId, err);`.",
+          "keep": true,
+          "rationale": "FailedError's constructor is `(chargeId: string, cause?: unknown)` (src/billing/errors.ts:4). The call at src/billing/status.ts:11 is `new FailedError(String(err), chargeId)`, passing the error string as chargeId and the actual charge identifier as cause — arguments are swapped. Any consumer reading error.chargeId gets the raw error text instead of the charge id. Confirmed real bug.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class FailedError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: `new FailedError(String(err), chargeId)` passes arguments in the wrong order — FailedError's constructor is `(chargeId: string, cause?: unknown)` (errors.ts:4), but this call passes the stringified error as `chargeId` and the real charge id as `cause`. WHY: `err.chargeId` will contain the stringified gateway error and `err.cause` will contain the charge id, so any consumer reading `err.chargeId` to identify/report which charge failed gets the wrong value (the old code `new FailedError(chargeId, err)` had the correct order). HOW: swap back to `throw new FailedError(chargeId, err);`.",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts:4 declares `constructor(readonly chargeId: string, readonly cause?: unknown)`. The call at status.ts:11 `new FailedError(String(err), chargeId)` passes the stringified error as chargeId and the real charge id as cause — arguments are swapped. Consumers reading `err.chargeId` get the stringified gateway error, not the charge id. This is a distinct problem from the prior decision (which concerned NotReadyError propagation, not argument order), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class FailedError|constructor",
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `FailedError`'s constructor is `(chargeId: string, cause?: unknown)`, this call makes every `FailedError` expose the raw error text as its `chargeId` and store the real charge identifier in `cause`, so consumers reading `error.chargeId` get the wrong value. Swap the arguments back to `throw new FailedError(chargeId, err);`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `FailedError`'s constructor is `(chargeId: string, cause?: unknown)` (`errors.ts:4`), this call makes `err.chargeId` contain the stringified gateway error and `err.cause` contain the charge id, so consumers reading `err.chargeId` to identify or report which charge failed get the wrong value. Swap the arguments back to `throw new FailedError(chargeId, err);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 87866,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: `new FailedError(String(err), chargeId)` passes the two arguments in the wrong order — FailedError's signature is `(chargeId: string, cause?: unknown)`, so the stringified gateway error lands in the `chargeId` property (and in `Error.message`, via `super(chargeId)` in errors.ts:4) while the real charge id is stored as `cause`. WHY: any error handler, logger, or reconciliation job that reads `err.chargeId` (the field's stated purpose) now receives an arbitrary error string instead of the charge id, and the original error is no longer available under `cause` as an Error — silently breaking the FailedError contract for every consumer outside this repo (nothing here consumes it yet, so the break is not caught by tests). HOW: restore the correct order and keep the cause as the original error.",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts:4 declares `constructor(readonly chargeId: string, readonly cause?: unknown)`, so FailedError's first arg is chargeId and second is cause. status.ts:11 calls `new FailedError(String(err), chargeId)`, passing the stringified error as the first argument and the real chargeId as the second. This is a genuine argument-order bug: err.chargeId receives the error string, Error.message becomes that string, and the actual charge id is stored under `cause` instead. The claim is factually accurate and the wrong-order call is present in the current diff.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class FailedError"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "errors.*"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "FailedError",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: `new FailedError(String(err), chargeId)` passes arguments in the wrong order — `FailedError`'s constructor is `(chargeId: string, cause?: unknown)` (src/billing/errors.ts:4), so the stringified error is stored as `chargeId` and the real charge id is stored as `cause`. WHY: every FailedError produced here reports the wrong charge id (consumers reading `err.chargeId` get the error text instead of the charge identifier), and `err.cause` no longer carries the underlying gateway error, so failure handling/telemetry keyed on either field is broken. HOW: swap the arguments to `throw new FailedError(chargeId, err);` (keep `err` un-stringified so `cause` retains the original error).",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts:4 defines `FailedError` constructor as `(chargeId: string, cause?: unknown)`, but status.ts:11 calls `new FailedError(String(err), chargeId)`, swapping arguments. The stringified error is stored as `chargeId` and the real charge id as `cause`, breaking consumers/telemetry that read `err.chargeId` or `err.cause`. This is a distinct bug from the previous decision (which only concerned NotReadyError propagation) — it is a different problem in the same code, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `new FailedError(String(err), chargeId)` passes the stringified gateway error as `chargeId` and the real charge id as `cause`, any handler, logger, or reconciliation job reading `err.chargeId` gets an arbitrary error string, the original error is no longer available as an `Error` under `cause`, and `Error.message` is set via `super(chargeId)` in `errors.ts:4`, silently breaking the `FailedError` contract for consumers outside this repo (nothing here consumes it yet, so tests do not catch the break). Restore the correct order so `chargeId` receives the charge id and `cause` keeps the original error."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nBecause `FailedError`'s constructor at `src/billing/errors.ts:4` expects `(chargeId: string, cause?: unknown)`, the current call stores the stringified error as `chargeId` and the real charge id as `cause`, so consumers reading `err.chargeId` get error text instead of the identifier and `err.cause` no longer carries the underlying gateway error, breaking failure handling and telemetry keyed on either field. Swap the arguments so the call passes `chargeId` first and `err` second, keeping `err` un-stringified so `cause` retains the original error."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 55558,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: The comparison in the refund guard is inverted — `amount < charge.amount` rejects partial refunds while allowing refunds larger than the charge. WHY: A legitimate partial refund (amount strictly less than charge.amount) now throws 'refund exceeds the charge', while an over-refund (amount > charge.amount) passes the guard and reaches `gw.submit`, whose contract (gateway.ts:3-4) states submit is NOT idempotent and creates a new charge on every call, so the excess amount is actually disbursed and cannot be undone by a retry. HOW: Restore the upper-bound check, e.g. `if (amount > charge.amount) { throw new Error('refund exceeds the charge'); }`, and if partial refunds are meant to be supported also validate the lower bound (`amount <= 0`).",
+          "keep": true,
+          "rationale": "Confirmed at src/billing/refund.ts:4-5: the guard `if (amount < charge.amount)` throws 'refund exceeds the charge' for any amount strictly less than the charge (rejecting legitimate partial refunds) while permitting amount > charge.amount (over-refund) to pass through to gw.submit at line 7. gateway.ts:3-4 confirms submit is NOT idempotent and creates a new charge per call, so the excess is actually disbursed. Root cause and failure path are both factually correct; not refuted. Also not a repeat of the status.ts NotReadyError decision (different file, different failure).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit|idempotent",
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The inverted comparison in the refund guard makes a legitimate partial refund (`amount < charge.amount`) throw `'refund exceeds the charge'` while an over-refund (`amount > charge.amount`) passes the guard and reaches `gw.submit`; because `submit` is not idempotent (`gateway.ts:3-4`) and creates a new charge on every call, the excess is actually disbursed and cannot be undone by a retry. Restore the upper-bound check so `amount > charge.amount` throws, and if partial refunds are supported also validate `amount <= 0`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 84711,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: The refund bound check is inverted — `amount < charge.amount` now throws 'refund exceeds the charge', so amounts greater than the charge (and equal-amount full refunds) are not rejected and are submitted to the gateway. WHY: The guard is the only validation before the irreversible `gw.submit({ type: 'refund', ... })` (gateway.ts documents submit as non-idempotent), so an over-refund is now sent to the payment provider, causing money/credit loss, while a legitimate full refund (`amount === charge.amount`) is wrongly rejected. HOW: Restore the comparison so over-refunds are rejected: `if (amount > charge.amount) { throw new Error('refund exceeds the charge'); }`.",
+          "keep": true,
+          "rationale": "Confirmed the inverted guard: `if (amount < charge.amount) throw 'refund exceeds the charge'` rejects only under-refunds, while over-refunds (amount > charge.amount) fall through to the non-idempotent `gw.submit({type:'refund',...})` documented as NOT idempotent in gateway.ts. The claimed failure path (over-refund sent to payment provider) is real and concrete. One minor sub-claim is inaccurate — equal-amount full refunds (amount === charge.amount) do NOT satisfy `amount < charge.amount`, so they are not wrongly rejected — but this does not refute the core inversion bug. Not a repeat of the prior decision (which concerned status.ts error classification).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The inverted check lets amounts greater than `charge.amount` reach the non-idempotent `gw.submit({ type: 'refund', ... })` in `gateway.ts`, risking money/credit loss, while rejecting valid refunds below `charge.amount`. Restore `if (amount > charge.amount) { throw new Error('refund exceeds the charge'); }` so over-refunds are blocked before submission."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 69773,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: The refund guard condition was inverted to `if (amount < charge.amount)`, so it throws 'refund exceeds the charge' for any refund smaller than the charge while allowing amounts larger than the charge through to gw.submit. WHY: Every legitimate partial refund (amount < charge.amount) is now rejected with a misleading error, and the actual over-refund case (amount > charge.amount) is accepted and submitted to the gateway, allowing a charge to be refunded for more than it is worth. HOW: Restore the original comparison: `if (amount > charge.amount) { throw new Error('refund exceeds the charge'); }` (optionally also reject non-positive amounts).",
+          "keep": true,
+          "rationale": "src/billing/refund.ts:4 shows `if (amount < charge.amount)` throwing 'refund exceeds the charge'. This inverts the guard: any partial refund (amount < charge.amount) is rejected with a misleading error, while over-refunds (amount > charge.amount) pass the check and are submitted to gw.submit on line 7, allowing refunding more than the charge value. The root cause, failure path, and suggested fix are all correct. Not a repeat of the PreviousReviewDecisions entry (which concerns NotReadyError propagation in status.ts), and not a style-only issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "refund|charge\\.amount",
+                "path": "src"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Legitimate partial refunds where `amount < charge.amount` now throw the misleading 'refund exceeds the charge' error, while actual over-refunds where `amount > charge.amount` are accepted and submitted to `gw.submit`, allowing a charge to be refunded for more than it is worth. Restore the original `>` comparison in `src/billing/refund.ts` so only amounts greater than `charge.amount` throw, and optionally also reject non-positive amounts."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 59146,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: The guard condition was inverted to `if (amount < charge.amount)` while the error message still reads 'refund exceeds the charge', so the check now rejects valid refunds and accepts invalid ones. WHY: A normal partial refund (amount less than the charge) throws instead of being processed, while a refund larger than the charge passes the check and is submitted to gw.submit, over-refunding the customer. HOW: Restore the original direction `if (amount > charge.amount) { throw new Error('refund exceeds the charge'); }`.",
+          "keep": true,
+          "rationale": "Confirmed at src/billing/refund.ts:4-6. The guard `if (amount < charge.amount)` throws the 'refund exceeds the charge' error for any amount smaller than the charge (a normal partial refund), while amounts larger than the charge pass the check and are submitted to gw.submit at line 7, over-refunding the customer. The condition is inverted relative to both the intended check and the error message. Root cause and failure path are accurate; the previous review decision concerns an unrelated status.ts misclassification, not this guard.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "refund|charge\\.amount|amount <|amount >",
+                "path": "src/billing"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: The guard condition was inverted to `if (amount < charge.amount)` while the error message still says 'refund exceeds the charge', so the function now rejects valid refunds and allows over-refunds. WHY: every legitimate partial refund (e.g. charge 100, refund 50) throws, and an amount greater than the charge falls through to `gw.submit({ type: 'refund', amount })`, which the Gateway interface documents as NOT idempotent — so an over-refund is actually submitted. HOW: restore the direction that matches the message and the invariant `amount <= charge.amount`.",
+          "keep": true,
+          "rationale": "The code at src/billing/refund.ts:4-6 confirms the claim: the guard is `if (amount < charge.amount)` while the error message states 'refund exceeds the charge'. This inverts the intended invariant (amount <= charge.amount): legitimate partial refunds (charge 100, refund 50) throw, and over-refunds (refund 150 > charge 100) fall through to gw.submit, which gateway.ts:3 documents as NOT idempotent. The root cause and failure path are both factually correct and reachable. This is also unrelated to the previous review decision (status.ts NotReadyError propagation), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "not idempotent|idempotent",
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the guard condition was inverted to `if (amount < charge.amount)` while the error message still says 'refund exceeds the charge', every legitimate partial refund such as a charge of 100 with a refund of 50 throws, and an amount greater than the charge falls through to `gw.submit({ type: 'refund', amount })`, which the Gateway interface documents as NOT idempotent, so an over-refund is submitted. Restore the direction that matches the message and the invariant `amount <= charge.amount`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the guard condition was inverted to `if (amount < charge.amount)` while the error message still reads 'refund exceeds the charge', a normal partial refund throws instead of being processed, while a refund larger than the charge passes the check and is submitted to `gw.submit`, over-refunding the customer. Restore the original direction by checking `amount > charge.amount` and throwing `Error('refund exceeds the charge')`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 52102,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: the guard condition was inverted from `amount > charge.amount` to `amount < charge.amount`, so the check no longer rejects refunds that exceed the charge. WHY: an over-refund (e.g. charge 100, refund 500) now passes the guard and is submitted to gw.submit, allowing refunding more than was charged, while a valid partial refund (charge 100, refund 20) is wrongly rejected with 'refund exceeds the charge'. HOW: restore the intended condition `if (amount > charge.amount) { throw new Error('refund exceeds the charge'); }`.",
+          "keep": true,
+          "rationale": "Confirmed in src/billing/refund.ts:4-6. The guard `if (amount < charge.amount)` throws 'refund exceeds the charge' exactly when the refund is LESS than the charge, so valid partial refunds are rejected while over-refunds (amount > charge.amount) pass and are submitted to gw.submit. The intended condition is `amount > charge.amount`. Root cause, failure path, and consequence all match the claim. Not a repeat of the status.ts NotReadyError decision, which concerns a different file and problem.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the guard condition was inverted from `amount > charge.amount` to `amount < charge.amount`, an over-refund (e.g. charge 100, refund 500) now passes and is submitted to `gw.submit`, allowing refunding more than was charged, while a valid partial refund (charge 100, refund 20) is wrongly rejected with `'refund exceeds the charge'`. Restore the intended condition `if (amount > charge.amount) { throw new Error('refund exceeds the charge'); }`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 47018,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `showBilling = mode === 'edit' || Boolean(draft.id)` is still false in create mode, because a new customer has no id (EMPTY at line 13 defines none and `onSave` assigns the id only after storing), so BillingSection is never rendered while `validateCustomer` still requires a valid billing email. WHY: 'Create customer' always fails with 'A valid billing email is required' and the user has no billing-email field to fill in, making customer creation impossible — the comment at lines 25-26 claims the opposite of what the condition does. HOW: gate on the mode only, e.g. `const showBilling = mode === 'edit' || mode === 'create';` (or drop the condition and always render the section).",
+          "keep": false,
+          "rationale": "The candidate finding is a verbatim repeat of PreviousDecision index 1 (round-a-P24-create-mode-section-hidden): same file, same failure (billing section hidden in create mode while validateCustomer requires a billing email, so 'Create customer' always fails). Rules require dropping a finding that raises again the problem an earlier entry already raised, regardless of the entry's outcome or rewording. The current code at line 27 confirms the same condition persists, but the underlying problem is already on the PR.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 37264,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 45553,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `submit()` awaits `onSave(draft)` with no try/catch and the component has no error state for save failures — `errors` is only ever populated from `validateCustomer`. WHY: when `onSave` rejects (network/server error), the promise rejection is unhandled (swallowed by the `void submit()` fire-and-forget) and the form shows nothing, so the user sees a successful-looking submit that silently did not persist and gets no feedback. HOW: wrap the save and surface the failure, e.g. `if (problems.length === 0) { try { await onSave(draft); } catch (e) { setErrors([e instanceof Error ? e.message : 'Failed to save']); } }`.",
+          "keep": true,
+          "rationale": "Confirmed: submit() at lines 19-23 awaits onSave(draft) with no try/catch, and errors is only populated by validateCustomer's synchronous result (line 20-21). The form is submitted via `void submit()` (line 33), so any rejection from onSave becomes an unhandled promise rejection while the UI shows no error. The described failure path is real and unguarded. This is also distinct from the previous decision (round-a-P24), which concerned the billing section not rendering in create mode — a different failure in a different location, already implemented (line 27/40). No refutation available; keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `showBilling = mode === 'edit' || Boolean(draft.id)` is still false in create mode, because a new draft has no `id` (EMPTY at line 13 has none, and `onSave` only assigns the id after the customer is stored). WHY: BillingSection therefore never renders in create mode, so `draft.billingEmail` stays empty and `validateCustomer` (validate.ts:8) always returns 'A valid billing email is required', making 'Create customer' permanently fail. HOW: gate on mode instead of the unsaved id, e.g. `const showBilling = mode === 'edit' || mode === 'create';` (or simply always render it).",
+          "keep": false,
+          "rationale": "This finding raises the exact same problem already posted in PreviousReviewDecisions (round-a-P24-create-mode-section-hidden): the billing section is hidden in create mode because it is gated on the unsaved draft.id, so `validateCustomer` (validate.ts:8) always fails with 'A valid billing email is required' and 'Create customer' cannot succeed. Same failure, same operation, same root gating (`mode === 'edit' || Boolean(draft.id)`). Per the review instructions, a finding that re-raises a problem an earlier entry already raised on this PR must be dropped regardless of that entry's Outcome or whether the finding claims the fix is incomplete. No new distinct defect is introduced here.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts",
+                "startLine": 1,
+                "endLine": 25
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 19,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "When `onSave` rejects, the promise rejection is swallowed by the fire-and-forget `void submit()` and `errors` is only ever populated from `validateCustomer`, so a failed save looks successful and the user gets no feedback. Wrap the `await onSave(draft)` in a try/catch that surfaces the failure, e.g. `setErrors([e instanceof Error ? e.message : 'Failed to save'])`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 91461,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: submit() awaits onSave(draft) but is invoked as `void submit()` from the form's onSubmit, so a rejected onSave produces an unhandled promise rejection and no user-visible error. WHY: when the save fails (network/server error) the form silently does nothing and the rejection escapes to the global handler. HOW: wrap the call in try/catch inside submit and surface the failure via setErrors.",
+          "keep": true,
+          "rationale": "Confirmed in the actual code: submit() is async, awaits onSave(draft) (line 22), and is invoked as `void submit()` from onSubmit (line 33). onSave is typed `(draft) => Promise<void>`, and submit() has no try/catch, so a rejected onSave yields an unhandled promise rejection and no setErrors call — the form silently does nothing on save failure. This is a real, concrete behavior bug distinct from the prior review entry (which concerned the billing section rendering in create mode, now fixed at line 27). Nothing upstream guards or catches the rejection.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 90
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "onSave|CustomerForm",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: submit() has no in-flight guard and the submit button is not disabled while onSave is pending. WHY: two rapid clicks (or a double submit) call onSave twice with the same draft, creating duplicate customers. HOW: track an isSubmitting state, return early from submit when it is true, and set the button's disabled attribute from it.",
+          "keep": true,
+          "rationale": "The code at lines 19-22 has no in-flight guard: submit() is async, calls await onSave(draft) with no isSubmitting state, and the submit button (line 46) has no disabled attribute tied to any pending flag. Nothing in the file or upstream prevents a second submit() invocation while the first onSave is pending, so two rapid clicks/submits invoke onSave twice with the same draft, which can create duplicate customers. This is a distinct failure (double submit / duplicate creation) not covered by the previous decision, which concerned the hidden billing section in create mode. The finding is technically accurate and not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CustomerForm|onSave",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 19,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `submit()` is invoked as `void submit()`, a rejected `onSave(draft)` escapes to the global handler while the form silently does nothing, so the user never sees that the save failed. Wrap the `onSave(draft)` call in try/catch inside `submit` and surface the failure via `setErrors`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 19,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Two rapid clicks call `onSave` twice with the same draft, creating duplicate customers. Track an `isSubmitting` state, return early from `submit` when it is true, and set the submit button's `disabled` attribute from it."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 54953,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `submit()` awaits `onSave(draft)` with no try/catch and is invoked as `void submit()`, so a rejected `onSave` promise is discarded and never surfaced. WHY: when `onSave` rejects (e.g. the save API returns an error or the network fails), the rejection becomes an unhandled promise rejection and the user sees no error while the form silently stays open. HOW: wrap the call and set an error state, e.g. `try { await onSave(draft); } catch (e) { setErrors([...problems, 'Could not save the customer']); }`.",
+          "keep": true,
+          "rationale": "Confirmed: line 22 awaits onSave(draft) with no try/catch, and the only caller invokes submit() as `void submit()` (line 33). onSave is typed `Promise<void>`, so a rejected save (API/network error) propagates out of submit() and becomes an unhandled rejection with no error state set — the user sees no error and the form stays open. The claim's root cause and failure path are accurate. It is not a repeat of the previous decision (which was about the billing section not rendering in create mode), and the current code shows the billing section now rendered via showBilling, confirming that is a distinct, already-addressed issue. No refutation evidence found.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit\\(\\)",
+                "path": "src/customers"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "onSave|CustomerForm",
+                "path": "src",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `submit()` is invoked as `void submit()` and awaits `onSave(draft)` without a `try`/`catch`, a rejected save becomes an unhandled promise rejection, so the failure is never surfaced and the form silently stays open. Wrap the `await onSave(draft)` call in `try`/`catch` and call `setErrors` (for example with `'Could not save the customer'`) so the user sees the failure."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 50397,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf casts the result of RegExp.exec to RegExpExecArray and unconditionally returns match[1], but exec returns null for any commit title that does not match /^\\w+\\(([^)]+)\\):/ (e.g. \"Merge branch 'x'\", \"Update README\", or any commit without a type(scope) prefix). WHY: match[1] then throws \"Cannot read properties of null (reading '1')\", aborting buildEntries and failing changelog generation for the entire range as soon as one non-conventional commit is present. HOW: guard the null result, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';`.",
+          "keep": true,
+          "rationale": "Confirmed: scopeOf casts RegExp.exec result and returns match[1] with no null guard. For any title not matching /^\\w+\\(([^)]+)\\):/ (e.g. \"Update README\"), exec returns null, and match[1] throws, aborting buildEntries/changelog generation. The regex only matches conventional commits with a scope, so plain titles reach the crash. This is a real distinct defect; the prior decision (index 22) addressed a different bug (SKIP check before title assignment), not this null dereference.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf casts the result of RegExp.exec to RegExpExecArray and returns match[1] unconditionally, but exec returns null when the title has no `type(scope):` prefix. WHY: any commit subject like `feat: add export` or `Fix flaky test` (no scope parentheses) makes match null, so match[1] throws `TypeError: Cannot read properties of null` and aborts changelog generation. HOW: guard for the null result and fall back to a default scope, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';`.",
+          "keep": true,
+          "rationale": "Confirmed. scopeOf (lines 24-25) casts exec's result to RegExpExecArray and returns match[1] without a null check. buildEntries calls scopeOf(entry.title) for every commit that isn't skipped (line 34). A conventional-but-scopeless subject like `feat: add export` or a non-conventional subject like `Fix flaky test` fails the regex, exec returns null, and match[1] throws TypeError, aborting changelog generation. No upstream guard prevents this. This is a distinct bug from the earlier SKIP-ordering decision (index 22), which addressed a different failure (skips never applied).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 24,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Any commit subject without a `type(scope):` prefix, such as `feat: add export` or `Fix flaky test`, makes `RegExp.exec` return null so that `match[1]` throws `TypeError: Cannot read properties of null` and aborts changelog generation. Guard the null result and fall back to a default scope with `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "scripts/release/changelog.ts",
+          "line": 23,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "For any commit title that does not match `/^\\w+\\(([^)]+)\\):/` (e.g. `Merge branch 'x'`, `Update README`), `RegExp.exec` returns null and `match[1]` throws \"Cannot read properties of null (reading '1')\", aborting `buildEntries` and failing changelog generation for the entire range as soon as one non-conventional commit is present. Guard the null result with `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 69167,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf dereferences match[1] on the result of a regex exec that returns null when the title has no `type(scope):` prefix. WHY: any commit whose first line lacks a parenthesized scope (e.g. `Fix flaky test`, `Update deps`) throws `TypeError: Cannot read properties of null (reading '1')`, aborting the whole changelog build. HOW: guard the match and fall back to an empty/placeholder scope, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';`.",
+          "keep": true,
+          "rationale": "Confirmed: /^\\w+\\(([^)]+)\\):/ only matches titles with a parenthesized scope; for any other title (e.g. 'Fix flaky test', 'Update deps') .exec returns null. The `as RegExpExecArray` cast suppresses the null check, so match[1] throws TypeError. buildEntries unconditionally calls scopeOf on every non-skipped title, aborting the changelog build. This is a distinct problem from the prior SKIP-ordering decision (which concerns title assignment order), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf dereferences match[1] on the result of RegExp.exec, which is null for any commit title that does not match the `type(scope):` form (e.g. `feat: add x`, a plain `Merge` line, or a bare title). WHY: buildEntries calls scopeOf(entry.title) for every non-skipped commit, so a single scopeless commit throws `TypeError: Cannot read properties of null (reading '1')` and aborts the whole changelog generation; the `as RegExpExecArray` cast only silences the compiler and does not make the value non-null. HOW: guard the match and fall back to an empty/default scope, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match?.[1] ?? '';`.",
+          "keep": true,
+          "rationale": "Confirmed: `scopeOf` casts the result of `RegExp.exec` to `RegExpExecArray` and immediately reads `match[1]`. The regex `/^\\w+\\(([^)]+)\\):/` only matches `type(scope):` titles; for a scopeless title like `feat: add x` or a bare title that isn't caught by SKIP, `exec` returns `null`, so `match[1]` throws TypeError and aborts changelog generation. `buildEntries` calls `scopeOf(entry.title)` for every non-skipped commit (line 34), so the path is reachable. The `as` cast is compile-time only and does not make the value non-null. This is a distinct problem from PreviousDecision index 22 (which was about the SKIP check running before title assignment), not a repeat of it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 23,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In `scripts/release/changelog.ts`, any commit whose first line lacks a parenthesized scope, such as `Fix flaky test` or `Update deps`, makes `scopeOf` dereference `match[1]` on `null` and throw `TypeError: Cannot read properties of null (reading '1')`, aborting the whole changelog build. Guard the regex result and fall back to an empty or placeholder scope, for example `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "scripts/release/changelog.ts",
+          "line": 24,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In `scripts/release/changelog.ts`, because `buildEntries` calls `scopeOf(entry.title)` for every non-skipped commit, a single title that does not match the `type(scope):` form, such as `feat: add x`, a plain `Merge` line, or a bare title, throws `TypeError: Cannot read properties of null (reading '1')` and aborts the whole changelog generation; the `as RegExpExecArray` cast only silences the compiler. Guard the regex result and fall back to an empty or default scope, for example `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match?.[1] ?? '';`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 63082,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf dereferences match[1] after casting the result of RegExp.exec to RegExpExecArray, but exec returns null when the title has no '(scope):' part. WHY: any commit whose first line lacks a scope (e.g. 'feat: add report export') makes match null and throws 'TypeError: Cannot read properties of null (reading 1)', crashing the whole release script on the very first such commit. HOW: return a fallback (empty string or a default bucket) when there is no match.",
+          "keep": true,
+          "rationale": "Confirmed in scripts/release/changelog.ts:23-26: scopeOf casts RegExp.exec's result to RegExpExecArray without a null check and immediately reads match[1]. For any title lacking a \"(scope):\" prefix (e.g. \"feat: add report export\"), exec returns null and match[1] throws TypeError, crashing buildEntries at line 34. The failure path is real and reachable for ordinary commits. Not a repeat of the earlier P31 SKIP/title-ordering decision, which concerns a different failure (chore/ci commits not being skipped).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 23,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Any commit whose first line lacks a `(scope):` part, such as `feat: add report export`, makes `match` null and throws `TypeError: Cannot read properties of null (reading 1)`, crashing the release script on the first such commit. Drop the `as RegExpExecArray` cast and return a fallback such as `'other'` when `match` is null."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 54530,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf returns match[1] without checking that the regex matched, so any commit title without a `(scope)` segment (e.g. `feat: add x`, `fix: bug`) makes exec return null and `match[1]` throws `TypeError: Cannot read properties of null`. WHY: the release/changelog script crashes on the most common commit-message format, aborting changelog generation. HOW: return a fallback when there is no match, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';` (or 'misc').",
+          "keep": true,
+          "rationale": "Confirmed by reading scripts/release/changelog.ts. scopeOf (lines 23-25) casts the result of /^\\w+\\(([^)]+)\\):/.exec(title) to RegExpExecArray and immediately returns match[1] with no null check. buildEntries (line 34) calls scopeOf(entry.title) for every commit not filtered by SKIP, and SKIP does not filter scope-less titles like `feat: add x` or `fix: bug`. Such titles produce a null match, so `match[1]` throws TypeError and aborts changelog generation. The root cause, trigger, and failure path described are accurate. No previous decision covers this file/issue (they concern src/reports/* and the unrelated SKIP-ordering bug), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 6,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 23,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Any commit title without a `(scope)` segment (for example `feat: add x` or `fix: bug`) makes the regex `exec` return `null`, so `scopeOf` throws `TypeError: Cannot read properties of null` and aborts changelog generation. Return a fallback such as `''` or `'misc'` when `match` is `null` instead of accessing `match[1]` directly."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 58393,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf does `match[1]` after casting `RegExp.exec(title)` to RegExpExecArray, but exec returns null whenever the title lacks a `word(scope):` prefix (e.g. \"feat: add thing\", \"Merge branch\", \"initial commit\"). WHY: match is null, so match[1] throws TypeError and the whole changelog build crashes — and because skipping is disabled (see the shouldSkip ordering bug), essentially every non-conventional commit reaches this line. HOW: guard the null case: `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : 'other';`.",
+          "keep": true,
+          "rationale": "Confirmed. scopeOf casts RegExp.exec's result to RegExpExecArray and immediately does match[1]; exec returns null whenever the title lacks a `word(scope):` prefix (e.g. \"feat: add thing\", \"Merge branch\", \"initial commit\"), throwing a TypeError that crashes the changelog build. buildEntries calls scopeOf on every non-skipped commit, and the skip check runs before the title is assigned (line 31-32), so essentially all non-conventional commits reach this line. This is a distinct problem from the earlier skip-ordering decision (which concerned the SKIP test on the empty title), not a repeat of it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: shouldSkip(entry) is called at line 32 while entry.title is still '' (assigned at line 33), so the SKIP regexes never match and no commit is ever filtered out. WHY: chore:/ci:/docs:/Merge commits all leak into the generated changelog — the exact failure the earlier review flagged, now reintroduced by this rework. HOW: build the entry with the title first, then test it: `const entry: Entry = { sha: commit.sha.slice(0, 7), title: commit.message.split('\\n')[0].trim(), scope: '' }; if (shouldSkip(entry)) continue; entry.scope = scopeOf(entry.title);`.",
+          "keep": false,
+          "rationale": "The claim is technically accurate (shouldSkip is called at line 32 while title is still ''), but it raises the exact same problem already raised by PreviousDecision round-a-P31-skip-before-title-set (scripts/release/changelog.ts:21-23): the SKIP check runs before the title is assigned, so chore:/ci:/docs:/Merge commits leak into the changelog. Same failure, same operation. Although that entry's Outcome is \"implemented\", the instructions require dropping a finding that re-raises a problem an earlier decision already raised on this PR, even when the developer's fix is incomplete or reverted. The finding is a repeat, not a different problem.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 24,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "When a title lacks a `word(scope):` prefix such as `feat: add thing`, `Merge branch`, or `initial commit`, `RegExp.exec(title)` returns `null` and `scopeOf` throws a `TypeError` on `match[1]`, crashing the changelog build; with skipping disabled by the `shouldSkip` ordering bug, essentially every non-conventional commit reaches this line. Remove the `RegExpExecArray` cast and guard the null case by returning `match ? match[1] : 'other'`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 53692,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now always raises SubscriptionNotFound instead of returning nil, so renew_due's `next if sub.nil?` guard at line 25 is unreachable and the exception aborts the ids.each loop on the first stale id. WHY: renew_due's own comment says queued ids may reference subscriptions deleted since, so a single deleted subscription now aborts the entire batch and every remaining due subscription is silently left uncharged. HOW: keep the batch tolerant of missing rows, e.g. rescue SubscriptionNotFound inside the loop (`begin; sub = find_subscription(id); rescue SubscriptionNotFound; next; end`) or add a non-raising lookup for the batch path.",
+          "keep": true,
+          "rationale": "The code confirms the claim: find_subscription (line 12) always raises SubscriptionNotFound instead of returning nil, so `next if sub.nil?` at line 25 is unreachable and a stale/deleted id aborts the entire ids.each loop in renew_due. The comment at lines 20-21 explicitly acknowledges queued ids may reference deleted subscriptions, so the batch path is meant to tolerate them. This is a genuine behavior bug (remaining due subscriptions silently left uncharged). It is NOT a repeat of the previous decision: that entry (round-a-P41-raise-breaks-batch-caller) asked to make find_subscription raise for charge_now's benefit; this finding is the new batch-caller consequence of applying that change — a different problem in a different operation, which the instructions treat as non-duplicate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|renew_due|charge_now",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/renewal_service.rb",
+          "line": 24,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Since `find_subscription` now always raises `SubscriptionNotFound` instead of returning nil, `renew_due`'s `next if sub.nil?` guard at line 25 is unreachable, so a single stale id aborts the `ids.each` loop and leaves every remaining due subscription silently uncharged even though queued ids may reference deleted subscriptions. Keep the batch tolerant of missing rows by rescuing `SubscriptionNotFound` inside the loop or adding a non-raising lookup for the batch path."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 85206,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: `find_subscription` now raises `SubscriptionNotFound` for a missing id, but `renew_due` still calls it and then guards with `next if sub.nil?` (line 25), which is now dead code. WHY: the method's comment states ids are queued the night before and some subscriptions may have been deleted since, so a single stale id raises out of `find_subscription` and aborts the `ids.each` loop, silently skipping every remaining subscription due today. HOW: make the batch path tolerant of missing rows, e.g. rescue and continue: `begin; sub = find_subscription(id); rescue SubscriptionNotFound; next; end` (or have `renew_due` use `@repo.find_by(id: id)` directly with the nil guard).",
+          "keep": true,
+          "rationale": "Confirmed at app/services/renewal_service.rb:11-13 that find_subscription raises SubscriptionNotFound rather than returning nil, making the `next if sub.nil?` guard at line 25 dead code. In renew_due (line 22-28), the comment explicitly states some queued ids may have been deleted since, so a single stale id raises out of find_subscription and aborts the whole ids.each loop, skipping all remaining subscriptions due today. This is a real failure path, not style. It is distinct from PreviousDecision round-a-P41-raise-breaks-batch-caller, which concerned find_subscription returning nil for charge_now (a single-id path); the batch-loop abort is the consequence of applying that earlier suggestion in the batch caller — a different operation and failure. Not a repeat in the sense that resolves it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: `find_subscription` now raises `SubscriptionNotFound` for a missing id, but `renew_due` (line 24) still relies on the old nil-returning contract and guards with `next if sub.nil?` at line 25, which is now dead code and can never run. WHY: the queued batch is documented to contain ids whose subscriptions may have been deleted since; with the new raising contract, the first stale id raises out of the `ids.each` loop and aborts the whole batch, so every remaining due subscription is silently never charged (lost billing). HOW: in `renew_due`, rescue the specific error per id and skip it, e.g. `ids.each { |id| begin; sub = find_subscription(id); rescue SubscriptionNotFound; next; end; @gateway.charge(...) }`, or add a separate non-raising lookup (e.g. `find_subscription_or_nil`) for the batch path.",
+          "keep": true,
+          "rationale": "Confirmed: `find_subscription` raises `SubscriptionNotFound` (line 12), while `renew_due` (line 24-25) still assumes the old nil-returning contract and guards with `next if sub.nil?` — dead code that can never execute. The comment at lines 20-21 documents that queued ids may reference deleted subscriptions, so the first stale id raises out of the `ids.each` loop and aborts the entire batch, silently skipping all remaining due subscriptions (lost billing). This is a distinct failure from PreviousDecision round-a-P41 (which was about NoMethodError on nil for `charge_now`); here the consequence is batch abortion/lost charges, arising precisely as a side effect of implementing that earlier raise. Not a repeat and not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "renew_due"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In `renew_due` (line 24), the `next if sub.nil?` guard at line 25 is now dead code because `find_subscription` raises `SubscriptionNotFound` for a missing id, so a stale queued id aborts the `ids.each` batch and silently leaves every remaining due subscription uncharged (lost billing). Rescue `SubscriptionNotFound` per id and skip it, or add a separate non-raising lookup such as `find_subscription_or_nil` for the batch path."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "app/services/renewal_service.rb",
+          "line": 24,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P41-raise-breaks-batch-caller",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `app/services/renewal_service.rb:9` (2026-10-06 12:00 UTC).\n\nBecause `find_subscription` now raises `SubscriptionNotFound` for a missing id, the `next if sub.nil?` guard at line 25 is dead code, and a single stale id—queued the night before and possibly deleted since—aborts the `ids.each` loop and silently skips every remaining subscription due today. Make the batch path tolerant of missing rows by rescuing `SubscriptionNotFound` and continuing, or have `renew_due` use `@repo.find_by(id: id)` directly with the nil guard."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 72221,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: `find_subscription` now raises `SubscriptionNotFound` on a missing row (line 12), but `renew_due` (line 24-25) still calls it expecting `nil` and skips with `next if sub.nil?`, which is now dead code. WHY: `renew_due` is documented to process a batch of ids queued the night before where \"some subscriptions may have been deleted since\"; the first deleted id now raises out of the loop and aborts the entire batch, leaving every remaining due subscription uncharged with no rescue in the file. HOW: In `renew_due`, tolerate the missing row explicitly, e.g. `sub = @repo.find_by(id: id); next if sub.nil?` (or rescue `SubscriptionNotFound` per id), while keeping the raising behavior for `charge_now`.",
+          "keep": true,
+          "rationale": "Confirmed by reading app/services/renewal_service.rb: find_subscription (line 12) raises SubscriptionNotFound on a missing row, so in renew_due (lines 24-25) `next if sub.nil?` is dead code and the first deleted id raises out of the `ids.each` loop, aborting the whole batch with no rescue — contradicting the method's own comment that \"some subscriptions may have been deleted since.\" This is a real behavioral bug. It is the consequence of applying the earlier suggestion (round-a-P41-raise-breaks-batch-caller), and the rules explicitly treat \"a consequence of applying the earlier suggestion\" as a DIFFERENT problem, not a repeat, so it should be kept (revising that earlier suggestion) rather than dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "renew_due|find_subscription|charge_now"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound instead of returning nil, but renew_due still guards with `next if sub.nil?` (line 25), which is unreachable and no longer protects the batch. WHY: renew_due's contract is to tolerate subscriptions deleted after the ids were queued the night before; a single missing id now raises out of the each loop, aborting the run after some subscriptions have already been charged and leaving the rest unprocessed (partial charging, no per-id handling). HOW: make find_subscription take a `required:`/optional flag or add a non-raising lookup for the batch path, e.g. add `def find_subscription_or_nil(id); @repo.find_by(id: id); end` and use it in renew_due, or wrap the per-id call in `rescue SubscriptionNotFound; next;` so the batch skips deleted subscriptions and continues.",
+          "keep": true,
+          "rationale": "Verified against the file: find_subscription (line 12) raises SubscriptionNotFound instead of returning nil, so `next if sub.nil?` at line 25 is unreachable and cannot protect the batch. In renew_due, one missing id now raises out of the each loop, aborting the run after some charges — a real partial-charging bug. This is NOT a repeat of PreviousDecision index 1: that entry described a NoMethodError crash inside charge_now from a nil result, whereas this finding is the distinct consequence of applying that suggestion — the batch path aborting on a deleted subscription. Per the rules, a consequence of applying an earlier suggestion is a different, reportable problem. The root cause and failure path are factually correct.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|renew_due|SubscriptionNotFound",
+                "path": "."
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/renewal_service.rb",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `find_subscription` now raises `SubscriptionNotFound` for missing rows, `renew_due`'s `next if sub.nil?` at line 25 is dead code and a single deleted subscription aborts the entire batch after earlier charges have been made, leaving the remaining ids unprocessed. Make `find_subscription` accept a `required:`/optional flag or add a non-raising lookup such as `find_subscription_or_nil` for `renew_due`, or wrap the per-id call in `rescue SubscriptionNotFound; next;` so the batch skips deleted subscriptions and continues."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `find_subscription` now raises `SubscriptionNotFound` on a missing row (line 12) while `renew_due` (lines 24-25) still expects `nil` and uses the now-dead `next if sub.nil?`, the first deleted id raises out of the loop and aborts the batch, leaving every remaining due subscription uncharged with no rescue in the file. In `renew_due`, tolerate the missing row explicitly, e.g. `sub = @repo.find_by(id: id); next if sub.nil?` (or rescue `SubscriptionNotFound` per id), while keeping the raising behavior for `charge_now`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 101397,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound instead of returning nil, so renew_due's `next if sub.nil?` guard at line 25 is dead code and the exception aborts the whole batch. WHY: the method comment states ids are queued the night before and some subscriptions may have been deleted since — the first deleted id now raises out of the `ids.each` loop, so every subscription queued after it is never charged (silent lost renewals). HOW: make renew_due tolerant of missing subscriptions, e.g. wrap the lookup in `begin ... rescue SubscriptionNotFound; next; end`, or add a non-raising lookup (e.g. `@repo.find_by(id: id)`) inside renew_due.",
+          "keep": true,
+          "rationale": "Confirmed: find_subscription (line 12) raises SubscriptionNotFound instead of returning nil, so the `next if sub.nil?` guard at line 25 is unreachable and the first stale id aborts the entire ids.each loop, silently skipping all subsequent renewals — directly contradicting the method's comment that some queued subscriptions may have been deleted. The bug is real and reachable. It is a consequence of the previously applied suggestion to make find_subscription raise, which is a valid revision-type finding (revises round-a-P41-raise-breaks-batch-caller), not a repeat of the earlier problem.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "renew_due|find_subscription|SubscriptionNotFound"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound instead of returning nil, so renew_due's `next if sub.nil?` guard (line 25) is dead code and the raise aborts the whole batch loop. WHY: renew_due is documented to receive ids queued the night before, some of which were deleted since; a single deleted subscription now raises out of the loop and every remaining due subscription is silently left uncharged. HOW: rescue SubscriptionNotFound inside the loop and continue, e.g. `begin; sub = find_subscription(id); rescue SubscriptionNotFound; next; end`, and drop the now-unreachable `next if sub.nil?`.",
+          "keep": true,
+          "rationale": "Confirmed. find_subscription (line 12) now raises SubscriptionNotFound instead of returning nil, making the `next if sub.nil?` guard on line 25 unreachable. The comment on lines 20-21 explicitly documents that ids may reference deleted subscriptions, so a single deleted subscription raises out of the `ids.each` loop and aborts the batch, leaving remaining due subscriptions uncharged. Note: PreviousDecision #1 (round-a-P41-raise-breaks-batch-caller) asked to make find_subscription raise, which is the cause; this finding is a distinct consequence of applying that suggestion — the batch loop in renew_due is a different operation/caller than charge_now, and its failure (uncaught raise aborting the batch) is not the problem that entry described. The finding also proposes a fix (rescue inside the loop), so it is a legitimate consequence-of-applied-suggestion finding rather than a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P41-raise-breaks-batch-caller",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `app/services/renewal_service.rb:9` (2026-10-06 12:00 UTC).\n\nBecause `find_subscription` now raises `SubscriptionNotFound` instead of returning `nil`, the `next if sub.nil?` guard on line 25 is dead and the first deleted id among those queued the night before aborts `renew_due`'s batch loop, silently leaving every later queued subscription uncharged. Rescue `SubscriptionNotFound` inside the loop and continue—for example `begin; sub = find_subscription(id); rescue SubscriptionNotFound; next; end`—and remove the unreachable `next if sub.nil?`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Since `find_subscription` raises `SubscriptionNotFound` instead of returning `nil`, the `next if sub.nil?` guard at line 25 is dead and the first deleted id raises out of the `ids.each` loop, so every subscription queued after it is silently never charged. Make `renew_due` tolerant of missing subscriptions by rescuing `SubscriptionNotFound` around the lookup and calling `next`, or by using a non-raising lookup such as `@repo.find_by(id: id)` inside `renew_due`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 29422,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: `find_subscription` now raises `SubscriptionNotFound` (line 12) instead of returning nil, but `renew_due` still calls it and then checks `next if sub.nil?` (line 25) to skip ids whose subscription was deleted. WHY: the documented contract of `renew_due` (lines 20-21) is that ids are queued the night before and some subscriptions may have been deleted since; the nil guard was the intended skip path, and now a single deleted id raises and aborts the `each` loop, so every remaining due subscription in the batch is silently left uncharged (missed renewals/revenue) rather than skipped. HOW: have `renew_due` rescue the missing-subscription case per id, e.g. `ids.each do |id| begin sub = find_subscription(id) rescue SubscriptionNotFound then next end; @gateway.charge(...) end`, or add a non-raising lookup used by the batch path.",
+          "keep": false,
+          "rationale": "This finding is a repeat of the problem already raised by PreviousDecision index 1 (round-a-P41-raise-breaks-batch-caller). That entry's suggestion was to make find_subscription raise SubscriptionNotFound instead of returning nil, and it was implemented. This candidate now reports the same failure in the same operation: the raise breaks the batch/caller path where the nil guard previously skipped. Judged by the failure (batch renewal aborts because the raise replaced the nil contract), not by the cause named, it is the same issue already posted on this PR. Per the rules, it must be dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: `find_subscription` now raises `SubscriptionNotFound` instead of returning nil, but `renew_due` still relies on a nil return — its `next if sub.nil?` guard (line 25) is now dead code. WHY: the method's own comment (lines 20-21) says ids are queued the night before and some subscriptions may already be deleted; a single deleted id now raises out of the loop and aborts the entire batch, silently skipping every remaining subscription that was due to be charged. HOW: rescue the missing-subscription case in the batch loop, e.g. wrap the lookup and `next` on `SubscriptionNotFound`, so one deleted subscription is skipped rather than aborting the run.",
+          "keep": false,
+          "rationale": "The technical claim is factually accurate (find_subscription always raises, so next if sub.nil? is dead and a deleted id aborts the batch). However, this is precisely the consequence of the already-implemented PreviousDecision index 1, which explicitly asked find_subscription to raise SubscriptionNotFound instead of returning nil. The finding describes the same failure (a raise on a missing subscription breaking the caller) in the same operation, just blaming the batch loop rather than charge_now. That makes it a repeat of the earlier suggestion's outcome, which the rules say to drop, even when framed as the developer's fix being incomplete. revisesSuggestionId would be round-a-P41-raise-breaks-batch-caller.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|renew_due|charge_now|SubscriptionNotFound"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    }
+  ]
+}

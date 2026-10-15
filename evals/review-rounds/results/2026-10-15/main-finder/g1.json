@@ -1,0 +1,2122 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "8c206718746410428f38bed002a490ba4fcfb0a5a9e4e86aab2b98b752a62c3d"
+  },
+  "startedAt": "2026-10-15T12:56:42.410Z",
+  "updatedAt": "2026-10-15T13:22:01.727Z",
+  "complete": true,
+  "selectedCases": [
+    "R2-consequence-status-implemented",
+    "R7-refines-prior",
+    "R14-repeat-of-rule-by-finder",
+    "P26-denylist-sanitizer-moved",
+    "P35-hardcoded-term-new-messages"
+  ],
+  "casesSourceDigest": "9911c4d44c277a7f0a372cabc6f6001f3a8ac7c1a069985ff90161449b17cb40",
+  "summary": {
+    "measured": 25,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 15,
+        "violations": 1,
+        "rate": 0.067
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 3,
+        "violations": 2,
+        "rate": 0.667
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 15,
+        "violations": 2,
+        "rate": 0.133
+      },
+      "index-reference (#2039)": {
+        "n": 18,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R2-consequence-status-implemented · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 1,
+        "n": 5,
+        "delivered": 3
+      },
+      "R7-refines-prior · signal-not-passed-repeat [not_deliver, proposed]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 1
+      },
+      "R14-repeat-of-rule-by-finder · resubmit-repeat-of-rule [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P26-denylist-sanitizer-moved · profile-denylist-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P26-denylist-sanitizer-moved · locale-without-region-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P35-hardcoded-term-new-messages · invite-messages-term-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 41737,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 56298,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged (lines 8-10) makes the transient 'not settled yet' state reach pollCharge's resubmit branch (poller.ts:13-15), which calls gw.submit — an operation gateway.ts:3 documents as 'NOT idempotent: every call creates a new charge'. WHY: NotReadyError is defined in errors.ts:1 as 'The gateway HAS the charge but has not settled it yet (transient)', so every poll tick on an unsettled charge now creates an additional duplicate charge on the gateway. HOW: Distinguish the two cases at the source — either give gw.status a way to signal 'charge truly unknown' (a separate error type) and only propagate that one, or have pollCharge resubmit only for that dedicated 'unknown' error rather than for the transient NotReadyError.",
+          "keep": true,
+          "rationale": "The chain is fully verified in-repo: errors.ts:1 documents NotReadyError as 'the gateway HAS the charge but has not settled it yet (transient)'. status.ts:8-10 propagates it unchanged. poller.ts:13-14 catches NotReadyError and calls gw.submit, which gateway.ts:3-4 explicitly documents as 'NOT idempotent: every call creates a new charge'. So every poll tick on an unsettled (but accepted) charge triggers a duplicate submit/charge. This is not a repeat of the prior decision (round-a-propagate), which asked to stop misclassifying NotReadyError as FailedError; this finding is the *consequence* of applying that earlier suggestion — the newly propagated error now hits a resubmit branch that assumes NotReadyError means 'never received'. Per the revision rule this is a distinct problem (a different consequence caused by the applied fix), so it should be kept. Root cause, failure path, and non-idempotency claim all check out.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "fetchStatus|submit\\(|NotReadyError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `NotReadyError` is the transient \"charge exists but not yet settled\" state (errors.ts:1), propagating it unchanged from lines 8-10 reaches `pollCharge`'s resubmit branch (poller.ts:13-15) and calls `gw.submit`, which gateway.ts:3 documents as not idempotent, so every poll tick on an unsettled charge creates a duplicate charge. Distinguish the two cases at the source by giving `gw.status` a separate error for a truly unknown charge and propagating (and resubmitting on) only that dedicated error rather than the transient `NotReadyError`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 59301,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError makes poller.ts:13-15 resubmit the charge on every poll tick while the gateway has merely not settled it, and Gateway.submit is documented NOT idempotent (gateway.ts:3). WHY: Because fetchStatus cannot distinguish \"gateway never received it\" from \"gateway received but not settled\", each tick during the settlement window calls gw.submit again, creating duplicate charges. HOW: If duplication is unacceptable, have the poller track an already-submitted flag (or use an idempotency key) so submit is invoked at most once per charge; otherwise document that duplicate submissions are tolerated. Note this behavior is only newly reachable because the previous wrapping of NotReadyError hid the caller's resubmit branch.",
+          "keep": true,
+          "rationale": "Confirmed against source: fetchStatus (status.ts:8-9) now rethrows NotReadyError; pollCharge (poller.ts:13-15) catches NotReadyError and calls gw.submit(charge.payload) on every tick; gateway.ts:3 documents submit as NOT idempotent (\"every call creates a new charge\"). The poller's own comment claims NotReadyError means \"gateway never received it,\" but fetchStatus cannot distinguish that from \"received but not settled,\" so each settlement-window tick re-submits, producing duplicate charges. This is a distinct problem from the previous decision (which was about misclassifying transient errors as terminal failures) — it is a new failure (duplicate charges) that arises as a consequence of applying that earlier fix, so it is not a repeat. No refuting guard exists upstream.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "fetchStatus|NotReadyError|gw.submit|\\.submit\\(",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `fetchStatus` cannot distinguish a charge the gateway never received from one it received but has not settled, propagating `NotReadyError` causes `poller.ts:13-15` to call the non-idempotent `Gateway.submit` (`gateway.ts:3`) on every poll tick during the settlement window, creating duplicate charges; this path is newly reachable because the previous wrapping of `NotReadyError` hid the caller's resubmit branch. Have the poller track an already-submitted flag or use an idempotency key so `submit` is invoked at most once per charge, or explicitly document that duplicate submissions are tolerated."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 44060,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 151248,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Re-throwing NotReadyError unchanged makes the poller resubmit a charge the gateway already holds, producing a duplicate charge. WHY: errors.ts documents NotReadyError as 'the gateway has the charge but has not settled it yet', yet poller.ts:13-15 treats any NotReadyError as 'never received it' and calls gw.submit(charge.payload), which gateway.ts:3 documents as NOT idempotent ('every call creates a new charge') — so an unsettled charge is submitted again, double-billing the customer. HOW: distinguish the two cases before deciding to resubmit — e.g. have fetchStatus surface a distinct transient status error that the poller maps to a retry-without-resubmit, and only resubmit on a genuine 'never received' error; do not route a status-phase NotReadyError into the submit path.",
+          "keep": true,
+          "rationale": "Confirmed by code: errors.ts:1 defines NotReadyError as \"the gateway has the charge but has not settled it yet\", status.ts:8-9 re-throws it unchanged, and poller.ts:13-14 maps any NotReadyError from fetchStatus to gw.submit(charge.payload), while gateway.ts:3 documents submit as NOT idempotent (\"every call creates a new charge\"). Thus an unsettled-but-received charge is resubmitted, duplicating the charge. This is a distinct problem created by applying the earlier round's suggestion (propagate NotReadyError) — a consequence of that fix, not a re-raise of it — so the previous decision does not cover it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|submit\\(|fetchStatus|status\\(",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nRe-throwing `NotReadyError` unchanged makes the poller resubmit a charge the gateway already holds, since `errors.ts` documents it as 'the gateway has the charge but has not settled it yet' but `poller.ts:13-15` treats any `NotReadyError` as 'never received it' and calls `gw.submit(charge.payload)`, which `gateway.ts:3` documents as not idempotent ('every call creates a new charge'), double-billing the customer. Distinguish the two cases before deciding to resubmit — for example, have `fetchStatus` surface a distinct transient status error that the poller maps to a retry-without-resubmit, and only resubmit on a genuine 'never received' error; do not route a status-phase `NotReadyError` into the submit path."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 41387,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: The AbortController is never attached to the request — fetch(url) is called without `{ signal: controller.signal }`, so controller.abort() after 5s does nothing. WHY: Because abort() has no effect on a fetch that was not given the signal, a server that never responds still leaves getJson (and the awaiting caller) hung indefinitely, so the intended timeout does not exist and the original hang is not fixed. HOW: pass the signal to fetch: `const res = await fetch(url, { signal: controller.signal });` (optionally convert the resulting AbortError into a clear TimeoutError).",
+          "keep": false,
+          "rationale": "The technical claim is correct — line 5 calls fetch(url) without the signal, so abort() has no effect. But this is exactly the failure raised by PreviousDecision round-a-http: \"getJson calls fetch with no timeout, so a server that never answers hangs the caller forever. Add a timeout (e.g. an AbortController aborted after 5s).\" The developer's applied fix (the AbortController) is incomplete, and this finding blames that attempted fix. Per the repeat rule, a finding whose consequence is the same hang in the same operation as an already-posted entry is a repeat, even when it names a new cause in the attempted fix or says the fix is incomplete. It is already on the pull request, so it should be dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 76812,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: `controller.abort()` is scheduled but `fetch(url)` is called without `{ signal: controller.signal }`, so the abort never cancels the request. WHY: after 5s the controller aborts nothing, the timer fires pointlessly, and the caller still hangs forever on a non-responding server — the timeout the PR added is dead code. HOW: pass the signal: `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": true,
+          "rationale": "Confirmed in src/http/client.ts:2-5: an AbortController is created and aborted after 5s, but fetch(url) is called without { signal: controller.signal }, so the abort cannot cancel the in-flight request and the timeout is dead code — the caller can still hang indefinitely. The prior decision (round-a-http) asked to add a timeout; this finding is a consequence of that applied fix (the fix is non-functional because the signal is never wired), i.e. a different problem, so it is not a mere repeat. Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: The new AbortController is created and `controller.abort()` is scheduled, but `fetch(url)` on line 5 is never given the signal (`fetch(url, { signal: controller.signal })`), so the abort never cancels the request. WHY: `AbortController.abort()` only aborts a fetch that was passed its signal, so the 5s timeout does nothing and a server that never responds still hangs the caller forever — the exact failure the change was meant to fix remains. HOW: pass the signal to fetch, e.g. `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": false,
+          "rationale": "The technical claim is accurate (fetch on line 5 is not passed controller.signal, so the abort never cancels the request and the hang persists). However, this is the exact problem already raised by PreviousReviewDecisions entry round-a-http (getJson calls fetch with no timeout → caller hangs forever; add AbortController). The current finding merely states the developer's applied fix is incomplete — same failure, same operation (the hang in getJson). Per the rules, repeating a previously-raised problem, including flagging that the applied fix is incomplete, requires dropping the finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/http/client.ts",
+          "line": 2,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `fetch(url)` is called without `{ signal: controller.signal }`, the scheduled `controller.abort()` never cancels the request, so after 5s the timer fires pointlessly, the caller still hangs forever on a non-responding server, and the added timeout is dead code. Pass `{ signal: controller.signal }` to the `fetch` call so the abort actually cancels the request."
+        }
+      ],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 50638,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: The AbortController's signal is never passed to fetch — `fetch(url)` at line 5 is called without `{ signal: controller.signal }`, so the 5s abort timer can never cancel the request. WHY: A server that never responds still hangs getJson forever; the timeout added in this PR is a no-op (dead code), so the exact hang the previous fix targeted remains. HOW: Pass the signal: `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": false,
+          "rationale": "The code factually matches the claim: the AbortController signal is never passed to fetch, so the 5s abort timer is a no-op and the request can hang forever. But this is the exact failure already raised by PreviousDecision round-a-http (\"getJson calls fetch with no timeout, so a server that never answers hangs the caller forever\"). The current finding describes the same hang in the same operation, merely blaming the developer's incomplete AbortController fix (missing signal). Per the rules, re-raising the same failure — even with a new cause and even when the earlier fix is incomplete — is a repeat and must be dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 57869,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: the AbortController created on line 2 is never connected to the request — line 5 calls fetch(url) without the `{ signal: controller.signal }` option, so controller.abort() after 5s does nothing. WHY: the timer fires but cannot cancel the in-flight request, so a server that never responds still hangs the caller indefinitely, leaving the original timeout defect unfixed while the code appears to guard against it. HOW: pass the signal to fetch: `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": false,
+          "rationale": "The technical claim is factually correct: fetch(url) is called without { signal: controller.signal }, so controller.abort() cannot cancel the request. However, this finding raises the exact same failure already raised in PreviousDecision round-a-http: \"a server that never answers hangs the caller forever\" in the same operation (getJson's fetch). The prior suggestion asked for a timeout/AbortController and was marked implemented; the current finding merely points out the developer's applied fix is incomplete (signal not wired), producing the identical hang in the same operation. Per the rules, a finding that raises again the same failure an earlier entry raised — including when it says the developer's fix is incomplete — must be dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: the AbortController's signal is never passed to fetch — line 5 calls fetch(url) with no options, so controller.abort() after 5s aborts a signal no request is listening to. WHY: the timeout does not cancel anything, so an unresponsive server still hangs getJson (and its caller) forever, which is exactly the failure this change was meant to fix. HOW: pass the signal to fetch: `await fetch(url, { signal: controller.signal })`.",
+          "keep": false,
+          "rationale": "The technical claim is accurate: fetch(url) is called without options, so controller.signal is never attached and controller.abort() after 5s cancels nothing, leaving getJson able to hang. However, this is a repeat of the PreviousReviewDecisions entry (round-a-http), which raised exactly the same failure — getJson hanging forever because the fetch has no timeout — and proposed adding an AbortController aborted after 5s, marked \"implemented\". The candidate blames a new cause (the signal isn't passed) but describes the identical failure in the same operation (getJson hanging). Per the rules, a finding that raises again the problem a previous entry already raised on this PR, including when it argues the developer's fix is incomplete, must be dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39733,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: the new AbortController is created and aborted on a 5s timer, but the fetch call on line 5 never receives `signal: controller.signal`, so the abort has no effect. WHY: a server that never responds still hangs the caller forever (the exact failure the timeout was meant to fix) — the timer fires, aborts a controller nobody is listening to, and the awaited fetch never settles, leaving the promise pending and the timer handle keeping the process alive. HOW: pass the signal to fetch: `const res = await fetch(url, { signal: controller.signal });`. Note: this revises the earlier suggestion (round-a-http) whose applied change does not actually abort the request.",
+          "keep": false,
+          "rationale": "The technical claim is factually true (fetch on line 5 is called without `signal: controller.signal`, so the abort is inert). However, it raises the exact failure already posted in PreviousReviewDecisions entry round-a-http: \"a server that never answers hangs the caller forever\" — the same hang in the same getJson operation. The finding itself concedes it \"revises the earlier suggestion whose applied change does not actually abort the request,\" i.e. it says the developer's fix is incomplete. Per the review rules, a finding that re-raises the same failure a previous entry described (even when blaming a new cause in the attempted fix) must be dropped. This is that repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R14-repeat-of-rule-by-finder",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 29313,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-of-rule",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R14-repeat-of-rule-by-finder",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 38447,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-of-rule",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R14-repeat-of-rule-by-finder",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23663,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-of-rule",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R14-repeat-of-rule-by-finder",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 29937,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-of-rule",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R14-repeat-of-rule-by-finder",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 51732,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-of-rule",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 76129,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: sanitizeProfileUpdate builds the patch from the raw request body and only deletes three denylisted keys, and that object is handed unchanged to usersRepo.update, which writes every key of the patch to the users row (src/users/users.repo.ts:19-20). WHY: any client-supplied key that is not one of id/role/passwordHash is persisted as a users column, so an unknown/renamed field (e.g. {\"display_name\":\"x\"} or a future column the client guesses) reaches the DB and surfaces as an unhandled DB error (HTTP 500) rather than a 400, and the write set is unbounded instead of being the fixed set of editable profile fields. HOW: build the patch from an allowlist of the fields the profile endpoint owns, e.g. `const patch: Record<string, unknown> = {}; for (const f of ['displayName','bio','avatarUrl','locale'] as const) { if (f in body) patch[f] = body[f]; } return patch;` (this also supersedes the denylist approach).",
+          "keep": false,
+          "rationale": "The finding's factual claims are correct (sanitizeProfileUpdate builds the patch from the raw body with a 3-key denylist and passes it unchanged to usersRepo.update, which writes every key). However, this is the exact problem already raised on this PR by PreviousReviewDecisions index 10 (round-a-P26-denylist-sanitizer-moved), located at the same function, describing the same unbounded write set from the denylist sanitizer handed to usersRepo.update, and proposing the same allowlist fix (displayName, bio, avatarUrl, locale). Judged by failure rather than cause, the candidate repeats that entry — the same unfiltered client-key write in the same operation — so it is dropped as a duplicate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/users.repo.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale calls parts[1].toUpperCase() without checking that the locale contains a region segment, so `split('-')` yields a one-element array and parts[1] is undefined. WHY: a request with locale: \"en\" (a perfectly ordinary, trivially invalid value) throws `TypeError: Cannot read properties of undefined (reading 'toUpperCase')` at line 13, escaping as an uncaught error and returning HTTP 500 instead of the intended 400 \"unsupported locale\"; the same applies to values like \"en-\". A related defect: `replace('_', '-')` only replaces the first underscore, so \"pt_br_extra\" normalizes to \"pt-BR_EXTRA\" and is rejected as unsupported. HOW: guard the missing segment and normalize the whole string, e.g. `const [language, region] = input.replace(/_/g, '-').split('-'); return region ? `${language.toLowerCase()}-${region.toUpperCase()}` : language.toLowerCase();`",
+          "keep": true,
+          "rationale": "Verified in src/users/profile.controller.ts:12-13: `input.replace('_','-').split('-')` on \"en\" yields a one-element array, so `parts[1].toUpperCase()` throws TypeError. checkProfileFields (line 39-41) calls normalizeLocale before the SUPPORTED_LOCALES check, and updateProfile (line 63-68) has no try/catch, so the TypeError escapes as HTTP 500 instead of the intended 400. The secondary claim about `replace('_','-')` only replacing the first underscore (\"pt_br_extra\" → \"pt-BR_EXTRA\") is also factually correct. This is a distinct defect from the PreviousReviewDecisions entry about the sanitizeProfileUpdate denylist (a different problem in the same file). Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: every check in checkProfileFields is gated on `typeof patch.x === 'string'`, so a non-string value for an editable field skips validation entirely and is passed to usersRepo.update. WHY: a body such as {\"displayName\": 123} or {\"avatarUrl\": {\"toString\": ...}} bypasses the length and URL checks and is written straight to the users column at line 66, persisting a value of the wrong type (corrupt row / DB type error) instead of returning 400. HOW: reject non-string values for the fields the endpoint accepts, e.g. `if ('displayName' in patch && typeof patch.displayName !== 'string') throw new HttpError(400, 'displayName must be a string');` before the length check (same for bio/avatarUrl/locale).",
+          "keep": false,
+          "rationale": "The finding is technically accurate (non-string editable-field values skip the type-gated checks and reach usersRepo.update at line 66, confirmed by users.repo.ts:20 writing patch as-is), but it raises the SAME failure already posted on this PR: PreviousDecision index 10 (round-a-P26-denylist-sanitizer-moved) on this exact file flagged that sanitizeProfileUpdate forwards body values to usersRepo.update unvalidated, persisting arbitrary keys/values on the users row. The consequence — request-body values written to the users column without validation — is identical; only the named cause differs (type-gating vs denylist). Its Outcome is not_implemented (not a rejection), and the current diff shows no rework of this area. Per the repeat rule, a finding whose failure an existing entry already described is that entry again, so drop it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update\\(",
+                "path": "src/users/users.repo.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A request with a locale like `en` or `en-` makes `normalizeLocale` read `parts[1].toUpperCase()` from `undefined` at line 13, escaping as an uncaught `TypeError` that returns HTTP 500 instead of the intended 400 \"unsupported locale\", and `replace('_', '-')` only fixing the first underscore leaves `pt_br_extra` as `pt-BR_EXTRA` and rejected as unsupported. Guard the missing region segment and normalize every underscore by destructuring `input.replace(/_/g, '-').split('-')` and returning `language.toLowerCase()` when `region` is absent."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 62890,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale calls parts[1].toUpperCase() when the input contains no '-' (e.g. locale: \"en\" or \"xx\"), and parts[1] is undefined, so it throws a TypeError. WHY: checkProfileFields only checks typeof patch.locale === 'string' (line 39) before calling normalizeLocale, so any single-token locale string crashes updateProfile with an unhandled TypeError (500) instead of the intended HttpError(400). HOW: guard the missing region, e.g. `if (!parts[1]) throw new HttpError(400, `unsupported locale ${input}`);` before formatting.",
+          "keep": true,
+          "rationale": "Verified: normalizeLocale at lines 11-14 does `parts[1].toUpperCase()`; for input without '-' (e.g. \"en\", \"xx\"), split yields a single element so parts[1] is undefined and toUpperCase throws TypeError. checkProfileFields (line 39) only guards `typeof patch.locale === 'string'` before calling normalizeLocale (line 40), so a single-token locale string produces an unhandled TypeError (500) instead of HttpError(400). This is a distinct problem from the prior denylist-sanitization decision. Confirmed real bug.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: updateProfile dereferences the result of usersRepo.update (user.displayName) with no null check, while getProfile at line 48 guards the same repo result with `if (!user) throw new HttpError(404, ...)`. WHY: if the update returns null (no matching user row — the same case getProfile treats as possible), this throws a TypeError and returns a 500 instead of a clean error. HOW: add `if (!user) throw new HttpError(404, 'user not found');` after the update call.",
+          "keep": false,
+          "rationale": "The claim asserts usersRepo.update can return null, mirroring findById. But the repo types are asymmetric: findById is `Promise<User | null>` (hence the guard at line 48), while update is declared `Promise<User>` (non-nullable). The candidate's root cause — \"the update returns null\" — contradicts the actual signature, so the TypeError path is not supported by the code. This reduces to a generic \"add a null check\" suggestion with no concrete code path producing a wrong outcome.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 30,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update\\s*\\(|async update",
+                "glob": "*.ts",
+                "path": "src/users"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/users.repo.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A single-token `locale` such as `en` or `xx` makes `normalizeLocale` read `parts[1]` as `undefined` and throw a `TypeError`, so `updateProfile` returns an unhandled 500 instead of the intended `HttpError(400)` because `checkProfileFields` only verifies `typeof patch.locale === 'string'` at line 39. Add a guard before formatting, e.g. `if (!parts[1]) throw new HttpError(400, `unsupported locale ${input}`);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 77739,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale throws a TypeError when the input has no region subtag (e.g. \"en\"), because parts[1] is undefined and parts[1].toUpperCase() is called. WHY: a request with locale: \"en\" (or any single-token value) crashes the handler with a 500 instead of returning 400, and the unhandled error can escape the normal validation path. HOW: guard the missing part, e.g. `const [lang, region] = input.replace('_', '-').split('-'); return region ? `${lang.toLowerCase()}-${region.toUpperCase()}` : lang.toLowerCase();` and let the SUPPORTED_LOCALES check reject unsupported values.",
+          "keep": true,
+          "rationale": "Confirmed: normalizeLocale splits input and unconditionally calls parts[1].toUpperCase(). For a single-token locale like \"en\" (or any value with no region), parts[1] is undefined, so `.toUpperCase()` throws a TypeError. The caller checkProfileFields (line 39-43) only validates typeof string, so it reaches normalizeLocale before the SUPPORTED_LOCALES guard on line 41 — the SUPPORTED_LOCALES check cannot run because the crash happens during normalizeLocale. This is a real 500-inducing bug. It is distinct from the prior denylist finding (round-a-P26), which concerns which fields reach usersRepo.update, not locale normalization.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "normalizeLocale|SUPPORTED_LOCALES"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 39,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A request whose `locale` is `en` (or any other single-token value) makes `normalizeLocale` throw a `TypeError` because `parts[1]` is undefined and `parts[1].toUpperCase()` is called, crashing the handler with a 500 instead of a 400 and letting the unhandled error escape normal validation. Guard the missing region by destructuring `lang` and `region` from `input.replace('_', '-').split('-')` and returning the lowercased `lang` when `region` is absent, so the `SUPPORTED_LOCALES` check can reject unsupported values."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 85126,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale assumes a region subtag and calls parts[1].toUpperCase() unconditionally, producing \"de-undefined\" for any tag without a region (e.g. \"de\", \"en\", \"pt\"). WHY: those inputs fail the SUPPORTED_LOCALES lookup and the request is rejected with a 400 even though the language is supported, and multi-subtag inputs like \"de-DE-extra\" are silently truncated to \"de-DE\". HOW: default the region to the canonical one or reject early — const [lang, region] = input.replace('_', '-').split('-'); if (!lang || !region) throw new HttpError(400, `unsupported locale ${input}`); return `${lang.toLowerCase()}-${region.toUpperCase()}`;",
+          "keep": true,
+          "rationale": "The claim is confirmed by the code: normalizeLocale (lines 12-13) unconditionally calls parts[1].toUpperCase(). For any input without a region subtag (e.g. \"de\", \"en\", \"pt\"), parts[1] is undefined, so the result is literally \"de-undefined\". That value is then checked against SUPPORTED_LOCALES (line 41) and throws HttpError(400, `unsupported locale de-undefined`), rejecting a supported language with a confusing error. Inputs like \"de-DE-extra\" are also silently truncated to \"de-DE\". This is a genuine behavior bug in the changed lines, not style. It is distinct from the previous review decisions (the only one on this file, round-a-P26-denylist-sanitizer-moved, concerns the denylist sanitizer, a different problem), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 60,
+                "path": "src/users/profile.controller.ts",
+                "startLine": 39
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "normalizeLocale",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale reads parts[1] without checking it exists, so any locale without a region subtag (e.g. 'de' or 'en') yields 'de-undefined'. WHY: a user submitting a valid language-only locale gets a 400 'unsupported locale de-undefined', and if such a value were ever accepted it would be persisted as a malformed locale. HOW: fall back to the region-less form, e.g. `const [lang, region] = input.replace('_', '-').split('-'); return region ? `${lang.toLowerCase()}-${region.toUpperCase()}` : lang.toLowerCase();`",
+          "keep": true,
+          "rationale": "Confirmed at src/users/profile.controller.ts:12-13. normalizeLocale splits on '-' and reads parts[1] unconditionally. For a language-only locale such as 'de' or 'en', parts[1] is undefined, so `${parts[1].toUpperCase()}` throws a TypeError (Cannot read properties of undefined) rather than yielding 'de-undefined' as the finding's prose states. Either way the failure is real: the finder's root cause (no check that the region subtag exists) is factually correct, and the path is reachable from updateProfile -> checkProfileFields (line 40) with any user-supplied locale lacking a region. The suggested fallback to the region-less form is a valid fix. The prose's exact output string ('de-undefined') is slightly inaccurate (it actually throws before interpolation), but the underlying bug and trigger are genuine, so this is not a refutation. This is also a distinct issue from PreviousDecision round-a-P26-denylist-sanitizer-moved (which concerns the denylist vs allowlist in sanitizeProfileUpdate), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 70,
+                "path": "src/users/profile.controller.ts",
+                "startLine": 39
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "normalizeLocale"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: sanitizeProfileUpdate strips only id/role/passwordHash, and checkProfileFields only validates displayName/bio/avatarUrl/locale, so any other key of the request body (organizationId, emailVerified, plan, email) is written verbatim by usersRepo.update. WHY: a member can POST {\"organizationId\":\"<other-org>\"} to move into another tenant, {\"emailVerified\":true} to skip verification, {\"plan\":\"pro\"} to upgrade for free, or {\"email\":\"attacker@evil.com\"} to hijack the account via password reset. HOW: replace the denylist with an allowlist of the editable fields — const patch = {}; for (const k of ['displayName','bio','avatarUrl','locale']) if (k in body) patch[k] = body[k]; return patch; — and never thread `email` through this endpoint. (Revises the earlier denylist finding: the allowlist it proposed omits email, so that fix alone still leaves the account-takeover path open.)",
+          "keep": false,
+          "rationale": "The technical claim is factually accurate (denylist of id/role/passwordHash; checkProfileFields only validates displayName/bio/avatarUrl/locale; usersRepo.update writes every patch key to the users row). However, this exact problem is already raised by PreviousReviewDecisions entry round-a-P26-denylist-sanitizer-moved (same file, same failure: arbitrary body keys like organizationId/emailVerified/plan reach usersRepo.update because the sanitizer is a denylist). The candidate finding's own text acknowledges it 'Revises the earlier denylist finding,' and the only distinction it draws is that the earlier proposed allowlist omits `email` — that is the same failure in the same operation, re-raised against the earlier suggestion's wording, which the instructions explicitly say to DROP (even when the finding claims the developer's/earlier fix is incomplete). No concrete evidence that the applied/earlier decision is wrong or reverted exists in the diff.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 90
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "sanitizeProfileUpdate|checkProfileFields"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update\\s*[=(]|async update|update\\(",
+                "path": "src/users/users.repo.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/users.repo.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 28,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Any locale without a region subtag, such as `de` or `en`, becomes `de-undefined`, so the `SUPPORTED_LOCALES` lookup fails and returns a 400 even though the language is supported, while inputs like `de-DE-extra` are silently truncated to `de-DE`. Destructure `lang` and `region` after `input.replace('_', '-').split('-')`, then either default the region to the canonical one or throw `new HttpError(400, ...)` before returning `${lang.toLowerCase()}-${region.toUpperCase()}`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/users/profile.controller.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A valid language-only locale such as `de` or `en` currently yields `de-undefined`, causing a 400 `unsupported locale de-undefined` and risking a malformed persisted locale if such a value were accepted. Destructure `lang` and `region` from `input.replace('_', '-').split('-')` and return `lang.toLowerCase()` when `region` is absent, otherwise return the formatted `${lang.toLowerCase()}-${region.toUpperCase()}`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 98092,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale dereferences parts[1] without a guard, so a locale string without a region separator (e.g. \"en\" or \"\") makes parts[1] undefined and parts[1].toUpperCase() throws a TypeError. WHY: a client sending {\"locale\":\"en\"} to updateProfile (line 40) triggers an uncaught TypeError that is not an HttpError, so the request fails with a 500 instead of a clean 400. HOW: validate the shape before indexing, e.g. throw an HttpError when parts.length < 2 or parts[1] is empty. Also note replace('_','-') only converts the first underscore, so inputs with more separators are silently mangled instead of normalized.",
+          "keep": true,
+          "rationale": "Confirmed. normalizeLocale at lines 11-14 does `input.replace('_','-').split('-')` then unconditionally reads parts[1]. For an input with no separator (e.g. \"en\"), parts = [\"en\"] so parts[1] is undefined and parts[1].toUpperCase() throws a TypeError. checkProfileFields (line 39-40) passes client-controlled patch.locale straight into normalizeLocale, and the thrown TypeError is not an HttpError, so updateProfile (line 63-68) fails with a 500 instead of a 400. The path is real and reachable. Not a repeat of any prior decision: entry index 10 (round-a-P26) addresses the denylist sanitizer/mass-assignment problem, a distinct issue; no previous entry covers this crash. The secondary note about replace() only converting the first underscore is a separate, accurate observation. Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: checkProfileFields only enforces length when displayName/bio are strings, so a non-string value (e.g. {\"displayName\": {\"$ne\": null}} or [\"x\"]) passes validation untouched and is written verbatim by usersRepo.update. WHY: the stored row then holds an object/array where the User contract declares displayName: string / bio: string, and getProfile/updateProfile return it directly as JSON, producing a wrong-typed response and downstream code that assumes a string breaks. HOW: reject non-string values for the editable fields, e.g. `if (patch.displayName !== undefined && typeof patch.displayName !== 'string') throw new HttpError(400, 'displayName must be a string');` (same for bio, and likewise avatarUrl/locale if they must be strings when present).",
+          "keep": true,
+          "rationale": "Confirmed by reading the code: checkProfileFields (src/users/profile.controller.ts:29-44) only length-checks displayName/bio when typeof === 'string' and only validates avatarUrl/locale when typeof === 'string'. A non-string value (object/array/boolean) falls through untouched, and sanitizeProfileUpdate passes it through while usersRepo.update writes every key of the patch verbatim to the users row (users.repo.ts:20). The User type declares displayName: string and bio: string (users.repo.ts:11-12), and both getProfile (line 49) and updateProfile (line 67) return these fields directly as JSON, so a wrong-typed value would be persisted and returned. The claimed root cause and failure path are factually correct and reachable via POST updateProfile with a non-string displayName/bio. Note: this is a distinct problem from the earlier denylist/allowlist decision (round-a-P26-denylist-sanitizer-moved), which concerned which keys are writable, not type enforcement of the editable fields; the two can coexist. Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 90
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update\\(|displayName",
+                "path": "src/users/users.repo.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "displayName|interface User|type User",
+                "glob": "*.ts",
+                "excludeTests": true,
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 30,
+                "path": "src/users/users.repo.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 30,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A client sending `{\"locale\":\"en\"}` to `updateProfile` (line 40) makes `normalizeLocale` dereference `parts[1]` as undefined and throw a `TypeError` that is not an `HttpError`, so the request fails with a 500 instead of a clean 400; `replace('_','-')` also converts only the first underscore, silently mangling inputs with more separators. Validate the shape before indexing, throwing an `HttpError` when `parts.length < 2` or `parts[1]` is empty, and switch to `replace(/_/g, '-')` so every underscore is normalized."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/users/profile.controller.ts",
+          "line": 30,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A non-string value such as `{\"displayName\": {\"$ne\": null}}` or `[\"x\"]` passes validation and is written verbatim by `usersRepo.update`, so the stored row holds an object where the `User` contract declares `displayName: string` / `bio: string`, and `getProfile`/`updateProfile` return wrong-typed JSON that breaks downstream code assuming a string. Reject non-string values for the editable fields, e.g. throwing an `HttpError(400, 'displayName must be a string')` when `patch.displayName !== undefined && typeof patch.displayName !== 'string'`, and likewise for `bio`, `avatarUrl`, and `locale` when present."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 65822,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: The two newly added functions inviteExpiredMessage (line 8) and alreadyMemberMessage (line 12) hardcode the literal nouns \"workspace\" and \"member\"/\"workspace admin\" even though they accept an `account` and src/lib/terminology.ts explicitly requires user-facing text to resolve nouns via term(account, noun). WHY: accounts that rename these nouns (e.g. a school calls a workspace a \"class\", an agency calls a member a \"collaborator\") are shown the wrong words — the same defect just fixed in seatLimitMessage on this PR — and the unused `account` parameter is itself evidence the terminology lookup was intended and dropped. HOW: build both strings with term(), e.g. return `This ${term(account, 'workspace')} invite has expired. Ask a ${term(account, 'workspace')} ${term(account, 'admin')} to send you a new one.` and return `${email} is already a ${term(account, 'member')} of this ${term(account, 'workspace')}.`",
+          "keep": true,
+          "rationale": "Confirmed: inviteExpiredMessage (line 8) and alreadyMemberMessage (line 12) accept an `account` parameter but hardcode \"workspace\", \"admin\", and \"member\" literals. src/lib/terminology.ts explicitly states user-facing text never hardcodes these nouns and must resolve via term(account, noun); the sibling seatLimitMessage in the same file already does this correctly. Accounts that rename nouns will see wrong words. The earlier decision (round-a-P35) covered seatLimitMessage only — a different function/operation — so this is a distinct defect, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "export function term|function term",
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 8,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The hardcoded nouns 'workspace' and 'member'/'workspace admin' in `inviteExpiredMessage` (line 8) and `alreadyMemberMessage` (line 12) show accounts that rename these terms the wrong words, the same defect just fixed in `seatLimitMessage` on this PR, and the unused `account` parameter shows the `term(account, noun)` lookup from `src/lib/terminology.ts` was intended but dropped. Build both strings with `term()`, for example `This ${term(account, 'workspace')} invite has expired. Ask a ${term(account, 'workspace')} ${term(account, 'admin')} to send you a new one.` and `${email} is already a ${term(account, 'member')} of this ${term(account, 'workspace')}.`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 62246,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage and alreadyMemberMessage accept `account` but never use it, hardcoding the literal nouns 'workspace', 'admin' and 'member' instead of calling term(account, ...). WHY: accounts can rename these nouns (src/lib/terminology.ts:4), so an account that calls its workspace a 'class' and its admin a 'teacher' is shown 'This workspace invite has expired. Ask a workspace admin...' — the wrong, un-renamed nouns, violating the module invariant documented at terminology.ts:1-3 that user-facing text never hardcodes these nouns. HOW: build both strings with term(account, 'workspace'), term(account, 'admin') and term(account, 'member'), matching seatLimitMessage.",
+          "keep": true,
+          "rationale": "Confirmed: inviteExpiredMessage (line 8) and alreadyMemberMessage (line 12) accept `account` but hardcode 'workspace', 'admin', and 'member' as literals, while the sibling seatLimitMessage (line 4) correctly uses term(account, 'workspace')/term(account, 'member'). terminology.ts:1-3 documents the invariant that user-facing text never hardcodes these nouns, and terminology.ts:6 shows accounts can supply custom nouns. The previous decision (index 4) targeted seatLimitMessage at lines 3-5 — a different function — so this is a distinct occurrence, not a repeat. Root cause and failure path both verified.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "An account that calls its workspace a 'class' and its admin a 'teacher' still sees the hardcoded nouns in 'This workspace invite has expired. Ask a workspace admin...' because `inviteExpiredMessage` and `alreadyMemberMessage` accept `account` but never call `term(account, ...)`, violating the invariant documented at `src/lib/terminology.ts:1-3` that user-facing text never hardcodes these nouns. Build both strings with `term(account, 'workspace')`, `term(account, 'admin')`, and `term(account, 'member')`, matching `seatLimitMessage`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 65152,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "The two new exported functions inviteExpiredMessage and alreadyMemberMessage accept an Account parameter but never call term(), hardcoding the literal nouns 'workspace' and 'member'. Accounts can rename these nouns (Noun = 'workspace' | 'member' | 'admin' with account.nouns overrides and DEFAULT_NOUNS fallback in src/lib/terminology.ts), and the file's own contract comment states user-facing text must never hardcode these nouns. An account that calls its workspaces 'classes' would be told 'This workspace invite has expired' / 'is already a member of this workspace'. Build the messages with term(account, 'workspace') and term(account, 'member') instead of the literal words. This is the same underlying failure already raised for seatLimitMessage, but on the two new functions the current diff introduces — the earlier fix was applied to seatLimitMessage only.",
+          "keep": true,
+          "rationale": "Confirmed by reading the file: seatLimitMessage (line 4) uses term(account, 'workspace') and term(account, 'member'), but the two new functions inviteExpiredMessage (line 8) and alreadyMemberMessage (line 12) hardcode the literal nouns 'workspace' and 'member' despite accepting an Account. src/lib/terminology.ts confirms accounts can override nouns via account.nouns with DEFAULT_NOUNS fallback, and its contract comment states user-facing text never hardcodes these nouns. The root cause and failure path are real. This is NOT a repeat of PreviousDecision #4, which was scoped to seatLimitMessage only; the current diff introduces two separate functions with the same kind of defect in a separate operation. The applied fix to seatLimitMessage does not guard these new functions.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage and alreadyMemberMessage take an Account but never use it, hardcoding \"workspace\"/\"member\"/\"workspace admin\" instead of calling term(account, ...). WHY: src/lib/terminology.ts documents that user-facing text never hardcodes these nouns; for an account that renames its workspace to \"class\" or its admin to another word, these messages show the wrong noun to the user. HOW: build the text with term(account, 'workspace') / term(account, 'member') / term(account, 'admin'), e.g. `This ${term(account,'workspace')} invite has expired. Ask a ${term(account,'workspace')} ${term(account,'admin')} to send you a new one.` and `${email} is already a ${term(account,'member')} of this ${term(account,'workspace')}.`",
+          "keep": true,
+          "rationale": "Confirmed: inviteExpiredMessage (lines 7-9) and alreadyMemberMessage (lines 11-13) both take an `account` parameter but hardcode \"workspace\"/\"member\"/\"workspace admin\" instead of calling term(account, ...). src/lib/terminology.ts explicitly documents that user-facing text never hardcodes these nouns (accounts can rename them). The sibling seatLimitMessage in the same file already demonstrates the correct pattern using term(). The earlier PreviousDecision (round-a-P35-hardcoded-term-new-messages) targeted a different function (seatLimitMessage, lines 3-5), which was implemented — so this is a different operation with the same class of bug, not a repeat of that resolved entry.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `src/lib/terminology.ts` documents that user-facing text must never hardcode these nouns, an account that renames its workspace to 'class' or its admin to another word sees the wrong noun in `inviteExpiredMessage` and `alreadyMemberMessage` even though both take an `Account`. Build the text with `term(account, 'workspace')`, `term(account, 'member')`, and `term(account, 'admin')` so the messages use the account's terminology instead of the hardcoded 'workspace'/'member'/'workspace admin' literals."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/invites/messages.ts",
+          "line": 3,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P35-hardcoded-term-new-messages",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/invites/messages.ts:3` (2026-10-06 12:00 UTC).\n\nBecause `src/lib/terminology.ts` requires user-facing text never to hardcode nouns and accounts can override the `Noun` union (`'workspace' | 'member' | 'admin'`) via `account.nouns` with a `DEFAULT_NOUNS` fallback, `inviteExpiredMessage` and `alreadyMemberMessage` show the wrong words to an account that calls its workspaces 'classes' or its members something else, the same failure already raised for `seatLimitMessage` but now on the two functions this diff introduces. Build both messages with `term(account, 'workspace')` and `term(account, 'member')` instead of the literal 'workspace' and 'member' strings, and apply the fix to these new functions rather than only `seatLimitMessage`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 65504,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage and alreadyMemberMessage hardcode the nouns 'workspace' (and 'member' in alreadyMemberMessage) while the account parameter they receive is never used, unlike the sibling seatLimitMessage which calls term(account, 'workspace')/term(account, 'member'). WHY: accounts can rename these nouns (src/lib/terminology.ts lines 1-3, Noun includes 'workspace', 'member', 'admin'), so an account that calls its workspaces 'classes' is shown 'This workspace invite has expired' and 'already a member of this workspace', contradicting the product's terminology. HOW: build both strings with term(account, 'workspace') (and term(account, 'member') for the member noun), mirroring seatLimitMessage.",
+          "keep": true,
+          "rationale": "Confirmed: inviteExpiredMessage and alreadyMemberMessage hardcode 'workspace'/'member' and never call term(account, ...), even though they receive the account parameter and the sibling seatLimitMessage was already updated to use term(). src/lib/terminology.ts confirms accounts can rename these nouns. The earlier previous-review decision targeted seatLimitMessage (lines 3-5), a different function; this finding covers two distinct functions/operations, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage and alreadyMemberMessage hardcode the nouns 'workspace' (and 'member' in alreadyMemberMessage) even though both take an Account and the sibling seatLimitMessage uses term(account, noun). WHY: an account that renames 'workspace' to e.g. 'class' is shown 'This workspace invite has expired' / 'already a member of this workspace', which contradicts src/lib/terminology.ts's stated rule that user-facing text never hardcodes these nouns. HOW: build both strings with term(account, 'workspace') and term(account, 'member') (use term(account, 'admin') for the admin reference), matching seatLimitMessage.",
+          "keep": true,
+          "rationale": "Verified in source: src/lib/terminology.ts documents that user-facing text must never hardcode nouns and exposes term(account, noun). inviteExpiredMessage (line 8) hardcodes 'workspace' and alreadyMemberMessage (line 12) hardcodes 'workspace'/'member', both ignoring their account parameter, while the sibling seatLimitMessage correctly uses term(). The described root cause and failure path are real. PreviousDecision index 4 scoped its suggestion specifically to seatLimitMessage (lines 3-5) and was implemented; it never named these two functions, so per the rule that an entry resolves only the specific issue it describes, this is a distinct instance in a separate message/operation rather than a re-raise. Cannot refute the technical claim.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `inviteExpiredMessage` and `alreadyMemberMessage` hardcode `workspace` (and `member`) despite receiving an `Account`, accounts that rename these nouns see text like 'This workspace invite has expired' and 'already a member of this workspace', contradicting `src/lib/terminology.ts`'s rule that user-facing text never hardcodes these nouns. Build both strings with `term(account, 'workspace')`, `term(account, 'member')`, and `term(account, 'admin')` for the admin reference, matching `seatLimitMessage`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Since `inviteExpiredMessage` and `alreadyMemberMessage` ignore their `account` parameter and hardcode `workspace` (and `member`), accounts that rename these nouns are shown 'This workspace invite has expired' and 'already a member of this workspace', contradicting `src/lib/terminology.ts` lines 1-3 where `Noun` includes `workspace`, `member`, and `admin`. Build both strings with `term(account, 'workspace')` and `term(account, 'member')`, mirroring `seatLimitMessage`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 52121,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage and alreadyMemberMessage accept an Account but ignore it, hardcoding the words 'workspace' and 'workspace admin' in the returned text. WHY: accounts can rename these nouns via term() (src/lib/terminology.ts) — an account that calls its workspaces 'classes' will be told 'This workspace invite has expired' / 'X is already a member of this workspace', the exact terminology bug previously fixed in the sibling seatLimitMessage on line 4. HOW: build both strings with term(account, 'workspace') (and term(account, 'admin') for the admin noun), e.g. `This ${term(account,'workspace')} invite has expired. Ask a ${term(account,'workspace')} ${term(account,'admin')} to send you a new one.` and `${email} is already a ${term(account,'member')} of this ${term(account,'workspace')}.`",
+          "keep": true,
+          "rationale": "Confirmed: inviteExpiredMessage (line 8) and alreadyMemberMessage (line 12) accept an Account parameter but hardcode 'workspace' and 'workspace admin' instead of using term(account, 'workspace'/'admin'). src/lib/terminology.ts defines Noun including 'workspace' and 'admin' and the file's own comment states user-facing text must never hardcode these nouns. seatLimitMessage (line 4) already does this correctly. The previous decision covered only seatLimitMessage (lines 3-5); this is the same class of bug in two separate functions, i.e. a different operation, so it is not a repeat of that entry.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`inviteExpiredMessage` and `alreadyMemberMessage` accept an `Account` but ignore it and hardcode `'workspace'`, `'workspace admin'`, and `'member'`, so accounts that rename these nouns through `term()` in `src/lib/terminology.ts` will see the wrong terminology, the same bug fixed in sibling `seatLimitMessage` on line 4. Build both strings with `term(account, 'workspace')`, `term(account, 'admin')` for the admin noun, and `term(account, 'member')` for the member noun."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

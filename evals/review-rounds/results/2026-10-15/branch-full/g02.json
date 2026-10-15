@@ -1,0 +1,4449 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "65d8210f3d4ff1d5a5fa4e69740a3ec8f2c429d859a98bb946084efd8385a404"
+  },
+  "startedAt": "2026-10-15T00:56:00.284Z",
+  "updatedAt": "2026-10-15T02:01:57.144Z",
+  "complete": true,
+  "selectedCases": [
+    "R3-consequence-status-stale",
+    "R9-repeat-after-dev-rejected",
+    "K4-rule-repeats-declined-bug",
+    "K10-rule-repost-new-file",
+    "P07-rule-absent-assert-cast-rewritten",
+    "P15-rule-nth-called-listed-site",
+    "P23-param-shape-read-before-helper",
+    "P31-skip-before-title-set",
+    "P39-promo-expiry-unrelated"
+  ],
+  "casesSourceDigest": "8d18ef729296a6410a0f0cbcd05bb0123861a76178fd3fd44bc04c6e02e8e943",
+  "summary": {
+    "measured": 45,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 35,
+        "violations": 4,
+        "rate": 0.114
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 4,
+        "violations": 1,
+        "rate": 0.25
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 40,
+        "violations": 4,
+        "rate": 0.1
+      },
+      "index-reference (#2039)": {
+        "n": 44,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R3-consequence-status-stale · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 3,
+        "n": 5,
+        "delivered": 4
+      },
+      "R9-repeat-after-dev-rejected · resubmit-repeat-after-rejection [not_deliver, proposed]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K4-rule-repeats-declined-bug · finishRun-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K4-rule-repeats-declined-bug · finishBatch-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "K10-rule-repost-new-file · rangeLabel-start-repeat [not_deliver]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 1
+      },
+      "K10-rule-repost-new-file · dayKey-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P07-rule-absent-assert-cast-rewritten · absent-cast-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P07-rule-absent-assert-cast-rewritten · absent-cast-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P15-rule-nth-called-listed-site · audit-nth-called-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 5,
+        "delivered": 3
+      },
+      "P15-rule-nth-called-listed-site · opt-out-nth-called-new-site [deliver]": {
+        "pass": 3,
+        "n": 5,
+        "delivered": 3
+      },
+      "P23-param-shape-read-before-helper · export-filter-shape-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P23-param-shape-read-before-helper · low-stock-wrong-query-unrelated [deliver]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 4
+      },
+      "P31-skip-before-title-set · skip-before-title-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P31-skip-before-title-set · scope-null-match-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P39-promo-expiry-unrelated · promo-expiry-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 189287,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now rethrows NotReadyError, and its only caller pollCharge interprets NotReadyError as 'the gateway never received it' and responds by calling the non-idempotent gw.submit. WHY: errors.ts documents NotReadyError as 'the gateway has the charge but has not settled it yet', so resubmitting a charge the gateway already holds creates a second charge — a duplicate/double billing. Before this change all errors became FailedError, so pollCharge rethrew and never resubmitted; the PR makes this duplicate-charge path newly reachable. HOW: In pollCharge, treat NotReadyError as transient and retry the status poll instead of resubmitting (return without calling gw.submit); only resubmit when the gateway genuinely never received the charge.",
+          "keep": true,
+          "rationale": "Confirmed. errors.ts:1 documents NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', while poller.ts:7 treats the same error as 'the gateway never received it: resubmit' and, at poller.ts:13-15, calls gw.submit(charge.payload). gateway.ts:3 states submit is 'NOT idempotent: every call creates a new charge.' The diff at status.ts:8-11 newly rethrows NotReadyError instead of wrapping it in FailedError, so pollCharge now reaches the resubmit branch for a charge the gateway already holds — a duplicate-charge path that was previously unreachable (all errors became FailedError, which pollCharge rethrows at poller.ts:17). The semantic contradiction and the resulting double-billing path are real; the finding's root cause and failure path are accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|fetchStatus|NotReadyError|gw.submit"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now rethrows NotReadyError unchanged, and its only caller pollCharge handles NotReadyError by calling gw.submit() to resend the charge. WHY: NotReadyError is documented in errors.ts as \"the gateway has the charge but has not settled it yet (transient)\", so this transient state now triggers a resubmit; because gw.submit is documented as NOT idempotent (\"every call creates a new charge\"), each poll tick while the charge is unsettled creates an additional duplicate charge (double billing). HOW: Keep propagating NotReadyError, but in pollCharge stop resubmitting on it — treat it as still-pending (e.g. return { state: 'pending' }) and only call gw.submit when the gateway genuinely has no record of the charge.",
+          "keep": true,
+          "rationale": "Confirmed the full failure path. status.ts:8-11 now rethrows NotReadyError unchanged; its only caller poller.ts:13-15 catches NotReadyError and calls gw.submit() to resend. errors.ts:1 documents NotReadyError as a transient state where \"the gateway has the charge but has not settled it yet\", and gateway.ts:3 documents submit as NOT idempotent (\"every call creates a new charge\"). poller.ts:6 confirms pollCharge runs on every tick for charges the gateway has ACCEPTED. Before this change NotReadyError was wrapped into FailedError and never reached the resubmit branch; the new rethrow activates it, so each tick while a charge is unsettled triggers a duplicate charge. The claim's root cause and trigger are factually accurate and the path is reachable — no guard prevents it. This is a distinct downstream bug introduced by applying the earlier propagate-NotReadyError suggestion, not a reversal of it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|NotReadyError|gw\\.submit"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 26,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nBecause `fetchStatus` now rethrows `NotReadyError` and `pollCharge` treats it as 'the gateway never received it', it calls the non-idempotent `gw.submit`, so a charge the gateway already holds can be submitted again and cause duplicate/double billing; before this change all errors became `FailedError`, so `pollCharge` rethrew and never resubmitted. In `pollCharge`, treat `NotReadyError` as transient and retry the status poll instead of resubmitting (return without calling `gw.submit`), and only resubmit when the gateway genuinely never received the charge."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nBecause `fetchStatus` rethrows `NotReadyError` and `pollCharge` handles it by calling `gw.submit()` to resend, a transient 'gateway has the charge but has not settled it yet' state now triggers a resubmit; since `gw.submit` is not idempotent and creates a new charge on every call, each poll tick while the charge is unsettled can create a duplicate charge and double billing. Keep propagating `NotReadyError`, but in `pollCharge` stop resubmitting on it—treat it as still pending (return `{ state: 'pending' }`) and only call `gw.submit` when the gateway genuinely has no record of the charge."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 266070,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now rethrows NotReadyError unchanged (lines 8-9), which makes pollCharge's previously-dead NotReadyError branch run and call gw.submit(), while errors.ts documents NotReadyError as 'the gateway HAS the charge but has not settled it yet (transient)' and gateway.ts documents submit as 'NOT idempotent: every call creates a new charge'. WHY: on every poll tick for a charge the gateway already holds but has not settled, pollCharge resubmits and the gateway creates an additional charge, producing duplicate charges / double billing. HOW: treat NotReadyError as 'already received, not settled' — re-poll later instead of resubmitting; only resubmit when a distinct 'never received' error is thrown, or make submit idempotent via an idempotency key. (Revises the earlier 'propagate NotReadyError so the caller can retry' suggestion: propagating it activates the non-idempotent resubmit path in pollCharge.)",
+          "keep": true,
+          "rationale": "Confirmed: status.ts:8-9 rethrows NotReadyError unchanged, which makes pollCharge's previously-dead NotReadyError branch (poller.ts:13-14) execute gw.submit(). errors.ts:1 defines NotReadyError as 'the gateway HAS the charge but has not settled it yet', and gateway.ts:3 documents submit as non-idempotent ('every call creates a new charge'). So on a poll tick for a charge the gateway already holds but has not settled, pollCharge resubmits, producing a duplicate charge. The failure path is reachable and the described root cause is factually accurate. The earlier suggestion round-a-propagate was outcome 'not_implemented' (no rejection) and this finding explicitly revises it, so it is not superseded.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now rethrows NotReadyError unchanged (lines 8-9), which makes pollCharge's NotReadyError branch reachable; that branch calls gw.submit(), which is documented as non-idempotent ('every call creates a new charge'), while NotReadyError is documented as 'the gateway has the charge but has not settled it yet (transient)'. WHY: every poll tick for a charge that is merely not settled yet now resubmits the payload and creates a duplicate charge against a gateway that already holds the original — a double-charge/financial regression that did not exist before, because previously fetchStatus wrapped NotReadyError in FailedError and the resubmit branch was unreachable. HOW: reconcile the two contradictory semantics — either keep wrapping the transient NotReadyError (e.g. `throw new FailedError(chargeId, err)`) so it cannot reach the resubmit path, or fix pollCharge (src/billing/poller.ts:13-16) to treat NotReadyError as a retry-poll signal rather than a resubmit signal; do not propagate it to a non-idempotent submit.",
+          "keep": true,
+          "rationale": "Confirmed by code: status.ts:8-9 now rethrows NotReadyError unchanged, so poller.ts:12-16's NotReadyError branch becomes reachable and calls gw.submit(charge.payload), which gateway.ts:3 documents as NOT idempotent ('every call creates a new charge'). Meanwhile errors.ts:1 documents NotReadyError as 'the gateway has the charge but has not settled it yet (transient)', directly contradicting poller.ts:7's comment ('the gateway never received it: resubmit'). A merely-unsettled charge therefore triggers a resubmit that creates a duplicate charge — a real double-charge regression. pollCharge/fetchStatus have no other callers or guards, so the path is live. This is a fresh, different problem created by applying the earlier round-a-propagate suggestion (propagate NotReadyError), not the same issue re-raised.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|fetchStatus",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 24,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nBecause `fetchStatus` now rethrows `NotReadyError` unchanged (lines 8-9), every poll tick for a charge the gateway already holds but has not settled reaches `pollCharge`'s `NotReadyError` branch and calls the non-idempotent `gw.submit()`, creating duplicate charges and a financial regression that did not exist when `fetchStatus` wrapped `NotReadyError` in `FailedError`. Reconcile the contradictory semantics by either wrapping the transient `NotReadyError` in `FailedError` (e.g. `throw new FailedError(chargeId, err)`) so it cannot reach the resubmit path, or fixing `pollCharge` (`src/billing/poller.ts:13-16`) to treat `NotReadyError` as a retry-poll signal rather than a resubmit signal, and do not propagate it to a non-idempotent submit."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nBecause `fetchStatus` now rethrows `NotReadyError` unchanged (lines 8-9), `pollCharge`'s previously-dead `NotReadyError` branch runs and calls `gw.submit()`, which `gateway.ts` documents as non-idempotent, so every poll tick for a charge the gateway already holds but has not settled creates an additional charge and produces duplicate charges / double billing. Treat `NotReadyError` as 'already received, not settled' and re-poll later instead of resubmitting, only resubmit when a distinct 'never received' error is thrown, or make `submit` idempotent via an idempotency key; this revises the earlier suggestion to propagate `NotReadyError` because propagating it activates the non-idempotent resubmit path in `pollCharge`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 109091,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The new re-throw of NotReadyError (lines 8-10) makes pollCharge's NotReadyError branch reachable, and that branch calls gw.submit — which gateway.ts:3-4 documents as NOT idempotent. WHY: errors.ts:1-2 defines NotReadyError as \"the gateway has the charge but has not settled it yet (transient)\", so resubmitting a charge the gateway already holds creates a duplicate charge, and pollCharge runs on every tick (poller.ts:6), so duplicates accumulate each tick. HOW: make the caller treat NotReadyError as a transient pending state (retry on a later tick) instead of resubmitting, e.g. return a pending result rather than calling the non-idempotent gw.submit.",
+          "keep": true,
+          "rationale": "The re-throw at status.ts:8-10 does make pollCharge's NotReadyError branch reachable (previously fetchStatus always wrapped into FailedError, so the branch was dead). That branch (poller.ts:13-14) calls gw.submit, which gateway.ts:3-4 explicitly documents as NOT idempotent (\"every call creates a new charge\"). errors.ts:1-2 defines NotReadyError as \"the gateway has the charge but has not settled it yet,\" so resubmitting a charge the gateway already holds creates a duplicate, and pollCharge runs every tick (poller.ts:6). The path is concrete and unguarded; the only counter-evidence is poller.ts:7's contradictory comment, which is the very inconsistency the finding exposes, not a refutation. No guard prevents the duplicate-submit path.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|pollCharge|gw\\.submit|submit\\(",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "earlierId": "round-a-propagate",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-propagate",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 26,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 224509,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: By letting NotReadyError escape fetchStatus, pollCharge now receives it and reacts by calling the non-idempotent gw.submit, creating a brand-new charge. WHY: errors.ts documents NotReadyError as the transient 'gateway has the charge but has not settled it yet' state, so a charge that is simply pending will trigger a duplicate charge (financial double-charge), a path that was unreachable before this change because fetchStatus wrapped NotReadyError into FailedError. HOW: reconcile the semantics — in pollCharge only call gw.submit when the charge is genuinely unknown, and for a transient not-settled status re-poll (return without resubmitting) instead of creating a new charge.",
+          "keep": true,
+          "rationale": "The change at status.ts:8-9 makes NotReadyError propagate out of fetchStatus instead of being wrapped into FailedError. This activates a previously-unreachable branch in pollCharge (poller.ts:13-16): catching NotReadyError now calls gw.submit(charge.payload), which is non-idempotent and creates a new charge. The candidate's root-cause relies on the error's own documentation (errors.ts:1: 'The gateway has the charge but has not settled it yet (transient)'), under which re-submitting for a merely-unsettled charge is a genuine duplicate-charge path. I could not refute this: poller.ts's comment ('never received it: resubmit') asserts the opposite semantics, but that contradiction is exactly the unresolved semantic conflict the finding describes, and the change unquestionably makes the resubmit branch reachable where it was dead before. This is a concrete behavioral/financial path, not style or a generic missing-guard suggestion. Note: the earlier round-a-propagate suggestion (outcome not_implemented) requested exactly this propagation, so the finding is a consequence of applying it; I am keeping it rather than dropping, since that entry is not an implemented decision and the current diff shows no reconciliation of the two conflicting NotReadyError semantics.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|class .*Error",
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|submit\\(|status\\(",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `NotReadyError` now escapes `fetchStatus`, `pollCharge` reacts by calling the non-idempotent `gw.submit` and creates a brand-new charge for a pending charge, causing a financial double-charge that was unreachable before this change since `fetchStatus` wrapped `NotReadyError` into `FailedError` and `errors.ts` documents `NotReadyError` as the transient 'gateway has the charge but has not settled it yet' state. Reconcile the semantics so `pollCharge` only calls `gw.submit` when the charge is genuinely unknown, and for a transient not-settled status re-polls (returns without resubmitting) instead of creating a new charge."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 135500,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Rethrowing NotReadyError unchanged makes fetchStatus surface a transient \"charge exists but not settled\" error to its only caller pollCharge, whose catch block calls the non-idempotent gw.submit to resubmit. WHY: Gateway.submit is documented as NOT idempotent (gateway.ts:3 — every call creates a new charge) while NotReadyError is documented as transient (errors.ts:1 — the gateway HAS the charge, it just has not settled), so every poll tick on an unsettled charge now creates an additional charge, producing duplicate/double billing; this branch was unreachable before this PR because fetchStatus converted NotReadyError into FailedError. HOW: Make pollCharge treat NotReadyError as pending (return a waiting state) instead of resubmitting, or only propagate NotReadyError when its meaning is genuinely \"the gateway never received it\".",
+          "keep": true,
+          "rationale": "The technical claim is confirmed by the code. errors.ts:1 documents NotReadyError as \"The gateway has the charge but has not settled it yet (transient)\", while gateway.ts:3 documents submit as \"NOT idempotent: every call creates a new charge\". status.ts:8-10 now rethrows NotReadyError unchanged, making it reachable at poller.ts:13-15, whose NotReadyError branch calls gw.submit(charge.payload). So a merely-unsettled charge triggers a fresh charge creation on each poll tick — duplicate billing. Before this change fetchStatus converted NotReadyError to FailedError (status.ts:11), so pollCharge's NotReadyError branch was unreachable; this PR activates the path. The conflict between the transient semantics (errors.ts) and pollCharge's comment/assumption (\"the gateway never received it\": resubmit, poller.ts:7,14) is real and the failure path is concrete, not speculative.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Now that fetchStatus propagates NotReadyError unchanged (status.ts:9), the previously-dead NotReadyError branch in pollCharge (poller.ts:13-15) becomes reachable and calls `await gw.submit(charge.payload)`, but NotReadyError is documented as a transient 'has the charge but has not settled yet' condition (errors.ts:2) while submit is explicitly non-idempotent ('every call creates a new charge', gateway.ts:3). WHY: A charge that is merely pending settlement now causes a duplicate charge to be created on every poll tick — double billing. Before this change fetchStatus wrapped NotReadyError into FailedError, so poller.ts:14 was unreachable; this PR makes it live. HOW: Do not resubmit on NotReadyError — it is transient, so let the next poll tick re-check status; only resubmit if the gateway truly never received the charge (introduce a distinct error type or a flag). If resubmission is intended, make submit idempotent via an idempotency key.",
+          "keep": true,
+          "rationale": "The finding is supported by the actual code. status.ts:8-9 now rethrows NotReadyError unchanged, whereas it previously wrapped it into FailedError. That makes poller.ts:13-15 reachable: pollCharge catches NotReadyError and calls `await gw.submit(charge.payload)`. The semantics contradict: errors.ts:2 documents NotReadyError as a transient 'has the charge but has not settled yet' condition, while gateway.ts:3 explicitly states submit is NOT idempotent ('every call creates a new charge'). poller.ts:7's comment ('the gateway never received it') conflicts with errors.ts:2, confirming a misclassification that, once the branch goes live, resubmits on every poll tick and can create duplicate charges (double billing). The root cause and failure path are factually correct and activated by this PR's change; nothing upstream guards it. This is a genuine behavior bug, not style. Note the prior review decision (round-a-propagate) asked to propagate NotReadyError and was not_implemented, so it does not resolve this distinct downstream consequence.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|fetchStatus|\\.status\\(|submit\\(",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "implements Gateway|class .*Gateway|throw new NotReadyError|status\\(chargeId|state: 'pending'|'not_ready'"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReady|not settled|never received|pending",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nBecause `fetchStatus` now propagates `NotReadyError` unchanged (status.ts:9), the previously-dead `NotReadyError` branch in `pollCharge` (poller.ts:13-15) becomes reachable and calls `await gw.submit(charge.payload)`; since `NotReadyError` is documented as a transient 'has the charge but has not settled yet' condition (`errors.ts:2`) while `submit` is explicitly non-idempotent ('every call creates a new charge', `gateway.ts:3`), a charge that is merely pending settlement creates a duplicate charge on every poll tick — double billing, whereas before this change `fetchStatus` wrapped `NotReadyError` into `FailedError` so poller.ts:14 was unreachable. Do not resubmit on `NotReadyError`; let the next poll tick re-check status and only resubmit if the gateway truly never received the charge (introduce a distinct error type or a flag), or make `submit` idempotent via an idempotency key if resubmission is intended."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nRethrowing `NotReadyError` unchanged makes `fetchStatus` surface a transient 'charge exists but not settled' error to its only caller `pollCharge`, whose catch block calls the non-idempotent `gw.submit` to resubmit, so every poll tick on an unsettled charge creates an additional charge and double billing because `Gateway.submit` is documented as not idempotent (`gateway.ts:3` — every call creates a new charge) while `NotReadyError` is transient (`errors.ts:1` — the gateway has the charge, it just has not settled); this branch was unreachable before this PR because `fetchStatus` converted `NotReadyError` into `FailedError`. Make `pollCharge` treat `NotReadyError` as pending (return a waiting state) instead of resubmitting, or only propagate `NotReadyError` when its meaning is genuinely 'the gateway never received it'."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 106211,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: The newly added `metrics.increment('billing.resubmit')` tags a branch that calls `gw.submit(charge.payload)`, but `Gateway.submit` is documented as NOT idempotent (gateway.ts:3: 'every call creates a new charge'), and this branch runs on every poll tick while the charge is in NotReadyError state. WHY: each tick submits again, producing duplicate charges / double billing for the same charge. HOW: do not resubmit on NotReadyError; return a pending/waiting state and let a later tick re-check status, or only resubmit after the gateway confirms the original charge was never received (e.g. a distinct 'not received' signal rather than the shared NotReadyError).",
+          "keep": true,
+          "rationale": "gateway.ts:3 confirms submit is documented NOT idempotent ('every call creates a new charge'), and pollCharge (poller.ts:10) is documented as running on every tick, with the NotReadyError branch unconditionally calling gw.submit. If the charge remains in NotReadyError across ticks, each tick creates a new charge — a real duplicate-billing path. The poller's 'never received it' docstring is internally inconsistent with its own 'charges the gateway has ACCEPTED' wording and is not proof the branch is safe. The prior review round raised this exact issue with outcome 'not_implemented', so it is not a basis for dropping.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "label": "bug",
+          "earlierId": "round-a-resubmit-rejected",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 72991,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: The NotReadyError branch that now increments 'billing.resubmit' resubmits a charge via gw.submit, but gw.submit is documented as NOT idempotent and NotReadyError means the gateway already holds the charge. WHY: Every poller tick that sees NotReadyError creates an additional real charge, so the customer is billed multiple times / duplicate charges accumulate. HOW: Do not resubmit on NotReadyError — treat it as transient and let the next tick re-check status (e.g. return { state: 'pending' }).",
+          "keep": true,
+          "rationale": "Confirmed by source docs: gateway.ts:3 states submit is \"NOT idempotent: every call creates a new charge,\" and errors.ts:1 states NotReadyError means \"The gateway has the charge but has not settled it yet (transient).\" The NotReadyError branch at poller.ts:14-17 nonetheless calls gw.submit, so each tick creates a duplicate real charge. The prior review entry for this same issue is not_implemented, which is not a refutation. Root cause and failure path are accurate; nothing guards the branch.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit",
+                "glob": "*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "src/billing/gateway.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "src/billing/errors.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "label": "bug",
+          "earlierId": "round-a-resubmit-rejected",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 87644,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: The new metrics.increment sits in the NotReadyError branch whose next statement resubmits via the non-idempotent gw.submit, but errors.ts documents NotReadyError as \"the gateway has the charge but has not settled it yet (transient)\". WHY: Because gateway.submit is documented as NOT idempotent (\"every call creates a new charge\"), every poll tick for a merely-unsettled charge creates an additional charge in the gateway, producing duplicate charges; the added metric only counts each duplicate resubmission instead of preventing it. HOW: On NotReadyError, do not resubmit — treat it as still-pending and return, letting the next tick re-poll the status.",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts defines NotReadyError as 'the gateway has the charge but has not settled it yet (transient)', and gateway.ts documents submit as NOT idempotent ('every call creates a new charge'). status.ts re-throws NotReadyError, so pollCharge's catch branch at poller.ts:14-17 resubmits via gw.submit on every tick for a charge the gateway already holds, producing duplicate charges. The added metric only counts the resubmission rather than preventing it. No upstream guard prevents this path. The prior decision (not_implemented) is not evidence of rejection.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit",
+                "glob": "*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "src/billing/errors.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "src/billing/status.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 30,
+                "path": "src/billing/gateway.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "label": "bug",
+          "earlierId": "round-a-resubmit-rejected",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 92689,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: The NotReadyError branch resubmits the charge via `gw.submit`, but `gw.submit` is documented as NOT idempotent and NotReadyError means the gateway already holds the charge, so each poll tick creates a duplicate charge; the newly added `metrics.increment('billing.resubmit')` only counts these duplicate resubmissions without preventing them. WHY: For every tick a charge stays unsettled, pollCharge issues another non-idempotent submit, so customers are charged multiple times for one logical charge. HOW: Wait/poll instead of resubmitting — do not call `gw.submit` on NotReadyError; return the not-ready state and let the next tick re-check status (only resubmit when the gateway confirms it never received the charge).",
+          "keep": true,
+          "rationale": "Confirmed by source: errors.ts defines NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', and gateway.ts documents submit as 'NOT idempotent: every call creates a new charge.' The NotReadyError branch in poller.ts:14-17 calls gw.submit on every tick, producing duplicate charges for one logical charge. The metrics.increment only counts these, it does not prevent them. The poller's own comment (line 8) claiming the gateway 'never received it' contradicts the NotReadyError class doc, corroborating the root cause. The prior decision was not_implemented, so the issue remains unresolved.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "label": "bug",
+          "earlierId": "round-a-resubmit-rejected",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 96659,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: The branch the new metric line instruments resubmits a charge via non-idempotent `gw.submit` on `NotReadyError`, but `errors.ts` defines `NotReadyError` as \"the gateway has the charge but has not settled it yet\". WHY: Because `submit` is documented as non-idempotent (every call creates a new charge) and the gateway already holds the charge, every tick in this state creates a duplicate charge; the added `metrics.increment('billing.resubmit')` merely records the duplicate-creating path instead of preventing it. HOW: On `NotReadyError`, do not call `gw.submit`; wait for the next tick (or make the resubmit idempotent with an idempotency key) and only increment the metric once the charge is confirmed created.",
+          "keep": true,
+          "rationale": "Confirmed: src/billing/errors.ts:1 documents NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', while src/billing/gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge'. poller.ts:14-17 catches NotReadyError and calls gw.submit(charge.payload), so each tick in this state issues another non-idempotent submit while the gateway already holds the charge — a duplicate charge. The added metrics.increment only instruments that path; it does not prevent the duplicate. The root cause and failure path are factually accurate; the prior review decision raised the same issue and was not implemented, which is not a refutation.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit|idempot|non-idempot",
+                "path": "src/billing"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "label": "bug",
+          "earlierId": "round-a-resubmit-rejected",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 46582,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 6,
+          "label": "kody_rules",
+          "earlierId": "round-a-bug-progress",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "A crash between `db.results.insertMany` and `db.progress.update` in `finishBatch` can leave results visible for a batch whose progress was never recorded. Call `db.progress.update(batch.id, 'done')` before `db.results.insertMany(batch.id, batch.outputs)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 30485,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 6,
+          "label": "kody_rules",
+          "earlierId": "round-a-bug-progress",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "Batch outputs can become visible for a batch whose progress was never recorded because `db.results.insertMany` runs before `db.progress.update` in `finishBatch`. Swap the order so the progress update runs before the results are inserted."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 52642,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 6,
+          "label": "kody_rules",
+          "earlierId": "round-a-bug-progress",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "In `finishBatch`, inserting results before recording progress makes batch outputs visible while the batch still appears unfinished, so readers can observe completed results against stale progress. Call `db.progress.update(batch.id, 'done')` before `db.results.insertMany(batch.id, batch.outputs)` so the status change is persisted first."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17208,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-bug-progress",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-bug-progress",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "A crash between these two calls leaves results visible for a job whose progress was never recorded. In `finishBatch`, call `await db.progress.update(batch.id, 'done')` before `db.results.insertMany`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 43252,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 6,
+          "label": "kody_rules",
+          "earlierId": "round-a-bug-progress",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "In `finishBatch`, `await db.results.insertMany(batch.id, batch.outputs);` runs before `await db.progress.update(batch.id, 'done');`, so batch outputs are visible while progress is still unrecorded. Call `db.progress.update(batch.id, 'done')` before `db.results.insertMany(batch.id, batch.outputs)` to satisfy Rule 1's ordering requirement."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K10-rule-repost-new-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 15745,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Because `dayKey` derives the calendar day via `at.toISOString().slice(0, 10)`, users west of UTC see the previous day and the resulting keys are off by one. Replace that expression with `formatLocalDate(at)`, which is already imported in `src/reports/range.ts`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K10-rule-repost-new-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17247,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "For users west of UTC, `startDay` in `rangeLabel` is the previous calendar day because it comes from `range.start.toISOString().slice(0, 10)`. Use `formatLocalDate(range.start)` from `src/reports/dates.ts` so it matches the already-local `endDay` line."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "For users west of UTC, `dayKey` returns the previous calendar day because it derives the date with `at.toISOString().slice(0, 10)`. Replace it with `formatLocalDate(at)` from `src/reports/dates.ts`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K10-rule-repost-new-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21093,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "`dayKey` derives the calendar day with `toISOString().slice(0, 10)`, which returns the previous day for users west of UTC. Use `formatLocalDate(at)` so the key reflects the local calendar day."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K10-rule-repost-new-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16840,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "For users west of UTC, `dayKey` reports the previous calendar day because `toISOString().slice(0, 10)` converts to UTC. Replace that call with `formatLocalDate(at)` from `./dates`, which is already imported here."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K10-rule-repost-new-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19313,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Users west of UTC get the previous day as the key because `dayKey` uses the UTC calendar day via `toISOString().slice(0, 10)`. Return `formatLocalDate(at)` instead to use the local calendar day; the import is already present."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 22564,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "label": "kody_rules",
+          "earlierId": "round-a-P07-rule-absent-assert-cast-rewritten",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P07-rule-absent-assert-cast-rewritten",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Casting `undefined as unknown as Coupon` hides the real type of `quote.appliedCoupon` and keeps the check compiling even if the field changes type, so the test can no longer catch that, violating the rule \"Assert absent values without casts\". Assert absence on the value as it is with `expect(quote.appliedCoupon).toBeUndefined()` instead of casting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16442,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "The `undefined as unknown as Coupon` cast hides the real type of `quote.appliedCoupon` and keeps the assertion compiling even if that field changes type, so it no longer catches such changes and violates the rule to assert absent values without casts. Replace it with `expect(quote.appliedCoupon).toBeUndefined()`; this is separate from the line 15 fix for `quote.discount`, as it is a new cast on `appliedCoupon`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23798,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "The `undefined as unknown as Coupon` double cast makes the assertion compile regardless of `appliedCoupon`'s real type, so the test cannot catch a change in that field. Assert absence directly with `expect(quote.appliedCoupon).toBeUndefined()` (or `toBeNull()` if the field is null rather than undefined), as required by the \"Assert absent values without casts\" rule."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20099,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "label": "kody_rules",
+          "earlierId": "round-a-P07-rule-absent-assert-cast-rewritten",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "The cast `undefined as unknown as Coupon` combined with `toEqual` hides whether `quote.appliedCoupon` is truly absent, violating Rule 21. Assert on the value directly with `toBeUndefined()` (or `toBeNull()` if the field is null rather than undefined)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17091,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "The `undefined as unknown as Coupon` cast violates the 'Assert absent values without casts' rule and defeats the type check, hiding the real type of `quote.appliedCoupon` so a change to that field's type would go unnoticed. Assert absence on the value as it is with `expect(quote.appliedCoupon).toBeUndefined()` (or `toBeNull()` if the field is nullable)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P15-rule-nth-called-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39513,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/digest.test.ts",
+          "line": 26,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "Because `toHaveBeenCalledWith` passes when any call matched, the three `audit.record` calls asserted with it stay green if the per-user entries are swapped or arrive out of order, violating the rule \"Pin mock call arguments\". Pin each call to its position with `toHaveBeenNthCalledWith(1, 'digest.delivered', { userId: 'u1', week })` and `toHaveBeenNthCalledWith(2, 'digest.delivered', { userId: 'u2', week })`, and note that the unchanged `digest.batch` assertion in the same test has the same problem but is outside this diff."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/digest.test.ts",
+          "line": 41,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "Because `toHaveBeenCalledWith` passes when any call matched, the new \"mails the rest in order\" test stays green if `cai` is mailed before `ben`, and `toHaveBeenCalledTimes(2)` only counts the calls without fixing their order, violating the rule \"Pin mock call arguments\". Pin each `mailer.send` call to its position with `toHaveBeenNthCalledWith(1, 'ben@example.test', ...)` and `toHaveBeenNthCalledWith(2, 'cai@example.test', ...)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "audit-nth-called-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "opt-out-nth-called-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P15-rule-nth-called-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 27226,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/digest.test.ts",
+          "line": 26,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "Because `toHaveBeenCalledWith` passes when any call matches, the test stays green if the first two `audit.record` per-user entries are recorded out of order. Pin each call with `toHaveBeenNthCalledWith(1, ...)` and `toHaveBeenNthCalledWith(2, ...)` per the rule \"Pin mock call arguments\"."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/digest.test.ts",
+          "line": 42,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "Although the test is named \"mails the rest in order\", both `mailer.send` assertions use `toHaveBeenCalledWith`, so it still passes if the two sends are swapped. Pin each call with `toHaveBeenNthCalledWith(1, ...)` and `toHaveBeenNthCalledWith(2, ...)` per the rule \"Pin mock call arguments\"."
+        }
+      ],
+      "claims": [
+        {
+          "id": "audit-nth-called-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "opt-out-nth-called-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P15-rule-nth-called-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 6740,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/notifications/digest.test.ts",
+          "line": 41,
+          "label": "kody_rules",
+          "earlierId": "round-a-P15-rule-nth-called-listed-site",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "audit-nth-called-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "opt-out-nth-called-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P15-rule-nth-called-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 51627,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/digest.test.ts",
+          "line": 42,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "Because `mailer.send` is called twice in this test, `toHaveBeenCalledWith` passes when any call matched, so the test stays green if the opted-out user is mailed or the two recipients are swapped, and `toHaveBeenCalledTimes(2)` only counts the calls without fixing their order. Pin each call to its position with `toHaveBeenNthCalledWith(1, ...)` and `(2, ...)` as shown."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/digest.test.ts",
+          "line": 26,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "`audit.record` is called at least three times in this test (two `digest.delivered` plus the `digest.batch` summary), and `toHaveBeenCalledWith` passes when any call matched, so the test does not verify that one entry per user is recorded in order. Pin each per-user call with `toHaveBeenNthCalledWith(1, ...)` and `(2, ...)` as shown."
+        }
+      ],
+      "claims": [
+        {
+          "id": "audit-nth-called-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "opt-out-nth-called-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P15-rule-nth-called-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 6984,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/notifications/digest.test.ts",
+          "line": 42,
+          "label": "kody_rules",
+          "earlierId": "round-a-P15-rule-nth-called-listed-site",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "audit-nth-called-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "opt-out-nth-called-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 147667,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock now calls stockService.list(filter) instead of stockService.low(filter), dropping the `qty < reorder_at` predicate. WHY: stock.service.ts:8-9 shows low() adds `and qty < reorder_at` while list() does not, so the /low-stock endpoint returns every stock row for the warehouse instead of only rows below the reorder threshold — a behavior regression for all callers of this endpoint. HOW: call stockService.low(filter) here.",
+          "keep": true,
+          "rationale": "Confirmed: stock.service.ts defines list() (lines 6-7) without the `qty < reorder_at` predicate and a separate low() (lines 8-9) that adds it. stock.controller.ts:13 lowStock calls stockService.list(filter), dropping the low-stock filter. This is a genuine behavior regression returning all warehouse rows instead of only below-reorder rows.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: exportStock reads `raw.warehouse.trim()` at line 19 before readStockFilter(raw) validates it at line 20, so the 400 guard runs only after the unsafe access. WHY: when req.query.filter is absent (`raw` is undefined), a string (e.g. ?filter=north), or an array (repeated ?filter), `raw.warehouse` is undefined or non-string and `.trim()` throws a TypeError, producing a 500 instead of the intended 400 — the exact failure readStockFilter exists to prevent. HOW: derive the file name from the validated filter: `const filter = readStockFilter(req.query.filter); const fileName = `stock_${filter.warehouse}.csv`;`.",
+          "keep": true,
+          "rationale": "Confirmed by reading src/inventory/stock.controller.ts:17-23 and src/inventory/filter.ts:7-16. Line 19 dereferences `raw.warehouse.trim()` before `readStockFilter(raw)` validates at line 20. When req.query.filter is absent (raw undefined), a string, or an array, `raw.warehouse` is undefined/non-string and `.trim()` throws a TypeError, yielding a 500 instead of the 400 that readStockFilter exists to produce. The prior decision (index 1) was only partially implemented — listStock/lowStock were fixed to call readStockFilter directly, but exportStock still performs the unsafe access, which is concrete evidence in the current code that the guard was not applied here. Root cause and failure path are accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "readStockFilter"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/filter.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "line": 18,
+          "label": "bug",
+          "earlierId": "round-a-P23-param-shape-read-before-helper",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 27,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 13,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The `/low-stock` endpoint now returns every stock row for the warehouse instead of only rows below the reorder threshold, since `stockService.list` omits the `and qty < reorder_at` predicate that `stockService.low` adds (stock.service.ts:8-9), regressing behavior for all callers. Call `stockService.low(filter)` in `lowStock` to restore the threshold filter."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 164325,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock now calls stockService.list(filter) instead of stockService.low(filter). WHY: list() selects all rows for the warehouse/sku, while low() adds 'and qty < reorder_at', so the low-stock endpoint silently returns every stock row and no longer filters to items below the reorder threshold — a functional regression. HOW: call stockService.low(filter).",
+          "keep": true,
+          "rationale": "Confirmed against src/inventory/stock.service.ts: list() runs 'select sku, qty from stock where warehouse = $1 and sku like $2' with no reorder_at filter, whereas low() appends 'and qty < reorder_at'. lowStock at stock.controller.ts:13 calls stockService.list(filter), so the low-stock endpoint returns all rows for the warehouse/sku instead of only items below the reorder threshold. The described regression is factually accurate and reachable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "list|low",
+                "path": "src/inventory",
+                "glob": "*service*"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 30,
+                "path": "src/inventory/stock.service.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: exportStock reads raw.warehouse.trim() (line 19) before readStockFilter validates the shape. WHY: when the client sends ?filter=x (string) or a repeated ?filter (array), req.query.filter.warehouse is undefined, so .trim() throws a TypeError that errorHandler maps to a 500 instead of the intended 400. HOW: validate first, then build the filename from the returned filter, e.g. `const filter = readStockFilter(req.query.filter); const fileName = `stock_${filter.warehouse}.csv`;`.",
+          "keep": true,
+          "rationale": "Confirmed. In exportStock (lines 18-19), `raw.warehouse.trim()` is evaluated before readStockFilter(raw) runs on line 20. filter.ts readStockFilter only validates the shape (throwing HttpError 400 for a string/array/undefined warehouse) AFTER being called. So when Express parses `?filter=x` as a string or a repeated `?filter` as an array, `raw.warehouse` is undefined and `.trim()` throws a TypeError, which errorHandler maps to a 500 rather than the intended 400. The root cause is factually correct and the failure path is reachable. PreviousDecision round-a-P23-param-shape-read-before-helper is only \"partially_implemented\" and the current code still performs the raw read before validation, so it does not refute this.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/filter.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "line": 18,
+          "label": "bug",
+          "earlierId": "round-a-P23-param-shape-read-before-helper",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 28,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `list()` selects all rows for the warehouse/sku while `low()` adds `and qty < reorder_at`, the low-stock endpoint silently returns every stock row and no longer filters to items below the reorder threshold. Call `stockService.low(filter)` so the endpoint restores the low-stock filter."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 138738,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock now calls stockService.list(filter) instead of stockService.low(filter), so the low-stock endpoint returns all stock rows and stockService.low (stock.service.ts:8, which adds `and qty < reorder_at`) is left with zero callers. WHY: the /lowStock response is wrong — it includes in-stock items and no longer filters on reorder threshold, a silent behavior regression for every consumer. HOW: call the low-stock method: `const rows = await stockService.low(filter);`.",
+          "keep": true,
+          "rationale": "Confirmed: stock.controller.ts:13 calls stockService.list(filter) instead of stockService.low(filter). list() (stock.service.ts:6-7) applies no qty < reorder_at filter, so the low-stock endpoint returns all rows. grep for 'stockService.low' / '.low(' returns no callers, so the low-stock query is dead code. The described regression is real and reachable via the lowStock handler.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stockService\\.low|\\.low\\("
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: exportStock reads raw.warehouse.trim() on line 19 before readStockFilter(raw) validates the filter on line 20, so a non-object filter crashes before the guard runs. WHY: for ?filter=north Express parses filter as the string 'north' (and a repeated ?filter as an array), so raw.warehouse is undefined and .trim() throws a TypeError that errorHandler converts to a 500 instead of the intended 400 — the exact case the new helper was added to handle. HOW: validate first, then derive the filename from the validated value: `const filter = readStockFilter(req.query.filter); const fileName = \\`stock_${filter.warehouse}.csv\\`;`.",
+          "keep": true,
+          "rationale": "Verified against the actual code: src/inventory/stock.controller.ts:19 executes `raw.warehouse.trim()` before line 20's `readStockFilter(raw)` guard. The helper (src/inventory/filter.ts:7-16) is precisely the validator that throws HttpError(400) for non-object/array/string filters, but it runs after the raw access in exportStock. Express parses `?filter=north` as the string 'north' and repeated `?filter` as an array, so `raw.warehouse` is undefined and `.trim()` throws a TypeError — converted to 500 rather than the intended 400. listStock/lowStock validate first (lines 6, 12); exportStock is the outlier. The root cause, trigger, and fix described are factually accurate. This is not a style/naming issue and the failure path is reachable, so the finding stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "readStockFilter"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "src/inventory/filter.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "line": 18,
+          "label": "bug",
+          "earlierId": "round-a-P23-param-shape-read-before-helper",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 13,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The /lowStock response now includes in-stock items and skips the reorder-threshold filter, so every consumer silently gets wrong data and `stockService.low` (`stock.service.ts:8`) is left with zero callers. Call `stockService.low(filter)` instead of `stockService.list(filter)` so the endpoint returns only rows where `qty < reorder_at`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 150907,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock calls stockService.list(filter) instead of stockService.low(filter). WHY: stockService.low adds `and qty < reorder_at` (stock.service.ts:8-9), so the low-stock endpoint now returns every stock row for the warehouse, silently breaking the endpoint contract. HOW: call stockService.low(filter) in lowStock.",
+          "keep": true,
+          "rationale": "Confirmed by reading both files: stock.service.ts defines list() without the `qty < reorder_at` predicate and low() with it. stock.controller.ts:13 calls stockService.list(filter) inside lowStock, so the low-stock endpoint returns all warehouse rows rather than low-stock rows. The root cause and failure path described are accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: exportStock reads raw.warehouse.trim() on line 19 before readStockFilter(raw) validates the shape on line 20. WHY: when req.query.filter is a string (?filter=north), an array (repeated ?filter), or absent, raw.warehouse is undefined and .trim() throws a TypeError, which errorHandler turns into a 500 instead of the intended 400. HOW: build the filename from the already-validated filter, e.g. `const filter = readStockFilter(req.query.filter); const fileName = `stock_${filter.warehouse}.csv`;`.",
+          "keep": true,
+          "rationale": "Confirmed in code: src/inventory/stock.controller.ts:19 reads raw.warehouse.trim() before line 20's readStockFilter(raw), and src/inventory/filter.ts:8-13 is the sole shape guard that throws HttpError(400). For ?filter=north (string), repeated ?filter (array), or absent filter, raw.warehouse is undefined and .trim() throws a TypeError surfaced as a 500 rather than the intended 400. The earlier decision on this PR was only 'partially_implemented' and the current diff shows exportStock still performs the read-before-validate, so the applied change did not fix this path — concrete evidence that keeps the finding live.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "readStockFilter"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/filter.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "line": 18,
+          "label": "bug",
+          "earlierId": "round-a-P23-param-shape-read-before-helper",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 13,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `stockService.low` adds `and qty < reorder_at` (stock.service.ts:8-9), the low-stock endpoint now returns every stock row for the warehouse, silently breaking the endpoint contract. Call `stockService.low(filter)` instead of `stockService.list(filter)` in `lowStock`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 125960,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock calls stockService.list(filter) instead of stockService.low(filter). WHY: list has no `qty < reorder_at` predicate, so the low-stock endpoint now returns the full stock list and the service's `low` method is dead code — a behavior regression from the previous controller which called stockService.low(...). HOW: change line 13 to `const rows = await stockService.low(filter);`.",
+          "keep": true,
+          "rationale": "stock.service.ts:8-9 defines low() with the `qty < reorder_at` predicate, while list() (line 6-7) has no such predicate. stock.controller.ts:13 calls stockService.list(filter) inside lowStock, so the low-stock endpoint returns the entire stock list and low() is dead code. The claim is technically correct.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "async (list|low)\\(|low\\(|list\\(",
+                "glob": "*.ts",
+                "path": "src/inventory"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "low|list|reorder_at|qty",
+                "glob": "stock.service.ts",
+                "path": "src/inventory"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: exportStock reads raw.warehouse.trim() on line 19 before readStockFilter(raw) validates it on line 20. WHY: when req.query.filter is missing or is a string/array (e.g. ?filter=north or repeated ?filter), raw.warehouse is undefined and `.trim()` throws a TypeError that errorHandler turns into a 500 instead of the 400 the helper is designed to return. HOW: validate first, then build the filename from the validated filter, e.g. `const filter = readStockFilter(req.query.filter); const fileName = `stock_${filter.warehouse}.csv`;`.",
+          "keep": true,
+          "rationale": "Verified directly in src/inventory/stock.controller.ts: line 19 reads `raw.warehouse.trim()` before line 20 calls `readStockFilter(raw)`. Express parses a missing/scalar/repeated `?filter` as undefined/string/array, so `raw.warehouse` is undefined and `.trim()` throws a TypeError that errorHandler maps to 500 rather than the 400 the helper is designed to produce. The root cause and failure path are accurate and not refuted by any upstream guard. The prior decision on this area was only 'partially_implemented' and the diff still shows the ordering bug present, so it is not superseded.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "readStockFilter"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "line": 13,
+          "label": "bug",
+          "earlierId": "round-a-P23-param-shape-read-before-helper",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "line": 18,
+          "label": "bug",
+          "earlierId": "round-a-P23-param-shape-read-before-helper",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 235190,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf dereferences the result of RegExp.exec without a null guard — `match[1]` throws when the title does not match `^\\w+\\(([^)]+)\\):` (e.g. `fix: crash`, `Bump version`, `Merge ...`). WHY: any commit whose subject lacks a `type(scope):` prefix makes `/^\\w+\\(([^)]+)\\):/.exec(title)` return null and `match[1]` crash with TypeError, aborting the whole changelog generation for the range. HOW: guard the match and fall back to an empty/`misc` scope, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';`.",
+          "keep": true,
+          "rationale": "scopeOf casts the RegExp.exec result to RegExpExecArray and immediately reads match[1]. In buildEntries only titles matching SKIP (chore:, Merge , ci:, docs:) are filtered; any other subject without a type(scope): prefix (e.g. 'fix: crash', 'Bump version') reaches scopeOf, where the regex returns null and match[1] throws a TypeError, aborting changelog generation. No upstream guard exists; the earlier skip-ordering decision is unrelated to this null dereference.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: shouldSkip(entry) is called on line 32 while entry.title is still the empty string assigned on line 31, so it always tests '' and never matches any SKIP pattern. WHY: chore:/ci:/docs:/Merge commits are never filtered and all end up in the changelog (the filter is effectively dead code). HOW: assign the title (and scope) before the skip test, e.g. compute `const title = commit.message.split('\\n')[0].trim();` and test that against SKIP, then build the entry.",
+          "keep": true,
+          "rationale": "Verified against the current file: line 31 initializes entry with title: '' and scope: '', line 32 calls shouldSkip(entry) which tests entry.title (line 19), and only line 33 assigns entry.title. Thus the SKIP filter always tests the empty string and never filters chore:/ci:/docs:/Merge commits — the filter is dead code. The claim is factually accurate. The earlier \"implemented\" decision on this same issue is contradicted by the current code, which still contains the exact buggy ordering, so it does not refute the finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "shouldSkip|SKIP",
+                "path": "scripts/release/changelog.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "line": 31,
+          "label": "bug",
+          "earlierId": "round-a-P31-skip-before-title-set",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P31-skip-before-title-set",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 24,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Any commit whose subject lacks a `type(scope):` prefix, such as `fix: crash`, `Bump version`, or `Merge ...`, makes `/^\\w+\\(([^)]+)\\):/.exec(title)` return null and `match[1]` throw a `TypeError`, aborting changelog generation for the entire range. Guard the match before indexing and fall back to an empty or `misc` scope, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 111272,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf returns `match[1]` from a `.exec()` that can return null, and it is called unconditionally for every entry at line 34. WHY: any commit subject without a `type(scope):` prefix (e.g. \"fix: x\", \"Merge branch 'main'\", or a free-form message) makes the regex return null, so `match[1]` throws TypeError: Cannot read properties of null and the entire changelog build crashes. HOW: guard the null result and fall back to an empty scope (or a default bucket) when there is no scope.",
+          "keep": true,
+          "rationale": "Confirmed. scopeOf (line 24-25) casts the .exec() result to RegExpExecArray without a null check and dereferences match[1]. The regex requires a parenthesized scope, so a subject like \"fix: x\" or a free-form/Merge message returns null and throws TypeError. It is invoked unconditionally at line 34 for every entry that survives shouldSkip, and the SKIP list (chore/Merge/ci/docs) does not guard non-scoped commits, so the crash path is reachable. No upstream guard refutes the claim.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: shouldSkip(entry) is evaluated on line 32 while entry.title is still the empty string assigned on line 31; the actual title is only set on line 33. WHY: SKIP.some(re => re.test('')) is always false, so chore:/ci:/docs:/Merge commits are never filtered and instead reach scopeOf at line 34, where a subject like \"Merge branch 'main'\" has no scope and throws. HOW: compute the title first, build the entry with it, then test SKIP before assigning scope.",
+          "keep": true,
+          "rationale": "Verified in scripts/release/changelog.ts:31-34: entry.title is initialized to '' (line 31), shouldSkip(entry) is called on line 32 while title is still '', and the real title is only assigned on line 33. Every SKIP regex requires non-empty content, so SKIP.some(re => re.test('')) is always false and no commit is ever filtered. The untitled entries then hit scopeOf (line 34); a subject like \"Merge branch 'main'\" has no word(...): scope, so /^\\w+\\(([^)]+)\\):/.exec returns null and match[1] throws a TypeError. The failure path is real and the root cause described is factually accurate. Although a prior decision (round-a-P31-skip-before-title-set) claims this was implemented, the current code clearly still contains the bug, i.e. concrete evidence the change is not present — so the finding is not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "line": 31,
+          "label": "bug",
+          "earlierId": "round-a-P31-skip-before-title-set",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 6,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 23,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `scopeOf` unconditionally returns `match[1]` from a `.exec()` that can return null at line 34, any commit subject without a `type(scope):` prefix—such as `fix: x`, `Merge branch 'main'`, or a free-form message—makes the regex return null, so `match[1]` throws `TypeError: Cannot read properties of null` and crashes the entire changelog build. Guard the null result and fall back to an empty scope or a default bucket when there is no scope."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 157294,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: buildEntries calls shouldSkip(entry) at line 32 while entry.title is still the empty string assigned at line 31, so SKIP.some(re => re.test('')) is always false and nothing is ever skipped. WHY: chore:, ci:, docs: and Merge commits are never filtered and all end up in the changelog (the title is only assigned on the following line). HOW: compute the title first, build the entry from it, then test skip.",
+          "keep": true,
+          "rationale": "Confirmed in the current file: line 31 sets title:'' , line 32 calls shouldSkip(entry) which tests /^chore.../, /^Merge /, /^ci:/, /^docs.../ against '' — none match empty string, so shouldSkip always returns false; the title is only assigned at line 33, after the check. Thus chore:/ci:/docs:/Merge commits are never filtered. This matches the claim exactly. A prior decision (round-a-P31-skip-before-title-set) marked this 'implemented', but the current diff shows the buggy ordering still present, i.e. concrete evidence the applied change was not actually applied/was reverted, so the finding stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "shouldSkip|SKIP|entry.title",
+                "path": "scripts/release/changelog.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf returns match[1] where match may be null because /^\\w+\\(([^)]+)\\):/ does not match titles without a (scope), e.g. 'feat: first cut'. WHY: any commit whose first line has no parenthesized scope (or that reaches this line because the skip check above never fires) causes a TypeError: Cannot read properties of null (reading '1'), crashing the changelog build. HOW: guard the null match and fall back to a default scope.",
+          "keep": true,
+          "rationale": "Confirmed. scopeOf uses /^\\w+\\(([^)]+)\\):/, which returns null for titles lacking a parenthesized scope (e.g. 'feat: first cut'). The `as RegExpExecArray` cast has no runtime effect, so match[1] throws TypeError. The only caller (buildEntries line 34) invokes scopeOf on the first line of every commit message, and there is no guard: the shouldSkip check on line 32 tests the still-empty entry.title, and even if it worked, scope-less titles are not in SKIP. The crash path is concrete and reachable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "line": 31,
+          "label": "bug",
+          "earlierId": "round-a-P31-skip-before-title-set",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P31-skip-before-title-set",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 23,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `/^\\w+\\(([^)]+)\\):/` does not match titles without a parenthesized scope, `scopeOf` returns `match[1]` on a null `match`, raising `TypeError: Cannot read properties of null (reading '1')` and crashing the changelog build. Guard the null match and fall back to a default scope."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 214056,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: `shouldSkip(entry)` is called while `entry.title` is still the empty string `''` — the title is only assigned from `commit.message` on the following line. WHY: none of the SKIP patterns match an empty string, so shouldSkip always returns false and chore/ci/Merge/docs commits are never filtered out of the changelog. HOW: assign the title first and pass the same value, e.g. `const title = commit.message.split('\\n')[0].trim(); const entry: Entry = { sha: commit.sha.slice(0, 7), title, scope: '' }; if (shouldSkip(entry)) continue; entry.scope = scopeOf(title);`.",
+          "keep": true,
+          "rationale": "Confirmed: line 31 initializes entry.title to '' and line 32 calls shouldSkip(entry) before line 33 assigns the real title. SKIP patterns (/^chore.../, /^Merge /, /^ci:/, /^docs.../) cannot match '', so shouldSkip always returns false and no commits are filtered. A prior decision (round-a-P31-skip-before-title-set) claimed this was implemented, but the current code still exhibits the bug, which is concrete evidence the applied change is absent/reverted — so the finding is valid.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "shouldSkip|SKIP",
+                "path": "scripts/release/changelog.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf dereferences `match[1]` on the result of `.exec`, which is null whenever the commit title has no `type(scope):` prefix (e.g. `feat: add thing`, `fix: bug`). WHY: the `as RegExpExecArray` cast hides the null, so the first scope-less commit throws `TypeError: Cannot read properties of null (reading '1')` and aborts changelog generation. HOW: type the result as nullable and fall back to an empty scope, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';`.",
+          "keep": true,
+          "rationale": "Confirmed. The regex /^\\w+\\(([^)]+)\\):/ at changelog.ts:24 requires a parenthesized scope, so for a scope-less title like \"feat: add thing\" or \"fix: bug\", .exec returns null. The `as RegExpExecArray` cast suppresses the nullable type, and line 25 unconditionally dereferences match[1], throwing TypeError. buildEntries (line 34) calls scopeOf on every non-skipped commit title, so the first scope-less commit aborts changelog generation. No upstream guard exists — shouldSkip (line 32) tests an empty title and never filters these. The described root cause, failure path, and fix are all accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 22,
+                "endLine": 38
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "line": 31,
+          "label": "bug",
+          "earlierId": "round-a-P31-skip-before-title-set",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 24,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Since `.exec` returns `null` for commit titles without a `type(scope):` prefix (e.g. `feat: add thing`, `fix: bug`), the `as RegExpExecArray` cast hides that null and `scopeOf` throws `TypeError: Cannot read properties of null (reading '1')`, aborting changelog generation. Type the result as nullable and fall back to an empty scope, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 110365,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf dereferences match[1] on the result of RegExp.exec without a null check, but the regex only matches scoped titles, so exec returns null for any title without parentheses (e.g. 'feat: add x', 'Merge branch ...'). WHY: scopeOf is called unconditionally for every entry at line 34, so the first scope-less commit throws 'TypeError: Cannot read properties of null (reading \\'1\\')' and aborts the whole changelog generation. HOW: return an empty scope when there is no match, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';`.",
+          "keep": true,
+          "rationale": "Confirmed: scopeOf's regex /^\\w+\\(([^)]+)\\):/ only matches scoped titles; exec returns null for scope-less titles like 'feat: add x' or 'Merge branch ...'. The `as RegExpExecArray` cast is compile-time only, so `match[1]` dereferences null at runtime. scopeOf is called unconditionally at line 34 for every non-skipped entry, and entry.title is arbitrary commit text, so the first scope-less commit throws TypeError and aborts changelog generation. No upstream guard prevents it; the SKIP check (line 32) tests the still-empty title, so it doesn't filter these commits. The prior decision about SKIP ordering is a different issue and does not resolve this.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: shouldSkip(entry) is evaluated on line 32 while entry.title is still '' (title is only set on line 33), so every SKIP pattern tests the empty string and always returns false. WHY: chore:, ci:, docs: and Merge commits are never filtered out, so they all end up in the generated changelog. HOW: assign the title from the first line of the commit message first, then run the SKIP check, e.g. compute `const title = commit.message.split('\\n')[0].trim();` and build the entry with it before `if (shouldSkip(entry)) continue;`.",
+          "keep": true,
+          "rationale": "Confirmed by reading scripts/release/changelog.ts:31-33. Line 31 constructs `entry` with `title: ''`, line 32 calls `shouldSkip(entry)` (which runs `SKIP.some(re => re.test(entry.title))` on that empty title), and only line 33 assigns the real title. Since every SKIP regex (`^chore(\\(.+\\))?:`, `^Merge `, `^ci:`, `^docs(\\(.+\\))?:`) requires non-empty content, all tests return false on `''`, so nothing is ever skipped and chore/ci/docs/Merge commits land in the changelog. The bug is real and reachable via buildEntries. Note: PreviousDecision round-a-P31-skip-before-title-set describes this exact issue as \"implemented\", but the current diff shows the fix was never actually applied (title is still assigned after the check), which is concrete evidence the applied change is absent/wrong — so this is not a case for dropping.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "line": 31,
+          "label": "bug",
+          "earlierId": "round-a-P31-skip-before-title-set",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 4,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 23,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the regex only matches scoped titles, `RegExp.exec` returns `null` for titles without parentheses, and since `scopeOf` is called unconditionally for every entry at line 34, the first scope-less commit dereferences `match[1]` and throws `TypeError: Cannot read properties of null (reading '1')`, aborting the whole changelog generation. Return an empty scope when there is no match, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 117704,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: the expiry check is inverted — it raises PromoExpired when expires_at is in the future and lets an already-expired promo through. WHY: expires_at is documented as the instant the promo 'can be used until', so a valid code (expires_at > now) is rejected with PromoExpired, while an expired code (expires_at < now) passes the guard and still returns a discount. HOW: flip the comparison to raise only when the promo has already expired.",
+          "keep": true,
+          "rationale": "Confirmed: models.py:18 documents expires_at as 'the promo can be used until this instant', so a valid promo has expires_at > now. The guard at apply.py:12 raises PromoExpired when expires_at > now, rejecting valid codes, while already-expired promos (expires_at < now) fall through and still return a discount. The comparison is genuinely inverted; the root cause and failure path are accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at|PromoExpired"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 30,
+                "path": "shop/promos/models.py",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The expiry check is inverted: a valid code with `expires_at` in the future raises `PromoExpired`, while an already-expired code passes the guard and still returns a discount. Flip the comparison in `shop/promos/apply.py` so `PromoExpired` is raised only when `promo.expires_at < datetime.now(timezone.utc)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 117519,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: The expiry guard is inverted — `if promo.expires_at > datetime.now(timezone.utc)` raises PromoExpired when the promo is still valid (its expiry is in the future) and lets promos whose expiry has already passed through. WHY: Every valid, unexpired promo code is rejected with PromoExpired, while genuinely expired codes are accepted and granted a discount, breaking the intended expiry enforcement entirely. HOW: Invert the comparison to reject only promos whose expiry has passed, e.g. `if promo.expires_at <= datetime.now(timezone.utc):`.",
+          "keep": true,
+          "rationale": "Verified against shop/promos/models.py:18, where expires_at is documented as 'the promo can be used until this instant'. So expires_at > now means the promo is still valid, but the code raises PromoExpired in exactly that case; conversely expired promos (expires_at <= now) fall through and receive a discount. The comparison is inverted, breaking expiry enforcement in both directions as claimed.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at",
+                "path": "shop/promos"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: `promo.expires_at` is compared against the timezone-aware `datetime.now(timezone.utc)`, but the new `expires_at` field (models.py:18) is only documented as `# UTC` and carries no tzinfo guarantee. WHY: if the stored value is naive (the usual case for a DB-backed UTC datetime), Python raises `TypeError: can't compare offset-naive and offset-aware datetimes` on every `apply_promo` call, so valid promos crash instead of returning a discount. HOW: normalize to an aware UTC datetime before comparing, e.g. coerce `expires_at` with `.replace(tzinfo=timezone.utc)` when `tzinfo is None` (the direction of the comparison itself is a separate, already-reported issue).",
+          "keep": true,
+          "rationale": "The comparison at apply.py:12 pits promo.expires_at against an aware datetime.now(timezone.utc). The Promo dataclass (models.py:18) types expires_at as a bare datetime documented only as '# UTC' with no tzinfo guarantee, and the PromoRepo implementation is not present in the tree, so there is no evidence the stored value is timezone-aware. If the value is naive — the common case for a DB-backed UTC datetime — Python raises TypeError: can't compare offset-naive and offset-aware datetimes, which is a concrete, reachable failure on the changed line. Nothing in the code normalizes or guards tzinfo, so I cannot actively refute the claim.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/repo.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at|timezone|datetime",
+                "glob": "shop/promos/**"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "repo.py",
+                "path": "shop"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "shop/promos",
+                "maxDepth": 3
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Every valid, unexpired promo code is rejected with `PromoExpired` while genuinely expired codes are accepted and granted a discount, breaking the intended expiry enforcement entirely. Invert the comparison so only promos whose expiry has passed are rejected, e.g. `if promo.expires_at <= datetime.now(timezone.utc):`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "If `promo.expires_at` is naive (the usual case for a DB-backed UTC datetime), comparing it against the timezone-aware `datetime.now(timezone.utc)` raises `TypeError: can't compare offset-naive and offset-aware datetimes` on every `apply_promo` call, so valid promos crash instead of returning a discount. Normalize to an aware UTC datetime before comparing, coercing `expires_at` with `.replace(tzinfo=timezone.utc)` when `tzinfo is None` (the direction of the comparison itself is a separate, already-reported issue)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 74477,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: The expiry guard is inverted — `if promo.expires_at > datetime.now(timezone.utc): raise PromoExpired(code)` fires when the promo is still valid (expiry in the future). WHY: models.py:18 documents expires_at as 'the promo can be used until this instant', so a promo whose expires_at is in the future is still usable; this condition rejects every valid promo with PromoExpired, and conversely lets expired promos (expires_at <= now) through and apply their discount. HOW: Invert the comparison so the exception is raised only once the deadline has passed: `if promo.expires_at <= datetime.now(timezone.utc): raise PromoExpired(code)`.",
+          "keep": true,
+          "rationale": "Confirmed inverted guard. models.py:18 documents expires_at as 'the promo can be used until this instant', so expires_at > now means still valid. The code raises PromoExpired exactly when expires_at is in the future (valid), and falls through to apply the discount when expires_at <= now (expired). The suggested fix (raise only when expires_at <= now) is correct. No previous review decision covers this issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at",
+                "path": "shop/promos"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "This inverted expiry guard in `shop/promos/apply.py` rejects every still-valid promo with `PromoExpired` and lets expired promos through, even though `models.py:18` documents `expires_at` as usable until that instant. Invert the comparison so `PromoExpired(code)` is raised only when `promo.expires_at <= datetime.now(timezone.utc)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 106136,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: The expiry check is inverted — `if promo.expires_at > datetime.now(timezone.utc): raise PromoExpired(code)` raises PromoExpired when the promo has NOT yet expired (its expiry instant is still in the future). WHY: Per the models.py contract (`expires_at` is 'the promo can be used until this instant'), a promo is valid when now <= expires_at and expired only when expires_at < now; this code therefore rejects every valid, non-expired promo and silently accepts genuinely expired ones, breaking the discount flow in both directions. HOW: flip the comparison to `if promo.expires_at < datetime.now(timezone.utc):`.",
+          "keep": true,
+          "rationale": "Confirmed by models.py:18 comment (\"the promo can be used until this instant\"). Validity is now <= expires_at; expiry is expires_at < now. The code raises PromoExpired when expires_at > now, i.e. while the promo is still valid, and grants the discount when it is already expired. Both directions are broken exactly as claimed. Root cause is factually correct and reachable on every call to apply_promo.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `expires_at` in models.py marks the instant a promo can be used until, this inverted check rejects every valid, non-expired promo and silently accepts genuinely expired ones, breaking the discount flow in both directions. Flip the comparison to `if promo.expires_at < datetime.now(timezone.utc):` so `PromoExpired(code)` is raised only after the expiry instant has passed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 88734,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: the expiry comparison is inverted — `promo.expires_at > datetime.now(timezone.utc)` raises PromoExpired exactly when the promo is still valid. WHY: `expires_at` is documented (models.py:18) as the instant the promo can be used UNTIL, so a promo is valid while now <= expires_at; this code rejects every still-valid promo (raising PromoExpired for any promo whose expiry is in the future) and silently accepts genuinely expired promos, applying their discount. HOW: flip the comparison to `if promo.expires_at < datetime.now(timezone.utc): raise PromoExpired(code)`.",
+          "keep": true,
+          "rationale": "Confirmed by direct read: shop/promos/models.py:18 documents expires_at as the instant the promo can be used UNTIL, so a promo is valid while now <= expires_at. apply.py:12 raises PromoExpired when promo.expires_at > now, i.e. precisely for still-valid promos, and silently accepts expired promos (expires_at < now), applying their discount. The inverted comparison is a real functional bug, not style.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py",
+                "startLine": 10,
+                "endLine": 25
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `expires_at` is documented in models.py:18 as the instant the promo can be used until, the inverted comparison rejects every still-valid promo and silently applies discounts from expired ones. Flip the comparison to `if promo.expires_at < datetime.now(timezone.utc): raise PromoExpired(code)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

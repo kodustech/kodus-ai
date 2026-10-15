@@ -93,6 +93,14 @@ const TIER0 = {
     'gpt-5.6-sol@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-sol', keyEnvs: [] },
     'gpt-5.6-luna@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-luna', keyEnvs: [] },
     'gpt-5.6-terra@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-terra', keyEnvs: [] },
+    // Tier-0 models through one OpenRouter account, each pinned to its
+    // first-party upstream with fallbacks off: the route a customer's
+    // OpenRouter BYOK slot takes (`openrouterProviderOrder`). The pin only
+    // applies on the BYOK route (`--byok-reasoning`); the env route is plain
+    // OpenAI-compatible against OpenRouter.
+    'gpt-6-sol@openrouter': { provider: 'open_router', doModel: 'openai/gpt-6-sol', openrouterProviderOrder: ['openai'], keyEnvs: ['OPENROUTER_API_KEY', 'API_OPEN_ROUTER_API_KEY', 'BYOK_OPENROUTER_API_KEY'], baseURL: 'https://openrouter.ai/api/v1' },
+    'claude-sonnet-5-5@openrouter': { provider: 'open_router', doModel: 'anthropic/claude-sonnet-5.5', openrouterProviderOrder: ['anthropic'], keyEnvs: ['OPENROUTER_API_KEY', 'API_OPEN_ROUTER_API_KEY', 'BYOK_OPENROUTER_API_KEY'], baseURL: 'https://openrouter.ai/api/v1' },
+    'kimi-k2.7-code@openrouter': { provider: 'open_router', doModel: 'moonshotai/kimi-k2.7-code', openrouterProviderOrder: ['moonshotai'], keyEnvs: ['OPENROUTER_API_KEY', 'API_OPEN_ROUTER_API_KEY', 'BYOK_OPENROUTER_API_KEY'], baseURL: 'https://openrouter.ai/api/v1' },
 
     // Scripted local model (evals/shared/fake-llm-server.js) for the wiring
     // smoke: the real self-hosted openai_compatible route, pointed at 127.0.0.1.
