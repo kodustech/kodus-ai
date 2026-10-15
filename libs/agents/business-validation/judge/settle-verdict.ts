@@ -11,7 +11,8 @@ export interface SettleInput {
  * can't prove either way becomes CHECK MANUALLY instead of failing the PR:
  *
  * - the judge is not confident it is missing (UC-31);
- * - it is about how something looks or flows, not what the code does (UC-30);
+ * - it is about how something looks, or a flow the judge can't pin to code
+ *   (UC-30);
  * - it may live in a file the judge never saw (UC-32).
  */
 export function settleVerdict(
@@ -48,7 +49,15 @@ function settleRequirement(
         downgraded: reason,
     });
 
-    if (requirement.kind === 'visual' || requirement.kind === 'flow') {
+    if (requirement.kind === 'visual') {
+        return downgrade('visual');
+    }
+    // A flow gap stands only when the judge is sure and points at the code
+    // that skips the step (an action sent with no confirmation first).
+    if (
+        requirement.kind === 'flow' &&
+        (requirement.confidence !== 'high' || !requirement.evidence?.length)
+    ) {
         return downgrade('visual');
     }
     if (requirement.confidence === 'low') {

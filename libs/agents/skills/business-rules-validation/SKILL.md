@@ -123,6 +123,7 @@ Kodus renders the PR comment, the check and the CLI output from `requirements` a
 - `partial`: the diff implements part of it. Say in `note` which part is missing.
 - `missing`: no evidence in this PR diff. Say so in `note`; never claim how the rest of the system behaves.
 - `check_manually`: a requirement about how something looks or flows (set `kind` to `visual` or `flow`), or one the diff can't show either way. It never fails the PR.
+- `kind`: `visual` is how something looks (layout, color, copy placement); `flow` is a sequence of screens or steps a person walks through. A rule the code decides (a threshold, a confirmation before an action, a permission, a default) is `behavior`, even when a person sees its result: when the code skips it, it is MISSING.
 - `confidence: low` when you are guessing. A low-confidence gap is shown as CHECK MANUALLY, not MISSING.
 - `outOfScope`: changes the task doesn't ask for. Leave out refactors, tests and wiring that serve a requirement.
 - `scopeMismatch: true` only when the whole diff works on a different domain than the task.

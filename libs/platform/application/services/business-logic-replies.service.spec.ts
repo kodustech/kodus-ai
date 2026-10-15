@@ -267,7 +267,7 @@ describe('BusinessLogicReplies', () => {
                         ...run.tasks[0],
                         tracker: 'Tickets',
                         id: 'OPS-12',
-                        url: 'https://app.clickup.com/t/86a1b2c3d',
+                        url: 'https://app.asana.com/0/1201/1207',
                     },
                 ],
             },

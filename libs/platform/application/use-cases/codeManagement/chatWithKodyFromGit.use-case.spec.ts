@@ -163,6 +163,40 @@ describe('ChatWithKodyFromGitUseCase', () => {
         );
     });
 
+    it('reads the branch from the PR when the GitHub comment webhook leaves it out', async () => {
+        (codeManagementService as any).getPullRequest = jest
+            .fn()
+            .mockResolvedValue({
+                head: { ref: 'feature/CU-86a1b2c3d-archive' },
+            });
+
+        await useCase.execute({
+            event: 'issue_comment',
+            platformType: PlatformType.GITHUB,
+            payload: {
+                action: 'created',
+                repository: { id: 'repo-1', name: 'kodus-extension' },
+                issue: {
+                    id: 456,
+                    body: 'PR description body',
+                    pull_request: {
+                        url: 'https://api.github.com/repos/kodus/kodus-extension/pulls/132',
+                    },
+                },
+                comment: { id: 123, body: '@kody -v business-logic' },
+                sender: { id: 'user-1', login: 'alice' },
+            },
+        } as any);
+
+        expect(businessValidationService.validate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                pullRequest: expect.objectContaining({
+                    headRef: 'feature/CU-86a1b2c3d-archive',
+                }),
+            }),
+        );
+    });
+
     it('answers as the team whose review runs on the repository when it is connected in two organizations', async () => {
         const webhookContextService = {
             getContext: jest.fn().mockResolvedValue({

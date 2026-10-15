@@ -60,6 +60,20 @@ describe('McpToolSession', () => {
             session().call('get_issue', { id: 'SAA-9' }),
         ).rejects.toBeInstanceOf(TaskNotFoundError);
 
+        // ClickUp's answer for an id that is not one of its tasks.
+        executeTool.mockResolvedValueOnce(
+            errorResult('{"error":"Team not authorized"}'),
+        );
+        await expect(
+            session().call('get_issue', { id: 'QA-17' }),
+        ).rejects.toBeInstanceOf(TaskNotFoundError);
+        executeTool.mockResolvedValueOnce(
+            errorResult('Team not authorized: token expired'),
+        );
+        await expect(
+            session().call('get_issue', { id: 'QA-17' }),
+        ).rejects.toBeInstanceOf(TrackerUnavailableError);
+
         executeTool.mockResolvedValueOnce(errorResult('rate limited'));
         await expect(
             session().call('get_issue', { id: 'SAA-9' }),

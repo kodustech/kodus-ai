@@ -194,4 +194,18 @@ describe('a met task', () => {
         expect(comment).not.toContain('Persists per user');
         expect(comment).toContain('CHECK MANUALLY');
     });
+
+    it('names a met parent requirement by its words, not "Parent"', () => {
+        const met = outcome({ passed: true });
+        met.passed = true;
+        const reqs = met.checks[0].verdict.requirements!;
+        met.checks[0].verdict.requirements = reqs
+            .filter((r) => r.state !== 'missing')
+            .map((r) => (r.state === 'met' ? { ...r, source: 'Parent' } : r));
+        met.checks[0].verdict.outOfScope = [];
+        const comment = renderComment(met);
+        const metReq = reqs.find((r) => r.state === 'met')!.requirement;
+        expect(comment).toContain(`✅ 1 of 2 met: ${metReq.slice(0, 40)}`);
+        expect(comment).not.toContain('met: Parent');
+    });
 });

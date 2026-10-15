@@ -375,7 +375,15 @@ export class ChatWithKodyFromGitUseCase {
                     pullRequestNumber,
                     pullRequestDescription,
                     organizationAndTeamData,
-                    headRef,
+                    // A GitHub comment webhook doesn't name the PR's branch,
+                    // where a task id often is (`feature/CU-86a1b2c3d-…`).
+                    headRef ||
+                        (await this.pullRequestHeadRef(
+                            organizationAndTeamData,
+                            repository,
+                            pullRequestNumber,
+                            params.platformType,
+                        )),
                     baseRef,
                 );
             }
@@ -1703,6 +1711,33 @@ export class ChatWithKodyFromGitUseCase {
                     metadata: { platformType: params.platformType },
                 });
                 return 0;
+        }
+    }
+
+    /** The PR's branch, read from the PR when the webhook leaves it out. */
+    private async pullRequestHeadRef(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: Repository,
+        prNumber: number,
+        platformType: PlatformType,
+    ): Promise<string | undefined> {
+        try {
+            const pullRequest =
+                (await this.codeManagementService.getPullRequest(
+                    {
+                        organizationAndTeamData,
+                        repository: {
+                            id: repository.id,
+                            name: repository.name,
+                        },
+                        prNumber,
+                    },
+                    platformType,
+                )) as { head?: { ref?: string } } | undefined;
+            return pullRequest?.head?.ref || undefined;
+        } catch {
+            // Without it, the task is still read from the title and body.
+            return undefined;
         }
     }
 

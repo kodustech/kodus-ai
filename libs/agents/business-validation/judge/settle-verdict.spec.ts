@@ -50,6 +50,27 @@ describe('settleVerdict', () => {
         });
     });
 
+    it('keeps a flow gap the judge is sure of and pins to code', () => {
+        const sure = requirement({
+            kind: 'flow',
+            confidence: 'high',
+            evidence: [{ file: 'src/archive.ts', line: 3 }],
+        });
+        expect(
+            settleVerdict(result([sure]), { unseenFiles: [] })
+                .requirements?.[0],
+        ).toMatchObject({ state: 'missing' });
+        const unpinned = requirement({
+            kind: 'flow',
+            confidence: 'high',
+            evidence: [],
+        });
+        expect(
+            settleVerdict(result([unpinned]), { unseenFiles: [] })
+                .requirements?.[0],
+        ).toMatchObject({ state: 'check_manually', downgraded: 'visual' });
+    });
+
     it('does not call MISSING what may live in a file the judge never saw (UC-32)', () => {
         const settled = settleVerdict(result([requirement({})]), {
             unseenFiles: ['src/huge.ts'],

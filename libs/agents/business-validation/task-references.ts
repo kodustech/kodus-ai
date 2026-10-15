@@ -23,6 +23,14 @@ const PART_OF =
     /\b(?:part\s+of|partially|partial|refs?|references?|related\s+to|relates\s+to|towards?|see|parte\s+de|relacionad[oa]\s+a)\b[\s:]*$/i;
 
 /**
+ * The PR summary Kody writes into the description: generated text, so an id
+ * in it (a team's summary template, a task the model mentions) is not a task
+ * the author named.
+ */
+const KODY_PR_SUMMARY =
+    /<!-- kody-pr-summary:start -->[\s\S]*?<!-- kody-pr-summary:end -->/g;
+
+/**
  * Every task a PR could be pointing at, in the order a person would read
  * them: what the command was given, then the title, the branch and the body.
  *
@@ -38,7 +46,10 @@ export function extractTaskReferences(
     const references: TaskReference[] = [];
 
     for (const source of SOURCE_ORDER) {
-        const text = sources[source];
+        const text =
+            source === 'body'
+                ? sources.body?.replace(KODY_PR_SUMMARY, '')
+                : sources[source];
         if (!text?.trim()) {
             continue;
         }

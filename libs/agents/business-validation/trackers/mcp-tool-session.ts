@@ -27,6 +27,12 @@ const RETRIEVE_FAILED_FOR_ID =
     /\bfailed to retrieve [\w\s]{0,40}? with (?:public )?id\W*[\w-]+\W*$/i;
 
 /**
+ * ClickUp's whole answer for a task id that is not one of the workspace's,
+ * custom ids too. The server answered; it just has no such task.
+ */
+const CLICKUP_NO_SUCH_TASK = /^\W*(?:error\W*)?team not authorized\W*$/i;
+
+/**
  * One MCP server, opened only for the tools a tracker reads with. Tools the
  * session is not given do not exist for it, so a fetch can never call a tool
  * that writes to the customer's tracker.
@@ -147,7 +153,8 @@ export function readToolPayload(result: unknown): unknown {
 
 function trackerError(message: string): Error {
     return NOT_FOUND_PATTERN.test(message) ||
-        RETRIEVE_FAILED_FOR_ID.test(message.trim())
+        RETRIEVE_FAILED_FOR_ID.test(message.trim()) ||
+        CLICKUP_NO_SUCH_TASK.test(message.trim())
         ? new TaskNotFoundError(message)
         : new TrackerUnavailableError(message);
 }

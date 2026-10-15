@@ -193,6 +193,39 @@ const CASES: Case[] = [
         ],
     },
     {
+        // The same sub-task with the confirmation left out: a step the code
+        // skips is a gap, not something to check by hand.
+        name: 'sub-task that skips the confirmation the parent asks for',
+        language: 'en-US',
+        task: {
+            id: 'KOD-20',
+            title: 'Bulk archive',
+            description: 'Archive part of the parent issue.',
+            acceptanceCriteria: [],
+            parent: {
+                id: 'KOD-19',
+                title: 'Ticket list: bulk actions',
+                description: [
+                    '## Acceptance criteria',
+                    '- A checkbox on each row selects the ticket',
+                    '- "Archive selected" archives every selected ticket in one request',
+                    '- Archiving more than 50 tickets asks for confirmation first',
+                ].join('\n'),
+            },
+        },
+        diff: file('src/tickets/bulkArchive.ts', [
+            "+import { api } from '../api';",
+            '+export async function archiveSelected(ids: string[]) {',
+            "+  await api.post('/tickets/archive', { ids });",
+            '+}',
+        ]),
+        gold: [
+            { match: 'archive selected', accept: ['met'] },
+            { match: '50', accept: ['missing'] },
+            { match: 'checkbox', accept: ['check_manually'], absentOk: true },
+        ],
+    },
+    {
         // The parent of two sub-issues: what one of them delivers is not
         // a gap of this PR, which only adds the checkboxes.
         name: 'parent split into sub-tasks: their work is not a gap here',

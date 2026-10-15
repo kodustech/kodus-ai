@@ -353,3 +353,18 @@ describe('ClickUp references', () => {
         ]);
     });
 });
+
+describe('the summary Kody writes into the description', () => {
+    it('is never read as the author naming a task', () => {
+        const references = extractTaskReferences({
+            branch: 'feature/CU-86a1b2c3d-bulk-archive',
+            body: [
+                'Closes OPS-7',
+                '<!-- kody-pr-summary:start -->',
+                'QA-1750: generated summary',
+                '<!-- kody-pr-summary:end -->',
+            ].join('\n'),
+        });
+        expect(references.map((r) => r.raw)).toEqual(['CU-86a1b2c3d', 'OPS-7']);
+    });
+});

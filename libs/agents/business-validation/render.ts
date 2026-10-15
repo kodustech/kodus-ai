@@ -133,7 +133,7 @@ function renderTaskSection(check: TaskCheck, context: RenderContext): string {
         const met = requirements.filter((r) => r.state === 'met');
         lines.push(
             `✅ ${met.length} of ${requirements.length} met: ${met
-                .map((r) => r.source ?? r.requirement)
+                .map((r) => metLabel(r, requirements))
                 .join(', ')}`,
         );
         if (rows.length) {
@@ -345,4 +345,24 @@ export function renderCliText(outcome: BusinessValidationOutcome): string {
         `status: ${outcome.passed ? 'compliant' : 'issues_found'} (--json for the full verdict)`,
     );
     return lines.join('\n');
+}
+
+/**
+ * A met requirement in the one-line summary: its label (`AC #2`) when that
+ * names only it, else its own words, so "Parent" never stands for a row.
+ */
+function metLabel(
+    requirement: RequirementVerdict,
+    all: RequirementVerdict[],
+): string {
+    const source = requirement.source?.trim();
+    if (
+        source &&
+        source !== 'Parent' &&
+        all.filter((r) => r.source?.trim() === source).length === 1
+    ) {
+        return source;
+    }
+    const text = requirement.requirement.trim();
+    return text.length > 60 ? `${text.slice(0, 57)}…` : text;
 }
