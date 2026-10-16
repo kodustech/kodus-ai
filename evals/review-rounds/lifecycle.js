@@ -7,6 +7,18 @@ const { once, instrumentVerifier, engineSnapshot } = require('./run');
 const { cases } = require('./cases');
 const { applyModelEnv } = require('../shared/tier0-models');
 const { loadJudgeKey, JUDGE_MODEL } = require('../investigation/recall-judge');
+require('ts-node/register/transpile-only');
+require('tsconfig-paths/register');
+const { toRecord, toRecordFromPrLevel } = require('../../libs/code-review/infrastructure/adapters/services/pr-decision-store.service.ts');
+const { ImplementationStatus } = require('../../libs/platformData/domain/pullRequests/enums/implementationStatus.enum.ts');
+// The outcome a sequence gives its posted suggestions, as the implementation
+// check stores it (`pending` is a suggestion it has not checked yet).
+const IMPLEMENTATION = {
+    implemented: ImplementationStatus.IMPLEMENTED,
+    partially_implemented: ImplementationStatus.PARTIALLY_IMPLEMENTED,
+    not_implemented: ImplementationStatus.NOT_IMPLEMENTED,
+    pending: undefined,
+};
 const arg = (name, fallback) =>
     process.argv
         .find((a) => a.startsWith(`--${name}=`))
@@ -262,18 +274,22 @@ async function main() {
                     row.historyBefore = clone(history);
                     row.changedFiles = c.changedFiles;
                     run.rounds.push(row);
-                    for (const [i, d] of row.delivered.entries())
-                        history.push({
-                            suggestionId: `${sequence.id}:${rep}:${index}:${i}`,
-                            relevantFile: d.file,
-                            relevantLinesStart: Number(d.line),
-                            suggestionContent: d.text,
-                            label: d.label || 'bug',
-                            brokenKodyRulesIds: d.brokenKodyRulesIds,
-                            outcome:
-                                sequence.historyOutcome || 'not_implemented',
-                            decidedAt: new Date().toISOString(),
-                        });
+                    // What this round posted becomes the PR's decision store,
+                    // read the way production reads it (toRecord /
+                    // toRecordFromPrLevel): the sequence says what the
+                    // implementation check concluded.
+                    const decidedAt = new Date(Date.UTC(2026, 9, 1, index)).toISOString();
+                    const implementationStatus = IMPLEMENTATION[sequence.historyOutcome || 'not_implemented'];
+                    row.posted.onFiles.forEach((s, i) =>
+                        history.push(
+                            toRecord({ ...s, id: `${sequence.id}:${rep}:${index}:${i}`, implementationStatus, createdAt: decidedAt }),
+                        ),
+                    );
+                    row.posted.onPR.forEach((s, i) =>
+                        history.push(
+                            toRecordFromPrLevel({ ...s, id: `${sequence.id}:${rep}:${index}:pr-${i}`, createdAt: decidedAt, comment: { id: `${sequence.id}-${rep}-${index}-${i}` } }),
+                        ),
+                    );
                     console.log(
                         `${c.id} #${rep}: ${row.claims.map((cl) => `${cl.id}=${cl.pass ? 'PASS' : 'FAIL'}`).join(' ')} delivered=${row.delivered.length} history=${history.length}`,
                     );

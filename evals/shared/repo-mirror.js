@@ -82,23 +82,39 @@ async function mirrorFor({ repo, prNumber, headSha, baseRef }) {
 
 /**
  * A repository written for an eval, as a mirror: every file of `files` on
- * `branch`, and `base` (the same tree) as its base branch. Returns the URL and
- * a cleanup.
+ * `branch`, and `base` as its base branch, holding `baseFiles` (the tree before
+ * the pull request) or, without them, the same tree. Returns the URL and a
+ * cleanup.
  */
-async function inlineMirror(files, { branch = 'feature', base = 'main' } = {}) {
+async function inlineMirror(files, { branch = 'feature', base = 'main', baseFiles } = {}) {
     const work = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-inline-mirror-'));
-    try {
-        for (const [file, content] of Object.entries(files || {})) {
+    const write = (tree) => {
+        for (const [file, content] of Object.entries(tree || {})) {
             const target = path.join(work, file);
             if (!target.startsWith(work + path.sep)) throw new Error(`repoFiles path escapes the repository: ${file}`);
             fs.mkdirSync(path.dirname(target), { recursive: true });
             fs.writeFileSync(target, String(content));
         }
+    };
+    try {
         const author = { GIT_AUTHOR_NAME: 'dev', GIT_AUTHOR_EMAIL: 'dev@example.com', GIT_COMMITTER_NAME: 'dev', GIT_COMMITTER_EMAIL: 'dev@example.com' };
         await git(work, ['init', '-q', '-b', base]);
-        await git(work, ['add', '-A']);
-        await git(work, ['commit', '-q', '-m', 'head of the pull request'], { env: author });
-        await git(work, ['branch', branch]);
+        if (baseFiles) {
+            // The base branch before the pull request, then its head on `branch`.
+            write(baseFiles);
+            await git(work, ['add', '-A']);
+            await git(work, ['commit', '-q', '--allow-empty', '-m', 'base of the pull request'], { env: author });
+            await git(work, ['checkout', '-q', '-b', branch]);
+            await git(work, ['rm', '-r', '-q', '--ignore-unmatch', '.']);
+            write(files);
+            await git(work, ['add', '-A']);
+            await git(work, ['commit', '-q', '--allow-empty', '-m', 'head of the pull request'], { env: author });
+        } else {
+            write(files);
+            await git(work, ['add', '-A']);
+            await git(work, ['commit', '-q', '-m', 'head of the pull request'], { env: author });
+            await git(work, ['branch', branch]);
+        }
         await git(work, ['config', 'uploadpack.allowAnySHA1InWant', 'true']);
     } catch (error) {
         fs.rmSync(work, { recursive: true, force: true });
@@ -123,4 +139,36 @@ async function contentAt(cloneUrl, ref, filePath) {
     }
 }
 
-module.exports = { mirrorFor, inlineMirror, contentAt, MIRROR_ROOT: ROOT };
+/**
+ * The pull request's changed files as the platform's API lists them for a
+ * repository written for an eval (the GitHub adapter's shape: filename, status,
+ * additions, deletions, changes, and `patch`, the unified diff of the file
+ * without its header lines), read from the mirror between `base` and `head`.
+ */
+async function pullRequestFiles(cloneUrl, base, head) {
+    const dir = cloneUrl.replace(/^file:\/\//, '');
+    const STATUS = { A: 'added', M: 'modified', D: 'removed', R: 'renamed' };
+    const { stdout: names } = await git(dir, ['diff', '--name-status', '--no-renames', `${base}..${head}`]);
+    const { stdout: counts } = await git(dir, ['diff', '--numstat', '--no-renames', `${base}..${head}`]);
+    const numstat = new Map(
+        counts
+            .split('\n')
+            .filter(Boolean)
+            .map((l) => {
+                const [add, del, file] = l.split('\t');
+                return [file, { additions: Number(add) || 0, deletions: Number(del) || 0 }];
+            }),
+    );
+    const files = [];
+    for (const line of names.split('\n').filter(Boolean)) {
+        const [code, filename] = line.split('\t');
+        const { stdout: diff } = await git(dir, ['diff', '-U3', '--no-renames', `${base}..${head}`, '--', filename]);
+        const at = diff.indexOf('\n@@');
+        const patch = at >= 0 ? diff.slice(at + 1).replace(/\n$/, '') : '';
+        const n = numstat.get(filename) || { additions: 0, deletions: 0 };
+        files.push({ filename, status: STATUS[code[0]] || 'modified', additions: n.additions, deletions: n.deletions, changes: n.additions + n.deletions, patch });
+    }
+    return files;
+}
+
+module.exports = { mirrorFor, inlineMirror, contentAt, pullRequestFiles, MIRROR_ROOT: ROOT };
