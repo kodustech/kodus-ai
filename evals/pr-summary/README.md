@@ -3,7 +3,7 @@
 > - **Answers:** Is the PR summary generated, posted, sent to the configured model, composed as the team configured, and about what the diff does?
 > - **Runs:** nightly when the summary path or its cases change (`evals/nightly-evals.js`), Friday on every tier-0 model, and on every PR in `evals/wiring-smoke.js` against the scripted model.
 > - **Run it:** `node evals/pr-summary/run.js --model=<id>` · `pnpm eval:pr-summary:mock`
-> - **Gate:** `--gate` fails below the model's floor in `evals/pr-summary/targets.json`; with none, any failed check fails it.
+> - **Gate:** `--gate` fails below the model's floor in `evals/pr-summary/targets.json`; a model with none is gated on the contract alone, where any failed check fails it.
 > - **Cost:** one model call per case; none mocked.
 
 Guards the **"generate PR summary on open"** feature — the AI description Kody
@@ -95,13 +95,17 @@ network errors — "not measured", never a silent green).
   the release train (`evals/tier0-smoke.js`), so one model degrading can't hide
   behind a healthy one.
 
-## No calibrated floor (by design)
+## Floors
 
-Unlike the recall/kody-rules evals, this gate is **binary property assertions**,
-not a numeric threshold — there is no `targets.json` to drift and nothing to
-flake on run-to-run variance. Add cases to `datasets/cases.json`; keep every
-behaviour (`replace`/`concatenate`/`complement`) represented (the harness
-preflight enforces this).
+Most checks are **binary property assertions** on the contract — routing,
+posting, composition — that hold or do not, whatever the model writes. The
+diff check (item 6) reads the model's prose, so a model is gated on it only
+with a floor of its own in `targets.json`, calibrated from runs (the nightly
+model). A model with none (the other tier-0 models on Friday) is gated on the
+contract alone, where any failed check fails it; its diff check is reported,
+not gated. Add cases to `datasets/cases.json`; keep every behaviour
+(`replace`/`concatenate`/`complement`) represented (the harness preflight
+enforces this).
 
 ## Why not flaky
 

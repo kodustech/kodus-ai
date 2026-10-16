@@ -230,7 +230,8 @@ async function runCase(c) {
 
     const exp = c.expect || {};
     const checks = [];
-    const check = (what, ok) => checks.push({ what, ok: !!ok });
+    // `quality`: a check on the model's prose, not on the contract (see the gate).
+    const check = (what, ok, quality = false) => checks.push({ what, ok: !!ok, ...(quality ? { quality: true } : {}) });
     const done = (contentLen, extra = {}) => ({ caseId: c.caseId, behaviour: c.behaviour, contentLen, checks, failures: checks.filter((x) => !x.ok).map((x) => x.what), ...extra });
 
     // 1) generated + non-empty. Empty ⇒ return NOW — every later assertion
@@ -287,10 +288,13 @@ async function runCase(c) {
     // words a good summary can miss them all (a tax-rounding fix whose only one
     // is `rate`), so the check needs three.
     if (REAL_MODEL) {
-        const known = new Set(diffWords([{ filename: '', patch: `+${c.pr?.title || ''} ${c.existingBody || ''}` }]));
+        // Every line of the title and the description, each as an added line:
+        // diffWords reads only those.
+        const saidBefore = `${c.pr?.title || ''}\n${c.existingBody || ''}`.split('\n').map((l) => `+${l}`).join('\n');
+        const known = new Set(diffWords([{ filename: '', patch: saidBefore }]));
         const only = diffWords(c.changedFiles).filter((w) => !known.has(w));
         const said = only.filter((w) => content.toLowerCase().includes(w));
-        if (only.length >= 3) check(`says what the diff does (uses ${said.length ? said.slice(0, 4).join(', ') : 'none'} of: ${only.slice(0, 6).join(', ')})`, said.length >= 1);
+        if (only.length >= 3) check(`says what the diff does (uses ${said.length ? said.slice(0, 4).join(', ') : 'none'} of: ${only.slice(0, 6).join(', ')})`, said.length >= 1, true);
     }
 
     return done(content.length);
@@ -522,10 +526,25 @@ async function main() {
     }
     const problems = resultProblems(result);
     if (problems.length) infra(`the result breaks the shared shape — ${problems.join('; ')}`);
+    // A case that crashed is out of the number: past the 5% budget the run did
+    // not measure (evals/AGENTS.md), engine break or not.
+    if (result.infra.errored > cases.length * 0.05) {
+        infra(`${result.infra.errored} of ${cases.length} cases did not run (see above)`);
+    }
 
-    if (result.metric.value < FLOOR) {
+    // A model with a floor of its own was calibrated with the diff check in the
+    // number. One without is gated on the contract alone (routing, posting,
+    // composition): the diff check reads the model's prose and is reported only.
+    const calibrated = TARGET.floor !== undefined;
+    const gated = evalCases.flatMap((x) => x.detail || []).filter((d) => calibrated || !d.quality);
+    const gatedHits = gated.filter((d) => d.ok).length;
+    if (!calibrated && gated.length < total) {
+        console.log(`  diff check: ${hits - gatedHits}/${total - gated.length} passed — reported, not gated (no floor for ${MODEL} in targets.json)`);
+    }
+
+    if ((gated.length ? gatedHits / gated.length : 1) < FLOOR) {
         if (GATE) {
-            console.error(`\n❌ GATE FAILED (${MODEL}): ${hits}/${total} checks, below the floor — ${routeFailures.length} routing + ${gateFailures.length} commit-gate + ${caseFailures.length} case failure(s)`);
+            console.error(`\n❌ GATE FAILED (${MODEL}): ${gatedHits}/${gated.length} gated checks, below the floor — ${routeFailures.length} routing + ${gateFailures.length} commit-gate + ${caseFailures.length} case failure(s)`);
             process.exit(1);
         }
         console.log(`\n⚠️  ${MODEL}: ${total - hits} failed check(s) — advisory (no --gate)`);
