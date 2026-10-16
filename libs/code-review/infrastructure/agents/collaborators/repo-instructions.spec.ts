@@ -356,6 +356,7 @@ describe('quotesRepoInstruction', () => {
                     '',
                     '- **Never** import a model directly in API helpers; use the `services` layer.',
                     '- Amounts are integer cents.',
+                    '- Use "strict" mode.',
                 ].join('\n'),
                 appliesTo: '**',
                 truncated: false,
@@ -388,6 +389,14 @@ describe('quotesRepoInstruction', () => {
         [
             'an ellipsis between two parts',
             'CLAUDE.md says "Never import a model directly ... use the services layer"',
+        ],
+        [
+            'an instruction that itself contains quotes',
+            'CLAUDE.md says "Use "strict" mode."',
+        ],
+        [
+            'an instruction with quotes, after another quote',
+            'The line sets "loose" but CLAUDE.md says "Use "strict" mode."',
         ],
     ])('accepts a quote of %s', (_name, content) => {
         expect(quotesRepoInstruction(content, context)).toBe(true);

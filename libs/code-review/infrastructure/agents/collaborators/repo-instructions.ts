@@ -331,8 +331,8 @@ const trimPunctuation = (text: string): string =>
 
 /**
  * Whether `text` (a finding's content) quotes one of the collected
- * instruction files: some double-quoted span of it, normalized, appears in a
- * file's normalized text. A quote cut with an ellipsis matches when every part
+ * instruction files: some span of it between two double quotes, normalized,
+ * appears in a file's normalized text. A quote cut with an ellipsis matches when every part
  * appears in the same file.
  */
 export function quotesRepoInstruction(
@@ -344,8 +344,13 @@ export function quotesRepoInstruction(
     );
     if (!corpus.length) return false;
 
-    const quotes = [...straightenQuotes(text).matchAll(/"([^"]+)"/g)].map(
-        (m) => m[1],
+    // The span between every pair of quote marks is a candidate, so an
+    // instruction that itself contains quotes (`Use "strict" mode.`) is
+    // compared whole instead of as the short pieces between its quotes.
+    const straight = straightenQuotes(text);
+    const marks = [...straight.matchAll(/"/g)].map((m) => m.index);
+    const quotes = marks.flatMap((start, i) =>
+        marks.slice(i + 1).map((end) => straight.slice(start + 1, end)),
     );
     return quotes.some((quote) => {
         const parts = quote
