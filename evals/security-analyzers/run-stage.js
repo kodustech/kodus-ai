@@ -43,7 +43,10 @@ if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
 
 const dataset = require('../../scripts/security-benchmark/dataset.json');
 const tranche = args.tranche || 'vuln';
-const samples = dataset.samples.filter((s) => s.tranche === tranche).slice(0, args.limit ? Number(args.limit) : undefined);
+// --ids=<prefix> picks samples by id prefix (the planted secrets are `secret-*`).
+const samples = dataset.samples
+    .filter((s) => s.tranche === tranche && (!args.ids || s.id.startsWith(String(args.ids))))
+    .slice(0, args.limit ? Number(args.limit) : undefined);
 const ORG = { organizationId: '00000000-0000-4000-8000-0000000a0a01', teamId: '00000000-0000-4000-8000-0000000a0a02' };
 
 function buildStage() {
@@ -53,8 +56,10 @@ function buildStage() {
     const { SecretScanTool } = lib('code-review/infrastructure/analyzers/tools/secret-scan.tool.ts');
     const { DependencyScanTool } = lib('code-review/infrastructure/analyzers/tools/dependency-scan.tool.ts');
     const { FeatureGateService } = lib('feature-gate/application/feature-gate.service.ts');
-    const featureGate = new FeatureGateService({ isFeatureEnabled: async () => false });
-    const organizations = { getReleaseTrack: async () => 'stable' };
+    // The flag store behind the gate: on for the one feature this eval measures.
+    const featureGate = new FeatureGateService({ isFeatureEnabled: async (feature) => feature === 'deterministic-evidence' });
+    // The feature is in beta: its catalog entry opens it to organizations on the beta track.
+    const organizations = { getReleaseTrack: async () => 'beta' };
     // The patches are in the context already; nothing is withheld by a host.
     const codeManagement = { getFilePatches: async () => [] };
     return new RunAnalyzersStage(new AnalyzerToolRouter(), new DeterministicEvidenceGate(featureGate, organizations), codeManagement, [new SecretScanTool(), new DependencyScanTool()]);
@@ -120,8 +125,13 @@ async function main() {
     for (const sample of samples) {
         try {
             // eslint-disable-next-line no-await-in-loop
-            const { findings, failures } = await runSample(stage, sample);
+            const { findings, failures, routing } = await runSample(stage, sample);
             if (failures.length) throw new Error(`a tool failed: ${JSON.stringify(failures).slice(0, 160)}`);
+            // A stage that never ran the scan is not a clean sample.
+            // Production's own file selection may leave the scan nothing to read
+            // (a template file): that is quiet. Any other reason is a wiring break.
+            const scan = routing.find((r) => r.toolId === 'secrets');
+            if (!scan || (!scan.run && scan.reason !== 'no-matching-files')) throw new Error(`the stage did not run the secret scan: ${JSON.stringify(routing).slice(0, 200)}`);
             const ok = tranche === 'noise' ? findings.length === 0 : detects(sample, findings);
             cases.push({ id: sample.id, checks: tranche === 'noise' ? `Stays quiet on ${sample.summary}`.slice(0, 160) : `Flags ${sample.cweLabel}: ${sample.summary}`.slice(0, 160), hits: ok ? 1 : 0, total: 1, detail: findings.slice(0, 5).map((f) => ({ what: `${f.ruleId} ${f.path}:${f.startLine}`, ok })) });
         } catch (error) {

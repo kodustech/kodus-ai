@@ -72,7 +72,8 @@ function groundTruth(pr, ruleUuid) {
     const gt = {};
     for (const f of scoped) {
         const sites = addedLines(f.patch)
-            .filter((l) => spec.rx.test(l.code))
+            // A pattern inside a comment (a JSDoc example) is not a violation.
+            .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l.code) && spec.rx.test(l.code))
             .map((l) => ({ line: l.line, code: l.code.trim().slice(0, 80) }));
         if (sites.length) gt[f.filename] = sites;
     }
