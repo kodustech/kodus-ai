@@ -9,7 +9,8 @@
 //     model, runs,
 //     metric:   { name, value, floor, baseline },   // ratios; floor from the eval's targets file
 //     cases:    [{ id, checks, hits, total, detail: [{ what, ok }] }],
-//     tokens:   { in, out, cacheRead },
+//     tokens:   { in, out, cacheRead, cacheWrite,     // what the model calls cost (eval-kit.js tokensUsed)
+//                 calls, ms, callMs: [ms…] },
 //     infra:    { errored, total },                 // runs that did not measure
 //   }
 //
@@ -63,6 +64,18 @@ function poolCases(a = [], b = []) {
             detail: (c.detail || []).map((d) => ({ ...d, ok: d.ok && okIn.get(d.what) !== false })),
         };
     });
+}
+
+// Two runs' token totals as one: counts add up, per-call times join.
+function poolTokens(a = {}, b = {}) {
+    const keys = [...new Set([...Object.keys(a || {}), ...Object.keys(b || {})])];
+    return Object.fromEntries(
+        keys.map((k) => {
+            const x = (a || {})[k];
+            const y = (b || {})[k];
+            return [k, Array.isArray(x) || Array.isArray(y) ? [...(x || []), ...(y || [])] : (x || 0) + (y || 0)];
+        }),
+    );
 }
 
 // The cases as the stage signal carries them: every case, its detail capped so
@@ -129,4 +142,4 @@ function signalCatalog(entries = []) {
     return entries.slice(0, MAX_CATALOG).map((e) => ({ id: String(e.id), checks: String(e.checks).slice(0, MAX_TEXT), ...(e.group ? { group: String(e.group) } : {}), ...(Number.isInteger(e.count) ? { count: e.count } : {}) }));
 }
 
-module.exports = { evalQuestion, resultProblems, poolCases, signalCases, requireTs, loadCatalog, catalogProblems, signalCatalog, MAX_DETAIL, MAX_CATALOG, MAX_TEXT };
+module.exports = { evalQuestion, resultProblems, poolCases, poolTokens, signalCases, requireTs, loadCatalog, catalogProblems, signalCatalog, MAX_DETAIL, MAX_CATALOG, MAX_TEXT };

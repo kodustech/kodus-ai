@@ -4,7 +4,9 @@ import * as path from 'path';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { STAGES, GROUPS, PLUMBING } = require('./stages');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { wiringRows, nightlyRows, READERS, catalogPath } = require('./stage-signals');
+const { wiringRows, nightlyRows, READERS, catalogPath, usageMeta } = require('./stage-signals');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { costUpperBound, catalogIdFor } = require('./investigation/nightly-compare');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { loadCatalog, catalogProblems } = require('./shared/eval-result');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -199,6 +201,36 @@ describe('stage-signals', () => {
         expect(row.meta.caveat).toEqual(expect.stringContaining('mechanical rules only'));
         expect(nightlyRows(null, 'infra', 'kody-rules')[0]).toMatchObject({ status: 'infra', value: null });
         expect(nightlyRows(result, 'pass', 'finder')[0]).toMatchObject({ status: 'infra' });
+    });
+
+    it('reports what the model calls cost: per review of a case, call-time percentiles, no per-call times', () => {
+        const tokens = { in: 4000, out: 400, cacheRead: 1000, cacheWrite: 0, calls: 8, ms: 8000, callMs: [500, 700, 800, 900, 1000, 1100, 1300, 1700] };
+        const usage = usageMeta(tokens, 4, 'eval-fake');
+        expect(usage).toEqual({
+            calls: 8, in: 4000, out: 400, cacheRead: 1000, cacheWrite: 0, ms: 8000, p50Ms: 900, p95Ms: 1700, reviews: 4,
+            perCase: { calls: 2, in: 1000, out: 100, cacheRead: 250, cacheWrite: 0, ms: 2000 },
+            usdPerCaseMax: null,
+        });
+        // Priced only from the Kodus catalog, every input token at the full rate.
+        const priced = usageMeta(tokens, 4, 'deepseek-v4-flash@fireworks');
+        expect(priced.usdPerCaseMax).toBeCloseTo(costUpperBound({ prompt: 4000, completion: 400 }, catalogIdFor('deepseek-v4-flash@fireworks')) / 4);
+        expect(priced.usdPerCaseMax).toBeGreaterThan(0);
+        expect(usageMeta(null, 4, 'eval-fake')).toBeNull();
+        expect(usageMeta({ in: 10 }, 0, 'eval-fake')).toMatchObject({ calls: 0, p50Ms: null, perCase: null });
+
+        // The shared reader: usage for the panel, the tokens without per-call times.
+        const result = {
+            eval: 'demo', question: 'Does it?', model: 'eval-fake', runs: 2,
+            metric: { name: 'of cases right', value: 1 },
+            cases: [{ id: 'a', checks: 'Checks a', hits: 1, total: 1 }, { id: 'b', checks: 'Checks b', hits: 1, total: 1 }],
+            tokens,
+        };
+        const read = READERS.shared(result);
+        expect(read.extra.tokens).toEqual({ in: 4000, out: 400, cacheRead: 1000, cacheWrite: 0, calls: 8, ms: 8000 });
+        expect(read.extra.usage).toMatchObject({ reviews: 4, perCase: { calls: 2, ms: 2000 } });
+        // The finder: summary.usage, two runs of every case on a confirmed night.
+        const finder = { model: 'eval-fake', cases: 2, metrics: { recall_mean: 0.4 }, gate: { confirmation: { runs: [0.4, 0.4] } }, usage: tokens, rows: [] };
+        expect(READERS['finder-recall'](finder).extra.usage).toMatchObject({ reviews: 4, perCase: { in: 1000 } });
     });
 
     it("reports the finder's cases: each PR's known bugs, found or not, by the PR's title", () => {
