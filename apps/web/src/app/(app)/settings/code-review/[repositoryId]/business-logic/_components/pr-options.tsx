@@ -1,7 +1,9 @@
 "use client";
 
+import { useParams } from "next/navigation";
 import { Heading } from "@components/ui/heading";
 import { Label } from "@components/ui/label";
+import { Link } from "@components/ui/link";
 import { RadioGroup } from "@components/ui/radio-group";
 import { Switch } from "@components/ui/switch";
 import { Controller, useFormContext } from "react-hook-form";
@@ -42,10 +44,26 @@ const RECHECK = [
 
 /** What Kody does on the pull request (UC-26, UC-35). */
 export const PrOptions = ({ canEdit }: { canEdit: boolean }) => {
+    const { repositoryId } = useParams<{ repositoryId: string }>();
     const form = useFormContext<CodeReviewFormType>();
     return (
         <section className="flex flex-col gap-3">
-            <Heading variant="h3">On the pull request</Heading>
+            <div className="flex flex-col gap-1">
+                <Heading variant="h3">On the pull request</Heading>
+                {/* The review stops before Business Logic on these PRs: the
+                    same settings decide both, set once in General. */}
+                <p className="text-text-secondary text-sm">
+                    Kody skips the pull requests code review skips: titles with
+                    an ignored keyword (like WIP) and, when reviews don&apos;t
+                    run on drafts, drafts. Set them in{" "}
+                    <Link
+                        href={`/settings/code-review/${repositoryId}/general`}>
+                        General
+                    </Link>
+                    . A comment with <code>@kody -v business-logic</code> always
+                    runs.
+                </p>
+            </div>
             <div className="bg-card-lv1 divide-card-lv3/60 flex flex-col divide-y rounded-xl">
                 {SWITCHES.map((option) => (
                     <Controller
