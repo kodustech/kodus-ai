@@ -1,0 +1,65 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "Both identify canManage() accepting all-groups VIEW permission and thereby allowing manage operations such as group creation."
+  },
+  {
+   "id": "S2",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "newGroup": null,
+   "reason": "Both identify group-instance resources missing the Groups type, causing findByType to omit specific group grants."
+  },
+  {
+   "id": "S3",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Both identify authorization resource IDs being used instead of resource names for permission lookup and returned model group IDs."
+  },
+  {
+   "id": "S4",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Both identify incorrect use of authorization resource IDs, breaking specific-group permission lookup and user search/count filtering."
+  },
+  {
+   "id": "S5",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "Both identify requireManageMembers documentation incorrectly referencing canManageMembership instead of canManageMembers."
+  },
+  {
+   "id": "S6",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#07",
+   "newGroup": null,
+   "reason": "Both identify the return documentation describing a Stream when the method returns a Set."
+  },
+  {
+   "id": "S7",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+   "newGroup": null,
+   "reason": "Both identify the membership test failing to establish that group-level MANAGE_MEMBERSHIP authorization is enforced. S7 gives a more specific negative test and membership assertion to close that coverage gap."
+  },
+  {
+   "id": "S8",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Both identify using authorization resource IDs instead of resource names, causing permission lookup failures and incorrect group IDs in user filters."
+  },
+  {
+   "id": "S9",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "Both identify canManage() granting manage access to callers with only an all-groups VIEW permission."
+  },
+  {
+   "id": "S10",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Both identify using internal authorization resource IDs for permission evaluation and returned group IDs where the resource name contains the required model group ID."
+  }
+ ]
+}

@@ -1,0 +1,23 @@
+{
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the same underscore-delimited denial-cache key collision between distinct resource name and parent pairs, causing an incorrect cached denial."
+  },
+  {
+   "id": "S2",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the same ambiguous key encoding and resulting denial of another resource. The additional suggestion to use a distinct cache prefix does not change the matching problem."
+  },
+  {
+   "id": "S3",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the same collision between name/parent tuples containing underscores, allowing one resource's cached denial to incorrectly deny another."
+  }
+ ]
+}

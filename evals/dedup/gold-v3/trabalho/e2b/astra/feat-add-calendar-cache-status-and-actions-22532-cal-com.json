@@ -1,0 +1,29 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+   "newGroup": null,
+   "reason": "Both describe missing connectedCalendars query invalidation after cache deletion, leaving stale timestamps and delete actions when no parent callback triggers a refetch."
+  },
+  {
+   "id": "S2",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+   "newGroup": null,
+   "reason": "Both describe the BSD-only sed -i '' invocation failing on Linux and leaving GOOGLE_WEBHOOK_URL unchanged despite reporting success."
+  },
+  {
+   "id": "S3",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#04",
+   "newGroup": null,
+   "reason": "Both describe the cache timestamp using hard-coded en-US formatting instead of the user's active locale."
+  },
+  {
+   "id": "S4",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "Both describe the empty update data preventing SelectedCalendar.updatedAt from advancing during availability cache refresh."
+  }
+ ]
+}

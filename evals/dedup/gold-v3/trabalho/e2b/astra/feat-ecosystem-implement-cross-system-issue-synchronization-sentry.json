@@ -1,0 +1,23 @@
+{
+ "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "Describes the same import-time evaluation of timezone.now(), causing all AssignmentSource instances to share a stale queued timestamp."
+  },
+  {
+   "id": "S2",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#03",
+   "newGroup": null,
+   "reason": "Describes the same empty-array test passing {} instead of [], leaving the named array-input case untested."
+  },
+  {
+   "id": "S3",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "Describes the same queued default evaluated once at module import instead of separately for each AssignmentSource instance."
+  }
+ ]
+}

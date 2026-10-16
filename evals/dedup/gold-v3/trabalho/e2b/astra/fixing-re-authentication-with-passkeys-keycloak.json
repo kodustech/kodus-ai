@@ -1,0 +1,11 @@
+{
+ "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fixing-re-authentication-with-passkeys-keycloak#03",
+   "newGroup": null,
+   "reason": "Both describe passkey-only users reaching a password-only page because the legacy keycloak theme inherits the base login-password.ftl, which lacks the passkeys import and conditionalUIData invocation."
+  }
+ ]
+}

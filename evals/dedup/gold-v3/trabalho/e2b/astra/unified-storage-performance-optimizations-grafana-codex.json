@@ -1,0 +1,17 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Both describe concurrent builds for the same uncached key after narrowing the cache lock, allowing one index to replace another and lose updates from subsequent search results."
+  },
+  {
+   "id": "S2",
+   "match": "unified-storage-performance-optimizations-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Both describe the startup TotalDocs call iterating the cache without a lock while the event consumer can insert an index, causing a data race or fatal concurrent map iteration/write error."
+  }
+ ]
+}

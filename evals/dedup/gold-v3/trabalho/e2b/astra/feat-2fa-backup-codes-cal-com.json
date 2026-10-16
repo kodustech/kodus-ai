@@ -1,0 +1,47 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Describes the same password bypass: a dummy nonempty totpCode skips password verification while a valid backup code authenticates the user."
+  },
+  {
+   "id": "S2",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same non-atomic backup-code consumption, allowing concurrent reuse or overwriting another request's removal."
+  },
+  {
+   "id": "S3",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same stale read-modify-write that lets concurrent requests reuse a code or restore consumed codes."
+  },
+  {
+   "id": "S4",
+   "match": "feat-2fa-backup-codes-cal-com#08",
+   "newGroup": null,
+   "reason": "Describes the same non-constant-time backup-code comparisons using indexOf in the login and disable endpoints."
+  },
+  {
+   "id": "S5",
+   "match": "feat-2fa-backup-codes-cal-com#05",
+   "newGroup": null,
+   "reason": "Describes the same copy-test gap: checking the unconditional success toast does not verify clipboard contents."
+  },
+  {
+   "id": "S6",
+   "match": "feat-2fa-backup-codes-cal-com#13",
+   "newGroup": null,
+   "reason": "Describes the same download-test gap: checking only the filename leaves empty or incorrect backup-code contents undetected."
+  },
+  {
+   "id": "S7",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same non-atomic backup-code consumption that permits concurrent reuse and lost removals."
+  }
+ ]
+}

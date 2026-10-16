@@ -1,0 +1,35 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "The second downsize definition overrides the width/height method, causing ResizeEmoji's five-argument call to raise ArgumentError."
+  },
+  {
+   "id": "S2",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "The hardcoded 10 MB client limit ignores max_attachment_size_kb and blocks attachments that the server permits."
+  },
+  {
+   "id": "S3",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "The downsizing loop ignores a false conversion result and repeats the same failing conversion on unchanged input."
+  },
+  {
+   "id": "S4",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "The duplicate downsize definition replaces the width/height version and breaks ResizeEmoji's five-argument call."
+  },
+  {
+   "id": "S5",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "The dimensions-based downsize definition overrides the existing method, making ResizeEmoji's five-argument call raise ArgumentError."
+  }
+ ]
+}

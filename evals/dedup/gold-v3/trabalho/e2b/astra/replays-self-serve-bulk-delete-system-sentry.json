@@ -1,0 +1,89 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#12",
+   "newGroup": null,
+   "reason": "The feature-flagged table visualization receives hardcoded empty props instead of the query results, making populated tables appear empty."
+  },
+  {
+   "id": "S2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#19",
+   "newGroup": null,
+   "reason": "The attribute cache key omits organization identity, allowing identical filters across organizations to reuse the previous organization's attributes."
+  },
+  {
+   "id": "S3",
+   "match": "replays-self-serve-bulk-delete-system-sentry#13",
+   "newGroup": null,
+   "reason": "Custom cell renderers use truthiness to select fallback, discarding valid falsy results instead of falling back only for undefined."
+  },
+  {
+   "id": "S4",
+   "match": "replays-self-serve-bulk-delete-system-sentry#13",
+   "newGroup": null,
+   "reason": "The header and body renderer checks incorrectly replace valid falsy custom content with default rendering."
+  },
+  {
+   "id": "S5",
+   "match": "replays-self-serve-bulk-delete-system-sentry#15",
+   "newGroup": null,
+   "reason": "The saved-query consumer still reads visualize.yAxes after Visualize switched to yAxis, producing undefined visualization expressions."
+  },
+  {
+   "id": "S6",
+   "match": "replays-self-serve-bulk-delete-system-sentry#19",
+   "newGroup": null,
+   "reason": "Missing organization identity in the attribute query key causes cached attribute names to appear across organizations."
+  },
+  {
+   "id": "S7",
+   "match": "replays-self-serve-bulk-delete-system-sentry#19",
+   "newGroup": null,
+   "reason": "Organization-specific attribute requests share a cache key when filters match, reusing cached results or in-flight requests across organizations."
+  },
+  {
+   "id": "S8",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "The age/timestamp mutual-exclusion validators check truthiness, allowing both fields when their values are zero."
+  },
+  {
+   "id": "S9",
+   "match": "replays-self-serve-bulk-delete-system-sentry#12",
+   "newGroup": null,
+   "reason": "The feature-flagged visualization discards fetched results and receives empty columns, rows, and metadata, rendering an empty table."
+  },
+  {
+   "id": "S10",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "Truthiness checks fail to enforce age/timestamp exclusivity when both fields contain zero."
+  },
+  {
+   "id": "S11",
+   "match": "replays-self-serve-bulk-delete-system-sentry#13",
+   "newGroup": null,
+   "reason": "The custom-renderer fallback checks discard valid falsy ReactNode results rather than treating only undefined as the fallback sentinel."
+  },
+  {
+   "id": "S12",
+   "match": "replays-self-serve-bulk-delete-system-sentry#12",
+   "newGroup": null,
+   "reason": "Hardcoded empty data and columns make dashboard tables appear empty when the visualization feature flag is enabled."
+  },
+  {
+   "id": "S13",
+   "match": "replays-self-serve-bulk-delete-system-sentry#19",
+   "newGroup": null,
+   "reason": "The organization-specific attribute query lacks organization identity in its cache key, allowing reuse of another organization's attribute collection."
+  },
+  {
+   "id": "S14",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "The validators check field values rather than presence, accepting simultaneous age and timestamp fields when both equal zero."
+  }
+ ]
+}

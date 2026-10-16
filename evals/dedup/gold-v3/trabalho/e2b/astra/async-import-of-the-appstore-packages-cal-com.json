@@ -1,0 +1,23 @@
+{
+ "caseId": "async-import-of-the-appstore-packages-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the same unawaited async forEach callbacks in rescheduling, causing getCalendar failures to escape the surrounding try/catch as unhandled rejections."
+  },
+  {
+   "id": "S2",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the same cancellation loop whose unawaited async callbacks add recurring calendar operations to apiDeletes after it is consumed, leaving cleanup and errors unawaited."
+  },
+  {
+   "id": "S3",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the same unawaited async forEach in cancellation, allowing Promise.all(apiDeletes) to run before recurring-event operations are registered."
+  }
+ ]
+}

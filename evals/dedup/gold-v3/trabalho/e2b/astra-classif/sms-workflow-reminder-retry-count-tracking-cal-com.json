@@ -1,0 +1,12 @@
+{
+ "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+ "items": [
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "packages/features/ee/workflows/lib/reminders/providers/twilioProvider.ts:90-95 returns undefined when sending is locked, before the Twilio request at line 104. The PR adds an unconditional retry increment for that result in packages/features/ee/workflows/api/scheduleSMSReminders.ts:178-185; after two locked runs, the new deletion condition at lines 29-42 permanently removes future reminders even if sending has been unlocked.",
+   "severity": "critical"
+  }
+ ]
+}

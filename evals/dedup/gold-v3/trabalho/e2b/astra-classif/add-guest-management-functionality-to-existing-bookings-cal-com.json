@@ -1,0 +1,12 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#e2b-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The new handler sets only `uid: booking.uid`, omitting persisted `iCalUID`, and passes that event to the email sender (packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:137,168). Guest-update attachments use generateIcsString (packages/emails/templates/attendee-add-guests-email.ts:10), whose UID fallback is `event.iCalUID || event.uid` (packages/emails/lib/generateIcsString.ts:67). This changes calendar identity for ordinary bookings because getICalUID generates `${uid}@${APP_NAME}` (packages/emails/lib/getICalUID.ts:30), preventing invitations from updating the original event.",
+   "severity": "high"
+  }
+ ]
+}

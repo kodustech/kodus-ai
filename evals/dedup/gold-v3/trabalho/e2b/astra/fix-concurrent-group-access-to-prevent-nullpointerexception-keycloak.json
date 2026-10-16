@@ -1,0 +1,35 @@
+{
+ "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "The assertion can run before the reader finishes and records an exception; joining the reader before asserting fixes the same test race."
+  },
+  {
+   "id": "S2",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#03",
+   "newGroup": null,
+   "reason": "A deletion failure skips setting the stop flag and leaves the non-daemon reader looping indefinitely, the same missing-finally termination problem."
+  },
+  {
+   "id": "S3",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "The comment describes an in-flight reader request recording its failure after the assertion passes, matching the missing reader synchronization."
+  },
+  {
+   "id": "S4",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "The reader is not joined before checking caughtExceptions, allowing a concurrent-read failure to be recorded after the test reports success."
+  },
+  {
+   "id": "S5",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "The comment identifies the same premature assertion before reader completion, also noting the existing issue's lack of synchronization before deletion starts."
+  }
+ ]
+}

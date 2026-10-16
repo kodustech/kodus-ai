@@ -146,6 +146,12 @@
       "S3",
       "S7",
       "S10"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S3",
+      "S4",
+      "S7"
      ]
     },
     "reason_opus": "readSequence leniency (ASN1Decoder.java:49-63) only affects asn1derToConcatenatedRS, used on locally produced JDK signatures in the signer context; the verify path uses concatenatedRSToASN1DER (ECDSASignatureVerifierContext.java:30), so no attacker-controlled DER reaches this parser.",
@@ -254,6 +260,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S2"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1"
      ]
     },
     "reason_opus": "The authz client main code never parses JWKs or builds EC keys (no JWK/key-factory usage under authz/client/src/main besides ServerConfiguration.jwksUri); AuthzClientCryptoProvider deliberately implements only the ECDSA conversion it needs and marks the rest unsupported.",
@@ -944,6 +953,9 @@
     "foundBy": {
      "deepseek-v4.1-flash": [
       "S7"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S7"
      ]
     },
     "reason_opus": "UserResource.joinGroup (UserResource.java:1058-1062) calls both auth.users().requireManageGroupMembership(user) and auth.groups().requireManageMembership(group), so the group-level MANAGE_MEMBERSHIP grant does gate the join in GroupResourceTypeEvaluationTest.java:306.",
@@ -1551,6 +1563,9 @@
      "muse-spark-1.3": [
       "S1",
       "S4"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1"
      ]
     },
     "reason_opus": "reader.go:194-199 enableSqlExpressions computes !IsEnabledGlobally(FlagSqlExpressions) and returns false on both branches, so ReadQuery (:129-132) rejects SQL expressions even when the flag is on.",
@@ -1618,6 +1633,10 @@
       "S6"
      ],
      "muse-spark-1.3": [
+      "S3"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
       "S3"
      ]
     },
@@ -1864,6 +1883,9 @@
     "martianRef": [],
     "foundBy": {
      "gpt-6.1-sol": [
+      "S2"
+     ],
+     "gpt-6.1-sol@e2b": [
       "S2"
      ]
     },
@@ -2355,6 +2377,9 @@
     "foundBy": {
      "deepseek-v4.1-flash": [
       "S13"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2"
      ]
     },
     "reason_opus": "handleNewBooking.ts:968 passes immediateDelete=true, which in emailReminderManager.ts:213-222 only cancels in SendGrid and returns, leaving the row; bookings.tsx:489 reschedule uses the default path that marks cancelled:true for the cron to cancel and delete. The two reschedule paths leave different DB state.",
@@ -2602,6 +2627,9 @@
       "S3",
       "S9",
       "S10"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S4"
      ]
     },
     "reason_opus": "emailReminderManager.ts:213-222: when immediateDelete is true the function posts the SendGrid cancel and returns without deleting the WorkflowReminder or setting cancelled; the previous DELETE scheduled_sends call was also removed. Callers like handleNewBooking.ts:968 and workflows.tsx:214 leave scheduled:true rows behind.",
@@ -2834,6 +2862,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S4"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3"
      ]
     },
     "reason_opus": "cleanup_test.go:98-105 sets AnnotationCleanupJobBatchSize 32767, which selects the inline-ID SQLite branch in deleteByIDs (xorm_store.go:605-607, chosen by batch size, not len(ids)), and the 80,000 orphaned tags are deleted in batches of 32767, so the large-batch path is exercised; the annotation split is a coverage nuance.",
@@ -2995,6 +3026,9 @@
      "gpt-6.1-sol": [
       "S10",
       "S15"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S6"
      ]
     },
     "reason_opus": "The spec mocks TopicRetriever.new/retrieve and the controller calls Jobs.enqueue(:retrieve_topic) (embed_controller.rb:15), but in the test env queue_jobs defaults to false (site_settings.yml developer.queue_jobs test:false) so Jobs.enqueue runs the job inline (app/jobs/base.rb:168-172), which calls TopicRetriever.new(...).retrieve (retrieve_topic.rb:17). The expectation is met.",
@@ -3328,6 +3362,10 @@
      "gpt-6.1-sol": [
       "S1",
       "S11"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S13"
      ]
     },
     "reason_opus": "best.html.erb:6 `<%- end if %>` sits on its own line, so Erubis (Rails 3.2.12 per Gemfile.lock) emits the statement with its trailing newline and no ';', and Ruby parses `end if\\n<next buffer append>` as a modifier whose condition is the following truthy append; `ruby -c` confirms the newline form is valid. The template compiles and renders.",
@@ -3735,6 +3773,9 @@
      ],
      "sonnet-5.5": [
       "S5"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S4"
      ]
     },
     "reason_opus": "next-auth-options.ts:144 matches the backup code with Array.indexOf (non-constant-time string equality). Codes are decrypted per request, 40-bit random, and the endpoint is rate limited (checkRateLimitAndThrowError at :109), so a timing side channel is not practically exploitable.",
@@ -4970,6 +5011,9 @@
     "foundBy": {
      "deepseek-v4.1-flash": [
       "S11"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S5"
      ]
     },
     "reason_opus": "Discourse's resolver findTemplate tries decamelized name with '_' replaced by '/' (ember/resolver.js.es6:151-158): 'topicUnsubscribe' -> 'topic_unsubscribe' -> 'topic/unsubscribe', which matches templates/topic/unsubscribe.hbs.",
@@ -6184,6 +6228,9 @@
      ],
      "gpt-6.1-sol": [
       "S6"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S5"
      ]
     },
     "reason_opus": "String.equals with anyMatch is used in BackwardsCompatibilityUserStorage.java:340, but this is an in-memory testsuite provider; a timing side-channel there is not a reachable security problem.",
@@ -6872,6 +6919,9 @@
      ],
      "gpt-6.1-sol": [
       "S1"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1"
      ]
     },
     "reason_opus": "The help text 'histogram of plugin request sizes returned' (metrics_middleware.go:48) is unchanged by the PR, which only renamed the type and file.",
@@ -6954,6 +7004,9 @@
      ],
      "muse-spark-1.3": [
       "S11"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3"
      ]
     },
     "reason_opus": "float64(elapsed/time.Millisecond) at metrics_middleware.go:129,136 is pre-existing code the PR did not change.",
@@ -6978,6 +7031,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S3"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2"
      ]
     },
     "reason_opus": "The test cases with empty bodies/queries (metrics_middleware_test.go:50-58) predate the PR.",
@@ -7483,6 +7539,9 @@
       "S3",
       "S13",
       "S14"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S5"
      ]
     },
     "reason_opus": "exploreParams.tsx types visualizes as BaseVisualize[] (which still has yAxes) and its only caller savedQueriesTable.tsx:215 passes query.query[0].visualize from the saved-query API JSON, not Visualize instances, so visualize.yAxes is still defined.",
@@ -8061,6 +8120,31 @@
     "subclass_opus_inicial": "nit",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#e2b-01",
+    "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+    "comment": "Claims the suffix check `\".\" << website_host` mutates website_host by prepending a dot, so unrelated domains are displayed as \".example.com\" and the new unrelated-domain spec fails.",
+    "commentOpus": "Claims the suffix check `\".\" << website_host` mutates website_host by prepending a dot, so unrelated domains are displayed as \".example.com\" and the new unrelated-domain spec fails.",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "medium",
+    "category": null,
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "gpt-6.1-sol@e2b": [
+      "S1"
+     ]
+    },
+    "reason_opus": "In user_serializer.rb:149 `\".\" << website_host` mutates the receiver, the new \".\" string literal, not website_host, so website_host stays \"example.com\". For discourse.org the else branch returns the unmodified website_host, which is what the spec expects.",
+    "reason_astra": "At app/serializers/user_serializer.rb:149, `\".\" << website_host` mutates the dot string literal, not `website_host`. For discourse.org and example.com, the suffix check is false and the unchanged `website_host` is returned as `example.com`, so the claimed leading-dot defect does not occur.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "e2b"
    }
   ]
  },
@@ -8068,7 +8152,8 @@
   "deepseek-v4.1-flash",
   "gpt-6.1-sol",
   "sonnet-5.5",
-  "muse-spark-1.3"
+  "muse-spark-1.3",
+  "gpt-6.1-sol@e2b"
  ],
  "classificadores": [
   "claude-opus-5.5",

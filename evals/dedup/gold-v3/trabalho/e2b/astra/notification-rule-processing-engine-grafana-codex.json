@@ -1,0 +1,35 @@
+{
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "notification-rule-processing-engine-grafana-codex#02",
+   "newGroup": null,
+   "reason": "The Delete action still requires a ruler rule, so passing only promRule removes it from Grafana list rows despite delete permission."
+  },
+  {
+   "id": "S2",
+   "match": "notification-rule-processing-engine-grafana-codex#01",
+   "newGroup": null,
+   "reason": "The Pause/Resume menu item remains gated on a Grafana ruler rule, which the Prometheus-only list rows no longer supply."
+  },
+  {
+   "id": "S3",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "The silence drawer still requires a ruler alerting rule, so clicking Silence on Prometheus-only Grafana rows changes state without opening the drawer."
+  },
+  {
+   "id": "S4",
+   "match": "notification-rule-processing-engine-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Delegation drops the federated-group check and uses isFederated=false, incorrectly enabling update/delete abilities for federated Mimir rules."
+  },
+  {
+   "id": "S5",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "The skipped Grafana ability hook still grants Duplicate from global Grafana create permission, which the menu ORs into datasource-rule abilities even when their ruler ability denies duplication."
+  }
+ ]
+}

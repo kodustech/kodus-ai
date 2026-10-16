@@ -1,0 +1,17 @@
+{
+ "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same reply author link regression at desktop/topic-post.scss:291: the light-theme scaling changed from 30% to 70%, making links paler."
+  },
+  {
+   "id": "S2",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same inverted light/dark values at desktop/topic-post.scss:291 and calls for restoring the original 30% light-theme scaling."
+  }
+ ]
+}

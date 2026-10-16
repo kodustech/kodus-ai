@@ -1,0 +1,101 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "The Meet fallback dereferences an undefined mainHostDestinationCalendar when destinations are null or empty, throwing instead of falling back to Cal Video."
+  },
+  {
+   "id": "S2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+   "newGroup": null,
+   "reason": "Video references lose result.credentialId, preventing cancellation from finding the credential needed to delete the meeting."
+  },
+  {
+   "id": "S3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "newGroup": null,
+   "reason": "Office365 creation selects the first destination instead of the current credential's destination. The additional provider guidance includes the same existing problem."
+  },
+  {
+   "id": "S4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Google update/delete fallback searches for an externalId equal to the absent externalCalendarId, losing the configured destination."
+  },
+  {
+   "id": "S5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
+   "newGroup": null,
+   "reason": "Recurring cancellation repeatedly deletes the organizer's first calendar reference while leaving secondary hosts' events untouched."
+  },
+  {
+   "id": "S6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "newGroup": null,
+   "reason": "The inverted billing condition omits slug when billing is disabled, leaving the organization with neither slug nor requestedSlug."
+  },
+  {
+   "id": "S7",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "newGroup": null,
+   "reason": "Office365 uses the first host's destination with another host's credential; the mixed-provider example is another consequence of the same selection bug."
+  },
+  {
+   "id": "S8",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "newGroup": null,
+   "reason": "Office365 always selects destinationCalendar[0] instead of matching the credential supplied for the current host."
+  },
+  {
+   "id": "S9",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+   "newGroup": null,
+   "reason": "The reference mapping discards credentialId for video results, losing the credential association needed by subsequent lifecycle operations."
+  },
+  {
+   "id": "S10",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "The Meet fallback reads .integration from an undefined first destination when the destination array is null or empty."
+  },
+  {
+   "id": "S11",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "newGroup": null,
+   "reason": "Office365 targets the first destination using a secondary host's token. The inconsistent saved reference is an additional consequence of that same destination-selection bug."
+  },
+  {
+   "id": "S12",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "newGroup": null,
+   "reason": "Office365 selects the organizer's destination for secondary hosts instead of selecting by the supplied credentialId."
+  },
+  {
+   "id": "S13",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "A null destination leaves mainHostDestinationCalendar undefined, and its unguarded integration access crashes the Meet fallback."
+  },
+  {
+   "id": "S14",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "newGroup": null,
+   "reason": "Office365 always uses the first destination despite being called separately with each collective host's credential."
+  },
+  {
+   "id": "S15",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "The Google update/delete fallback compares destination externalId against an already-falsy externalCalendarId, failing to recover the configured calendar."
+  },
+  {
+   "id": "S16",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "The optional push drops collective members' destinations when the organizer's destinationCalendar is initialized to null."
+  }
+ ]
+}

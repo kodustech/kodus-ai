@@ -1,0 +1,35 @@
+{
+ "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08",
+   "newGroup": null,
+   "reason": "Both describe skipped login-cache invalidation because the original provider's enabled state comes from the organization-aware wrapper. Changing hideOnLogin instead of BROKER_PUBLIC triggers the same defect, fixed by comparing stored models."
+  },
+  {
+   "id": "S2",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Cleanup removes the literal alias \"alias\" instead of the actual created provider aliases at both creation sites, leaving providers behind."
+  },
+  {
+   "id": "S3",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "This reports the same incorrect literal cleanup alias for the loop-created providers and idp-alias-20."
+  },
+  {
+   "id": "S4",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#14",
+   "newGroup": null,
+   "reason": "The test discards returned streams and checks only cache contents, leaving returned provider identities and repeated cache-hit queries untested."
+  },
+  {
+   "id": "S5",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#05",
+   "newGroup": null,
+   "reason": "A partial cache miss copies stale organization results into a newly revisioned query, allowing concurrent invalidation to be lost and stale membership to persist."
+  }
+ ]
+}

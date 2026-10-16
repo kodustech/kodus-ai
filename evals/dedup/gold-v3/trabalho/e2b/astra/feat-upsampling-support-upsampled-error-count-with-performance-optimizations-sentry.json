@@ -1,0 +1,29 @@
+{
+ "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#08",
+   "newGroup": null,
+   "reason": "Both describe top-events selection and ordering using raw count() while the displayed timeseries uses weighted counts, potentially excluding groups with higher weighted counts."
+  },
+  {
+   "id": "S2",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+   "newGroup": null,
+   "reason": "Both describe checking upsampling eligibility against the outer dataset instead of scoped_dataset, causing dashboard Discover error queries to skip upsampling."
+  },
+  {
+   "id": "S3",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Both describe the substring check incorrectly classifying negated or mixed-event Discover queries as error-only and applying the sample-weight aggregation."
+  },
+  {
+   "id": "S4",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Both describe the substring check accepting negated or mixed-event queries, incorrectly replacing count() with the error-specific weighted aggregation."
+  }
+ ]
+}

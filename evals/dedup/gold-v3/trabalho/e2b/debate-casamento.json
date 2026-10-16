@@ -1,0 +1,22 @@
+{
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+  "S1": {
+   "final": "new",
+   "rodadas": [
+    {
+     "quem": "opus",
+     "match": "new"
+    },
+    {
+     "quem": "astra",
+     "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07"
+    },
+    {
+     "quem": "astra",
+     "match": "new",
+     "reason": "S1 alleges mutation of website_host and a leading dot in the displayed domain; the code mutates the literal instead. #07 concerns the missing ? guard suffix and, in its additional note, literal mutation: distinct problems despite the overlapping suggested fix."
+    }
+   ]
+  }
+ }
+}

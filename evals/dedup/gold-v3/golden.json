@@ -221,6 +221,10 @@
      ],
      "sonnet-5.5": [
       "S2"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S6",
+      "S8"
      ]
     },
     "reason_opus": "ECDSAAlgorithmTest.java:39-43 generates one default EC key pair (P-256) and reuses it for ES384/ES512, so those tests only pad 32-byte r/s values and never exercise 48/66-byte components.",
@@ -254,6 +258,9 @@
      ],
      "sonnet-5.5": [
       "S3"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S5"
      ]
     },
     "reason_opus": "ECDSAAlgorithmTest.java:52-56 asserts only that asn1derToConcatenatedRS(concatenatedRSToASN1DER(x)) equals x, never comparing asn1Des to the original sign or verifying the signature, so symmetric bugs (e.g. swapped r/s) pass.",
@@ -296,6 +303,10 @@
      "gpt-6.1-sol": [
       "S2",
       "S5"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S3"
      ]
     },
     "reason_opus": "OrganizationCacheTest.java:381 and :424 register cleanup with testRealm().identityProviders().get(\"alias\")::remove instead of the created \"idp-alias-\"+i / \"idp-alias-20\", so the 21 IDPs created by testCacheIDPForLogin are never removed and leak into later tests.",
@@ -320,6 +331,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S4"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S5"
      ]
     },
     "reason_opus": "When the searchKey is missing, getForLogin (InfinispanIdentityProviderStorageProvider.java:233-240) invalidates the key, takes the current revision and builds a new query that copies the previously read query's entries; if another transaction invalidated the key between the read and this step, the stale entries are republished under the fresh revision.",
@@ -343,6 +357,9 @@
     "martianRef": [],
     "foundBy": {
      "gpt-6.1-sol": [
+      "S1"
+     ],
+     "gpt-6.1-sol@e2b": [
       "S1"
      ]
     },
@@ -446,6 +463,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S3"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S4"
      ]
     },
     "reason_opus": "OrganizationCacheTest.java:399-412 discards the streams returned by getForLogin and asserts only IdentityProviderListQuery sizes, each mode queried once; the cache-hit path that builds the returned models (InfinispanIdentityProviderStorageProvider.java:243-254) is never executed or checked.",
@@ -662,6 +682,9 @@
      "muse-spark-1.3": [
       "S4",
       "S5"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S5"
      ]
     },
     "reason_opus": "ClientPermissionEvaluator.java:95-103: Javadoc of void requireView()/requireViewClientScopes() says 'Returns true if canView()...'; the methods return nothing and throw ForbiddenException. Doc only.",
@@ -709,6 +732,10 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S2"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S3"
      ]
     },
     "reason_opus": "ClientPermissionsV2.java:86-88 canView() checks only VIEW, while canView(client) (line 78) also grants via canConfigure/canManage. An admin with only global MANAGE gets canView()=false, so ClientsResource.getClients (lines 122-133) loads the unpaginated client stream and filters per client; results are still correct, only slower.",
@@ -734,6 +761,9 @@
      "gpt-6.1-sol": [
       "S1",
       "S5"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1"
      ]
     },
     "reason_opus": "ClientPermissionsV2.java:78 returns true from canView(client) whenever the all-clients VIEW permission is granted, before evaluating the client's own resource (line 82); a client-specific deny is never consulted, unlike UserPermissionsV2.hasPermission which evaluates the specific resource first (UserPermissionsV2.java:117-124).",
@@ -758,6 +788,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S6"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S4"
      ]
     },
     "reason_opus": "PermissionClientTest.java:146-151 calls getDefaultClientScopes() inside the same try as removeDefaultClientScope(); without permissions the read is already forbidden, so the asserted ForbiddenException does not prove the removal is protected.",
@@ -854,6 +887,10 @@
       "S2",
       "S4",
       "S5"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S4"
      ]
     },
     "reason_opus": "blocked_email.rb:12 looks up BlockedEmail.where(email: email).first with exact, case-sensitive matching and nothing downcases the stored or submitted email (User.new_from_params assigns params[:email] as-is), so Block@x.org bypasses an entry for block@x.org.",
@@ -902,6 +939,10 @@
       "S2",
       "S5",
       "S6"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S3"
      ]
     },
     "reason_opus": "blocked_email.rb:12-17 increments match_count and saves inside should_block?, which EmailValidator calls during validation (email_validator.rb:13); UsersController#create calls user.valid? and then user.save, so one signup attempt is counted twice, and the read-modify-write is not atomic.",
@@ -980,6 +1021,9 @@
     "foundBy": {
      "muse-spark-1.3": [
       "S2"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S5"
      ]
     },
     "reason_opus": "email_validator.rb:18-22 builds Regexp.new(\"@(#{domains})\", true) with no end anchor, so whitelist gmail.com matches user@gmail.com.evil.com; the PR moves and rewrites this method into the new EmailValidator.",
@@ -1026,6 +1070,10 @@
      "gpt-6.1-sol": [
       "S1",
       "S10"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S9"
      ]
     },
     "reason_opus": "GroupPermissionsV2.java:70 canManage() returns hasPermission(null, VIEW, MANAGE), whereas canManage(GroupModel) at :79 requires MANAGE; a view-only all-groups grant passes requireManage() and can create groups.",
@@ -1073,6 +1121,12 @@
      "sonnet-5.5": [
       "S5",
       "S6"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3",
+      "S4",
+      "S8",
+      "S10"
      ]
     },
     "reason_opus": "GroupPermissionsV2.java:121-124 passes groupResource.getId() to hasPermission, which does findByName (:141), while V2 resources are named by group id (AdminPermissionsSchema.resolveGroup); it also adds the resource id, not the group id, to the returned set used as UserModel.GROUPS.",
@@ -1096,6 +1150,9 @@
     "martianRef": [],
     "foundBy": {
      "gpt-6.1-sol": [
+      "S2"
+     ],
+     "gpt-6.1-sol@e2b": [
       "S2"
      ]
     },
@@ -1154,6 +1211,9 @@
      ],
      "gpt-6.1-sol": [
       "S5"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S5"
      ]
     },
     "reason_opus": "GroupPermissionEvaluator.java:132-135 Javadoc for requireManageMembers references canManageMembership(GroupModel) instead of canManageMembers(GroupModel).",
@@ -1183,6 +1243,9 @@
       "S5"
      ],
      "gpt-6.1-sol": [
+      "S6"
+     ],
+     "gpt-6.1-sol@e2b": [
       "S6"
      ]
     },
@@ -1233,6 +1296,9 @@
      "muse-spark-1.3": [
       "S1",
       "S11"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1"
      ]
     },
     "reason_opus": "addGuests.handler.ts:46-48 computes isTeamAdminOrOwner as isTeamAdmin && isTeamOwner; isTeamAdmin (queries/teams/index.ts:264) already matches ADMIN or OWNER while isTeamOwner (:286) matches only OWNER, so the check is OWNER-only and team ADMINs get FORBIDDEN.",
@@ -1275,6 +1341,11 @@
       "S3",
       "S6",
       "S11"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S6",
+      "S9"
      ]
     },
     "reason_opus": "addGuests.handler.ts:71 lowercases the BLACKLISTED_GUEST_EMAILS entries but line 77 checks blacklistedGuestEmails.includes(guest) with the raw input; the schema (addGuests.schema.ts:5) does not lowercase, so mixed-case addresses bypass the blacklist.",
@@ -1320,6 +1391,11 @@
       "S3",
       "S5",
       "S12"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3",
+      "S5",
+      "S8"
      ]
     },
     "reason_opus": "uniqueGuests (addGuests.handler.ts:74-78) only filters against existing attendees and the blacklist; ZAddGuestsInputSchema has no uniqueness refine (only the client dialog dedupes) and the Attendee model has no unique (bookingId,email), so repeated emails become duplicate attendee rows via createMany (:100-104).",
@@ -1675,6 +1751,9 @@
      ],
      "sonnet-5.5": [
       "S9"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S7"
      ]
     },
     "reason_opus": "MultiEmail.tsx:46 uses Tooltip content=\"Remove email\" literally while the component uses t('add_another'); untranslated tooltip text only.",
@@ -1764,6 +1843,31 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#e2b-01",
+    "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+    "comment": "The add-guests handler omits booking.iCalUID from the CalendarEvent, so the add-guests emails' .ics attachments use booking.uid as UID and recipients' calendars treat them as a new event rather than an update of the original booking invite.",
+    "commentOpus": "The add-guests handler omits booking.iCalUID from the CalendarEvent, so the add-guests emails' .ics attachments use booking.uid as UID and recipients' calendars treat them as a new event rather than an update of the original booking invite.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "gpt-6.1-sol@e2b": [
+      "S4"
+     ]
+    },
+    "reason_opus": "addGuests.handler.ts:124-147 builds the CalendarEvent with uid: booking.uid but no iCalUID, although Booking has iCalUID (schema.prisma:592) set at creation as `${uid}@APP_NAME` (handleNewBooking.ts:829,1019). generateIcsString.ts:67 uses event.iCalUID || event.uid, so the REQUEST .ics in the new attendee/organizer add-guests emails carries a different UID than the original invite, creating a separate calendar event instead of updating it.",
+    "reason_astra": "The new handler sets only `uid: booking.uid`, omitting persisted `iCalUID`, and passes that event to the email sender (packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:137,168). Guest-update attachments use generateIcsString (packages/emails/templates/attendee-add-guests-email.ts:10), whose UID fallback is `event.iCalUID || event.uid` (packages/emails/lib/generateIcsString.ts:67). This changes calendar identity for ordinary bookings because getICalUID generates `${uid}@${APP_NAME}` (packages/emails/lib/getICalUID.ts:30), preventing invitations from updating the original event.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "e2b"
    }
   ],
   "add-html-sanitizer-for-translated-message-resources-keycloak": [
@@ -1805,6 +1909,12 @@
      "muse-spark-1.3": [
       "S4",
       "S5"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S4",
+      "S5",
+      "S6",
+      "S10"
      ]
     },
     "reason_opus": "messages_lt.properties (account :101 and login :71) now set totpStep1/loginTotpStep1 to the Italian 'Installa una delle seguenti applicazioni sul tuo cellulare:', so Lithuanian users see Italian text.",
@@ -1958,6 +2068,12 @@
       "S6",
       "S8",
       "S9"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S7",
+      "S8",
+      "S9"
      ]
     },
     "reason_opus": "VerifyMessageProperties.java:102-111 computes the common prefix and suffix independently, so start + end can exceed a string's length (e.g. '<b>x</b></b>' sanitized to '<b>x</b>' gives start=8, end=4) and substring throws StringIndexOutOfBoundsException, which verify() does not catch.",
@@ -1985,6 +2101,9 @@
      ],
      "muse-spark-1.3": [
       "S2"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3"
      ]
     },
     "reason_opus": "VerifyMessageProperties.java:124-126 replaces the whole {n,choice,...} block with '...' before sanitizing for linkExpirationFormatter.timePeriodUnit* and error-invalid-multivalued-size, so HTML or links inside choice branches of those keys are never checked.",
@@ -2014,6 +2133,9 @@
       "S11"
      ],
      "gpt-6.1-sol": [
+      "S2"
+     ],
+     "gpt-6.1-sol@e2b": [
       "S2"
      ]
     },
@@ -2115,6 +2237,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S1"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1"
      ]
     },
     "reason_opus": "testFeatureNotEnabled only calls cliResult.assertError(...) and never asserts exitCode() == CompatibilityResult.FEATURE_DISABLED, the new exit code added by the PR.",
@@ -2167,6 +2292,10 @@
       "S2",
       "S5",
       "S6"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S10",
+      "S11"
      ]
     },
     "reason_opus": "viewer/slots.ts:141-142 computes end from slotStartTime, identical to start, so the `end > workingHour.endTime` check ignores the event length.",
@@ -2211,6 +2340,9 @@
      "muse-spark-1.3": [
       "S1",
       "S7"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S8"
      ]
     },
     "reason_opus": "viewer/slots.ts:114 compares two newly created dayjs objects with ===, which is always false, so the start==end (unavailable-day) override branch never fires.",
@@ -2242,6 +2374,12 @@
       "S6",
       "S7",
       "S8"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S5",
+      "S6",
+      "S7"
      ]
     },
     "reason_opus": "viewer/slots.ts:133-135 returns true when a date override matches the day, before the busy.every check at :153, so existing bookings within the override window are ignored.",
@@ -2270,6 +2408,10 @@
      ],
      "muse-spark-1.3": [
       "S3"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S9"
      ]
     },
     "reason_opus": "viewer/slots.ts:138-147 rejects a slot if any workingHours entry for that weekday does not contain it (find), so with split schedules on the same day every slot is rejected by the other interval.",
@@ -2297,6 +2439,10 @@
      ],
      "sonnet-5.5": [
       "S7"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3",
+      "S12"
      ]
     },
     "reason_opus": "viewer/slots.ts:123 checks slotStartTime.isAfter(override end), so a slot that starts before the override end but finishes after it is accepted.",
@@ -2323,6 +2469,9 @@
       "S5"
      ],
      "muse-spark-1.3": [
+      "S4"
+     ],
+     "gpt-6.1-sol@e2b": [
       "S4"
      ]
     },
@@ -2384,6 +2533,9 @@
      "muse-spark-1.3": [
       "S1",
       "S2"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1"
      ]
     },
     "reason_opus": "querySplitting.ts:299 now runs datasource.applyTemplateVariables on each target, and the split requests still go through runQuery -> super.query, which applies applyTemplateVariables again; runShardSplitQuery (shardQuerySplitting.ts:52) interpolates first and then delegates to runSplitQuery (the test now expects 5 calls for one target). Ad hoc filters get re-added (duplicated label filters after parsers) and interpolated values containing '$' are re-expanded.",
@@ -2503,6 +2655,11 @@
       "S3",
       "S6",
       "S8"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3",
+      "S5",
+      "S7"
      ]
     },
     "reason_opus": "anonstore/database.go:108-118: CreateOrUpdateDevice calls CountDevices and then, in a separate statement with no transaction or lock, inserts; concurrent new devices can all observe count < deviceLimit and all insert.",
@@ -2598,6 +2755,11 @@
      "muse-spark-1.3": [
       "S2",
       "S5"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S4",
+      "S6"
      ]
     },
     "reason_opus": "impl.go:83-93: tagDeviceUI calls localCache.SetDefault(key) before CreateOrUpdateDevice and never evicts on error; a retry hits the cache at impl.go:83-84 and returns nil, so client.go:44-47 authenticates a device that was rejected with ErrDeviceLimitReached.",
@@ -2742,6 +2904,11 @@
       "S13",
       "S14",
       "S15"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S2",
+      "S3"
      ]
     },
     "reason_opus": "The PR turns the callbacks into async in bookings.tsx:553 and vital/lib/reschedule.ts:125 (and wipemycalother) with await getCalendar inside forEach; forEach discards the promises, so calendar/video deletions are fire-and-forget, getCalendar/import failures become unhandled rejections outside the surrounding try/catch, and the handler continues before cleanup.",
@@ -2785,6 +2952,11 @@
      ],
      "muse-spark-1.3": [
       "S1"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S2",
+      "S3"
      ]
     },
     "reason_opus": "cache.go:30-32 builds userPermDenialCacheKey as namespace+\".perm_\"+uid+\"_\"+action+\"_\"+name+\"_\"+parent; dashboard/folder UIDs may contain '_', so (name=a_b,parent=c) and (name=a,parent=b_c) share a key and Check (service.go:116-121) returns a cached denial for the wrong resource.",
@@ -2919,6 +3091,10 @@
      "deepseek-v4.1-flash": [
       "S8",
       "S9"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3",
+      "S6"
      ]
     },
     "reason_opus": "handleCancelBooking.ts:487-492, bookings.tsx:488-494 and workflows.tsx call the async deleteScheduledEmailReminder/deleteScheduledSMSReminder inside forEach without awaiting; the PR removed the awaited prisma deleteMany, so the DB cancellation/deletion now runs in floating promises.",
@@ -2949,6 +3125,10 @@
       "S6"
      ],
      "sonnet-5.5": [
+      "S1",
+      "S5"
+     ],
+     "gpt-6.1-sol@e2b": [
       "S1",
       "S5"
      ]
@@ -3287,6 +3467,9 @@
      ],
      "gpt-6.1-sol": [
       "S1"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1"
      ]
     },
     "reason_opus": "xorm_store.go:608-613 builds the SQLite IN list with repeated fmt.Sprintf(\"%s, %d\", values, v), quadratic in batch size; only hit on SQLite with batch size > 999 in a background job.",
@@ -3330,6 +3513,9 @@
      "sonnet-5.5": [
       "S2",
       "S4"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2"
      ]
     },
     "reason_opus": "cleanup.go:77 changes the ticker from time.Minute * 10 to time.Minute * 1, running the whole cleanup service (temp files, annotations, snapshots, versions, etc.) ten times as often with no stated reason.",
@@ -3371,6 +3557,9 @@
      "muse-spark-1.3": [
       "S5",
       "S9"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S12"
      ]
     },
     "reason_opus": "dualwriter_mode3.go:96 builds the enriched `log` but :97 installs d.Log via klog.NewContext, unlike Create/Update/List/DeleteCollection. Only the downstream log fields (name/kind/method) are lost; behaviour is unchanged.",
@@ -3412,6 +3601,9 @@
      "muse-spark-1.3": [
       "S3",
       "S12"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S11"
      ]
     },
     "reason_opus": "dualwriter_mode3.go:166, inside the legacy DeleteCollection goroutine, calls d.recordStorageDuration with startLegacy, so legacy latency/errors are recorded in the unified-storage histogram and the legacy histogram gets nothing for delete-collection.",
@@ -3457,6 +3649,10 @@
      ],
      "muse-spark-1.3": [
       "S4",
+      "S10"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3",
       "S10"
      ]
     },
@@ -3509,6 +3705,9 @@
       "S1",
       "S2",
       "S11"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S9"
      ]
     },
     "reason_opus": "dualwriter_mode3.go:45 (Create) and :129 (Update) record a failed d.Storage call with d.recordLegacyDuration, so unified-store failures are counted as legacy failures and missing from the storage error metric.",
@@ -3549,6 +3748,11 @@
       "S6",
       "S13",
       "S14"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S7",
+      "S13"
      ]
     },
     "reason_opus": "dualwriter_mode3.go:50-57 (and :108, :134, :161) run the legacy write in a goroutine whose context comes from context.WithTimeoutCause(ctx, ...) on the request ctx; the PR made these writes async (previously synchronous), and the request context is cancelled when the handler returns, so legacy writes can be aborted and the legacy store silently diverges.",
@@ -3583,6 +3787,10 @@
      ],
      "muse-spark-1.3": [
       "S7"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S14"
      ]
     },
     "reason_opus": "Base code passed Legacy.Update an updateWrapper{upstream: objInfo, updated: obj} pinned to the Storage result; head :139 passes the raw objInfo, so Legacy recomputes the update against its own old object and can diverge from (or reject) what unified storage persisted.",
@@ -3617,6 +3825,9 @@
      ],
      "muse-spark-1.3": [
       "S8"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S4"
      ]
     },
     "reason_opus": "dualwriter_mode3_test.go:47-76 register legacy expectations on the same *mock.Mock shared by legacyStoreMock and storageMock, never wait for the goroutine and never assert expectations; removing the d.Legacy.* calls in dualwriter_mode3.go would leave every test passing.",
@@ -3641,6 +3852,9 @@
     "foundBy": {
      "deepseek-v4.1-flash": [
       "S21"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S6"
      ]
     },
     "reason_opus": "dualwriter_mode3_test.go:145 names the case 'error when listing an object in the unified store is not implemented' while List is now implemented (dualwriter_mode3.go:79) and the case tests error propagation. Test naming only.",
@@ -3664,6 +3878,9 @@
     "martianRef": [],
     "foundBy": {
      "gpt-6.1-sol": [
+      "S5"
+     ],
+     "gpt-6.1-sol@e2b": [
       "S5"
      ]
     },
@@ -3689,6 +3906,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S15"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S8"
      ]
     },
     "reason_opus": "Each Create/Update/Delete at dualwriter_mode3.go:50, :108, :134 launches an independent goroutine for the legacy write, so legacy writes to the same resource can complete out of order (e.g. an older update or a create after a delete), leaving legacy in a state that differs from unified storage.",
@@ -3881,6 +4101,10 @@
      "gpt-6.1-sol": [
       "S2",
       "S12"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S7"
      ]
     },
     "reason_opus": "poll_feed.rb:35 calls CGI.unescapeHTML(i.content.scrub) with no fallback; RSS 2.0 items that carry only <description> have no content, so .scrub raises NoMethodError and, with no per-item rescue, aborts the whole poll (poll_feed.rb:31-37).",
@@ -3914,6 +4138,9 @@
       "S6"
      ],
      "sonnet-5.5": [
+      "S3"
+     ],
+     "gpt-6.1-sol@e2b": [
       "S3"
      ]
     },
@@ -3950,6 +4177,9 @@
      ],
      "sonnet-5.5": [
       "S8"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S11"
      ]
     },
     "reason_opus": "topic_embed.rb:13 interpolates url unescaped into <a href='#{url}'>#{url}</a> inside raw_html content rendered with raw (best.html.erb:19); the only check is the /^https?:\\/\\// prefix (topic_embed.rb:11), so a URL containing a quote can inject attributes/markup. The nil-contents part is weaker (callers pass strings), but the XSS holds.",
@@ -4034,6 +4264,9 @@
      ],
      "muse-spark-1.3": [
       "S11"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S8"
      ]
     },
     "reason_opus": "topic_embed.rb:15-30 does a where(embed_url).first then PostCreator + TopicEmbed.create! with a unique index on embed_url (create_topic_embeds migration) and no rescue; the scheduled PollFeed and the retrieval-triggered PollFeed (topic_retriever.rb:40-42) can run concurrently for the same URL, so the loser raises RecordNotUnique and aborts its job.",
@@ -4138,6 +4371,9 @@
      "sonnet-5.5": [
       "S6",
       "S9"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S5"
      ]
     },
     "reason_opus": "absolutize_urls (topic_embed.rb:62-73) only rewrites values starting with '/', and for '//cdn.example.com/x.png' it strips the slashes and prefixes the article host, producing http://host/cdn.example.com/x.png; path-relative links like 'images/a.jpg' are left relative and resolve against the forum.",
@@ -4168,6 +4404,9 @@
      ],
      "muse-spark-1.3": [
       "S15"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S12"
      ]
     },
     "reason_opus": "best.html.erb:14 formats the post date with strftime(\"%e %b %Y\"), which always yields English month abbreviations and day-month-year order, while the surrounding labels use I18n.t (best.html.erb:3,5,25).",
@@ -4222,6 +4461,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S5"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S4"
      ]
     },
     "reason_opus": "topic_retriever.rb:40-42 runs Jobs::PollFeed.new.execute synchronously on every uncached retrieval when feed polling is enabled; the throttle is per embed_url (topic_retriever.rb:26), so requests for different unknown articles each re-download and re-process the full feed.",
@@ -4252,6 +4494,9 @@
      ],
      "sonnet-5.5": [
       "S13"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S10"
      ]
     },
     "reason_opus": "embed_controller_spec.rb:8-11 never stubs embeddable_host (default '' in site_settings.yml), so ensure_embeddable raises at embed_controller.rb:25 before params.require(:embed_url) at :9 runs; the test stays green if the embed_url requirement is removed and only checks not-success, not 404.",
@@ -4285,6 +4530,9 @@
      ],
      "sonnet-5.5": [
       "S12"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S9"
      ]
     },
     "reason_opus": "poll_feed_spec.rb:18-28 stub only feed_polling_url or embed_by_username to nil; feed_polling_enabled defaults to false (site_settings.yml), so execute short-circuits at the first condition (poll_feed.rb:15) and the tests pass even if the URL/username checks are removed.",
@@ -4346,6 +4594,13 @@
       "S10",
       "S11",
       "S14"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3",
+      "S4",
+      "S5",
+      "S9",
+      "S11"
      ]
     },
     "reason_opus": "When enable_advanced_features and cursor.offset < 0, OptimizedCursorPaginator.get_result slices queryset[cursor.offset:stop] directly (paginator.py:877-882) under a comment claiming the ORM 'properly handles negative slicing'; Django querysets reject negative indices, so such cursors raise instead of paginating.",
@@ -4449,6 +4704,13 @@
       "S1",
       "S10",
       "S11"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S6",
+      "S7",
+      "S8",
+      "S10"
      ]
     },
     "reason_opus": "OptimizedCursorPaginator.get_item_key applies math.floor/math.ceil to getattr(item, self.key) (paginator.py:838-840), and value_from_cursor returns the raw cursor value, but the only caller uses order_by='-datetime' (organization_auditlogs.py:76-82); math.floor on a datetime raises TypeError while building the cursor for any non-empty page.",
@@ -4479,6 +4741,9 @@
     ],
     "foundBy": {
      "gpt-6.1-sol": [
+      "S2"
+     ],
+     "gpt-6.1-sol@e2b": [
       "S2"
      ]
     },
@@ -4559,6 +4824,9 @@
       "S1"
      ],
      "muse-spark-1.3": [
+      "S1"
+     ],
+     "gpt-6.1-sol@e2b": [
       "S1"
      ]
     },
@@ -4658,6 +4926,9 @@
      ],
      "muse-spark-1.3": [
       "S8"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S5"
      ]
     },
     "reason_opus": "login.2fa.e2e.ts:121-122 clicks backup-codes-copy and only waits for toast-success; EnableTwoFactorModal.tsx:277-278 fires showToast unconditionally after an un-awaited clipboard.writeText, so the test passes even if copying is broken.",
@@ -4703,6 +4974,11 @@
      "muse-spark-1.3": [
       "S2",
       "S9"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S3",
+      "S7"
      ]
     },
     "reason_opus": "next-auth-options.ts:139-156 decrypts backupCodes, finds the index, nulls it and writes back with an unconditional prisma.user.update by id. Concurrent logins with the same code both pass indexOf before either write, so a single-use code can be used twice and concurrent writes can restore consumed codes.",
@@ -4784,6 +5060,9 @@
      ],
      "muse-spark-1.3": [
       "S7"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S6"
      ]
     },
     "reason_opus": "login.2fa.e2e.ts:112-117 only asserts download.suggestedFilename() with a TODO for content; the test still verifies that a download is triggered, so this is incomplete coverage rather than a vacuous test.",
@@ -5077,6 +5356,9 @@
      ],
      "sonnet-5.5": [
       "S1"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S4"
      ]
     },
     "reason_opus": "CalendarService.ts:1024 calls updateManyByCredentialId(this.credential.id, {}), which forwards data unchanged to prisma.selectedCalendar.updateMany (selectedCalendar.ts:400-405); with empty data no column is written, so the @updatedAt SelectedCalendar.updatedAt is not bumped as the comment intends.",
@@ -5106,6 +5388,9 @@
       "S2"
      ],
      "gpt-6.1-sol": [
+      "S1"
+     ],
+     "gpt-6.1-sol@e2b": [
       "S1"
      ]
     },
@@ -5146,6 +5431,9 @@
       "S7"
      ],
      "sonnet-5.5": [
+      "S3"
+     ],
+     "gpt-6.1-sol@e2b": [
       "S3"
      ]
     },
@@ -5307,6 +5595,9 @@
      ],
      "muse-spark-1.3": [
       "S3"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2"
      ]
     },
     "reason_opus": "scripts/test-gcal-webhooks.sh:68 uses sed -i '' -E ..., the BSD/macOS form; GNU sed treats '' as the script and fails, so on Linux GOOGLE_WEBHOOK_URL is not updated while the script still prints that it was.",
@@ -5449,6 +5740,10 @@
       "S3",
       "S7",
       "S6"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S3"
      ]
     },
     "reason_opus": "assignment_source.py:18 `queued: datetime = timezone.now()` is evaluated once at import, and from_integration (:21-25) never passes queued, so every AssignmentSource carries the process import time instead of the queue time.",
@@ -5521,6 +5816,9 @@
      ],
      "muse-spark-1.3": [
       "S6"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2"
      ]
     },
     "reason_opus": "test_assignment_source.py:8-11 test_from_dict_empty_array passes an empty dict ({}), not an array; from_dict is typed to take a dict, so this is a test-naming mismatch.",
@@ -5553,6 +5851,9 @@
     ],
     "foundBy": {
      "deepseek-v4.1-flash": [
+      "S2"
+     ],
+     "gpt-6.1-sol@e2b": [
       "S2"
      ]
     },
@@ -5590,6 +5891,10 @@
      ],
      "muse-spark-1.3": [
       "S3"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3",
+      "S4"
      ]
     },
     "reason_opus": "error_upsampling.py:100-103 returns True when the raw request query contains the substring `event.type:error`, so `!event.type:error` or `event.type:error OR event.type:transaction` on the discover dataset gets count() rewritten to upsampled_count(); it also ignores the query actually passed to _get_event_stats.",
@@ -5701,6 +6006,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S2"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1"
      ]
     },
     "reason_opus": "organization_events_stats.py:242-248 passes final_columns only as timeseries_columns to top_events_timeseries while selected_columns/orderby come unchanged from get_field_list/get_orderby, so top-N groups are chosen and ordered by raw count() while the series show weighted counts.",
@@ -6028,6 +6336,11 @@
       "S4",
       "S8",
       "S11"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S5",
+      "S7",
+      "S13"
      ]
     },
     "reason_opus": "OrderedQueueWorker.run calls offset_tracker.complete_offset in the finally block (queue_consumer.py:144-149) even when result_processor raised, so the commit loop commits past a failed message; the strategy docstring (line 254) promises 'Only commits offsets after successful processing'.",
@@ -6086,6 +6399,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S15"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S11"
      ]
     },
     "reason_opus": "The test waits for the processor calls, sleeps 0.2s (test_results_consumer.py:1916-1917) and asserts no commit, while _commit_loop waits 1.0s per iteration (queue_consumer.py:276); the failed offset is completed in finally, so a commit may happen right after the assertion and the test passes regardless.",
@@ -6123,6 +6439,10 @@
      "sonnet-5.5": [
       "S4",
       "S7"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3",
+      "S6"
      ]
     },
     "reason_opus": "FixedQueuePool creates queue.Queue() with no maxsize (queue_consumer.py:185) and submit/poll never block or raise MessageRejected (lines 204-212, 327-333), despite the docstring promising 'Natural backpressure when queues fill up' (line 253). A slow worker lets the queue grow without bound.",
@@ -6152,6 +6472,10 @@
       "S2",
       "S6",
       "S12"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S15"
      ]
     },
     "reason_opus": "FixedQueuePool.shutdown sets worker.shutdown=True before q.shutdown(immediate=False) (queue_consumer.py:233-238), and the worker loop checks 'while not self.shutdown' (line 129), so workers exit after the current item and abandon queued work; close() also stops the commit thread before the pool (lines 335-338), so completed work is never committed.",
@@ -6190,6 +6514,12 @@
       "S7",
       "S10",
       "S13"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S4",
+      "S8",
+      "S14"
      ]
     },
     "reason_opus": "ResultsStrategyFactory creates one FixedQueuePool in __init__ and passes self.queue_pool to every strategy (result_consumer.py:131-137, 254-259), while SimpleQueueProcessingStrategy.close/terminate/join shut that pool down (queue_consumer.py:335-345). After a rebalance the new strategy reuses a shut-down pool; put() raises and submit's except marks the offset complete, so messages are committed unprocessed.",
@@ -6271,6 +6601,9 @@
      ],
      "gpt-6.1-sol": [
       "S18"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S10"
      ]
     },
     "reason_opus": "test_concurrent_processing_across_groups (test_queue_consumer.py:137-173) only asserts 6 items processed and 3 groups seen, and test_thread_queue_parallel_concurrent_subscriptions (test_results_consumer.py:1780-1820) only asserts call_count==2; a serial implementation passes both.",
@@ -6295,6 +6628,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S17"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S9"
      ]
     },
     "reason_opus": "test_preserves_order_within_group (test_queue_consumer.py:302-312) submits five identical sub1 messages and asserts only len(processed_results)==5, so out-of-order processing would still pass.",
@@ -6319,6 +6655,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S16"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S12"
      ]
     },
     "reason_opus": "test_thread_queue_parallel_graceful_shutdown (test_results_consumer.py:1987-2005) only asserts factory.queue_pool is None, which factory.shutdown sets unconditionally (result_consumer.py:183-185); it never checks that submitted work completed or workers stopped.",
@@ -6375,6 +6714,9 @@
      ],
      "gpt-6.1-sol": [
       "S5"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S7"
      ]
     },
     "reason_opus": "grouptype.py:10 keeps '# TODO: This will be a stateful detector when we build that abstraction' while line 11 now subclasses StatefulDetectorHandler; stale comment only.",
@@ -6427,6 +6769,12 @@
       "S1",
       "S2",
       "S5"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S2",
+      "S3",
+      "S4"
      ]
     },
     "reason_opus": "grouptype.py:11-12 makes MetricAlertDetectorHandler a StatefulDetectorHandler with only `pass`; StatefulDetectorHandler declares abstract counter_names, get_dedupe_value, get_group_key_values and build_occurrence_and_event_data (processors/detector.py:142-170), so Detector.detector_handler (models/detector.py:86) raises TypeError when instantiating it for metric alert detectors.",
@@ -6467,6 +6815,9 @@
      ],
      "deepseek-v4.1-flash": [
       "S2"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S6"
      ]
     },
     "reason_opus": "processors/detector.py:226-233 evaluate() now returns dict[DetectorGroupKey, DetectorEvaluationResult] but the docstring still says it returns a list; docs only.",
@@ -6505,6 +6856,9 @@
      ],
      "muse-spark-1.3": [
       "S3"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S5"
      ]
     },
     "reason_opus": "test_detector.py:244 build_mock_occurrence_and_event takes `value` but never uses it, and it also implements MockDetectorStateHandler.build_occurrence_and_event_data (line 39); test_state_results_multi_group builds group_2's expected occurrence with 6 (line 191) while the packet has 10 (line 177) and still passes, so value forwarding to the new hook is never verified.",
@@ -6563,6 +6917,11 @@
       "S6",
       "S7",
       "S8"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S4",
+      "S5"
      ]
     },
     "reason_opus": "optimized_image.rb defines self.downsize(from, to, max_width, max_height, opts={}) and then self.downsize(from, to, dimensions, opts={}); Ruby keeps the last one, so app/jobs/regular/resize_emoji.rb:14 OptimizedImage.downsize(path, path, 100, 100, opts) now raises ArgumentError (5 args for 3..4).",
@@ -6600,6 +6959,9 @@
      ],
      "muse-spark-1.3": [
       "S3"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2"
      ]
     },
     "reason_opus": "utilities.js:182 replaces Discourse.SiteSettings['max_' + type + '_size_kb'] with a fixed 10 * 1024 for every upload type (and the 413 handler at :246), while the server-side downsizing only applies to images, so attachment limits no longer match the configured max_attachment_size_kb.",
@@ -6780,6 +7142,9 @@
      ],
      "muse-spark-1.3": [
       "S2"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3"
      ]
     },
     "reason_opus": "The loop at uploads_controller.rb:66-69 ignores OptimizedImage.downsize's return (convert_with returns false on failure), so a failing conversion is repeated up to 5 times; the upload then fails size validation as it would anyway. Only wasted work.",
@@ -6936,6 +7301,9 @@
      "muse-spark-1.3": [
       "S1",
       "S9"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S7"
      ]
     },
     "reason_opus": "app/models/embeddable_host.rb:5-8 calls self.host.sub! with no nil guard; Admin::EmbeddableHostsController#save_host (embeddable_hosts_controller.rb:23) assigns params[:embeddable_host][:host] directly, so a missing host raises NoMethodError (500) instead of a validation error.",
@@ -7022,6 +7390,10 @@
      ],
      "muse-spark-1.3": [
       "S6"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S4",
+      "S9"
      ]
     },
     "reason_opus": "embeddable_host.rb:14-17 lowercases the column (lower(host)) but binds uri.host unchanged; URI preserves host case, so a referer with uppercase letters never matches a stored lowercase host and the validation regex is /i so mixed-case hosts can also be stored.",
@@ -7063,6 +7435,11 @@
      "deepseek-v4.1-flash": [
       "S7",
       "S14"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S10",
+      "S11"
      ]
     },
     "reason_opus": "db/migrate/20150818190757_create_embeddable_hosts.rb:24-25 inserts raw lines of the old embeddable_hosts setting via SQL, bypassing the model's scheme/path stripping; the removed SiteSetting.allows_embeddable_host? accepted entries like http://host, but record_for_host now compares only URI.host, so migrated rows with a scheme never match.",
@@ -7216,6 +7593,11 @@
       "S8",
       "S10",
       "S13"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S5",
+      "S6"
      ]
     },
     "reason_opus": "create_embeddable_hosts.rb:9-11 indexes execute(...)[0]['id'] without checking for rows; embed_category is only stored when changed from its '' default, so on most installs the query returns no rows and the migration raises before the category_id == 0 fallback (line 15 has the same issue).",
@@ -7280,6 +7662,9 @@
      ],
      "sonnet-5.5": [
       "S9"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S12"
      ]
     },
     "reason_opus": "spec/models/topic_spec.rb:1403-1405 keeps the name 'is false if embeddable_host is blank' but only asserts false on a default topic where embed_truncate is false; the code no longer checks hosts, so the example is a stale/misleading name rather than a missing check of current behaviour.",
@@ -7358,6 +7743,10 @@
      "gpt-6.1-sol": [
       "S3",
       "S14"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3",
+      "S8"
      ]
     },
     "reason_opus": "embeddable_host.rb:2 regex explicitly allows a :port and before_validation only strips scheme and path, so example.com:8080 is stored with the port; record_for_host (line 14-17) compares URI.host, which excludes the port, so such a record never matches.",
@@ -7393,6 +7782,9 @@
      ],
      "muse-spark-1.3": [
       "S4"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1"
      ]
     },
     "reason_opus": "Fallback locales are loaded only by I18n.fallbacks.ensure_loaded! in ApplicationController#set_locale (application_controller.rb:159); I18n.translate still loads only config.locale (translate_accelerator.rb:67-68), and Backend::Simple only returns loaded translations, so in jobs/mailers a missing key cannot fall back to the site default or :en and the missing result is cached.",
@@ -7449,6 +7841,9 @@
      ],
      "muse-spark-1.3": [
       "S2"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2"
      ]
     },
     "reason_opus": "config/routes.rb:441-442 add GET t/:slug/:topic_id/unsubscribe and t/:topic_id/unsubscribe, and TopicsController#unsubscribe (topics_controller.rb:98-116) changes notification_level and calls tu.save! on that GET with check_xhr skipped; Rails CSRF protection does not cover GET, so a cross-site request from a logged-in user changes their topic notification level.",
@@ -7495,6 +7890,10 @@
      "muse-spark-1.3": [
       "S1",
       "S4"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S7"
      ]
     },
     "reason_opus": "topics_controller.rb:105-107 does tu = TopicUser.find_by(user_id:, topic_id:) and then tu.notification_level without a nil check; TopicView.new does not create the topic_users row, so a user without a row (e.g. notified via category watching without visiting) gets NoMethodError and a 500.",
@@ -7592,6 +7991,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S5"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S4"
      ]
     },
     "reason_opus": "client.en.yml:985 says 'You will stop receiving notifications', but topics_controller.rb:107-111 drops watching/tracking users to regular, which still notifies on mentions/replies. Message wording only.",
@@ -7617,6 +8019,10 @@
      "gpt-6.1-sol": [
       "S2",
       "S9"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3",
+      "S8"
      ]
     },
     "reason_opus": "topics_controller.rb:107-113 sets notification_level and calls save! without setting notifications_reason_id; TopicUser.update_last_read (topic_user.rb:~157-163) re-promotes rows with null notifications_reason_id to tracking once the read threshold passes, while TopicUser.change sets reason user_changed (lines 86-88).",
@@ -7665,6 +8071,9 @@
      "gpt-6.1-sol": [
       "S3",
       "S8"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S6"
      ]
     },
     "reason_opus": "routes/topic-unsubscribe.js.es6 only loads the topic view; the unsubscribe itself is performed by the server-rendered GET (topics_controller.rb#unsubscribe) reached from the email link, and nothing in the app links to this route for an in-app transition.",
@@ -7777,6 +8186,12 @@
       "S3",
       "S4",
       "S6"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S3",
+      "S4",
+      "S5"
      ]
     },
     "reason_opus": "GroupTest.java:139-157 starts the reader thread without keeping a reference or joining it; after deletedAll.set(true) the assertion on caughtExceptions runs immediately, so in-flight reads that fail later, or a reader that never read, still let the test pass.",
@@ -7874,6 +8289,9 @@
      "gpt-6.1-sol": [
       "S2",
       "S5"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2"
      ]
     },
     "reason_opus": "GroupTest.java:152-155 sets deletedAll only after all removes succeed, with no finally; if a remove throws, the non-daemon reader thread loops forever. Only affects the test when it already fails.",
@@ -7980,6 +8398,10 @@
       "S3",
       "S9",
       "S15"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S4",
+      "S15"
      ]
     },
     "reason_opus": "googlecalendar/lib/CalendarService.ts:254-256 (updateEvent) and :315-317 (deleteEvent) fall back to destinationCalendar.find(cal => cal.externalId === externalCalendarId) only when externalCalendarId is falsy, so the find can never match and the old destinationCalendar.externalId fallback is lost.",
@@ -8014,6 +8436,9 @@
      ],
      "muse-spark-1.3": [
       "S5"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S6"
      ]
     },
     "reason_opus": "organizations/create.handler.ts:151 changed ...(!IS_TEAM_BILLING_ENABLED && { slug }) to ...(IS_TEAM_BILLING_ENABLED ? { slug } : {}), inverting the condition while requestedSlug is still set only when billing is enabled; without billing the org gets neither slug nor requestedSlug.",
@@ -8055,6 +8480,14 @@
       "S6",
       "S17",
       "S18"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3",
+      "S7",
+      "S8",
+      "S11",
+      "S12",
+      "S14"
      ]
     },
     "reason_opus": "office365calendar/lib/CalendarService.ts:72-76 keeps createEvent(event) and always uses destinationCalendar[0], while CalendarManager.createEvent now passes credential.id and EventManager.createAllCalendarEvents (EventManager.ts:339-372) calls it per destination; a second Office365 host's token is used against the first host's calendar id.",
@@ -8157,6 +8590,11 @@
       "S11",
       "S13",
       "S16"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S10",
+      "S13"
      ]
     },
     "reason_opus": "EventManager.ts:118-119 destructures const [mainHostDestinationCalendar] = evt.destinationCalendar ?? [] then reads mainHostDestinationCalendar.integration without ?.; handleNewBooking sets destinationCalendar to null and other callers to [], so a Google Meet booking without a destination calendar throws a TypeError.",
@@ -8188,6 +8626,9 @@
      ],
      "muse-spark-1.3": [
       "S4"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S16"
      ]
     },
     "reason_opus": "handleNewBooking.ts:1063-1067 sets evt.destinationCalendar to null when neither event type nor organizer has one, and :1077-1078 then calls evt.destinationCalendar?.push(...teamDestinationCalendars), which silently does nothing.",
@@ -8216,6 +8657,10 @@
      "gpt-6.1-sol": [
       "S2",
       "S13"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S9"
      ]
     },
     "reason_opus": "EventManager.ts:170 now stores credentialId: isCalendarType ? result.credentialId : undefined, dropping the video credentialId previously stored; handleCancelBooking.ts:490-501 deletes the video meeting only when the video reference has a credentialId.",
@@ -8319,6 +8764,9 @@
      "gpt-6.1-sol": [
       "S7",
       "S20"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S5"
      ]
     },
     "reason_opus": "handleCancelBooking.ts:449-470: inside the new loop over all calendar references, the recurring cancel-all branch still iterates the organizer's credentials and deletes updBooking.references.find(first _calendar ref), so every outer iteration repeats the first host's deletion and other hosts' recurring events are never removed.",
@@ -8426,6 +8874,11 @@
       "S1",
       "S5",
       "S8"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S3",
+      "S4"
      ]
     },
     "reason_opus": "admin-group.js.es6:11-14 computes totalPages as Math.floor(user_count/limit)+1, which adds a phantom page when user_count is an exact multiple of limit; showingLast stays false on the real last page and next (lines 30-37) sets offset = min(offset+limit, user_count) = user_count, loading an empty page.",
@@ -8507,6 +8960,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S6"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S6"
      ]
     },
     "reason_opus": "next/previous set group.offset immediately and call findMembers without cancelling earlier requests (admin-group.js.es6:30-52); findMembers unconditionally setProperties with the response's offset and members (group.js:30-37), so with rapid clicks an older response arriving last overwrites the newer page.",
@@ -8540,6 +8996,11 @@
       "S6"
      ],
      "sonnet-5.5": [
+      "S7"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S5",
       "S7"
      ]
     },
@@ -8651,6 +9112,9 @@
     "martianRef": [],
     "foundBy": {
      "gpt-6.1-sol": [
+      "S1"
+     ],
+     "gpt-6.1-sol@e2b": [
       "S1"
      ]
     },
@@ -8875,6 +9339,9 @@
      ],
      "gpt-6.1-sol": [
       "S8"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S6"
      ]
     },
     "reason_opus": "integration.py:141 wraps the variable error_short in _() while callers pass plain literals (:132, :471, :488); base code had _(\"GitHub installation pending deletion.\") literals. makemessages can no longer extract these short messages, an i18n-only regression with no functional effect.",
@@ -8931,6 +9398,10 @@
      "gpt-6.1-sol": [
       "S1",
       "S9"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S8"
      ]
     },
     "reason_opus": "integration.py:402 uses pipeline.signature as OAuth state; pipeline/base.py:132-133 computes it as md5 of the pipeline view class names, a constant identical for every user and attempt (tests hardcode 9cae5e88...). It provides no CSRF protection or binding of the OAuth callback to the user's attempt.",
@@ -8962,6 +9433,9 @@
      ],
      "sonnet-5.5": [
       "S3"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S4"
      ]
     },
     "reason_opus": "integration.py:423 calls safe_urlopen outside the try at :425, and get_user_info at :434 calls resp.raise_for_status() (identity/github/provider.py:16) unguarded; network errors or non-2xx GitHub responses raise and produce a 500 instead of the error() page.",
@@ -8992,6 +9466,9 @@
       "S1"
      ],
      "muse-spark-1.3": [
+      "S3"
+     ],
+     "gpt-6.1-sol@e2b": [
       "S3"
      ]
     },
@@ -9038,6 +9515,10 @@
       "S2",
       "S6",
       "S8"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S5"
      ]
     },
     "reason_opus": "integration.py:503 indexes integration.metadata[\"sender\"][\"login\"], but build_integration only sets sender when state has it (:376-377) and installation.py:44 explicitly handles metadata without sender; such an active integration without an OrganizationIntegration raises KeyError (500) instead of the error page.",
@@ -9067,6 +9548,9 @@
       "S5"
      ],
      "gpt-6.1-sol": [
+      "S7"
+     ],
+     "gpt-6.1-sol@e2b": [
       "S7"
      ]
     },
@@ -9122,6 +9606,11 @@
       "S10",
       "S11",
       "S12"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S5",
+      "S9",
+      "S13"
      ]
     },
     "reason_opus": "AccessTokenContext.java:73 (diff line 184) calls Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\"), validating grantType twice and never rawTokenId, so a null raw id is accepted and encodeTokenId emits '...:null'.",
@@ -9192,6 +9681,13 @@
       "S7",
       "S9",
       "S13"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S3",
+      "S6",
+      "S7",
+      "S12"
      ]
     },
     "reason_opus": "AssertEvents.java:480-484 reads items[0].substring(3,5) although the encoder puts the grant at [4,6) (DefaultTokenContextEncoderProvider substring(4,6)), and returns false on equality; for valid ids the slice never equals the shortcut, so the matcher only checks the UUID and never verifies the grant.",
@@ -9233,6 +9729,11 @@
      ],
      "muse-spark-1.3": [
       "S14"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S4",
+      "S8",
+      "S10"
      ]
     },
     "reason_opus": "OAuth2GrantTypeFactory.java:29-33 Javadoc says 'usually like 3-letters shortcut', but every implementation returns 2 chars and the decoder requires exactly 2 (6-char prefix). Documentation inaccuracy.",
@@ -9288,6 +9789,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S1"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1"
      ]
     },
     "reason_opus": "Only OAuth2GrantTypeBase.createTokenResponse, the password grant, refresh, pre-authorized code and token exchange set Constants.GRANT_TYPE; ClientCredentialsGrantType (lines 121-141) builds its own clientSessionCtx and calls responseBuilder.generateAccessToken() without it, so DefaultTokenContextEncoderProvider:57-60 falls back to 'na' for client-credentials tokens.",
@@ -9312,6 +9816,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S16"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S11"
      ]
     },
     "reason_opus": "getShortcutByGrantType/getGrantTypeByShortcut (DefaultTokenContextEncoderProviderFactory.java:106-137) lazily put new grants into both maps without the duplicate-shortcut check done in postInit, so a hot-deployed grant reusing a shortcut overwrites the reverse mapping.",
@@ -9377,6 +9884,11 @@
      ],
      "muse-spark-1.3": [
       "S2"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S3",
+      "S4"
      ]
     },
     "reason_opus": "BackwardsCompatibilityUserStorage.isValid returns generatedKeys.stream().anyMatch(key.equals(input)) (BackwardsCompatibilityUserStorage.java:326-340) without removing the matched code, so a code can be reused. This is a testsuite provider; production consumption is the provider's responsibility.",
@@ -9441,6 +9953,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S1"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1"
      ]
     },
     "reason_opus": "When updateCredential succeeds in external storage, createRecoveryCodesCredential skips the local provider's createCredential (CredentialHelper.java:125-129), so an existing local recovery-codes credential is not replaced; UserCredentialManager.isValid falls back to local validators for inputs the storage rejects (UserCredentialManager.java:66-79), so old local codes keep working.",
@@ -9493,6 +10008,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S1"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2"
      ]
     },
     "reason_opus": "AlertRuleMenu.tsx:123 still renders MenuItemPauseRule only when rulerRuleType.grafana.rule(rulerRule), but GrafanaRuleListItem.tsx:47 now passes only promRule to RuleActionsButtons (the ruler-loading GrafanaRuleLoader was deleted), so Pause/Resume never appears in the list view even when canPause is true.",
@@ -9517,6 +10035,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S2"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1"
      ]
     },
     "reason_opus": "AlertRuleMenu.tsx:165 renders Delete only when canDelete && rulerRule, and handleDelete takes a RulerRuleDTO; list-view Grafana rules (GrafanaRuleListItem.tsx:47) now provide no rulerRule, so the Delete action is never shown despite the new prom-based delete ability.",
@@ -9552,6 +10073,9 @@
      ],
      "gpt-6.1-sol": [
       "S6"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S5"
      ]
     },
     "reason_opus": "useGrafanaPromRuleAbilities(skipToken) calls useAllGrafanaPromRuleAbilities(undefined); useIsGrafanaPromRuleEditable returns loading:false, so MaybeSupported is AlwaysSupported and Duplicate = toAbility(AlwaysSupported, grafana create). AlertRuleMenu.tsx:91 ORs this with the ruler ability, so Duplicate shows for datasource rules whenever the user has Grafana create permission.",
@@ -9589,6 +10113,9 @@
       "S2",
       "S4",
       "S5"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S4"
      ]
     },
     "reason_opus": "useAllAlertRuleAbilities now delegates to useAllRulerRuleAbilities, which hardcodes isFederated = false (useAbilities.ts, TODO), replacing the removed isFederatedRuleGroup(rule.group) check, so federated Mimir groups are no longer immutable for Update/Delete/Pause.",
@@ -9764,6 +10291,9 @@
      ],
      "muse-spark-1.3": [
       "S4"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3"
      ]
     },
     "reason_opus": "RuleActionsButtons.V2.tsx:104 mounts SilenceGrafanaRuleDrawer only when rulerRuleType.grafana.alertingRule(rule), but GrafanaRuleListItem.tsx:47 passes only promRule, while canSilence can be true via grafana prom abilities; clicking Silence sets showSilenceDrawer and nothing renders.",
@@ -9800,6 +10330,9 @@
      "sonnet-5.5": [
       "S3",
       "S6"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S21"
      ]
     },
     "reason_opus": "app-credential.ts:24-27 (new file) compares the request header to CALCOM_WEBHOOK_SECRET with !==, a non-constant-time comparison on an endpoint that writes user credentials.",
@@ -9934,6 +10467,12 @@
       "S11",
       "S20",
       "S23"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3",
+      "S7",
+      "S13",
+      "S18"
      ]
     },
     "reason_opus": "parseRefreshTokenResponse.ts:8,10 use computed keys [z.string().toString()] which both evaluate to the same literal object-string key, not wildcards; the schema ends up as {access_token, '<literal>': unknown optional} and z.object strips expiry/refresh fields in sync mode.",
@@ -9989,6 +10528,13 @@
       "S1",
       "S18",
       "S21"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S9",
+      "S12",
+      "S15",
+      "S19"
      ]
     },
     "reason_opus": "refreshOAuthTokens.ts:8-15 returns the raw fetch Response in sync mode, while googlecalendar reads res?.data, zoho-bigin reads tokenInfo.data.error and hubspot types the result as HubspotToken; those callers break when sharing is enabled.",
@@ -10043,6 +10589,13 @@
       "S10",
       "S11",
       "S13"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S8",
+      "S11",
+      "S14",
+      "S17"
      ]
     },
     "reason_opus": "googlecalendar/lib/CalendarService.ts:97-100 stores key = parseRefreshTokenResponse(...), which returns the safeParse wrapper {success,data}, as credential.key; googleCredentialSchema.parse(credential.key) then fails on the next load.",
@@ -10091,6 +10644,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S7"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S6"
      ]
     },
     "reason_opus": "salesforce CalendarService.ts:75-99 now runs a refresh_token exchange and a prisma update inside getClient, called from the constructor, on every service instantiation regardless of token validity.",
@@ -10115,6 +10671,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S6"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S5"
      ]
     },
     "reason_opus": "salesforce CalendarService.ts:96 calls prisma.credential.update but the file has no prisma import (imports at lines 1-20), causing a compile error / ReferenceError.",
@@ -10168,6 +10727,12 @@
      ],
      "muse-spark-1.3": [
       "S5",
+      "S16",
+      "S20"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S4",
+      "S10",
       "S16",
       "S20"
      ]
@@ -10257,6 +10822,9 @@
     "martianRef": [],
     "foundBy": {
      "gpt-6.1-sol": [
+      "S1"
+     ],
+     "gpt-6.1-sol@e2b": [
       "S1"
      ]
     },
@@ -10443,6 +11011,11 @@
      "muse-spark-1.3": [
       "S2",
       "S6"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S4",
+      "S5"
      ]
     },
     "reason_opus": "zunionstore at add-buffer.lua:47 and :53 uses default AGGREGATE SUM, so a duplicate payload present in both set_key and the merged key gets its end-timestamp score doubled. The score is only used for zpopmin eviction (add-buffer.lua:62-64), so the effect is a duplicate span being biased against eviction in segments over 1000 spans; flushing ignores scores (buffer.py zscan values discarded).",
@@ -10476,6 +11049,10 @@
       "S4",
       "S6",
       "S7"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S3"
      ]
     },
     "reason_opus": "Segment keys switch from SET to ZSET (buffer.py:197-199 zadd, flush zscan, Lua zcard/zunionstore) without renaming the span-buf:s: namespace. Keys written by the previous release live up to redis_ttl/set_timeout, so during deploy ZADD/ZCARD/ZSCAN on an existing SET key raise WRONGTYPE, failing the pipeline and the consumer batch.",
@@ -10612,6 +11189,9 @@
      ],
      "gpt-6.1-sol": [
       "S3"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S6"
      ]
     },
     "reason_opus": "The span-count guard on max_segment_spans was removed from flush (buffer.py:446-449) and the cap is now a hardcoded 1000 in add-buffer.lua:62; the max_segment_spans constructor parameter (buffer.py:150, default 1001) is still accepted but no longer used. Dead/misleading configuration; insert-time eviction bounds the set after every insert.",
@@ -10912,6 +11492,11 @@
      "muse-spark-1.3": [
       "S2",
       "S13"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S8",
+      "S10",
+      "S14"
      ]
     },
     "reason_opus": "browser_reporting_collector.py:52 and :58 test presence with self.initial_data.get(\"age\") / .get(\"timestamp\"); age (line 47) and timestamp (min_value=0, line 48) both accept 0, so a report carrying age=0 plus timestamp, or timestamp=0 plus age, passes the mutual-exclusion validators.",
@@ -11126,6 +11711,11 @@
      "gpt-6.1-sol": [
       "S1",
       "S19"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S9",
+      "S12"
      ]
     },
     "reason_opus": "widgetCard/chart.tsx: when organization has 'use-table-widget-visualization', TableWidgetVisualization is rendered with columns={[]} and tableData {data: [], meta: {fields: {}, units: {}}}, discarding result.data/result.meta, so the table is always empty.",
@@ -11174,6 +11764,11 @@
      "gpt-6.1-sol": [
       "S8",
       "S11"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3",
+      "S4",
+      "S11"
      ]
     },
     "reason_opus": "defaultTableCellRenderers.tsx:32 and :71 use if (cell) so a custom renderer returning 0 or '' falls back to the default; the prop docs (tableWidgetVisualization.tsx:42,54) only state the return type ReactNode | undefined. New component with no caller relying on falsy output.",
@@ -11202,6 +11797,12 @@
       "S15",
       "S17",
       "S20"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S6",
+      "S7",
+      "S13"
      ]
     },
     "reason_opus": "useTraceItemAttributeKeys.tsx now uses queryKey ['use-trace-item-attribute-keys', queryOptions] where makeTraceItemAttributeKeysQueryOptions returns only itemType/attributeType/project/dates; the old useApiQuery key included the /organizations/{slug}/ path, so org identity was dropped from the cache key.",
@@ -11280,6 +11881,10 @@
      "muse-spark-1.3": [
       "S1",
       "S5"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S2"
      ]
     },
     "reason_opus": "desktop/topic-post.scss:291 changed `scale-color($primary, $lightness: 30%)` to `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))`, so the light-theme argument went from 30% to 70% (inverted), visibly lightening the reply author link in the existing light theme.",
@@ -11526,6 +12131,9 @@
      "gpt-6.1-sol": [
       "S2",
       "S6"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S4"
      ]
     },
     "reason_opus": "Both failure updates write retryCount: reminder.retryCount + 1 (scheduleSMSReminders.ts:184 and :195) from the value read by findMany at the start of the run instead of { increment: 1 }; overlapping cron runs both write N+1 and undercount failures.",
@@ -11603,6 +12211,9 @@
      ],
      "muse-spark-1.3": [
       "S4"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3"
      ]
     },
     "reason_opus": "The comment at scheduleSMSReminders.ts:28 still says it deletes scheduled SMS reminders whose date has passed, but the query now also deletes reminders with retryCount > 1. Stale comment.",
@@ -11636,6 +12247,9 @@
      "sonnet-5.5": [
       "S1",
       "S6"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2"
      ]
     },
     "reason_opus": "The new prisma.workflowReminder.update inside catch (scheduleSMSReminders.ts:190-197) is unguarded; if it throws (row deleted by a concurrent cancellation -> P2025, or a DB error), the exception escapes the for loop, the remaining reminders are skipped and the handler fails. Previously the catch only logged.",
@@ -11805,6 +12419,36 @@
     "subclass_opus_inicial": "nit",
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": "nit"
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+    "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+    "comment": "SMS-sending locks are counted as failed scheduling attempts: scheduleSMS returns undefined for locked users/teams, retryCount is incremented, and after two cron runs the retryCount > 1 cleanup deletes future reminders even if sending is later unlocked.",
+    "commentOpus": "SMS-sending locks are counted as failed scheduling attempts: scheduleSMS returns undefined for locked users/teams, retryCount is incremented, and after two cron runs the retryCount > 1 cleanup deletes future reminders even if sending is later unlocked.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "high",
+    "category": "bug",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "gpt-6.1-sol@e2b": [
+      "S1"
+     ]
+    },
+    "reason_opus": "twilioProvider.ts:90-95 returns undefined when isLockedForSMSSending is true, and the PR's new else branch in scheduleSMSReminders.ts:178-186 increments retryCount on any falsy result. The PR's new deleteMany clause (scheduleSMSReminders.ts:38-41, retryCount gt 1) then deletes those still-future reminders after two cron runs, so a temporarily locked user/team permanently loses them.",
+    "reason_astra": "packages/features/ee/workflows/lib/reminders/providers/twilioProvider.ts:90-95 returns undefined when sending is locked, before the Twilio request at line 104. The PR adds an unconditional retry increment for that result in packages/features/ee/workflows/api/scheduleSMSReminders.ts:178-185; after two locked runs, the new deletion condition at lines 29-42 permanently removes future reminders even if sending has been unlocked.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "e2b",
+    "severidadeHumana": {
+     "opus": "medium",
+     "astra": "critical",
+     "nota": "Junior: meio-termo entre medium (Opus) e critical (Astra)"
+    }
    }
   ],
   "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
@@ -11953,6 +12597,11 @@
      ],
      "muse-spark-1.3": [
       "S1"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1",
+      "S5",
+      "S6"
      ]
     },
     "reason_opus": "flusher.py:254 guards kill() with isinstance(process, multiprocessing.Process), but processes come from get_context('spawn').Process (line 53/105), i.e. SpawnProcess, which is not a subclass of multiprocessing.Process; the base code called kill() unconditionally, so hung workers are now never killed before a replacement is started (line 259).",
@@ -11988,6 +12637,10 @@
      ],
      "muse-spark-1.3": [
       "S3"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2",
+      "S7"
      ]
     },
     "reason_opus": "flusher.py:337-347: once the shared deadline passes the loop breaks before reaching terminate() for the current and remaining processes, so later workers are never terminated on shutdown.",
@@ -12021,6 +12674,9 @@
      ],
      "muse-spark-1.3": [
       "S6"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S4"
      ]
     },
     "reason_opus": "Docstring at flusher.py:31-32 says 'one process per shard', but lines 60-66 cap processes at max_processes and share shards round-robin (default --flusher-processes=1). Documentation only.",
@@ -12247,6 +12903,9 @@
      ],
      "muse-spark-1.3": [
       "S4"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S3"
      ]
     },
     "reason_opus": "flusher.py:299-301 calls get_memory_info() for every per-process buffer, and SpansBuffer.get_memory_info (buffer.py:375-376) is iter_cluster_memory_usage(self.client) for the whole cluster, so INFO is repeated once per process; submit is not a hot path and the ratio is unchanged.",
@@ -12369,6 +13028,9 @@
      ],
      "muse-spark-1.3": [
       "S1"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S1"
      ]
     },
     "reason_opus": "bleve.go BuildIndex no longer holds cacheMu for the whole build, only around b.cache[key] = idx (bleve.go:137-139). getOrCreateIndex (search.go:287-307) does GetIndex then build without re-checking, so concurrent searches/events for the same uncached key now each build the index (previously GetIndex blocked on the build lock), wasting work and leaking the overwritten index.",
@@ -12405,6 +13067,9 @@
       "S2"
      ],
      "sonnet-5.5": [
+      "S2"
+     ],
+     "gpt-6.1-sol@e2b": [
       "S2"
      ]
     },
@@ -12659,6 +13324,9 @@
      ],
      "gpt-6.1-sol": [
       "S3"
+     ],
+     "gpt-6.1-sol@e2b": [
+      "S2"
      ]
     },
     "reason_opus": "website is in untrusted_attributes (user_serializer.rb:105-111), whose include_website? returns false when scope.restrict_user_fields?(object) (:25-31), but the new :website_name attribute (:43) is not, so a TL0 user's hidden website host (and path) is still sent to anonymous viewers.",
@@ -12734,7 +13402,8 @@
   "deepseek-v4.1-flash",
   "gpt-6.1-sol",
   "sonnet-5.5",
-  "muse-spark-1.3"
+  "muse-spark-1.3",
+  "gpt-6.1-sol@e2b"
  ],
  "classificadores": [
   "claude-opus-5.5",

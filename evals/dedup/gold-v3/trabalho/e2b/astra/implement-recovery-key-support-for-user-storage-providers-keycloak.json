@@ -1,0 +1,35 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
+   "newGroup": null,
+   "reason": "Describes the same failure to remove existing local recovery codes after successful external creation, allowing replaced codes to authenticate through local fallback."
+  },
+  {
+   "id": "S2",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+   "newGroup": null,
+   "reason": "Describes the same federated validator accepting recovery codes without consuming and persisting their use, enabling replay."
+  },
+  {
+   "id": "S3",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+   "newGroup": null,
+   "reason": "Describes the same unchanged stored recovery-code list after successful validation, allowing reuse and preventing progression to the next code."
+  },
+  {
+   "id": "S4",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+   "newGroup": null,
+   "reason": "Describes the same missing consumption of accepted recovery codes. The additional synchronization and testing recommendations do not change the shared problem."
+  },
+  {
+   "id": "S5",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#03",
+   "newGroup": null,
+   "reason": "Repeats the same timing-oracle claim involving String.equals and short-circuiting anyMatch in the recovery-code validator."
+  }
+ ]
+}

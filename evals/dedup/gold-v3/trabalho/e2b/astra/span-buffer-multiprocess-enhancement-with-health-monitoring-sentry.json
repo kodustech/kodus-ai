@@ -1,0 +1,47 @@
+{
+ "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "The process type guard fails to recognize spawn-context workers, leaving hung workers alive when replacements start."
+  },
+  {
+   "id": "S2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "The shared join deadline causes the cleanup loop to break, skipping termination of remaining workers."
+  },
+  {
+   "id": "S3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "newGroup": null,
+   "reason": "submit repeats the same cluster-wide Redis memory query for each process-specific buffer."
+  },
+  {
+   "id": "S4",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+   "newGroup": null,
+   "reason": "The docstring incorrectly promises one process per shard although workers are capped and may handle multiple shards."
+  },
+  {
+   "id": "S5",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "The isinstance guard excludes SpawnProcess workers, so hung workers survive replacement and become unmanaged."
+  },
+  {
+   "id": "S6",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "The restart path fails to kill hung spawn-context workers because it checks against the wrong process class."
+  },
+  {
+   "id": "S7",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "join stops the worker cleanup loop when its shared deadline expires, leaving remaining workers without termination cleanup."
+  }
+ ]
+}

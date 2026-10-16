@@ -1,0 +1,29 @@
+{
+ "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This concerns the falsy-result branch counting an SMS sending lock as a failure. Issue #06 concerns exceptions counted in the catch block; fixing that would not fix locked results consuming retries."
+  },
+  {
+   "id": "S2",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "newGroup": null,
+   "reason": "Both describe an unguarded retry-count update inside catch throwing after concurrent deletion and aborting the remaining batch."
+  },
+  {
+   "id": "S3",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#03",
+   "newGroup": null,
+   "reason": "Both describe the stale cleanup comment omitting the retry-exhaustion deletion branch and request updating that comment."
+  },
+  {
+   "id": "S4",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#01",
+   "newGroup": null,
+   "reason": "Both describe lost retry increments when overlapping runs write from a stale snapshot and recommend atomic increments in both failure paths."
+  }
+ ]
+}

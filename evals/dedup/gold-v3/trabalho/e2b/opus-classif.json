@@ -1,0 +1,26 @@
+{
+  "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "twilioProvider.ts:90-95 returns undefined when isLockedForSMSSending is true, and the PR's new else branch in scheduleSMSReminders.ts:178-186 increments retryCount on any falsy result. The PR's new deleteMany clause (scheduleSMSReminders.ts:38-41, retryCount gt 1) then deletes those still-future reminders after two cron runs, so a temporarily locked user/team permanently loses them.",
+    "category": "bug",
+    "comment": "SMS-sending locks are counted as failed scheduling attempts: scheduleSMS returns undefined for locked users/teams, retryCount is incremented, and after two cron runs the retryCount > 1 cleanup deletes future reminders even if sending is later unlocked.",
+    "severity": "medium"
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com#e2b-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "addGuests.handler.ts:124-147 builds the CalendarEvent with uid: booking.uid but no iCalUID, although Booking has iCalUID (schema.prisma:592) set at creation as `${uid}@APP_NAME` (handleNewBooking.ts:829,1019). generateIcsString.ts:67 uses event.iCalUID || event.uid, so the REQUEST .ics in the new attendee/organizer add-guests emails carries a different UID than the original invite, creating a separate calendar event instead of updating it.",
+    "category": "bug",
+    "comment": "The add-guests handler omits booking.iCalUID from the CalendarEvent, so the add-guests emails' .ics attachments use booking.uid as UID and recipients' calendars treat them as a new event rather than an update of the original booking invite.",
+    "severity": "medium"
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#e2b-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "In user_serializer.rb:149 `\".\" << website_host` mutates the receiver, the new \".\" string literal, not website_host, so website_host stays \"example.com\". For discourse.org the else branch returns the unmodified website_host, which is what the spec expects.",
+    "category": null,
+    "comment": "Claims the suffix check `\".\" << website_host` mutates website_host by prepending a dot, so unrelated domains are displayed as \".example.com\" and the new unrelated-domain spec fails.",
+    "severity": "medium"
+  }
+}

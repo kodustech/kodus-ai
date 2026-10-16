@@ -1,0 +1,47 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same extra page caused by floor(user_count / limit) + 1 when the member count is an exact multiple of the limit."
+  },
+  {
+   "id": "S2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Describes the same public members view truncation at 50 members because it has no pagination controls or subsequent fetches."
+  },
+  {
+   "id": "S3",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same page-count overestimate that enables Next to navigate to an empty page for exact multiples of the limit."
+  },
+  {
+   "id": "S4",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same off-by-one totalPages calculation and resulting empty final page."
+  },
+  {
+   "id": "S5",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Describes the same endpoint pagination change leaving public group members beyond the first 50 inaccessible."
+  },
+  {
+   "id": "S6",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Describes the same unconditional application of stale findMembers responses, which can overwrite newer membership refreshes or page navigation."
+  },
+  {
+   "id": "S7",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Describes the same missing public pagination that makes members beyond the first 50 inaccessible."
+  }
+ ]
+}

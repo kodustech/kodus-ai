@@ -1,0 +1,23 @@
+{
+ "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Both identify the request-size histogram HELP text incorrectly describing measured request payload sizes as sizes returned."
+  },
+  {
+   "id": "S2",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#10",
+   "newGroup": null,
+   "reason": "Both identify empty request payloads and missing size-value assertions that allow constant-zero size calculations to pass the tests."
+  },
+  {
+   "id": "S3",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#09",
+   "newGroup": null,
+   "reason": "Both identify integer division before float64 conversion truncating millisecond durations in both observation paths."
+  }
+ ]
+}

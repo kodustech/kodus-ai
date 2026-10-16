@@ -1,0 +1,77 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "newGroup": null,
+   "reason": "The matching override returns true before busy intervals are checked, allowing conflicting bookings."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "newGroup": null,
+   "reason": "The working-hours predicate rejects slots excluded by any interval, removing valid availability on split schedules."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05",
+   "newGroup": null,
+   "reason": "The comment includes the same override containment bug: slots ending after the override end are accepted. It also describes the corresponding start-boundary failure."
+  },
+  {
+   "id": "S4",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#06",
+   "newGroup": null,
+   "reason": "Converting override boundaries to hour/minute values discards date rollover, producing inverted ranges or availability on the wrong day."
+  },
+  {
+   "id": "S5",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "newGroup": null,
+   "reason": "The override early return bypasses busy-calendar checks and marks occupied hosts available."
+  },
+  {
+   "id": "S6",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "newGroup": null,
+   "reason": "A valid override skips busy.every, accepting slots that conflict with existing bookings."
+  },
+  {
+   "id": "S7",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "newGroup": null,
+   "reason": "The override success return occurs before busy checks, allowing conflicting slots."
+  },
+  {
+   "id": "S8",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "Strict equality compares distinct Dayjs objects, so zero-length day-off overrides are never detected by this branch."
+  },
+  {
+   "id": "S9",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "newGroup": null,
+   "reason": "The predicate requires slots to fit every weekday interval instead of at least one, rejecting valid split-schedule slots."
+  },
+  {
+   "id": "S10",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "The working-hours end value incorrectly uses slotStartTime, allowing events to overrun working hours."
+  },
+  {
+   "id": "S11",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "The working-hours upper-bound comparison uses the slot start instead of its actual end."
+  },
+  {
+   "id": "S12",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05",
+   "newGroup": null,
+   "reason": "The comment includes acceptance of slots extending past the override end, the same containment failure as this issue. It additionally describes slots starting before the override."
+  }
+ ]
+}

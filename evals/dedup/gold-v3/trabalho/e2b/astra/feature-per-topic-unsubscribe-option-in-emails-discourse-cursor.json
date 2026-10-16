@@ -1,0 +1,53 @@
+{
+ "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "The comment describes the same missing TopicUser row causing a nil dereference and server error in unsubscribe."
+  },
+  {
+   "id": "S2",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "The comment describes the same GET endpoint changing notification preferences without CSRF protection or confirmation."
+  },
+  {
+   "id": "S3",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Directly saving the notification level leaves the notification reason unset, allowing automatic tracking to undo the unsubscribe."
+  },
+  {
+   "id": "S4",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "The confirmation promises all notifications stop even though downgrading to regular still permits mention and reply notifications."
+  },
+  {
+   "id": "S5",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "The comment repeats the template lookup mismatch between the standalone topicUnsubscribe route and topic/unsubscribe.hbs."
+  },
+  {
+   "id": "S6",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#10",
+   "newGroup": null,
+   "reason": "The comment describes the same client-side route entry displaying the unsubscribe page without executing the server-side unsubscribe operation."
+  },
+  {
+   "id": "S7",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "The comment describes the same unchecked nil result from TopicUser.find_by causing a NoMethodError."
+  },
+  {
+   "id": "S8",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "The comment describes the same missing explicit-user-change metadata allowing subsequent reads to restore tracking after unsubscribe."
+  }
+ ]
+}

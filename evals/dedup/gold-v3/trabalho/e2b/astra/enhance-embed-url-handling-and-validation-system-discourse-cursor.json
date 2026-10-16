@@ -1,0 +1,83 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#23",
+   "newGroup": null,
+   "reason": "Reports the same invalid `end if` closing tag that causes the embed template to fail compilation."
+  },
+  {
+   "id": "S2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Reports the same unconditional feed content access and scrub call that aborts polling when an entry lacks content."
+  },
+  {
+   "id": "S3",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Reports the same unsanitized imported HTML stored with raw_html cooking, allowing stored XSS."
+  },
+  {
+   "id": "S4",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+   "newGroup": null,
+   "reason": "Reports the same full-feed polling on every uncached article retrieval, amplified by throttling per URL rather than per feed."
+  },
+  {
+   "id": "S5",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "newGroup": null,
+   "reason": "Reports the same incorrect resolution of protocol-relative and path-relative URLs in absolutize_urls."
+  },
+  {
+   "id": "S6",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Repeats the claim that synchronous TopicRetriever expectations fail because the controller only enqueues a retrieval job."
+  },
+  {
+   "id": "S7",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Reports the same missing-content scrub failure that aborts the feed poll for description-only RSS entries."
+  },
+  {
+   "id": "S8",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#17",
+   "newGroup": null,
+   "reason": "Reports the same concurrent check-then-create race and unhandled unique-index conflict when importing the same URL."
+  },
+  {
+   "id": "S9",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+   "newGroup": null,
+   "reason": "Reports the same prerequisite tests whose other falsy settings mask removal of the guard being tested."
+  },
+  {
+   "id": "S10",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#32",
+   "newGroup": null,
+   "reason": "Reports the same missing-embed_url test being rejected by ensure_embeddable before required-parameter validation is reached."
+  },
+  {
+   "id": "S11",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Reports the same unescaped URL interpolation into the attribution link, allowing markup injection preserved by raw_html cooking."
+  },
+  {
+   "id": "S12",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#24",
+   "newGroup": null,
+   "reason": "Reports the same hard-coded strftime date format that ignores locale-specific month names and ordering."
+  },
+  {
+   "id": "S13",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#23",
+   "newGroup": null,
+   "reason": "Reports the same invalid `end if` closing tag and resulting embed template syntax error."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#04",
+   "newGroup": null,
+   "reason": "Both identify that the disabled-feature test asserts only the diagnostic text and lacks an assertion that the exit code equals FEATURE_DISABLED (4)."
+  }
+ ]
+}

@@ -1,0 +1,23 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-sql-analytics-framework-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the same helper returning false regardless of FlagSqlExpressions, causing every SQL expression to be rejected."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-sql-analytics-framework-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Describes the same replacement DB methods unconditionally returning errors, breaking table discovery and SQL execution."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-sql-analytics-framework-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Describes the same always-failing replacement DB and its effects on parsing and execution. The additional discussion of direct callers and consumer contracts concerns that same problem."
+  }
+ ]
+}

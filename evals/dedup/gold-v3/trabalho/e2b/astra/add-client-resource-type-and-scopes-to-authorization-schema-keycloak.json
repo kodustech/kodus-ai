@@ -1,0 +1,35 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+   "newGroup": null,
+   "reason": "Both describe the global VIEW shortcut bypassing client-specific denials in canView(client) and client listing."
+  },
+  {
+   "id": "S2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+   "newGroup": null,
+   "reason": "Both identify the missing global MANAGE grant in canView(). The different downstream consequences share the same fix at the same location."
+  },
+  {
+   "id": "S3",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+   "newGroup": null,
+   "reason": "Both identify canView() ignoring global MANAGE permission. Adding that grant addresses the described client-scope listing inconsistency and the existing issue."
+  },
+  {
+   "id": "S4",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#11",
+   "newGroup": null,
+   "reason": "Both describe getDefaultClientScopes() throwing the expected exception before removal is reached, leaving the removal permission check untested."
+  },
+  {
+   "id": "S5",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+   "newGroup": null,
+   "reason": "Both describe the void requireView() and requireViewClientScopes() Javadocs incorrectly promising boolean returns instead of documenting ForbiddenException."
+  }
+ ]
+}

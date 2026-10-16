@@ -1,0 +1,77 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "The migration dereferences an absent first category result and crashes before reaching the uncategorized fallback."
+  },
+  {
+   "id": "S2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Legacy hosts are migrated without stripping schemes and paths, so they fail the new bare-host lookup."
+  },
+  {
+   "id": "S3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+   "newGroup": null,
+   "reason": "Saved hosts retain accepted ports, but lookup uses URI.host without the port, preventing those records from matching."
+  },
+  {
+   "id": "S4",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "The lookup lowercases only the stored hostname, causing mixed-case incoming hostnames to fail matching."
+  },
+  {
+   "id": "S5",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "An empty category query result is dereferenced before the uncategorized fallback can run, aborting the migration."
+  },
+  {
+   "id": "S6",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Missing or unmatched embed_category settings produce an empty result whose first row is dereferenced, crashing the migration."
+  },
+  {
+   "id": "S7",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "The normalization callback calls sub! on a nil host, raising before validation can return a normal error."
+  },
+  {
+   "id": "S8",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+   "newGroup": null,
+   "reason": "Validation and normalization preserve host ports, while lookup discards them through URI.host, so configured port-qualified hosts never match."
+  },
+  {
+   "id": "S9",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "The unchanged incoming URI hostname is compared against lower(host), making matching incorrectly depend on URL capitalization."
+  },
+  {
+   "id": "S10",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "The migration copies legacy full URLs verbatim, bypassing normalization and breaking the new bare-host authorization lookup."
+  },
+  {
+   "id": "S11",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Migrated entries retain schemes and paths because raw SQL bypasses model normalization, so previously allowed hosts no longer match."
+  },
+  {
+   "id": "S12",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "The blank-host test lacks the other true-branch prerequisites and therefore passes without exercising host presence, providing misleading coverage."
+  }
+ ]
+}

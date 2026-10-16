@@ -1,0 +1,11 @@
+{
+ "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01": {
+  "opus": "medium",
+  "astra": "critical",
+  "rodadas": 1,
+  "astraFinal": "Two locked cron runs cause the next run to permanently delete persisted future reminders, even if SMS sending has been unlocked; irreversible loss of persisted data, which the rubric classifies as critical.",
+  "status": "human_decided",
+  "humano": "high",
+  "nota": "Junior: meio-termo entre medium (Opus) e critical (Astra)"
+ }
+}

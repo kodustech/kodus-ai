@@ -36,11 +36,14 @@ h1 = ler(f'verify/resultados/{ALUC}/{MODEL}.json')['prs']
 h1f = ler(f'verify/resultados/{ALUC}f/{MODEL}.json')['prs']
 nit = ler(f'verify/resultados/{NIT}/{MODEL}.json')['prs']
 mapa = ler(f'{V3}/sugestoes.json')['sugestoes']
-classe = {}
+# --mapa: chave do finder no gold v3 quando difere do model (ex.: gpt-6.1-sol@e2b).
+MAPA = o.get('mapa', MODEL)
+classe, sevDe = {}, {}
 for f in ('golden.json', 'fps-conhecidos.json'):
     for l in ler(f'{V3}/{f}')['prs'].values():
         for i in l:
             classe[i['issueId']] = (i['class'], i['subclass'])
+            sevDe[i['issueId']] = i.get('severity')
 tps = collections.Counter(i['caseId'] for l in ler(f'{V3}/golden.json')['prs'].values() for i in l if i['class'] == 'TP' and not i['subclass'])
 PRS = list(sug['prs'])
 TOTAL_TP = sum(tps[c] for c in PRS)
@@ -71,15 +74,15 @@ for c, p in nit.items():
 
 def placar(comentarios):
     """comentarios: [(cid, sid)] -> numeros da regua."""
-    vistos, n = set(), collections.Counter()
+    vistos, n, porSev = set(), collections.Counter(), collections.Counter()
     for cid, sid in comentarios:
-        iss = mapa[f'{MODEL}|{cid}|{sid}']
+        iss = mapa[f'{MAPA}|{cid}|{sid}']
         cl, sub = classe[iss]
         if cl == 'TP' and not sub:
             if iss in vistos:
                 n['fp_duplicata'] += 1
             else:
-                vistos.add(iss); n['tp'] += 1
+                vistos.add(iss); n['tp'] += 1; porSev[sevDe[iss]] += 1
         elif cl == 'TP':
             n['tp_nit'] += 1
         elif sub == 'hallucination':
@@ -92,7 +95,7 @@ def placar(comentarios):
     f = lambda b: (1 + b * b) * Pr * R / (b * b * Pr + R) if Pr + R else 0
     return {'comentarios': tot, 'tp': n['tp'], 'totalTp': TOTAL_TP, 'recall': round(100 * R, 1), 'precisao': round(100 * Pr, 1),
             'f1': round(100 * f(1), 1), 'f2': round(100 * f(2), 1),
-            **{k: n[k] for k in ('tp_nit', 'fp_alucinacao', 'fp', 'fp_duplicata')}}
+            **{k: n[k] for k in ('tp_nit', 'fp_alucinacao', 'fp', 'fp_duplicata')}, 'tpPorSeveridade': dict(porSev)}
 
 finder = [(c, s['id']) for c in PRS for s in sug['prs'][c]['suggestions']]
 dedup = [(c, k) for c in PRS for k, _ in grupos(c)]
@@ -109,7 +112,8 @@ def particao(ids, grupo_de):
         por[grupo_de(i) or ('so', i)].add(i)
     return [frozenset(v) for v in por.values()]
 pares = lambda part: {frozenset((x, y)) for g in part for x in g for y in g if x < y}
-GAB = ler(f'09.10.26_{MODEL}.final.json')
+# O gabarito de dedup so vale para as sugestoes que ele rotulou (finder de 09/10, mesmos ids).
+GAB = ler(f'09.10.26_{MODEL}.final.json') if MAPA == MODEL else {'prs': {}}
 assert not str(GAB.get('fonte', '')).startswith('dedup-real/'), 'o gabarito de dedup foi sobrescrito'
 GAB = GAB['prs']
 c = collections.Counter()

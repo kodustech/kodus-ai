@@ -84,7 +84,55 @@ for cid, L in A.items():
         alvo = revisao if status == 'human_review' else golden if cls == 'TP' else fps
         alvo.setdefault(cid, []).append(reg)
         cont[(status, cls, sc)] += 1
-meta = {'versao': 'v3', 'prs': len(A), 'modelos': list(ABR.values()), 'classificadores': ['claude-opus-5.5', 'gpt-6-astra'],
+# Rodadas de finder posteriores (ex.: GPT com o sandbox E2B): cada sugestao nova casada por Opus
+# e Astra (cegos, debate no desacordo) com um problema que ja existe herda o problema; so o que
+# nenhum dos dois casou vira problema novo, classificado do mesmo jeito.
+RODADAS = {'e2b': 'gpt-6.1-sol@e2b'}
+for pasta, chave in RODADAS.items():
+    R = f'{W}/{pasta}'
+    if not os.path.exists(f'{R}/opus-classif.json'):
+        continue
+    import glob
+    op = {}
+    for f in glob.glob(f'{R}/opus-out*.json'): op.update(json.load(open(f)))
+    ast = {json.load(open(f))['caseId']: {x['id']: x for x in json.load(open(f))['items']} for f in glob.glob(f'{R}/astra/*.json')}
+    deb = json.load(open(f'{R}/debate-casamento.json'))
+    oc = json.load(open(f'{R}/opus-classif.json'))
+    ac = {x['issueId']: x for f in glob.glob(f'{R}/astra-classif/*.json') for x in json.load(open(f))['items']}
+    dsev = json.load(open(f'{R}/debate-severidade.json'))
+    novos = json.load(open(f'{R}/classif-in.json'))
+    porId = {r['issueId']: r for d in (golden, fps, revisao) for l in d.values() for r in l}
+    for cid, L in op.items():
+        for x in L:
+            a = ast[cid][x['id']]
+            fim = x['match'] if x['match'] == a['match'] else deb[cid][x['id']]['final']
+            if fim != 'new':
+                sugestoes[f'{chave}|{cid}|{x["id"]}'] = fim
+                porId[fim].setdefault('foundBy', {}).setdefault(chave, []).append(x['id'])
+    for cid, p in novos.items():
+        for it in p['issues']:
+            k = it['issueId']; o = oc[k]; a = ac[k]
+            assert (o['class'], o['subclass']) == (a['class'], sub(a['subclass'])), f'{k}: classe sem consenso'
+            N = {'low': 0, 'medium': 1, 'high': 2, 'critical': 3}
+            reg = {'issueId': k, 'caseId': cid, 'comment': o['comment'], 'commentOpus': o['comment'],
+                   'class': o['class'], 'subclass': o['subclass'], 'status': 'agreed',
+                   'severity': o['severity'], 'category': o['category'] if o['class'] == 'TP' else None, 'source': 'kodus', 'martianRef': [],
+                   'foundBy': {chave: [c['gid'].split(':')[1] for c in it['comentarios']]},
+                   'reason_opus': o['reason'], 'reason_astra': a['reason'],
+                   'class_opus_inicial': o['class'], 'subclass_opus_inicial': o['subclass'],
+                   'class_astra_inicial': a['class'], 'subclass_astra_inicial': sub(a['subclass']), 'rodada': pasta}
+            # severidade: 1 nivel de diferenca fica com o Opus; 2+ discutido, e sem consenso vai para revisao humana
+            if abs(N[o['severity']] - N[a['severity']]) >= 2 and k in dsev:
+                if dsev[k].get('humano'):
+                    reg.update(severity=dsev[k]['humano'], severidadeHumana={'opus': o['severity'], 'astra': a['severity'], 'nota': dsev[k].get('nota')})
+                else:
+                    reg['severidadeEmRevisao'] = {'opus': o['severity'], 'astra': a['severity']}
+            for c in it['comentarios']:
+                sugestoes[f'{chave}|{cid}|{c["gid"].split(":")[1]}'] = k
+            (golden if o['class'] == 'TP' else fps).setdefault(cid, []).append(reg)
+            cont[(f'{pasta}:agreed', o['class'], o['subclass'])] += 1
+
+meta = {'versao': 'v3', 'prs': len(A), 'modelos': list(ABR.values()) + list(RODADAS.values()), 'classificadores': ['claude-opus-5.5', 'gpt-6-astra'],
         'regua': 'TP = o problema existe no codigo do head e o PR o introduz ou mexe no codigo envolvido; FP = nao ha problema a reportar no PR'}
 for nome, dados in [('golden', golden), ('fps-conhecidos', fps), ('revisao-humana', revisao)]:
     json.dump({**meta, 'prs': dados}, open(f'{AQUI}/{nome}.json', 'w'), indent=1, ensure_ascii=False)

@@ -1,0 +1,77 @@
+{
+ "sms-workflow-reminder-retry-count-tracking-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "917c7b0764f4c6bfdca95db2c5f73dbfdbe11757",
+  "head": "c790227e0cda780e6fea9bb03af27948d9e286b9",
+  "issues": [
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+    "comentarios": [
+     {
+      "gid": "gpt-e2b:S1",
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       178,
+       185
+      ],
+      "texto": "WHAT: The falsy-result branch counts SMS sending locks as failed scheduling attempts. WHY: twilioProvider.scheduleSMS returns undefined without contacting Twilio when isLockedForSMSSending is true, so two cron runs exhaust the retry budget and the next run deletes future reminders even if sending is subsequently unlocked. HOW: Distinguish a deferred/locked result from a failed scheduling attempt and increment retryCount only for actual failures."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ],
+  "prTitle": "SMS workflow reminder retry count tracking"
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "b004587262e8221083bafbe9a0c515e7becaa7b3",
+  "head": "92f44dcea7ff19e9123a30c63c167a2938df5a55",
+  "issues": [
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#e2b-01",
+    "comentarios": [
+     {
+      "gid": "gpt-e2b:S4",
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       137,
+       137
+      ],
+      "texto": "The reconstructed CalendarEvent omits the booking's persisted iCalUID. generateIcsString consequently uses booking.uid for the new REQUEST attachments, so bookings whose stored iCalUID differs receive invitations with a different identity rather than updates to the original calendar event. Carry booking.iCalUID into the event passed to the calendar updater and email sender."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ],
+  "prTitle": "Add guest management functionality to existing bookings"
+ },
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "7a5fbae060bd0d3e29f3a4b5c6f2bfd8b2914dc7",
+  "head": "267d8be1f556ed59639ced396c885bb44586da19",
+  "issues": [
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#e2b-01",
+    "comentarios": [
+     {
+      "gid": "gpt-e2b:S1",
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       149,
+       149
+      ],
+      "texto": "The suffix check mutates website_host by prepending a dot before returning it for unrelated domains. A website of http://example.com/user on discourse.org is consequently displayed as .example.com, and the newly added unrelated-domain expectation fails. Use non-mutating string interpolation for the suffix argument."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ],
+  "prTitle": "UX: show complete URL path if website domain is same as instance domain"
+ }
+}

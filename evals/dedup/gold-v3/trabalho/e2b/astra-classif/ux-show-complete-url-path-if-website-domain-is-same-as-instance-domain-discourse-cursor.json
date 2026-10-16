@@ -1,0 +1,12 @@
+{
+ "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "items": [
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#e2b-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "At app/serializers/user_serializer.rb:149, `\".\" << website_host` mutates the dot string literal, not `website_host`. For discourse.org and example.com, the suffix check is false and the unchanged `website_host` is returned as `example.com`, so the claimed leading-dot defect does not occur.",
+   "severity": "medium"
+  }
+ ]
+}

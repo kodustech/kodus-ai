@@ -1,0 +1,17 @@
+{
+ "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Matches the concatenation-mutation concern in #07\u2019s known-issue text at the same suffix expression. Replacing `\".\" << website_host` with non-mutating concatenation addresses both concerns, despite S1 misidentifying which string is mutated."
+  },
+  {
+   "id": "S2",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Both describe website_name exposing restricted website content to anonymous viewers of TL0 profiles because it is absent from untrusted_attributes."
+  }
+ ]
+}

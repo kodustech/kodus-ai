@@ -1,0 +1,11 @@
+{
+ "caseId": "advanced-query-processing-architecture-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Both describe repeated interpolation of Loki split-query targets, causing variable tokens inside already-substituted values to be expanded again during execution. Both also identify an additional interpolation pass in shard splitting."
+  }
+ ]
+}

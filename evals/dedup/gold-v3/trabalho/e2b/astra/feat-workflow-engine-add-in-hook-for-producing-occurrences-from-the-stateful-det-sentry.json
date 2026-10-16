@@ -1,0 +1,47 @@
+{
+ "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "The handler inherits unimplemented abstract members, so constructing the metric-alert detector handler raises TypeError instead of preserving its no-op behavior."
+  },
+  {
+   "id": "S2",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "The same missing abstract-method implementations make MetricAlertDetectorHandler uninstantiable and cause TypeError before evaluation."
+  },
+  {
+   "id": "S3",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "The comment identifies the same four unimplemented abstract members and resulting TypeError when constructing MetricAlertDetectorHandler."
+  },
+  {
+   "id": "S4",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "The base-class change leaves the placeholder handler abstract, causing the same construction-time TypeError."
+  },
+  {
+   "id": "S5",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#04",
+   "newGroup": null,
+   "reason": "The occurrence test double ignores value, allowing incorrect forwarded measurements and the group_2 expected value of 6 instead of 10 to pass unnoticed."
+  },
+  {
+   "id": "S6",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03",
+   "newGroup": null,
+   "reason": "The evaluate docstring still describes a list although the method returns a dictionary keyed by DetectorGroupKey."
+  },
+  {
+   "id": "S7",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#01",
+   "newGroup": null,
+   "reason": "The preceding TODO incorrectly describes adopting the stateful abstraction as future work even though the handler already inherits StatefulDetectorHandler."
+  }
+ ]
+}

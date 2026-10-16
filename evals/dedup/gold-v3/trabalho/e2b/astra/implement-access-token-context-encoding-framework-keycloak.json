@@ -1,0 +1,83 @@
+{
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#05",
+   "newGroup": null,
+   "reason": "Describes the missing GRANT_TYPE assignment in client-credentials issuance, which causes the encoder to use the unknown 'na' shortcut."
+  },
+  {
+   "id": "S2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the incorrect grant substring offset and inverted equality check in isAccessTokenId."
+  },
+  {
+   "id": "S3",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the same matcher offset and comparison errors that allow incorrect grant shortcuts to pass."
+  },
+  {
+   "id": "S4",
+   "match": "implement-access-token-context-encoding-framework-keycloak#03",
+   "newGroup": null,
+   "reason": "Describes the documentation recommending three-letter shortcuts despite the encoding requiring exactly two characters."
+  },
+  {
+   "id": "S5",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Describes the duplicated grantType null check that leaves rawTokenId unvalidated and allows ':null' encoding."
+  },
+  {
+   "id": "S6",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the incorrect grant offset and inverted comparison that prevent event assertions from verifying the grant."
+  },
+  {
+   "id": "S7",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the same isAccessTokenId substring and equality errors that accept tokens from the wrong grant."
+  },
+  {
+   "id": "S8",
+   "match": "implement-access-token-context-encoding-framework-keycloak#03",
+   "newGroup": null,
+   "reason": "Describes the three-letter shortcut contract conflicting with the two-character encoding requirement, including the missing width validation already reported under this issue."
+  },
+  {
+   "id": "S9",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Describes checking grantType twice instead of validating rawTokenId, allowing null to serialize as 'null'."
+  },
+  {
+   "id": "S10",
+   "match": "implement-access-token-context-encoding-framework-keycloak#03",
+   "newGroup": null,
+   "reason": "Describes missing shortcut-width validation and the misleading three-letter documentation, both covered by this issue's existing reports."
+  },
+  {
+   "id": "S11",
+   "match": "implement-access-token-context-encoding-framework-keycloak#06",
+   "newGroup": null,
+   "reason": "Describes lazy registration overwriting shortcut ownership without uniqueness checks, causing existing tokens to decode as another grant."
+  },
+  {
+   "id": "S12",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the incorrect substring offset and inverted equality check that let incorrect grant prefixes pass the matcher."
+  },
+  {
+   "id": "S13",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Describes the repeated grantType validation leaving rawTokenId unchecked and allowing null IDs to be encoded."
+  }
+ ]
+}

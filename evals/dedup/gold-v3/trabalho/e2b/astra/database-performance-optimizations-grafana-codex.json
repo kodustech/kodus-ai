@@ -1,0 +1,23 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "database-performance-optimizations-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Describes the same quadratic string construction in the SQLite inline-ID loop caused by repeatedly copying the accumulated list with fmt.Sprintf."
+  },
+  {
+   "id": "S2",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Describes the same ticker change from ten minutes to one minute, increasing execution frequency and database load for every cleanup job."
+  },
+  {
+   "id": "S3",
+   "match": "database-performance-optimizations-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Repeats the same claim that splitting test fixtures across three annotation types prevents any annotation DELETE from exceeding SQLite's parameter limit, leaving the regression untested."
+  }
+ ]
+}

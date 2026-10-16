@@ -1,0 +1,1773 @@
+{
+ "model": "gpt-6.1-sol",
+ "verificador": "gpt-6.1-sol@sub",
+ "versao": "v3d",
+ "versaoDedup": "hve2b-dedup",
+ "prs": {
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete cancellation bug that leaves secondary hosts' calendar events undeleted and repeats organizer deletions, rather than an optional style or defensive improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure where missing slug values cause NoOrganizationSlugError and break organization setup when team billing is disabled.",
+     "passos": 1
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete failure where a null destination array causes team members’ configured calendars to be skipped and their events not to be created.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 33268,
+    "cacheRead": 0,
+    "output": 144,
+    "reasoning": 0,
+    "ms": 3713
+   },
+   "sandbox": {
+    "criaMs": 8335,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete authorization failure in which team admins who are neither organizer nor attendee incorrectly receive FORBIDDEN.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete calendar identity bug: omitting the persisted iCalUID causes invitations to create distinct events instead of updating the existing event.",
+     "passos": 1
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "Translating the tooltip is a minor localization improvement; leaving its accurate English text does not cause any of the concrete functional failures in the stated test.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 30776,
+    "cacheRead": 0,
+    "output": 142,
+    "reasoning": 0,
+    "ms": 3810
+   },
+   "sandbox": {
+    "criaMs": 10690,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete unresolved-name compilation error and runtime ReferenceError from using prisma without an import, rather than an optional style improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete external OAuth request and database write on every initialization, plus use of the stale access token after refreshing, rather than an optional style change or speculative micro-optimization.",
+     "passos": 1
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a specific security failure—timing leakage from ordinary string comparison of a secret that authorizes credential replacement—rather than an optional style change or unspecified defensive precaution.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 37015,
+    "cacheRead": 0,
+    "output": 159,
+    "reasoning": 0,
+    "ms": 4523
+   },
+   "sandbox": {
+    "criaMs": 10087,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [],
+   "uso": null
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure where temporary SMS sending locks consume retries and cause future reminders to be deleted rather than sent.",
+     "passos": 1
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete concurrent-deletion path where the catch block itself throws and aborts processing of the remaining reminders, rather than an optional defensive or stylistic improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete false description of the deletion scope: the existing comment implies expired SMS cleanup, whereas the new branch also deletes future reminders regardless of method.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete lost-update race that undercounts failed attempts and causes extra retries, rather than an optional style or defensive improvement.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 9890,
+    "cacheRead": 0,
+    "output": 197,
+    "reasoning": 0,
+    "ms": 3553
+   },
+   "sandbox": {
+    "criaMs": 7974,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete authentication bypass using a valid backup code and a nonempty invalid totpCode to skip password verification, which is a security hole rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete security vulnerability—a timing oracle in backup-code verification—rather than an optional style change or speculative hardening.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger test coverage of clipboard contents rather than identifying an actual incorrect copy result or other concrete production failure.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger test coverage for hypothetical incorrect serialization without identifying an actual defect that produces unusable backup codes.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 41523,
+    "cacheRead": 0,
+    "output": 187,
+    "reasoning": 0,
+    "ms": 4329
+   },
+   "sandbox": {
+    "criaMs": 7298,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete stored-XSS security hole in which unsanitized feed HTML executes under the forum origin, rather than an optional style or best-practice improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete repeated-work path where distinct embed URLs bypass the per-URL throttle and repeatedly fetch and import the entire feed, imposing real network and database costs on background workers.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment identifies concrete URL inputs that are resolved incorrectly, causing broken imported links and images for users.",
+     "passos": 1
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete concurrency failure in which overlapping imports trigger a unique-index exception and abort a feed poll, rather than an optional style or defensive improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger isolation and coverage in tests without identifying a current production failure, so ignoring it leaves working behavior unchanged.",
+     "passos": 1
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete false-positive test that is rejected by the wrong guard and claims to verify a 404 without asserting it, misleading readers about what behavior is actually validated.",
+     "passos": 1
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete HTML injection security hole caused by interpolating an unescaped URL into raw HTML, rather than an optional style or defensive improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete localization failure: non-English forums display English month names and a fixed date format instead of dates in the active locale.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 8,
+    "input": 94768,
+    "cacheRead": 0,
+    "output": 468,
+    "reasoning": 67,
+    "ms": 8946
+   },
+   "sandbox": {
+    "criaMs": 4905,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete request input that causes a nil-method exception instead of the expected validation-error response, so it describes a functional bug rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete misleading claim: the test purports to verify the no-host condition but passes solely because the topic has no embed, even though the implementation no longer checks hosts.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 22621,
+    "cacheRead": 0,
+    "output": 110,
+    "reasoning": 0,
+    "ms": 3443
+   },
+   "sandbox": {
+    "criaMs": 5141,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete user-visible layout failure in which long topic titles prevent a flex item from shrinking and push the navigation panel beyond the header, rather than an optional style improvement.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 2841,
+    "cacheRead": 0,
+    "output": 56,
+    "reasoning": 0,
+    "ms": 2884
+   },
+   "sandbox": {
+    "criaMs": 4977,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete regression: attachments larger than 10 MB that the configured limit previously allowed are now incorrectly rejected by client-side validation.",
+     "passos": 1
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete malformed-image path that causes five redundant external conversion attempts, imposing real processing cost and upload latency rather than merely suggesting a speculative optimization.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 5522,
+    "cacheRead": 0,
+    "output": 99,
+    "reasoning": 0,
+    "ms": 4570
+   },
+   "sandbox": {
+    "criaMs": 5320,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete request-ordering race that can overwrite newer results with stale membership, counts, and pagination state, producing incorrect displayed data.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 11565,
+    "cacheRead": 0,
+    "output": 49,
+    "reasoning": 0,
+    "ms": 3389
+   },
+   "sandbox": {
+    "criaMs": 5995,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [],
+   "uso": null
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment identifies concrete non-controller translation paths where unloaded fallback dictionaries cause missing translations instead of the expected fallback text, which is an incorrect result rather than an optional improvement.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 2251,
+    "cacheRead": 0,
+    "output": 53,
+    "reasoning": 0,
+    "ms": 3753
+   },
+   "sandbox": {
+    "criaMs": 5502,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete false statement in exported metric help text that misleads operators into interpreting incoming request sizes as returned payload sizes.",
+     "passos": 1
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger test coverage against a hypothetical regression, without identifying any incorrect behavior in the current request-size instrumentation.",
+     "passos": 1
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment identifies concrete numeric truncation that records incorrect latency measurements and distorts histogram bucket counts, rather than an optional style improvement.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 29886,
+    "cacheRead": 0,
+    "output": 136,
+    "reasoning": 0,
+    "ms": 3817
+   },
+   "sandbox": {
+    "criaMs": 6537,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete security bypass: omitting the device identifier allows anonymous authentication despite a full configured device limit.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 6175,
+    "cacheRead": 0,
+    "output": 43,
+    "reasoning": 0,
+    "ms": 3113
+   },
+   "sandbox": {
+    "criaMs": 12511,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger test coverage for legacy writes but identifies no concrete failure in the implementation if the tests remain unchanged.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete false statement in the test name—claiming creation occurs only in unified storage when the exercised path writes to both stores—which misleads readers about the behavior tested.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete false statement in the test description that misleadingly implies Mode3 listing is unimplemented even though List now delegates to storage.",
+     "passos": 1
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment describes concrete write-ordering failures that can leave legacy storage stale or resurrect deleted objects, causing data inconsistency rather than an optional stylistic improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete metrics correctness bug: storage errors are attributed to legacy storage, hiding storage failures and falsely reporting legacy failures and durations.",
+     "passos": 1
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete metrics correctness bug: legacy deletion durations and failures are attributed to storage, producing false storage measurements and omitting legacy measurements.",
+     "passos": 1
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "nit": true,
+     "reason": "The comment requests preserving additional logging fields but identifies no functional failure or incorrect result beyond reduced diagnostic context.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 7,
+    "input": 97306,
+    "cacheRead": 0,
+    "output": 338,
+    "reasoning": 0,
+    "ms": 8526
+   },
+   "sandbox": {
+    "criaMs": 7787,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete concurrency failure in which competing index builds displace an index containing an event, causing subsequent searches to return incomplete results.",
+     "passos": 1
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete concurrent map iteration/write during startup that can cause a data race or fatal crash, rather than an optional style or defensive improvement.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 6830,
+    "cacheRead": 0,
+    "output": 98,
+    "reasoning": 0,
+    "ms": 2503
+   },
+   "sandbox": {
+    "criaMs": 8141,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete user-facing regression where users with delete permission lose the Delete action in the Grafana rule list, rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete user-facing regression: Grafana rules can no longer be paused or resumed from the list because the pause menu item requires an absent ruler rule.",
+     "passos": 1
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete user-facing failure: clicking Silence notifications on Grafana list rows enables state but never displays the silence drawer.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete regression in which federated rules incorrectly receive update/delete abilities after their immutable-group check is dropped.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete incorrect permission result: skipToken still grants Grafana Duplicate ability, causing data-source rules to show Duplicate despite their ruler ability being denied or unsupported.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 61849,
+    "cacheRead": 0,
+    "output": 247,
+    "reasoning": 0,
+    "ms": 6047
+   },
+   "sandbox": {
+    "criaMs": 10290,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete wrong result: client_credentials access tokens encode an unknown grant shortcut, preventing decoding from recovering their actual grant type.",
+     "passos": 1
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete mapping corruption where a duplicate shortcut overwrites its existing owner and causes existing tokens to decode as the wrong grant.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 23698,
+    "cacheRead": 0,
+    "output": 94,
+    "reasoning": 0,
+    "ms": 3436
+   },
+   "sandbox": {
+    "criaMs": 8779,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete failure path where a deletion exception leaves a non-daemon reader running indefinitely, potentially hanging the test process and interfering with teardown.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 2846,
+    "cacheRead": 0,
+    "output": 50,
+    "reasoning": 0,
+    "ms": 7143
+   },
+   "sandbox": {
+    "criaMs": 10344,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete user-visible failure in which validation errors display literal placeholders and a choice expression instead of the attribute name and limits.",
+     "passos": 1
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete validation bypass where forbidden HTML inside a choice branch is removed before verification, causing unsafe markup to pass the check.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 27338,
+    "cacheRead": 0,
+    "output": 94,
+    "reasoning": 0,
+    "ms": 4493
+   },
+   "sandbox": {
+    "criaMs": 6698,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete authorization bypass in which a global view grant overrides a client-specific denial, allowing a delegated administrator to read an explicitly excluded client.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete false-positive test: an earlier forbidden read satisfies the catch, so the test misleadingly reports success without exercising the removal authorization it claims to verify.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete false statement in the Javadocs—claiming void methods return true—which misleads readers about the methods’ denial contract.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 34028,
+    "cacheRead": 0,
+    "output": 155,
+    "reasoning": 0,
+    "ms": 4975
+   },
+   "sandbox": {
+    "criaMs": 5913,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [],
+   "uso": null
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete cache-invalidation failure that causes a hidden identity provider to appear on login after its organization is re-enabled, rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger test coverage without identifying an actual incorrect result in the implementation, and its Stream.empty() example is a hypothetical regression.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete concurrency failure that republishes stale cache results after invalidation, causing subsequent logins to omit newly enabled identity providers.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 23270,
+    "cacheRead": 0,
+    "output": 147,
+    "reasoning": 0,
+    "ms": 3413
+   },
+   "sandbox": {
+    "criaMs": 6562,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete login failure where passkey-only users are treated as configured but receive a password-only page with no usable authentication method.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 10954,
+    "cacheRead": 0,
+    "output": 48,
+    "reasoning": 0,
+    "ms": 3244
+   },
+   "sandbox": {
+    "criaMs": 8933,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "reason": "The comment requests correcting a test case and adding coverage for a hypothetical regression, without identifying any current functional failure.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 6264,
+    "cacheRead": 0,
+    "output": 42,
+    "reasoning": 0,
+    "ms": 4934
+   },
+   "sandbox": {
+    "criaMs": 9117,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete security bypass in which a missing Integration row skips installer ownership verification and allows the pipeline to proceed with a supplied installation ID.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete failure path where a GitHub HTTP or transport error escapes the try block and crashes the installation callback instead of returning the error page.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete localization failure: Django cannot extract the short messages, so users will receive untranslated error messages rather than the intended localized output.",
+     "passos": 1
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "The comment requests restoring test coverage of the missing-installation path but identifies no concrete production failure caused by leaving the test unchanged.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 28803,
+    "cacheRead": 0,
+    "output": 251,
+    "reasoning": 55,
+    "ms": 10703
+   },
+   "sandbox": {
+    "criaMs": 6660,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [],
+   "uso": null
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger test coverage to catch a hypothetical future regression, without identifying an existing production failure caused by ignoring the measurement.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concretely false return-contract docstring that misleads readers into expecting evaluation results rather than dictionary keys when iterating.",
+     "passos": 1
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concretely false TODO that tells readers the stateful abstraction is missing even though the class now inherits it.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 29520,
+    "cacheRead": 0,
+    "output": 138,
+    "reasoning": 0,
+    "ms": 5108
+   },
+   "sandbox": {
+    "criaMs": 8523,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "grupos": [],
+   "uso": null
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure where a SendGrid cancellation error leaves the old booking’s email scheduled without a persisted cancellation flag or cron retry, causing users to receive obsolete reminders.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 9029,
+    "cacheRead": 0,
+    "output": 55,
+    "reasoning": 0,
+    "ms": 3481
+   },
+   "sandbox": {
+    "criaMs": 5424,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete user-visible failure: deleting cache without an onSuccess callback leaves a stale timestamp and delete action displayed because the connectedCalendars query is not invalidated.",
+     "passos": 1
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete Linux failure where GNU sed leaves the old webhook URL unchanged while the script falsely reports success, rather than an optional style improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete user-facing localization failure: hard-coded US date ordering can cause users in other locales to misread the cache's last-update date.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete functional failure: the empty update leaves SelectedCalendar.updatedAt unchanged instead of recording the availability refresh time.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 34548,
+    "cacheRead": 0,
+    "output": 201,
+    "reasoning": 0,
+    "ms": 3533
+   },
+   "sandbox": {
+    "criaMs": 12698,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete validation failure where an unanchored regex allows an attacker-controlled domain through the whitelist or wrongly blocks a domain, rather than an optional stylistic improvement.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 4432,
+    "cacheRead": 0,
+    "output": 55,
+    "reasoning": 0,
+    "ms": 5407
+   },
+   "sandbox": {
+    "criaMs": 4500,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete security vulnerability: state-changing GET requests let an attacker alter an authenticated victim's notification preferences without CSRF protection or confirmation.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete misleading confirmation: it promises notifications will stop even though reducing the level to regular still permits mention and reply notifications.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete functional failure: client-side navigation skips the unsubscribe operation, leaving notifications enabled while the page falsely says they will stop.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 22446,
+    "cacheRead": 0,
+    "output": 144,
+    "reasoning": 0,
+    "ms": 3112
+   },
+   "sandbox": {
+    "criaMs": 5978,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "grupos": [],
+   "uso": null
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete incorrect user-visible result and a failing test caused by string mutation, rather than an optional style improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete security restriction bypass in which anonymous visitors receive website-derived content that should be suppressed, rather than an optional style or defensive improvement.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 5621,
+    "cacheRead": 0,
+    "output": 95,
+    "reasoning": 0,
+    "ms": 3326
+   },
+   "sandbox": {
+    "criaMs": 5573,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong-result bug where timezone conversion wraps override boundaries across midnight and causes valid availability slots to disappear or appear on the wrong day.",
+     "passos": 1
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete correctness bug: reference equality between distinct Dayjs objects fails to detect an unavailable-day override and can incorrectly return availability.",
+     "passos": 1
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete correctness failure: using the slot start for the end-boundary check allows slots that finish outside working hours to pass.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 13498,
+    "cacheRead": 4352,
+    "output": 146,
+    "reasoning": 0,
+    "ms": 63514
+   },
+   "sandbox": {
+    "criaMs": 6445,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete performance regression: enabling multiple flusher processes multiplies redundant cluster-wide Redis requests and serial blocking time on every submission.",
+     "passos": 1
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete false statement in the docstring—one process per shard despite capped, shared-shard processing—that misleads readers about the provided parallelism and isolation.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 14196,
+    "cacheRead": 6912,
+    "output": 104,
+    "reasoning": 0,
+    "ms": 88809
+   },
+   "sandbox": {
+    "criaMs": 9880,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "grupos": [],
+   "uso": null
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong-result bug: repeated interpolation substitutes variable tokens inside literal variable values, causing execution of different query text than the user selected.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 3565,
+    "cacheRead": 0,
+    "output": 50,
+    "reasoning": 0,
+    "ms": 3349
+   },
+   "sandbox": {
+    "criaMs": 9318,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete quadratic allocation cost for the newly supported large batches, causing gigabytes of temporary allocations, GC pressure, and cleanup delays rather than proposing a cost-free micro-optimization.",
+     "passos": 1
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete performance regression: the interval change runs all cleanup jobs ten times as often on every instance, increasing unrelated recurring database and processing work.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 13853,
+    "cacheRead": 0,
+    "output": 133,
+    "reasoning": 22,
+    "ms": 3610
+   },
+   "sandbox": {
+    "criaMs": 6578,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete functional failure: the helper always returns false, causing the guard to reject SQL expressions even when the feature flag is enabled.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 5626,
+    "cacheRead": 0,
+    "output": 49,
+    "reasoning": 0,
+    "ms": 5250
+   },
+   "sandbox": {
+    "criaMs": 7661,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete runtime failure in EC JWK parsing caused by unsupported EC parameter construction and key-factory lookup, rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "reason": "The comment requests a stronger test assertion against a hypothetical decoder regression, without identifying an existing production failure caused by the current code.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 22046,
+    "cacheRead": 0,
+    "output": 95,
+    "reasoning": 0,
+    "ms": 3371
+   },
+   "sandbox": {
+    "criaMs": 5660,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "reason": "The comment requests additional test coverage for the exit code without identifying an existing incorrect exit, so ignoring it does not change the command’s currently correct behavior.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 5380,
+    "cacheRead": 0,
+    "output": 50,
+    "reasoning": 0,
+    "ms": 2802
+   },
+   "sandbox": {
+    "criaMs": 7262,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete security failure in which old local recovery codes remain valid after regeneration through external storage, rather than an optional improvement.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment alleges a concrete security vulnerability—a timing oracle in recovery-code authentication—rather than an optional style or best-practice improvement, even though the provider is test-only.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 19719,
+    "cacheRead": 0,
+    "output": 101,
+    "reasoning": 0,
+    "ms": 4390
+   },
+   "sandbox": {
+    "criaMs": 9305,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete failure: authorized non-member requests dereference a missing member and raise AttributeError even when optimized pagination is not requested.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 3692,
+    "cacheRead": 0,
+    "output": 48,
+    "reasoning": 0,
+    "ms": 3007
+   },
+   "sandbox": {
+    "criaMs": 10272,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong-result bug: ranking groups by unweighted counts can exclude groups with higher weighted counts from the upsampled chart.",
+     "passos": 1
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete query path where checking the wrong dataset skips upsampling and returns incorrect, unweighted error counts.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 16695,
+    "cacheRead": 0,
+    "output": 93,
+    "reasoning": 0,
+    "ms": 4063
+   },
+   "sandbox": {
+    "criaMs": 9035,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "grupos": [
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger test assertions to detect ordering regressions but identifies no concrete failure in production behavior.",
+     "passos": 1
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger concurrency test coverage without identifying a concrete failure in production behavior, so ignoring it leaves a test weakness rather than a demonstrated functional bug.",
+     "passos": 1
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete false-passing test that misses commits of failed items, allowing unprocessed messages to be skipped and data to be lost, rather than merely requesting additional coverage.",
+     "passos": 1
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete shutdown failure in which queued work is abandoned while the test falsely passes, rather than merely requesting additional test coverage.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 46740,
+    "cacheRead": 0,
+    "output": 193,
+    "reasoning": 0,
+    "ms": 5632
+   },
+   "sandbox": {
+    "criaMs": 10952,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete behavioral regression: a configured max_segment_spans of 100 is ignored, allowing a 500-span segment to flush instead of being rejected.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 6219,
+    "cacheRead": 0,
+    "output": 53,
+    "reasoning": 0,
+    "ms": 4600
+   },
+   "sandbox": {
+    "criaMs": 10816,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete functional failure: untyped group resources are excluded from permission collection, causing incorrect user counts and incomplete paginated search results.",
+     "passos": 1
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete false statement in authorization documentation that misleads readers about which distinct permission requireManageMembers checks.",
+     "passos": 1
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete false statement in the API documentation: it describes a Stream even though the method returns a Set, misleading readers about the return type.",
+     "passos": 1
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "The comment requests stronger authorization test coverage but identifies no existing production authorization failure or other concrete harm if the test remains unchanged.",
+     "passos": 1
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 46514,
+    "cacheRead": 0,
+    "output": 188,
+    "reasoning": 0,
+    "ms": 60597
+   },
+   "sandbox": {
+    "criaMs": 6074,
+    "chamadas": 0,
+    "msFerramentas": 0,
+    "porTipo": {}
+   }
+  }
+ }
+}

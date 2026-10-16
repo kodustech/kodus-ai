@@ -1,0 +1,53 @@
+{
+ "caseId": "github-oauth-security-enhancement-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "github-oauth-security-enhancement-sentry#03",
+   "newGroup": null,
+   "reason": "Describes the same predictable OAuth state derived from pipeline view names, allowing account substitution instead of providing per-attempt CSRF protection."
+  },
+  {
+   "id": "S2",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Describes the same unchecked sender metadata lookup that raises KeyError for integrations created without sender metadata."
+  },
+  {
+   "id": "S3",
+   "match": "github-oauth-security-enhancement-sentry#06",
+   "newGroup": null,
+   "reason": "Describes the same missing-Integration branch advancing the pipeline without verifying ownership of the supplied installation ID."
+  },
+  {
+   "id": "S4",
+   "match": "github-oauth-security-enhancement-sentry#05",
+   "newGroup": null,
+   "reason": "Describes the same unguarded token exchange request causing GitHub HTTP or transport failures to surface as unhandled exceptions."
+  },
+  {
+   "id": "S5",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Describes the same unconditional sender/login metadata lookup causing KeyError when an existing integration lacks sender metadata."
+  },
+  {
+   "id": "S6",
+   "match": "github-oauth-security-enhancement-sentry#01",
+   "newGroup": null,
+   "reason": "Describes the same translation extraction failure from translating error_short dynamically while leaving default and call-site literals unmarked."
+  },
+  {
+   "id": "S7",
+   "match": "github-oauth-security-enhancement-sentry#10",
+   "newGroup": null,
+   "reason": "Describes the same incorrect OAuth state in test_installation_not_found, causing the test to pass on state rejection without exercising missing-installation handling."
+  },
+  {
+   "id": "S8",
+   "match": "github-oauth-security-enhancement-sentry#03",
+   "newGroup": null,
+   "reason": "Describes the same static, predictable pipeline signature used as OAuth state instead of a random per-attempt nonce."
+  }
+ ]
+}

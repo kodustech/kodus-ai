@@ -1,0 +1,11 @@
+{
+ "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Both describe the outer header-extra-info component retaining min-width:auto because the styles target its inner wrapper, causing long titles to push navigation outside the header. Both require allowing the actual flex item to shrink."
+  }
+ ]
+}

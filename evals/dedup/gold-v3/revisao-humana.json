@@ -5,7 +5,8 @@
   "deepseek-v4.1-flash",
   "gpt-6.1-sol",
   "sonnet-5.5",
-  "muse-spark-1.3"
+  "muse-spark-1.3",
+  "gpt-6.1-sol@e2b"
  ],
  "classificadores": [
   "claude-opus-5.5",

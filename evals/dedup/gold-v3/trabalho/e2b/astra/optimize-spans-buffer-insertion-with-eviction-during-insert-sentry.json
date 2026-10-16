@@ -1,0 +1,41 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "newGroup": null,
+   "reason": "Matches the unchanged Redis key namespace switching from sets to sorted sets without migration, causing WRONGTYPE failures during insertion and flushing."
+  },
+  {
+   "id": "S2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "newGroup": null,
+   "reason": "Matches default SUM aggregation in ZUNIONSTORE doubling duplicate payload timestamp scores and incorrectly protecting old spans from eviction."
+  },
+  {
+   "id": "S3",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "newGroup": null,
+   "reason": "Matches the incompatible Redis type change under existing buffer keys, causing WRONGTYPE failures during rollout. The additional old-worker incompatibility detail describes the same migration problem."
+  },
+  {
+   "id": "S4",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "newGroup": null,
+   "reason": "Matches ZUNIONSTORE summing duplicate payload timestamp scores, causing replayed old spans to survive eviction ahead of newer spans."
+  },
+  {
+   "id": "S5",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "newGroup": null,
+   "reason": "Matches default SUM aggregation on overlapping sorted sets inflating timestamp scores and breaking oldest-first eviction."
+  },
+  {
+   "id": "S6",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "Matches removal of the flush-time span-count guard leaving max_segment_spans unenforced while Lua uses a hardcoded cap of 1000."
+  }
+ ]
+}

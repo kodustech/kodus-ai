@@ -1,0 +1,53 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#09",
+   "newGroup": null,
+   "reason": "Repeats the claim that unsupported EC parameter construction and ECDSA key-factory lookup break EC JWK parsing through AbstractJWKParser."
+  },
+  {
+   "id": "S2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+   "newGroup": null,
+   "reason": "Describes readSequence accepting a child that crosses the declared sequence boundary and returning successfully with a negative remainder."
+  },
+  {
+   "id": "S3",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+   "newGroup": null,
+   "reason": "Describes the same missing sequence-boundary validation, allowing child encodings to exceed the remaining declared content length."
+  },
+  {
+   "id": "S4",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+   "newGroup": null,
+   "reason": "Describes the same acceptance of child encodings extending beyond the sequence's declared length; the different example does not change the problem."
+  },
+  {
+   "id": "S5",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#11",
+   "newGroup": null,
+   "reason": "Identifies the same self-consistency-only round-trip assertion, which can pass despite corrupted signature values because no independent correctness check is performed."
+  },
+  {
+   "id": "S6",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#10",
+   "newGroup": null,
+   "reason": "Identifies the same default P-256 key generation in every algorithm case, leaving real P-384/P-521 signatures and their encoding sizes untested."
+  },
+  {
+   "id": "S7",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+   "newGroup": null,
+   "reason": "Describes the same readSequence boundary bug: an oversized child makes the remaining length negative without causing rejection."
+  },
+  {
+   "id": "S8",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#10",
+   "newGroup": null,
+   "reason": "Identifies the same use of default EC keys for ES384 and ES512, which only exercises padded P-256 components rather than the intended curves."
+  }
+ ]
+}

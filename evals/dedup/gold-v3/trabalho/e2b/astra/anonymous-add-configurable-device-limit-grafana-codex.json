@@ -1,0 +1,47 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "The cache entry is written before store admission succeeds and remains after rejection, allowing retries to bypass the device limit."
+  },
+  {
+   "id": "S2",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Omitting X-Grafana-Device-Id makes TagDevice return nil, bypassing device-limit enforcement during authentication."
+  },
+  {
+   "id": "S3",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Separate count and upsert operations let concurrent new devices pass the capacity check and exceed the limit."
+  },
+  {
+   "id": "S4",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "A rejected device retains its prematurely written cache entry, so a retry authenticates without enforcing the limit."
+  },
+  {
+   "id": "S5",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "The non-atomic count-and-insert admission decision allows concurrent requests to consume the same remaining capacity."
+  },
+  {
+   "id": "S6",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Caching before a successful store write lets rejected or in-flight admissions appear successful to subsequent requests."
+  },
+  {
+   "id": "S7",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "The count and subsequent upsert lack serialization, allowing concurrent admissions to exceed the configured device limit."
+  }
+ ]
+}

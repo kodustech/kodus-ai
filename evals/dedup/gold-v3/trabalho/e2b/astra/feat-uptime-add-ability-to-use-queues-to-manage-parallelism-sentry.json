@@ -1,0 +1,95 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "The factory reuses a pool shut down by the previous strategy, causing submissions after rebalance to fail and unprocessed messages to be marked complete."
+  },
+  {
+   "id": "S2",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "newGroup": null,
+   "reason": "Shutdown stops workers before accepted work drains and stops the commit thread before final completed offsets can be committed."
+  },
+  {
+   "id": "S3",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Unbounded worker queues and unconditional submission provide no backpressure, allowing queued work to exhaust memory."
+  },
+  {
+   "id": "S4",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Replacement strategies receive the same permanently shut-down factory pool, allowing failed submissions to be committed without processing."
+  },
+  {
+   "id": "S5",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "newGroup": null,
+   "reason": "The comment identifies unconditional completion of failed processing as contradicting the successful-processing-only commit guarantee. Its suggested documentation fix does not change the shared problem."
+  },
+  {
+   "id": "S6",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "The documented backpressure guarantee contradicts the unbounded queues and absence of capacity checks or rejection."
+  },
+  {
+   "id": "S7",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "newGroup": null,
+   "reason": "The worker completes offsets in finally after processing exceptions, allowing failed results to be committed and permanently skipped."
+  },
+  {
+   "id": "S8",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Closing a strategy destroys the factory-owned shared pool, which subsequent strategies reuse, causing unprocessed submissions to be marked complete."
+  },
+  {
+   "id": "S9",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#17",
+   "newGroup": null,
+   "reason": "The ordering test uses identical results and checks only their count, so reversed processing would pass."
+  },
+  {
+   "id": "S10",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#16",
+   "newGroup": null,
+   "reason": "The concurrency test checks only completion and group coverage, so a serial implementation would pass."
+  },
+  {
+   "id": "S11",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#05",
+   "newGroup": null,
+   "reason": "The test checks for absent commits after only 0.2 seconds, before the one-second commit loop can expose the erroneous commit."
+  },
+  {
+   "id": "S12",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#18",
+   "newGroup": null,
+   "reason": "The shutdown test only checks that the factory cleared its pool reference, which does not establish that work drained or workers stopped."
+  },
+  {
+   "id": "S13",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "newGroup": null,
+   "reason": "Unconditional complete_offset in finally makes failed processing committable, permanently skipping failed results."
+  },
+  {
+   "id": "S14",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "The factory hands replacement strategies the pool destroyed by the previous strategy, allowing failed submissions to be committed without processing."
+  },
+  {
+   "id": "S15",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "newGroup": null,
+   "reason": "Setting the worker shutdown flag before draining causes workers to exit with accepted work still queued, defeating graceful shutdown."
+  }
+ ]
+}
