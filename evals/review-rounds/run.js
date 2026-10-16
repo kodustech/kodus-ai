@@ -41,9 +41,14 @@ for (const p of [
         break;
     }
 }
-// --judge, read before the judge module reads JUDGE_MODEL.
+// --judge, read before the judge module reads JUDGE_MODEL. The pinned judge
+// takes its own provider's key: JUDGE_API_KEY, which wins over any other
+// (recall-judge.js loadKeyForModel), is the key of the job's default judge.
 const judgeArg = process.argv.find((a) => a.startsWith('--judge='));
-if (judgeArg) process.env.JUDGE_MODEL = judgeArg.slice('--judge='.length);
+if (judgeArg) {
+    process.env.JUDGE_MODEL = judgeArg.slice('--judge='.length);
+    delete process.env.JUDGE_API_KEY;
+}
 if (!process.env.JUDGE_MODEL) {
     process.env.JUDGE_MODEL = 'gpt-5.6-luna';
     process.env.JUDGE_REASONING_EFFORT =

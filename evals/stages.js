@@ -339,6 +339,22 @@ const STAGES = [
         set: 'conversations where someone replies in a Kody thread without @kody',
         note: 'cases.json in the nightly (evals/nightly-evals.js); the real replies of repo-cases.json run by hand',
     },
+    {
+        id: 'conversation',
+        name: 'Conversation replies',
+        group: 'Conversation with Kody',
+        label: 'Answers a developer in a PR thread from the code: a claimed fix, a decline, a question',
+        pipeline: null,
+        eval: 'evals/conversation',
+        model: 'real',
+        wiring: ['conversation'],
+        nightly: 'shared',
+        friday: 'conversation',
+        metric: 'of reply checks right',
+        set: 'invented threads where the developer is right or wrong about the code, in English and Portuguese',
+        caveat: 'A judge reads whether the reply asserts what the code shows (assertsClaim); writes through MCP are not covered.',
+        note: 'every PR against the scripted model; nightly on the real model when the agent or its cases change',
+    },
 ];
 
 // Pipeline stages that do not change what Kody posts: they gate, configure,

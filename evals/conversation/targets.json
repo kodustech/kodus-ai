@@ -1,0 +1,12 @@
+{
+    "__doc": [
+        "Floors per model for the share of reply checks right (run.js --gate), as ratios. A floor holds only under the judge that set it: gpt-5.6-luna at reasoning effort low, the nightly's (JUDGE_MODEL), reading assertsClaim in evals/investigation/recall-judge.js.",
+        "eval-fake (the wiring smoke, every PR): the scripted reply asserts nothing and declares no action, so only the no-action and English checks pass. Deterministic. floor = observed.",
+        "deepseek-v4-flash@fireworks (the nightly model): calibrated 2026-10-16 from 2 local runs on the branch's base (main 4b5c881cd's conversation agent), 24 and 24 of 24, replies read by hand. A binomial SE is 0 at 100%, so the floor leaves room for 2 failed checks of 24. With the sandbox tools removed (the agent cannot read the code) the same run scored 17 of 24: 7 of the 8 cases went wrong.",
+        "RATCHET: a PR that adds cases, changes the judge or moves the value on purpose recalibrates here in the same PR, with its runs as evidence."
+    ],
+    "models": {
+        "eval-fake": { "floor": 0.583, "observed": 0.5833 },
+        "deepseek-v4-flash@fireworks": { "floor": 0.91, "observed": 1 }
+    }
+}
