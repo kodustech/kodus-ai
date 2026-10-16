@@ -472,9 +472,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         file: { filename: path },
                         pullRequest: { head: { ref }, base: { ref } },
                     });
-                const raw = response?.data?.content;
-                if (!raw) return null;
-                return response?.data?.encoding === 'base64'
+                // Forgejo returns the file flat and already decoded; the
+                // other providers wrap it in `data`.
+                const file = response?.data ?? response;
+                const raw = file?.content;
+                if (typeof raw !== 'string' || !raw) return null;
+                return file?.encoding === 'base64'
                     ? Buffer.from(raw, 'base64').toString('utf-8')
                     : raw;
             },
@@ -484,16 +487,18 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             (sum, f) => sum + Buffer.byteLength(f.content),
             0,
         );
-        this.logger[result.error ? 'warn' : 'log']({
-            message: `[repo-instructions] PR#${prNumber}: indexed=${result.indexedCount} listed=${result.files.length} dropped=${result.dropped.length} bytes=${bytes} truncated=${result.truncated}${result.error ? ` error=${result.error}` : ''}`,
+        const unreadable = result.unreadable ?? [];
+        this.logger[result.error || unreadable.length ? 'warn' : 'log']({
+            message: `[repo-instructions] PR#${prNumber}: indexed=${result.indexedCount} listed=${result.files.length} dropped=${result.dropped.length} unreadable=${unreadable.length} bytes=${bytes} truncated=${result.truncated}${result.error ? ` error=${result.error}` : ''}`,
             context: this.stageName,
             metadata: {
                 ...logMetadata,
                 ref,
                 durationMs: Date.now() - startedAt,
                 indexed: result.indexedCount,
-                inlined: result.files.map((f) => f.path),
+                listed: result.files.map((f) => f.path),
                 dropped: result.dropped,
+                unreadable,
                 bytes,
                 truncated: result.truncated,
                 error: result.error,

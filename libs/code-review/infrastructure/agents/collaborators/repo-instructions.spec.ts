@@ -269,5 +269,48 @@ describe('collectRepoInstructions', () => {
         });
 
         expect(result.files.map((f) => f.path)).toEqual(['CLAUDE.md']);
+        expect(result.unreadable).toEqual(['AGENTS.md: 404']);
+    });
+
+    it('stops reading once the file budget is full and lists the rest as dropped', async () => {
+        const map: Record<string, string> = {};
+        for (let i = 0; i < REPO_INSTRUCTIONS_LIMITS.maxFiles + 3; i++) {
+            map[`pkg${i}/AGENTS.md`] = 'Use the logger.';
+        }
+        const repo = files(map);
+
+        const result = await collectRepoInstructions({
+            ...repo,
+            changedFiles: Object.keys(map).map((p) =>
+                p.replace('AGENTS.md', 'a.ts'),
+            ),
+        });
+
+        expect(result.files).toHaveLength(REPO_INSTRUCTIONS_LIMITS.maxFiles);
+        expect(result.dropped).toHaveLength(3);
+        expect(repo.readFile).toHaveBeenCalledTimes(
+            REPO_INSTRUCTIONS_LIMITS.maxFiles,
+        );
+    });
+
+    it('stops reading once the byte budget is spent', async () => {
+        const map: Record<string, string> = {};
+        for (let i = 0; i < 4; i++) {
+            map[`pkg${i}/AGENTS.md`] = 'y'.repeat(
+                REPO_INSTRUCTIONS_LIMITS.maxBytesPerFile,
+            );
+        }
+        const repo = files(map);
+
+        const result = await collectRepoInstructions({
+            ...repo,
+            changedFiles: Object.keys(map).map((p) =>
+                p.replace('AGENTS.md', 'a.ts'),
+            ),
+        });
+
+        expect(result.files).toHaveLength(3);
+        expect(result.dropped).toEqual(['pkg3/AGENTS.md']);
+        expect(repo.readFile).toHaveBeenCalledTimes(3);
     });
 });

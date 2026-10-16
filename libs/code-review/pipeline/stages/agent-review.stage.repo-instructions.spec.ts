@@ -94,6 +94,68 @@ describe('AgentReviewStage — repo instructions source branch', () => {
         ).not.toHaveBeenCalled();
     });
 
+    it.each([
+        [
+            'wrapped in data (GitHub, GitLab, Azure)',
+            {
+                data: {
+                    content: Buffer.from('Amounts are integer cents.').toString(
+                        'base64',
+                    ),
+                    encoding: 'base64',
+                },
+            },
+        ],
+        [
+            'flat, already decoded (Forgejo)',
+            { content: 'Amounts are integer cents.', encoding: 'utf-8' },
+        ],
+    ])('reads a file whose content comes back %s', async (_label, response) => {
+        const { stage, codeManagementService } = makeStage();
+        codeManagementService.getRepositoryContentFile.mockResolvedValue(
+            response,
+        );
+
+        const result = await (stage as any).resolveRepoInstructions(
+            context,
+            [{ filename: 'src/a.ts' }],
+            { kind: 'full' },
+            7,
+        );
+
+        expect(result.files[0].content).toBe('Amounts are integer cents.');
+    });
+
+    it('warns with the files it could not read', async () => {
+        const { stage, codeManagementService } = makeStage();
+        codeManagementService.getRepositoryAllFiles.mockResolvedValue([
+            { path: 'CLAUDE.md' },
+            { path: 'AGENTS.md' },
+        ]);
+        codeManagementService.getRepositoryContentFile.mockImplementation(
+            async ({ file }: { file: { filename: string } }) => {
+                if (file.filename === 'AGENTS.md') throw new Error('502');
+                return { data: { content: 'Use pnpm.' } };
+            },
+        );
+        const warn = jest.spyOn((stage as any).logger, 'warn');
+
+        await (stage as any).resolveRepoInstructions(
+            context,
+            [{ filename: 'src/a.ts' }],
+            { kind: 'full' },
+            7,
+        );
+
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    unreadable: ['AGENTS.md: 502'],
+                }),
+            }),
+        );
+    });
+
     it('reads nothing when the target branch is unknown', async () => {
         const { stage, codeManagementService } = makeStage();
 

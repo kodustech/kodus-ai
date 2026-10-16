@@ -26,7 +26,7 @@ export const REPO_INSTRUCTIONS_LIMITS = {
     maxFiles: 8,
     maxBytesPerFile: 24_000,
     maxTotalBytes: 64_000,
-    /** Below this, a file that would overflow the total is dropped, not cut. */
+    /** With less than this left of the total, no further file is read. */
     minUsefulBytes: 1_000,
     /** Paths listed (not inlined) so the agent knows what else exists. */
     maxOtherFiles: 30,
@@ -44,8 +44,10 @@ export interface RepoInstructionsContext {
     files: RepoInstructionFile[];
     /** Instruction files that exist but do not govern this change. */
     otherFiles: string[];
-    /** Governing files left out by the file or byte budget. */
+    /** Candidates left out, unread, once the file or byte budget was spent. */
     dropped: string[];
+    /** Candidates whose read failed, as `path: reason`. */
+    unreadable?: string[];
     /** True when any governing content was cut or left out. */
     truncated: boolean;
     indexedCount: number;
@@ -56,6 +58,7 @@ const EMPTY: RepoInstructionsContext = {
     files: [],
     otherFiles: [],
     dropped: [],
+    unreadable: [],
     truncated: false,
     indexedCount: 0,
 };
@@ -215,7 +218,8 @@ const errorMessage = (error: unknown): string =>
 /**
  * Reads the coding-agent instruction files that govern `changedFiles`, within
  * `REPO_INSTRUCTIONS_LIMITS`. Never throws: a git host failure yields an empty
- * result with `error` set, and a file that cannot be read is skipped.
+ * result with `error` set, and a file that cannot be read is skipped and
+ * listed in `unreadable`. Nothing is read once the budget is spent.
  */
 export async function collectRepoInstructions(params: {
     listFiles: () => Promise<string[]>;
@@ -237,14 +241,24 @@ export async function collectRepoInstructions(params: {
 
     const files: RepoInstructionFile[] = [];
     const dropped: string[] = [];
+    const unreadable: string[] = [];
     let total = 0;
     let truncated = false;
 
     for (const path of candidates) {
+        if (
+            files.length >= limits.maxFiles ||
+            limits.maxTotalBytes - total < limits.minUsefulBytes
+        ) {
+            dropped.push(path);
+            continue;
+        }
+
         let content: string | null;
         try {
             content = await params.readFile(path);
-        } catch {
+        } catch (error) {
+            unreadable.push(`${path}: ${errorMessage(error)}`);
             continue;
         }
         if (!content?.trim()) continue;
@@ -257,19 +271,10 @@ export async function collectRepoInstructions(params: {
             continue;
         }
 
-        if (files.length >= limits.maxFiles) {
-            dropped.push(path);
-            continue;
-        }
-
         let text = truncateToBytes(content.trim(), limits.maxBytesPerFile);
         let cut = text.length < content.trim().length;
         const remaining = limits.maxTotalBytes - total;
         if (Buffer.byteLength(text) > remaining) {
-            if (remaining < limits.minUsefulBytes) {
-                dropped.push(path);
-                continue;
-            }
             text = truncateToBytes(text, remaining);
             cut = true;
         }
@@ -291,6 +296,7 @@ export async function collectRepoInstructions(params: {
             .filter((p) => !used.has(p))
             .slice(0, limits.maxOtherFiles),
         dropped,
+        unreadable,
         truncated: truncated || dropped.length > 0,
         indexedCount: prose.length,
     };
