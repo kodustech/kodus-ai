@@ -36,7 +36,9 @@ jest.mock('next/navigation', () => mockNavigation);
 
 // Local installs can carry separate Next copies at the root and in apps/web.
 jest.doMock(
-    require.resolve('next/navigation', { paths: [`${process.cwd()}/apps/web`] }),
+    require.resolve('next/navigation', {
+        paths: [`${process.cwd()}/apps/web`],
+    }),
     () => mockNavigation,
 );
 jest.mock('nuqs', () => ({
@@ -56,6 +58,10 @@ jest.mock('@services/parameters/hooks', () => ({
 }));
 jest.mock('@services/parameters/fetch', () => ({
     createOrUpdateCodeReviewParameter: jest.fn(),
+}));
+jest.mock('@components/ui/magic-modal', () => ({
+    ...jest.requireActual('@components/ui/magic-modal'),
+    magicModal: { show: jest.fn() },
 }));
 jest.mock('@services/permissions/hooks', () => ({ usePermission: () => true }));
 jest.mock('src/core/providers/selected-team-context', () => ({
@@ -94,8 +100,14 @@ jest.mock('src/core/layout/sidebar/plan-status', () => ({
     SidebarPlanStatus: () => null,
 }));
 jest.mock(
-    '../../../apps/web/src/app/(app)/settings/_components/copy-settings-modal',
-    () => ({ AddRepoModal: () => null }),
+    '../../../apps/web/src/app/(app)/settings/_components/directory-scope-modal',
+    () => ({
+        DirectoryScopeModal: ({
+            repository,
+        }: {
+            repository: { name: string };
+        }) => <p>Directories for {repository.name}</p>,
+    }),
 );
 jest.mock(
     '../../../apps/web/src/app/(app)/settings/_components/kodus-config-file-status',
@@ -114,11 +126,20 @@ jest.mock(
     }),
 );
 
-const { SettingsLayout } = require('../../../apps/web/src/app/(app)/settings/_components/_layout');
-const { useCodeReviewConfig } = require('../../../apps/web/src/app/(app)/settings/_components/context');
+const {
+    SettingsLayout,
+} = require('../../../apps/web/src/app/(app)/settings/_components/_layout');
+const {
+    useCodeReviewConfig,
+} = require('../../../apps/web/src/app/(app)/settings/_components/context');
 const { AppSidebar } = require('../../../apps/web/src/core/layout/sidebar');
-const { ScopeToolsProvider } = require('../../../apps/web/src/core/layout/sidebar/scope-tools');
-const { createOrUpdateCodeReviewParameter } = require('@services/parameters/fetch');
+const {
+    ScopeToolsProvider,
+} = require('../../../apps/web/src/core/layout/sidebar/scope-tools');
+const {
+    createOrUpdateCodeReviewParameter,
+} = require('@services/parameters/fetch');
+const { magicModal } = require('@components/ui/magic-modal');
 
 const configs = { automatedReviewActive: { value: true, level: 'global' } };
 const configValue = {
@@ -191,6 +212,12 @@ it('lists and opens repositories inheriting Global without creating configuratio
     const inherited = screen.getByRole('option', {
         name: 'app Inherits Global',
     });
+    expect(
+        screen.queryByRole('button', { name: 'Add repository configuration' }),
+    ).not.toBeInTheDocument();
+    expect(
+        screen.queryByRole('button', { name: 'Add directory scope' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'InfraScope' })).toBeVisible();
     expect(
         screen.getByRole('option', { name: 'monorepo Inherits Global' }),
@@ -208,6 +235,26 @@ it('lists and opens repositories inheriting Global without creating configuratio
     expect(
         screen.queryByRole('button', { name: 'Delete configuration' }),
     ).not.toBeInTheDocument();
+    expect(createOrUpdateCodeReviewParameter).not.toHaveBeenCalled();
+});
+
+it('offers directory grouping only for the current repository without creating root settings', () => {
+    mockPathname = '/settings/code-review/inherited/general';
+    render(<Harness />);
+    fireEvent.click(
+        screen.getByRole('button', {
+            name: 'Settings scope: app. Change scope',
+        }),
+    );
+    expect(
+        screen.queryByRole('button', { name: 'Add repository configuration' }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+        screen.getByRole('button', { name: 'Add directory scope' }),
+    );
+    const openModal = magicModal.show.mock.calls[0][0];
+    render(openModal());
+    expect(screen.getByText('Directories for app')).toBeVisible();
     expect(createOrUpdateCodeReviewParameter).not.toHaveBeenCalled();
 });
 

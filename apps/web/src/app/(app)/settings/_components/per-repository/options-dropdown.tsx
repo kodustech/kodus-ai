@@ -8,14 +8,12 @@ import {
     DropdownMenuTrigger,
 } from "@components/ui/dropdown-menu";
 import { magicModal } from "@components/ui/magic-modal";
-import { useSuspenseGetCodeReviewParameter } from "@services/parameters/hooks";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { EllipsisIcon, FolderPenIcon, TrashIcon } from "lucide-react";
-import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
 import type { CodeReviewRepositoryConfig } from "../../code-review/_types";
-import { AddRepoModal } from "../copy-settings-modal";
+import { DirectoryScopeModal } from "../directory-scope-modal";
 import { DeleteRepoConfigModal } from "./delete-config-modal";
 
 export const SidebarRepositoryOrDirectoryDropdown = (props: {
@@ -25,8 +23,6 @@ export const SidebarRepositoryOrDirectoryDropdown = (props: {
         "id" | "name" | "folders"
     >;
 }) => {
-    const { teamId } = useSelectedTeamId();
-    const { configValue } = useSuspenseGetCodeReviewParameter(teamId);
     const canDelete = usePermission(
         Action.Delete,
         ResourceType.CodeReviewSettings,
@@ -52,13 +48,10 @@ export const SidebarRepositoryOrDirectoryDropdown = (props: {
                         disabled={!canUpdate}
                         onClick={() => {
                             magicModal.show(() => (
-                                <AddRepoModal
-                                    repositories={
-                                        configValue?.repositories ?? []
-                                    }
+                                <DirectoryScopeModal
+                                    repository={props.repository}
                                     editGroup={{
-                                        repositoryId: props.repository.id,
-                                        directoryId: props.directory!.id,
+                                        id: props.directory!.id,
                                         initialPaths:
                                             props.directory!.folders?.map(
                                                 (f) => f.path,
