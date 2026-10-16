@@ -57,7 +57,8 @@ describe('agent-review.stage — discarded suggestions carry a delivery status',
         // the new one before updating the count. 7: issue #1833's publication
         // gate no longer discards — it strips `improvedCode` and keeps the
         // suggestion, so it has no `allDiscarded.push` site to guard here.
-        expect(discardBlocks()).toHaveLength(7);
+        // 8: #2097's repeat check discards what an earlier comment raised.
+        expect(discardBlocks()).toHaveLength(8);
     });
 
     it.each(discardBlocks().map((b, i) => [i, b] as const))(

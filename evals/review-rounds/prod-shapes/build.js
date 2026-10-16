@@ -75,6 +75,15 @@ function fillers(count, start) {
     });
 }
 
+// The code the earlier comment pointed at, as production stores it with the
+// suggestion (`existingCode`): its lines in the version before this diff.
+function earlierCode(spec) {
+    const text = spec.base?.[spec.earlier.file];
+    if (!text) return undefined;
+    const [start, end] = spec.earlier.lines;
+    return text.split('\n').slice(start - 1, end).join('\n') || undefined;
+}
+
 function history(spec) {
     if (!spec.earlier) return fillers(Math.max(0, (spec.historySize || 1) - 1), DECIDED_AT);
     const e = spec.earlier;
@@ -84,6 +93,7 @@ function history(spec) {
         relevantLinesStart: e.lines[0],
         relevantLinesEnd: e.lines[1],
         suggestionContent: e.text,
+        existingCode: earlierCode(spec),
         label: e.label,
         ...(e.label === 'kody_rules' && spec.rule ? { brokenKodyRulesIds: [spec.rule.uuid] } : {}),
         outcome: e.status,

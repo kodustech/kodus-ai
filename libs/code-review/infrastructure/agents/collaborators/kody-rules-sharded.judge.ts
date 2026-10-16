@@ -369,9 +369,9 @@ Rules of engagement:
 - One entry PER violating line PER rule; do not collapse repeats. Downstream dedup folds repeats into one comment.
 - Identify the violated rule by its number — the [n] shown before each rule. Put that number in "ruleId". Never invent a number; if a real issue matches no listed rule, DROP it.
 - If nothing violates, return an empty list.
-- If a <PreviousReviewDecisions> block is present: do not flag the reverse of an entry whose outcome is "implemented"/"partially_implemented" — unless the diff shows concrete evidence that specific decision was reverted or is still wrong. And never re-flag what an entry already flagged — whatever its outcome, however you would word it, wherever the code moved, also when the developer changed the code and it still looks unsolved — judge by the failure the entry described, not by the cause you would name: that comment is already on the pull request. There is no separate check after you decide — you ARE the only judgment this path gets.`;
+- If a <PreviousReviewDecisions> block is present: do not flag the reverse of an entry whose outcome is "implemented"/"partially_implemented" — unless the diff shows concrete evidence that specific decision was reverted or is still wrong. Report every violation you see, also one an entry already flagged: a later step compares your findings with those entries and drops what is already on the pull request.`;
 
-export const SHARD_PR_SYSTEM_PROMPT = `You evaluate PULL-REQUEST-level team rules against a PR: its title, description, the list of changed files, and the FULL DIFF of every changed file. Judge the PR as a whole — cross-file conditions (e.g. "one migration = one logical change", "index added to a table that already existed before this PR") are exactly what these rules are about, so reason across the whole diff. Identify each violated rule by its number — the [n] shown before each rule — and put that number in "ruleId"; never invent one. Return only real violations. If a <PreviousReviewDecisions> block is present: do not flag the reverse of an entry whose outcome is "implemented"/"partially_implemented" — unless the diff shows concrete evidence that specific decision was reverted or is still wrong — and never re-flag what an entry already flagged, whatever its outcome or wording: that comment is already on the pull request.`;
+export const SHARD_PR_SYSTEM_PROMPT = `You evaluate PULL-REQUEST-level team rules against a PR: its title, description, the list of changed files, and the FULL DIFF of every changed file. Judge the PR as a whole — cross-file conditions (e.g. "one migration = one logical change", "index added to a table that already existed before this PR") are exactly what these rules are about, so reason across the whole diff. Identify each violated rule by its number — the [n] shown before each rule — and put that number in "ruleId"; never invent one. Return only real violations. If a <PreviousReviewDecisions> block is present: do not flag the reverse of an entry whose outcome is "implemented"/"partially_implemented" — unless the diff shows concrete evidence that specific decision was reverted or is still wrong. Report every violation you see, also one an entry already flagged: a later step compares your findings with those entries and drops what is already on the pull request.`;
 
 function ruleBlock(rules: Array<Partial<IKodyRule>>): string {
     return rules
@@ -674,6 +674,7 @@ function fileShardUser(
     const previousDecisionsSection = formatPreviousDecisions(
         previousDecisions,
         ruleTitleByUuid,
+        { repeatsCheckedLater: true },
     );
     return [
         `<Rules>`,
@@ -755,6 +756,7 @@ function prShardUser(
     const previousDecisionsSection = formatPreviousDecisions(
         previousDecisions,
         ruleTitleByUuid,
+        { repeatsCheckedLater: true },
     );
     let used = 0;
     const diffs: string[] = [];

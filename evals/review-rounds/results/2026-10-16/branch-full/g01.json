@@ -1,0 +1,2587 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "ef8ace6e81c2ad04800d9543336439a8767fa987",
+    "sourceDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "startedAt": "2026-10-15T22:56:31.137Z",
+  "updatedAt": "2026-10-15T23:20:53.364Z",
+  "complete": true,
+  "selectedCases": [
+    "R2-consequence-status-implemented",
+    "R10-kodus2044-reversal",
+    "R15-repost-stored-implemented",
+    "P04-rule-local-path-doc-reworded",
+    "P14-rule-mock-undefined-moved",
+    "P24-create-mode-section-hidden",
+    "P34-rule-loading-default-new-component"
+  ],
+  "casesSourceDigest": "49611b97af2dad3bd7d46182d320d4bd955be1047960c2206e6c9e86d25b0fca",
+  "summary": {
+    "measured": 35,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 20,
+        "violations": 2,
+        "rate": 0.1
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 1,
+        "violations": 1,
+        "rate": 1
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 15,
+        "violations": 4,
+        "rate": 0.267
+      },
+      "index-reference (#2039)": {
+        "n": 22,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R2-consequence-status-implemented · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 1
+      },
+      "R10-kodus2044-reversal · unresolved-team-bypass [if_delivered_linked, proposed]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "R15-repost-stored-implemented · await-sleep-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P04-rule-local-path-doc-reworded · local-path-doc-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P04-rule-local-path-doc-reworded · local-path-doc-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P14-rule-mock-undefined-moved · mock-undefined-repeat [not_deliver]": {
+        "pass": 3,
+        "n": 5,
+        "delivered": 2
+      },
+      "P24-create-mode-section-hidden · billing-hidden-on-create-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P34-rule-loading-default-new-component · next-invoice-default-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "eval": "review-rounds",
+  "question": "When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, revisions linked, nothing already sent posted again?",
+  "metric": {
+    "name": "of claims handled right",
+    "value": 0.825,
+    "floor": 0.8,
+    "baseline": 0.903
+  },
+  "runs": 5,
+  "tokens": {
+    "in": 3964713,
+    "out": 114207,
+    "cacheRead": 3476224,
+    "cacheWrite": 0
+  },
+  "infra": {
+    "errored": 0,
+    "total": 35
+  },
+  "cases": [
+    {
+      "id": "R2-consequence-status-implemented",
+      "checks": "resubmit-double-charge: posted and linked",
+      "hits": 0,
+      "total": 5,
+      "detail": [
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "id": "R10-kodus2044-reversal",
+      "checks": "unresolved-team-bypass: linked if posted",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "unresolved-team-bypass",
+          "ok": true
+        },
+        {
+          "what": "unresolved-team-bypass",
+          "ok": true
+        },
+        {
+          "what": "unresolved-team-bypass",
+          "ok": true
+        },
+        {
+          "what": "unresolved-team-bypass",
+          "ok": true
+        },
+        {
+          "what": "unresolved-team-bypass",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "R15-repost-stored-implemented",
+      "checks": "await-sleep-repeat: not posted",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "await-sleep-repeat",
+          "ok": true
+        },
+        {
+          "what": "await-sleep-repeat",
+          "ok": true
+        },
+        {
+          "what": "await-sleep-repeat",
+          "ok": true
+        },
+        {
+          "what": "await-sleep-repeat",
+          "ok": true
+        },
+        {
+          "what": "await-sleep-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P04-rule-local-path-doc-reworded",
+      "checks": "Kody Rule against local absolute paths, on a runbook line; the developer reworded the line and kept the path; stored implemented; 36 earlier comments",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "local-path-doc-repeat",
+          "ok": true
+        },
+        {
+          "what": "local-path-doc-new-site",
+          "ok": true
+        },
+        {
+          "what": "local-path-doc-repeat",
+          "ok": true
+        },
+        {
+          "what": "local-path-doc-new-site",
+          "ok": true
+        },
+        {
+          "what": "local-path-doc-repeat",
+          "ok": true
+        },
+        {
+          "what": "local-path-doc-new-site",
+          "ok": true
+        },
+        {
+          "what": "local-path-doc-repeat",
+          "ok": true
+        },
+        {
+          "what": "local-path-doc-new-site",
+          "ok": true
+        },
+        {
+          "what": "local-path-doc-repeat",
+          "ok": true
+        },
+        {
+          "what": "local-path-doc-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P14-rule-mock-undefined-moved",
+      "checks": "Kody Rule requiring null, not undefined, in mock API responses; the developer renamed the flagged field keeping undefined while new mocks were inserted above it; stored not_implemented; 40 earlier comments",
+      "hits": 3,
+      "total": 5,
+      "detail": [
+        {
+          "what": "mock-undefined-repeat",
+          "ok": true
+        },
+        {
+          "what": "mock-undefined-repeat",
+          "ok": true
+        },
+        {
+          "what": "mock-undefined-repeat",
+          "ok": false
+        },
+        {
+          "what": "mock-undefined-repeat",
+          "ok": true
+        },
+        {
+          "what": "mock-undefined-repeat",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "id": "P24-create-mode-section-hidden",
+      "checks": "Bug finder; a form section never renders when creating a record because its condition needs an id that exists only after save; the developer changed the condition but create mode still hides it; stored implemented; 1 earlier comment",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "billing-hidden-on-create-repeat",
+          "ok": true
+        },
+        {
+          "what": "billing-hidden-on-create-repeat",
+          "ok": true
+        },
+        {
+          "what": "billing-hidden-on-create-repeat",
+          "ok": true
+        },
+        {
+          "what": "billing-hidden-on-create-repeat",
+          "ok": true
+        },
+        {
+          "what": "billing-hidden-on-create-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P34-rule-loading-default-new-component",
+      "checks": "Kody Rule broken at a new component in the same file (new in the PR); the earlier comment covered the other component, stored partially_implemented; 3 earlier comments",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "next-invoice-default-new-site",
+          "ok": true
+        },
+        {
+          "what": "next-invoice-default-new-site",
+          "ok": true
+        },
+        {
+          "what": "next-invoice-default-new-site",
+          "ok": true
+        },
+        {
+          "what": "next-invoice-default-new-site",
+          "ok": true
+        },
+        {
+          "what": "next-invoice-default-new-site",
+          "ok": true
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 58040,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39819,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 79274,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged now makes the resend branch in pollCharge reachable, and that branch calls the explicitly non-idempotent gw.submit(charge.payload) with no attempt limit while discarding the returned new charge. WHY: the comment in poller.ts describes NotReadyError as 'the gateway never received it', but errors.ts now defines it as 'the gateway has the charge but has not settled it yet (transient)' — so a charge that is merely pending is treated as never-received and resubmitted, creating a duplicate charge on every poll tick (gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge'), while the new charge returned by submit is dropped and the stored charge.payload is never reconciled, orphaning it. HOW: only resubmit when the gateway genuinely did not receive the charge, and bound the retries, e.g. distinguish a transient 'pending' status from a 'not received' status and guard resubmission with an attempt counter/idempotency key in pollCharge rather than treating every NotReadyError as a resend.",
+          "keep": true,
+          "rationale": "Confirmed: status.ts propagates NotReadyError unchanged, making pollCharge's resend branch (poller.ts:13-16) reachable. That branch calls gw.submit(charge.payload), documented in gateway.ts:3 as NOT idempotent, with no attempt limit, and discards the returned new charge. errors.ts:1 defines NotReadyError as 'has the charge but has not settled yet (transient)', which contradicts poller.ts:7's assumption that it means 'never received it', so a merely-pending charge is resubmitted every tick, creating duplicate charges. This is a distinct failure from the prior round-a-propagate decision (which was about misclassifying transient as terminal/failed — the opposite failure); this finding is the new duplicate-charge consequence introduced by applying that fix, so it is a legitimate revision, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|submit\\(|pollCharge|resend"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "text": "Propagating `NotReadyError` unchanged makes the resend branch in `pollCharge` reachable, so a merely pending charge is treated as never received and resubmitted via the explicitly non-idempotent `gw.submit(charge.payload)` on every poll tick with no attempt limit, duplicating charges while the returned new charge is dropped and the stored `charge.payload` is never reconciled, orphaning it (the `poller.ts` comment says 'the gateway never received it', but `errors.ts` defines it as transient pending, and `gateway.ts:3` documents submit as 'NOT idempotent: every call creates a new charge'). Only resubmit when the gateway genuinely did not receive the charge and bound retries, e.g. distinguish a transient pending status from a not-received status and guard resubmission with an attempt counter or idempotency key in `pollCharge` rather than treating every `NotReadyError` as a resend."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26841,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26934,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 60141,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 29,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 108005,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: The new `createMemoryRule` refusal branch returns `data` with only `title`, `action`, `requiresApproval`, `message` and `link`, but this tool's `outputSchema.data` is a `z.looseObject` declaring `uuid`, `rule` and `status` as required (non-optional) fields. WHY: The refusal payload does not satisfy the tool's own published output schema, so the MCP output validation (or the client's schema check) sees an invalid `data` object — the same refusal shape used by `createKodyRule` is safe only because that tool declares every `data` field optional. HOW: Either make the refusal include the required fields with placeholders (`uuid: '', rule: '', status: KodyRulesStatus.ACTIVE`) or make `uuid`, `rule` and `status` optional in this tool's output schema so a skipped memory can be reported without them.",
+          "keep": true,
+          "rationale": "The refusal branch at lines 1116-1127 returns a data object containing only title, action, requiresApproval, message, link, while the tool's own outputSchema.data (lines 1073-1084) is a z.looseObject declaring uuid, rule and status as required non-optional fields. The mismatch is directly visible in the code and the sibling createKodyRule tool (lines 515-520) declares those fields optional, confirming the asymmetry. The claim's factual basis (payload missing required schema fields) is verified. This is a distinct issue from the prior review decision, which concerned the teamBelongsToOrganization gate behavior, not the refusal payload's schema conformance.",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "looseObject|outputSchema|createMemoryRule|createKodyRule",
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1050,
+                "endLine": 1140
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 512,
+                "endLine": 560
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "pattern": "wrapToolHandler"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/utils/mcp-protocol.utils.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 33,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1116,
+          "text": "The refusal payload omits `uuid`, `rule`, and `status`, which this tool's `outputSchema.data` declares as required, so MCP output validation rejects the `data` object; the same shape is safe in `createKodyRule` only because every `data` field there is optional. Either add placeholder values for the three required fields (empty strings and `KodyRulesStatus.ACTIVE`) or make them optional in this tool's output schema."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 106798,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: The new cross-organization refusal branch in createMemoryRule returns a data object that omits uuid, rule, and status, but the tool's outputSchema declares those three fields as required on data (uuid: z.string(), rule: z.string(), status: z.enum(KodyRulesStatus) — none optional). WHY: A caller with a teamId belonging to another organization now receives a structured payload that fails the declared output contract (or is rejected by output validation), whereas the sibling createKodyRule refusal path is safe only because its schema marks those fields optional — so this branch returns a malformed response exactly on the refusal path. HOW: Make the refused-memory data satisfy the schema, e.g. return status: KodyRulesStatus.ACTIVE, rule: args.kodyRule.rule, and uuid: '' alongside the existing fields (or make uuid/rule/status optional in the outputSchema if the refusal shape is intended).",
+          "keep": true,
+          "rationale": "Confirmed. The KODUS_CREATE_MEMORY tool's outputSchema (lines 1070-1084) declares data as a looseObject with uuid: z.string(), rule: z.string(), and status: z.enum(KodyRulesStatus) — none optional. The new cross-organization refusal branch (lines 1116-1127) returns a data object containing only title, action, requiresApproval, message, and link, omitting uuid, rule, and status. This fails the declared required-field contract on the refusal path. The claim's comparison is also accurate: the sibling createKodyRule schema (lines 512-519) marks these three fields optional, so its refusal path is safe. This is a distinct bug from PreviousDecision index 1 (which concerned refusing teams that fail to resolve); this finding is about the malformed response shape, not the refusal logic. Not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1080,
+                "endLine": 1160
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "outputSchema|uuid:|rule:|status:|z.object",
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1060,
+                "endLine": 1090
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1116,
+          "label": "bug",
+          "earlierId": "kodus-2044-round-a",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 37,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 127011,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: The new 'team of another organization' early-return in createMemoryRule returns `data` without the required `uuid`, `rule`, and `status` fields that the tool's own `outputSchema` (lines 1070-1084) and `CreateMemoryRuleResponse.data` (lines 114-123) declare as non-optional. WHY: The returned object violates the declared output contract of the KODUS_CREATE_MEMORY tool — the sibling success branch always populates `uuid`/`rule`/`status`, so any consumer or schema validation of this response will see a malformed payload (missing required fields) for exactly this refusal path. HOW: Populate the required fields (e.g. `uuid: ''`, `rule: args.kodyRule.rule`, `status: KodyRulesStatus.ACTIVE`) or make them optional in the `outputSchema`/`CreateMemoryRuleResponse` to match the actual skipped response.",
+          "keep": true,
+          "rationale": "Confirmed. The tool's outputSchema (lines 1073-1084) declares uuid: z.string(), rule: z.string(), and status: z.enum(KodyRulesStatus) as REQUIRED (non-optional) on data. The new refusal branch at lines 1116-1127 returns data with only title/action/requiresApproval/message/link, omitting uuid, rule, and status, while the sibling success branch (lines 1153-1166) always populates all three. So exactly this early-return path emits a payload that violates the tool's declared output contract. The CreateMemoryRuleResponse interface (lines 114-123) marks them optional, but the runtime outputSchema validation uses the stricter z.object definition, so consumers/schema validation will see a malformed payload. This is not a repeat of the prior decision (which was about refusing only teams confirmed to belong to another org) — this is a distinct output-contract defect introduced by the new branch. Refutation not possible.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1060,
+                "endLine": 1200
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CreateMemoryRuleResponse",
+                "path": "libs/mcp-server"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 95,
+                "endLine": 135
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: The new \"team of another organization\" early-return in createMemoryRule returns `data` without the `uuid`, `rule` and `status` fields that this tool's own outputSchema declares as required (`uuid: z.string()`, `rule: z.string()`, `status: z.enum(KodyRulesStatus)` at line 1070-1084). WHY: a caller that supplies a teamId belonging to another organization now receives a structuredContent that does not satisfy the tool's declared output schema (the pre-PR code never took this branch, so this path is newly reachable), breaking the MCP tool contract for that input. HOW: populate the required fields in the refusal payload, e.g. `data: { uuid: '', title: args.kodyRule.title, rule: args.kodyRule.rule, status: KodyRulesStatus.ACTIVE, action: 'skipped', requiresApproval: false, message: 'Team not found.', link: '' }`, or make the schema fields optional to match the error shape.",
+          "keep": true,
+          "rationale": "Confirmed. The outputSchema (lines 1070-1084) declares data as requiring uuid (z.string()), rule (z.string()), and status (z.enum(KodyRulesStatus)) via z.looseObject. The new early-return at 1116-1127 omits all three, returning only title/action/requiresApproval/message/link. The branch is newly reachable for a teamId belonging to another organization (teamBelongsToAnotherOrganization returns true only when teamOrganizationId exists and differs from organizationId, line 349), so a caller supplying such a teamId receives structuredContent that violates the tool's declared output contract. The sibling KODUS_CREATE_RULE branch (line 545) has the same shape, but the candidate is about this tool's own declared schema and the claim is factually accurate; nothing upstream guards the missing fields. This is a distinct issue from the prior review decision (which concerned refusing unresolvable teams, not the schema-shape of the refusal payload).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1040,
+                "endLine": 1140
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "teamBelongsToAnotherOrganization",
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 320,
+                "endLine": 360
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 525,
+                "endLine": 575
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 50,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1116,
+          "text": "The `createMemoryRule` early-return for a team belonging to another organization violates the KODUS_CREATE_MEMORY output contract, so any consumer or schema validation of this refusal path sees `data` missing the non-optional `uuid`, `rule`, and `status` fields declared by `outputSchema` (lines 1070-1084) and `CreateMemoryRuleResponse.data` (lines 114-123). Populate those fields in the refusal payload—for example `uuid: ''`, `rule: args.kodyRule.rule`, and `status: KodyRulesStatus.ACTIVE`—or make them optional in `outputSchema`/`CreateMemoryRuleResponse` to match the skipped response."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1111,
+          "text": "A caller that supplies a `teamId` belonging to another organization now receives `structuredContent` that does not satisfy the tool's declared `outputSchema` because `data` omits the required `uuid`, `rule`, and `status` fields (`z.string()`, `z.string()`, and `z.enum(KodyRulesStatus)` at lines 1070-1084), breaking the MCP tool contract for that input. Populate those fields in the refusal payload—for example `uuid: ''`, `rule: args.kodyRule.rule`, and `status: KodyRulesStatus.ACTIVE`—or make the schema fields optional to match the error shape."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 71026,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: The new cross-org refusal in createMemoryRule returns `data` without the schema-required `uuid`, `rule`, and `status` fields. WHY: The tool's outputSchema declares `data: z.looseObject({ uuid: z.string(), title: z.string(), rule: z.string(), status: z.enum(KodyRulesStatus), action, requiresApproval, message?, link })` — `uuid`, `rule` and `status` are required non-optional strings, and `looseObject` only allows extra keys, it does not make declared keys optional; so when a team from another org is refused the response fails output validation instead of returning the intended `success:false` \"Team not found.\" refusal (the spec's `(result as any).structuredContent` cast hides this). HOW: Supply the required fields in the refusal's `data` (e.g. `uuid: '', rule: args.kodyRule.rule, status: KodyRulesStatus.ACTIVE`) or relax the outputSchema to make them optional.",
+          "keep": true,
+          "rationale": "The outputSchema at lines 1070-1087 declares data as z.looseObject with uuid, title, rule, status, action, requiresApproval all required (only message is optional). The cross-org refusal at lines 1116-1127 returns data omitting uuid, rule, and status. looseObject allows extra keys but does not relax declared required keys, so this response would fail output validation. I could not locate wrapToolHandler's implementation (mcp-protocol.utils.ts not found in repo) to confirm whether it validates output against the schema, but the finding's core claim about the schema mismatch is factually correct: the returned object is missing required schema fields. This is also a distinct problem from the previous decision (which concerned the gate refusing too broadly), so it is not a repeat. Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1080,
+                "endLine": 1160
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "outputSchema|looseObject|z\\.object",
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 1090,
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1060
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/mcp-server",
+                "pattern": "wrapToolHandler|structuredContent|outputSchema.*parse|safeParse",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/utils/mcp-protocol.utils.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "mcp-protocol.utils.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1116,
+          "label": "bug",
+          "earlierId": "kodus-2044-round-a",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 48,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 34763,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: sleep(200 * attempt) is called without `await` inside the catch block, so the backoff delay is never observed and the next retry fires immediately. WHY: the unawaited promise resolves only after the loop has already moved on, so a failing service is hit back-to-back up to `attempts` times instead of being spaced by 200ms, 400ms, ... — defeating the retry/backoff contract. HOW: `await sleep(200 * attempt);` (the function is already async).",
+          "keep": false,
+          "rationale": "The candidate finding describes the identical problem already raised by PreviousReviewDecisions entry \"round-a-await-sleep\" on this exact pull request: the unawaited sleep(200 * attempt) in withRetry's catch block causing retries to fire back-to-back with no backoff. The code at src/sync/retry.ts:12 still shows `sleep(200 * attempt);` without await, and the consequence is the same failure (no backoff delay). Per the rules, a finding that raises again the problem a PreviousReviewDecisions entry already raised — whatever its Outcome — must be dropped. This is a repeat, not a new/independent defect.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20537,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 25410,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 37741,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 70293,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: log.warn('retrying', { attempt }) is emitted inside the catch block on every failed attempt, including the final attempt when attempt === attempts and the loop is about to exit with throw lastError. WHY: it logs 'retrying' for a failure that will not be retried, producing a misleading log line that hides the terminal failure. HOW: only log when a retry will actually follow, e.g. guard with `if (attempt < attempts) log.warn('retrying', { attempt });`.",
+          "keep": true,
+          "rationale": "The claim is factually correct: log.warn('retrying', { attempt }) is emitted unconditionally inside the catch block (line 11) on every failed attempt, including the final iteration when attempt === attempts, after which the loop exits and throw lastError fires. No guard exists (compare line 12's sleep which is also called on the final attempt, though that's a separate issue already covered by the previous decision). The log line is therefore misleading for terminal failures. The previous decision (round-a-await-sleep) addressed the missing await on sleep — a different problem — so this is not a repeat. Low severity but a genuine behavior/logging defect.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/sleep.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: log.warn('retrying', { attempt }) is emitted inside the catch block on every failed attempt, including the last one where attempt === attempts and no further retry will occur. WHY: the final failure logs a 'retrying' message that never happens, misleading anyone debugging an incident into believing another attempt is coming. HOW: only log when another attempt remains, e.g. guard with `if (attempt < attempts) log.warn('retrying', { attempt });`.",
+          "keep": true,
+          "rationale": "Verified in src/sync/retry.ts:6-15. On the final iteration attempt === attempts, the catch logs 'retrying' at line 11 but the loop then terminates and throws lastError at line 15 — no further attempt occurs, so the log is factually misleading. The claim is accurate and the failure path is reachable. This is a distinct issue from the earlier decision (which concerned the missing await on sleep, a backoff-timing bug), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/sync/retry.ts",
+          "line": 11,
+          "text": "The final failed attempt, when `attempt === attempts`, logs a `retrying` message even though no retry will follow, misleading anyone debugging an incident. Guard the log with `if (attempt < attempts)` so `log.warn('retrying', { attempt })` is emitted only when another attempt remains."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/sync/retry.ts",
+          "line": 11,
+          "text": "The final attempt, when `attempt === attempts`, logs `retrying` even though the loop is about to exit with `throw lastError`, hiding the terminal failure. Guard the log with `if (attempt < attempts)` so `log.warn('retrying', { attempt })` runs only when a retry will actually follow."
+        }
+      ],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26326,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "label": "kody_rules",
+          "earlierId": "round-a-P04-rule-local-path-doc-reworded",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P04-rule-local-path-doc-reworded",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "text": "In `docs/runbooks/replay-dead-letters.md`, the troubleshooting entry points readers to `/Users/dev/tmp/replay-dlq.log`, a developer-local path that violates \"No local machine paths in committed files\" and cannot be found on the on-call engineer's machine. Point to a portable location such as `/tmp/replay-dlq.log` or a repository-relative path."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23766,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "label": "kody_rules",
+          "earlierId": "round-a-P04-rule-local-path-doc-reworded",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P04-rule-local-path-doc-reworded",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "text": "The troubleshooting note points readers to `/Users/dev/tmp/replay-dlq.log`, a path that exists only on one developer's machine, so the instruction cannot be followed during an incident and violates the `No local machine paths in committed files` rule. Refer to the log via a repository-relative path, a temporary directory, or the path the script prints."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26811,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "label": "kody_rules",
+          "earlierId": "round-a-P04-rule-local-path-doc-reworded",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "text": "Using the hard-coded `/Users/dev/tmp/replay-dlq.log` path violates the \"No local machine paths in committed files\" rule and makes the instruction unusable for operators who do not have `/Users/dev/tmp`. Point at a temporary directory or a configurable/setting-based log path instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 25149,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "label": "kody_rules",
+          "earlierId": "round-a-P04-rule-local-path-doc-reworded",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "text": "The troubleshooting section points to `/Users/dev/tmp/replay-dlq.log`, which exists only under one developer's home directory, so the instruction is unusable for anyone else and violates the \"No local machine paths in committed files\" rule. Replace it with a temporary directory or repository-relative log path such as `$TMPDIR/replay-dlq.log` or `./replay-dlq.log`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 24571,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "label": "kody_rules",
+          "earlierId": "round-a-P04-rule-local-path-doc-reworded",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P04-rule-local-path-doc-reworded",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "text": "Since nobody else has `/Users/dev/tmp`, the instruction is unusable on any other machine and violates the rule against local machine paths in committed files. Refer to a repository-relative or temp-directory path instead, such as `./replay-dlq.log`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P14-rule-mock-undefined-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 4168,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/mocks/orders.mock.ts",
+          "line": 20,
+          "label": "kody_rules",
+          "earlierId": "round-a-P14-rule-mock-undefined-moved",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-P14-rule-mock-undefined-moved",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "mock-undefined-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P14-rule-mock-undefined-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 5474,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/mocks/orders.mock.ts",
+          "line": 20,
+          "label": "kody_rules",
+          "earlierId": "round-a-P14-rule-mock-undefined-moved",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-P14-rule-mock-undefined-moved",
+          "by": "model"
+        },
+        {
+          "file": "src/mocks/orders.mock.ts",
+          "line": 21,
+          "label": "kody_rules",
+          "earlierId": "round-a-P14-rule-mock-undefined-moved",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-P14-rule-mock-undefined-moved",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "mock-undefined-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P14-rule-mock-undefined-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 25406,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P14-rule-mock-undefined-moved",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mock-null-not-undefined"
+          ],
+          "marked": false,
+          "file": "src/mocks/orders.mock.ts",
+          "line": 20,
+          "text": "**Revises an earlier Kody suggestion** on `src/mocks/orders.mock.ts:8` (2026-10-06 12:00 UTC).\n\nBecause `pendingOrder` sets `dispatchedAt` to `undefined` rather than the `null` the orders API serializes for a not-yet-dispatched order, code tested against this mock passes `=== undefined` checks that fail in production. Use `dispatchedAt: null` in `src/mocks/orders.mock.ts` to follow the \"Mock responses use null for absent values\" rule."
+        }
+      ],
+      "claims": [
+        {
+          "id": "mock-undefined-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P14-rule-mock-undefined-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 4726,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/mocks/orders.mock.ts",
+          "line": 20,
+          "label": "kody_rules",
+          "earlierId": "round-a-P14-rule-mock-undefined-moved",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        },
+        {
+          "file": "src/mocks/orders.mock.ts",
+          "line": 21,
+          "label": "kody_rules",
+          "earlierId": "round-a-P14-rule-mock-undefined-moved",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "mock-undefined-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P14-rule-mock-undefined-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 30772,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mock-null-not-undefined"
+          ],
+          "marked": false,
+          "file": "src/mocks/orders.mock.ts",
+          "line": 20,
+          "text": "Because `pendingOrder` sets `dispatchedAt` and `trackingNumber` to `undefined` instead of `null`, code tested against this mock never sees the `null` values the orders API returns in production, so `=== undefined` checks pass here but fail there. Set `dispatchedAt: null` and `trackingNumber: null` to match the 'Mock responses use null for absent values' rule."
+        }
+      ],
+      "claims": [
+        {
+          "id": "mock-undefined-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 82011,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: submit() awaits onSave(draft) with no try/catch and is invoked as `void submit()` in onSubmit, so a rejected save promise is never handled. WHY: if onSave (which returns Promise<void>) rejects — e.g. a network or server-side error on create/edit — the rejection becomes an unhandled promise rejection and the user sees no error message, leaving the form stuck with no feedback while errors[] only ever holds local validation results. HOW: wrap the save and surface the failure, e.g. `try { await onSave(draft); } catch (e) { setErrors(['Could not save the customer']); }`, or have onSubmit call `submit().catch(...)`.",
+          "keep": true,
+          "rationale": "Confirmed in src/customers/CustomerForm.tsx:19-23: submit() awaits onSave(draft) with no try/catch, and onSubmit (line 33) calls `void submit()`, so a rejected save promise is unhandled and errors[] only ever holds local validation output — the user gets no feedback on a network/server failure. onSave is typed Promise<void> (line 9) and performs persistence, so rejection is a real path. This is distinct from the previous decision (BillingSection create-mode gating), which concerns a different failure. No upstream guard prevents the rejection.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 19,
+          "text": "A rejected `onSave` promise becomes an unhandled rejection, so the user gets no error message and the form stays stuck with `errors` holding only local validation results. Wrap the `await onSave(draft)` call in a `try`/`catch` that calls `setErrors(['Could not save the customer'])`, or have `onSubmit` handle the rejection via `submit().catch(...)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 30144,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 41812,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 62334,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: useState(initial ?? EMPTY) initializes draft from the initial prop only on the first render, so a later-arriving initial value is ignored. WHY: if the parent loads the customer asynchronously in edit mode and passes initial once it resolves, the form keeps the empty EMPTY draft, showing blank fields and causing a subsequent save to overwrite the stored customer with empty data. HOW: sync incoming initial with an effect, e.g. `useEffect(() => { if (initial) setDraft(initial); }, [initial]);`, or require callers to mount the form only once initial is available.",
+          "keep": true,
+          "rationale": "The code `const [draft, setDraft] = useState<CustomerDraft>(initial ?? EMPTY)` does capture `initial` only at mount, with no effect syncing a later-arriving prop. The prop is optional and edit mode is supported, so an async-loading parent that mounts the form before `initial` resolves would leave the draft as EMPTY, producing blank fields and a potential empty overwrite on save. No upstream guard prevents this, and no parent caller in the repo proves `initial` is always present at mount. The previous decision addressed a different problem (billing-section gating), so this is not a repeat. Cannot refute.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CustomerForm",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CustomerForm|initial=",
+                "glob": "*.tsx"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CustomerForm|initial="
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src",
+                "maxDepth": 3
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/customers"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 16,
+          "text": "`useState(initial ?? EMPTY)` reads `initial` only on the first render, so a customer loaded asynchronously in edit mode leaves the form showing blank fields and a later save overwrites the stored customer with empty data. Sync the incoming `initial` prop with a `useEffect` that calls `setDraft(initial)`, or require callers to mount the form only once `initial` is available."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 53573,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `await onSave(draft)` runs inside `submit()`, which is invoked as `void submit()` from the submit handler, and there is no try/catch anywhere, so a rejected onSave produces an unhandled promise rejection and no error is surfaced. WHY: when the save fails (network error, server validation), the promise rejects, `setErrors` is never called, the rejection is detached by `void`, and the user sees the form silently do nothing with no failure feedback. HOW: wrap the save and surface the failure, e.g. `try { await onSave(draft); } catch (e) { setErrors([e instanceof Error ? e.message : 'Save failed']); }`.",
+          "keep": true,
+          "rationale": "Confirmed in src/customers/CustomerForm.tsx: onSave is typed `(draft) => Promise<void>`, awaited at line 22 inside submit(), which is invoked as `void submit()` at line 33 with no try/catch. A rejected onSave therefore produces an unhandled promise rejection and never calls setErrors, so no failure feedback reaches the user. No upstream guard, error boundary, or unhandledrejection handler exists (grep for callers/handlers found none). This is a different problem from the earlier billing-section decision, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit|onSave",
+                "path": "src/customers"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CustomerForm|unhandledrejection|ErrorBoundary",
+                "path": "src",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `showBilling = mode === 'edit' || Boolean(draft.id)` still excludes create mode, because a new customer's `draft.id` is undefined until after save and `mode === 'edit'` is false in create mode, so `BillingSection` (line 40) never renders for a new customer. WHY: `validateCustomer` (validate.ts:8) unconditionally requires a valid billing email, so `submit()` always finds a problem and never calls `onSave`, making the 'Create customer' button always fail with 'A valid billing email is required' — the billing email field is unreachable in create mode. HOW: render the billing section whenever billing is required, independent of the saved id: `const showBilling = mode === 'create' || mode === 'edit';` (or simply always render it), so the input is available before the customer is saved.",
+          "keep": false,
+          "rationale": "This is a verbatim repeat of PreviousDecision index 1 (round-a-P24-create-mode-section-hidden): the same failure (BillingSection not rendered in create mode because it is gated on draft.id, while validateCustomer requires a billing email, so 'Create customer' always fails with 'A valid billing email is required'), the same root cause, the same file/location, and even the same proposed fix. That entry is already on the pull request. Although the code still exhibits the condition (mode==='edit' || Boolean(draft.id) does not cover create mode), the rules require dropping findings that raise again a problem already posted, regardless of the entry's Outcome and regardless of whether the fix is incomplete. No new/different problem is described.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "billingEmail|validateCustomer",
+                "path": "src/customers"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts",
+                "startLine": 1,
+                "endLine": 15
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 19,
+          "text": "Because `await onSave(draft)` runs inside `submit()`, which is invoked as `void submit()` with no `try`/`catch`, a rejected save becomes an unhandled promise rejection: `setErrors` never runs and the user sees the form silently do nothing after a network or server-validation failure. Wrap the save in `try`/`catch` and call `setErrors` with the failure so it is surfaced."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16376,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "text": "While the query is loading or has failed, `NextInvoiceCard` in `src/billing/BillingCards.tsx` renders a $0.00 invoice with an empty due date that reads as real data. Add an `isLoading`/`isError` check that returns a `Skeleton` or error state, then render `invoice.totalCents` and `invoice.dueDate` without fallbacks, since this is a distinct location from the `SeatUsageCard` finding."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16719,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "text": "While the query is loading or has failed, `NextInvoiceCard` renders a $0.00 invoice with a blank due date, which reads to the user as real data. Track `isLoading`/`isError` from `useQuery` and return a `Skeleton` while loading and an error state on failure, rendering the real values only once `invoice` exists."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 13564,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "text": "While the query is loading or has failed, `NextInvoiceCard` renders `invoice?.totalCents ?? 0` and `invoice?.dueDate ?? ''`, so users see a $0.00 invoice with an empty due date presented as real data. Render a `Skeleton` (or an error state) until `invoice` is present, and only then render the amount and date."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18156,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "text": "NextInvoiceCard's `invoice?.totalCents ?? 0` and `invoice?.dueDate ?? ''` fallbacks render a $0.00 amount and empty due date during loading or after a failure, so users read placeholders as real billing data. Render a `Skeleton` (or an error state) until `invoice` is available, then show `invoice.totalCents` and `invoice.dueDate`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21410,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "text": "While the upcoming-invoice query is loading or has failed, NextInvoiceCard renders a $0.00 amount that looks like real data — the same class of issue previously flagged for SeatUsageCard but never fixed here. Destructure `isLoading`/`isError` from the query, return a `<Skeleton className=\"h-24\" />` while loading and an error state on failure, and render `formatMoney(invoice.totalCents)` only once data exists.\n\n**Also found in:**\n- `src/billing/BillingCards.tsx:33-33`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 33,
+          "alsoFoundIn": true,
+          "text": "While the upcoming-invoice query is loading or has failed, NextInvoiceCard renders a $0.00 amount that looks like real data — the same class of issue previously flagged for SeatUsageCard but never fixed here. Destructure `isLoading`/`isError` from the query, return a `<Skeleton className=\"h-24\" />` while loading and an error state on failure, and render `formatMoney(invoice.totalCents)` only once data exists.\n\n**Also found in:**\n- `src/billing/BillingCards.tsx:33-33`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}
