@@ -37,7 +37,7 @@ describe('formatAndShapeSuggestions', () => {
     it('falls back to the impact and the action when the formatter returned nothing', async () => {
         formatter.mockResolvedValue(new Map());
         const s = [finding()];
-        const r = await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT });
+        const r = await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT, organizationId: 'org' });
         expect(s[0].suggestionContent).toBe('The last read throws on an empty list. Stop at length minus one.');
         expect(r.shapeCounts.impactActionFallback).toBe(1);
     });
@@ -45,7 +45,7 @@ describe('formatAndShapeSuggestions', () => {
     it("hands a team's own guidelines to the formatter and neither falls back nor caps", async () => {
         formatter.mockResolvedValue(new Map([[0, { suggestionContent: 'One. Two. Three.' } as any]]));
         const s = [finding()];
-        const r = await formatAndShapeSuggestions(s, { writingGuidelines: { text: 'Write one sentence.', isCustom: true } });
+        const r = await formatAndShapeSuggestions(s, { writingGuidelines: { text: 'Write one sentence.', isCustom: true }, organizationId: 'org' });
         expect(formatter.mock.calls[0][1]).toMatchObject({ customWritingGuidelines: 'Write one sentence.' });
         expect(s[0].suggestionContent).toBe('One. Two. Three.');
         expect(r.shapeCounts).toMatchObject({ capped: 0, impactActionFallback: 0 });
@@ -55,7 +55,7 @@ describe('formatAndShapeSuggestions', () => {
         formatter.mockResolvedValue(new Map());
         const analyzer = finding({ suggestionContent: '- pkg a\n- pkg b', evidence: { source: ANALYZER_SOURCE } });
         const s = [analyzer, finding()];
-        const r = await formatAndShapeSuggestions(s as any, { writingGuidelines: DEFAULT });
+        const r = await formatAndShapeSuggestions(s as any, { writingGuidelines: DEFAULT, organizationId: 'org' });
         expect(formatter.mock.calls[0][0]).toHaveLength(1);
         expect(s[0].suggestionContent).toBe('- pkg a\n- pkg b');
         expect(r).toMatchObject({ formatTargets: 1, shapeCounts: { shaped: 1 } });
@@ -64,7 +64,7 @@ describe('formatAndShapeSuggestions', () => {
     it('keeps each text and still shapes it when the formatter throws', async () => {
         formatter.mockRejectedValue(new Error('provider down'));
         const s = [finding({ suggestionContent: 'Plain prose. Second. Third.' })];
-        const r = await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT });
+        const r = await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT, organizationId: 'org' });
         expect(r.formatted).toBeNull();
         expect(String((r.formatError as Error).message)).toBe('provider down');
         expect(s[0].suggestionContent).toBe('Plain prose. Second.');

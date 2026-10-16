@@ -39,7 +39,9 @@ export async function formatAndShapeSuggestions(
         writingGuidelines: { text: string; isCustom: boolean };
         byokConfig?: NormalizedModel;
         languageResultPrompt?: string;
-        organizationId?: string;
+        /** The org the formatter call is billed and traced to; every caller
+         *  passes it, even when the review has none. */
+        organizationId: string | undefined;
     },
 ): Promise<FormatAndShapeResult> {
     const { writingGuidelines } = options;

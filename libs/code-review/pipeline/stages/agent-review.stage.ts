@@ -1381,15 +1381,23 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     organizationId:
                         context.organizationAndTeamData?.organizationId,
                 });
+            const formatLogMetadata = {
+                organizationAndTeamData: context.organizationAndTeamData,
+                prNumber: context.pullRequest?.number,
+                formatted,
+                formatTargets,
+            };
             if (formatError !== undefined) {
                 this.logger.warn({
                     message: `[AGENT] Content formatting failed, keeping original text: ${formatError instanceof Error ? formatError.message : String(formatError)}`,
                     context: this.stageName,
+                    metadata: formatLogMetadata,
                 });
             } else {
                 this.logger.log({
                     message: `[AGENT] Formatted ${formatted}/${formatTargets} suggestion contents`,
                     context: this.stageName,
+                    metadata: formatLogMetadata,
                 });
             }
             this.logger.log({
