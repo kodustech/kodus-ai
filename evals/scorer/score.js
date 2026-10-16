@@ -92,6 +92,8 @@ async function scoreCase({ findings, goldens, corpus = '', trace = null, judge }
     const bestConfidence = new Array(goldenTexts.length).fill(0);
     for (let gi = 0; gi < goldenTexts.length; gi++) {
         for (let fi = 0; fi < candidates.length; fi++) {
+            // Nothing outranks a certain match: stop judging this known bug.
+            if (bestConfidence[gi] >= 1) break;
             // eslint-disable-next-line no-await-in-loop
             const { match, confidence } = await matchCommentDetailedWith(judge.model, judge.apiKey, goldenTexts[gi], candidates[fi]);
             if (match && confidence > bestConfidence[gi]) {

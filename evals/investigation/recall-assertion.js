@@ -120,6 +120,8 @@ module.exports = async (output, context) => {
     for (let gi = 0; gi < goldens.length; gi++) {
         const goldenText = typeof goldens[gi] === 'string' ? goldens[gi] : goldens[gi].comment;
         for (let fi = 0; fi < candidates.length; fi++) {
+            // Nothing outranks a certain match: stop judging this known bug.
+            if (bestConfidence[gi] >= 1) break;
             // eslint-disable-next-line no-await-in-loop
             const { match, confidence } = await matchCommentDetailed(apiKey, goldenText, candidates[fi]);
             if (match && confidence > bestConfidence[gi]) {

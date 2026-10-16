@@ -801,15 +801,18 @@ async function runProduction(caseData, permissionService, run, remoteCommands, r
     const results = [];
     const errors = [];
     for (let i = 0; i < total; i++) {
-        const batchRun = await buildProductionRun(caseData, permissionService, {
-            changedFiles: run.chunks[i],
-            fileTiers: run.input.fileTiers,
-            runtimeName: `${run.provider.getIdentity().name} batch ${i + 1}/${total}`,
-            index: i + 1,
-            total,
-            depth: depth + 1,
-        });
+        // A batch that cannot be built is left out like one that fails to run
+        // (batch-runner.ts): the other batches' findings stay.
         try {
+            // eslint-disable-next-line no-await-in-loop
+            const batchRun = await buildProductionRun(caseData, permissionService, {
+                changedFiles: run.chunks[i],
+                fileTiers: run.input.fileTiers,
+                runtimeName: `${run.provider.getIdentity().name} batch ${i + 1}/${total}`,
+                index: i + 1,
+                total,
+                depth: depth + 1,
+            });
             // eslint-disable-next-line no-await-in-loop
             results.push(await runProduction(caseData, permissionService, batchRun, remoteCommands, runAgentLoop, depth + 1));
         } catch (error) {
