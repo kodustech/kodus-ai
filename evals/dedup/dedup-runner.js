@@ -5,6 +5,8 @@
 // builds it, over the team's default config with the model routed as an org's
 // (evals/shared/review-stage.js teamContext). A failed pass keeps every
 // finding, as in production.
+// libs/common/utils/crypto.ts reads API_CRYPTO_KEY at import time; CI has no .env.
+if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
 const { TIER0 } = require('../shared/tier0-models');
 
 // The model a cloud org without BYOK reviews with (the managed default).

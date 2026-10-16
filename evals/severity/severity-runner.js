@@ -5,6 +5,8 @@
 // model routed as an org's (evals/shared/review-stage.js teamContext). The
 // labels are what the pass left on every finding, kept or filtered; whether
 // the classifier's answer parsed is read off its parser, not changed.
+// libs/common/utils/crypto.ts reads API_CRYPTO_KEY at import time; CI has no .env.
+if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
 const path = require('path');
 const { AsyncLocalStorage } = require('async_hooks');
 const { normalizeSeverity } = require('./severity-eval');
