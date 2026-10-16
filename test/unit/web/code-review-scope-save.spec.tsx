@@ -111,8 +111,21 @@ it('returns centralized PR metadata while refreshing the persisted scope status'
     const { client, result } = harness();
     await act(async () => {
         await expect(
-            result.current.saveSettings(result.current.form.getValues() as any),
+            result.current.saveSettings({
+                ...result.current.form.getValues(),
+                automatedReviewActive: { value: false, level: 'repository' },
+            } as any),
         ).resolves.toEqual({ centralizedPr });
     });
     expect(client.getQueryState(scopesKey('team-1'))?.isInvalidated).toBe(true);
+});
+
+it('keeps an unchanged inherited scope without creating configuration', async () => {
+    const { result } = harness();
+    await act(async () => {
+        await result.current.saveSettings(
+            result.current.form.getValues() as any,
+        );
+    });
+    expect(save).not.toHaveBeenCalled();
 });
