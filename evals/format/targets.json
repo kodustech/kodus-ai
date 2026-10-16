@@ -1,0 +1,12 @@
+{
+    "__doc": [
+        "Floors per model for the share of findings formatted right on cases.json (run.js --gate), as ratios.",
+        "eval-fake (the wiring smoke, every PR): the scripted model answers nothing usable, so the local fallback ships and is scored on its own rules (labels, code names, code block). Deterministic: two runs of the same commit gave the same count on every case. floor = observed, so a PR that leaves one label or loses the names of one finding fails.",
+        "deepseek-v4-flash@fireworks (the nightly model): calibrated 2026-10-15 from 2 local runs on the branch's base (main 4b5c881cd's formatter), 522 and 516 of 555 (mean 93.5%). floor = mean - 2 binomial SE over the 555 findings, rounded down, like evals/reply-addressing/targets.json.",
+        "RATCHET: a PR that moves the value on purpose (a formatter or prompt change, cases rebuilt) recalibrates here in the same PR, with its runs as evidence."
+    ],
+    "models": {
+        "eval-fake": { "floor": 1, "observed": 1 },
+        "deepseek-v4-flash@fireworks": { "floor": 0.91, "observed": 0.935 }
+    }
+}

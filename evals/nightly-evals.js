@@ -57,6 +57,13 @@ const NIGHTLY_EVALS = [
         // The cases that call the model: findings written as prose.
         friday: ['--limit=4', '--prose'],
     },
+    {
+        id: 'format',
+        stage: 'format',
+        run: ['evals/format/run.js'],
+        files: ['evals/format/targets.json'],
+        friday: ['--limit=4'],
+    },
 ];
 
 const byId = (id) => NIGHTLY_EVALS.find((e) => e.id === id) || null;
