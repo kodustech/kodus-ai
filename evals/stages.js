@@ -157,7 +157,7 @@ const STAGES = [
         nightly: 'shared',
         friday: 'format',
         metric: 'of findings formatted right',
-        set: "real findings from 31 reviews, under the teams' languages and a writing guideline",
+        set: 'batches of findings: each of 31 real reviews under four team languages and a writing guideline',
         caveat: 'Checks the text a reviewer sees, not whether the claim stayed the same.',
         note: 'every PR against the scripted model (the local fallback); nightly on the real model when the formatter or its cases change',
     },

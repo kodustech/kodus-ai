@@ -11,7 +11,7 @@
 // below is written for the eval, after that kind of edit.
 const VARIANTS = {
     'en-US': {
-        checks: 'in English (700 teams, and the default)',
+        checks: 'in English (700 teams, the default)',
         languageResultPrompt: 'en-US',
         want: { language: 'en', maxSentences: 2 },
     },
@@ -31,7 +31,7 @@ const VARIANTS = {
         want: { language: 'es', maxSentences: 2 },
     },
     'en-US-one-sentence': {
-        checks: 'in English with a team guideline asking for one sentence',
+        checks: 'in one sentence, as a team guideline asks',
         languageResultPrompt: 'en-US',
         customWritingGuidelines: 'Keep every comment to a single sentence. Cut any word that does not change what the developer has to do.',
         want: { language: 'en', maxSentences: 1 },

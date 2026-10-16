@@ -76,7 +76,11 @@ async function main() {
         while (next < cases.length) {
             const i = next++;
             const c = cases[i];
-            const checks = `Formats the ${BATCHES[c.batch].findings.length} findings ${c.batch.split('/')[0]} wrote ${VARIANTS[c.variant].checks}`.slice(0, 160);
+            const n = BATCHES[c.batch].findings.length;
+            const [model, pr] = c.batch.split('/');
+            // Named by its review: the panel lists every case, and two reviews
+            // by the same model can carry the same number of findings.
+            const checks = `Formats ${n} finding${n === 1 ? '' : 's'} ${model.replace(/@.*/, '')} wrote on ${pr}, ${VARIANTS[c.variant].checks}`;
             try {
                 results[i] = { id: c.id, checks, ...(await runCase(c)) };
             } catch (error) {
