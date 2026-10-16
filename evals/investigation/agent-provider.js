@@ -812,3 +812,5 @@ class InvestigationAgentProvider {
 }
 
 module.exports = InvestigationAgentProvider;
+// The dataset's recorded tools, for evals that run a part of the finder on the same PR (evals/funnel/verify).
+module.exports.ReplayRemoteCommands = ReplayRemoteCommands;

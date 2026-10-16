@@ -128,40 +128,38 @@ describe('stage-signals', () => {
         expect(posting?.meta).toMatchObject({ name: 'Posting', group: 'On the PR' });
     });
 
+    // review-rounds is the stage the smoke alone reports: every other one with a
+    // scheduled eval has its row from the nightly.
     it('turns a failed step red and a step that did not run into infra', () => {
-        const results = allOk(wiringSteps.filter((step) => step !== 'anchoring')).map((r) =>
-            r.step === 'dedup-engine' ? { ...r, ok: false, problem: 'exit 1' } : r,
-        );
-        const rows: Row[] = wiringRows(results);
-        const dedup = rows.find((r) => r.name === 'evals.stage.dedup');
-        expect(dedup?.status).toBe('red');
-        expect(dedup?.meta.reason).toBe('dedup-engine: exit 1');
-        expect(rows.find((r) => r.name === 'evals.stage.anchoring')?.status).toBe('infra');
-        expect(wiringRows(null).find((r: Row) => r.name === 'evals.stage.dedup')?.status).toBe('infra');
+        const failed = allOk(wiringSteps).map((r) => (r.step === 'review-lifecycle' ? { ...r, ok: false, problem: 'exit 1' } : r));
+        const rounds = wiringRows(failed).find((r: Row) => r.name === 'evals.stage.review-rounds');
+        expect(rounds?.status).toBe('red');
+        expect(rounds?.meta.reason).toBe('review-lifecycle: exit 1');
+        const missing = allOk(wiringSteps.filter((step) => !['review-rounds', 'review-lifecycle'].includes(step)));
+        expect(wiringRows(missing).find((r: Row) => r.name === 'evals.stage.review-rounds')?.status).toBe('infra');
+        expect(wiringRows(null).find((r: Row) => r.name === 'evals.stage.review-rounds')?.status).toBe('infra');
     });
 
     it('turns every wired stage into infra when the smoke fails a check no stage owns', () => {
         const results = [...allOk(wiringSteps), { step: 'pr-paths-filter', ok: false, problem: 'incomplete trace', ms: 0, calls: 0 }];
         const rows: Row[] = wiringRows(results);
         for (const stage of scheduled) expect(rows.find((r) => r.name === `evals.stage.${stage.id}`)?.status).toBe('infra');
-        expect(rows.find((r) => r.name === 'evals.stage.dedup')?.meta).toMatchObject({
+        expect(rows.find((r) => r.name === 'evals.stage.review-rounds')?.meta).toMatchObject({
             reason: 'wiring smoke failed: pr-paths-filter: incomplete trace',
             harness: 'wiring smoke failed: pr-paths-filter: incomplete trace',
         });
         expect(rows.find((r) => r.name === 'evals.stage.posting')?.status).toBe('skipped');
-        expect(wiringRows([...allOk(wiringSteps), { step: 'pr-paths-filter', ok: true, problem: null }]).find((r: Row) => r.name === 'evals.stage.dedup')?.status).toBe('green');
+        expect(wiringRows([...allOk(wiringSteps), { step: 'pr-paths-filter', ok: true, problem: null }]).find((r: Row) => r.name === 'evals.stage.review-rounds')?.status).toBe('green');
     });
 
     it("keeps a stage's own failure red on a night the smoke also failed its own check", () => {
         const results = [
-            ...allOk(wiringSteps).map((r) => (r.step === 'dedup-engine' ? { ...r, ok: false, problem: 'exit 1' } : r)),
+            ...allOk(wiringSteps).map((r) => (r.step === 'review-lifecycle' ? { ...r, ok: false, problem: 'exit 1' } : r)),
             { step: 'pr-paths-filter', ok: false, problem: 'incomplete trace', ms: 0, calls: 0 },
         ];
-        const rows: Row[] = wiringRows(results);
-        const dedup = rows.find((r) => r.name === 'evals.stage.dedup');
-        expect(dedup?.status).toBe('red');
-        expect(dedup?.meta).toMatchObject({ reason: 'dedup-engine: exit 1', failed: ['dedup-engine'], harness: 'wiring smoke failed: pr-paths-filter: incomplete trace' });
-        expect(rows.find((r) => r.name === 'evals.stage.anchoring')?.status).toBe('infra');
+        const rounds = wiringRows(results).find((r: Row) => r.name === 'evals.stage.review-rounds');
+        expect(rounds?.status).toBe('red');
+        expect(rounds?.meta).toMatchObject({ reason: 'review-lifecycle: exit 1', failed: ['review-lifecycle'], harness: 'wiring smoke failed: pr-paths-filter: incomplete trace' });
     });
 
     it('reports the finder from the nightly: recall against the floor, status from the verdict', () => {
