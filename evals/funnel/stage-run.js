@@ -19,6 +19,7 @@ const { applyModelEnv } = require('../shared/tier0-models');
 const { countTokens, tokensUsed } = require('../shared/eval-kit');
 const { evalQuestion, resultProblems } = require('../shared/eval-result');
 const { knownBugs } = require('./known-bugs');
+const { caseSentence } = require('./catalog');
 
 const parseArgs = (argv) =>
     Object.fromEntries(
@@ -61,7 +62,7 @@ async function runStage(stage) {
             const input = c.candidates.filter(reaches);
             const bugs = knownBugs(c.caseId);
             const reaching = [...new Set(input.filter((x) => x.bug !== null).map((x) => x.bug))];
-            const checks = `Keeps the known bugs of ${c.caseId} that reach ${stage.id} (${reaching.length} of ${bugs.length})`.slice(0, 160);
+            const checks = caseSentence(c.caseId, stage.id, reaching.length, bugs.length);
             try {
                 const out = new Set(reaching.length || stage.always ? await stage.apply(input, c.caseId) : input.map((_, k) => k));
                 const survived = new Set(input.filter((_, k) => out.has(k)).map((x) => x.bug));
@@ -88,7 +89,9 @@ async function runStage(stage) {
         snapshot: { model: snapshot.model, builtOn: snapshot.builtOn, judge: snapshot.judge },
         runs: 1,
         metric: { name: `of known bugs reaching ${stage.id} kept`, value: total ? hits / total : null, floor: TARGET.floor ?? null, baseline: TARGET.observed ?? null },
-        cases: results,
+        // A PR where no known bug reaches the stage has nothing to keep: it is
+        // left out of the cases, not shown as 0 of 0.
+        cases: results.filter((r) => r.unmeasured || r.total > 0),
         tokens: tokensUsed(),
         infra: { errored, total: cases.length },
     };
@@ -99,7 +102,7 @@ async function runStage(stage) {
     for (const r of results.filter((x) => x.hits < x.total)) {
         console.log(`  ${r.id}: ${r.hits}/${r.total} — lost ${r.detail.filter((d) => !d.ok).map((d) => d.what.slice(0, 90)).join('; ')}`);
     }
-    console.log(`${stage.id}: ${hits}/${total} known bugs reaching it kept · ${noise} of ${inputs} candidates matching no known bug removed · ${errored} of ${cases.length} PRs did not measure`);
+    console.log(`${stage.id}: ${hits}/${total} known bugs reaching it kept · ${noise} of ${inputs} candidates matching no known bug removed · ${results.filter((r) => !r.unmeasured && !r.total).length} PRs with none reaching it · ${errored} of ${cases.length} PRs did not measure`);
     if (errored > cases.length * 0.05) {
         console.error(`not measured: ${errored} of ${cases.length} PRs failed (see above)`);
         return 2;

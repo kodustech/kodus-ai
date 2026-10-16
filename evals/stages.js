@@ -106,7 +106,7 @@ const STAGES = [
         nightly: 'shared',
         friday: 'funnel_verify',
         metric: 'of known bugs reaching verify kept',
-        set: "the finder's frozen candidates on the nightly's PRs (evals/funnel/snapshot)",
+        set: "PRs whose known bugs reach the step, from the finder's frozen candidates (evals/funnel/snapshot)",
         caveat: 'Ungated until the relabeled dataset lands (#2114): reported, never alerted.',
     },
     {
@@ -140,7 +140,7 @@ const STAGES = [
         nightly: 'shared',
         friday: 'funnel_severity',
         metric: 'of known bugs reaching severity kept',
-        set: "the finder's frozen candidates on the nightly's PRs (evals/funnel/snapshot)",
+        set: "PRs whose known bugs reach the step, from the finder's frozen candidates (evals/funnel/snapshot)",
         caveat: 'Ungated until the relabeled dataset lands (#2114): reported, never alerted.',
     },
     {
@@ -157,7 +157,7 @@ const STAGES = [
         nightly: 'shared',
         friday: 'funnel_dedup',
         metric: 'of known bugs reaching dedup kept',
-        set: "the finder's frozen candidates on the nightly's PRs (evals/funnel/snapshot)",
+        set: "PRs whose known bugs reach the step, from the finder's frozen candidates (evals/funnel/snapshot)",
         caveat: 'Ungated until the relabeled dataset lands (#2114): reported, never alerted.',
     },
     {
@@ -190,7 +190,7 @@ const STAGES = [
         nightly: 'shared',
         friday: 'funnel_anchoring',
         metric: 'of known bugs reaching anchoring kept',
-        set: "the finder's frozen candidates on the nightly's PRs (evals/funnel/snapshot)",
+        set: "PRs whose known bugs reach the step, from the finder's frozen candidates (evals/funnel/snapshot)",
         caveat: 'Ungated until the relabeled dataset lands (#2114): reported, never alerted.',
     },
     {

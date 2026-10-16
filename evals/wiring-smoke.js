@@ -126,11 +126,11 @@ async function main() {
         { name: 'memories', model: true, args: ['evals/memories/run.js', '--model=eval-fake', '--gate'] },
         // The stages after the finder on its frozen candidates (evals/funnel), on
         // one PR whose findings reach every stage (dedup needs two or more).
-        ...['anchoring', 'dedup', 'severity', 'verify'].map((stage) => ({
-            name: `funnel-${stage}`,
-            model: stage !== 'anchoring',
-            args: [`evals/funnel/${stage}/run.js`, ...(stage === 'anchoring' ? [] : ['--model=eval-fake']), '--gate', `--cases=${FUNNEL_CASE}`],
-        })),
+        // Anchoring calls no model. Each name is written out: the specs read them.
+        { name: 'funnel-anchoring', args: ['evals/funnel/anchoring/run.js', '--gate', `--cases=${FUNNEL_CASE}`] },
+        { name: 'funnel-dedup', model: true, args: ['evals/funnel/dedup/run.js', '--model=eval-fake', '--gate', `--cases=${FUNNEL_CASE}`] },
+        { name: 'funnel-severity', model: true, args: ['evals/funnel/severity/run.js', '--model=eval-fake', '--gate', `--cases=${FUNNEL_CASE}`] },
+        { name: 'funnel-verify', model: true, args: ['evals/funnel/verify/run.js', '--model=eval-fake', '--gate', `--cases=${FUNNEL_CASE}`] },
         {
             name: 'finder-recall',
             model: true,
