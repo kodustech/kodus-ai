@@ -79,6 +79,18 @@ describe('finder model route', () => {
         expect(route.storedConfig.credentials[0].apiKey).not.toBe('fake');
     });
 
+    it('takes the model from RECALL_MODEL over the config, on either route', () => {
+        process.env.EVAL_FAKE_LLM_URL = 'http://127.0.0.1:1/v1';
+        process.env.EVAL_FAKE_LLM_KEY = 'fake';
+        process.env.RECALL_MODEL = 'eval-fake';
+        delete process.env.RECALL_REASONING_EFFORT;
+        expect(internals.resolveRoute({ provider: 'tier0', model: 'gpt-5.6-luna@sub' })).toMatchObject({ route: 'managed', modelId: 'eval-fake' });
+        process.env.RECALL_REASONING_EFFORT = 'low';
+        expect(internals.resolveRoute({ provider: 'tier0', model: 'gpt-5.6-luna@sub' }).storedConfig).toMatchObject({ models: [{ model: 'eval-fake' }] });
+        process.env.RECALL_MODEL = 'gpt-5.6-luna@sub';
+        expect(() => internals.resolveRoute({ provider: 'tier0', model: 'eval-fake' })).toThrow(internals.NotAProductionRoute);
+    });
+
     it('refuses a subscription model instead of running another one', () => {
         delete process.env.RECALL_MODEL;
         expect(() => internals.resolveRoute({ provider: 'tier0', model: 'gpt-5.6-luna@sub' })).toThrow(internals.NotAProductionRoute);

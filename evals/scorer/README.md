@@ -82,7 +82,7 @@ how two incomparable runs end up compared.
 | `harness.name` | yes | `kodus`, `claude-code`, `codex`, `greptile`… The harness is a first-class dimension: the same model under different engines is a different entry. |
 | `model` | no | `null` when the harness does not let you pick a model (closed product). |
 | `model.id` | if `model` is an object | a string, or the submission is rejected. |
-| `model.accessPath` | no | `api` \| `subscription` \| `local` \| `unknown`. Different billing and rate-limit regimes are not comparable on latency — declare it. |
+| `model.accessPath` | no | `api` \| `subscription` \| `local` \| `unknown` \| `byok` \| `managed` (the finder eval's production routes). Different billing and rate-limit regimes are not comparable on latency — declare it. |
 | `executionMode` | yes | `replay` (recorded tool outputs, deterministic) or `live` (ran against the real repo). **Only compare within the same mode.** |
 | `reasoning` | no | `{config, effortRequested}`. `config` ∈ `vendor-default` \| `explicit` \| `disabled`. `effortRequested` is required when `config` is `explicit` — otherwise `explicit` says nothing. See below — it is a real confounder. |
 | `runAt` | yes | ISO-8601. |
