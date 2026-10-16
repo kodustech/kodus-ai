@@ -78,12 +78,22 @@ function observeTheReview() {
     observeTheLoop();
     const steps = () => observedLoops.getStore()?.steps;
     const { AgentReviewStage } = lib('code-review/pipeline/stages/agent-review.stage.ts');
+    // A sync method stays sync, an async one async: the wrapper returns what
+    // the method returns.
     const wrap = (method, record) => {
         const original = AgentReviewStage.prototype[method];
-        AgentReviewStage.prototype[method] = async function observed(...args) {
-            const input = steps() ? clone(args) : null;
-            const out = await original.apply(this, args);
-            if (steps()) steps()[method] = record(input, clone(out));
+        AgentReviewStage.prototype[method] = function observed(...args) {
+            const store = steps();
+            const input = store ? clone(args) : null;
+            const out = original.apply(this, args);
+            if (!store) return out;
+            if (out && typeof out.then === 'function') {
+                return out.then((value) => {
+                    store[method] = record(input, clone(value));
+                    return value;
+                });
+            }
+            store[method] = record(input, clone(out));
             return out;
         };
     };

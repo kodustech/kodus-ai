@@ -191,3 +191,14 @@ describe('finder input data', () => {
         });
     });
 });
+
+describe('the observed review (funnel snapshot)', () => {
+    it('ships what the same review ships unobserved, and records every step after the agents', () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { spawnSync } = require('child_process');
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const path = require('path');
+        const r = spawnSync(process.execPath, [path.join(__dirname, '../funnel/observe-check.js')], { encoding: 'utf8', env: { PATH: process.env.PATH, HOME: process.env.HOME } });
+        expect({ status: r.status, out: r.stdout.split('\n').filter((l: string) => l.startsWith('{"shipped')).pop() }).toMatchObject({ status: 0 });
+    }, 120_000);
+});
