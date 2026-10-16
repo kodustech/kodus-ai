@@ -320,7 +320,7 @@ const loopRan = (result) =>
 
 async function once(c, judgeKey) {
     const { reviewPullRequest } = require('../shared/review-stage');
-    const { prOf, teamOf } = require('./pr-of-case');
+    const { prOf, teamOf, decisionsOf } = require('./pr-of-case');
     observeRepeatCheck();
 
     const phase = currentPhase();
@@ -340,12 +340,13 @@ async function once(c, judgeKey) {
             team: teamOf(c),
             route,
             permissionService,
-            decisions: c.previousDecisions || [],
+            decisions: decisionsOf(c),
             sandbox: c.sandbox === 'none' ? 'none' : 'alive',
+            // `alive` only counts the calls: every command reaches the sandbox.
             wrapSandbox:
-                c.sandbox === 'none' || c.sandbox === 'alive'
+                c.sandbox === 'none'
                     ? undefined
-                    : dyingSandbox(c.sandbox, counter),
+                    : dyingSandbox(c.sandbox || 'alive', counter),
         }),
     );
     if (review.skipped) {

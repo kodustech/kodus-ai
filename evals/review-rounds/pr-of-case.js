@@ -1,64 +1,33 @@
 // A review-rounds case as the data production reads a pull request from: the
 // repository before and after the PR, the team's stored rules, the PR's
-// commits as the platform lists them, and its decision store.
+// commits as the platform lists them, and its decision store's records.
 //
 // A case holds the repository at the reviewed head (`repo`) and, per changed
-// file, the hunk of the PR (`changedFiles`: a raw unified `patch`, or the
-// `patchWithLinesStr` the cases were first written in). The base tree is the
-// head tree with each hunk undone; the platform's file list, its patches and
-// the line-numbered rendering the agents read then come from production
-// (evals/shared/repo-mirror.js pullRequestFiles, FetchChangedFilesStage).
+// file, the PR's hunks as the platform returns them (`changedFiles[].patch`).
+// The base tree is the head tree with each hunk undone; the platform's file
+// list, its patches and the line-numbered rendering the agents read then come
+// from production (evals/shared/repo-mirror.js pullRequestFiles,
+// FetchChangedFilesStage).
 
-/** The hunks of one changed file: where they start at the head, the head's lines, the base's lines. */
+/** The hunks of one changed file's patch: where they start at the head, the head's lines, the base's lines. */
 function hunksOf(changed) {
     const hunks = [];
-    if (changed.patch) {
-        let cur = null;
-        for (const line of String(changed.patch).split('\n')) {
-            const h = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
-            if (h) {
-                cur = { oldStart: Number(h[1]), oldCount: h[2] === undefined ? 1 : Number(h[2]), newStart: Number(h[3]), head: [], base: [] };
-                hunks.push(cur);
-                continue;
-            }
-            if (!cur || line.startsWith('\\')) continue;
-            const mark = line[0];
-            const text = line.slice(1);
-            if (mark === '+') cur.head.push(text);
-            else if (mark === '-') cur.base.push(text);
-            else if (mark === ' ') {
-                cur.head.push(text);
-                cur.base.push(text);
-            }
-        }
-        return hunks;
-    }
-    // `## file: '…'` / `@@ -a,b +c,d @@` / `__new hunk__` numbered head lines /
-    // `__old hunk__` base lines.
     let cur = null;
-    let side = null;
-    for (const line of String(changed.patchWithLinesStr || '').split('\n')) {
+    for (const line of String(changed.patch || '').split('\n')) {
         const h = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
         if (h) {
             cur = { oldStart: Number(h[1]), oldCount: h[2] === undefined ? 1 : Number(h[2]), newStart: Number(h[3]), head: [], base: [] };
             hunks.push(cur);
-            side = null;
             continue;
         }
-        if (line === '__new hunk__') {
-            side = 'head';
-            continue;
-        }
-        if (line === '__old hunk__') {
-            side = 'base';
-            continue;
-        }
-        if (!cur || !side) continue;
-        if (side === 'head') {
-            const m = line.match(/^\d+ ([+ ])(.*)$/s);
-            if (m) cur.head.push(m[2]);
-        } else if (line.length) {
-            cur.base.push(line.slice(1));
+        if (!cur || line.startsWith('\\')) continue;
+        const mark = line[0];
+        const text = line.slice(1);
+        if (mark === '+') cur.head.push(text);
+        else if (mark === '-') cur.base.push(text);
+        else if (mark === ' ') {
+            cur.head.push(text);
+            cur.base.push(text);
         }
     }
     return hunks;
@@ -137,6 +106,26 @@ function prOf(c) {
     };
 }
 
+/**
+ * The decision store's records of the case's earlier suggestions, as
+ * PrDecisionStoreService writes them: a file-level record carries the code the
+ * suggestion pointed at (`existingCode`, which the repeat check matches on).
+ * Where a hand-written record does not give it, it is the record's lines in
+ * the tree before this round's change, the version the suggestion was posted
+ * on. A record on a file the case's repository does not hold keeps none.
+ */
+function decisionsOf(c, base = baseTreeOf(c)) {
+    return (c.previousDecisions || []).map((d) => {
+        // A record the store wrote (lifecycle.js, toRecord) has the field, set or not.
+        if ('existingCode' in d || !d.relevantFile || base[d.relevantFile] === undefined || !d.relevantLinesStart) return d;
+        const code = String(base[d.relevantFile])
+            .split('\n')
+            .slice(d.relevantLinesStart - 1, d.relevantLinesEnd || d.relevantLinesStart)
+            .join('\n');
+        return code.trim() ? { ...d, existingCode: code } : d;
+    });
+}
+
 /** The team's stored data: its Kody Rules as the save path writes them (active, every repository, file scope by default). */
 function teamOf(c) {
     const { KodyRulesStatus, KodyRulesType, KodyRulesScope } = require('../../libs/kodyRules/domain/interfaces/kodyRules.interface.ts');
@@ -152,4 +141,4 @@ function teamOf(c) {
     };
 }
 
-module.exports = { prOf, teamOf, baseTreeOf, hunksOf, platformCommits };
+module.exports = { prOf, teamOf, decisionsOf, baseTreeOf, hunksOf, platformCommits };

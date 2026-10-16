@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { cases } = require('./cases');
 const { sequences } = require('./lifecycle');
-const { baseTreeOf, hunksOf } = require('./pr-of-case');
+const { baseTreeOf, hunksOf, decisionsOf } = require('./pr-of-case');
 const { inlineMirror, pullRequestFiles } = require('../shared/repo-mirror');
 
-type Changed = { filename: string; patch?: string; patchWithLinesStr?: string };
+type Changed = { filename: string; patch?: string };
 type Case = { id: string; repo: Record<string, string>; changedFiles?: Changed[] };
 
 const rounds: Case[] = [
@@ -68,6 +68,24 @@ describe('a review-rounds case as a pull request', () => {
             ],
         });
         expect(base).toEqual({ 'b.ts': 'export const b = 2;\n' });
+    });
+
+    // The repeat check matches on the code an earlier suggestion pointed at,
+    // which the decision store keeps for every file-level suggestion.
+    it('an earlier suggestion carries the code it pointed at, as the decision store keeps it', () => {
+        const c = {
+            repo: { 'a.ts': 'one\nTWO\nthree\n' },
+            changedFiles: [{ filename: 'a.ts', patch: '@@ -1,3 +1,3 @@\n one\n-two\n+TWO\n three' }],
+            previousDecisions: [
+                { suggestionId: 'hand-written', relevantFile: 'a.ts', relevantLinesStart: 2, relevantLinesEnd: 3 },
+                { suggestionId: 'stored', relevantFile: 'a.ts', relevantLinesStart: 2, relevantLinesEnd: 2, existingCode: undefined },
+                { suggestionId: 'elsewhere', relevantFile: 'b.ts', relevantLinesStart: 1, relevantLinesEnd: 1 },
+            ],
+        };
+        const [handWritten, stored, elsewhere] = decisionsOf(c);
+        expect(handWritten.existingCode).toBe('two\nthree');
+        expect(stored.existingCode).toBeUndefined();
+        expect('existingCode' in elsewhere).toBe(false);
     });
 
     it('a hunk not found at the head fails as case data, never silently', () => {
