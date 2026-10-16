@@ -20,7 +20,7 @@
 |---|---|---|
 | Dedup | `evals/dedup` | `goldensLost == 0` with `guard=content@0.3` |
 | Severity | `evals/severity` | `filter_false_drop@high == 0` |
-| Format | `evals/format` | `ident_recall_mean ≥ 0.5`, low `parse_fail` |
+| Format | `evals/format` | share of findings formatted right, floor in `evals/format/targets.json` |
 
 ## Live matrix (smoke)
 
@@ -51,11 +51,11 @@
 # CI (no keys)
 node evals/dedup/run.js --mock=identity --gate
 node evals/severity/run.js --mock=heuristic --gate
-node evals/format/run.js --mock=perfect --gate
+node evals/wiring-smoke.js   # format runs there against the scripted model
 
 # Live single model
 node evals/severity/run.js --model=gpt-5.4-mini --gate
-node evals/format/run.js --model=gpt-5.4-mini --gate
+node evals/format/run.js --model=<id> --gate
 node evals/dedup/run.js --model=gpt-5.4-mini --guard=content --contentthresh=0.3 --gate
 
 # Matrix

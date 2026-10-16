@@ -1,6 +1,6 @@
 # Secondary-pass eval harness
 
-> - **Answers:** Shared datasets and model registry for the dedup, severity and format evals.
+> - **Answers:** Shared datasets and model registry for the dedup and severity evals.
 > - **Runs:** through those evals.
 > - **Run it:** `node evals/secondary/build-findings-dataset.js <recall-result.json>`
 > - **Gate:** none.
@@ -13,7 +13,7 @@ today run on platform `gpt-5.4-mini` and we want to certify for **client BYOK**.
 |---|---|---|
 | Dedup | `evals/dedup` | exists + matrix |
 | Severity | `evals/severity` | new |
-| Format | `evals/format` | new |
+| Format | `evals/format` | own cases (`evals/format/batches.json`), production formatter |
 
 See [BYOK-READINESS.md](./BYOK-READINESS.md) for the migration decision matrix.
 

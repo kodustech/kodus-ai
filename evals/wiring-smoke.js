@@ -117,7 +117,8 @@ async function main() {
         // The live dedup runner goes through LLM.run like the stage does.
         { name: 'dedup-engine', model: true, args: ['evals/dedup/run.js', '--model=eval-fake'] },
         { name: 'severity', args: ['evals/severity/run.js', '--mock=heuristic', '--gate'] },
-        { name: 'format', args: ['evals/format/run.js', '--mock=perfect', '--gate'] },
+        // The scripted model answers nothing usable: this measures the local fallback.
+        { name: 'format', model: true, args: ['evals/format/run.js', '--model=eval-fake', '--gate'] },
         {
             name: 'finder-recall',
             model: true,
