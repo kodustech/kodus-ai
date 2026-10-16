@@ -11,7 +11,10 @@ The review stage hands the findings of a review to `formatSuggestionContent`
 which rewrites the finder's WHAT/WHY/HOW text into the comment a developer
 reads, and falls back to stripping the labels locally when the model call
 fails. The eval calls it as the stage does (`agent-review.stage.ts`) and scores
-what ships: the formatted text, or the finder's own when nothing came back.
+what ships: the formatted text, or the finder's own when nothing came back,
+after the stage's deterministic shaping (the impact-and-action fallback, the
+scaffolding strip, and no code block, no title repeat, two sentences unless the
+team wrote its own guideline).
 
 - `batches.json`: the findings of 31 reviews, as nine models wrote them on public
   PRs (the run ends recorded for `evals/parse`, the one with the most findings
@@ -30,3 +33,4 @@ none judges whether the claim is still the same one.
 Under the scripted model (`--model=eval-fake`) the call returns nothing usable
 and the local fallback ships. It only removes the labels, so there it is scored
 on the labels, the code names and the code block, not on length or language.
+`--limit` takes the configurations in turn, so `--limit=5` runs one of each.

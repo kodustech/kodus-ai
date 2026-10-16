@@ -6,10 +6,14 @@
 //
 //   node evals/format/run.js [--model=<id>] [--gate] [--output=<result.json>] [--limit=N] [--concurrency=N]
 //
-// What ships is what the stage keeps: the formatted text, or the finder's own
-// text when the formatter returned none for that finding. A provider refusal
-// leaves the case unmeasured; a timeout or an unreadable answer ships the local
-// fallback, as in production, and is scored.
+// What ships is what the stage posts: the formatted text, or the finder's own
+// text when the formatter returned none for that finding, then the stage's
+// deterministic shaping (agent-review.stage.ts, after formatSuggestionContent):
+// the impact-and-action fallback for an unformatted finding, the scaffolding
+// strip, and the shape (no code block, no opening sentence that restates the
+// title, two sentences unless the team wrote its own guideline). A provider
+// refusal leaves the case unmeasured; a timeout or an unreadable answer ships
+// the local fallback, as in production, and is scored.
 //
 // Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/AGENTS.md).
 const fs = require('fs');
@@ -29,13 +33,27 @@ const args = Object.fromEntries(
 const MODEL = args.model || 'deepseek-v4-flash@fireworks';
 const TARGET = (require('./targets.json').models || {})[MODEL] || {};
 const BATCHES = Object.fromEntries(require('./batches.json').map((b) => [b.id, b]));
-const cases = require('./cases.json').slice(0, args.limit ? Number(args.limit) : undefined);
+// cases.json lists one configuration after another: --limit takes them in turn,
+// so a short run (the Friday cut) covers every configuration, not the first.
+const cases = (() => {
+    const all = require('./cases.json');
+    if (!args.limit) return all;
+    const rank = new Map();
+    const order = all.map((c) => {
+        const k = rank.get(c.variant) || 0;
+        rank.set(c.variant, k + 1);
+        return { c, k, v: Object.keys(VARIANTS).indexOf(c.variant) };
+    });
+    return order.sort((a, b) => a.k - b.k || a.v - b.v).slice(0, Number(args.limit)).map((x) => x.c);
+})();
 
 // libs/common/utils/crypto.ts reads API_CRYPTO_KEY at import time; CI has no .env.
 if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
 applyModelEnv(MODEL);
 countTokens();
 const { formatSuggestionContent } = require('../../libs/code-review/infrastructure/agents/engine/format-suggestion-content.ts');
+const { impactAndActionFallback, stripReviewScaffolding } = require('../../libs/code-review/infrastructure/agents/engine/strip-review-scaffolding.ts');
+const { shapeSuggestionBodyWithReport } = require('../../libs/common/utils/codeManagement/suggestion-body-shape.ts');
 const { classifyLLMError, LlmErrorCategory } = require('../../libs/llm/error-classifier.ts');
 
 // The scripted model answers nothing usable, so what ships is the local
@@ -59,9 +77,14 @@ async function runCase(c) {
     );
     const refusal = errors.find((e) => REFUSED.has(classifyLLMError(e).category));
     if (refusal) throw new Error(`formatter call refused: ${String(refusal?.message || refusal).slice(0, 200)}`);
+    // The stage's own shaping, as agent-review.stage.ts runs it on each finding.
+    const custom = !!variant.customWritingGuidelines;
     const detail = batch.findings.map((f, i) => {
         const out = formatted.get(i)?.suggestionContent;
-        const shipped = out && out.trim() ? out : f.suggestionContent;
+        const formattedHere = !!(out && out.trim());
+        const fallback = !custom && !formattedHere ? impactAndActionFallback(f.suggestionContent || '') : undefined;
+        const body = stripReviewScaffolding(fallback || (formattedHere ? out : f.suggestionContent) || '');
+        const shipped = shapeSuggestionBodyWithReport({ body, title: f.title, capSentences: !custom }).body;
         const failed = failedChecks(f, shipped, FALLBACK_ONLY ? { ...variant.want, only: FALLBACK_ONLY } : variant.want);
         return { what: `${i}. ${f.relevantFile}: ${f.title.slice(0, 70)}${failed.length ? ` — ${failed.join(', ')}` : ''}`, ok: !failed.length };
     });
@@ -135,8 +158,8 @@ async function main() {
         return 2;
     }
     if (args.gate && result.metric.floor === null) {
-        console.error(`GATE NOT EVALUATED: no floor for ${MODEL} in evals/format/targets.json`);
-        return 0;
+        console.error(`not measured: no floor for ${MODEL} in evals/format/targets.json, so --gate cannot judge it`);
+        return 2;
     }
     if (args.gate && result.metric.value < result.metric.floor) {
         console.error(`GATE FAILED: ${(result.metric.value * 100).toFixed(1)}% below the floor in evals/format/targets.json`);

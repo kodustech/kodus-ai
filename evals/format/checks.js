@@ -95,7 +95,9 @@ function allFailed(original, out, want) {
     if (title.size >= 3 && [...title].filter((w) => first.has(w)).length / title.size >= 0.8) failed.push('title');
     if (sentences(text).length > want.maxSentences) failed.push('length');
     const lang = languageOf(text);
-    if (want.language === 'en' ? !['en', 'unknown'].includes(lang) : lang !== want.language) failed.push(`language (${lang})`);
+    // 'unknown' is a text too short to tell, not a wrong language: only a
+    // competing language fails.
+    if (!['unknown', want.language].includes(lang)) failed.push(`language (${lang})`);
     return failed;
 }
 

@@ -62,7 +62,8 @@ const NIGHTLY_EVALS = [
         stage: 'format',
         run: ['evals/format/run.js'],
         files: ['evals/format/targets.json'],
-        friday: ['--limit=4'],
+        // One case of each configuration (five).
+        friday: ['--limit=5'],
     },
 ];
 
