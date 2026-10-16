@@ -270,7 +270,11 @@ export class TeamMemberService implements ITeamMemberService {
                         member,
                     );
 
-                    usersToSendInvite.push(user);
+                    // An existing user of the organization may come back
+                    // here; one who already accepted needs no invitation.
+                    if (user?.status !== STATUS.ACTIVE) {
+                        usersToSendInvite.push(user);
+                    }
                 }
 
                 if (!member.uuid) {
@@ -402,9 +406,10 @@ export class TeamMemberService implements ITeamMemberService {
         organizationAndTeamData: OrganizationAndTeamData,
         member: IMembers,
     ): Promise<IUser> {
-        let user: IUser;
-
-        user = await this.usersService.find(
+        // The member lookup only sees users on an active or pending team, so
+        // a user of this organization can still exist here; registering the
+        // email again would hit the unique constraint.
+        const [existing] = await this.usersService.find(
             {
                 email: member.email,
                 organization: {
@@ -412,21 +417,21 @@ export class TeamMemberService implements ITeamMemberService {
                 },
             },
             [STATUS.ACTIVE, STATUS.PENDING],
-        )[0];
+        );
 
-        if (!user) {
-            user = await this.usersService.register({
-                email: member.email,
-                password: this.generateTemporaryPassword(),
-                role: Role.CONTRIBUTOR,
-                status: STATUS.PENDING,
-                organization: {
-                    uuid: organizationAndTeamData.organizationId,
-                },
-            });
+        if (existing) {
+            return existing;
         }
 
-        return user;
+        return this.usersService.register({
+            email: member.email,
+            password: this.generateTemporaryPassword(),
+            role: Role.CONTRIBUTOR,
+            status: STATUS.PENDING,
+            organization: {
+                uuid: organizationAndTeamData.organizationId,
+            },
+        });
     }
 
     private async createTeamMember(

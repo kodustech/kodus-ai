@@ -607,4 +607,344 @@ describe('TeamMemberService — deterministic logic', () => {
             expect(response.results).toEqual([]);
         });
     });
+
+    describe('updateOrCreateMembers — invite, resend and rejection paths', () => {
+        const orgTeam = { organizationId: 'org-1', teamId: 'team-1' };
+        const invited = {
+            email: 'invitee@acme.dev',
+            status: 'invite_sent',
+            message: 'Invite sent successfully',
+        };
+
+        const setup = ({
+            orgMembers = [] as any[],
+            users = {} as Record<string, any>,
+            otherOrg = [] as any[],
+        } = {}) => {
+            const repo = {
+                findManyByOrganizationId: jest
+                    .fn()
+                    .mockResolvedValue(orgMembers),
+                create: jest.fn().mockResolvedValue({}),
+                update: jest.fn().mockResolvedValue({}),
+            };
+            const usersService = {
+                findUsersWithEmailsInDifferentOrganizations: jest
+                    .fn()
+                    .mockResolvedValue(otherOrg),
+                findOne: jest.fn(async ({ uuid }) => users[uuid] ?? null),
+                find: jest.fn().mockResolvedValue([]),
+                register: jest.fn(async (user) => ({
+                    ...user,
+                    uuid: 'new-user',
+                })),
+            };
+            const service = makeService(repo, usersService, {});
+            const sendInvitations = jest
+                .spyOn(service, 'sendInvitations')
+                .mockResolvedValue(undefined);
+            return { service, repo, usersService, sendInvitations };
+        };
+        const member = (email: string, extra: any = {}) => ({
+            email,
+            name: 'Invitee',
+            active: true,
+            ...extra,
+        });
+        const orgMember = (team: string) => ({
+            uuid: 'tm-1',
+            user: { uuid: 'u-1', email: 'invitee@acme.dev' },
+            team: { uuid: team },
+        });
+
+        it('creates a PENDING contributor for a new email and invites them', async () => {
+            const { service, repo, usersService, sendInvitations } = setup();
+
+            const response = await service.updateOrCreateMembers(
+                [member('invitee@acme.dev')] as any,
+                orgTeam,
+                'owner@acme.dev',
+            );
+
+            expect(usersService.register).toHaveBeenCalledWith({
+                email: 'invitee@acme.dev',
+                password: expect.any(String),
+                role: Role.CONTRIBUTOR,
+                status: STATUS.PENDING,
+                organization: { uuid: 'org-1' },
+            });
+            expect(repo.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    name: 'Invitee',
+                    teamRole: TeamMemberRole.MEMBER,
+                    user: { uuid: 'new-user' },
+                    organization: { uuid: 'org-1' },
+                    team: { uuid: 'team-1' },
+                }),
+            );
+            expect(repo.update).not.toHaveBeenCalled();
+            expect(sendInvitations).toHaveBeenCalledWith(
+                [expect.objectContaining({ uuid: 'new-user' })],
+                orgTeam,
+                'owner@acme.dev',
+            );
+            expect(response).toEqual({ success: true, results: [invited] });
+        });
+
+        it('resends to a member of this team who has not accepted yet, without a new user', async () => {
+            const pending = { uuid: 'u-1', status: STATUS.PENDING };
+            const { service, repo, usersService, sendInvitations } = setup({
+                orgMembers: [orgMember('team-1')],
+                users: { 'u-1': pending },
+            });
+
+            const response = await service.updateOrCreateMembers(
+                [member('invitee@acme.dev')] as any,
+                orgTeam,
+            );
+
+            expect(usersService.register).not.toHaveBeenCalled();
+            expect(repo.create).not.toHaveBeenCalled();
+            expect(repo.update).toHaveBeenCalledWith(
+                { uuid: 'tm-1' },
+                expect.objectContaining({ uuid: 'tm-1', name: 'Invitee' }),
+            );
+            expect(sendInvitations).toHaveBeenCalledWith(
+                [pending],
+                orgTeam,
+                undefined,
+            );
+            expect(response).toEqual({ success: true, results: [invited] });
+        });
+
+        it('does not invite a member who already accepted', async () => {
+            const { service, repo, sendInvitations } = setup({
+                orgMembers: [orgMember('team-1')],
+                users: { 'u-1': { uuid: 'u-1', status: STATUS.ACTIVE } },
+            });
+
+            await service.updateOrCreateMembers(
+                [member('invitee@acme.dev')] as any,
+                orgTeam,
+            );
+
+            expect(repo.update).toHaveBeenCalled();
+            expect(sendInvitations).not.toHaveBeenCalled();
+        });
+
+        it('adds a member of another team of the organization to this team, reusing the user', async () => {
+            const { service, repo, usersService } = setup({
+                orgMembers: [orgMember('team-2')],
+                users: { 'u-1': { uuid: 'u-1', status: STATUS.ACTIVE } },
+            });
+
+            await service.updateOrCreateMembers(
+                [member('invitee@acme.dev')] as any,
+                orgTeam,
+            );
+
+            expect(usersService.register).not.toHaveBeenCalled();
+            expect(repo.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    uuid: undefined,
+                    user: { uuid: 'u-1' },
+                    team: { uuid: 'team-1' },
+                }),
+            );
+        });
+
+        it('rejects an email registered in another organization and still invites the rest', async () => {
+            const { service, usersService } = setup({
+                otherOrg: [
+                    { email: 'taken@other.dev', uuid: 'u-x', extra: 'x' },
+                ],
+            });
+
+            const response = await service.updateOrCreateMembers(
+                [member('taken@other.dev'), member('invitee@acme.dev')] as any,
+                orgTeam,
+            );
+
+            expect(usersService.register).toHaveBeenCalledTimes(1);
+            expect(usersService.register).toHaveBeenCalledWith(
+                expect.objectContaining({ email: 'invitee@acme.dev' }),
+            );
+            expect(response).toEqual({
+                success: true,
+                results: [
+                    {
+                        email: 'taken@other.dev',
+                        status: 'user_already_registered_in_other_organization',
+                        uuid: 'u-x',
+                        message:
+                            'User already registered in another organization',
+                    },
+                    invited,
+                ],
+            });
+        });
+
+        it('rejects each of several emails registered in other organizations', async () => {
+            const { service, usersService } = setup({
+                otherOrg: [
+                    { email: 'a@other.dev', uuid: 'u-a' },
+                    { email: 'b@other.dev', uuid: 'u-b' },
+                ],
+            });
+
+            await service.updateOrCreateMembers(
+                [
+                    member('a@other.dev'),
+                    member('b@other.dev'),
+                    member('invitee@acme.dev'),
+                ] as any,
+                orgTeam,
+            );
+
+            expect(usersService.register).toHaveBeenCalledTimes(1);
+            expect(usersService.register).toHaveBeenCalledWith(
+                expect.objectContaining({ email: 'invitee@acme.dev' }),
+            );
+        });
+
+        it('skips an empty entry in the list', async () => {
+            const { service, usersService } = setup();
+
+            const response = await service.updateOrCreateMembers(
+                [null, member('invitee@acme.dev')] as any,
+                orgTeam,
+            );
+
+            expect(usersService.register).toHaveBeenCalledTimes(1);
+            expect(response.results).toEqual([invited]);
+        });
+
+        it('stops when every email is registered in another organization', async () => {
+            const { service, repo, usersService, sendInvitations } = setup({
+                otherOrg: [{ email: 'taken@other.dev', uuid: 'u-x' }],
+            });
+
+            const response = await service.updateOrCreateMembers(
+                [member('taken@other.dev')] as any,
+                orgTeam,
+            );
+
+            expect(response.success).toBe(false);
+            expect(response.results).toHaveLength(1);
+            expect(repo.findManyByOrganizationId).not.toHaveBeenCalled();
+            expect(usersService.register).not.toHaveBeenCalled();
+            expect(sendInvitations).not.toHaveBeenCalled();
+        });
+
+        it('reuses a user of the organization that has no team membership instead of registering it again', async () => {
+            // e.g. their only team was deactivated: the member lookup (by
+            // active/pending teams) misses them, but the user row exists.
+            const existing = {
+                uuid: 'u-1',
+                email: 'invitee@acme.dev',
+                status: STATUS.PENDING,
+            };
+            const { service, repo, usersService, sendInvitations } = setup();
+            usersService.find.mockResolvedValue([existing]);
+
+            await service.updateOrCreateMembers(
+                [member('invitee@acme.dev')] as any,
+                orgTeam,
+            );
+
+            expect(usersService.find).toHaveBeenCalledWith(
+                {
+                    email: 'invitee@acme.dev',
+                    organization: { uuid: 'org-1' },
+                },
+                [STATUS.ACTIVE, STATUS.PENDING],
+            );
+            expect(usersService.register).not.toHaveBeenCalled();
+            expect(repo.create).toHaveBeenCalledWith(
+                expect.objectContaining({ user: { uuid: 'u-1' } }),
+            );
+            expect(sendInvitations).toHaveBeenCalledWith(
+                [existing],
+                orgTeam,
+                undefined,
+            );
+        });
+
+        it('adds an existing active user of the organization without inviting them', async () => {
+            const { service, usersService, sendInvitations } = setup();
+            usersService.find.mockResolvedValue([
+                { uuid: 'u-1', status: STATUS.ACTIVE },
+            ]);
+
+            await service.updateOrCreateMembers(
+                [member('invitee@acme.dev')] as any,
+                orgTeam,
+            );
+
+            expect(usersService.register).not.toHaveBeenCalled();
+            expect(sendInvitations).not.toHaveBeenCalled();
+        });
+
+        it('updates the membership without inviting when its user is gone', async () => {
+            // The member was listed, but the user row was deleted before
+            // the loop reached it.
+            const { service, repo, sendInvitations } = setup({
+                orgMembers: [orgMember('team-1')],
+            });
+
+            const response = await service.updateOrCreateMembers(
+                [member('invitee@acme.dev')] as any,
+                orgTeam,
+            );
+
+            expect(repo.update).toHaveBeenCalled();
+            expect(sendInvitations).not.toHaveBeenCalled();
+            expect(response.results).toEqual([invited]);
+        });
+
+        it('ignores a blank email', async () => {
+            const { service, usersService } = setup();
+
+            const response = await service.updateOrCreateMembers(
+                [member('   ')] as any,
+                orgTeam,
+            );
+
+            expect(
+                usersService.findUsersWithEmailsInDifferentOrganizations,
+            ).toHaveBeenCalledWith([], 'org-1');
+            expect(usersService.register).not.toHaveBeenCalled();
+            expect(response).toEqual({ success: true, results: [] });
+        });
+
+        it('answers before the invitation emails go out and survives their failure', async () => {
+            const { service, sendInvitations } = setup();
+            sendInvitations.mockRejectedValueOnce(new Error('smtp down'));
+
+            const response = await service.updateOrCreateMembers(
+                [member('invitee@acme.dev')] as any,
+                orgTeam,
+            );
+
+            expect(response).toEqual({ success: true, results: [invited] });
+        });
+
+        it('wraps a persistence failure and keeps it as the cause', async () => {
+            const { service, repo } = setup();
+            const cause = new Error('db down');
+            repo.create.mockRejectedValueOnce(cause);
+
+            const failure = await service
+                .updateOrCreateMembers(
+                    [member('invitee@acme.dev')] as any,
+                    orgTeam,
+                )
+                .catch((error: Error) => error);
+
+            expect((failure as Error).message).toBe(
+                'Error creating or updating team members',
+            );
+            expect((failure as Error).cause).toBe(cause);
+        });
+    });
 });
