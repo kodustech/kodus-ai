@@ -1,7 +1,7 @@
 // The result every eval writes: the question it answers, what each case
 // checked and how it came out, and the number its gate reads. One shape, so the
 // nightly, the stage signals and the quality panel read every eval the same way
-// instead of one parser per eval (evals/AGENTS.md).
+// instead of one parser per eval (evals/README.md).
 //
 //   {
 //     eval:     'kody-rules',                       // the eval's folder under evals/
@@ -50,7 +50,7 @@ function resultProblems(result) {
     return problems;
 }
 
-// Two runs as one, over the cases BOTH runs have (evals/AGENTS.md: never two
+// Two runs as one, over the cases BOTH runs have (evals/README.md: never two
 // different subsets): counts summed, an item ok only when ok in both.
 function poolCases(a = [], b = []) {
     const byId = new Map(b.map((c) => [c.id, c]));

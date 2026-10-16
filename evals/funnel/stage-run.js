@@ -17,7 +17,7 @@
 // the control pair's checks. A stage with no floor for the model reports
 // `ungated`: measured, not compared, no alert.
 //
-// Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/AGENTS.md).
+// Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/README.md).
 const fs = require('fs');
 const path = require('path');
 const { countTokens, tokensUsed, withCallErrors } = require('../shared/eval-kit');

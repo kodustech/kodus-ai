@@ -117,7 +117,7 @@ carries the same shapes rewritten against a neutral codebase.
 ### What production delivers
 
 The counts live in [observed.json](observed.json) — capture writes them, nothing
-is typed by hand, and `evals/AGENTS.md` forbids restating them here. Refresh:
+is typed by hand, and `evals/README.md` forbids restating them here. Refresh:
 
 ```bash
 node evals/verifier-verdict/capture.js --days 10 --limit 200 --write-observed

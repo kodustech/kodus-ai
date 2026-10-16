@@ -10,7 +10,7 @@
 //
 // --no-memories  the same cases with no memory, to see which ones the memory decides
 //
-// Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/AGENTS.md).
+// Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/README.md).
 const fs = require('fs');
 const path = require('path');
 const { evalQuestion, resultProblems } = require('../shared/eval-result');

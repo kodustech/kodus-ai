@@ -59,7 +59,7 @@ function harmless(c, round, file) {
 }
 
 function ruleSequences() {
-    // Synthetic reproduction of Trinio's report, not a replay of private PR #2933.
+    // Synthetic reproduction of a customer report, not a replay of the customer's PR.
     const file = 'src/jobs/handler.ts';
     const template = byId('K1');
     const first = clone(template);
@@ -113,13 +113,13 @@ function ruleSequences() {
     return [
         {
             id: 'rules-rejected-four-rounds',
-            action: 'Trinio-shaped synthetic: rejected rule finding, four nearby commits with line shifts, then a new violation of the same rule in another function.',
+            action: 'Customer-report-shaped synthetic: rejected rule finding, four nearby commits with line shifts, then a new violation of the same rule in another function.',
             historyOutcome: 'not_implemented',
             rounds: rejected,
         },
         {
             id: 'rules-fixed-three-rounds',
-            action: 'Trinio-shaped synthetic: corrected rule violation, three nearby commits while status remains pending, then a new violation of the same rule in another function.',
+            action: 'Customer-report-shaped synthetic: corrected rule violation, three nearby commits while status remains pending, then a new violation of the same rule in another function.',
             historyOutcome: 'pending',
             rounds: fixed,
         },

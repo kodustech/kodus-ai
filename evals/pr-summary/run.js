@@ -493,7 +493,7 @@ async function main() {
     const problems = resultProblems(result);
     if (problems.length) infra(`the result breaks the shared shape — ${problems.join('; ')}`);
     // A case that crashed is out of the number: past the 5% budget the run did
-    // not measure (evals/AGENTS.md), engine break or not.
+    // not measure (evals/README.md), engine break or not.
     if (result.infra.errored > cases.length * 0.05) {
         infra(`${result.infra.errored} of ${cases.length} cases did not run (see above)`);
     }

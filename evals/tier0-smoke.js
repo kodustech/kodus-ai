@@ -149,7 +149,7 @@ function tier0Signal(r) {
 
 // One stage's eval on a few cases: it runs on this model when the eval says it
 // measured (exit 0; each eval holds its own budget of failed calls, exit 2
-// above it, evals/AGENTS.md), at least half its calls ran (Kody Rules exits 2
+// above it, evals/README.md), at least half its calls ran (Kody Rules exits 2
 // only under --gate; its nightly verdict reads the same half), and it got at
 // least one item right. The number is reported, never compared with a floor:
 // floors are calibrated on the full set.

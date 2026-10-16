@@ -10,7 +10,7 @@
 // comment names what is missing. --verify runs the skill with its verify pass
 // on (SkillExecutionPolicy.verifyAnalyzerResult), which production ships off.
 //
-// Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/AGENTS.md).
+// Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/README.md).
 const fs = require('fs');
 const path = require('path');
 const { applyModelEnv } = require('../shared/tier0-models');

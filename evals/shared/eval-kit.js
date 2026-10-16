@@ -1,4 +1,4 @@
-// What every eval runner needs and should not write again (evals/AGENTS.md).
+// What every eval runner needs and should not write again (evals/README.md).
 // Each piece here replaced a copy that drifted in one eval.
 const { AsyncLocalStorage } = require('async_hooks');
 const fs = require('fs');

@@ -1,4 +1,4 @@
-// The control pair of each stage eval over the snapshot (evals/AGENTS.md: one
+// The control pair of each stage eval over the snapshot (evals/README.md: one
 // case the stage must act on, one it must leave alone). They run on a
 // repository written for them, through the same production step as the
 // snapshot's cases, with no known bug from the dataset: each finding says what

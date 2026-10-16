@@ -197,8 +197,8 @@ assertions on `eval-fake` only: it proves the wiring, never model quality.
 
 The `rules-rejected-four-rounds` and `rules-fixed-three-rounds` sequences drive
 the production Kody Rules provider through the same lifecycle. They reproduce
-the shape of Trinio's report on private PR #2933 using invented code, not a
-replay of that PR: four nearby commits after rejection, or a repair followed by
+the shape of a customer report using invented code, not a replay of the
+customer's PR: four nearby commits after rejection, or a repair followed by
 three commits while the stored status remains pending. Each sequence ends with
 a new violation of the same rule in another function, which must be delivered.
 Only actual delivered comments enter the next round's history; an empty first

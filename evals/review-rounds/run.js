@@ -701,7 +701,7 @@ async function main() {
     checkpoint(true);
     console.log('\n' + JSON.stringify(summary.problems, null, 2));
     console.log(`wrote ${OUT}`);
-    // More than 5% of runs unmeasured is "not measured" (evals/AGENTS.md).
+    // More than 5% of runs unmeasured is "not measured" (evals/README.md).
     if (!summary.measured || summary.infra / rows.length > 0.05) {
         console.error(
             `INFRA: ${summary.infra}/${rows.length} runs not measured`,
@@ -712,7 +712,7 @@ async function main() {
         const target = TARGETS.models?.[MODEL];
         const { metric } = sharedResult(rows, selected);
         // A floor holds only for the set, the judge and the reasoning effort it
-        // was calibrated with (evals/AGENTS.md).
+        // was calibrated with (evals/README.md).
         const mismatch = !target?.floor
             ? `no floor for ${MODEL} in evals/review-rounds/targets.json`
             : narrowed

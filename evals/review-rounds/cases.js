@@ -996,7 +996,7 @@ const cases = [
         }],
         claims: [{ id: 'unclaimed-path-unfenced', golden: 'For a run that never claimed the lease, handleFailure takes the !ownedBy branch and updates the job with no condition, so the "do not stamp over a live worker" fence added for the BYOK-exhausted branch is missing on the rate-limit-gate / payload-validation path; a redelivery can overwrite a row another worker holds.', truth: 'contested', premise: 'diff', expect: 'if_delivered_linked', proposed: true }],
     },
-    // --- Kody Rules across rounds (#2933) ---
+    // --- Kody Rules across rounds ---
     {
         id: 'K1-rule-already-posted', family: 'rounds', agent: 'kody-rules', repo: jobsRepo, changedFiles: jobsDiff, sandbox: 'alive',
         kodyRules: [progressFirstRule],

@@ -18,7 +18,7 @@
 // --prose        only the cases that reach prose recovery (the Friday cut)
 // --concurrency  cases run at once (8): recovery calls take seconds each
 //
-// Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/AGENTS.md).
+// Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/README.md).
 const fs = require('fs');
 const path = require('path');
 const { resolveRoute, evalPermissionService, EVAL_ORG } = require('../shared/model-route');

@@ -20,7 +20,7 @@
 // libs/mcp-server/mcp-adapter/client.ts listTools), so the prompt never carries
 // the offers block. Those checks are the proof for that fix.
 //
-// Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/AGENTS.md).
+// Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/README.md).
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');

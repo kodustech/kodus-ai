@@ -305,7 +305,7 @@ async function main() {
     }
 
     if (GATE) {
-        // Not measured (evals/AGENTS.md): a run that threw (a clone, the
+        // Not measured (evals/README.md): a run that threw (a clone, the
         // provider) or whose review recorded an error counts in no
         // denominator. Up to 5% of runs may be lost that way; beyond, exit 2.
         const budget = Math.floor(totalRuns * 0.05);
