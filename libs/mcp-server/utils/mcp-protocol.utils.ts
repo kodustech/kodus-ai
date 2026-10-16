@@ -1,7 +1,6 @@
 import { SimpleLogger } from '@libs/core/log/logger';
 import { z } from 'zod';
 
-import { getMcpPrincipal } from '../auth/mcp-principal';
 import { JsonRpcCode } from './errors'; // ← novo
 import { toJsonRpcError, toToolErrorPayload } from './serialize'; // ← novo
 
@@ -75,25 +74,12 @@ export function wrapToolHandler<I = any, O = any>(
     return async (args: I, extra?: any) => {
         const start = Date.now();
         try {
-            // Tenant isolation (GHSA-5rf5-5rj3-37cv #1): the organization —
-            // and, for external Team CLI key clients, the team — is taken from
-            // the authenticated principal the McpAuthGuard resolved, NEVER from
-            // the client-supplied JSON-RPC arguments. Without this a valid
-            // credential for org A could act on org B by passing its id.
-            // The McpAuthGuard attaches the principal to every authenticated
-            // tools/call, so in production it is always present here; pinning
-            // when present is what enforces the boundary.
-            if (args && typeof args === 'object') {
-                const principal = getMcpPrincipal(extra);
-                if (principal) {
-                    const a = args as Record<string, unknown>;
-                    a.organizationId = principal.organizationId;
-                    if (principal.kind === 'team-key') {
-                        a.teamId = principal.teamId;
-                    }
-                }
-            }
-
+            // Tenant fields (organizationId, and teamId for Team CLI keys) are
+            // pinned to the authenticated principal by McpToolAuthorizer, which
+            // runs before this handler in both server factories and REJECTS a
+            // mismatch instead of silently rewriting it. Do not re-pin them
+            // here: the tenant boundary has a single owner
+            // (GHSA-5rf5-5rj3-37cv #1).
             const result = await handler(args, extra);
             const res = createToolResponse(result);
 
