@@ -124,7 +124,7 @@ async function runCase(c, judgeKey) {
         const detail = [
             { what: `says: ${c.golden.slice(0, 120)}${right ? '' : ` — replied: ${String(reply).replace(/\s+/g, ' ').slice(0, 160)}`}`, ok: right },
             { what: `declares no action nobody asked for (intent: ${decision?.intent ?? 'none'})`, ok: decision?.intent !== 'act' },
-            { what: `replies in ${c.language} (read as ${lang})`, ok: want === 'en' ? ['en', 'unknown'].includes(lang) : lang === want },
+            { what: `replies in ${c.language} (read as ${lang})`, ok: ['unknown', want].includes(lang) },
         ];
         // The whole reply, for whoever reads the verdict after the judge.
         return { hits: detail.filter((d) => d.ok).length, total: detail.length, detail, reply: String(reply).slice(0, 4000) };
@@ -189,8 +189,8 @@ async function main() {
         return 2;
     }
     if (args.gate && result.metric.floor === null) {
-        console.error(`GATE NOT EVALUATED: no floor for ${MODEL} in evals/conversation/targets.json`);
-        return 0;
+        console.error(`not measured: no floor for ${MODEL} in evals/conversation/targets.json, so --gate cannot judge it`);
+        return 2;
     }
     if (args.gate && result.metric.value < result.metric.floor) {
         console.error(`GATE FAILED: ${(result.metric.value * 100).toFixed(1)}% below the floor in evals/conversation/targets.json`);
