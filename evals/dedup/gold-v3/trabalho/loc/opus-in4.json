@@ -1,0 +1,2022 @@
+{
+ "dual-storage-architecture-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "e369f24665ec70e1e3700f457d25ef83301d931a",
+  "base": "66c4dff17e9147b11fb9b14c6ed63089a599da65",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     50,
+     51
+    ],
+    "texto": "WHAT: The asynchronous legacy write derives its timeout from the original request context, as do the other three write goroutines. WHY: Once the handler returns, request cancellation cancels this child context too, so successful unified writes can consistently fail to reach legacy storage despite the nominal ten-second timeout. HOW: Detach cancellation with context.WithoutCancel(ctx) before applying the bounded timeout, preserving request values needed for tenant identity."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     139,
+     139
+    ],
+    "texto": "WHAT: Legacy Update receives the original UpdatedObjectInfo rather than the object successfully committed to unified storage. WHY: Playlist legacy Update invokes UpdatedObject(ctx, old) against its own stored object, so a patch applied to stale legacy data can persist a different result or fail its preconditions instead of mirroring the successful unified update. HOW: Restore the updateWrapper around res so the legacy layer receives the committed unified object rather than recomputing the transformation."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     106,
+     106
+    ],
+    "texto": "WHAT: Successful Delete records the resource name in the histogram's kind label. WHY: recordStorageDuration passes that argument directly to WithLabelValues, creating a retained histogram per distinct deleted object and unbounded metric cardinality over the server lifetime. HOW: Pass options.Kind, consistent with the error branch and other operations."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     166,
+     166
+    ],
+    "texto": "WHAT: The legacy DeleteCollection duration and error are recorded in the unified-storage histogram. WHY: Each successful unified deletion contributes a second storage observation for a different backend, while legacy failures appear as unified failures and the legacy histogram receives no observation. HOW: Record this result with recordLegacyDuration."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     45,
+     45
+    ],
+    "texto": "WHAT: A unified Create failure is recorded with recordLegacyDuration; Update repeats the same collector error at line 129. WHY: Unified write failures disappear from the storage failure histogram and are attributed to legacy even though the legacy operation is never attempted. HOW: Use recordStorageDuration in both unified error branches."
+   },
+   {
+    "id": "S6",
+    "file": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+    "lines": [
+     28,
+     28
+    ],
+    "texto": "This test name says creation occurs only in the unified store, but the case configures Legacy.Create and mode 3 invokes both Storage.Create and Legacy.Create. The resulting test output describes the opposite storage contract and can mislead maintainers about expected dual-write behaviour. Rename it to describe creation in both stores."
+   },
+   {
+    "id": "S7",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     50,
+     55
+    ],
+    "texto": "Create now returns before Legacy.Create finishes, but the background operation still inherits the request context. When the API handler returns, that context is canceled, canceling the legacy write even though its ten-second timeout has not elapsed. Previously the synchronous call completed before the request ended. The same lifecycle mismatch affects Update, Delete, and DeleteCollection. Detach request cancellation while retaining context values before starting these background writes, then apply the bounded timeout, so successful requests do not routinely leave legacy storage unchanged."
+   },
+   {
+    "id": "S8",
+    "file": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+    "lines": [
+     345,
+     353
+    ],
+    "texto": "The successful Create and Update cases configure legacy mock responses but never assert that those calls occur, and all four write tests return after checking only the unified-store result. Since the implementation performs legacy writes in goroutines, the assertions can finish before those calls even start. Removing the legacy goroutines from Create, Update, Delete, and DeleteCollection would still pass these tests, leaving the defining dual-write behavior untested. Add separate legacy-call signals, wait for their completion with a bounded condition-based wait, and assert the legacy calls and arguments (using distinct legacy and storage mocks). Mock response setup alone does not verify execution."
+   },
+   {
+    "id": "S9",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     45,
+     45
+    ],
+    "texto": "Create records a failed Storage.Create using recordLegacyDuration, even though Legacy.Create is never attempted on this path. Update repeats this at line 129. This hides unified-storage failures from its duration/error series and adds fictitious failures to the legacy series. Use recordStorageDuration in both error paths."
+   },
+   {
+    "id": "S10",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     166,
+     166
+    ],
+    "texto": "This observation times Legacy.DeleteCollection but calls recordStorageDuration. Each successful collection deletion therefore contributes two observations to unified-storage timing and none to legacy timing, and legacy errors are attributed to the wrong backend. Record this with recordLegacyDuration."
+   },
+   {
+    "id": "S11",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     106,
+     106
+    ],
+    "texto": "The successful Storage.Delete observation passes name, whereas its failure path and the legacy observation pass options.Kind in the same argument position. Successes and failures for the same operation consequently land in different label series, and individual resource names introduce potentially unbounded cardinality. Use options.Kind consistently."
+   },
+   {
+    "id": "S12",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     97,
+     97
+    ],
+    "texto": "Delete builds log with name, kind and method but puts d.Log into the context instead. Logs emitted by either storage implementation through the context lose those correlation fields, unlike the other methods. Pass the enriched log to NewContext."
+   },
+   {
+    "id": "S13",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     50,
+     57
+    ],
+    "texto": "The independently launched legacy writes do not preserve the order of primary mutations, even when the client issues requests sequentially. For example, after Create returns successfully, a client can Delete the same object; the delete goroutine can reach Legacy.Delete before this goroutine reaches Legacy.Create. The delete then finds nothing, and the delayed create leaves an object in legacy storage that no longer exists in primary storage. Two updates can similarly overwrite a newer legacy value with an older one. Preserve per-object mutation order (including across create/update/delete), or keep the legacy calls synchronous rather than launching independent goroutines."
+   },
+   {
+    "id": "S14",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     50,
+     55
+    ],
+    "texto": "The background write still derives its context from the HTTP request. Once Create returns and the response completes, that context is canceled; WithTimeoutCause does not detach cancellation, so the legacy write can fail immediately or be canceled in flight despite the successful unified write. The same issue affects the other new background mutations. Detach cancellation while preserving context values before applying the bounded timeout, or await replication before returning."
+   },
+   {
+    "id": "S15",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     108,
+     114
+    ],
+    "texto": "Independent goroutines do not preserve mutation order across requests. For example, unified Create succeeds and returns while its legacy Create is delayed; a subsequent Delete succeeds in unified storage and its legacy Delete runs first, finding nothing; the delayed legacy Create then inserts the object. Unified storage now has no object while legacy storage retains it. Updates can similarly arrive in reverse order. Preserve per-resource mutation ordering (including create/delete), or keep replication synchronous rather than launching independent goroutines."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#01",
+    "descricao": "Delete puts the base d.Log instead of the enriched per-call logger into the context, so downstream logs lose name/kind/method fields.",
+    "textoGolden": "The context is being created with d.Log instead of the log variable that was initialized with additional context values (name, kind, method). This means those values won't be propagated to the logging context.",
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       97,
+       97
+      ],
+      "texto": "`ctx = klog.NewContext(ctx, d.Log)` installs the mode-level logger instead of the request-scoped `log` built on line 96 (which carries name, kind and method) \u2014 a copy/paste error, as every other method in this file passes the composed `log`. Storage.Delete and the legacy delete goroutine therefore log without the per-request fields this PR is adding (and without the metrics method/kind context)."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       97,
+       97
+      ],
+      "texto": "ctx is built with klog.NewContext(ctx, d.Log) instead of the enriched `log`. The delete logs then lose the name, kind and method values. Use `log`."
+     },
+     {
+      "file": "dualwriter_mode3.go",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The Delete context uses d.Log rather than the per-call log. This is a logging-context inconsistency (not a data leak); use the per-call logger for consistency."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#02",
+    "descricao": "The legacy DeleteCollection goroutine records its duration with recordStorageDuration instead of recordLegacyDuration, misattributing legacy latency and errors to the storage metric.",
+    "textoGolden": "In DualWriterMode3's DeleteCollection method, when a storage operation fails, recordStorageDuration is incorrectly called with recordLegacyDuration instead.",
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       166,
+       166
+      ],
+      "texto": "The legacy DeleteCollection duration and error status are recorded in the unified-storage histogram. Every successful unified deletion therefore produces a second storage observation for a different backend, while legacy deletion failures are attributed to unified storage and no legacy observation is emitted. Call recordLegacyDuration here instead."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       166,
+       166
+      ],
+      "texto": "The timed call is d.Legacy.DeleteCollection, but its measurement is emitted using recordStorageDuration. Use recordLegacyDuration; otherwise storage receives two measurements for a successful collection deletion and legacy receives none, and legacy failures appear as storage failures."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       166,
+       166
+      ],
+      "texto": "The legacy DeleteCollection duration is recorded with recordStorageDuration, so legacy latency and errors are attributed to storage. Use recordLegacyDuration."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#03",
+    "descricao": "Delete's success path records the storage metric with the object name in the kind label instead of options.Kind, creating per-object series and inconsistent labels.",
+    "textoGolden": "Inconsistency: using name instead of options.Kind for metrics recording differs from other methods.",
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       106,
+       106
+      ],
+      "texto": "The Delete success-path metric passes `name` where every other call site in this file (lines 48, 103, 113, 156, 159) passes options.Kind in the kind/name argument slot. The storage-success sample for Delete is thus labelled with the object name instead of the resource kind, breaking label consistency with the other operations and with the error sample emitted at line 103. Use options.Kind here (or insert name consistently everywhere, matching the metric's label semantics)."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       106,
+       106
+      ],
+      "texto": "recordStorageDuration(false, mode3Str, name, method, startStorage) at line 106 passes the object name in the kind label slot."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       106,
+       106
+      ],
+      "texto": "recordStorageDuration is called with the object `name` as the `kind` label: `d.recordStorageDuration(false, mode3Str, name, method, startStorage)`. Every other storage call site passes `options.Kind` (lines 73, 89, 103, 156, 159). This injects a per-object value into the kind label, corrupting the metric and giving it unbounded cardinality (one series per object name), which grows memory on every delete. Should be `options.Kind`."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#04",
+    "descricao": "On storage Create/Update failure the duration is recorded with recordLegacyDuration, attributing unified-store errors to the legacy metric.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       43,
+       46
+      ],
+      "texto": "On a Storage.Create failure the code records the error with recordLegacyDuration(true, mode3Str, options.Kind, method, startStorage) \u2014 the failing subsystem is Storage, not Legacy, and it passes the storage start time. This records storage failures under the legacy metric, corrupting the dual-writer error dashboards (and contradicts the success path on line 48 which uses recordStorageDuration). Use d.recordStorageDuration(true, mode3Str, options.Kind, method, startStorage)."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       127,
+       130
+      ],
+      "texto": "On a Storage.Update failure the code records the error with recordLegacyDuration(true, mode3Str, options.Kind, method, startStorage), attributing a storage failure and its storage duration to the legacy metric. This is inconsistent with the success path on line 132 (recordStorageDuration) and with mode1's semantics. Use d.recordStorageDuration(true, mode3Str, options.Kind, method, startStorage)."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       161,
+       167
+      ],
+      "texto": "The async goroutine performing the LEGACY DeleteCollection measures it with d.recordStorageDuration(err != nil, mode3Str, options.Kind, method, startLegacy). Every other legacy write in this file uses recordLegacyDuration (lines 56, 113, 140); recording it under the storage metric reports legacy latency/errors as storage latency/errors. Use d.recordLegacyDuration(err != nil, mode3Str, options.Kind, method, startLegacy)."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#05",
+    "descricao": "Mode 3 legacy writes now run in background goroutines derived from the request context, which is cancelled when the request completes, so legacy writes can be cancelled and legacy storage falls out of sync.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       50,
+       57
+      ],
+      "texto": "The async legacy write goroutine derives its context from the request-scoped `ctx` (context.WithTimeoutCause(ctx, ...)). The apiserver cancels that context as soon as the HTTP handler returns \u2014 which is immediately after Create/Update/Delete/DeleteCollection return \u2014 so the goroutine's Legacy.Create can be canceled before completing, silently dropping the legacy write that this mode exists to guarantee. The same applies to the goroutines at lines 108-114, 134-141 and 161-167. Detach the async context from request cancellation (e.g. derive from context.WithoutCancel(ctx) / context.Background()) before applying the timeout."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       50,
+       57
+      ],
+      "texto": "The legacy write in Mode 3 became fire-and-forget, changing the contract callers relied on: previously Create (and, identically, Update/Delete/DeleteCollection) returned only after the LegacyStorage call had been made in-request; now it returns immediately and the write runs in a detached goroutine. Worse, the goroutine builds its context from the request-scoped `ctx` (line 51: `context.WithTimeoutCause(ctx, ...)`), which the API server cancels as soon as the handler returns/flushes the response \u2014 so the legacy write and its 10s timeout will typically be cancelled outright and the legacy store silently stops being updated, which is precisely what the new mode-3 integration cases assume still happens. Any detached work must be given a context not tied to the request lifetime (e.g. context.WithoutCancel(ctx) or a server-lifetime context), and consumers that depended on the synchronous legacy write need to be updated."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       50,
+       51
+      ],
+      "texto": "The asynchronous legacy write derives its timeout context from the request context, which is canceled when the HTTP request finishes. Create, Update, Delete, and DeleteCollection return before this work completes, so their legacy database operations can be canceled immediately instead of receiving the intended ten-second window. Derive the bounded background context from context.WithoutCancel(ctx) to retain request values without inheriting request cancellation."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#06",
+    "descricao": "Legacy.Update now receives the original objInfo instead of a wrapper carrying the object stored in unified storage, so legacy recomputes the update and can diverge.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       139,
+       139
+      ],
+      "texto": "Legacy.Update receives the original objInfo instead of the object successfully committed to unified storage. The playlist legacy implementation calls objInfo.UpdatedObject(ctx, old) against its own legacy object, so a patch is reapplied to potentially stale state and can persist a different result or fail rather than mirror the unified write. Pass an updateWrapper containing res, as the previous implementation did."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       139,
+       139
+      ],
+      "texto": "Legacy.Update previously received an updateWrapper containing the object returned by Storage.Update; it now receives the original objInfo. UpdatedObjectInfo can compute an update from the old object supplied by each backend (notably for patches), so evaluating it against a stale legacy object can produce a different result or reject an update that already succeeded in Storage. Preserve the canonical-result contract by passing an updateWrapper with updated: res and upstream: objInfo to the legacy consumer rather than replaying the original update against legacy state."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       139,
+       139
+      ],
+      "texto": "Legacy.Update now receives the original objInfo rather than the updateWrapper containing the object successfully committed to Storage. UpdatedObjectInfo can represent a patch/transform based on the supplied old object; replaying it against legacy's potentially different old state can persist a different result or fail, even though the authoritative update succeeded. Restore forwarding of the committed result via updateWrapper instead of recomputing the update against legacy state."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#07",
+    "descricao": "The Mode 3 tests never wait for or assert the asynchronous legacy writes, and legacy and storage share one mock, so removing the legacy calls would not fail them.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+      "lines": [
+       30,
+       57
+      ],
+      "texto": "The legacy half of Mode 3 is never verified, so these tests cannot catch its removal. Mode 3 is documented as writing to BOTH LegacyStorage and Storage, and the implementation performs the legacy write in a detached goroutine (`go func(){ d.Legacy.Create(...) }()`, dualwriter_mode3.go lines 50-57, and likewise at 108-114, 134-141, 161-167). Each test registers legacy expectations (`setupLegacyFn`, e.g. lines 30-32 and 40-42) but never calls `m.AssertExpectations(t)`, `AssertCalled` or `AssertNumberOfCalls`, and never waits for or observes the goroutine \u2014 no channel, no polling. Additionally `legacyStoreMock{m, l}` and `storageMock{m, s}` (lines 53-54, and the same pair in every other test function) share one `*mock.Mock`, so even a count assertion could not distinguish a legacy call from a storage call. Deleting every `d.Legacy.*` call from the implementation leaves all six tests passing, which is exactly the regression the names \u2014 and the Mode 3 contract \u2014 claim to cover."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+      "lines": [
+       65,
+       75
+      ],
+      "texto": "The successful Create test never verifies the legacy write. Configuring m.On(\"Create\", ...) does not require that expectation to be consumed, and these assertions only inspect the object returned by Storage.Create. Deleting the entire legacy-create goroutine would still pass this test. Use distinct storage and legacy mocks and synchronize on the legacy call, then assert that it completed with the intended object."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+      "lines": [
+       345,
+       353
+      ],
+      "texto": "The successful Update case configures a legacy Update expectation but returns after checking only the unified-store result. It neither waits for the asynchronous legacy update nor verifies its expectation, so removing the legacy-update goroutine entirely still passes. Add explicit synchronization and verification of the legacy update (ideally with separate mocks), including the object propagated to legacy storage."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#09",
+    "descricao": "The List error test case is still named 'not implemented' although List is now implemented and the case checks storage error propagation.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+      "lines": [
+       145,
+       145
+      ],
+      "texto": "The test-case name \"error when listing an object in the unified store is not implemented\" still describes the old stub List (which returned nil, nil with a \"List not implemented\" log). List is now implemented at dualwriter_mode3.go:79 and delegates to Storage.List; the case merely checks that a Storage error is propagated. The name contradicts the code it now exercises \u2014 rename it, e.g. \"error when listing objects in the unified store fails\"."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#10",
+    "descricao": "The Create test case name says 'only in the unified store' although Mode 3 also writes to legacy.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+      "lines": [
+       28,
+       28
+      ],
+      "texto": "The test name says creation happens \"only in the unified store\", but this case configures a successful Legacy.Create as well, and Mode3.Create launches that legacy write after the unified write succeeds. Rename the case to describe creation in both stores (with the legacy write asynchronous), so test output does not communicate the opposite of the mode-3 write contract."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#11",
+    "descricao": "Independent per-request goroutines remove ordering between legacy writes to the same resource, so legacy can end up with an older version or a resurrected object.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       134,
+       139
+      ],
+      "texto": "Independent goroutines remove ordering between successful writes to the same resource. For example, Storage commits update A and then update B, but the legacy goroutine for B can finish before A, leaving legacy with A while Storage contains B. Likewise a delete can run before an earlier create and leave a resurrected legacy object. Preserve per-resource commit order for mirroring (including across create/update/delete), rather than launching each write independently."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#13",
+    "descricao": "The storage-failure Create test registers its failing expectation via setupLegacyFn and only works because legacy and storage share one mock.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+      "lines": [
+       37,
+       44
+      ],
+      "texto": "The 'error when creating object in the unified store fails' case registers the failing Create expectation only through setupLegacyFn. It passes only because legacy and storage share one mock, so the storage Create gets that error by accident. Register the expectation in setupStorageFn and use separate mocks for legacy and storage, so the test really covers a storage failure."
+     }
+    ]
+   }
+  ]
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     9,
+     15
+    ],
+    "texto": "The category query indexes the first row without checking whether any row was returned. On installations without a stored embed_category setting, or whose configured category no longer exists, [0] is nil and ['id'] raises before the fallback can run, aborting the upgrade even when embedding is unused. Check for an empty result before reading the ID, and apply the same protection to the fallback query."
+   },
+   {
+    "id": "S2",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     24,
+     25
+    ],
+    "texto": "The migration inserts legacy host values verbatim instead of applying the normalization required by the new lookup. Existing URL-form entries such as https://example.com/1234 become database values that can never equal URI.host (example.com), disabling embedding for those hosts after upgrade. Normalize each migrated host by removing its scheme and path before insertion, consistently with EmbeddableHost's normalization."
+   },
+   {
+    "id": "S3",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     14,
+     17
+    ],
+    "texto": "record_for_host compares URI.host against the saved host string even though the validator explicitly accepts a :port suffix. Saving example.com:8080 therefore succeeds, but a request from http://example.com:8080 resolves to example.com and is rejected, preventing embedding and category lookup for that configured host. Use a consistent port-aware representation for both stored entries and incoming URLs."
+   },
+   {
+    "id": "S4",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     17,
+     17
+    ],
+    "texto": "The domain comparison normalizes only the stored host. URI parsing preserves hostname case, so an allowed `example.com` does not match `https://EXAMPLE.com/article`, even though DNS hostnames are case-insensitive. This rejects legitimate embedding requests and makes category derivation fail for equivalent mixed-case URLs. Normalize the parsed hostname as well before comparing."
+   },
+   {
+    "id": "S5",
+    "file": "spec/models/topic_spec.rb",
+    "lines": [
+     1401,
+     1404
+    ],
+    "texto": "This case claims to verify that a missing embeddable host prevents expansion, but the built topic has no TopicEmbed and the previous stub making has_topic_embed? true has been removed. Consequently the current implementation, which no longer checks for any allowed hosts, still passes this test because has_topic_embed? is false. Set embed_truncate to true and stub has_topic_embed? to true in this case so that absence of a host is the only false prerequisite; if absence of hosts is intentionally no longer a prerequisite, rename this case to describe the missing topic embed instead."
+   },
+   {
+    "id": "S6",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     9,
+     11
+    ],
+    "texto": "The join can return no rows (for example, when embed_category has no persisted setting or its stored name no longer matches a category). In that case execute(...)[0] is nil and indexing ['id'] aborts the migration, before the category_id == 0 fallback can run. Check whether the result has a first row before accessing its id; the fallback query below likewise needs to handle an empty result."
+   },
+   {
+    "id": "S7",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     24,
+     25
+    ],
+    "texto": "The migration inserts legacy host values verbatim, bypassing the normalization introduced in EmbeddableHost's before_validation callback. EmbeddableHost.record_for_host now compares URI.host (a bare hostname) against this stored value, so an existing entry such as `https://example.com/1234` will never match after upgrading. The changed embed controller tests explicitly exercise scheme/path-bearing configurations, but only through model creation, which runs the callback. Normalize migrated values to the same bare-host representation before inserting so existing embeds continue to work."
+   },
+   {
+    "id": "S8",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     24,
+     25
+    ],
+    "texto": "The old allowlist accepted URL-form entries (the existing embed controller tests used `http://discourse.org` and `https://example.com/1234`), but this INSERT preserves those strings verbatim and bypasses the new model's normalization callback. `EmbeddableHost.record_for_host` now compares only `URI(url).host` against the stored value, so those migrated hosts stop being allowed: existing embeds are denied and TopicRetriever rejects their URLs after upgrade. Normalize each legacy entry by stripping its scheme and path, consistently with the new model, before inserting it."
+   },
+   {
+    "id": "S9",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     9,
+     15
+    ],
+    "texto": "The SELECT can return no rows when embed_category was never explicitly configured (or its category no longer exists). Accessing [0]['id'] then raises on nil, so the category_id == 0 fallback is never reached and upgrading fails even on installations not using embedding. Handle an empty result before dereferencing it, and likewise handle an absent uncategorized setting."
+   },
+   {
+    "id": "S10",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     24,
+     25
+    ],
+    "texto": "Legacy entries can include schemes and paths, as the changed embed controller tests demonstrate with http://discourse.org and https://example.com/1234. This raw SQL copy preserves those strings and bypasses the new model's normalization callback, but record_for_host compares the stored value to URI.host alone. Such previously working hosts stop allowing embeds after upgrade. Normalize each legacy entry to the same representation used by the reader before inserting it."
+   },
+   {
+    "id": "S11",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     14,
+     17
+    ],
+    "texto": "The validator explicitly accepts example.com:8080 and the normalization callback preserves that port. URI.host for http://example.com:8080, however, is only example.com, so this query never finds the configured entry. Use a consistent authority representation at both the write and lookup sites so port-bearing allowed hosts actually work."
+   },
+   {
+    "id": "S12",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     9,
+     11
+    ],
+    "texto": "When embed_category has never been configured, or its saved name no longer matches a category, this SELECT returns no rows. Indexing [0] then ['id'] raises NoMethodError on nil before the intended category_id == 0 fallback can run. This blocks upgrades even on sites that never enabled embedding. Handle an absent row explicitly, and likewise handle an absent uncategorized setting row in the fallback."
+   },
+   {
+    "id": "S13",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     5,
+     7
+    ],
+    "texto": "The create endpoint assigns the supplied host directly, so a request with host: null reaches this callback with nil. Calling sub! raises NoMethodError before validates_format_of runs, producing a server error rather than the controller's render_json_error response. Guard the normalization so invalid absent hosts can be rejected by validation."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+    "descricao": "EmbeddableHost's before_validation calls self.host.sub! unconditionally, so saving a record with a nil host raises NoMethodError instead of returning a validation error.",
+    "textoGolden": "The EmbeddableHost model's before_validation callback calls self.host.sub! to strip http://, https://, and path segments, but if self.host is nil, this raises NoMethodError.",
+    "comentarios": [
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       5,
+       7
+      ],
+      "texto": "The before_validation callback calls `sub!` on host without guarding nil. Creating a host with a missing or null host field reaches this callback from save_host and raises NoMethodError instead of returning a validation error. Guard nil during normalization and let presence/format validation reject it."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       5,
+       8
+      ],
+      "texto": "WHAT: `before_validation` calls `self.host.sub!(...)` unconditionally, so a record with a nil host raises NoMethodError (`nil.sub!`) instead of producing a normal format-invalid result. WHY: `Admin::EmbeddableHostsController#save_host` assigns `params[:embeddable_host][:host]` directly; any request that omits the host value makes the save raise a 500 instead of returning the `render_json_error(host)` validation response. HOW: guard the mutation, e.g. `return if host.blank?` at the top of the before_validation block (or use `self.host = self.host.to_s` before stripping)."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       5,
+       8
+      ],
+      "texto": "before_validation calls self.host.sub!(...) on a possibly-nil host before validates_format_of runs. The controller assigns host.host = params[:embeddable_host][:host], so a request without a host key leaves it nil and nil.sub! raises NoMethodError at save time instead of the format validation producing a normal error response. Add a presence guard so validation reports the failure."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+    "descricao": "update and destroy in Admin::EmbeddableHostsController fetch the host with where(id:).first and never check for nil, so an unknown id raises NoMethodError and returns a 500 instead of not-found.",
+    "textoGolden": "The update and destroy methods in Admin::EmbeddableHostsController do not validate the existence of the EmbeddableHost record retrieved by ID. If EmbeddableHost.where(id: params[:id]).first returns nil (i.e., the host does not exist), attempting to call methods on the nil object (e.g., save_host or destroy) will result in a NoMethodError.",
+    "comentarios": [
+     {
+      "file": "",
+      "lines": [
+       15,
+       16
+      ],
+      "texto": "In the destroy action, the nil-host case (line 15-16) would raise NoMethodError. Consider adding a nil check to handle the case where the host is not found."
+     },
+     {
+      "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+      "lines": [
+       9,
+       18
+      ],
+      "texto": "update and destroy fetch the record with EmbeddableHost.where(id: params[:id]).first but never check for nil, then immediately use it (save_host(host) does host.host = ... / host.save; destroy does host.destroy). A stale or already-deleted id, or an interleaving where a concurrent delete removes the row first, makes host nil and the first call on it raises NoMethodError -> unhandled 500. Guard with a nil/404 check before use."
+     },
+     {
+      "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+      "lines": [
+       10,
+       11
+      ],
+      "texto": "Update passes the nullable result of where(...).first directly to save_host, which immediately assigns host.host. Updating a nonexistent or concurrently deleted record returns an internal error instead of a not-found response; destroy has the same lookup failure. Use find or explicitly raise a not-found error before dereferencing the lookup result."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+    "descricao": "record_for_host compares lower(host) against the un-lowercased URI host, so mixed-case referer hosts fail to match allowed hosts and embedding is rejected.",
+    "textoGolden": "record_for_host compares lower(host) = ? but does not normalize the parameter\u2019s case, so mixed\u2011case referer hosts may fail to match even though comparison intends to be case\u2011insensitive.",
+    "comentarios": [
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "Normalize the parsed hostname before comparing it with lower(host). URI parsing preserves hostname case, so an allowed entry such as example.com does not match https://EXAMPLE.com/page even though DNS hostnames are case-insensitive. This makes valid embedding requests fail the host authorization check and makes category lookup inconsistent for equivalent domain identities. Compare against host.downcase (or normalize both operands equivalently), and add a mixed-case URL test."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "The query compares lower(host) to the un-downcased uri.host. A referer such as http://EvilTrout.com never matches the stored lowercase host, so embedding is wrongly denied. Fix: use where(\"lower(host) = ?\", host.downcase)."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "The query compares lower(host) in the database with uri.host, which is not lowercased, so the comparison normalizes only one side. A referer or URL with uppercase letters (e.g. http://EvilTrout.com) will not match the stored host. Compare against host.downcase, i.e. where('lower(host) = ?', host.downcase)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+    "descricao": "The migration copies the legacy embeddable_hosts values into the new table without stripping scheme and path, so hosts stored as http://example.com no longer match the bare-host lookup and previously allowed embeds are rejected after upgrade.",
+    "textoGolden": "Because this migration inserts embeddable_hosts rows with raw SQL, any existing embeddable_hosts values that include http:// or /https:// or path segments won\u2019t go through the EmbeddableHost model\u2019s normalization, so the new host lookup (which compares only the bare host) may fail for migrated data. Consider ensuring that migrated hosts are normalized to the same format as newly created EmbeddableHost records so existing embedding configurations keep working.",
+    "comentarios": [
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       24,
+       26
+      ],
+      "texto": "WHAT: migration inserts raw embeddable_hosts lines (e.g. http://example.com/123) without stripping scheme/path like the model does. WHY: migrated rows never match EmbeddableHost.record_for_host which compares bare uri.host, silently breaking previously allowed embeds."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "Migration INSERTs raw embeddable_hosts lines with scheme/path intact, but EmbeddableHost normalizes to bare domain (before_validation strips protocol/path, record_for_host looks up by URI.host). Strip protocol and path before INSERT or migrated hosts will never satisfy host_allowed?."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       24,
+       25
+      ],
+      "texto": "Legacy hosts are inserted verbatim instead of applying the new model's scheme/path normalization. Existing values such as http://discourse.org or https://example.com/1234 remain in the table, while record_for_host compares only URI.host, so previously configured embedding hosts stop working after upgrade. Normalize migrated entries to the same representation used by the model before inserting them."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+    "descricao": "The contents of category_fabricator.rb and embeddable_host_fabricator.rb are swapped, so each file defines the other's fabricators.",
+    "textoGolden": "The contents of `category_fabricator.rb` and `embeddable_host_fabricator.rb` have been swapped, resulting in the loss of original category fabricators and potentially causing errors in fabricator usage.",
+    "comentarios": [
+     {
+      "file": "spec/fabricators/category_fabricator.rb",
+      "lines": [
+       1,
+       4
+      ],
+      "texto": "File named category_fabricator.rb now defines Fabricator(:embeddable_host) while Fabricator(:category) was moved to embeddable_host_fabricator.rb. Filenames disagree with contents \u2014 swap contents back so each file defines the fabricator its name states."
+     },
+     {
+      "file": "spec/fabricators/embeddable_host_fabricator.rb",
+      "lines": [
+       1,
+       27
+      ],
+      "texto": "The file names and contents are swapped. embeddable_host_fabricator.rb defines the category fabricators (:category, :diff_category, :happy_category, :private_category), and category_fabricator.rb defines :embeddable_host. Restore category_fabricator.rb to the original category fabricators and put the :embeddable_host fabricator in embeddable_host_fabricator.rb."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+    "descricao": "The migration builds its INSERT by interpolating each legacy host value into the SQL string instead of quoting or binding it, so a value with a quote breaks the statement.",
+    "textoGolden": "The SQL query in the `app/controllers/admin/embeddable_hosts_controller.rb` file uses string interpolation (`'#{h}'`) to insert values, which is vulnerable to SQL injection. It should use parameter binding or proper quoting to prevent this security vulnerability.",
+    "comentarios": [
+     {
+      "file": "",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The migration's INSERT statement uses string interpolation: VALUES ('#{h}', ...). This is a SQL-injection concern and should be fixed by using parameterized queries or proper escaping."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       25,
+       25
+      ],
+      "texto": "WHAT: migration interpolates raw host string into SQL: VALUES ('#{h}', ...). WHY: a host value containing a single quote breaks the statement and allows SQL injection via site_settings value."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+    "descricao": "The migration reads execute(...)[0]['id'] for embed_category without checking for an empty result, so installs without that setting stored crash the migration instead of falling back to the uncategorized category.",
+    "textoGolden": "The migration accesses execute(...)[0]['id'] without checking if the query returned any rows, which causes a crash when no embed_category setting exists. This can lead to a broken feature when attempting to edit category/host relationships.",
+    "comentarios": [
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       9,
+       12
+      ],
+      "texto": "WHAT: migration does execute(...)[0]['id'] with no guard when embed_category setting/category is missing. WHY: nil[0] dereference crashes the migration and blocks deploy on instances without that setting."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       9,
+       16
+      ],
+      "texto": "Migration does execute(...)[0]['id'] without checking empty result; missing site_settings row throws NoMethodError and fails migration. Check for nil row."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       9,
+       11
+      ],
+      "texto": "The migration indexes the first category-query result before checking whether any row was returned. An installation without a persisted embed_category setting, or with no matching category name, aborts migration before reaching the uncategorized fallback. Check whether the result contains a row before accessing its id and handle missing fallback settings as well."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+    "descricao": "The spec 'is false if embeddable_host is blank' no longer sets up any host condition and passes only because embed_truncate defaults to false, so its name no longer matches what it tests.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/models/topic_spec.rb",
+      "lines": [
+       1399,
+       1406
+      ],
+      "texto": "Test 'is false if embeddable_host is blank' does not establish the true-branch preconditions (embed_truncate true, has_topic_embed true) nor control host presence, so it passes regardless of host logic and would still pass if host checking were broken/removed. Set truncate true + stub embed true with no hosts for the false case."
+     },
+     {
+      "file": "spec/models/topic_spec.rb",
+      "lines": [
+       1401,
+       1404
+      ],
+      "texto": "The test named \"is false if embeddable_host is blank\" now uses an ordinary built topic without setting embed_truncate or making has_topic_embed? true. It therefore returns false for reasons unrelated to the missing host, and passes even with the new implementation that never checks host availability. If blank-host behavior remains the intended contract, arrange all the other prerequisites before asserting false; if the contract intentionally changed, replace this case with a test of the actual intended behavior rather than retaining a misleading passing test."
+     },
+     {
+      "file": "spec/models/topic_spec.rb",
+      "lines": [
+       1403,
+       1404
+      ],
+      "texto": "The description \"is false if embeddable_host is blank\" no longer matches the code. This PR changed Topic#expandable_first_post? (app/models/topic.rb:869) to `SiteSetting.embed_truncate? && has_topic_embed?`, removing the embeddable_hosts condition entirely, and removed the `SiteSetting.embeddable_hosts` setup from this test. The assertion now passes only because `has_topic_embed?` is unstubbed (false) and embed_truncate is unset, so the name states a cause the method no longer has \u2014 rename it (e.g. \"is false when there is no topic embed\") or set up the precondition it claims to test."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#10",
+    "descricao": "The 'find embedded' test requests fruit 2 but the pretender always returns fruit 1, so it asserts fruit 1's colors and would not notice a find that ignores the id.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "test/javascripts/models/store-test.js.es6",
+      "lines": [
+       109,
+       121
+      ],
+      "texto": "Test requests fruit id 2 but pretender returns fruits[0] unconditionally, so assertions on colors [1,2] never cover fruit 2's color_ids [3]. Make pretender honor :id or request id 1 / assert single-element case to actually verify plural _ids hydration."
+     },
+     {
+      "file": "test/javascripts/models/store-test.js.es6",
+      "lines": [
+       111,
+       117
+      ],
+      "texto": "This test now requests fruit 2 but expects fruit 1's two colors. The /fruits/:id Pretender handler always returns fruits[0], so the test passes while hydrating the wrong record and would not catch a find implementation that ignores the requested ID. Make the handler select the requested fruit and assert its ID and corresponding colors (fruit 2 has only color 3), or request fruit 1 if testing its two-color hydration is the goal."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11",
+    "descricao": "After saving a host, the component overwrites its category with findById(categoryId); when no category was chosen this is null even though the server saved the uncategorized category, so the row shows no category until reload.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+      "lines": [
+       38,
+       38
+      ],
+      "texto": "The save callback overwrites the category using categoryId even when the server substituted the uncategorized category for a blank selection. Adding a host without choosing a category therefore leaves its category badge empty, and editing it reads an undefined category id despite a valid category_id having been returned. Resolve the category from the saved response's category_id rather than the submitted selection."
+     },
+     {
+      "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+      "lines": [
+       37,
+       38
+      ],
+      "texto": "When categoryId is null (the default for a new row, or a cleared selection), the controller saves SiteSetting.uncategorized_category_id and returns that category_id. This callback instead overwrites host.category with findById(null), making the displayed category disagree with the saved category. Use the category from the save response or its returned category_id rather than the pre-save selection."
+     },
+     {
+      "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+      "lines": [
+       37,
+       38
+      ],
+      "texto": "Use the saved response's category rather than overwriting it from categoryId after saving. For a new host with no category selected, categoryId is null, while the new controller deliberately saves SiteSetting.uncategorized_category_id and returns that ID through the serializer. This callback replaces the hydrated category with findById(null), leaving the row without its actual category until reload (and reopening edit also initializes from that incorrect relationship)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+    "descricao": "Hosts saved with a port (allowed by the validation regex) are stored as host:port, but lookup compares only URI.host, so those configured hosts never match and embedding fails for them.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "Host lookup compares URI.host against a stored value that validation explicitly permits to include a port. Saving example.com:8080 succeeds, but a request from http://example.com:8080 produces URI.host equal to example.com and never matches that record, disabling embedding and retrieval for the configured host. Use a consistent port representation in both storage and lookup."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "The validator accepts hosts such as `example.com:8080`, but record_for_host extracts only URI.host (`example.com`) and compares it to the stored port-qualified string. An accepted and saved host therefore never authorizes its corresponding URLs. Normalize the stored and queried authority consistently, including a deliberate port policy."
+     }
+    ]
+   }
+  ]
+ },
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "8ab88145113dd23a930e23b9cbbcf8b30e4c0b17",
+  "base": "a5d290951def84afdcc4c88d2f1f20023fc36e2a",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+    "lines": [
+     71,
+     71
+    ],
+    "texto": "The unconditional advanced-feature check dereferences organization_context.member even though that member is optional. API credentials with org:write can pass OrganizationAuditPermission without a user membership, causing AttributeError on ordinary audit-log requests even when optimized_pagination is absent. Evaluate this check only when optimization is requested and guard the optional member."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     838,
+     843
+    ],
+    "texto": "OptimizedCursorPaginator applies numeric rounding directly to the audit entry's datetime field and returns raw numeric cursor values for datetime queries. Any populated optimized page fails with TypeError when build_cursor requests an item key, and supplied timestamp cursors lack the datetime conversion used by DateTimePaginator. Inherit DateTimePaginator's key and cursor conversion methods for this datetime-ordered endpoint."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     877,
+     882
+    ],
+    "texto": "The advanced negative-offset branch passes a negative slice start directly to a Django QuerySet. Cursor.from_string accepts negative offsets, so an optimized request with cursor=0:-1:0 raises Django's negative-indexing exception instead of returning a page. Reject negative offsets as invalid pagination input or implement reverse traversal with nonnegative queryset bounds."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     874,
+     876
+    ],
+    "texto": "The comment explicitly says that Django ORM handles negative slicing automatically, but QuerySet.__getitem__ rejects negative indices. The branch below passes a negative start directly into that slice, so this is not supported reverse pagination as the comment and class docstring promise. Correct the documentation (including the equivalent claim in BasePaginator) to describe the restriction, or implement the advertised behavior before documenting it as supported."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     877,
+     886
+    ],
+    "texto": "Django QuerySets do not support negative slicing. For example, an advanced cursor with offset=-1 and limit=100 reaches queryset[-1:100] and raises instead of returning a page. The reverse fallback likewise passes a negative offset through unchanged. Validate or normalize offsets before slicing in both the optimized paginator and the modified BasePaginator path; negative offsets cannot be delegated to the ORM as boundary handling."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     838,
+     840
+    ],
+    "texto": "The audit-log consumer now selects this paginator with order_by=\"-datetime\", but get_item_key applies math.floor/math.ceil directly to that datetime attribute. Unlike the previous DateTimePaginator path, this does not convert the timestamp to a numeric cursor value, so a nonempty optimized audit-log page fails with TypeError when build_cursor invokes this key function. Preserve datetime cursor encoding and decoding (for example by building the optimized paginator on DateTimePaginator) before switching that consumer."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     838,
+     843
+    ],
+    "texto": "The endpoint selects this paginator with order_by='-datetime', so get_item_key receives a datetime attribute. math.floor/math.ceil cannot process a datetime and will raise TypeError when cursors are built for nonempty results. Returning the raw cursor value also omits datetime cursor conversion. Reuse DateTimePaginator's key and cursor conversions (for example by subclassing it) rather than numeric conversions."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     877,
+     882
+    ],
+    "texto": "This branch explicitly passes a negative start index into the Django queryset. Django rejects negative queryset slicing rather than handling boundary conditions automatically, so a negative-offset cursor produces an exception instead of the advertised pagination results. Reject negative offsets with a client validation error or implement reverse traversal using nonnegative queryset bounds."
+   },
+   {
+    "id": "S9",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     838,
+     840
+    ],
+    "texto": "The new endpoint selects this paginator with order_by=\"-datetime\". Consequently getattr(item, self.key) is a datetime for audit-log rows, but math.floor/math.ceil require a number. A nonempty optimized response fails with TypeError when build_cursor invokes get_item_key. Use the datetime conversion semantics of DateTimePaginator (including its cursor-to-datetime conversion) rather than this numeric implementation."
+   },
+   {
+    "id": "S10",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     877,
+     882
+    ],
+    "texto": "With advanced features enabled and a negative cursor offset, this branch passes a negative start directly into queryset[start_offset:stop]. Django QuerySets reject negative slice bounds with ValueError; they do not handle these boundary conditions automatically. Thus the advertised negative-offset request raises an unhandled exception instead of returning a page. Reject negative offsets as invalid input or normalize them before slicing."
+   },
+   {
+    "id": "S11",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     821,
+     843
+    ],
+    "texto": "The other changed file selects this paginator with `order_by=\"-datetime\"` for audit logs, but this implementation treats the ordering attribute as numeric: `get_item_key` passes a datetime to `math.floor`/`math.ceil`, which raises TypeError when a nonempty page builds its cursors. It also returns numeric cursor values without converting them back to datetimes for subsequent filtering. Preserve DateTimePaginator's datetime key and cursor conversions (for example by inheriting its conversion methods) when implementing this optimized paginator."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+    "descricao": "OptimizedCursorPaginator passes negative cursor offsets straight into Django queryset slicing, which Django does not support, so requests with a negative offset raise an error instead of returning a page.",
+    "textoGolden": "The OptimizedCursorPaginator in organization_auditlogs.py attempts to use negative slice offsets on Django querysets, but Django querysets do not support negative slicing and will raise an AssertionError.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       877,
+       882
+      ],
+      "texto": "The advanced negative-offset branch passes a negative slice start directly to a Django QuerySet, which does not support negative indexing. A cursor such as 0:-1:0 is accepted by Cursor.from_string but crashes the optimized audit-log request instead of providing reverse pagination. Reject negative offsets with BadPaginationError or implement reverse traversal using nonnegative slices and reversed ordering."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       874,
+       880
+      ],
+      "texto": "The comment claiming that Django ORM 'properly handles negative slicing automatically' is false: Django QuerySet slicing rejects negative indices. This branch passes cursor.offset straight into queryset[start_offset:stop], so it raises rather than supplying the documented negative-offset pagination. Correct the negative-offset support claims here, in the class docstring, and in the new BasePaginator boundary-handling comment (or implement actual supported boundary handling) so callers are not promised a pagination mode that the underlying queryset cannot provide."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       877,
+       882
+      ],
+      "texto": "Django QuerySets do not support negative slice bounds. Passing a negative cursor offset directly into `queryset[start_offset:stop]` raises an exception instead of enabling advanced pagination. Validate or normalize negative offsets before slicing, or implement reverse traversal through ordering/filtering rather than negative slices."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02",
+    "descricao": "The comment added to BasePaginator claims negative offsets are allowed and safely handled by the queryset, but the code clamps non-prev offsets to zero and leaves prev offsets as before, so the comment misdescribes the behaviour.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       179,
+       184
+      ],
+      "texto": "The added comment says this change will \"allow negative offsets to enable efficient bidirectional pagination ... safe because the underlying queryset will handle boundary conditions\", but the statement it annotates, line 182, is `start_offset = max(0, offset) if not cursor.is_prev else offset` \u2014 it clamps negative offsets to 0, i.e. it does the opposite of what the comment claims and leaves the 'negative offset' (offset < 0) paging behaviour exactly as before. The comment is now untrue for the code it sits on; either drop the 'allow negative offsets' wording or make the code actually permit them."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       179,
+       184
+      ],
+      "texto": "The comment declares this change `allow[s] negative offsets to enable efficient bidirectional pagination`, but the actual computation is `start_offset = max(0, offset) if not cursor.is_prev else offset`, which clamps non-prev offsets at 0 \u2014 i.e. it never permits a negative offset. The declared optimization is a no-op relative to the original `queryset[offset:stop]`; the comment describes behavior the code does not have."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       182,
+       184
+      ],
+      "texto": "BasePaginator now passes the raw `offset` to the slice whenever `cursor.is_prev` is true (`max(0, offset) if not cursor.is_prev else offset`). A negative offset from a user-supplied prev cursor therefore reaches `queryset[negative:stop]`, which Django rejects. This crashes every endpoint that uses BasePaginator. Fix: always use `max(0, offset)`, or validate the offset when the cursor is parsed."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#04",
+    "descricao": "The OptimizedCursorPaginator docstring claims streamlined boundary handling, an optimized query path and backward compatibility that the implementation, a copy of BasePaginator plus a negative-offset branch, does not provide.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       821,
+       832
+      ],
+      "texto": "Docstring lists 'Streamlined boundary condition handling', 'Optimized query path for large datasets', and 'maintaining backward compatibility', but get_result (845-886) is a copy of BasePaginator with only a negative-offset branch added \u2014 no streamlined handling or optimized path exists, and negative-offset slicing breaks prior cursor semantics. Doc describes behavior the function does not produce \u2014 align doc to code or implement the claimed handling."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+    "descricao": "OptimizedCursorPaginator computes cursor keys with math.floor/ceil on the raw attribute, but the audit log endpoint uses it with order_by='-datetime', so building the cursor raises TypeError for any non-empty result.",
+    "textoGolden": "get_item_key assumes a numeric key, but the paginator is used with order_by=-datetime in the audit logs endpoint; calling math.floor/ceil on a datetime will raise a TypeError.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       73,
+       83
+      ],
+      "texto": "OptimizedCursorPaginator requires numeric integer keys (get_item_key uses math.floor/ceil + int, cursor_value defaults to 0) but is instantiated here with order_by=\"-datetime\". This mismatched producer/consumer contract breaks pagination for datetime-ordered audit logs. Fix: do not use OptimizedCursorPaginator for datetime ordering; keep DateTimePaginator or make OptimizedCursorPaginator datetime-aware."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       838,
+       843
+      ],
+      "texto": "WHAT: OptimizedCursorPaginator.get_item_key/value_from_cursor mishandles datetime ordering by calling math.floor/ceil directly on a datetime and returning raw int cursor value. WHY: Used with order_by=\"-datetime\" it crashes with TypeError on floor(datetime) when building cursors and filters the datetime column against an int in build_queryset, breaking pagination. HOW: Copy DateTimePaginator logic \u2014 timestamp via strftime/multiplier with floor/ceil and convert cursor value back with datetime.fromtimestamp."
+     },
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       79,
+       80
+      ],
+      "texto": "The optimized branch selects a numeric-key paginator while ordering by the datetime field. On any nonempty first page, build_cursor invokes OptimizedCursorPaginator.get_item_key, which calls math.ceil on a datetime and raises TypeError; nonzero cursors also lack the datetime conversion provided by DateTimePaginator. Make the optimized paginator inherit DateTimePaginator or preserve its timestamp encoding and decoding."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+    "descricao": "The audit log endpoint always dereferences organization_context.member.has_global_access, which crashes with AttributeError for authorized token requests that have no member, even on the default pagination path.",
+    "textoGolden": "When requests are authenticated with API keys or org auth tokens (which have user_id=None), organization_context.member is None. Line 71 attempts to access organization_context.member.has_global_access without checking if member is None, causing an AttributeError crash when optimized_pagination=true is used, even though the request passed all permission checks with valid org:write scope.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The unconditional advanced-access check dereferences organization_context.member although RpcUserOrganizationContext permits member=None. Authorized non-member organization-token requests therefore raise AttributeError even when optimized_pagination is absent, instead of returning audit logs through the existing paginator. Guard the optional member and evaluate eligibility only when optimized pagination is requested."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#08",
+    "descricao": "The comments and enable_advanced variable describe the optimized_pagination path as a performance optimization for administrators, hiding that it enables negative-offset slicing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       68,
+       72
+      ],
+      "texto": "The comments describe a 'performance optimization' for 'authorized administrators', and the variable is named enable_advanced. In fact it opts into negative-offset slicing, and the optimized_pagination query parameter gates it. The names and comments hide what the flag actually enables. Rename them to say what is enabled, or remove the path."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#09",
+    "descricao": "A user-controlled optimized_pagination flag lets any member with global access switch to a paginator that accepts unvalidated negative cursor offsets, widening the attack surface and causing server errors.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       70,
+       83
+      ],
+      "texto": "A user-controlled `optimized_pagination` query flag switches the endpoint to a paginator that accepts attacker-supplied negative cursor offsets. This is available to any user with global access, not only to real admins. It widens the attack surface for unvalidated cursor offsets and causes server errors. The comment 'permissions are checked at the queryset level' is not backed by any check in the paginator. Fix: remove the optimized path, or have the paginator validate and clamp offsets."
+     }
+    ]
+   }
+  ]
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "02f48f776f43734d1ac8914d3ad6a7115acdcb33",
+  "base": "f3c8e8f3487112f2c99aa78400430cce2d30be39",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     124,
+     126
+    ],
+    "texto": "The choice-expression normalization removes every alternative, including HTML, before the sanitizer sees it. A translation such as `linkExpirationFormatter.timePeriodUnit.minutes={0,choice,0#minutes|1#<img src=x onerror=alert(1)>}` is reduced to `...` and passes this verifier despite containing prohibited executable markup that MessageFormat can select at runtime. Validate the alternative text rather than discarding the entire choice expression, exempting only the choice syntax's comparison operator."
+   },
+   {
+    "id": "S2",
+    "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+    "lines": [
+     71,
+     71
+    ],
+    "texto": "The Lithuanian `loginTotpStep1` translation has been replaced with Italian text; the same replacement occurs in the Lithuanian account bundle's `totpStep1`. Users selecting Lithuanian now receive the first authenticator setup instruction in Italian instead of Lithuanian. Replace both values with Lithuanian instructions, for example `\u012ediekite vien\u0105 i\u0161 \u0161i\u0173 program\u0117li\u0173 savo mobiliajame telefone:`."
+   },
+   {
+    "id": "S3",
+    "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+    "lines": [
+     71,
+     71
+    ],
+    "texto": "The Lithuanian OTP setup instruction has been replaced with Italian ('Installa una delle seguenti applicazioni sul tuo cellulare'), while the remaining steps are Lithuanian. Lithuanian users now receive the first setup step in the wrong language. Translate this sentence into Lithuanian and apply the same correction to totpStep1 in the Lithuanian account bundle, which contains the identical regression."
+   },
+   {
+    "id": "S4",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     107,
+     111
+    ],
+    "texto": "The suffix scan is not bounded by the already matched prefix. For example, a value `a<div></div>a` sanitizes to `aa`: the prefix scan sets start=1, while the suffix scan reaches end=2. The diagnostic then calls sanitized.substring(1, 0), throwing StringIndexOutOfBoundsException rather than reporting illegal HTML. Bound the suffix scan to the remaining unmatched portions of both strings so invalid translations cannot abort verification."
+   },
+   {
+    "id": "S5",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     107,
+     111
+    ],
+    "texto": "The suffix scan is not bounded by the already consumed prefix. For example, value `a<div></div>a` sanitizes to `aa`: start becomes 1 and end becomes 2, so sanitized.substring(1, 0) throws StringIndexOutOfBoundsException. An invalid translation thus crashes verification rather than returning the Illegal HTML diagnostic. Stop the suffix scan at length minus start for both strings."
+   },
+   {
+    "id": "S6",
+    "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+    "lines": [
+     71,
+     71
+    ],
+    "texto": "This is the Lithuanian bundle, but the new instruction is Italian ('Installa una delle seguenti applicazioni sul tuo cellulare'). Lithuanian users now receive an instruction in a different language during OTP enrollment. The same erroneous replacement is made for totpStep1 in the Lithuanian account bundle; use Lithuanian text at both sites."
+   },
+   {
+    "id": "S7",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     107,
+     111
+    ],
+    "texto": "The suffix scan must stop at the prefix already consumed. For a translation `a<div></div>a` whose English source has no HTML, sanitization yields `aa`. The prefix scan sets `start = 1`, while the independent suffix scan sets `end = 2`, and `sanitized.substring(1, 0)` throws StringIndexOutOfBoundsException. This crashes verification on invalid HTML instead of adding its diagnostic. Bound the suffix scan by each string's remaining length after `start`."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+    "descricao": "The Lithuanian TOTP setup step was replaced with Italian text in both the account and login bundles.",
+    "textoGolden": "The translation is in Italian instead of Lithuanian. This should be translated to Lithuanian to match the file's locale (messages_lt.properties).",
+    "comentarios": [
+     {
+      "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The Lithuanian OTP setup instruction has been replaced with an Italian sentence. login-config-totp.ftl renders this message directly, so users selecting Lithuanian receive an instruction in the wrong language; the same copied sentence also appears in the Lithuanian account bundle at line 101. Replace both values with the Lithuanian translation of the new installation instruction."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+      "lines": [
+       101,
+       101
+      ],
+      "texto": "The replacement OTP setup instruction is Italian (\u201cInstalla una delle seguenti applicazioni sul tuo cellulare\u201d), but this is the Lithuanian locale and the surrounding setup steps are Lithuanian. Translate the new instruction into Lithuanian rather than copying the Italian translation. The same incorrect replacement appears in the login bundle at themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71 and should be corrected there too; otherwise Lithuanian users see an untranslated first step in both OTP setup flows."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The replacement OTP setup instruction is Italian, not Lithuanian (`Installa una delle seguenti applicazioni sul tuo cellulare`). The same replacement was made for `totpStep1` in the Lithuanian account bundle. Translate both replacements into Lithuanian so selecting Lithuanian does not display Italian instructions during authenticator setup."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+    "descricao": "The zh_CN totpStep1 translation is written in Traditional Chinese instead of Simplified Chinese.",
+    "textoGolden": "The totpStep1 value uses Traditional Chinese terms in the Simplified Chinese file (zh_CN), which is likely incorrect for this locale. Please verify the locale\u2011appropriate translation.",
+    "comentarios": [
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "The zh_CN (Simplified Chinese) file was given Traditional Chinese characters: totpStep1=\u5728\u60a8\u7684\u624b\u6a5f\u4e0a\u5b89\u88dd\u4ee5\u4e0b\u61c9\u7528\u7a0b\u5f0f\u4e4b\u4e00\uff1a. Compare the unchanged neighbouring lines (e.g. '\u6253\u5f00\u5e94\u7528\u626b\u63cf\u4e8c\u7ef4\u7801\u2026') which use Simplified forms; \u624b\u6a5f/\u61c9\u7528\u7a0b\u5f0f/\u5b89\u88dd are Traditional. zh_CN must be Simplified Chinese, so this string is in the wrong script/variant for the locale."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "totpStep1 in messages_zh_CN uses Traditional Chinese (\u624b\u6a5f, \u5b89\u88dd, \u61c9\u7528\u7a0b\u5f0f), not Simplified Chinese as the rest of the file does. Replace it with the Simplified form: \u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u4e4b\u4e00\uff1a"
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "The Simplified Chinese (zh_CN) totpStep1 was replaced with Traditional Chinese (\"\u5728\u60a8\u7684\u624b\u6a5f\u4e0a\u5b89\u88dd\u4ee5\u4e0b\u61c9\u7528\u7a0b\u5f0f\u4e4b\u4e00\uff1a\"). Use the Simplified form, \"\u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u7a0b\u5e8f\u4e4b\u4e00\uff1a\"."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#04",
+    "descricao": "The method santizeAnchors is misspelled; it should be sanitizeAnchors.",
+    "textoGolden": "The method name 'santizeAnchors' should be 'sanitizeAnchors' (missing 'i').",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#05",
+    "descricao": "HTML_TAGS is a non-static, non-private field instead of a private static final constant.",
+    "textoGolden": "Field HTML_TAGS should be declared as 'private static final' following Java naming conventions for constants",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+    "descricao": "The diff-trimming code computes common prefix and suffix independently, so they can overlap and substring throws StringIndexOutOfBoundsException, crashing the verifier instead of reporting the illegal HTML.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       101,
+       111
+      ],
+      "texto": "The common prefix (start) and common suffix (end) are computed independently and can overlap, for example value \"aa\" vs sanitized \"a\". Then substring(start, length - end) gets begin > end and throws StringIndexOutOfBoundsException, so the verifier crashes instead of reporting the illegal HTML. Bound the suffix scan so that start + end <= min(value.length(), sanitized.length()), e.g. `while (end < min - start && ...)`."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       102,
+       111
+      ],
+      "texto": "The common prefix and common suffix are computed independently and can overlap, so `sanitized.substring(start, sanitized.length() - end)` can have start > end and throw StringIndexOutOfBoundsException. This crashes the verifier instead of reporting 'Illegal HTML'. Cap the suffix scan with `end < Math.min(value.length(), sanitized.length()) - start`."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       102,
+       111
+      ],
+      "texto": "WHAT: Common prefix/suffix stripping for the diff message can compute start+end larger than the string length and call substring(start, length-end) with start > end. WHY: Throws StringIndexOutOfBoundsException inside the key loop and crashes verification instead of reporting Illegal HTML. HOW: Clamp end so start+end <= min lengths, e.g. stop suffix scan when end >= length-start."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#07",
+    "descricao": "normalizeValue blanks the entire choice expression for some keys before HTML validation, so markup placed inside a choice branch of those keys bypasses the new verifier.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       124,
+       126
+      ],
+      "texto": "Choice normalization removes all branch content before HTML validation, allowing prohibited markup to bypass the new translation policy. A translated error-invalid-multivalued-size value such as `{2,choice,0#values|1#<a href=\"https://malicious.example\">value</a>|1<values}` becomes `...` and passes without checking the injected link, while consumers using MessageFormat expand that branch into the rendered message. Preserve and validate branch text, normalizing only the choice comparison syntax that conflicts with HTML parsing."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       124,
+       127
+      ],
+      "texto": "WHAT: normalizeValue replaces the entire {n,choice,...} block with ... before sanitizing, so HTML inside choice options is never checked. WHY: A translation can smuggle tags (e.g. {2,choice,0#<script>...}) in error-invalid-multivalued-size/linkExpirationFormatter keys and pass the verifier, reaching UI rendering as XSS. HOW: Sanitize/validate the choice body instead of blanking it, or run the HTML policy on the inner choice text as well."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+    "descricao": "The account and admin UI bundles now use Java MessageFormat placeholders and choice syntax for error-invalid-multivalued-size, but i18next expects {{n}}, so the UI shows literal {0}/{1}/{2} and the raw choice text.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties",
+      "lines": [
+       3138,
+       3138
+      ],
+      "texto": "The admin-ui bundle is consumed by react-i18next, which interpolates with double-brace `{{0}}` syntax (the previous value was `Attribute {{0}} ... {{2}}`). This line was rewritten to Java MessageFormat/ICU syntax (`{0}` ... `{2,choice,0#values|1#value|1<values}`), which i18next does not understand: the placeholders will not be substituted and the literal `{2,choice,...}` text will be shown to users. Keep the JS-side value in `{{0}}` form (and don't introduce ICU ChoiceFormat into the JS bundle); the ICU/choice spelling belongs only in the Java theme properties."
+     },
+     {
+      "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+      "lines": [
+       188,
+       188
+      ],
+      "texto": "Same contract break in the account-ui bundle: the value was `Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).` (i18next double-brace interpolation) and was changed to `{0}`/`{2,choice,...}` MessageFormat+ICU syntax. The account console's i18next based consumer was not updated to match, so interpolation will fail and the raw placeholder/choice syntax will be rendered. Restore `{{0}}`-style placeholders for the JS bundle."
+     },
+     {
+      "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+      "lines": [
+       188,
+       188
+      ],
+      "texto": "The account-ui bundle is consumed by i18next, which interpolates with double braces (the original string was `Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).`). This PR aligned the value to the Java theme convention, replacing `{{0}}/{{1}}/{{2}}` with `{0}/{1}/{2}` and adding ICU `{2,choice,...}`. i18next will no longer substitute the placeholders and cannot interpret the ICU choice, so the account UI shows the raw `{0}`, `{1}`, `{2}` and literal choice text. Keep the JS-side double-brace form for this bundle (adapt the choice accordingly) rather than the Java single-brace/ICU form used by the theme messages."
+     }
+    ]
+   }
+  ]
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "bbd8c507cdf56f6b884373809e0b24abd4a2353d",
+  "base": "50f4e78a39914711d0d231a501ba215becf17ebc",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/anonymous/anonimpl/client.go",
+    "lines": [
+     44,
+     46
+    ],
+    "texto": "TagDevice caches a device ID before CreateOrUpdateDevice checks the limit, so the new authentication check rejects only the first request for an over-limit device. Repeating the request with the same X-Grafana-Device-Id hits tagDeviceUI's cache and returns nil, allowing Authenticate to issue an anonymous identity despite the full device limit. Cache the device only after successful persistence, and ensure concurrent requests cannot interpret an in-progress admission as a successful one."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/anonymous/anonimpl/client.go",
+    "lines": [
+     44,
+     46
+    ],
+    "texto": "The new limit enforcement treats TagDevice returning nil as successful admission even when the request has no device header. TagDevice immediately returns nil for an empty X-Grafana-Device-Id, so a client can omit that header and continue authenticating and accessing anonymous APIs after the configured limit is reached. Establish an enforceable device identity for requests subject to the limit instead of treating missing identification as admission."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     109,
+     117
+    ],
+    "texto": "The active-device count is checked separately from the subsequent insert without a transaction or shared admission lock. Two requests for different device IDs can both observe one remaining slot and both insert successfully, exceeding the configured limit; the unique device_id constraint does not prevent this. Serialize the count-and-admit operation across Grafana instances using database-level admission locking or equivalent atomic enforcement."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     109,
+     118
+    ],
+    "texto": "The count check is not atomic with the insertion that follows it. For example, with deviceLimit=1 and no devices, two concurrent requests for different device IDs can both read count=0, both pass this branch, and both insert successfully. This violates the configured anonymous-device limit (and can occur across server instances). Serialize admission with a database-backed lock or an appropriately isolated transaction covering both the count and insertion; a process-local mutex alone would not protect multi-instance deployments. Add a concurrent-registration test asserting that only the available number of slots can be admitted."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/services/anonymous/anonimpl/impl.go",
+    "lines": [
+     144,
+     147
+    ],
+    "texto": "tagDeviceUI populates localCache before attempting persistence (line 87), while cache hits return without retrying persistence. When the new limit check rejects a device, this return propagates the error for only its first request: subsequent requests with the same device key hit the cache and authenticate successfully for the cache lifetime. Cache only successfully persisted devices, or remove the cache entry when tagging fails, so a rejected device cannot bypass the configured limit by retrying."
+   },
+   {
+    "id": "S6",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     109,
+     118
+    ],
+    "texto": "The count and subsequent upsert are separate database operations with no serialization. When one slot remains, two requests for different new devices can both observe count < deviceLimit and both insert successfully. The configured admission limit therefore does not hold under concurrent requests (including across server instances). Make the capacity check and insertion atomic with database-level serialization appropriate to the supported databases."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#01",
+    "descricao": "The device limit check counts devices and then inserts in separate non-atomic steps, so concurrent requests from new devices can all pass the check and exceed the configured limit.",
+    "textoGolden": "Race condition: Multiple concurrent requests could pass the device count check simultaneously and create devices beyond the limit. Consider using a database transaction or lock.",
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "The limit check counts devices and then inserts in separate steps with no lock or transaction. Concurrent requests from new devices can all see count < limit and all insert, so the limit is exceeded. Make the count-and-insert atomic, for example with a conditional INSERT ... SELECT ... WHERE (SELECT COUNT(*)) < limit."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "The device limit check is a non-atomic count followed by an insert. Concurrent requests from different new devices can all see count < limit and all insert, so the number of devices exceeds deviceLimit. Make the check and insert atomic, for example with a conditional INSERT ... SELECT WHERE (SELECT COUNT(*)) < limit, or serialize the check and insert under a lock."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "WHAT: CreateOrUpdateDevice does check-then-act (CountDevices then INSERT/UPSERT) with no lock, transaction, or unique-guard when deviceLimit>0. WHY: Two concurrent new-device requests can both observe count < limit and both insert, exceeding the configured limit and breaking the enforcement contract. HOW: Enforce atomically (e.g., conditional insert guarded by count in one statement/transaction with serializable lock, or re-check count on conflict)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#02",
+    "descricao": "Device slots are keyed by the client-controlled X-Grafana-Device-Id header with no validation or rate limiting, so an anonymous caller can fill the limit with fake IDs and deny anonymous access to every new legitimate device.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       109,
+       117
+      ],
+      "texto": "WHAT: Device slots counted toward deviceLimit are keyed by the unauthenticated X-Grafana-Device-Id header (read in impl.go TagDevice) with no validation or rate-limit. WHY: Any anonymous caller can mint arbitrary device IDs to fill the table up to the limit, after which all legitimate new anonymous devices get ErrDeviceLimitReached and authentication is denied \u2014 a trivial anonymous-access DoS introduced by the limit. HOW: Do not let a single client consume many slots (e.g., bind slot consumption to IP/fingerprint, rate-limit new-device creation, or require proof of distinct device)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#05",
+    "descricao": "TestIntegrationBeyondDeviceLimit only checks that a new device is rejected at the limit and never verifies that an existing device can still be updated at the limit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database_test.go",
+      "lines": [
+       51,
+       70
+      ],
+      "texto": "The at-limit call reuses a brand-new device ID (\"keep\") that was never inserted, so it only reaches updateDevice's `rowsAffected == 0` -> ErrDeviceLimitReached branch. The success branch of the newly added updateDevice (an existing device still being updated while the store is at the limit) is never exercised by any test \u2014 every other call uses deviceLimit 0, so updateDevice is never invoked. A regression that made updateDevice always affect 0 rows, use a wrong WHERE/SET, or unconditionally return ErrDeviceLimitReached whenever limit>0 would leave this and all other tests green. Add a case that, after the store is at the limit, calls CreateOrUpdateDevice again with the SAME DeviceID and asserts require.NoError (and ideally that client_ip/user_agent/updated_at were changed), so the update path is actually verified."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database_test.go",
+      "lines": [
+       51,
+       70
+      ],
+      "texto": "TestIntegrationBeyondDeviceLimit only checks that a new device is rejected at the limit. It would still pass if updateDevice always returned ErrDeviceLimitReached, because it never re-submits the existing device (DeviceID \"32mdo31deeqwes\") at the limit. Add a call that updates the existing device with a new UserAgent or UpdatedAt, require NoError, and check the stored row changed."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#07",
+    "descricao": "tagDeviceUI caches the device key before CreateOrUpdateDevice; when the store returns ErrDeviceLimitReached the entry stays, so the next request from the same device skips the limit check and authenticates for up to 29 minutes.",
+    "textoGolden": "The `tagDeviceUI` function populates the local cache with the device ID before the `CreateOrUpdateDevice` call. If `ErrDeviceLimitReached` is returned, the cache entry remains set, allowing subsequent requests to bypass the device limit until the cache expires after 29 minutes.",
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       47
+      ],
+      "texto": "WHAT: TagDevice failures that triggered the new ErrDeviceLimitReached early-return are not permanent, because tagDeviceUI (impl.go:87) writes the device key into localCache BEFORE CreateOrUpdateDevice (impl.go:93) and never evicts it on error; tagDeviceUI returns early on any cache hit (impl.go:83-84). WHY: the first request from a new over-limit device is denied, but the poisoned cache makes every subsequent request from that same device skip the limit check entirely and authenticate successfully, so the configurable device limit is bypassed by simply retrying. HOW: only set the cache key after CreateOrUpdateDevice returns nil (e.g. move a.localCache.SetDefault after the successful DB write, or delete the key when it returns ErrDeviceLimitReached)."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/impl.go",
+      "lines": [
+       144,
+       148
+      ],
+      "texto": "TagDevice now propagates ErrDeviceLimitReached to deny an over-limit anonymous device, but tagDeviceUI (impl.go:83-95) records the device in localCache at line 87 *before* calling a.anonStore.CreateOrUpdateDevice. When the store rejects the device with ErrDeviceLimitReached, the key is already cached, so the next request for that same device returns early at line 83 with a nil error and the device is admitted. The limit therefore only blocks the first request and is silently bypassed on retry. Fix by only setting the cache entry after CreateOrUpdateDevice succeeds (move SetDefault after the store call), or by removing/not caching the key on failure."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       46
+      ],
+      "texto": "The new authentication gate accepts retries from devices that were rejected by the limit because tagDeviceUI inserts the cache entry before CreateOrUpdateDevice succeeds. At capacity, the first request with a new X-Grafana-Device-Id fails, but subsequent requests with that same ID hit the 29-minute cache and receive an anonymous identity without admission to the device store. Cache only successful admissions, and ensure concurrent requests cannot treat an in-progress admission as successful."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#09",
+    "descricao": "Device tagging now runs synchronously in Authenticate, adding DB round-trips on cache-miss anonymous requests where it used to be fire-and-forget.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       50
+      ],
+      "texto": "WHAT: Anonymous.Authenticate changed from fire-and-forget goroutine TagDevice to synchronous TagDevice(ctx) that runs CountDevices + INSERT/UPDATE inline. WHY: Every cache-miss anonymous authentication now blocks on two DB round-trips in the login hot path, adding latency and DB load per request where previously auth returned immediately. HOW: Restore async tagging for the non-limit path or at least decouple denial from the hot path (e.g., async count with cached count, or only synchronously enforce when near limit)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#11",
+    "descricao": "The new auth.anonymous device_limit setting has no entry in conf/defaults.ini, so the GF_AUTH_ANONYMOUS_DEVICE_LIMIT environment override is ignored and the limit stays 0.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/setting/setting.go",
+      "lines": [
+       1654,
+       1654
+      ],
+      "texto": "The new device_limit setting is read without adding a corresponding key to conf/defaults.ini. applyEnvVariableOverrides only visits keys already present in the loaded INI and runs before readAuthSettings, so setting GF_AUTH_ANONYMOUS_DEVICE_LIMIT alone is ignored and leaves the limit at zero, disabling enforcement. Add an uncommented device_limit = 0 entry under auth.anonymous in defaults.ini so the standard environment override mechanism can apply it."
+     }
+    ]
+   }
+  ]
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "ce2dcc537b4b1f98a335e88cfe8e0b804483252a",
+  "base": "85737f52b59aa2e3403c9b8e48acf71ccc5bfae3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+    "lines": [
+     125,
+     129
+    ],
+    "texto": "Successful external recovery-code creation leaves any existing local recovery-code credential intact. For a federated user who previously stored codes locally and whose provider now supports recovery codes, regenerating codes no longer revokes the old set: UserCredentialManager.isValid falls back to RecoveryAuthnCodesCredentialProvider when external validation fails, allowing superseded local codes to authenticate. Remove the existing locally stored recovery-code credentials after successfully updating external storage, preserving the replacement semantics of RecoveryAuthnCodesCredentialProvider.createCredential."
+   },
+   {
+    "id": "S2",
+    "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+    "lines": [
+     340,
+     340
+    ],
+    "texto": "The new recovery-code validator returns success without consuming the matched code. Because getCredentials reconstructs a full credential from the unchanged stored list on every call, the same code can be reused indefinitely, the login form keeps requesting the first code, and the exhaustion/regeneration path is never reached in this test provider. Persist consumption on successful validation and extend the integration test to reject reuse and verify progression to the next code."
+   },
+   {
+    "id": "S3",
+    "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+    "lines": [
+     340,
+     340
+    ],
+    "texto": "The new validator returns true for any code in the original stored list without consuming it. getCredentials also reconstructs a fresh recovery credential from that unchanged list each time. Consequently, after a successful login the same recovery code can be submitted again, breaking the single-use recovery-code invariant (and the test currently verifies only the first login). Consume the accepted code in the authoritative provider state, atomically with validation, and add a second-login test asserting that the consumed code is rejected."
+   },
+   {
+    "id": "S4",
+    "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+    "lines": [
+     340,
+     340
+    ],
+    "texto": "The new validator returns true for any member of the original generated-code list without removing or marking that code as consumed. Each subsequent validation reloads the same list from recoveryCodes, so a successful recovery login leaves the same code valid indefinitely. Consume the matched code in the backing storage when validation succeeds, and add a second login attempt using the same code to verify rejection."
+   },
+   {
+    "id": "S5",
+    "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+    "lines": [
+     340,
+     340
+    ],
+    "texto": "The new storage path changes who is responsible for consuming recovery codes: CredentialHelper now persists these codes in the user-storage provider, and credential validation is handled here instead of by the local RecoveryAuthnCodesCredentialProvider (whose successful validation updates the stored credential). This implementation only checks membership and never changes myUser.recoveryCodes. Consequently the same recovery code remains valid on subsequent logins, and getCredentials() keeps reconstructing a model with the first code still available. Consume an accepted code in the backing user storage and return credential metadata reflecting the remaining codes; extend the test to reject reuse and verify progression to the next code."
+   },
+   {
+    "id": "S6",
+    "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+    "lines": [
+     340,
+     340
+    ],
+    "texto": "The new recovery-code authentication branch compares a stored secret with the submitted response using String.equals. That comparison is not constant-time, and anyMatch additionally exits at the first matching candidate. Use a constant-time byte comparison for each recovery code and accumulate the results without short-circuiting. This provider is test infrastructure, so the exposure is limited to environments running this provider, but its new authentication implementation should not establish a timing-sensitive secret-validation path."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+    "descricao": "The test user-storage provider validates recovery codes without consuming the used code, so the same code can be replayed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       326,
+       340
+      ],
+      "texto": "WHAT: The new recovery-codes branch of isValid only checks whether the submitted code appears in the stored list and never removes the consumed entry. WHY: Unlike the local RecoveryAuthnCodesCredentialProvider.isValid (which calls removeRecoveryAuthnCode()+updateStoredCredential), the federated path never consumes a code and allCodesUsed() can never become true, so a used recovery code remains valid and can be replayed indefinitely. HOW: On a successful match, remove that entry from the stored codes (rewrite recoveryCodes.credentialData), mirroring the local provider's consume-on-success semantics."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       340,
+       340
+      ],
+      "texto": "The new recovery-code validator accepts any code in the original list without consuming the accepted code. Repeating a successful login with the same code succeeds indefinitely, while getCredentials reconstructs all original codes so the login form never advances or detects exhaustion. Validate the next unused code and persist its consumption before returning success."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       340,
+       340
+      ],
+      "texto": "The new federated recovery-code validator accepts any code in the original list but never removes a successfully used code from myUser.recoveryCodes. Consequently the same recovery code remains valid on subsequent logins, and getCredentials reconstructs the full original set every time. Consume and persist the successfully validated code (and test a second login/replay), so federated recovery codes retain their one-time semantics."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#02",
+    "descricao": "getCredentials rebuilds the recovery-codes credential without copying the stored credential id, so the returned federated credential has a null id and cannot be targeted by id-based removal.",
+    "textoGolden": "After creating the RecoveryAuthnCodesCredentialModel, consider setting its id from the stored credential (e.g., myUser.recoveryCodes.getId()); otherwise getId() will be null and downstream removal by id (e.g., removeStoredCredentialById in the authenticator flow) may not work.",
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       237,
+       242
+      ],
+      "texto": "WHAT: getCredentials builds the RecoveryAuthnCodesCredentialModel via createFromValues but never sets its id from the stored myUser.recoveryCodes.getId() (createFromValues does not populate id). WHY: The returned federated model has a null id, so callers that identify/delete the credential by id \u2014 e.g. RecoveryAuthnCodesFormAuthenticator.removeStoredCredentialById(recoveryCodeCredentialModel.getId()) when all codes are used, or federated-credential deletion via getFederatedCredentialsStream \u2014 cannot target the actual credential. HOW: call model.setId(myUser.recoveryCodes.getId()) after createFromValues."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       237,
+       242
+      ],
+      "texto": "getCredentials rebuilds the recovery-code model without copying the ID assigned during updateCredential. createFromValues does not assign an ID, so the exposed federated credential has a null ID and CredentialDeleteHelper cannot resolve it by the stored credential ID for account deletion. Copy myUser.recoveryCodes.getId() to the reconstructed model before returning it."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       237,
+       242
+      ],
+      "texto": "The CredentialModel returned from getCredentials for recovery codes is built with createFromValues and never gets the stored credential's id (myUser.recoveryCodes.getId()). RecoveryAuthnCodesFormAuthenticator later calls removeStoredCredentialById(model.getId()) once all codes are used, and this would pass a null id. Fix: call model.setId(myUser.recoveryCodes.getId()) after creating the model."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
+    "descricao": "Creating recovery codes in external storage does not remove a previously stored local recovery-codes credential, and validation falls back to local storage, so the replaced codes still authenticate.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+      "lines": [
+       125,
+       129
+      ],
+      "texto": "Successful recovery-code creation in external storage leaves any existing locally stored recovery-code credential active. For a federated user who previously stored codes locally and now has an external provider supporting this type, regeneration no longer calls RecoveryAuthnCodesCredentialProvider.createCredential's replacement cleanup; UserCredentialManager.isValid falls back to the local validator when external validation rejects an old code, so the supposedly replaced codes still authenticate. Remove the previous local recovery-code credential after successful external creation."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+    "descricao": "Exhausted recovery codes are removed with removeStoredCredentialById, which only covers local storage, so a federated recovery-codes credential is never removed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+      "lines": [
+       80,
+       88
+      ],
+      "texto": "RecoveryAuthnCodesUtils.getCredential() can now return a credential from user storage (federated), but this code still calls removeStoredCredentialById() on it once all codes are used. That removal only targets local stored credentials, so a federated credential may not be removed. The user could then be left with an exhausted credential in user storage. Remove federated credentials through the federated path, or confirm the removal reaches user storage."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+      "lines": [
+       80,
+       88
+      ],
+      "texto": "RecoveryAuthnCodesUtils.getCredential can now return a credential from user storage, but exhausted codes are cleaned up with removeStoredCredentialById, which only targets the local DB. For a federated credential (possibly with a null id), the exhausted credential is never removed or the call misbehaves, so the user keeps a dead credential. Remove federated credentials through a path that covers user storage, for example by checking where the credential came from."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+      "lines": [
+       80,
+       89
+      ],
+      "texto": "RecoveryAuthnCodesUtils.getCredential can now return a federated credential. The authenticator still removes an exhausted one with removeStoredCredentialById(getId()), which only deletes from the local store, and the federated model's id may be null. Remove the credential through the path that matches where it was found, for example by checking whether it came from the federated stream and using the federated removal."
+     }
+    ]
+   }
+  ]
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "303cdc2caf256aa5df660611120c2e3f7392365d",
+  "base": "58ba11ecbd60863e2bfc6e32f0399ed4feb3927a",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+    "lines": [
+     129,
+     129
+    ],
+    "texto": "Both observation paths convert to float64 only after integer division by time.Millisecond (here and at line 136). Requests shorter than 1 ms are therefore recorded as zero, and all other durations are truncated to whole milliseconds. This makes the fractional millisecond buckets declared above misleading and systematically understates latency. Divide floating-point durations instead in both paths."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+    "lines": [
+     77,
+     80
+    ],
+    "texto": "The returned middleware factory shares a single MetricsMiddleware, including its mutable next pointer. If it is applied to client A and then client B, both decorated clients now forward requests to B. If another chain wraps the first decorated client, this can even create a forwarding cycle. Concurrent construction and requests additionally race on next. Share the registered metrics, but allocate a separate middleware wrapper for each application of the factory."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+    "lines": [
+     48,
+     48
+    ],
+    "texto": "The Prometheus HELP text says this histogram measures sizes returned, but QueryData observes len(v.JSON) from incoming queries and CallResource observes len(req.Body), both before calling the plugin. Operators reading the exported metric documentation can therefore mistake request payload sizes for response sizes. Describe incoming request payload sizes instead."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+    "lines": [
+     101,
+     108
+    ],
+    "texto": "Both QueryData and CallResource cases send empty payloads, and this assertion only checks that the histogram has at least one sample. Replacing either size calculation with constant zero would therefore leave the test green. Supply nonempty query JSON and resource bodies and assert the size histogram's SampleSum against their expected byte lengths, so incorrect size instrumentation fails the test."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+    "descricao": "TestLogger.FromContext returns a fresh TestLogger instead of the receiver, so logs written via the contextual logger are lost to assertions on the original fake.",
+    "textoGolden": "The `TestLogger.FromContext` method returns a new `TestLogger` instance via `NewTestLogger()` instead of returning the receiver (f). This causes logs to be recorded on an un-referenced instance, leading to broken test assertions that expect logs to be recorded on the original logger.",
+    "comentarios": [
+     {
+      "file": "pkg/plugins/log/fake.go",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "WHAT: TestLogger.FromContext returns a fresh NewTestLogger instead of the receiver. WHY: LoggerMiddleware calls m.logger.FromContext(ctx).Info so the write goes to a throwaway instance and assertions on the original TestLogger Calls/Message never observe it, diverging from real wrapper that preserves logger context. HOW: Return f (or a child sharing f) instead of NewTestLogger."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#06",
+    "descricao": "The test function is still named TestInstrumentationMiddleware after the middleware was renamed to MetricsMiddleware.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       21,
+       21
+      ],
+      "texto": "TestInstrumentationMiddleware still carries the old name even though this PR renamed the middleware under test to MetricsMiddleware (newMetricsMiddleware/NewMetricsMiddleware) and the file to metrics_middleware_test.go. The identifier advertises the superseded \"InstrumentationMiddleware\" name; rename it (e.g. TestMetricsMiddleware) so the test name matches the code it exercises."
+     },
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       21,
+       21
+      ],
+      "texto": "Test function still named TestInstrumentationMiddleware but it constructs and asserts MetricsMiddleware (newMetricsMiddleware). Rename to TestMetricsMiddleware to match the renamed middleware."
+     }
+    ]
+   }
+  ]
+ },
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "267d8be1f556ed59639ced396c885bb44586da19",
+  "base": "7a5fbae060bd0d3e29f3a4b5c6f2bfd8b2914dc7",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/serializers/user_serializer.rb",
+    "lines": [
+     149,
+     149
+    ],
+    "texto": "WHAT: `\".\" << website_host` mutates `website_host` before the ternary returns it for unrelated domains. WHY: With instance `discourse.org` and website `http://example.com/user`, the label becomes `.example.com` instead of `example.com`, also contradicting the newly added unrelated-domain test. HOW: Build the suffix without mutating the hostname."
+   },
+   {
+    "id": "S2",
+    "file": "app/serializers/user_serializer.rb",
+    "lines": [
+     43,
+     43
+    ],
+    "texto": "WHAT: The new `website_name` attribute bypasses the TL0/anonymous field restriction applied to `website`. WHY: Anonymous visitors can now retrieve a TL0 user's website hostname and matching-domain path through UsersController#show, and the changed template displays it even when `website` is omitted. HOW: Register `website_name` with `untrusted_attributes` so it uses the same Guardian restriction as `website`."
+   },
+   {
+    "id": "S3",
+    "file": "app/serializers/user_serializer.rb",
+    "lines": [
+     153,
+     154
+    ],
+    "texto": "The new website_name field bypasses the protection applied to website through untrusted_attributes. When an anonymous viewer sees a TL0 profile, website is deliberately omitted, but this predicate still includes website_name, disclosing that hidden website's host and, for matching domains, its path. Apply the same visibility condition as website to this derived field and extend the anonymous serialization test to assert its absence."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#01",
+    "descricao": "website_name compares hostnames case-sensitively, so an uppercase website host matching the instance domain shows only the host instead of the full path.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       137,
+       151
+      ],
+      "texto": "The new `website_name` compares two domain names case-sensitively. `URI(website.to_s).host` preserves the letter case written by the user, whereas `Discourse.current_hostname` is the canonical lower-cased host, and no side is down-cased before the comparison at lines 141, 144-146 and 149 (including the `ends_with?` suffix check). Because DNS host names are case-insensitive identity values, `http://EXAMPLE.com/user` and `http://example.com/user` denote the same host but take different branches, so the same-site check is decided by letter case: the wrong arm is chosen and the full-path form is dropped. Normalise both sides before comparing, e.g. `website_host = URI(website.to_s).host&.downcase` (or use `URI(...).hostname`, which down-cases) and compare against `Discourse.current_hostname.to_s.downcase`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       138,
+       141
+      ],
+      "texto": "Hostname comparisons are case-sensitive even though DNS hostnames are case-insensitive. With an instance hostname of example.com and a valid website of http://EXAMPLE.COM/user, neither the exact-host nor suffix comparison matches, so the profile displays only EXAMPLE.COM instead of the requested path. Normalize both hostnames to lowercase for comparison while preserving the desired display spelling."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04",
+    "descricao": "website_name strips only the first label to decide same-domain, so unrelated hosts under multi-label public suffixes (co.uk, github.io) are treated as the instance domain and shown with full path.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       144,
+       146
+      ],
+      "texto": "WHAT: the `elsif` branch treats the last two dot-segments as the registrable domain, so multi-part public suffixes are mis-compared. WHY: for e.g. website_host='example.co.uk' and discourse_host='forum.co.uk' both have 3 segments, the branch compares `'co.uk' == 'co.uk'`, concludes the domains match, and returns `website_host + path`, even though example.co.uk and forum.co.uk are unrelated sites \u2014 the display then shows a path that does not belong to the instance domain, defeating the feature's purpose. HOW: compare against a public-suffix-aware registrable domain (e.g. use the PublicSuffix list) or require at least the full suffix before treating hosts as the same domain, instead of blindly taking `split('.')[1..-1]`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       144,
+       146
+      ],
+      "texto": "Comparing all labels except the first incorrectly treats unrelated domains under multi-label public suffixes as the same domain. For example, with instance host `forum.co.uk` and website `https://unrelated.co.uk/user`, this returns `unrelated.co.uk/user` rather than the unrelated-site host-only label. Both hosts have three labels and their suffixes are `co.uk`, so this branch mistakes the public suffix for a shared site domain. Use registrable-domain-aware comparison (or a narrower explicit host relationship) before including the path."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       144,
+       146
+      ],
+      "texto": "The same-label-count branch treats two hosts as the same domain when everything after the first label matches. Unrelated hosts on shared suffixes, such as `a.github.io` and `b.github.io`, are treated as the same domain, so the full path is shown for an unrelated website. Compare against the registrable domain, for example with the PublicSuffix gem, or drop this heuristic branch."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#05",
+    "descricao": "Claims website_name should also show the full path when the website is a subdomain of the instance host.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       147,
+       150
+      ],
+      "texto": "WHAT: Else branch only tests `discourse_host.ends_with?('.'+website_host)` (discourse child of website) and misses the reverse (website subdomain of instance). WHY: With instance `example.com` and website `http://sub.example.com/page`, it returns `sub.example.com` instead of `sub.example.com/page`, contradicting the PR intent to show the full path for same-base-domain URLs. HOW: Also return host+path when `website_host` ends with `.`+discourse_host or shares the same registrable domain."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+    "descricao": "website_name is not marked untrusted, so the host/path of a TL0 user's website, which is hidden from anonymous viewers, is still exposed through the new field.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "WHAT: website_name re-exposes the user's website for profiles where it is intentionally hidden \u2014 the attribute is added to the public `attributes` list (line 43) but not to `untrusted_attributes`, and `include_website_name` only checks `website.present?` instead of `scope.restrict_user_fields?(object)`. WHY: `website` is an untrusted attribute gated by `restrict_user_fields?` (lib/guardian/user_guardian.rb:58-60), which is true for a TL0 user viewed by an anonymous visitor; `website_name` derives `website_host + path` from the same `object.user_profile.website`, so the URL that `include_website?` suppresses is still disclosed through the new key (the existing spec at spec/serializers/user_serializer_spec.rb:11-14 only asserts the listed untrusted keys are absent, so this leak is not covered). HOW: add `:website_name` to the `untrusted_attributes` list (or have `include_website_name` return false when `scope.restrict_user_fields?(object)`), mirroring the `website` handling."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       137,
+       155
+      ],
+      "texto": "`website_name` is derived from the same `object.user_profile.website` value that `:website` protects via `untrusted_attributes` (lines 105-111), but it is only gated by `include_website_name` -> `website.present?`. Since the untrusted filter removes `website` for some viewers while `website_name` is still emitted, and in the same-domain / subdomain branches it returns host *plus* `URI(website).path` (lines 143/146/149), the user's full website URL still leaves in the response for viewers the filter was supposed to strip it from. Either add `:website_name` to `untrusted_attributes` or gate `include_website_name` with the same trust condition as `website`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "The new `website_name` field is gated only on `website.present?`, ignoring the visibility constraint this file declares for its source attribute: lines 105-111 put `:website` in `untrusted_attributes`, so `website` is omitted for viewers not allowed to see profile fields, but `website_name` is still serialized because `include_website_name` never consults that condition. Those viewers now receive the user's URL host, and when the host equals (lines 141-143) or is a parent of (144-149) the instance host they receive host + path, i.e. the complete URL that `website` was supposed to hide. Fix by adding `:website_name` to the `untrusted_attributes` list (105-111) \u2014 or make the guard reuse `website`'s own inclusion condition instead of a bare presence check."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+    "descricao": "include_website_name lacks the '?' suffix that ActiveModelSerializers requires, so the conditional-inclusion guard is never called.",
+    "textoGolden": "The include_website_name method is missing the required ? suffix. Rails serializers expect include_ methods to end with ? for conditional attribute inclusion, a convention followed by other methods in this serializer. Without it, the website_name attribute may not be conditionally included as intended. Additionally, the '.' << website_host string concatenation should be replaced with '.' + website_host or '.#{website_host}' to avoid mutating string literals, which can lead to issues.",
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       153
+      ],
+      "texto": "WHAT: `include_website_name` is missing the trailing `?` required by ActiveModelSerializers. WHY: every other conditional-inclusion guard in this file uses the `?` form (`define_method \"include_#{attr}?\"` at lines 9/18/27, `include_email?` at line 117), and AMS 0.8.3 resolves the guard as `include_<attr>?`; because this method lacks the `?` it is never invoked, so the intended `website.present?` condition is silently ignored and `website_name` is always serialized. HOW: rename to `def include_website_name?`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "The guard method is named `include_website_name`, but ActiveModelSerializers (and this file's own convention, e.g. `include_email?` at line 117) resolves per-attribute guards via `include_<attribute>?`. Because the name lacks the trailing `?`, the framework never invokes it: the `website.present?` guard is dead code and `website_name` is serialized unconditionally, emitting `website_name: null` for users without a website. Rename to `include_website_name?`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "The conditional-inclusion guard is named `include_website_name`, but ActiveModelSerializers resolves these guards as `include_<attribute>?` (the sibling in this very file is `include_email?` at line 117). As written the method is never called, so the guard is dead and the `:website_name` attribute declared at line 43 is serialized unconditionally. That defeats the intent of the guard (`website.present?`): the payload now always carries `website_name`, including for the scopes where `website` itself is withheld by the `untrusted_attributes` list (line 109), leaking the user's site host/path to viewers who were never meant to receive the website. Rename the method to `include_website_name?` so the serializer base class honors it."
+     }
+    ]
+   }
+  ]
+ },
+ "async-import-of-the-appstore-packages-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "820d7fa87e0c824c5dee8082a33efadb1a2566f7",
+  "base": "ba9688a04a8398c9a8332ee7061bfae2f2efd524",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/app-store/vital/lib/reschedule.ts",
+    "lines": [
+     125,
+     128
+    ],
+    "texto": "The async forEach callback converts getCalendar failures into rejected promises that the surrounding try/catch never observes. For example, Exchange2013's constructor decrypts and JSON-parses credentials, so a credential decryption/parsing failure now escapes the previously effective catch as an unhandled rejection while rescheduling continues and returns success. Await Promise.all over map inside the try block (and apply the same correction in wipemycalother/lib/reschedule.ts) so initialization and deletion failures reach the existing error handler."
+   },
+   {
+    "id": "S2",
+    "file": "packages/app-store/index.ts",
+    "lines": [
+     3,
+     9
+    ],
+    "texto": "Each import() executes as soon as the registry module loads, while callers await only the entry for their selected integration. If any other integration fails during loading or module initialization, its stored promise rejects without a handler. This converts a module-loading failure into an unhandled rejection (potentially terminating the Node process), even for requests using a different integration. Store loader functions and invoke only the selected loader, or ensure every eagerly started promise has a rejection handler immediately."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "async-import-of-the-appstore-packages-cal-com#02",
+    "descricao": "Async callbacks passed to forEach after getCalendar became async are never awaited, so calendar and video cancellations run fire-and-forget, may not finish, and their errors escape the surrounding try/catch as unhandled rejections.",
+    "textoGolden": "The code uses forEach with async callbacks, which causes asynchronous operations (e.g., calendar/video event deletions, payment refunds) to run concurrently without being awaited. This 'fire-and-forget' behavior leads to unhandled promise rejections, race conditions, and incomplete cleanup, as surrounding try-catch blocks cannot properly handle errors from these unawaited promises. Replace forEach with for...of loops or Promise.all() with map() to ensure proper sequential execution and error handling.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/vital/lib/reschedule.ts",
+      "lines": [
+       125,
+       128
+      ],
+      "texto": "The async forEach callback moves calendar factory exceptions outside the surrounding try/catch because forEach discards its returned promise. An invalid encrypted Exchange credential throws during CalendarService construction, now producing an unhandled rejection while Reschedule continues and returns success instead of logging the error; the identical regression occurs in wipemycalother/lib/reschedule.ts. Await Promise.all over bookingRefsFiltered.map(async ...) inside the try block, or use an awaited for...of loop, so factory and deletion failures reach the catch."
+     },
+     {
+      "file": "packages/app-store/vital/lib/reschedule.ts",
+      "lines": [
+       125,
+       128
+      ],
+      "texto": "The new async forEach callback is not awaited. If getCalendar rejects (for example, the dynamically imported calendar module fails to load or its service constructor throws), the callback produces a rejected promise that forEach discards; the surrounding try/catch cannot catch it. Previously a synchronous getCalendar failure reached that catch. Await Promise.all(bookingRefsFiltered.map(async ...)) or use an awaited for...of loop so these failures remain handled and calendar cleanup completes before rescheduling continues. Apply the same fix to the equivalent changed loop in wipemycalother/lib/reschedule.ts."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       458,
+       470
+      ],
+      "texto": "WHAT: credentials.filter(...).forEach(async (credential) => { await getCalendar; apiDeletes.push(...) }) pushes to apiDeletes asynchronously after outer code consumes it. WHY: outer apiDeletes is awaited elsewhere while async callbacks have not yet pushed, so recurring-event deletions are lost/partial and errors are unobserved. HOW: replace with for...of with await or collect promises via map + await Promise.all."
+     }
+    ]
+   }
+  ]
+ }
+}

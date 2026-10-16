@@ -1,0 +1,2089 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     119,
+     119
+    ],
+    "texto": "WHAT: The Meet fallback dereferences mainHostDestinationCalendar even when destinationCalendar is null or empty. WHY: Bookings selecting Google Meet without a destination calendar now throw instead of falling back to Cal Video, including the null destination produced by handleNewBooking. HOW: Restore the optional access on the integration check."
+   },
+   {
+    "id": "S2",
+    "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+    "lines": [
+     73,
+     76
+    ],
+    "texto": "WHAT: Office365 event creation always selects the first host's destination calendar, ignoring the credential for the current provider instance. WHY: EventManager now invokes this method for every collective host with the same full destination array, so a secondary Office365 host sends its token with the primary host's calendar ID and fails to create its event. HOW: Accept the credentialId supplied by CalendarManager and select the matching destination."
+   },
+   {
+    "id": "S3",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     170,
+     170
+    ],
+    "texto": "WHAT: Reference creation now removes credentialId from every non-calendar result, including dedicated video meetings. WHY: createMeeting returns the video credential ID, and handleCancelBooking only deletes the video meeting when its reference has that ID, so newly booked video meetings remain active after cancellation. HOW: Preserve result.credentialId for video results as well."
+   },
+   {
+    "id": "S4",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     254,
+     256
+    ],
+    "texto": "WHAT: The fallback searches destination calendars for an externalId equal to the missing externalCalendarId. WHY: For references without an external calendar ID, update sends an undefined calendarId and deletion falls back to primary instead of the configured non-primary calendar, breaking legacy booking updates and cancellations. HOW: Restore the first destination's externalId as the single-calendar fallback in both updateEvent and deleteEvent."
+   },
+   {
+    "id": "S5",
+    "file": "packages/features/bookings/lib/handleNewBooking.ts",
+    "lines": [
+     1077,
+     1078
+    ],
+    "texto": "WHAT: Collective host destinations are appended with optional chaining to a destination array that can be null. WHY: When the organizer and event type have no destination but another collective host does, that host's configured calendar is silently discarded and EventManager never creates its calendar event. HOW: Initialize an empty array before appending the other hosts' destinations."
+   },
+   {
+    "id": "S6",
+    "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+    "lines": [
+     449,
+     457
+    ],
+    "texto": "WHAT: Recurring cancellation ignores the credential resolved for the current host reference and again loops only over the organizer's credentials using the first calendar reference. WHY: With the newly supported multiple collective calendar references, cancelling all remaining occurrences repeatedly deletes the organizer's events but leaves secondary hosts' recurring events in their calendars. HOW: Use the resolved calendar for the current reference and select each updated booking's reference by that credentialId instead of taking its first calendar reference."
+   },
+   {
+    "id": "S7",
+    "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+    "lines": [
+     73,
+     76
+    ],
+    "texto": "The first destination belongs to the main organizer, not necessarily to the credential used by this service. createAllCalendarEvents now calls createEvent for every collective host's credential while passing the same destination array. For a second Office365 host, this therefore requests /me/calendars/<organizer-calendar-id>/events using the second host's token, typically failing with a calendar-not-found error instead of creating their event. Select the destination matching the credentialId passed by CalendarManager rather than always taking element zero."
+   },
+   {
+    "id": "S8",
+    "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+    "lines": [
+     72,
+     76
+    ],
+    "texto": "EventManager.createAllCalendarEvents now iterates all collective hosts' destination calendars and calls createEvent with each host's credential; CalendarManager passes that credential ID to the provider while retaining the entire destinationCalendar array. This implementation always takes element zero, so a second Office365 host's token is used against the first host's calendar ID (potentially even a Google calendar ID in a mixed-provider event). Creation fails or targets the wrong calendar, while the saved reference records the second host's intended external ID. Accept the credential ID and select the destination matching it, as the Google implementation now does."
+   },
+   {
+    "id": "S9",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     119,
+     119
+    ],
+    "texto": "When a Google Meet booking has no destination calendar, the destructured first element is undefined (handleNewBooking explicitly constructs a null destination in this case). Accessing its integration throws instead of falling back to Cal Video, aborting booking creation. Preserve the optional access used before the array migration."
+   },
+   {
+    "id": "S10",
+    "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+    "lines": [
+     72,
+     76
+    ],
+    "texto": "createAllCalendarEvents now calls this method once per destination credential but passes the entire event destination array each time. Selecting element zero means a second Office365 host attempts to create in the organizer's calendar using the second host's token. Normally Graph rejects that calendar ID, leaving the collective host without an event; if accessible, the event is created in the wrong calendar while the reference records the second host's external ID. Select the destination matching the credential passed by CalendarManager rather than always using the first destination."
+   },
+   {
+    "id": "S11",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     118,
+     119
+    ],
+    "texto": "The new array destructuring yields an undefined first element for null or empty destinations, but the fallback now dereferences it without optional chaining. handleNewBooking explicitly produces null when neither event type nor organizer has a destination. With Google Meet selected, this throws instead of preserving the previous fallback to Cal Video."
+   },
+   {
+    "id": "S12",
+    "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+    "lines": [
+     72,
+     76
+    ],
+    "texto": "EventManager now passes the entire destination array to each host's calendar service, and CalendarManager supplies that host's credential ID. This consumer still takes only the first destination. For a second Office365 host it therefore requests the organizer's calendar ID using the second host's token, typically failing creation or writing to the wrong calendar if shared access exists. Accept the credentialId argument and select its matching destination, as the Google provider does."
+   },
+   {
+    "id": "S13",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     170,
+     170
+    ],
+    "texto": "The reference mapping previously preserved result.credentialId for non-calendar results. Changing the false branch to undefined drops the video/conferencing credential identity, even though moving calendar credential IDs into EventResult does not change the non-calendar contract. Preserve result.credentialId for both kinds so later operations can identify the integration account that created the meeting."
+   },
+   {
+    "id": "S14",
+    "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+    "lines": [
+     73,
+     76
+    ],
+    "texto": "EventManager now iterates all collective destinations and invokes this service with each destination's credential, but this method always selects destinationCalendar[0]. For a second Office365 host, the request uses that host's token with the organizer's calendar ID, typically failing to create their event (or targeting the wrong calendar). Select the destination matching the credential passed by CalendarManager rather than always taking the first entry."
+   },
+   {
+    "id": "S15",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     254,
+     256
+    ],
+    "texto": "The fallback executes only when externalCalendarId is falsy, but then searches for a destination whose externalId equals that same falsy value. A normal configured destination cannot match. Updates to legacy references without an external calendar ID therefore lose the previously working destination fallback; the analogous delete fallback now targets primary instead of the configured calendar. Use a usable destination externalId when the reference does not supply one."
+   },
+   {
+    "id": "S16",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     169,
+     170
+    ],
+    "texto": "This mapping previously retained result.credentialId for non-calendar results; it now explicitly writes undefined for them. Video integration results therefore lose their credential association when converted to booking references, even though the producer supplies it. Preserve result.credentialId for non-calendar results as well as calendar results."
+   },
+   {
+    "id": "S17",
+    "file": "packages/features/bookings/lib/handleNewBooking.ts",
+    "lines": [
+     758,
+     759
+    ],
+    "texto": "The new catch treats PrismaClientKnownRequestError as a client-safe error and copies its raw message into HttpError. Prisma diagnostics can include internal database/query context and offending values, so a failed user lookup can disclose those details through the public booking error response. Preserve explicitly safe HttpError messages, but return a generic message for Prisma failures and keep any necessary diagnostics in appropriately sanitized internal logging."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#02",
+    "descricao": "Claims the optional chaining in mainHostDestinationCalendar?.integration is redundant because a ternary already checks it.",
+    "textoGolden": "The optional chaining on mainHostDestinationCalendar?.integration is redundant since you already check mainHostDestinationCalendar in the ternary condition.",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+    "descricao": "When externalCalendarId is absent, updateEvent/deleteEvent look for a destination calendar whose externalId equals that absent value, so the lookup never matches and the configured destination calendar is no longer used.",
+    "textoGolden": "Logic error: when externalCalendarId is provided, you're searching for a calendar where externalId === externalCalendarId, but this will always fail since you're looking for a calendar that matches itself. Should likely find by credentialId or use different logic.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       254,
+       256
+      ],
+      "texto": "WHAT: The fallback `event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)?.externalId` only executes when `externalCalendarId` is falsy, so it compares `cal.externalId` against `null`/`undefined` and matches nothing (the same wrong pattern is duplicated in deleteEvent at lines 315-317).\nWHY: When `updateEvent`/`deleteEvent` are called without an externalCalendarId, `selectedCalendar`/`calendarId` now resolves to `undefined` instead of the host's destination calendar externalId (old code fell back to `event.destinationCalendar?.externalId`), so the Google API is invoked with an undefined calendarId and the update/delete targets the wrong (or default) calendar or errors.\nHOW: Find the destination calendar for the current credential (e.g. by credentialId) rather than comparing `externalId` to the already-falsy `externalCalendarId`, or restore the single fallback `event.destinationCalendar?.[0]?.externalId`."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       254,
+       256
+      ],
+      "texto": "Dead computation in the fallback: the else branch runs only when externalCalendarId is falsy, yet it calls `event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)`, comparing every cal.externalId to undefined. Nothing can match, so selectedCalendar is always undefined and the fallback that previously returned `event.destinationCalendar?.externalId` is lost. Match the intended criterion (destination calendar's own externalId/credentialId), not the already-falsy externalCalendarId."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       315,
+       317
+      ],
+      "texto": "Same dead-computation defect in deleteEvent: the else branch executes only when externalCalendarId is falsy, yet the predicate `(cal) => cal.externalId === externalCalendarId` compares against undefined and can never match, so calendarId falls through to \"primary\" and the event is deleted from the wrong calendar instead of the booking's destination calendar. Fix the predicate to use the destination calendar's externalId (or credentialId) rather than the falsy externalCalendarId."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+    "descricao": "The organization slug is now set only when team billing is enabled (inverted condition), so with billing both slug and requestedSlug are set and without billing neither is.",
+    "textoGolden": "Logic inversion in organization creation: The slug property is now conditionally set when IS_TEAM_BILLING_ENABLED is true, instead of when it's false as originally intended. This change, combined with requestedSlug still being set when IS_TEAM_BILLING_ENABLED is true, results in both properties being set when billing is enabled, and neither when disabled",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+      "lines": [
+       151,
+       151
+      ],
+      "texto": "Organization creation no longer assigns a slug when team billing is disabled, while requestedSlug is also omitted in that mode. New self-hosted organizations therefore have neither publication field, and publish.handler rejects them because requestedSlug is missing. Restore the non-billing slug assignment."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+      "lines": [
+       148,
+       152
+      ],
+      "texto": "WHAT: slug spread condition was inverted from ...(!IS_TEAM_BILLING_ENABLED && {slug}) to ...(IS_TEAM_BILLING_ENABLED ? {slug} : {}). WHY: organizations get slug when billing enabled and lose it when disabled, opposite of prior contract and breaking slug/requestedSlug pairing. HOW: restore negation for slug branch."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+    "descricao": "Office365 (and Lark) createEvent ignore the new credentialId argument and always use the first destination calendar, so in collective bookings other hosts' credentials target the organizer's calendar instead of their own.",
+    "textoGolden": "The Calendar interface now requires createEvent(event, credentialId), but some implementations (e.g., Lark/Office365) still declare createEvent(event) only\u2014this breaks the interface contract (also applies to other locations in the PR).",
+    "comentarios": [
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Office365 creation always selects the first host's destination despite being invoked separately with each host's credential. A collective booking with distinct Office365 calendars sends the second host's token to the first host's calendar ID, causing failed or incorrectly targeted creation. Accept the credentialId supplied by CalendarManager and select the matching destination."
+     },
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Select the destination belonging to the current credential rather than always taking the first array entry. EventManager now calls createEvent once per destination with that destination's credential, while passing the full event array each time. In a collective booking with two Outlook hosts, the second host therefore attempts to insert into the first host's calendar using the second host's token, typically failing instead of creating the second calendar event. Accept the credentialId passed by CalendarManager and match the destination by that ID (or pass a destination-specific event)."
+     },
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       72,
+       76
+      ],
+      "texto": "Select the destination belonging to the credential passed by CalendarManager, rather than always selecting the first array element. EventManager now invokes creation for each collective host with the full destination array. A second Office365 host therefore attempts to write to the first host's calendar using its own token, causing creation to fail or target the wrong calendar; meanwhile the saved reference records the second host's externalId."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#06",
+    "descricao": "Claims updateAllCalendarEvents passes an undefined credential to updateEvent when reference.credentialId points to a credential that cannot be found.",
+    "textoGolden": "The `credential` may be undefined when passed to `updateEvent` if `reference.credentialId` is set but the credential is not found. This can lead to a runtime error when `updateEvent` is called with an undefined credential, which should be handled to prevent crashes.",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+    "descricao": "The Google Meet fallback reads mainHostDestinationCalendar.integration without optional chaining, so a Meet booking with a null or empty destinationCalendar throws instead of falling back to Cal Video.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       119,
+       119
+      ],
+      "texto": "WHAT: `mainHostDestinationCalendar.integration` is dereferenced without optional chaining after destructuring `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []`.\nWHY: The previous code was `evt.destinationCalendar?.integration !== \"google_calendar\"`, which was null-safe; now when `destinationCalendar` is null/empty (e.g. handleNewBooking.ts:1063-1067 sets it to `null` when neither eventType nor organizer has one) and `evt.location === MeetLocationType`, destructuring yields `undefined` and `.integration` throws `TypeError: Cannot read properties of undefined`, crashing the booking creation flow.\nHOW: Use `mainHostDestinationCalendar?.integration !== \"google_calendar\"`."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       118,
+       119
+      ],
+      "texto": "`mainHostDestinationCalendar` can be `undefined` because `evt.destinationCalendar` may now be null or an empty array (callers such as handleNewBooking pass `: null` / `: []`). The old code used `evt.destinationCalendar?.integration`, but the new line dereferences `mainHostDestinationCalendar.integration` without optional chaining, throwing `TypeError: Cannot read properties of undefined (reading 'integration')` whenever `evt.location === MeetLocationType`. Use `mainHostDestinationCalendar?.integration !== \"google_calendar\"` to preserve the null-safe fallback."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       118,
+       119
+      ],
+      "texto": "The Meet-location fallback destructures `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []` and then reads `mainHostDestinationCalendar.integration` without optional chaining. When `destinationCalendar` is an empty array (which this PR now produces in many callers, e.g. handleCancelBooking.ts, the payment webhooks, confirm/editLocation/deleteCredential/requestReschedule handlers all set `[]` when there is no destination calendar), the destructured value is `undefined` and `.integration` throws `TypeError: Cannot read properties of undefined (reading 'integration')`, aborting event creation. Use `mainHostDestinationCalendar?.integration` to preserve the previous optional-chained behavior."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+    "descricao": "For collective events whose organizer has no destination calendar, destinationCalendar is null and the optional push drops all other hosts' destination calendars, so those hosts never get calendar events.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1078
+      ],
+      "texto": "WHAT: `evt.destinationCalendar?.push(...teamDestinationCalendars)` silently does nothing when `evt.destinationCalendar` is `null`.\nWHY: For a COLLECTIVE event where neither `eventType.destinationCalendar` nor `organizerUser.destinationCalendar` exists, the evt field is set to `null` (lines 1063-1067), so the collected `teamDestinationCalendars` of the other hosts are dropped and those hosts are never invited \u2014 defeating the multi-host support this PR adds.\nHOW: Initialize to an array (e.g. `evt.destinationCalendar ?? []` before pushing, or default the field to `[]` instead of `null`) so team destination calendars are always appended."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1078
+      ],
+      "texto": "The optional push discards all collected team destinations when the organizer has no destination calendar. A collective booking with configured secondary hosts therefore creates none of their calendar events even though teamDestinationCalendars contains them. Initialize the array before appending the team destinations."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1079
+      ],
+      "texto": "Initialize destinationCalendar to an array before appending collective hosts' destinations. When neither the event type nor organizer has a destination, it is set to null above, so optional push silently discards all the computed teamDestinationCalendars. Hosts with configured destination calendars consequently receive no calendar events."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+    "descricao": "Video booking references are now saved without their credentialId, so cancelling the booking can no longer find the video credential and the meeting is not deleted.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       169,
+       170
+      ],
+      "texto": "WHAT: `credentialId: isCalendarType ? result.credentialId : undefined` drops the previous non-calendar fallback `result.credentialId`.\nWHY: For non-calendar results (video events) `referencesToCreate` now stores `credentialId: undefined` where it previously stored `result.credentialId`, so the persisted video reference loses its credentialId; later code that looks the reference up by credentialId (e.g. handleCancelBooking.ts:491-502 deleting the video meeting, or EventManager.updateLocation) can no longer resolve the credential and the meeting is not cleaned up.\nHOW: Keep the fallback for non-calendar results: `credentialId: isCalendarType ? result.credentialId : result.credentialId` (i.e. just `result.credentialId` for both branches)."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       170,
+       170
+      ],
+      "texto": "The reference mapping discards credentialId for every video result. createMeeting returns the video credential ID, and handleCancelBooking only deletes a video meeting when its reference has that ID, so newly created video meetings are left behind on cancellation. Preserve result.credentialId for video results as well."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       170,
+       170
+      ],
+      "texto": "Retain result.credentialId for non-calendar references as well. The previous mapping saved the dedicated video integration's credential ID; this change unconditionally replaces it with undefined for video results, losing the association needed to identify the account that created the meeting during subsequent lifecycle operations."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#10",
+    "descricao": "createAllCalendarEvents and updateAllCalendarEvents fetch each missing host credential with a separate findUnique inside the loop instead of one batched query.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       341,
+       355
+      ],
+      "texto": "WHAT: The new `for (const destination of event.destinationCalendar)` loop performs a `prisma.credential.findUnique` on every destination whose credential is not found in the cached `this.calendarCredentials` (line 344); the same per-reference DB lookup was added in updateAllCalendarEvents at line 517.\nWHY: For collective bookings with multiple hosts this turns one in-memory lookup into up to N sequential database round-trips added to the booking-creation hot path, scaling with host count.\nHOW: Resolve all missing credential ids in a single batched query (`prisma.credential.findMany({ where: { id: { in: missingIds } } })`) before the loop and build a lookup map."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+    "descricao": "updateLocation stores externalCalendarId and credentialId from updateEvent's result, which never returns them, so calendar references rewritten on location edit lose their calendar and credential and later updates or cancellations misroute.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       208,
+       209
+      ],
+      "texto": "updateLocation now reads externalId and credentialId exclusively from results, but CalendarManager.updateEvent returns neither field. Calendar references produced by location editing consequently lose their calendar and credential routing information, breaking subsequent updates or cancellation, particularly for secondary collective hosts. Return those fields from updateEvent or preserve them from the corresponding booking reference."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
+    "descricao": "Cancelling all remaining occurrences of a recurring collective booking deletes only the first calendar reference of each booking, repeated once per host, so the other hosts' events stay on their calendars.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       423,
+       424
+      ],
+      "texto": "The new per-reference loop runs the recurring-series deletion branch for every host, but that branch still iterates only bookingToDelete.user.credentials and selects the first calendar reference in each occurrence. Canceling all remaining collective occurrences repeatedly deletes the owner's events while leaving secondary hosts' events untouched. For each occurrence, delete the reference matching the current host credential using the resolved calendarCredential."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       449,
+       457
+      ],
+      "texto": "For cancel-all-remaining recurring collective bookings, delete each updated booking's reference matching the current outer reference/credential. The new outer loop iterates all calendar references, but this inner block still iterates only the organizer's credentials and takes the first calendar reference of each booking. Every outer iteration therefore repeats deletion of the first host's event, while the additional hosts' recurring events remain on their calendars after cancellation."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#14",
+    "descricao": "Google createEvent picks the target calendar only by matching credentialId, so destination calendars without a credentialId are ignored and events are created on the primary calendar instead.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       145,
+       154
+      ],
+      "texto": "createEvent now picks the target calendar only by matching credentialId. Destination calendars without a credentialId (handled by EventManager's integration-based branch) never match, so events are inserted into \"primary\" instead of the configured destination externalId as before."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#15",
+    "descricao": "For destination calendars without a credentialId, createEvent is called without the externalId, so the booking reference is stored with an undefined externalCalendarId.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       376,
+       381
+      ],
+      "texto": "In the no-credentialId branch createEvent(c, event) is called without externalId, so EventResult.externalId is undefined. The booking reference's externalCalendarId, which used to come from evt.destinationCalendar.externalId, is now not stored, which breaks later update/delete targeting. Pass destination.externalId."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       375,
+       381
+      ],
+      "texto": "In the branch for destinations without a credentialId, `createEvent(c, event)` is called without the externalId argument. CalendarManager.createEvent only returns `externalId` when it is passed in, and EventManager now stores `result.externalId` as externalCalendarId, so these booking references are saved with an undefined externalCalendarId. Pass `destination.externalId` as the third argument, so the producer returns what the consumer stores."
+     }
+    ]
+   }
+  ]
+ },
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "ee38fd295fd294b9fc787eba482bde24bbfea69b",
+  "base": "93cb21f55a2a40d9116c014741f5679fbeff5fd9",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     133,
+     135
+    ],
+    "texto": "WHAT: A matching date override returns true before busy times are checked. WHY: Both fixed-host and rotating-host callers pass calendar bookings and buffered busy periods in schedule.busy, but every slot accepted by an override now ignores those conflicts and can advertise an already-booked host. HOW: Let a valid override bypass recurring working-hours validation only, then continue to busy.every."
+   },
+   {
+    "id": "S2",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     117,
+     124
+    ],
+    "texto": "WHAT: Override validation rejects disjoint slots rather than requiring the entire meeting to fit inside an override. WHY: A fixed host with a 10:00\u201311:00 override is considered available for a 10:30\u201311:30 meeting generated by another round-robin host; a meeting starting exactly at 11:00 also passes. HOW: Accept a slot only when its start is at or after an override start and its end is at or before that same override end, considering all override intervals on the date."
+   },
+   {
+    "id": "S3",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     138,
+     147
+    ],
+    "texto": "WHAT: The working-hours scan rejects a slot if any interval on that weekday does not contain it. WHY: getWorkingHours returns separate intervals for split schedules, so a valid 09:00 slot in a 09:00\u201312:00 and 13:00\u201317:00 schedule is rejected by the afternoon interval, and afternoon slots are rejected by the morning interval. HOW: Reject only when no working-hours interval on the relevant day contains the entire slot."
+   },
+   {
+    "id": "S4",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     142,
+     142
+    ],
+    "texto": "WHAT: The working-hours end bound is calculated from slotStartTime instead of slotEndTime. WHY: For a fixed host available until 17:00, a 16:30\u201317:30 slot generated by another host passes this check despite extending beyond the fixed host's working hours. HOW: Compare the actual slot end against the interval end, including the end date when the meeting crosses midnight."
+   },
+   {
+    "id": "S5",
+    "file": "packages/lib/slots.ts",
+    "lines": [
+     218,
+     223
+    ],
+    "texto": "WHAT: Timezone-shifted override endpoints are reduced to clock minutes without preserving their date or splitting at midnight. WHY: A UTC organizer override of 22:00\u201323:00 viewed in UTC+01 becomes startTime 1380 and endTime 0; buildSlots skips that reversed range, so valid override availability disappears. Larger shifts can also move the entire override to another attendee date while activeOverrides still selects using the unshifted start. HOW: Convert override endpoints to actual instants, intersect them with the attendee day's boundaries, and derive minutes relative to that day rather than extracting wrapped hours."
+   },
+   {
+    "id": "S6",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     133,
+     135
+    ],
+    "texto": "When a slot falls within a date override, this early return accepts it without running busy.every below. For example, an override from 09:00 to 17:00 and an existing booking at 10:00 now marks the 10:00 slot available. Override membership must only replace the working-hours check; it must still pass the busy-interval checks before returning true."
+   },
+   {
+    "id": "S7",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     142,
+     143
+    ],
+    "texto": "The new end bound repeats slotStartTime, so it never checks whether the event fits completely within working hours. A 60-minute event starting at 16:30 passes a user's 09:00\u201317:00 schedule even though it ends at 17:30. This matters when filtering aggregate slots for individual hosts whose availability ends earlier. Calculate the end from slotEndTime and account for crossing midnight before accepting the interval."
+   },
+   {
+    "id": "S8",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     133,
+     135
+    ],
+    "texto": "The consumers at the fixed-host and loose-host availability checks still rely on this function to reject slots overlapping the supplied `busy` intervals. Previously a slot (other than the explicit currentSeats exception) had to pass `busy.every` to be available. Now any slot on a matching override date that reaches this branch returns true without checking busy at all. For example, an override covering 09:00\u201317:00 makes a slot at 10:00 available even if that host has a booking at 10:00. Treat the override as satisfying the working-hours constraint, but continue through the busy check rather than returning true here."
+   },
+   {
+    "id": "S9",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     133,
+     135
+    ],
+    "texto": "When an override exists for the slot's date, this returns true before reaching busy.every below. A slot inside an override is consequently offered even when an existing booking or calendar busy interval overlaps it. An override should replace working-hours constraints, not bypass busy-time validation; continue to the busy check after validating the override."
+   },
+   {
+    "id": "S10",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     141,
+     143
+    ],
+    "texto": "Both start and end are calculated from slotStartTime. Thus a 16:30\u201317:30 event passes a working period ending at 17:00. Calculate the end from slotEndTime (including any date rollover) so the entire event must fit within working hours."
+   },
+   {
+    "id": "S11",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     117,
+     124
+    ],
+    "texto": "These conditions reject only slots entirely before or after the override. For an override of 09:00\u201312:00, both 08:30\u201309:30 and 11:30\u201312:30 pass, and even a slot starting exactly at 12:00 passes. Validate that the slot start is at or after the override start and its end is at or before the override end instead."
+   },
+   {
+    "id": "S12",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     114,
+     115
+    ],
+    "texto": "The two dayjs(...).add(...) calls create distinct objects, so strict equality is always false even when the timestamps match. This makes the explicit zero-length/unavailable override branch unreachable. Compare timestamp values with isSame instead."
+   },
+   {
+    "id": "S13",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     141,
+     143
+    ],
+    "texto": "The `end` offset is calculated from `slotStartTime`, so the upper-bound check allows slots that start inside working hours but finish outside them. For example, with working hours 09:00\u201310:00, a 60-minute slot starting at 09:30 passes because both offsets are 570. This matters when checking an individual host against slots generated from aggregated availability. Use the slot's actual end for this comparison (and account for crossing midnight when comparing day-relative offsets)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+    "descricao": "The working-hours check computes end from slotStartTime instead of slotEndTime, so slots that start within working hours but end after them are accepted.",
+    "textoGolden": "Incorrect end time calculation using slotStartTime instead of slotEndTime",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       141,
+       143
+      ],
+      "texto": "WHAT: `end` is computed as `slotStartTime.hour() * 60 + slotStartTime.minute()` \u2014 an exact duplicate of `start` \u2014 instead of using `slotEndTime`. WHY: the working-hours upper-bound test `end > workingHour.endTime` therefore compares the slot START against the working-day end, so a slot whose start is inside working hours but whose end (start + eventLength) overruns `workingHour.endTime` is never filtered and is reported as available, allowing bookings outside the host's working hours. HOW: compute `const end = slotEndTime.hour() * 60 + slotEndTime.minute();`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       141,
+       142
+      ],
+      "texto": "`end` is computed from `slotStartTime` instead of `slotEndTime`, so it always equals `start`. The `end > workingHour.endTime` check is identical to the `start` check and never catches a slot that starts within working hours but ends past them. Use `slotEndTime.hour() * 60 + slotEndTime.minute()` for `end`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       141,
+       143
+      ],
+      "texto": "`end` is computed identically to `start` (both from slotStartTime), so the check `start < workingHour.startTime || end > workingHour.endTime` can never reject a slot on the upper bound. A slot starting inside working hours but ending after workingHour.endTime is wrongly considered available; derive `end` from slotEndTime instead."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+    "descricao": "The date-override check compares two dayjs objects with ===, which is always false, so zero-length (day off) overrides are never detected.",
+    "textoGolden": "Using === for dayjs object comparison will always return false as it compares object references, not values. Use .isSame() method instead: dayjs(date.start).add(utcOffset, 'minutes').isSame(dayjs(date.end).add(utcOffset, minutes))",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       114,
+       114
+      ],
+      "texto": "This compares two separately constructed dayjs objects with `===` (reference equality), which is always false, so a zero-length override (start equal to end, whole day blocked) never returns true here. Compare timestamps, e.g. `dayjs(date.start).add(utcOffset, 'minutes').isSame(dayjs(date.end).add(utcOffset, 'minutes'))`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       114,
+       116
+      ],
+      "texto": "`dayjs(date.start).add(utcOffset, \"minutes\") === dayjs(date.end).add(utcOffset, \"minutes\")` compares two separate dayjs object references, so `===` is always false. The zero-length date-override branch is dead code and such an override is never recognised as covering the day; compare values (e.g. .isSame() or .valueOf() === .valueOf()) instead."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       114,
+       115
+      ],
+      "texto": "The equality check compares two separately created Dayjs objects with ===, which is always false, even when the override start and end represent the same instant. The intended zero-length/closed-day rejection is unreachable, and a slot beginning exactly at that instant can reach the dateOverrideExist success return. Compare timestamps or use isSame instead."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+    "descricao": "When a date override exists for the day, checkIfIsAvailable returns true before checking busy times, so slots overlapping existing bookings are reported available.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       133,
+       135
+      ],
+      "texto": "WHAT: when `dateOverrideExist` is true the function returns `true` before running the `busy.every(...)` check at the end. WHY: on any day that has a matching date override, a slot inside the override is reported available without checking the host's existing bookings (`busy` is spread via `...schedule`/`...userSchedule`), so a fixed/loose host who already has a booking during the override window is still shown as free \u2014 enabling double-booking. HOW: do not return early here; fall through so the override branch only decides whether the slot is inside the override window, and let the existing `busy` evaluation decide availability (e.g. `if (dateOverrideExist) { /* within override, still check busy */ } else { /* fall through to busy */ }`)."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       133,
+       135
+      ],
+      "texto": "The new `if (dateOverrideExist) return true;` short-circuits the `busy` conflict check (and the workingHours check) for any slot that falls inside a date override window. Every caller of `checkIfIsAvailable` previously counted on it returning false for a slot that overlaps an existing booking; on days covered by a date override that guarantee is gone, so slots conflicting with the user's real bookings are now reported as available and can be double-booked. The override branch should let control fall through to the `busy.every(...)` check (returning true only for the availability-window part) instead of returning early."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       133,
+       134
+      ],
+      "texto": "A matching date override returns true before checking busy periods. Both fixed-host and loose-host callers pass calendar and booking conflicts in busy, so a host with an override is offered even when an existing booking overlaps the slot. Continue to the busy checks after validating the override instead of returning true."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+    "descricao": "The working-hours check rejects a slot when any interval for the weekday excludes it, so split schedules (e.g. morning and afternoon) reject all slots.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       138,
+       147
+      ],
+      "texto": "The working-hours predicate rejects a slot if any interval on its weekday does not contain it. A split schedule of 09:00\u201312:00 and 13:00\u201317:00 therefore loses every slot, since each valid slot lies outside the other interval. Require at least one matching interval to contain the full event instead of finding an interval that excludes it."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       138,
+       150
+      ],
+      "texto": "This search rejects a slot if it falls outside any working-hours window on that weekday. With split hours of 09:00\u201312:00 and 13:00\u201317:00, a valid 10:00 slot is rejected because it is outside the afternoon window. Check for containment in at least one applicable window rather than finding any window that excludes the slot."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       138,
+       151
+      ],
+      "texto": "WHAT: Outside-working-hours test uses workingHours.find() returning true if ANY entry rejects the slot. WHY: With split schedules (two entries same weekday, e.g. morning+afternoon) a valid morning slot is outside the afternoon entry, find() matches and the slot is wrongly rejected as outside hours. HOW: Invert logic to accept if ANY entry contains the slot (e.g. !workingHours.some(entry contains slot) => outside)."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05",
+    "descricao": "The date-override bound compares the slot start, not the slot end, with the override end, so slots extending past the override are accepted.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       117,
+       124
+      ],
+      "texto": "The override bounds reject only non-overlapping slots rather than requiring the entire event to fit inside an override. A fixed host with a 10:00\u201311:00 override accepts a 10:30\u201311:30 event generated from another host's availability, despite being unavailable for its final half hour. Accept only when at least one override contains both slotStartTime and slotEndTime; this also avoids rejecting a slot merely because another interval on the same date does not overlap it."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       123,
+       125
+      ],
+      "texto": "The upper bound checks whether slotStartTime is after the override end. A slot that starts before the override end but finishes after it is treated as available. Compare slotEndTime with the override end using isAfter, so the slot must fit entirely inside the override."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#06",
+    "descricao": "The override timezone conversion keeps only hour and minute, so overrides that cross midnight in the invitee timezone become inverted ranges or are applied to the wrong day.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/lib/slots.ts",
+      "lines": [
+       218,
+       223
+      ],
+      "texto": "Timezone conversion takes only hour and minute, discarding day rollover and turning intervals crossing attendee midnight into reversed ranges. A UTC organizer's 22:00\u201323:00 override viewed in UTC+01:30 becomes startTime 1410 and endTime 30, which buildSlots skips because start is greater than end, removing valid availability. Preserve the converted dates and split the interval across attendee-day boundaries before building slots."
+     },
+     {
+      "file": "packages/lib/slots.ts",
+      "lines": [
+       206,
+       224
+      ],
+      "texto": "WHAT: activeOverrides are filtered by UTC day (line 206-207) before the invitee/organizer offset is applied (lines 212-224), and shifted hours are not re-bucketed across midnight. WHY: An override that shifts to the previous/next calendar day in the invitee timezone is dropped from the wrong day or applied to the wrong day, so slots show open when the organizer is off (and vice versa). HOW: Filter/bucket overrides in the invitee-local date after applying the offset, or emit split entries spanning two invitee days."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#07",
+    "descricao": "The new working-hours check does not reject slots on weekdays that have no working-hours entry, so those slots are treated as available.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       140,
+       146
+      ],
+      "texto": "A weekday with no matching working-hours entry falls through to the busy checks and is treated as available when there are no conflicts. In round-robin events, slots generated for a loose host can consequently include a fixed host whose schedule excludes that day. Reject slots unless a working-hours interval on the slot's weekday contains the event, when no date override applies."
+     }
+    ]
+   }
+  ]
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     13,
+     13
+    ],
+    "texto": "WHAT: totalPages adds an extra page whenever user_count is an exact multiple of limit. WHY: with 50 members and a limit of 50, Next remains enabled and requests offset 50, displaying an empty second page. HOW: use Math.ceil(user_count / limit), retaining the zero-member guard."
+   },
+   {
+    "id": "S2",
+    "file": "app/controllers/groups_controller.rb",
+    "lines": [
+     22,
+     26
+    ],
+    "texto": "WHAT: the public member endpoint now defaults all groups to 50 members, but the public group-members route and template have no pagination controls or subsequent fetch. WHY: ordinary groups with more than 50 members previously displayed their complete membership; now all members after the first 50 are inaccessible on the public membership page. HOW: add pagination to the public group-members route and template alongside this server-side limit."
+   },
+   {
+    "id": "S3",
+    "file": "app/controllers/admin/groups_controller.rb",
+    "lines": [
+     90,
+     90
+    ],
+    "texto": "WHAT: remove_member deletes the membership without clearing the removed user's primary_group_id. WHY: the previous usernames-based deletion path explicitly cleared this reference in Group#destroy_deletions; the new path leaves removed users displaying the former primary group's identity through post serializers. HOW: clear primary_group_id for this user when it equals the removed group ID, together with the membership deletion."
+   },
+   {
+    "id": "S4",
+    "file": "app/controllers/groups_controller.rb",
+    "lines": [
+     22,
+     26
+    ],
+    "texto": "Applying a default limit of 50 to every group changes the public members-page contract: custom groups previously returned all members. The updated public group-members route calls findMembers() once with the model's default limit of 50, and its template only iterates members; unlike the admin page, it provides no next/previous actions or further fetching. Consequently members after the first 50 are inaccessible on the public page (and automatic groups previously showed up to 200). Update the public consumer to support pagination alongside this server change."
+   },
+   {
+    "id": "S5",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     11,
+     14
+    ],
+    "texto": "For a nonzero member count exactly divisible by the limit, floor(count / limit) + 1 overcounts by one. For example, 50 members with limit 50 displays 1/2 and enables Next; clicking it requests offset 50 and shows an empty member list. Use ceiling division so the last populated page disables Next."
+   },
+   {
+    "id": "S6",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     11,
+     14
+    ],
+    "texto": "When user_count is exactly divisible by limit (for example, 50 members with limit 50), this computes two pages instead of one. showingLast remains false on the actual last page, so next sets offset to 50 and loads an empty member list, displaying page 2/2 despite the group having only one page. Use ceiling division so that every advertised page contains members for a positive count."
+   },
+   {
+    "id": "S7",
+    "file": "app/assets/javascripts/discourse/routes/group-members.js.es6",
+    "lines": [
+     8,
+     11
+    ],
+    "texto": "The changed members endpoint now limits every group to 50 users, including custom groups that previously returned all members. This public route calls findMembers only once, and the corresponding public template only iterates members; the next/previous actions added in this PR belong to the admin controller. Consequently, users visiting a custom group with more than 50 members cannot view the remaining members. Add public pagination (or fetch subsequent pages) to match the new endpoint contract."
+   },
+   {
+    "id": "S8",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     11,
+     14
+    ],
+    "texto": "When user_count is a positive multiple of limit (for example 50 members with limit 50), floor(count / limit) + 1 overstates the page count. showingLast remains false on the actual final page, allowing Next to load an empty page. Use ceiling division instead."
+   },
+   {
+    "id": "S9",
+    "file": "app/controllers/admin/groups_controller.rb",
+    "lines": [
+     23,
+     25
+    ],
+    "texto": "The new-group form exposes alias_level and Group.asJSON sends it in the create request, but this action assigns only name and visible before saving. A group created with a nondefault alias level silently retains the default despite the successful save. Assign alias_level here as in update."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+    "descricao": "The admin group pager computes total pages as floor(user_count / limit) + 1, so when the member count is an exact multiple of the limit it shows an extra page and Next navigates to an empty member list.",
+    "textoGolden": "The `totalPages` calculation using `Math.floor(user_count / limit) + 1` produces an extra page when `user_count` is an exact multiple of `limit`, leading to incorrect pagination. For example, with 100 users and a limit of 50, it reports 3 pages instead of 2, allowing navigation to an empty page.",
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+      "lines": [
+       11,
+       14
+      ],
+      "texto": "totalPages (and currentPage) use `Math.floor(user_count / limit) + 1`, which is an off-by-one when user_count is an exact multiple of limit (e.g. 50 members, limit 50 \u2192 reports 2 pages although only 1 exists). This leaves `showingLast` false on the real last page, so 'next' navigates to an empty page at offset=user_count. Use `Math.ceil(user_count / limit)` (and compute currentPage consistently) to get the correct page count."
+     },
+     {
+      "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+      "lines": [
+       11,
+       14
+      ],
+      "texto": "totalPages is off by one when user_count is an exact multiple of limit: `Math.floor(user_count / limit) + 1` gives 2 for user_count=50, limit=50, although 50 members occupy exactly one page. Correct it to `Math.ceil(this.get('user_count') / this.get('limit'))`. Effect: for a group whose member count is a multiple of the page size, totalPages is one too high, showingLast remains false so the 'next' link stays enabled, and clicking it navigates to a phantom empty page."
+     },
+     {
+      "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+      "lines": [
+       11,
+       14
+      ],
+      "texto": "`totalPages` uses `Math.floor(user_count / limit) + 1`, which over-counts by one whenever `user_count` is an exact multiple of `limit` (e.g. 50 members with limit 50 yields 2 pages instead of 1). Since `showingLast` is `propertyEqual(\"currentPage\", \"totalPages\")`, on a full last page `showingLast` is false, so the `next` action stays enabled and advances `offset` to `user_count`, rendering an empty page labeled as the last page. Use `Math.ceil(user_count / limit)` (with the zero-member guard) so the count matches the real number of pages."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#03",
+    "descricao": "Several Group model functions (findMembers, destroy, userCountDisplay) return a value on some paths and undefined on others, triggering consistent-return lint warnings.",
+    "textoGolden": "Expected to return a value at the end of function - code paths without explicit returns will return undefined",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#04",
+    "descricao": "Paging actions fire overlapping member requests and each response unconditionally overwrites offset and members, so a stale response arriving last can revert the list to an earlier page.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/models/group.js",
+      "lines": [
+       30,
+       35
+      ],
+      "texto": "Guard against stale member-fetch responses before updating the model. `next` updates offset immediately and leaves navigation enabled, so with at least three pages two rapid clicks issue requests for offsets 50 and 100. If the offset-100 response arrives first and the offset-50 response arrives last, this unconditional `setProperties` resets both offset and members to the older page, undoing the latest navigation. Refreshes after membership changes can similarly be overwritten by an earlier fetch. Track a per-model request generation and apply only the latest response, or serialize navigation and refresh requests."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+    "descricao": "The public members endpoint now always caps results at 50 per page, but the public group members page has no pagination, so groups with more than 50 members are silently truncated for users.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/routes/group-members.js.es6",
+      "lines": [
+       10,
+       11
+      ],
+      "texto": "The public members route now loads only the model's default 50-member page without providing any way to request subsequent pages. The public group/members.hbs template only renders members and has no Next/Previous controls, so members after the first 50 become inaccessible (manual groups previously returned all members). Add public pagination controls and actions that update offset and reload members."
+     },
+     {
+      "file": "app/controllers/groups_controller.rb",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "The new default limit applies to nonautomatic groups as well, but the public group-members route still calls findMembers() only once and its template simply iterates members without pagination. Previously this endpoint returned every member of a nonautomatic group; now a group with more than 50 members exposes only the first 50 on its public members page, with no way to reach the rest. Update that consumer to fetch subsequent pages or provide pagination when introducing this endpoint contract."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/routes/group-members.js.es6",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "Provide pagination or load subsequent pages for the public group-members view. findMembers now requests only 50 members, and this route calls it only once while its template simply iterates members without navigation. Custom groups previously returned all members, so groups larger than 50 now have members that cannot be viewed on this page."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#07",
+    "descricao": "Creating a group ignores the alias_level the admin selected, saving only name and visibility, so new groups keep the default alias level.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       23,
+       27
+      ],
+      "texto": "Persist params[:alias_level] when creating a group, just as update does. The creation form exposes aliasLevelOptions and group.asJSON sends the selected alias_level, but create saves only name and visible. A newly created group therefore retains the default alias level instead of the administrator's selection."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+    "descricao": "Removing a member deletes the membership row directly and skips clearing the user's primary_group_id, so a removed user can keep this group as their primary group.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       84,
+       91
+      ],
+      "texto": "WHAT: remove_member uses group.users.delete(user_id) instead of the Group#remove destroy path. WHY: bypasses GroupUser destroy callbacks and primary_group_id cleanup done in destroy_deletions, leaving stale membership side-effects (e.g. dangling primary_group_id). HOW: load the User and call group.remove(user)."
+     },
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       90,
+       90
+      ],
+      "texto": "Removing a member with group.users.delete bypasses the primary_group_id cleanup previously performed by Group#destroy_deletions during usernames updates. A user whose primary group is this group remains associated with it as their primary group after membership removal, leaving stale primary-group state used by user administration and post serialization. Clear primary_group_id for the removed user when it equals this group's id as part of the removal operation."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#12",
+    "descricao": "The remove_member spec issues a PUT request although the route only maps DELETE to remove_member, so the test uses a verb never routed in production.",
+    "textoGolden": "The remove_member test uses xhr :put to call the remove_member action, but the route defines delete 'members' => 'groups#remove_member' requiring DELETE method.",
+    "comentarios": [
+     {
+      "file": "spec/controllers/admin/groups_controller_spec.rb",
+      "lines": [
+       114,
+       117
+      ],
+      "texto": "This example sends `xhr :put, :remove_member`, but the PR maps `remove_member` only to DELETE (`delete \"members\" => \"groups#remove_member\"`); PUT on that path routes to `groups#add_members`. Controller specs bypass the router, so the example still lands on `remove_member` and passes regardless \u2014 it would still pass if the DELETE route were missing or wired to the wrong action, leaving the newly introduced verb/action pairing untested. Use `xhr :delete, :remove_member`, as the sibling example at line 125 already does."
+     },
+     {
+      "file": "spec/controllers/admin/groups_controller_spec.rb",
+      "lines": [
+       114,
+       117
+      ],
+      "texto": "The test 'cannot remove members from automatic groups' sends `xhr :put, :remove_member`, but the route is `delete \"members\" => \"groups#remove_member\"`. It exercises the action with a verb that is never routed in production. Use `xhr :delete, :remove_member, group_id: 1, user_id: 42` so the test matches the real request."
+     }
+    ]
+   }
+  ]
+ },
+ "github-oauth-security-enhancement-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "bb75657fc8f13923c1d7983f422290908a1e7310",
+  "base": "344aa102e7818606e29426ebe69d5a680d8727c6",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     401,
+     402
+    ],
+    "texto": "OAuth state is set to pipeline.signature, which Pipeline.__init__ derives only from the pipeline view class names rather than from a random per-session value. An attacker can obtain an authorization code for their own GitHub account and send its callback URL with this publicly reproducible state to a victim with an active installation pipeline, causing the victim's pipeline to authenticate as the attacker's GitHub user and potentially attach the attacker's installation. Generate a cryptographically random nonce, persist it in pipeline state before redirecting, and compare and consume that nonce on callback."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     501,
+     505
+    ],
+    "texto": "The new installer comparison indexes metadata['sender']['login'] even though build_integration only stores sender when supplied by a webhook. Integrations created by the normal pipeline lack this field, as test_basic_flow explicitly asserts, so reconnecting such an integration after its OrganizationIntegration is removed raises KeyError instead of returning the installation failure response. Handle absent sender metadata explicitly and reject with the existing error response when the installer cannot be verified."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     501,
+     504
+    ],
+    "texto": "An active, unlinked integration need not have sender metadata: build_integration only writes that key when state contains sender, and installation.py already explicitly handles its absence. Attempting to reconnect such an integration now raises KeyError at metadata['sender'] instead of completing or rendering the invalid-installation response. Treat missing sender/login as a failed verification rather than indexing the optional metadata directly."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     500,
+     504
+    ],
+    "texto": "This makes sender metadata mandatory for an existing, unlinked Integration, but build_integration still only populates metadata['sender'] when state contains it (lines 376\u2013377). Integrations created through the pipeline can therefore lack this key; the installation endpoint likewise explicitly handles that case. Reattaching such an integration previously advanced the pipeline, but now raises KeyError and returns a server error. Handle the absent-sender shape explicitly, obtaining authoritative installation/user verification when necessary rather than unconditionally indexing it."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     412,
+     413
+    ],
+    "texto": "The OAuth callback validates its state credential with ordinary string inequality. This comparison can short-circuit based on the supplied value, exposing a timing-dependent authentication check. Use Django's constant_time_compare for the state validation so comparison timing does not depend on the matching portion of the state."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     500,
+     505
+    ],
+    "texto": "The authenticated-user check is only reached if an Integration already exists. The preceding Integration.DoesNotExist branch advances the pipeline immediately, so an installation callback completed before its installation webhook arrives bypasses the new installer verification entirely. This makes the authenticity decision depend on webhook delivery order: the same mismatched GitHub user rejected by the new test is accepted on the no-row path. Ensure installation ownership is verified before advancing on that path as well, or reject/retry until the webhook-backed sender is available."
+   },
+   {
+    "id": "S7",
+    "file": "tests/sentry/integrations/github/test_integration.py",
+    "lines": [
+     388,
+     396
+    ],
+    "texto": "This callback uses a state different from the valid pipeline signature used by the successful flows and asserts `Invalid installation request.`. OAuthLoginView rejects that state before advancing to GitHubInstallation, so this test passes even if nonexistent installations are accepted or their lookup/error handling is removed entirely. Complete OAuth with the actual pipeline state and then assert the missing-installation failure; keep invalid-state rejection as a separate test."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     132,
+     141
+    ],
+    "texto": "The short user-facing errors are now translated with `_(error_short)`, but the default and call sites supply plain string literals. Gettext extraction cannot resolve this variable, so these messages will not be collected for translation (including the new invalid-installation message), and existing messages can disappear from regenerated catalogs. Mark the default and each call-site literal with gettext, then pass the translated value through the helper without wrapping the variable."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#01",
+    "descricao": "error() calls _(error_short) on a variable and callers pass plain literals, so the short error strings are no longer extractable for translation.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       129,
+       146
+      ],
+      "texto": "The helper calls `_(error_short)` on a variable, and callers pass plain string literals. The translation extractor cannot see these strings, so the short error messages sent to the user are no longer translatable; the old code wrapped the literals directly in `_()`. Mark the literals with gettext_lazy at the call sites and the default, and pass them through without wrapping again."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       129,
+       146
+      ],
+      "texto": "error_short strings bypass translation extraction: _(error_short) uses a variable so makemessages cannot collect them. Wrap literals at definition/call sites, e.g. error_short=_(\"Invalid installation request.\") and pass _(\"...\") literals, then use data error value directly without re-wrapping."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       132,
+       141
+      ],
+      "texto": "Translate the short-message literals at their definition/call sites instead of calling `_(error_short)` on a variable. Django's message extraction cannot extract the default `\"Invalid installation request.\"` or the plain-string arguments at the two call sites from this dynamic gettext invocation. The existing pending-deletion and already-installed messages previously appeared directly inside `_()`; this refactor removes their extraction sites, and the new default message cannot enter translation catalogs. Use a translated default and translated arguments, then place `error_short` directly into the payload so these user-facing errors remain localizable."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#02",
+    "descricao": "The org parameter of error()/get_document_origin is actually the active-organization context, not an Organization, so the name is misleading.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       149,
+       152
+      ],
+      "texto": "The parameter is named `org` but the code treats it as the pipeline's active-organization context: it dereferences `org.organization` and every caller (error() and the GitHubInstallation sites) passes `self.active_organization`, not an Organization. The name misstates the argument's type/contract \u2014 a caller following the name and passing a real Organization would hit AttributeError on `.organization`. Rename the parameter (e.g. `active_organization`) and correct the corresponding name in `error()` at line 131 so the two signatures match what is actually passed."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#03",
+    "descricao": "The GitHub OAuth state is pipeline.signature, a static md5 of the pipeline view names, instead of a per-attempt random nonce, so it gives no CSRF protection.",
+    "textoGolden": "OAuth state uses pipeline.signature (static) instead of a per-request random value",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       401,
+       412
+      ],
+      "texto": "The OAuth state is pipeline.signature, which Pipeline.__init__ computes solely from pipeline view class names and therefore shares across all users and installation attempts. An attacker can obtain an OAuth code for their own GitHub account and send a callback using this known state to a victim with an active installation pipeline, binding the attacker's GitHub identity to the victim's flow instead of rejecting the forged callback. Generate a random per-attempt nonce, store it in pipeline state, and validate that nonce on the OAuth callback."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       401,
+       413
+      ],
+      "texto": "Do not use pipeline.signature as OAuth state. It is a deterministic MD5 of the pipeline identifiers, not an unpredictable nonce tied to this user's authorization attempt (the tests reuse it across users). An attacker can know the expected state and submit a callback containing a code authorized under the attacker's GitHub account, defeating the OAuth login-CSRF protection and the intended binding to the installing user. Generate a cryptographically random per-attempt state, store it in the session/pipeline, and validate and consume it on callback."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#05",
+    "descricao": "The new OAuth step's token exchange and user lookup are not wrapped in error handling, so GitHub/network failures surface as 500s instead of the installation-failed page.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       423,
+       425
+      ],
+      "texto": "The token request is executed outside the try block. If GitHub's token endpoint is unavailable or the request fails with a connection/timeout error, safe_urlopen raises before the guarded response parsing is reached, and this new installation step returns an unhandled server error instead of the installation-failed response. Include the request itself in the error handling and handle the relevant transport exceptions."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       423,
+       436
+      ],
+      "texto": "WHAT: safe_urlopen token exchange and get_user_info() (which calls resp.raise_for_status()) are called with no exception handling. WHY: Any network error, timeout, or non-2xx from GitHub bubbles up as an unhandled exception and 500s the install instead of rendering the invalid-request page. HOW: Wrap the exchange plus get_user_info in try/except and return error() on failure."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       422,
+       436
+      ],
+      "texto": "safe_urlopen() and get_user_info() are called outside any try/except, so network errors, non-2xx responses, or API failures raise unhandled exceptions instead of returning error(). Wrap the token exchange + user-info fetch in try/except and return error() on failure, matching the handled missing-access_token path."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#06",
+    "descricao": "When no Integration exists yet for the installation_id the pipeline advances without comparing the OAuth user to the installer, bypassing the new ownership check.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "The missing Integration branch advances the pipeline without verifying that github_authenticated_user installed the supplied installation_id. When the installation webhook has not created a record, or the local record was deleted, finish_pipeline calls build_integration using app credentials and attaches the installation without checking the OAuth user's access, allowing a user with another account's installation ID to bypass the new ownership check. Fail closed until trusted installer information is available and apply the ownership check before every successful next_step."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "The record-absent path advances the pipeline before checking whether the authenticated GitHub user installed this app. Installation IDs arrive from the request, and a missing Integration record (for example before the installation webhook is processed) does not establish ownership. As a result, this path can attach an installation belonging to a different GitHub user despite the new authenticity check. Verify the authenticated user's authorization for the installation before advancing in this branch too, rather than relying on the webhook-created record existing."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "When no Integration row exists for the installation_id, the code calls next_step() without comparing the OAuth-authenticated GitHub user to the installer. An attacker can supply an installation_id they do not own before the installation webhook has created the row, and bypass the new verification. Do not skip the check in this branch. Either fail closed, or verify ownership another way, for example by confirming the user can access the installation through the GitHub API."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#09",
+    "descricao": "The installer check indexes integration.metadata['sender']['login'] without checking that sender exists, raising KeyError for integrations created without sender metadata.",
+    "textoGolden": "The code attempts to access integration.metadata[sender][login] without checking for the existence of the sender key. This causes a KeyError for integrations where the sender metadata was not set during creation",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       500,
+       505
+      ],
+      "texto": "integration.metadata[\"sender\"][\"login\"] is indexed without checking that \"sender\" exists, so an ACTIVE integration whose metadata has no sender raises KeyError (500) here. metadata[\"sender\"] is only populated when state.get(\"sender\") is set (integration.py:376-377), and the only writer of that state is the installation webhook (webhook.py:202-208); integrations created through the pipeline itself carry no sender (confirmed by installation.py:44 which explicitly guards `if \"sender\" not in integration.metadata`, and by the pipeline-created integration in test_integration.py:730-743). Previously this branch only bound state and called pipeline.next_step(), so this crash is newly introduced. Fix: guard the lookup, e.g. `if pipeline.fetch_state(\"github_authenticated_user\") != (integration.metadata.get(\"sender\") or {}).get(\"login\"):` and decide the desired fallback when sender is absent."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       500,
+       505
+      ],
+      "texto": "`integration.metadata[\"sender\"][\"login\"]` can raise KeyError. build_integration (line 376-377) only sets metadata[\"sender\"] when state.get(\"sender\") is truthy, so an existing Integration without a sender entry makes this subscripting throw an unhandled KeyError (500) instead of routing to the intended error page. Use `integration.metadata.get(\"sender\", {}).get(\"login\")` (and treat a missing sender as a failed verification) so the mismatch/absence case returns error() rather than crashing."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       501,
+       503
+      ],
+      "texto": "The new ownership check indexes integration.metadata['sender']['login'] even though GitHubIntegrationProvider.build_integration omits sender for normal pipeline-created integrations. Reconnecting an existing active integration without an OrganizationIntegration and without webhook-populated sender now raises KeyError and returns a server error rather than an installation failure. Handle missing sender explicitly and return the invalid-installation response when trusted installer metadata is unavailable."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#10",
+    "descricao": "test_installation_not_found uses a wrong OAuth state, so it fails at the state check and never reaches the installation-not-found path it is meant to test.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       385,
+       396
+      ],
+      "texto": "First response (installation_id) is overwritten by second response (bad state) with no assertion, so the Integration.DoesNotExist / not-ACTIVE branch in GitHubInstallation is never verified. Keep/assert the first flow through a valid OAuth step to reach the installation check instead of only asserting the OAuth state-mismatch error."
+     },
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       388,
+       396
+      ],
+      "texto": "This test no longer verifies the \"installation not found\" path it exists for. The second GET supplies state=ddd023d87a913d5226e2a882c4c4cc05, which is not the github pipeline signature (that is the 9cae5e88803f35ed7970fc131e6e65d3 asserted in test_github_setup and reused elsewhere). OAuthLoginView.dispatch (integration.py:412-413) therefore returns error() before GitHubInstallation runs, producing the same generic \"Invalid installation request.\" message and the same failed template via the state-mismatch branch. The Integration.DoesNotExist handling at integration.py:493-498 is never reached, so the test would still pass if that handling were removed or broken. Use the real pipeline state so the request advances into GitHubInstallation, or assert on something that distinguishes the state-mismatch branch from the missing-installation branch."
+     },
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       388,
+       396
+      ],
+      "texto": "The replacement assertion no longer verifies that a nonexistent installation is rejected: 'Invalid installation request.' is also returned for a state mismatch, missing access token, or missing authenticated login before GitHubInstallation is reached. This test can therefore pass with installation-not-found handling broken if the callback fails OAuth validation instead. Establish a successful OAuth exchange with the actual pipeline state and verify that the nonexistent installation lookup is reached and rejected, rather than accepting this shared authentication-error message alone."
+     }
+    ]
+   }
+  ]
+ },
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "4def149a50c4b9b2c24fbb753ac60fe4f4df0cac",
+  "base": "c834e7473c02f11451216b3fbf355f953cfd95e9",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     155,
+     157
+    ],
+    "texto": "The test asserts caughtExceptions without waiting for the reader thread to finish. A listing request already in flight when deletedAll is set can fail and append its exception after the assertion has passed, allowing the concurrency regression this test targets to go undetected. Keep a reference to the reader thread and join it before asserting the collected exceptions."
+   },
+   {
+    "id": "S2",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     152,
+     155
+    ],
+    "texto": "The reader's stop flag is set only after every group deletion succeeds. If remove() throws, the test exits while its non-daemon reader continues issuing requests indefinitely and accumulating exceptions, leaking a thread and load into subsequent tests. Set the stop flag in a finally block and wait for the reader to terminate on both success and failure."
+   },
+   {
+    "id": "S3",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     155,
+     157
+    ],
+    "texto": "The reader can still be inside groups() when deletedAll is set. The main thread immediately asserts that caughtExceptions is empty, so a failing in-flight request can add its exception after the assertion and the test incorrectly passes. Retain the reader thread and join it after signaling termination, before checking caughtExceptions, so the assertion includes every read performed by the test."
+   },
+   {
+    "id": "S4",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     155,
+     157
+    ],
+    "texto": "Setting deletedAll does not wait for a request already executing on the reader thread. That request can fail during deletion, while the main thread sets the flag and asserts an empty list before the catch block adds the exception. The regression test then passes despite the failure it is meant to detect. Retain the reader thread and join it before examining caughtExceptions."
+   },
+   {
+    "id": "S5",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     152,
+     155
+    ],
+    "texto": "If any remove() throws, execution skips deletedAll.set(true). The reader continues issuing requests and catching exceptions indefinitely, including after realm/client teardown, and its non-daemon thread can prevent JVM shutdown. Put the deletion loop in try/finally so the stop flag is set and the reader is awaited even when deletion fails."
+   },
+   {
+    "id": "S6",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     155,
+     157
+    ],
+    "texto": "Setting deletedAll only requests that the reader stop; it does not wait for the current groups() request or its catch block. If that request fails due to the deleted-group regression, assertThat can observe an empty list and pass before the exception is appended. The reader can even start after deletedAll is true and never exercise the read path. Retain the reader thread, coordinate its startup with deletion, and join it before asserting captured failures so the assertion covers completed concurrent reads."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+    "descricao": "The cached GroupAdapter.getSubGroupsCount returns null when the group was deleted concurrently, violating the GroupModel contract that it never returns null and risking NPEs in callers that unbox it.",
+    "textoGolden": "Returning null from getSubGroupsCount() violates the GroupModel contract (Javadoc says it never returns null) and may lead to NPEs in callers that expect a non-null count.",
+    "comentarios": [
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+      "lines": [
+       274,
+       275
+      ],
+      "texto": "WHAT: `getSubGroupsCount()` now returns `null` when the delegate model is gone, violating the `GroupModel.getSubGroupsCount()` contract whose javadoc (GroupModel.java:296) states 'Never returns null'. WHY: In-repo callers happen to tolerate a Long null, but any caller that unboxes the result (`long c = group.getSubGroupsCount()`) or does arithmetic on it will NPE, converting the old NPE into a different one. HOW: return a non-null sentinel such as `0L` (and assert the empty/absent case explicitly), or update the interface contract to document a nullable return."
+     },
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+      "lines": [
+       274,
+       275
+      ],
+      "texto": "getSubGroupsCount() now returns null when the cached delegate is gone (modelSupplier.get() == null), whereas before this change the method delegate-called getGroupModel().getSubGroupsCount(), which could not yield null (a missing delegate surfaced as an exception instead). The declared type Long is now genuinely nullable in a path that previously always produced a value or threw, so any caller that relies on the old contract \u2014 unboxing the result (e.g. `group.getSubGroupsCount() > 0`, `long n = group.getSubGroupsCount()`, or passing it to a primitive-typed parameter) \u2014 will now throw a NullPointerException instead of getting a value or the previous exception. Since consumers were not updated for the new nullable contract, either keep the non-null behavior for callers that cannot handle null or audit/update every caller of GroupModel.getSubGroupsCount() to null-check before use."
+     },
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+      "lines": [
+       274,
+       275
+      ],
+      "texto": "getSubGroupsCount() now returns null when modelSupplier.get() is null, but the count is consumed as a number by brief-representation building; the sibling cache entity changed in this PR (CachedGroup) handles the same 'model unavailable' case by returning a non-null default (getRoleMappings returns Collections.emptySet(), and the subGroups/attributes loaders are built with non-null empty defaults). Returning null here breaks that convention and can surface as an unboxing/NPE on the consumer side of the read path. Return a non-null value (e.g., 0) or only null if the GroupModel contract explicitly declares it nullable."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+    "descricao": "The concurrency regression test never waits for the reader thread before asserting no exceptions, so it can pass even when the concurrent-deletion NPE still occurs.",
+    "textoGolden": "The reader thread isn\u2019t waited for; flipping deletedAll to true and asserting immediately can race and miss exceptions added just after the flag change, making this test flaky.",
+    "comentarios": [
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       136,
+       157
+      ],
+      "texto": "The reader thread is started but never synchronized with: the test does not wait for it to complete a read before deleting, and does not join it before asserting caughtExceptions is empty. The deletes can finish before the reader reads at all, or a failing read can land after the assertion, so the test passes even with the bug present. Use a CountDownLatch counted down after the reader's first successful read, start deleting only after it fires, and join the thread (after setting deletedAll) before asserting."
+     },
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       149,
+       157
+      ],
+      "texto": "WHAT: The reader thread started at line 139-149 is never joined before `assertThat(caughtExceptions, Matchers.empty())` runs. WHY: The reader can be mid-request when `deletedAll.set(true)` executes; if that request throws (e.g., reading a group deleted concurrently), the exception is appended to `caughtExceptions` AFTER the assertion has already evaluated, so the test can pass even when the NPE regression it targets is present (and is flaky). HOW: after `deletedAll.set(true)`, `thread.join(<timeout>)` (storing the Thread reference) before the assertion."
+     },
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       139,
+       157
+      ],
+      "texto": "The reader Thread is started but never joined, so the assertion at line 157 can execute before the reader has completed a single groups() read (or while a read that would throw the NPE is still in flight). If the GroupAdapter.getSubGroupsCount null-model NullPointerException were reintroduced, this test could still pass because caughtExceptions is asserted empty before the racing reader thread has recorded anything. Capture the Thread, then join it (e.g. Thread reader = new Thread(...); reader.start(); ... deletions ...; deletedAll.set(true); reader.join();) before asserting so the test actually waits on the condition it verifies."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#03",
+    "descricao": "The reader thread's stop flag is set only after all deletions succeed, so a failing delete leaves a non-daemon thread polling indefinitely.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       139,
+       155
+      ],
+      "texto": "WHAT: The reader loop `while (!deletedAll.get())` has no termination guarantee and `deletedAll.set(true)` at line 155 only runs after the delete loop at 152-154 completes. WHY: If any `group(groupUuid).remove()` throws, `deletedAll` is never set, so the non-daemon thread loops forever and the test JVM hangs. HOW: set the thread as daemon and/or wrap deletion in try/finally so `deletedAll.set(true)` always executes."
+     },
+     {
+      "file": "GroupTest.java",
+      "lines": [
+       117,
+       158
+      ],
+      "texto": "The test has a mid-loop abort hazard."
+     },
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       152,
+       155
+      ],
+      "texto": "The reader's stop flag is set only after every deletion succeeds, with no finally block. If any remove() throws, the test exits with a live non-daemon thread that keeps issuing requests and collecting exceptions indefinitely, interfering with teardown and potentially preventing JVM termination. Put stop signaling and reader termination in a finally block around deletion."
+     }
+    ]
+   }
+  ]
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "eb9623b4e787303a3bd15e10bbbdb78d59875ac6",
+  "base": "28e3db2520d4ea28c57b08da57b83917ba7b2e15",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/spans/buffer.py",
+    "lines": [
+     197,
+     199
+    ],
+    "texto": "The new ZADD writes sorted sets under the same keys that the previous implementation populated with Redis sets. Existing buffered traces therefore raise WRONGTYPE on insertion, and the new ZSCAN also fails when the flusher encounters an old queued segment, interrupting ingestion and flushing during deployment until those keys disappear. Version the buffer and associated queue namespace or provide an explicit migration/drain strategy before switching command types."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/scripts/spans/add-buffer.lua",
+    "lines": [
+     47,
+     47
+    ],
+    "texto": "ZUNIONSTORE uses the default SUM aggregation, so a payload present in both merge inputs receives the sum of its end timestamps rather than its actual end timestamp. Replaying a child already merged into the root can recreate it in its original parent buffer; merging that buffer into the root then gives the replayed span an inflated score, retaining older duplicates ahead of newer spans during eviction. Use AGGREGATE MAX on both union operations to preserve timestamp scores."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/spans/buffer.py",
+    "lines": [
+     449,
+     449
+    ],
+    "texto": "Removing the max_segment_spans check makes the constructor's configured span limit ineffective. The replacement Lua truncation always uses 1000, independently of self.max_segment_spans, so a buffer configured with a lower limit now emits segments exceeding that limit, while a higher limit still loses spans at 1000. Pass the configured limit into the script and use it for truncation, or retain explicit enforcement of the configured limit."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/scripts/spans/add-buffer.lua",
+    "lines": [
+     47,
+     47
+    ],
+    "texto": "buffer.py now writes end_timestamp_precise as each payload's score, and the new zpopmin eviction depends on those scores remaining timestamps. ZUNIONSTORE defaults to AGGREGATE SUM: if the same payload is present in both sets (for example from replaying a span after its parent redirects to a different set), its timestamp is doubled. Such old duplicates then outrank genuinely newer spans and survive eviction incorrectly. Use AGGREGATE MAX (or MIN) on both union calls so merging preserves the timestamp contract."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/spans/buffer.py",
+    "lines": [
+     197,
+     199
+    ],
+    "texto": "The new ZADD uses the same `span-buf:s:` keys that the previous version populated with SADD. Any segment still buffered when this version deploys causes Redis WRONGTYPE errors on writes (and ZSCAN/ZCARD also fail on those keys). Rolling deployment also lets old workers create sets while new workers expect sorted sets. Use a versioned key namespace consistently across writers, Lua, queues and readers, or provide a coordinated migration/drain before switching types."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/scripts/spans/add-buffer.lua",
+    "lines": [
+     47,
+     47
+    ],
+    "texto": "ZUNIONSTORE defaults to AGGREGATE SUM. If a payload is present in both sets\u2014for example a replay writes a child back into its original parent set after it was already merged into the resolved ancestor\u2014its end-timestamp score is doubled during this merge. The resulting score is no longer an end timestamp, so ZPOPMIN retains replayed older spans ahead of newer spans when enforcing the 1,000-span cap. Specify AGGREGATE MAX (also on the second ZUNIONSTORE) to preserve timestamp scores for duplicate members."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+    "descricao": "ZUNIONSTORE merges sorted sets with the default SUM aggregate, so a span payload present in both keys gets a doubled end-timestamp score and is wrongly kept by the oldest-first eviction.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       46,
+       53
+      ],
+      "texto": "ZUNIONSTORE uses AGGREGATE SUM by default, so when the same span payload is present in both `set_key` and the merged `span_key`/`parent_key` (duplicate delivery is anticipated by this buffer's own comments), its score is added instead of being kept equal to `end_timestamp_precise`. Because eviction at line 63 (`zpopmin` by score) compares scores across all members of `set_key`, a summed score makes the duplicated span appear far newer than its real end timestamp and biases eviction away from legitimately-old spans, breaking the stated 'evict oldest end timestamps' contract. Use ZUNIONSTORE ... AGGREGATE MIN (or MAX) so a duplicate keeps a single end timestamp score rather than doubling it."
+     },
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       53,
+       53
+      ],
+      "texto": "ZUNIONSTORE uses its default SUM aggregation, so replayed payloads present in both the temporary parent_key and the resolved set_key receive the sum of their end timestamps. Replaying a child whose parent already redirects to an ancestor therefore makes that old span score roughly twice its actual timestamp, protecting it from eviction over genuinely newer spans. Use AGGREGATE MAX (or MIN for identical timestamp scores) on both union operations to preserve timestamp scores when members overlap."
+     },
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       47,
+       47
+      ],
+      "texto": "ZUNIONSTORE defaults to AGGREGATE SUM, so a payload present in both the destination and source has its timestamp doubled rather than preserved. This can happen when a previously merged span is replayed into its original subtree key. The duplicated span then sorts after genuinely newer spans and survives ZPOPMIN eviction incorrectly. Specify AGGREGATE MAX (or MIN, since identical payloads should have identical timestamps) on both union calls so merging remains idempotent and scores remain end timestamps."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+    "descricao": "Segment keys change from Redis sets to sorted sets under the same key names, so keys left by the previous release make ZADD, ZCARD and ZSCAN fail with WRONGTYPE during rollout, crashing span processing and flushing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       46,
+       54
+      ],
+      "texto": "WHAT: Changed SET ops (scard/sunionstore) to ZSET ops (zcard/zunionstore/zpopmin) with no migration breaks in-flight segments. WHY: Old keys of type SET still live up to TTL; ZCARD/ZUNIONSTORE/ZSCAN/ZADD on the opposite type raises WRONGTYPE and fails inserts/flushes during rollout."
+     },
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       197,
+       199
+      ],
+      "texto": "The segment keys were migrated from Redis SETs to SORTED SETs (ZADD/ZSCAN/ZCARD/ZUNIONSTORE/ZPOPMIN), but nothing handles the keys written by the currently deployed release. During a rolling deploy, an existing `span-buf:s:{...}:{id}` key is still a SET, so this `p.zadd(...)` (and the flusher's `p.zscan(...)`, and the Lua `zcard`/`zunionstore`) raises WRONGTYPE 'Operation against a key holding the wrong kind of value'. That exception is unhandled: it aborts the whole pipeline/Lua invocation and crashes the consumer batch. Add a key-schema version to the key name (or a migration/fallback) so old SET-typed keys cannot be touched as sorted sets."
+     },
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       197,
+       199
+      ],
+      "texto": "The new ZADD writes sorted sets into the same span-buf:s namespace previously populated by SADD, without migrating existing set keys. During deployment, inserting into an existing buffered segment fails with WRONGTYPE, and the new ZSCAN reader likewise fails on pending old-format segments instead of flushing them. Introduce a coordinated migration/drain or a versioned namespace with compatible handling of pending old-format buffers."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+    "descricao": "Claims zpopmin eviction can drop the root span while the has-root flag stays set, flushing a segment without its root.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       62,
+       64
+      ],
+      "texto": "WHAT: zpopmin eviction by lowest end_timestamp has no protection for the segment/root span. WHY: Root with smallest or tied timestamp (tests use identical timestamps, ties break lexicographically) is evicted while hrs flag stays 1, flushing a root-marked segment missing its root."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+    "descricao": "max_segment_spans is still a constructor parameter but is no longer enforced; the segment cap is now hardcoded to 1000 in the Lua script, so the configured value is ignored.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       439,
+       449
+      ],
+      "texto": "This hunk removes the only load-time span-count cap (`self.max_segment_spans`): previously a segment exceeding 1001 spans was logged, deleted from `payloads`/`cursors`, and skipped, but now every scanned span is unconditionally appended via `payloads[key].extend(...)`. The new bound relies entirely on insert-time eviction in the Lua script; if that eviction fails to bound a key (e.g. duplicated/scored members or the concurrent-writer case the code itself warns about at lines 457-461), this method will now materialize an unbounded number of spans into memory and emit them, whereas before it was safely skipped. Re-introduce a span-count guard (or verify the invite-time eviction strictly caps cardinality) to keep memory bounded."
+     },
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       446,
+       449
+      ],
+      "texto": "buffer.py declares the segment span limit as the configurable `max_segment_spans` (default 1001, line 150) and this hunk removed the `len(payloads[key]) > self.max_segment_spans` size guard from the flush path, while the other changed file (add-buffer.lua line 62) now enforces a hardcoded cap of 1000 spans. The two changed files disagree on what the segment span limit is: the Lua cap (1000) is not the declared `max_segment_spans`, and the buffer no longer applies the declared limit at all. If `max_segment_spans` is configured below 1000 (or below the Lua cap), oversized segments that this code used to skip will now be flushed. Reconcile the constant: either keep/restore the buffer-side guard against `self.max_segment_spans`, or make the Lua cap derive from the same limit instead of hardcoding 1000."
+     },
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       62,
+       63
+      ],
+      "texto": "The segment size cap is hardcoded as 1000 here, but SpansBuffer still declares max_segment_spans = 1001 in src/sentry/spans/buffer.py, and this PR deleted the flush-time guard that used that constant. The declared limit and the actually-enforced limit now disagree (and the Python constant is no longer honored anywhere). Make the Lua cap and the Python constant agree \u2014 either pass max_segment_spans in as an ARGV instead of the literal 1000, or update the declared constant to 1000 \u2014 so the buffer's enforced bound matches the value it declares."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#08",
+    "descricao": "Tests give every span the same end timestamp and never exceed 1000 spans, so the new score ordering and oldest-first eviction are not tested.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/spans/test_buffer.py",
+      "lines": [
+       120,
+       152
+      ],
+      "texto": "All spans in the fixture use identical end_timestamp_precise=1700000000.0, so the ZSET score-dependent behavior (ordering by end time, zunionstore score merge, and Lua zpopmin keeping newest 1000) is neutralised \u2014 tests pass even if scores are wrong or eviction keeps the wrong end. Use distinct timestamps and add a >1000-span trimming test asserting oldest evicted."
+     },
+     {
+      "file": "tests/sentry/spans/test_buffer.py",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The missing test for the new trim path (zset ordering/trim by end_timestamp_precise, the >1000-span zpopmin path) is a coverage gap. Add a test that verifies the new trim behavior."
+     }
+    ]
+   }
+  ]
+ },
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "9501091c52ae94e8d916f79b35d21975b3f9cadb",
+  "base": "bb5a6837cb5b3d8d3b174e17d42ec14486ef8738",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/integrations/services/assignment_source.py",
+    "lines": [
+     18,
+     18
+    ],
+    "texto": "WHAT: The queued default is evaluated once when the module is imported rather than when an AssignmentSource is created. WHY: Every inbound assignment handled by the same worker receives the worker's import timestamp in its serialized source metadata, even if the event occurs hours later. HOW: Use a dataclass default_factory so each source gets its own creation timestamp."
+   },
+   {
+    "id": "S2",
+    "file": "tests/sentry/integrations/services/test_assignment_source.py",
+    "lines": [
+     8,
+     11
+    ],
+    "texto": "This test is named for an empty array but supplies an empty dictionary. Consequently it still passes if empty-array input raises instead of returning None: it only exercises construction with missing required keyword arguments. Either supply an empty list to test the named case (with an appropriate typing adjustment), or rename this case to empty_dict so it does not claim array coverage."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/integrations/services/assignment_source.py",
+    "lines": [
+     18,
+     18
+    ],
+    "texto": "timezone.now() is evaluated once when the class is defined, so every AssignmentSource created without an explicit queued value carries the worker's module-import time rather than the time of that assignment. This also affects from_integration and from_dict when queued is omitted, making the serialized queue timestamp inaccurate for every later event. Use a dataclass default factory so the timestamp is evaluated for each instance."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/integrations/services/assignment_source.py",
+    "lines": [
+     18,
+     18
+    ],
+    "texto": "The default is evaluated once when this module is imported, not when an AssignmentSource is constructed. Consequently every inbound assignment handled by a long-running worker receives the same queued timestamp, potentially hours or days before the assignment actually occurred, and to_dict propagates that incorrect timestamp into the task payload. Use a default factory so each source records its own creation time."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+    "descricao": "AssignmentSource.queued defaults to timezone.now() evaluated at class definition, so all instances share the import-time timestamp instead of the time they were queued.",
+    "textoGolden": "The AssignmentSource dataclass uses queued: datetime = timezone.now() as a default field value, which evaluates timezone.now() once at class definition time and shares that single datetime instance across all objects.",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       14,
+       18
+      ],
+      "texto": "WHAT: `queued: datetime = timezone.now()` evaluates once at class-definition time so every AssignmentSource without explicit queued shares the same timestamp. WHY: queued time is wrong/stale for all later instances and defeats its purpose as a queue-time marker. HOW: use `field(default_factory=timezone.now)` (with `field` import)."
+     },
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       14,
+       18
+      ],
+      "texto": "Field `queued: datetime = timezone.now()` is evaluated once at import so all AssignmentSources share the same timestamp. Use `field(default_factory=timezone.now)` so each instance measures its actual creation/queue time."
+     },
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       18,
+       18
+      ],
+      "texto": "The dataclass field default `queued: datetime = timezone.now()` is evaluated a single time when the module is imported, so every AssignmentSource created without an explicit `queued` value (which is exactly what `from_integration` does, and what `from_dict` falls back to when the key is absent) shares the same frozen import-time timestamp instead of the moment the assignment was actually queued. This makes the `queued` timestamp semantically wrong/meaningless (it reflects process start, not assignment time) and would silently misreport the queue time anywhere this value is later inspected. Fix by defaulting in a factory/`__post_init__` or making the caller pass the timestamp, e.g. set `queued` inside `from_integration` (`queued=timezone.now()`), or use `field(default_factory=timezone.now)`."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#02",
+    "descricao": "The test method name test_from_dict_inalid_data has a typo; it should be test_from_dict_invalid_data.",
+    "textoGolden": "The method name has a typo: test_from_dict_inalid_data should be test_from_dict_invalid_data.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       13,
+       19
+      ],
+      "texto": "Typo in test name test_from_dict_inalid_data hides it from name-filtered runs (e.g. -k invalid_data): fix spelling to test_from_dict_invalid_data so the invalid-payload guard is actually selected and verified."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#03",
+    "descricao": "test_from_dict_empty_array actually passes an empty dict, so the name does not match what the test exercises.",
+    "textoGolden": "Method name says 'empty_array' but tests empty dict - consider renaming to 'test_from_dict_empty_dict' for clarity.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "The test is named test_from_dict_empty_array but it passes an empty dict ({}), not an empty array; a caller reading the name will believe the empty-list/array input path is covered when it is not. Rename it to test_from_dict_empty_dict (or pass [] to actually cover the empty-array case) so the identifier agrees with the input it exercises."
+     },
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "test_from_dict_empty_array names an empty array but constructs an empty dict (`data: dict[str, Any] = {}`), so it only re-exercises the empty/None path and never covers empty-array input; a regression specific to that input would pass unnoticed. Pass a real empty array or rename the test to match its body."
+     },
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "test_from_dict_empty_array passes {} rather than an empty array. It therefore only tests missing required dictionary keys and would still pass if rejection of an array input were broken. Pass [] to exercise the named case (or rename this test to empty_dict if that is the intended contract)."
+     }
+    ]
+   }
+  ]
+ },
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "71826eb08fc7ea35a5925ad223296feadd5c5e29",
+  "base": "e805e472f4a80017957e2fbec975ea78c6ee45ed",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/api/helpers/error_upsampling.py",
+    "lines": [
+     102,
+     103
+    ],
+    "texto": "WHAT: The substring check treats negated or mixed-type filters as error-only queries. WHY: Queries such as `!event.type:error` or `event.type:error OR event.type:transaction` enable sample-weight aggregation for non-error events, contrary to the helper's error-only contract, producing incorrect counts or querying a weight column unavailable for transactions. HOW: Determine the effective event-type restriction from the parsed query rather than searching the raw query string."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/api/endpoints/organization_events_stats.py",
+    "lines": [
+     243,
+     244
+    ],
+    "texto": "WHAT: Top-events requests transform only timeseries_columns while leaving the selected columns and ordering used to choose the top events unweighted. WHY: Both errors.top_events_timeseries and discover.top_events_timeseries first call query with selected_columns and orderby, so a group with many sampled rows can outrank a group with a larger weighted error count and the chart returns the wrong top N for its displayed count. HOW: Apply the same weighted count transformation to the selection aggregates and corresponding ordering when choosing top events."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/api/helpers/error_upsampling.py",
+    "lines": [
+     100,
+     103
+    ],
+    "texto": "The substring test also accepts `!event.type:error` and `event.type:error OR event.type:transaction`. Neither query is restricted to errors, but on the discover dataset both now trigger replacement of count() with the sample-weight aggregate. This violates the error-only gating and can change counts for non-error events. Determine error-only scope from parsed query semantics rather than substring presence (including negation and OR branches). Add regression tests for these filters."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+    "descricao": "The upsampling decision is evaluated against the request's dataset instead of the scoped_dataset actually queried, so in the dashboard discover-split path (metrics dataset) error queries run against discover skip upsampling even when all projects are allowlisted.",
+    "textoGolden": "The upsampling eligibility check passes the outer dataset instead of the actual dataset used by scoped_dataset. In paths where the query ultimately runs against discover (e.g., dashboard split) while the original dataset is metrics, upsampling may be skipped even when all projects are allowlisted.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_events_stats.py",
+      "lines": [
+       218,
+       223
+      ],
+      "texto": "The upsampling decision uses the closure variable `dataset` while the transformed `final_columns` are executed against `scoped_dataset`. In the dashboard-split path `_get_event_stats` is deliberately invoked with a different dataset (e.g. `_get_event_stats(discover, ...)` at lines 351, 365, 406, 423) than the request's `dataset`, so the `_should_apply_sample_weight_transform` branch can be evaluated against the wrong dataset and apply/skip `sum(sample_weight)` for a dataset that was never queried. Base the decision on the dataset actually being queried (`scoped_dataset`) so the transform matches the target of the query."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+    "descricao": "_is_error_focused_query uses a substring match for `event.type:error` on the request query, so negated or mixed (OR transaction) discover queries are treated as error-only and get the sample_weight sum instead of count().",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       100,
+       103
+      ],
+      "texto": "`_is_error_focused_query` decides whether to apply `upsampled_count()` by doing a naive substring search for `event.type:error` in the raw request query. A query that excludes errors (e.g. `!event.type:error`) or the discover-split query `({query}) AND event.type:transaction` still contains the literal `event.type:error`, so the transform is applied to a non-error / transactions query, summing `sample_weight` where it should be a plain `count()` and producing wrong bucket values. It also ignores the actual `query` passed to `_get_event_stats`, so the decision can differ from the query that is really executed. Match on a parsed/negation-aware condition (or pass the resolved query string) instead of a raw substring test."
+     },
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       100,
+       103
+      ],
+      "texto": "The substring check treats `!event.type:error` and `event.type:error OR event.type:transaction` as error-only queries. For allowlisted projects this rewrites count() to an aggregation over sample_weight even when the Discover query includes transactions, violating the error-only restriction and potentially failing against a transaction-backed query. Determine the event-type restriction from the parsed query rather than the presence of a substring."
+     },
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       100,
+       103
+      ],
+      "texto": "Substring matching does not establish that the Discover query selects only errors. For example, `!event.type:error` and `event.type:error OR event.type:transaction` both return True here, causing count() to be replaced with the sample-weight aggregation for non-error or mixed results in allowlisted projects. This contradicts the error-only guard and can produce incorrect counts. Parse the query and establish an error-only restriction (including negation and Boolean structure), or conservatively skip transformation when that restriction cannot be proven."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#05",
+    "descricao": "test_error_upsampling_with_transaction_events cannot detect upsampling being applied to transaction queries, because the transaction has no sample_weight and upsampled_count() equals count() for it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+      "lines": [
+       3654,
+       3697
+      ],
+      "texto": "test_error_upsampling_with_transaction_events would still pass if upsampling were wrongly applied to transaction queries. The transaction event has no sample_weight, and upsampled_count uses ifNull(sample_weight, 1), so the result is still 1 and 0. Give the transaction a non-default sample rate or weight so an upsampled count would differ from a plain count, or assert that the transform was not applied."
+     },
+     {
+      "file": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+      "lines": [
+       3654,
+       3697
+      ],
+      "texto": "test_error_upsampling_with_transaction_events cannot falsify over-application of upsampling: the stored transaction has no sample_weight so upsampled_count() (sum(ifNull(sample_weight,1))) returns 1, same as count(). Give the transaction a sample_weight/client_sample_rate that would diverge (e.g. count 10 if upsampled vs 1 if not), or assert via mock that transform_query_columns_for_error_upsampling was not called / yAxes were not rewritten."
+     },
+     {
+      "file": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+      "lines": [
+       3655,
+       3697
+      ],
+      "texto": "test_error_upsampling_with_transaction_events cannot detect upsampling being wrongly applied to transaction queries. The stored transaction event has no error_sampling context, so sample_weight is null, and upsampled_count = toInt64(sum(ifNull(sample_weight,1))) evaluates to 1 for it \u2014 identical to count(). If _should_apply_sample_weight_transform/_is_error_focused_query were broken so that a discover query with event.type:transaction gets upsampled, the assertion count==1 (and 0 in the empty bucket) would still pass. Add an event with a known non-1 sample_weight (or assert the emitted query uses count() and not upsampled_count) so the test actually fails when the transaction exclusion is bypassed."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#06",
+    "descricao": "The test factory helper's docstring promises a valid client sample rate but it copies any truthy float-convertible value (negative, >1, strings), unlike production validation.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/testutils/factories.py",
+      "lines": [
+       344,
+       357
+      ],
+      "texto": "WHAT: _set_sample_rate_from_error_sampling uses `if client_sample_rate: float(...)` with no type/range check, unlike production _derive_client_error_sampling_rate which requires isinstance(int,float) and 0<rate<=1. WHY: string '0.1', bool True, or out-of-range 5.0 get stored as sample_rate in fixtures while production drops them, making upsampling tests diverge from prod. HOW: mirror production validation before assigning sample_rate."
+     },
+     {
+      "file": "src/sentry/testutils/factories.py",
+      "lines": [
+       345,
+       345
+      ],
+      "texto": "The new docstring says the client sample rate must be 'present and valid', but the implementation only checks truthiness and float conversion. Negative rates, rates greater than 1, and float-convertible non-finite values are all accepted and written to sample_rate. This falsely tells test authors that this helper enforces sample-rate validity. Either document that it merely copies truthy float-convertible values, or validate the supported sample-rate range and finiteness before setting the field."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#08",
+    "descricao": "With upsampling active, top-events queries pick and order the top N groups by raw count() (selected_columns/orderby are not transformed) while the plotted series use upsampled_count(), so ranking can disagree with the displayed weighted counts.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_events_stats.py",
+      "lines": [
+       242,
+       248
+      ],
+      "texto": "Only timeseries_columns are upsampled while selected_columns and orderby used to select the Top N remain based on raw count(). discover.top_events_timeseries first queries those unchanged selected columns to choose groups, so a group with fewer retained events but a higher weighted count is omitted in favor of a lower-volume group. Apply the weighted-count transformation consistently to Top N selection and its ordering as well as the displayed timeseries."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#09",
+    "descricao": "_are_all_projects_error_upsampled and its caller take an organization argument that is never read.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       28,
+       44
+      ],
+      "texto": "`_are_all_projects_error_upsampled` takes an `organization` argument \u2014 also threaded in from the public `is_errors_query_for_error_upsampled_projects` \u2014 but never reads it: the body uses only `project_ids` and the global option `issues.client_error_sampling.project_allowlist`. The declared parameter is dead. Either the allowlist check is meant to be organization-scoped (the body must actually consult `organization`) or the parameter should be removed from both functions; as written the signature advertises an organization-scoped decision the implementation never makes."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14",
+    "descricao": "Claims only bare count() is rewritten, so aliased count, eps(), epm(), count_unique() etc. stay un-upsampled.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       54,
+       64
+      ],
+      "texto": "WHAT: transform_query_columns_for_error_upsampling only rewrites exact bare `count()` and passes everything else through unchanged. WHY: yAxes like `count() as foo`, `eps()`, `epm()`, `count_unique()`, `count_if()` keep raw counts while should_upsample is true, returning under-counted timeseries. HOW: parse/normalize the function (strip alias, match function name with args) and rewrite all count-equivalent aggs or explicitly fall back to no-upsampling."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#15",
+    "descricao": "Rewriting count() to `upsampled_count() as count` breaks responses for transformAliasToInputFormat=1: the result column is translated to the rewritten field string while the serializer still reads `count()`.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       58,
+       60
+      ],
+      "texto": "Replacing count() with `upsampled_count() as count` breaks requests using transformAliasToInputFormat=1. QueryBuilder.process_results translates the count alias to the replacement field string, but the endpoint serializer still resolves the original axis as `count()`, so it cannot read the weighted count from the returned rows. Preserve the original public field name in the result mapping when rewriting the internal aggregation."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#16",
+    "descricao": "upsampled_count truncates the weighted sum with toInt64 instead of rounding, under-counting the estimate by up to one per bucket.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/search/events/datasets/discover.py",
+      "lines": [
+       1044,
+       1049
+      ],
+      "texto": "`upsampled_count` wraps the sum in `toInt64`, which truncates toward zero: `sum(ifNull(sample_weight, 1))` of e.g. 1.5 or 3.33 yields 1 or 3 instead of the nearest integer, systematically under-counting the upsampled estimate (worst when weights are just below an integer). Use a rounding aggregation (e.g. `toInt64(round(sum(...)))`) so the reconstructed count reflects the intended estimate rather than a floored value."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#18",
+    "descricao": "The 'no project IDs' test case runs with an empty allowlist mock, so it passes via the empty-allowlist branch and does not verify the empty project_ids guard.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/api/helpers/test_error_upsampling.py",
+      "lines": [
+       51,
+       52
+      ],
+      "texto": "The 'no project IDs provided' case does not exercise the `if not project_ids: return False` guard. mock_options.get.return_value was set to [] just above (line 48), so removing the project_ids guard still returns False via the `if not allowlist` branch, and this assertion passes either way. Re-mock options.get to return a non-empty allowlist (e.g. self.project_ids) before calling with project_ids=[], so the empty-project guard is actually falsifiable."
+     }
+    ]
+   }
+  ]
+ },
+ "fixing-re-authentication-with-passkeys-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "25bf964a844ea0bc64dc838bff038345048cb1fa",
+  "base": "744e031019af8dbaacf407e792fbb3756364e2b4",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java",
+    "lines": [
+     63,
+     63
+    ],
+    "texto": "PasswordForm now treats passkey-only users as configured even when the selected login theme cannot render passkey authentication. The legacy keycloak theme inherits base/login/login-password.ftl, which does not import or invoke passkeys.conditionalUIData, so a passkey-only user reaching this execution receives only a password field and cannot authenticate; the UI was added only to keycloak.v2. Add the passkeys macro import and invocation to the base login-password.ftl template as well."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#03",
+    "descricao": "PasswordForm now accepts passkey-only users, but only the keycloak.v2 login-password.ftl renders the passkeys conditional UI; the base template (used by the legacy keycloak theme) does not, so a passkey-only user is shown a password-only form they cannot complete.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java",
+      "lines": [
+       63,
+       63
+      ],
+      "texto": "PasswordForm.configuredFor now accepts passkey-only users even when the active login theme renders the unchanged base login-password.ftl, which contains no passkeys UI. The legacy keycloak theme inherits that template, so a user without a password reaches a password-only challenge with no way to authenticate instead of being able to use the newly accepted passkey credential. Add the passkeys import and conditionalUIData invocation to the base login-password.ftl as well as the keycloak.v2 override."
+     }
+    ]
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#04",
+    "descricao": "The comment 'setup webauthn data when passkeys enabled' does not mention that the condition also requires a selected user to own a passkey credential.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java",
+      "lines": [
+       114,
+       117
+      ],
+      "texto": "The new comment says webauthn data is set up \"when passkeys enabled\", but the guard `isConditionalPasskeysEnabled(context.getUser())` also requires that a known/already-selected user actually has a passkey credential. With realm passkeys enabled and a selected user without a passkey, `fillContextForm` is skipped (the test `passwordLogin_reauthenticationOfUserWithoutPasskey` relies on exactly this), so the comment misdescribes the condition it documents. Rephrase it to match the code, e.g. \"setup webauthn data when conditional passkeys can be used (user unknown or user has a passkey)\"."
+     }
+    ]
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#06",
+    "descricao": "The test comment says it sets the passwordless policy for discoverable keys, but the updater only disables passkeys for the realm.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java",
+      "lines": [
+       281,
+       283
+      ],
+      "texto": "The comment 'set passwordless policy for discoverable keys' is stale. The updater now only calls setWebAuthnPolicyPasskeysEnabled(Boolean.FALSE), so it disables passkeys for the realm. Change the comment to say that passkeys are disabled for the realm."
+     }
+    ]
+   }
+  ]
+ },
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "62bf98939eda58f0d0a1a41a58aa6d4ecdc24dba",
+  "base": "8671f860469d6d95e54df3e13f77ebc401249489",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+    "lines": [
+     48,
+     50
+    ],
+    "texto": "The new disabled-feature path promises exit code 4, but this test checks only the error text. Replacing `picocli.exit(CompatibilityResult.FEATURE_DISABLED)` with a successful exit while retaining the diagnostic would still pass this test, even though callers could treat the disabled command as successful. Assert the exit code as well as the diagnostic."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#03",
+    "descricao": "testFeatureNotEnabled only covers the metadata subcommand, so the feature guard in the check subcommand is untested.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "testFeatureNotEnabled only launches the `metadata` subcommand and never the `check` subcommand. Removing the feature guard from UpdateCompatibilityCheck.run() would therefore not fail any test. It also doesn't assert the exit code (FEATURE_DISABLED=4). Add a case for `check` and assert the exit code on both."
+     },
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "WHAT: testFeatureNotEnabled only exercises the metadata subcommand disabled path and never the check subcommand. WHY: the feature gate in UpdateCompatibilityCheck.run can be removed or broken without failing any test since no assertion covers its disabled message/exit code. HOW: also launch/assert the check command without --features (e.g. parameterize over metadata and check subcommands or add a second Launch)."
+     },
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "testFeatureNotEnabled only exercises the metadata subcommand, leaving the identical ROLLING_UPDATES gate in UpdateCompatibilityCheck unverified. If the Check gate were removed, the suite still passes. Parameterize/add a second @Launch for {UpdateCompatibility.NAME, UpdateCompatibilityCheck.NAME} (with required --file or not) asserting the disabled message and FEATURE_DISABLED exit code."
+     }
+    ]
+   },
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#04",
+    "descricao": "The disabled-feature test checks only the error message, not that the command exits with FEATURE_DISABLED (4).",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "The new disabled-feature test only verifies the error text, not the failure exit status. If the metadata command still prints this diagnostic but exits with 0 (or another incorrect code) instead of FEATURE_DISABLED (4), this test would still pass. Assert that cliResult.exitCode() equals CompatibilityResult.FEATURE_DISABLED so the test actually protects the new disabled-feature failure contract."
+     }
+    ]
+   }
+  ]
+ }
+}

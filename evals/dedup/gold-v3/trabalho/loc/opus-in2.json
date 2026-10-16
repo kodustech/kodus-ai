@@ -1,0 +1,2487 @@
+{
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "4f8aed295a29954023b2849c060ef4fb299d1b5d",
+  "base": "62db063e1e1abe691313ab42682a68f796d63769",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/views/embed/best.html.erb",
+    "lines": [
+     6,
+     6
+    ],
+    "texto": "WHAT: The header conditional ends with `end if`, leaving an incomplete Ruby conditional modifier. WHY: Rendering the successful embed response fails with a template syntax error instead of displaying comments. HOW: Close the block with `end` alone."
+   },
+   {
+    "id": "S2",
+    "file": "app/jobs/scheduled/poll_feed.rb",
+    "lines": [
+     35,
+     35
+    ],
+    "texto": "WHAT: Body extraction assumes every feed item has an Atom `content` field. WHY: SimpleRSS exposes ordinary RSS bodies as `description` or `content_encoded`, so valid RSS items without `content` fail at this line and abort the entire poll, including on-demand retrieval that invokes it. HOW: Select the available body using explicit hash keys, preferring full content, and handle items without any body before calling scrub."
+   },
+   {
+    "id": "S3",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     22,
+     22
+    ],
+    "texto": "WHAT: Feed-supplied HTML is imported with raw_html cooking after only URL rewriting, without HTML sanitization. WHY: A script element or an image event handler in a feed body survives Nokogiri serialization, is stored verbatim by Post.cook, and executes in the forum origin when post.cooked is rendered as raw HTML. HOW: Sanitize imported HTML with the forum's safe HTML policy before storing it; URL absolutization is not a sanitizer."
+   },
+   {
+    "id": "S4",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     64,
+     65
+    ],
+    "texto": "WHAT: URL absolutization handles only leading-slash paths and treats protocol-relative URLs as local paths. WHY: An article containing `images/photo.jpg` loads the image relative to the forum embed route, while `//cdn.example/photo.jpg` is rewritten onto the article host, producing broken images and links. HOW: Resolve each nonblank href and src against the article URI with URI.join rather than manually concatenating the host."
+   },
+   {
+    "id": "S5",
+    "file": "lib/topic_retriever.rb",
+    "lines": [
+     40,
+     42
+    ],
+    "texto": "WHAT: Every missing article retrieval executes a complete feed poll inline before fetching the article. WHY: The retrieval throttle is keyed by article URL, so simultaneous loads of distinct articles each download and parse the same feed and run per-item database imports, multiplying feed-sized work across background workers instead of respecting the hourly polling schedule. HOW: Coordinate feed polling with a feed-scoped lock and freshness cache so article retrievals share one recent poll."
+   },
+   {
+    "id": "S6",
+    "file": "app/controllers/embed_controller.rb",
+    "lines": [
+     15,
+     15
+    ],
+    "texto": "Retrieval is now asynchronous, but spec/controllers/embed_controller_spec.rb:40-45 still expects TopicRetriever.new and retriever.retrieve during the controller request. Those expectations are no longer satisfied when jobs are queued, so the existing success test fails rather than testing the new contract. Update that spec to expect Jobs.enqueue(:retrieve_topic, user_id: nil, embed_url: embed_url), and test execution of the retriever separately in the job spec."
+   },
+   {
+    "id": "S7",
+    "file": "app/views/embed/best.html.erb",
+    "lines": [
+     14,
+     14
+    ],
+    "texto": "Unlike the surrounding translated labels, the visible post date uses strftime with a fixed day/month/year order and English abbreviated month names. Non-English forums therefore show untranslated dates. Use Rails' localisation helper with a locale-defined date format."
+   },
+   {
+    "id": "S8",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     13,
+     13
+    ],
+    "texto": "The URL is interpolated directly into both a single-quoted href and visible HTML. The prefix check only requires http(s), so a feed link containing a quote or markup can alter the attribution HTML. This becomes rendered content because import selects raw_html and Post#cook returns it without the rendering pipeline; parsing with Nokogiri does not escape injected elements or remove event attributes. Escape the URL for both contexts before building the link."
+   },
+   {
+    "id": "S9",
+    "file": "app/views/embed/best.html.erb",
+    "lines": [
+     6,
+     6
+    ],
+    "texto": "The conditional opened with `if` must close with `end`, not `end if`. ERB compiles this to an incomplete Ruby modifier-if expression, so rendering the successful embed view raises a template syntax error."
+   },
+   {
+    "id": "S10",
+    "file": "app/jobs/scheduled/poll_feed.rb",
+    "lines": [
+     35,
+     35
+    ],
+    "texto": "RSS items commonly provide a description without a content element. For those items `i.content` is nil and calling `scrub` raises NoMethodError, aborting the entire polling run before this and subsequent items can be imported. Fall back to the description and handle items with neither field."
+   },
+   {
+    "id": "S11",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     20,
+     28
+    ],
+    "texto": "Two imports can both read no embed at line 15 before either commits. Each then creates a topic and attempts TopicEmbed.create! for the same URL; the unique index rejects the second insert with an unhandled uniqueness exception. The transaction rolls back its topic, but the import/job still fails. Serialize imports for a URL or rescue the uniqueness conflict outside the transaction and reload the winning embed."
+   },
+   {
+    "id": "S12",
+    "file": "spec/controllers/embed_controller_spec.rb",
+    "lines": [
+     42,
+     44
+    ],
+    "texto": "This test expects TopicRetriever.new and retrieve during get :best, but the controller now only calls Jobs.enqueue(:retrieve_topic, ...). Those expectations remain unsatisfied, making the new controller test fail. Assert the enqueue and its arguments instead."
+   },
+   {
+    "id": "S13",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     62,
+     72
+    ],
+    "texto": "absolutize_urls only rewrites values beginning with '/'. A source article at https://example.com/blog/article containing href='next.html' or src='images/photo.jpg' retains those values in the imported post, where they resolve against the Discourse origin instead of the source article. Resolve relative references against the complete source URL with URI.join; this also preserves the intended host of protocol-relative references."
+   },
+   {
+    "id": "S14",
+    "file": "app/jobs/scheduled/poll_feed.rb",
+    "lines": [
+     35,
+     36
+    ],
+    "texto": "PollFeed passes decoded feed content directly to TopicEmbed.import, but the new import implementation explicitly sets cook_method to raw_html, and Post.cook returns raw unchanged for that method. Unlike import_remote's restricted Readability extraction, this path never filters script elements, event-handler attributes, or dangerous links. A malicious or compromised feed can therefore persist executable HTML into forum posts (and embed/best renders post.cooked with raw). Sanitize feed HTML with the application's HTML allowlist before passing it into this raw HTML import path, including on updates."
+   },
+   {
+    "id": "S15",
+    "file": "spec/controllers/embed_controller_spec.rb",
+    "lines": [
+     8,
+     11
+    ],
+    "texto": "This request supplies neither an enabled embeddable_host nor an allowed referer. ensure_embeddable therefore rejects it before best reaches params.require(:embed_url). Removing the embed_url requirement would still leave this test green. Configure a valid host and matching referer first, then assert the missing-parameter response (including its expected status) so this case actually reaches the parameter validation."
+   },
+   {
+    "id": "S16",
+    "file": "spec/jobs/poll_feed_spec.rb",
+    "lines": [
+     18,
+     23
+    ],
+    "texto": "feed_polling_enabled defaults to false, and this case only stubs the URL. execute therefore skips poll_feed regardless of whether it checks feed_polling_url at all. Enable polling and supply a valid embed_by_username in this case; otherwise deleting the URL guard would still pass this regression test."
+   },
+   {
+    "id": "S17",
+    "file": "spec/jobs/poll_feed_spec.rb",
+    "lines": [
+     24,
+     28
+    ],
+    "texto": "This case leaves polling disabled and the feed URL blank, both of which independently prevent poll_feed. It consequently remains green if the embed_by_username guard is removed. Set polling enabled and a valid feed URL before stubbing the username to nil to isolate the behavior named by this test."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+    "descricao": "The postMessage handler in embed.js checks the sender with discourseUrl.indexOf(e.origin), a substring test instead of exact origin equality, so a page on an origin that is a substring of the Discourse URL can send forged discourse-resize messages to the embedding page.",
+    "textoGolden": "The current origin validation using indexOf is insufficient and can be bypassed. An attacker could use a malicious domain like evil-discourseUrl.com to pass this check.",
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/embed.js",
+      "lines": [
+       15,
+       17
+      ],
+      "texto": "The message-origin check uses substring matching: `discourseUrl.indexOf(e.origin) === -1`. Any origin that is a substring of discourseUrl is accepted (e.g. discourseUrl `https://discourse.example.com` accepts origin `https://discourse`), so a malicious page can post `discourse-resize` messages into the embed. Compare against the iframe's actual origin exactly (`e.origin !== expectedOrigin`) instead of a substring test."
+     },
+     {
+      "file": "embed.js",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "Uses indexOf containment instead of origin equality, but it cannot be bypassed."
+     },
+     {
+      "file": "app/assets/javascripts/embed.js",
+      "lines": [
+       15,
+       17
+      ],
+      "texto": "WHAT: postMessage origin check is reversed (`discourseUrl.indexOf(e.origin)===-1`) instead of strict origin equality. WHY: any e.origin that is a substring of discourseUrl passes, letting a foreign iframe drive `iframe.height` handling and future message branches."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#04",
+    "descricao": "The referer and embed_url host checks compare against SiteSetting.embeddable_host case-sensitively, so a host differing only in case is rejected even though hostnames are case-insensitive.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/embed_controller.rb",
+      "lines": [
+       26,
+       26
+      ],
+      "texto": "Host identity is compared case-sensitively: `URI(request.referer).host != SiteSetting.embeddable_host`. Hostnames are case-insensitive, so a referer such as `http://EVILTROUT.COM/...` never matches the configured `eviltrout.com` (and the same flaw exists in lib/topic_retriever.rb:15 for `URI(@embed_url).host`). Normalize both sides with downcase before comparing so case variations of the same host are treated identically."
+     },
+     {
+      "file": "embed_controller.rb",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The referer/host comparison does not lowercase either side, so a mixed-case host is wrongly rejected. The reviewer notes this fails closed and is not a bypass. Normalize case on both sides of the host comparison (e.g. downcase both) to avoid false rejections. The same issue applies to topic_retriever.rb."
+     },
+     {
+      "file": "topic_retriever.rb",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The host comparison does not lowercase either side, so a mixed-case host is wrongly rejected. This fails closed and is not a bypass. Normalize case on both sides of the comparison (e.g. downcase both) to avoid false rejections."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+    "descricao": "PollFeed reads i.content.scrub for every feed item, so items without a content element (common in RSS feeds that only have description) raise NoMethodError and abort the import of the remaining items.",
+    "textoGolden": "Calling `i.content.scrub` assumes that `i.content` is always populated. However, many RSS feeds do not provide a `content` field, leading to a potential nil pointer exception when `i.content` is nil. A fallback to `description` should be implemented to prevent crashes.",
+    "comentarios": [
+     {
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       35,
+       35
+      ],
+      "texto": "WHAT: `CGI.unescapeHTML(i.content.scrub)` assumes every feed item has a `content` element. WHY: many RSS 2.0 items expose only `<description>` (simple-rss returns nil for `content`), so `nil.scrub` raises NoMethodError and, because the job is `sidekiq_options retry: false`, the entire hourly feed import for all items is aborted. HOW: fall back to the available field, e.g. `(i.content || i.description || i.summary).to_s.scrub`, and skip items whose body is blank."
+     },
+     {
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       31,
+       36
+      ],
+      "texto": "The feed item is consumed unconditionally: url = i.link, then i.title, and content = CGI.unescapeHTML(i.content.scrub). SimpleRSS item accessors raise NoMethodError when the element is absent (RSS 2.0 feeds frequently carry only <description>, no <content>, and some items have no <link>/<title>), so a single malformed or content-less item aborts the whole hourly job with an unhandled exception instead of skipping it. The code already anticipates a blank link (line 33 fallback) but reads i.content/i.title without a nil guard; use i.content.to_s (or fall back to i.description/summary) and skip items whose content is blank."
+     },
+     {
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       31,
+       37
+      ],
+      "texto": "`i.content.scrub` raises NoMethodError when a feed item has no content (only a description). The exception aborts the whole poll, so every item after it is never imported. Fall back to `i.content || i.description`, skip items with blank content, and rescue per item."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+    "descricao": "Posts imported from RSS or remote pages use cook_method raw_html, which makes Post#cook return the raw HTML without sanitization, and the embed view outputs it with raw post.cooked, allowing stored XSS from imported content.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/post.rb",
+      "lines": [
+       130,
+       136
+      ],
+      "texto": "WHAT: the new `return raw if cook_method == Post.cook_methods[:raw_html]` makes `Post#cook` return completely unsanitized HTML, and Jobs::PollFeed stores untrusted feed content this way (poll_feed.rb:35-36 \u2192 TopicEmbed.import, unlike import_remote which sanitizes via Readability's tag/attribute whitelist). WHY: the stored `cooked` value is then emitted with `<%= raw post.cooked %>` in app/views/embed/best.html.erb:19, and that page is served from the forum's own origin \u2014 so a malicious/compromised RSS feed item containing `<script>` or `onerror=` runs attacker JavaScript in the forum origin and can read cookies/session and perform authenticated actions (stored XSS). HOW: sanitize the raw HTML before persisting it (e.g. run the feed content through the same HTML sanitizer used for regular posts, or restrict the raw_html cook path to trusted, pre-sanitized sources only)."
+     },
+     {
+      "file": "app/models/post.rb",
+      "lines": [
+       130,
+       133
+      ],
+      "texto": "WHAT: Post#cook returns raw verbatim for cook_method raw_html, skipping the cooking/sanitization pipeline and plugin filters. WHY: any RSS/readability HTML imported via TopicEmbed is rendered unsanitized in embed/best.html.erb, executing attacker script in the Discourse origin."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       22,
+       22
+      ],
+      "texto": "Feed-provided HTML is persisted with raw_html cooking after only Nokogiri parsing and URL rewriting, which do not sanitize scripts or event-handler attributes. A malicious feed entry containing executable HTML is stored as post.cooked and executed under the forum origin when rendered, including through the new raw cooked embed view. Sanitize imported HTML with an explicit safe tag, attribute and URL-scheme allowlist before storing it or returning it from the raw_html cooking path."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+    "descricao": "TopicEmbed.import appends a footer that interpolates the URL unescaped into an <a href='...'> tag in raw HTML that is later rendered unsanitized, so a crafted URL can inject markup; it also appends to contents with << without handling nil.",
+    "textoGolden": "The TopicEmbed.import method is susceptible to a NoMethodError if the contents parameter is nil when attempting to append a string, and an XSS vulnerability due to unescaped url interpolation in the generated HTML.",
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       10,
+       13
+      ],
+      "texto": "WHAT: TopicEmbed.import interpolates feed-controlled url unescaped into raw HTML (`<a href='#{url}'>#{url}</a>`) and stores feed HTML as raw_html. WHY: url passing /^https?\\:\\/\\// can still contain `'`, `>` or script, and RSS content is never sanitized, giving stored XSS when rendered via `raw post.cooked`. HOW: HTML-escape url and sanitize content instead of raw_html passthrough."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       10,
+       14
+      ],
+      "texto": "TopicEmbed.import interpolates feed-controlled url unescaped into HTML link stored with cook_method raw_html (Post#cook returns raw, bypassing pipeline) and rendered with raw post.cooked: XSS via quote/script break-out. Escape url for text and attribute contexts before storing."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       13,
+       13
+      ],
+      "texto": "The url is interpolated unescaped into `<a href='#{url}'>#{url}</a>`. The post is stored with cook_method raw_html and rendered with `raw post.cooked`, so a url containing a quote or markup is output as live HTML. Escape it with ERB::Util.html_escape (or CGI.escapeHTML) for both the href and the link text."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#16",
+    "descricao": "TopicEmbed.import appends the footer with contents <<, mutating the caller's string in place instead of building a new string.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       13,
+       13
+      ],
+      "texto": "`contents <<` mutates the caller's string in place. This raises FrozenError for frozen strings and appends the footer twice if the same string is imported again. Use `contents = contents + ...` instead."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#17",
+    "descricao": "TopicEmbed.import checks for an existing embed and then creates the post and TopicEmbed without handling the unique-index conflict, so two concurrent imports of the same URL make one job fail with RecordNotUnique.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       15,
+       30
+      ],
+      "texto": "TopicEmbed.import does a check-then-insert on embed_url (where(...).first, then TopicEmbed.create!) with no rescue for the unique index declared on topic_embeds.embed_url. The only guard against concurrent intake is the Redis throttle in TopicRetriever, which is bypassed for staff (retrieve_topic.rb:17 passes no_throttle: user.try(:staff?)) and can expire while a slow retrieval (which may synchronously run a full PollFeed, topic_retriever.rb:41) is still running. Two interleaved retrievals for the same URL both see embed.blank? and both attempt creation; the loser raises ActiveRecord::RecordNotUnique, which is unhandled anywhere in the job path, breaking execution. Guard the create against the race (rescue/retry on RecordNotUnique, or use find_or_create_by on embed_url inside the transaction) so concurrent retrievals cannot raise."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       20,
+       28
+      ],
+      "texto": "Make creation idempotent under concurrent imports. Two workers can both read no embed at line 15 and create posts before attempting the same unique embed_url insert. The unique index correctly rolls back the losing transaction, but its unhandled uniqueness exception aborts that job (and potentially the rest of a feed polling run). This is reachable when scheduled polling overlaps retrieval-triggered polling; the per-URL retrieval throttle does not serialize those paths. Handle the conflict outside the transaction and return the winning embed/post, or serialize imports for the URL."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       20,
+       30
+      ],
+      "texto": "Race on check-then-create: two concurrent imports both see TopicEmbed.where(embed_url:url).first blank, both create Post + TopicEmbed.create!. Unique index on embed_url then raises RecordNotUnique (unhandled) or creates duplicates. Need atomic find-or-create / rescue unique violation."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
+    "descricao": "When the embedded post has been deleted, TopicEmbed.import's update path passes a nil embed.post to PostRevisor and crashes on every later import of that URL.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       31,
+       39
+      ],
+      "texto": "On the update path `embed.post` can be nil if the post was deleted. `PostRevisor.new(nil)` then raises NoMethodError, and every later import of that URL fails the same way. Guard against a nil post, for example by skipping the revision or recreating the topic."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       32,
+       37
+      ],
+      "texto": "WHAT: update path uses `embed.post` without nil guard then `PostRevisor.new(post)`. WHY: if the first post was deleted, post is nil and revise! dereferences nil, crashing feed-poll updates instead of recreating/skipping."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       31,
+       37
+      ],
+      "texto": "Orphan-post crash on update path: post = embed.post can be nil if the post/topic was deleted, then PostRevisor.new(nil).revise! raises NoMethodError. Must handle missing post (recreate or skip) instead of assuming present."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#19",
+    "descricao": "Claims import_remote crashes on unparseable pages (nil content) and dead URLs because it does no nil check or network error handling around open(url).read.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       44,
+       52
+      ],
+      "texto": "WHAT: import_remote passes `doc.content` (and title) directly to import where `contents <<` assumes a String, with no nil check or network-error handling around `open(url).read`. WHY: unparseable pages (nil content) raise NoMethodError and dead URLs raise OpenURI errors, crashing RetrieveTopic/Disqus imports with no topic created."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+    "descricao": "absolutize_urls only handles root-relative paths: protocol-relative URLs like //cdn.example.com/x.png are rewritten to http://host/cdn.example.com/x.png and path-relative links are left unresolved, breaking links and images in imported posts.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       64,
+       71
+      ],
+      "texto": "The URL rewrite treats protocol-relative URLs such as `//cdn.example.com/image.jpg` as paths on the article host, producing `http://article-host/cdn.example.com/image.jpg`. Imported images and links using protocol-relative external URLs therefore point to the wrong server. Resolve both href and src using URI joining against the article URL, which also handles ordinary relative paths correctly."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       62,
+       72
+      ],
+      "texto": "Resolve relative href/src references with URI joining rather than handling only leading slashes. For an article at http://example.com/blog/article, href='next' and src='images/photo.jpg' remain relative and resolve against the forum instead of the imported article. Moreover, '//cdn.example.com/photo.jpg' is rewritten to 'http://example.com/cdn.example.com/photo.jpg'. Both yield incorrect links/images in imported posts; apply proper URI resolution to both anchors and images."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       62,
+       73
+      ],
+      "texto": "absolutize_urls treats any href or src starting with '/' as site-relative and strips all leading slashes. Protocol-relative URLs like '//cdn.example.com/a.png' are rewritten to 'http://site/cdn.example.com/a.png', which is broken. Skip values starting with '//' (or prefix them with the scheme) and only rewrite single-slash paths."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#24",
+    "descricao": "The embed view formats post dates with a hard-coded strftime pattern, so users in non-English locales see English month names and a fixed order while the rest of the view is translated.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       14,
+       14
+      ],
+      "texto": "The post date uses a hard-coded strftime format `\"%e %b %Y\"`. `%b` emits English month abbreviations (Jan, Feb, ...) no matter what locale the viewer is in, so the date is frozen to en-US while the surrounding strings in this same view are localized via I18n.t. This is a locale-pinned user-facing format; it should be localized (e.g. via the app's localized date helper / l( ) rather than a literal strftime pattern)."
+     },
+     {
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       14,
+       14
+      ],
+      "texto": "Use a localized date formatter rather than strftime(\"%e %b %Y\"). %b produces English month abbreviations and the fixed day-month-year order ignores the selected locale, although the neighbouring header and footer labels are translated. Embedded comments therefore show English-formatted dates for users of other locales."
+     },
+     {
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       14,
+       14
+      ],
+      "texto": "Date uses strftime(\"%e %b %Y\") hard-coding one locale's month names/order while neighbouring strings go through I18n.t. Use I18n.l with a locale date format so non-English users see localized dates."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#29",
+    "descricao": "The Disqus importer now creates topics through TopicEmbed.import_remote, dropping the thread's created_at and the category option and requiring a live HTTP fetch per thread, so imported topics get wrong dates/categories and a dead link aborts the import.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "lib/tasks/disqus.thor",
+      "lines": [
+       143,
+       149
+      ],
+      "texto": "WHAT: Disqus import replaced PostCreator (title/raw/created_at/category) with `TopicEmbed.import_remote` per thread, dropping category_id, created_at, and strip handling. WHY: imported topics lose categories/timestamps and now require a live HTTP fetch per thread, failing when links are dead."
+     },
+     {
+      "file": "lib/tasks/disqus.thor",
+      "lines": [
+       148,
+       148
+      ],
+      "texto": "Preserve the Disqus thread creation timestamp when switching to TopicEmbed.import_remote. The previous PostCreator call passed `created_at: Date.parse(t[:created_at])`, but this replacement passes only the title, and TopicEmbed.import_remote/import never forward a timestamp to PostCreator. Imported historical topics now get the migration time as their initial post creation date while their replies retain historical dates, losing the importer's chronological fidelity. Extend the import options to forward created_at and pass the thread timestamp here."
+     },
+     {
+      "file": "lib/tasks/disqus.thor",
+      "lines": [
+       148,
+       148
+      ],
+      "texto": "The Disqus import now calls TopicEmbed.import_remote instead of PostCreator. This silently drops the `--category` option and the `created_at` from the Disqus thread, and the `--category` method_option was removed from the CLI. It also now makes a live HTTP fetch of every thread link, and `open(url)` raises on a failure that previously could not happen, aborting the whole import. Keep the category and date handling, and rescue fetch errors per thread."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+    "descricao": "Every retrieval of an article not yet embedded synchronously polls and imports the entire RSS feed, and since throttling is per URL, many different article requests repeat the full feed download and processing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "lib/topic_retriever.rb",
+      "lines": [
+       40,
+       42
+      ],
+      "texto": "Every uncached article retrieval synchronously downloads and processes the complete configured feed before fetching the article. Because the retrieval throttle is keyed by individual embed URL, simultaneous requests for different articles each repeat the feed download and all per-item database lookups/imports, multiplying worker load by the number of requests times feed size. Coalesce feed polling with a feed-wide throttle or lock and reuse its recent results instead of executing a full poll per article."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#32",
+    "descricao": "The 'is 404 without an embed_url' spec never sets an embeddable host, so the request is rejected by ensure_embeddable before the embed_url check runs, and the test would pass even without that check.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "The test is named 'is 404 without an embed_url' but passes for the wrong reason: it never sets embeddable_host, which defaults to '' so the before_filter `ensure_embeddable` raises at the blank-host check before `params.require(:embed_url)` is reached. The request is rejected regardless of whether the embed_url requirement exists, so the test would still pass if that requirement were removed. Stub a valid embeddable_host here so the failure is actually attributable to the missing embed_url."
+     },
+     {
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       8,
+       10
+      ],
+      "texto": "The missing-embed_url test does not establish a valid embeddable host and referer, so ensure_embeddable rejects this request before best reaches params.require(:embed_url). It also only checks non-success despite claiming a 404. Removing the required-parameter check would therefore leave this test green. Configure an allowed host/referer for this case and assert the intended missing-parameter response."
+     },
+     {
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "The 'is 404 without an embed_url' test never sets embeddable_host, so ensure_embeddable rejects the request before params.require(:embed_url) runs. It passes without the embed_url check. Stub embeddable_host and the referer so the missing param is the only failure cause."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+    "descricao": "The 'requires feed_polling_url' and 'requires embed_by_username' specs leave feed_polling_enabled at its false default, so they never reach the condition they name and would pass with those checks deleted.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       12,
+       28
+      ],
+      "texto": "The three 'requires ...' tests do not isolate the guard they name: each stubs only one setting to falsy while the other two remain falsy by default, so poll_feed is never called even if the named check were deleted. Stub the other two settings to truthy values in each test so removing the named guard would cause poll_feed to run and fail the test."
+     },
+     {
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       18,
+       28
+      ],
+      "texto": "These two tests do not verify the conditions they name. `execute` is guarded by `feed_polling_enabled? && feed_polling_url.present? && embed_by_username.present?`, and feed_polling_enabled defaults to false. Neither test stubs feed_polling_enabled? to true, so the guard short-circuits at the first clause and poll_feed is never called no matter what feed_polling_url/embed_by_username are. Both would still pass if the URL/username checks were deleted entirely. Stub `SiteSetting.stubs(:feed_polling_enabled?).returns(true)` in each so the specific condition under test is actually reached."
+     },
+     {
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       18,
+       27
+      ],
+      "texto": "The URL and username prerequisite tests never enable feed polling (whose configured default is false) or supply the other required setting. execute consequently short-circuits at feed_polling_enabled? and never evaluates the prerequisite each test claims to cover. Both tests still pass if their corresponding presence checks are removed. Set all other prerequisites to valid values before making only the setting under test absent, so the poll_feed.never expectation actually detects removal of that guard."
+     }
+    ]
+   }
+  ]
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+  "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/remote_subscriptions/consumers/result_consumer.py",
+    "lines": [
+     254,
+     255
+    ],
+    "texto": "The factory reuses self.queue_pool for every strategy even after the previous strategy's close() permanently stops its workers and shuts down its queues. Arroyo closes and recreates strategies during partition rebalances, so the next assignment receives a dead pool; submissions raise queue.ShutDown and the submit exception handler marks these unprocessed messages complete, allowing their offsets to be committed. Create a fresh pool and offset tracker for each strategy lifecycle rather than reusing the stopped factory-owned pool."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     231,
+     238
+    ],
+    "texto": "Graceful shutdown sets every worker's shutdown flag before its queue has drained. Workers exit at the next loop condition with accepted messages still queued, while strategy.close() has already stopped the commit thread and join() only calls close() again, so shutdown/revocation returns without finishing or committing accepted work and subsequent consumption replays it. Keep workers running until the gracefully shut-down queues are exhausted, wait for processing in join(), and commit the final completed offsets before returning."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     184,
+     185
+    ],
+    "texto": "Each worker queue is unbounded, and neither strategy.submit() nor poll() applies backpressure. When a worker is slow or incoming throughput exceeds processing throughput, consumption continues retaining decoded results, original Kafka messages, and offset-tracking entries without a limit, eventually exhausting consumer memory instead of leaving the backlog in Kafka. Bound pending work and reject submissions with Arroyo's backpressure mechanism when capacity is exhausted, without marking rejected messages complete."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     335,
+     338
+    ],
+    "texto": "The queue pool belongs to ResultsStrategyFactory and is constructed only once in its constructor, but closing a strategy shuts it down. When a partition reassignment closes the old strategy and calls create_with_partitions again on the same factory, create_thread_queue_parallel_worker passes this same stopped pool to the new strategy. Its workers have exited and its queues are shut down, so processing cannot resume (and submit's exception handler can mark rejected messages complete). Previously factory-owned parallel resources survived individual strategy closure until factory.shutdown. Keep the pool alive across strategy replacement, or create a fresh pool for each strategy and isolate its offset tracker."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/remote_subscriptions/consumers/result_consumer.py",
+    "lines": [
+     247,
+     255
+    ],
+    "texto": "The factory creates its queue_pool only once in __init__ and supplies it to every strategy, but SimpleQueueProcessingStrategy.close() and terminate() both call queue_pool.shutdown(). When a rebalance closes the old strategy and calls create_with_partitions again on this factory, the new strategy receives the already-shut-down queues and workers. Submissions then fail (and the submission exception handler marks those offsets complete), so the consumer can commit results it never processes. Give each replacement strategy a fresh pool, or align pool ownership so closing a strategy does not destroy a factory-owned reusable pool."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     144,
+     149
+    ],
+    "texto": "When result_processor raises, the exception is logged but the finally block still completes its offset. The commit thread can then commit past this failed message, permanently skipping it after restart. For example, offset 100 fails and 101 succeeds; both leave outstanding and 102 becomes the committed next offset. This violates the strategy's explicit guarantee that offsets are committed only after successful processing. Surface processing failure to the strategy and leave the failed offset outstanding until it is successfully retried or explicitly handled."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     335,
+     338
+    ],
+    "texto": "close() shuts down the pool owned by ResultsStrategyFactory, but create_thread_queue_parallel_worker() reuses that same pool for the next strategy. On a partition reassignment, closing the old strategy stops its workers and shuts its queues; the replacement strategy then submits to those shut queues. put() raises, and submit's broad exception handler marks the message complete anyway, allowing unprocessed messages to be committed. Give each strategy a fresh pool and tracker, or implement a lifecycle that drains and resets the shared pool before reuse; do not reuse a shut-down pool."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     86,
+     93
+    ],
+    "texto": "Kafka offsets can legitimately contain gaps (for example after compaction or transactional records). Iterating every integer and breaking when it is absent treats an undelivered offset as unfinished work. For received and completed offsets 100, 102, 103, this scan initially commits only 100 rather than 103; progress then depends on another commit-loop iteration and cleanup changing min_offset. Track ordering over received offsets instead: stop at the first outstanding received offset, not at a missing integer. The new gap tests encode the same invalid assumption and should cover legitimate broker gaps instead."
+   },
+   {
+    "id": "S9",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     148,
+     149
+    ],
+    "texto": "complete_offset runs in finally even when result_processor raises. Thus a transient processing failure becomes eligible for commit on the next commit-loop iteration, permanently skipping the failed result. This contradicts the successful-processing guarantee; the error-handling test only checks before the one-second commit timer typically fires. Mark completion only on success and propagate or otherwise retain failures for retry."
+   },
+   {
+    "id": "S10",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     335,
+     338
+    ],
+    "texto": "The pool is created once on ResultsStrategyFactory and passed to every new strategy, but strategy.close shuts that pool down. When a partition reassignment closes the old strategy and creates another from the same factory, the new strategy receives queues whose workers have exited (and whose queues are shut down). Results can no longer be processed. Give each strategy a fresh pool or preserve the factory-owned pool through strategy replacement with appropriate draining and offset-state isolation."
+   },
+   {
+    "id": "S11",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     254,
+     254
+    ],
+    "texto": "The claim that offsets are committed only after successful processing is false: OrderedQueueWorker catches processor exceptions and calls complete_offset in finally, so the commit loop treats failed items as completed too. submit also marks offsets complete after exceptions. This contract can lead callers to rely on retries that do not occur. Document the actual log-and-skip behavior rather than promising successful-only commits."
+   },
+   {
+    "id": "S12",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     253,
+     253
+    ],
+    "texto": "The strategy promises natural backpressure when queues fill, but FixedQueuePool constructs queue.Queue() without a capacity and submit unconditionally puts items into it. These queues never become full and no MessageRejected or other producer throttling occurs. Remove this guarantee or explicitly describe the unbounded buffering so operators do not rely on nonexistent memory protection."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+    "descricao": "Claims OffsetTracker.get_committable_offsets requires every integer offset to exist, so Kafka offset gaps permanently block commits for the partition and per-partition state is never cleared on rebalance.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       100,
+       105
+      ],
+      "texto": "Offsets are only tracked for messages that were submitted, and there is no partition revoke handling. Contiguity is checked with `range(start, max_offset+1)`, so any offset gap (compacted topics, transactional markers, or offsets filtered out upstream) permanently blocks commits for that partition. The `last_committed`, `all_offsets` and `outstanding` state is never cleared on rebalance, so stale state survives partition reassignment. Treat gaps as committable once all lower tracked offsets are complete, and clear per-partition state when partitions are revoked."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       86,
+       93
+      ],
+      "texto": "The commit scan assumes consecutive Kafka offsets and breaks at the first offset that is not in all_offsets. A permanent offset gap (compacted or transactional records) then blocks commits for that partition forever. Track the submitted offsets in sorted order and commit up to the highest offset below the lowest outstanding one, rather than requiring every integer in between to be present."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       86,
+       93
+      ],
+      "texto": "Determine the commit boundary from received offsets rather than requiring every integer in this range to exist. Kafka offsets need not be consecutive: if 100, 102 and 103 are delivered and completed, this scan stops at the nonexistent 101 even though there is no unfinished record. Conversely, after committing 100 and removing it, the next scan starts at 102 and commits past the gap, contradicting the added gap tests. Iterate received offsets in sorted order and stop at the first outstanding record; add a test covering legitimate skipped Kafka offsets across multiple commit cycles."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+    "descricao": "OrderedQueueWorker marks a work item's offset complete in a finally block even when processing raised, so failed messages are committed and dropped, contradicting the documented guarantee of committing only after successful processing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       144,
+       149
+      ],
+      "texto": "The worker marks the offset complete in the `finally` block even when `result_processor(...)` raises, so a message whose handling failed is reported as committable and its offset is committed (it will never be retried). This contradicts the strategy's own guarantee 'Only commits offsets after successful processing' and the new test `test_thread_queue_parallel_error_handling`, which asserts the partition is not committed after a failure. Only call `complete_offset` on the success path (or track failed offsets separately) so failures are not silently skipped."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       142,
+       149
+      ],
+      "texto": "The worker marks the offset complete in `finally` even when `result_processor` raised an exception, so a failed item's offset is reported as committable and gets committed by the commit loop. This contradicts the strategy's documented guarantee 'Only commits offsets after successful processing' and the contract asserted in test_results_consumer.py (test_thread_queue_parallel_error_handling, which expects the failed partition NOT to be committed): the failed message is committed past and never retried. Track success separately and only call `complete_offset` when processing succeeded (or make the failure explicit so the offset is withheld/retried)."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       144,
+       149
+      ],
+      "texto": "The failed item's offset is completed unconditionally in the `finally` block, so `complete_offset` runs even when `result_processor` raised. This breaks the class's documented guarantee ('Only commits offsets after successful processing', line 254): the commit loop then advances past a message that was never successfully processed, silently dropping it (and, per the PR's own test_thread_queue_parallel_error_handling, a commit is produced where none is expected). Only call `offset_tracker.complete_offset(...)` on the success path (i.e. after `result_processor` returns normally), or explicitly decide and document the at-most-once semantics; do not complete on the exception path."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#04",
+    "descricao": "test_thread_queue_parallel_error_handling's docstring says errors must not block commits for other messages, but the test asserts that nothing was committed, so it does not verify the behaviour it describes.",
+    "textoGolden": "The test test_thread_queue_parallel_error_handling has a docstring that doesn't match the test implementation.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1911,
+       1922
+      ],
+      "texto": "The commit assertion contradicts the test's own docstring and cannot fail for the reason it claims. The docstring says \"errors in processing don't block offset commits for other messages\", but the body asserts `len(committed_offsets) == 0 or test_partition not in committed_offsets` \u2014 i.e. it passes only when nothing is committed. In queue_consumer.py ordered worker's `finally` calls `complete_offset` even after result_processor raises (lines 148-149), so offset 100 should be committable and offset 101 should advance the commit; if the whole commit path were removed (commits blocked entirely) the test would still pass. Assert the positive behaviour instead: e.g. that the failing message's offset was still completed so commits progressed (expect `committed_offsets[test_partition] == 102`, matching the follow-on offset of the successfully processed message)."
+     },
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1874,
+       1924
+      ],
+      "texto": "test_thread_queue_parallel_error_handling claims errors don't block commits but asserts len(committed)==0 / not in, and waits only for total==0+sleep(0.2) while commit loop is 1.0s. It passes if commits are correctly made (checked before loop fires) and if commits are never made. Wait for commit condition and assert contiguous commit includes both offsets despite the exception."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#05",
+    "descricao": "The error-handling test asserts no commit happened after only a 0.2s sleep while the commit loop runs every second, so it passes without ever observing whether a failed offset gets committed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1915,
+       1922
+      ],
+      "texto": "The error-handling test can pass even when failed messages are committed. It waits for two processor calls, sleeps only 0.2 seconds, and asserts that no commit has happened, whereas _commit_loop waits 1 second. OrderedQueueWorker currently completes the failed offset in finally, so the unsafe commit can occur after this assertion. Synchronize with an actual commit-loop iteration before asserting that it cannot advance past the failed offset."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+    "descricao": "FixedQueuePool uses unbounded queues and the strategy never applies backpressure, so when workers fall behind the consumer keeps polling and queued work items grow memory without limit, contrary to the documented backpressure guarantee.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       184,
+       185
+      ],
+      "texto": "Each worker queue is created unbounded (queue.Queue() with no maxsize) although the class docstring promises 'Natural backpressure when queues fill up' and the strategy claims to guarantee backpressure. With no bound and no MessageRejected raised from submit(), a slow group continues to accumulate items in its queue while the consumer keeps polling, so memory grows without limit under a sustained backlog \u2014 the opposite of the intended protection. Fix: give the queues a maxsize and raise/return MessageRejected (or otherwise propagate backpressure to the caller) when a queue is full."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       246,
+       255
+      ],
+      "texto": "The `SimpleQueueProcessingStrategy` docstring promises \"Natural backpressure when queues fill up\", but the queues this strategy drives are unbounded: `FixedQueuePool` creates each one as `queue.Queue()` with no maxsize (line 185), and `submit()` puts items unconditionally. Nothing ever blocks, so no backpressure exists. Either bound the queues (pass a `maxsize` and handle `queue.Full` / block in `submit`) or correct the docstring so it does not advertise a guarantee the code does not provide."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       184,
+       185
+      ],
+      "texto": "The pool creates unbounded queues, while strategy submit always accepts messages and poll never applies backpressure. When a queue's worker is slow or ingestion exceeds processing capacity, queued WorkItems retain both decoded results and original Kafka messages without any limit, causing growing memory consumption and eventual consumer OOM. Bound queued/in-flight work and raise Arroyo MessageRejected when capacity is reached, ensuring that rejection is not swallowed by the generic submit exception handler."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+    "descricao": "Graceful shutdown sets each worker's shutdown flag before draining, so workers stop with items still queued, and close() stops the commit thread first, so finished work is not committed and gets replayed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       231,
+       243
+      ],
+      "texto": "WHAT: FixedQueuePool.shutdown sets worker.shutdown=True while OrderedQueueWorker.run loops on while not self.shutdown, so workers exit without draining queued WorkItems even though queues are shut down with immediate=False. WHY: Graceful shutdown silently drops queued items and leaves their offsets in outstanding forever, causing reprocessing/duplicates and failing the claimed graceful-shutdown guarantee. HOW: Remove the shutdown-flag short-circuit and let workers drain until queue.ShutDown, e.g. loop unconditionally and break only on ShutDown."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       345
+      ],
+      "texto": "close() stops the commit thread and shuts down workers before draining accepted work, and join() only repeats close() instead of waiting for processing and making a final commit. Pool shutdown sets worker.shutdown before workers can drain their queues, so assignment revocation abandons queued results and completed in-flight work is not finally committed, causing replay and allowing unfinished old work to overlap a new owner. Make close() stop acceptance without blocking, then have join() drain accepted work within its timeout and commit completed offsets before releasing workers."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       233,
+       238
+      ],
+      "texto": "Do not set worker.shutdown before draining the queues during graceful shutdown. If a worker is processing A while B is queued, shutdown sets the flag; after A finishes, the worker exits at `while not self.shutdown` without ever retrieving B. Calling queue.shutdown(immediate=False) does not override that loop condition. Drain accepted work before stopping workers, and keep committing available until that drain completes; currently close stops the commit thread before the workers as well, so even work finished during shutdown is not finally committed."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+    "descricao": "The strategy's close() shuts down the factory-owned shared queue pool, so after a partition rebalance the next strategy reuses a dead pool; submissions fail and the error handler marks their offsets complete, committing messages that were never processed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       338
+      ],
+      "texto": "SimpleQueueProcessingStrategy.close() shuts down the FixedQueuePool, but that pool is a singleton owned by the factory (created once in ResultsStrategyFactory.__init__ and never recreated). Arroyo calls strategy.close() then join() on every assignment revocation/rebalance, and the factory's create_with_partitions is called again for the next assignment; the new strategy then reuses the already-shut-down queue_pool. Because q.shutdown(immediate=False) makes subsequent put() raise queue.ShutDown, submit()'s except branch (lines 317-325) swallows it and marks the offset complete, so after any rebalance every message is committed as processed without ever being handled \u2014 silent data loss. Fix: either let the factory own the pool lifecycle (don't shut it down from the strategy's close) and create a fresh pool per create_with_partitions, or reset/recreate factory.queue_pool when the strategy is closed."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       342
+      ],
+      "texto": "WHAT: SimpleQueueProcessingStrategy.close/terminate shuts down the factory-owned shared FixedQueuePool. WHY: ResultsStrategyFactory creates one queue_pool and hands it to every strategy from create_with_partitions, so Arroyo rebalance (close old strategy, create new one reusing factory.queue_pool) reuses a dead pool with joined workers and shut-down queues, stalling all further processing. HOW: Make pool lifecycle owned only by the factory: strategy close should only stop its commit thread, not call queue_pool.shutdown()."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       345
+      ],
+      "texto": "SimpleQueueProcessingStrategy.close(), terminate() and join() shut down the FixedQueuePool, but that pool is created once by ResultsStrategyFactory and shared by every strategy it creates. After a rebalance, Arroyo closes the old strategy and then calls create_with_partitions again, which reuses the dead pool. Messages then fail to enqueue, and the submit() exception handler marks them complete, so their offsets get committed without the messages being processed. The strategy should only stop its own commit thread. The pool should be shut down only by factory.shutdown(), or the pool should be created per strategy."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#12",
+    "descricao": "The strategy invokes Arroyo's commit callback from a background thread rather than from submit/poll on the consumer thread, so commits can race with polling and partition revocation on a non-thread-safe consumer.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       273,
+       291
+      ],
+      "texto": "`commit_function` is called from the background commit thread, but arroyo's commit callback is expected to be called from the main consumer thread, and the Kafka consumer is not thread-safe. Committing from another thread risks races with polling and with rebalances."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#15",
+    "descricao": "The WorkItem docstring says the original message is kept for offset tracking, but offset tracking only uses partition and offset and the message field is never used.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       24,
+       31
+      ],
+      "texto": "The `WorkItem` docstring says it \"includes the original message for offset tracking\", but the `message` field is never used for offset tracking \u2014 `OffsetTracker` and the commit loop only ever read `partition`/`offset`, and `submit()` even re-derives the offset from `message.value` rather than from the stored `message`. Update the docstring to describe what the field is actually for (or remove the unused field) so it does not misdescribe the dataclass contract."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       24,
+       31
+      ],
+      "texto": "`WorkItem.message` is declared with the comment 'includes the original message for offset tracking' and is populated in `SimpleQueueProcessingStrategy.submit`, but nothing ever reads it \u2014 offset tracking uses the separate `partition`/`offset` fields. The declared purpose does not match any actual use, so the field (and the extra reference to each Kafka message it keeps alive) is dead; either use it for offset tracking or remove it."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#16",
+    "descricao": "The tests named for concurrent processing across groups only check that all items were processed and all groups seen, so a fully serial implementation would pass and concurrency is never verified.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+      "lines": [
+       137,
+       173
+      ],
+      "texto": "Test named/docstringed \"Test that different groups are processed concurrently\" never verifies concurrency. The body only asserts all 6 items ran and that three distinct group numbers were seen \u2014 a single worker draining one queue, or a fully serial FixedQueuePool, would satisfy both assertions. Either measure actual overlap (e.g. have result_processor block on a barrier/event until all three groups have entered, and fail on timeout) or drop the concurrency claim from the name/docstring."
+     },
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1780,
+       1822
+      ],
+      "texto": "test_thread_queue_parallel_concurrent_subscriptions claims to verify that different subscriptions are processed concurrently, but the only assertion is `mock_processor_call.call_count == 2`, which a strictly serial implementation also satisfies. Add a real concurrency signal (e.g. a barrier in the mocked processor that requires both calls to be in flight simultaneously before either returns), otherwise this test cannot detect loss of parallelism."
+     },
+     {
+      "file": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+      "lines": [
+       137,
+       173
+      ],
+      "texto": "test_concurrent_processing_across_groups claims concurrent processing but only asserts 6 items processed and 3 groups seen. A serial/single-queue implementation would still pass. Verify overlap (blocking processor + timing/thread IDs) or remove concurrency claim."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#17",
+    "descricao": "The strategy ordering test submits identical messages and only checks the count processed, so it cannot detect out-of-order processing within a group.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+      "lines": [
+       302,
+       312
+      ],
+      "texto": "The strategy ordering test submits five identical decoded results for sub1 and only asserts their count. Processing them in reverse order would still pass. Give each message a distinguishable sequence value and assert the exact processed sequence, so this tests ordering through SimpleQueueProcessingStrategy rather than only delivery."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#18",
+    "descricao": "The graceful-shutdown test only asserts that the factory cleared its queue_pool reference, which shutdown always does, so it does not verify that pending work is drained or workers stop.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       2004,
+       2005
+      ],
+      "texto": "This does not verify graceful shutdown: factory.shutdown unconditionally clears queue_pool after calling pool.shutdown, so the assertion passes even if pending messages are abandoned or worker threads remain alive. Retain the pool reference and assert that all submitted work completed and its workers stopped; the current worker shutdown flag can stop workers without draining their queues."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#20",
+    "descricao": "The polling bound max_wait = 50 is repeated as a magic number across the thread-queue-parallel tests instead of a named constant.",
+    "textoGolden": "The magic number 50 for max_wait is used repeatedly throughout the tests. Consider extracting this as a named constant to improve maintainability.",
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-2fa-backup-codes-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "54486a059cd2032042189bb565646ba4e0f6bd61",
+  "base": "efa6d464a38e60ceeeb88f40668c1c4ac4bfaf54",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     131,
+     131
+    ],
+    "texto": "The new backup-code branch accepts a valid backupCode even when an arbitrary nonempty totpCode has skipped password verification at lines 121\u2013129. An attacker with a backup code can submit both fields and authenticate without knowing the account password, because this branch never validates the supplied TOTP. Ensure backup-code authentication verifies the password regardless of whether totpCode was also supplied."
+   },
+   {
+    "id": "S2",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     148,
+     156
+    ],
+    "texto": "Backup-code consumption overwrites the encrypted array using only the user id after validating a previously read snapshot. Concurrent requests can redeem the same code twice, and requests redeeming different codes can overwrite each other's removals and restore a consumed code. Use an atomic conditional update matching the original backupCodes value and reject or retry when no row is updated, or serialize redemption in a transaction with a row lock."
+   },
+   {
+    "id": "S3",
+    "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+    "lines": [
+     134,
+     136
+    ],
+    "texto": "Successful enablement now changes only the modal step instead of notifying the parent that 2FA is enabled. Dismissing the backup-code screen through the dialog's onOpenChange path leaves viewer.me uninvalidated, so the settings switch still shows disabled and opens the enable flow rather than allowing disablement until a refresh. Invalidate the user's 2FA state when the enable request succeeds, independently of closing the backup-code display."
+   },
+   {
+    "id": "S4",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     143,
+     145
+    ],
+    "texto": "The new authentication path checks a secret backup code with Array.indexOf. This performs ordinary string equality and stops at the first match, rather than providing constant-time secret comparison. Use fixed-length buffers with timingSafeEqual (reject invalid input lengths first), compare against every valid code without early exit, and retain the matching index for consumption. Apply the same correction to the backup-code check in the disable endpoint."
+   },
+   {
+    "id": "S5",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     147,
+     156
+    ],
+    "texto": "Backup-code verification and consumption are not atomic. Two requests can read the same stored list, both find the same code, and both successfully authenticate after writing the same updated list. Requests using different codes can also overwrite each other's removals, restoring one consumed code. This violates the stated guarantee that each backup code can be used exactly once. Consume with an atomic compare-and-swap against the original encrypted backupCodes value (and reject or retry if no row was updated), or use a transaction with appropriate locking."
+   },
+   {
+    "id": "S6",
+    "file": "apps/web/playwright/login.2fa.e2e.ts",
+    "lines": [
+     119,
+     122
+    ],
+    "texto": "The success toast is emitted independently of the clipboard write in EnableTwoFactorModal. Removing the write entirely, or copying incorrect codes, would leave this test passing. Read the clipboard after clicking and compare its contents with the displayed backup codes so the test verifies the copy operation rather than just its notification."
+   },
+   {
+    "id": "S7",
+    "file": "apps/web/playwright/login.2fa.e2e.ts",
+    "lines": [
+     112,
+     117
+    ],
+    "texto": "The download assertion verifies only the filename, which is fixed by the anchor's download attribute regardless of the blob contents. Generating an empty file or exporting incorrect backup codes would still pass. Inspect the downloaded file and compare its contents with the displayed codes to verify that the recovery material is actually exported."
+   },
+   {
+    "id": "S8",
+    "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+    "lines": [
+     276,
+     279
+    ],
+    "texto": "The handler displays \u201cBackup codes copied!\u201d immediately, even if clipboard access is denied or writeText rejects. This can tell a user that their recovery codes are saved when nothing was copied. Await the clipboard write and show the success toast only after it resolves; handle failure without claiming success."
+   },
+   {
+    "id": "S9",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     147,
+     156
+    ],
+    "texto": "Two simultaneous requests can read the same backupCodes snapshot, both find the submitted code, and both successfully perform this unconditional update and authenticate. Requests consuming different codes can also overwrite each other's changes and restore a consumed code. Consume the code atomically, for example by conditionally updating against the original encrypted backupCodes value and rejecting or retrying when no row matches."
+   },
+   {
+    "id": "S10",
+    "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+    "lines": [
+     134,
+     135
+    ],
+    "texto": "The successful enable response now only changes the step; onEnable is called exclusively by the backup-code Close button. The Dialog still passes dismissals directly to onOpenChange, so Escape or an outside dismissal after enabling bypasses onEnable even though server-side 2FA is already enabled. Ensure every exit from the post-success backup-code screen notifies the parent (or prevent dismissal until that explicit completion path)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#01",
+    "descricao": "The credentials authorize() skips the password check when any totpCode is present, and the new backup-code branch never validates that totpCode, so a backup code plus a dummy totpCode logs in without the account password.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       131,
+       156
+      ],
+      "texto": "The new backup-code branch authenticates without guaranteeing the password check ran: password verification at line 121 is gated on `!credentials.totpCode`, and the branch at line 131 triggers on any truthy `credentials.backupCode` regardless of that gate. A POST to the credentials callback supplying a valid backup code together with any non-empty totpCode therefore takes the backup branch (skipping TOTP validation) while line 121 skips password verification \u2014 granting a session using only a second-factor backup code, with no account password. Require the password check before the backup branch, or include backupCode in the guard at line 121 (e.g. `if (user.password && !credentials.totpCode && !credentials.backupCode)`)."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       131,
+       145
+      ],
+      "texto": "The backup-code branch accepts a valid backup code even when an arbitrary nonempty totpCode has skipped password verification. The preceding guards at lines 113\u2013125 trust the presence of totpCode, but this new branch does not validate it, allowing a holder of a backup code to log in to a password account without knowing its password by submitting both fields. Require password verification for backup-code authentication rather than allowing an unverified totpCode to bypass it."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       131,
+       145
+      ],
+      "texto": "WHAT: The new backup-code login branch authenticates without verifying the password when credentials also contain any totpCode value (password check at line 121 is skipped when totpCode is truthy, and the backup branch never checks it). WHY: An attacker holding only a backup code can add a dummy totpCode to the credentials callback and log in without the password, reducing two factors to one. HOW: Verify the password whenever backupCode is used (or decouple the password check from totpCode presence)."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#02",
+    "descricao": "After enabling 2FA, onEnable is only called from the backup-codes Close button; dismissing the dialog by Escape/overlay never notifies the parent, so the settings page keeps showing 2FA disabled.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       134,
+       136
+      ],
+      "texto": "On a successful enable (response.status === 200) the modal no longer calls onEnable(); it only advances to SetupStep.DisplayBackupCodes, and onEnable() is now invoked solely from the 'close' button (line 269). If the user dismisses the Dialog via ESC or an overlay click, DialogContent's onOpenChange fires (wired to a plain setEnableModalOpen toggle at apps/web/pages/settings/security/two-factor-auth.tsx:64 and the conditional render at apps/web/components/security/TwoFactorAuthSection.tsx:36), so onEnable never runs. The parent callbacks (setEnableModalOpen(false) + utils.viewer.me.invalidate() / setEnabled(true)) are skipped, leaving the 2FA Switch unchecked and the UI showing 2FA as disabled even though the server has enabled it. Call onEnable() from the dismiss path (onOpenChange) or when transitioning into DisplayBackupCodes, not only from the Close button."
+     },
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       134,
+       136
+      ],
+      "texto": "Successful enablement no longer invokes onEnable until the backup-code screen's explicit Close button is clicked. Dismissing that screen through the dialog's onOpenChange instead only closes it in the parent and does not invalidate viewer.me, leaving the settings switch showing disabled even though the server has enabled 2FA. Ensure dismissal after successful enablement also invokes the completion callback and resets the setup state."
+     },
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       132,
+       136
+      ],
+      "texto": "After a successful enable, `onEnable()` is no longer called and is only called from the backup-codes Close button. If the user dismisses the dialog by Escape or overlay click (`onOpenChange`) while the codes are displayed, the parent is never notified that 2FA is enabled. The modal also keeps its step state and the plaintext backup codes. Call `onEnable` when 2FA is enabled, or make the dialog's `onOpenChange(false)` on the DisplayBackupCodes step run the same handler as Close, which resets state and clears `backupCodes`."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#04",
+    "descricao": "The default export in BackupCode.tsx is named TwoFactor, a copy-paste leftover from the TOTP component.",
+    "textoGolden": "The exported function TwoFactor handles backup codes and is in BackupCode.tsx. Inconsistent naming.",
+    "comentarios": [
+     {
+      "file": "apps/web/components/auth/BackupCode.tsx",
+      "lines": [
+       7,
+       7
+      ],
+      "texto": "The default export is named `TwoFactor` but this file (BackupCode.tsx) renders the backup-code field and is imported as `BackupCode` by callers. The copied identifier misstates what the component is; rename the function to `BackupCode` so the name matches the file, the imports and the rendered content."
+     },
+     {
+      "file": "apps/web/components/auth/BackupCode.tsx",
+      "lines": [
+       7,
+       7
+      ],
+      "texto": "The default export in BackupCode.tsx is named `TwoFactor`, which is the name of the separate TOTP component. It is a copy-paste leftover and misleads readers and stack traces. Rename it to `BackupCode`."
+     },
+     {
+      "file": "apps/web/components/auth/BackupCode.tsx",
+      "lines": [
+       7,
+       7
+      ],
+      "texto": "Component in BackupCode.tsx is named `TwoFactor` (`export default function TwoFactor`) while the file is BackupCode.tsx and it is imported as `BackupCode`. The name disagrees with the code's contract and duplicates the real TwoFactor component, misleading callers/readers. Rename to `BackupCode`."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#05",
+    "descricao": "The backup-code copy e2e test only waits for the success toast, which is shown unconditionally, so it never verifies the clipboard content.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       119,
+       122
+      ],
+      "texto": "This 'copy' test does not verify the copy behaviour it names: it clicks backup-codes-copy and then only waits for the toast-success element. The handler (EnableTwoFactorModal) runs navigator.clipboard.writeText(...) without awaiting it and then calls showToast(...) unconditionally, so the toast appears even when the clipboard write is removed or fails. The assertion therefore passes with the backup-code copy feature broken; assert the actual effect (clipboard content, or that the formatted codes reached writeText) instead of the toast."
+     },
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       119,
+       122
+      ],
+      "texto": "The copy test only waits for a success toast, but the implementation emits that toast unconditionally without awaiting navigator.clipboard.writeText. Removing the clipboard write entirely, copying an empty string, or rejecting the write would still pass this test. Read the clipboard after the click and compare its contents with the displayed backup codes so the test verifies the actual copy effect."
+     },
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       119,
+       122
+      ],
+      "texto": "Copy test only waits for toast-success, explicitly TODOing clipboard check. Broken writeText (wrong format/empty) still passes; assert clipboard content equals formatted backup codes."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#07",
+    "descricao": "Backup-code consumption is a non-atomic read-modify-write, so concurrent logins can accept the same backup code more than once or overwrite each other's removal.",
+    "textoGolden": "Because backupCodes are decrypted and mutated in memory before being written back, two concurrent login requests using the same backupCode could both pass this check and update, so a single backup code may effectively be accepted more than once if used concurrently, weakening the intended one-time-use semantics.",
+    "comentarios": [
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       144,
+       156
+      ],
+      "texto": "Backup-code consumption is a non-atomic read-modify-write: the code is validated with indexOf (line 144) and only then persisted via prisma.user.update (line 149), with no unique constraint or lock. Two concurrent login requests sending the same valid backup code both read the unchanged row, both pass the indexOf check, and both obtain a session, violating the 'each backup code can be used exactly once' invariant. Consume the code atomically (e.g. a conditional update on the raw encrypted value / a dedicated used-backup-codes table with a unique index) so only one request can succeed."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       144,
+       156
+      ],
+      "texto": "Backup-code consumption is a non-atomic read-modify-write, breaking the stated invariant that each backup code is single-use. Two concurrent login requests with the same backup code both read the same user.backupCodes array and both pass `index !== -1` before either `prisma.user.update` commits; both then persist a stale array (each nulling only its own index), so the code authenticates twice. Make consumption atomic (e.g. compare-and-swap on the encrypted value/updatedAt, a transaction with a conditional update, or an optimistic-locking retry) so exactly one request can claim a given code."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       148,
+       156
+      ],
+      "texto": "Backup-code consumption overwrites the encrypted list by user ID without checking that the stored list still matches the value read before verification. Concurrent requests can both authenticate with the same single-use code, and requests using different codes can overwrite each other's removals and restore a consumed code. Use a conditional atomic update matching the original backupCodes ciphertext and reject or retry authentication if no row was updated."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#12",
+    "descricao": "The copy button shows a success toast without awaiting clipboard.writeText, so a failed copy still tells the user their backup codes were saved.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       276,
+       279
+      ],
+      "texto": "The handler shows \u201cBackup codes copied!\u201d immediately after calling `navigator.clipboard.writeText`, without awaiting its promise. If clipboard access is denied or the write otherwise rejects, the user still receives a success message and may close the dialog believing their recovery codes were saved. Await the clipboard write and show the success toast only after it resolves; handle rejection with an appropriate translated failure message."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#13",
+    "descricao": "The download e2e test checks only the filename, not that the file contains the displayed backup codes.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       113,
+       117
+      ],
+      "texto": "The download assertion checks only the static filename from the anchor's download attribute. It still passes if the blob contains empty or incorrect backup codes, leaving the essential recovery-code export behavior unverified. Read the downloaded file and compare its contents to the displayed codes, including their formatting."
+     },
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       112,
+       117
+      ],
+      "texto": "Download test only asserts suggestedFilename, explicitly TODOing file-content check. Empty/wrong backupCodes blob with correct filename still passes; assert downloaded file lines equal displayed/formatted backup codes."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#14",
+    "descricao": "The disable endpoint's error log says 'backup code login' although it is disabling 2FA.",
+    "textoGolden": "Error message mentions 'backup code login' but this is a disable endpoint, not login",
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+      "lines": [
+       50,
+       50
+      ],
+      "texto": "The error log says \"cannot proceed with backup code login\", but this endpoint disables two-factor authentication and does not log in. Change the message to describe disabling 2FA with a backup code."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#15",
+    "descricao": "resetState does not clear backup codes/secret or revoke the backup-codes object URL, leaving a small blob URL leaked per setup cycle.",
+    "textoGolden": "Object URL for backup codes is not revoked on component unmount, leading to a potential memory leak. This can cause increased memory usage over time, especially if the component is mounted and unmounted frequently.",
+    "comentarios": [
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       71,
+       75
+      ],
+      "texto": "WHAT: resetState() clears only password/error/step and never clears backupCodes, secret, dataUri, nor revokes backupCodesUrl. WHY: Closing the modal after setup leaves TOTP secret and backup codes in memory and leaks the Blob object URL on every setup/close cycle. HOW: Clear those states and call URL.revokeObjectURL in resetState and on unmount."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#16",
+    "descricao": "The disable endpoint calls replaceAll on req.body.backupCode without checking it is a string, so non-string input throws a 500.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+      "lines": [
+       60,
+       64
+      ],
+      "texto": "WHAT: req.body.backupCode.replaceAll assumes a string with no type guard. WHY: A non-string JSON value (number/array) throws TypeError and returns 500 instead of the 400 IncorrectBackupCode contract, breaking error handling and enabling error-probing. HOW: Validate typeof backupCode === 'string' (or String(...)) before replaceAll."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#17",
+    "descricao": "Backup codes are matched case-sensitively against lowercase hex, so a user typing the code in uppercase is rejected.",
+    "textoGolden": "Backup code validation is case-sensitive due to the use of indexOf(). This causes validation to fail if a user enters uppercase hex characters, as backup codes should be case-insensitive for a better user experience.",
+    "comentarios": []
+   }
+  ]
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "ffbaf8c54269df2ce510de91245760fddce09896",
+  "base": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     149,
+     150
+    ],
+    "texto": "The second definition of downsize replaces the width/height definition rather than overloading it. Jobs::ResizeEmoji.execute still calls OptimizedImage.downsize(path, path, 100, 100, opts), which now raises ArgumentError because the surviving method accepts at most four arguments, preventing emoji resizing. Use one method that supports both argument forms or give the geometry-based helper a distinct name."
+   },
+   {
+    "id": "S2",
+    "file": "app/controllers/uploads_controller.rb",
+    "lines": [
+     67,
+     67
+    ],
+    "texto": "The new downsizing call passes only tempfile.path to animation detection, which checks whether that path ends in .GIF rather than checking filename. An oversized multipart GIF whose temporary path lacks that suffix takes downsize_instructions, whose input is explicitly restricted to frame zero, permanently discarding animation even when animated thumbnails are enabled. Preserve the image extension on the conversion input or pass explicit format information to animation selection."
+   },
+   {
+    "id": "S3",
+    "file": "app/controllers/uploads_controller.rb",
+    "lines": [
+     67,
+     67
+    ],
+    "texto": "The initial downsizing uses allow_animated_thumbnails even for avatar uploads. When allow_animated_avatars is enabled but allow_animated_thumbnails is disabled, an oversized GIF avatar is flattened before Upload.create_for reaches its avatar-specific conversion, so that later step cannot preserve its animation. Select allow_animated_avatars when type is avatar, matching Upload.create_for."
+   },
+   {
+    "id": "S4",
+    "file": "app/assets/javascripts/discourse/lib/utilities.js",
+    "lines": [
+     182,
+     182
+    ],
+    "texto": "The fixed 10 MB limit replaces the configured attachment limit as well as the image limit in validateUploadedFile. Sites allowing attachments larger than 10 MB now have those otherwise permitted uploads rejected in the browser, although attachments cannot benefit from image downsizing. Apply the fixed input cap only to images and retain max_attachment_size_kb for attachments."
+   },
+   {
+    "id": "S5",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     149,
+     150
+    ],
+    "texto": "Ruby does not overload methods by argument count: this definition replaces the downsize method immediately above it. The existing ResizeEmoji caller in app/jobs/regular/resize_emoji.rb:14 still invokes OptimizedImage.downsize(path, path, 100, 100, opts), which now raises ArgumentError (five arguments supplied to a method accepting three to four), preventing emoji resizing. Preserve the width/height API and give the geometry variant a distinct name, updating the new controller call accordingly."
+   },
+   {
+    "id": "S6",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     149,
+     150
+    ],
+    "texto": "Ruby does not overload methods by argument count: this second definition replaces the preceding downsize method. The existing ResizeEmoji caller at app/jobs/regular/resize_emoji.rb:14 invokes OptimizedImage.downsize(path, path, 100, 100, opts), which now raises ArgumentError because the surviving method accepts only three or four arguments. Preserve the existing width/height API and give the geometry-string variant a separate name (updating the new controller caller accordingly), or implement explicit argument dispatch in a single method."
+   },
+   {
+    "id": "S7",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     149,
+     150
+    ],
+    "texto": "Ruby does not overload methods by arity: this definition replaces the width/height definition immediately above it. app/jobs/regular/resize_emoji.rb:14 still calls `OptimizedImage.downsize(path, path, 100, 100, opts)`, so emoji resizing now raises ArgumentError instead of resizing the file. Preserve the old width/height entry point and give the geometry-string variant a distinct name (updating the upload controller accordingly), or explicitly dispatch both calling conventions in one method."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#01",
+    "descricao": "downsize is defined twice in OptimizedImage; the new (from, to, dimensions, opts) version overrides the (max_width, max_height) one, so existing callers such as ResizeEmoji that pass width and height now raise ArgumentError.",
+    "textoGolden": "The downsize method is defined twice. The second definition, which expects a single dimensions string parameter, overrides the first, which expected separate max_width and max_height parameters. This makes the original method unreachable and breaks existing code that calls it with separate width and height arguments.",
+    "comentarios": [
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       149,
+       151
+      ],
+      "texto": "WHAT: A second `def self.downsize(from, to, dimensions, opts={})` is defined that overrides the existing `downsize(from, to, max_width, max_height, opts={})` at lines 145-147. WHY: Ruby uses the last definition, so the effective downsize now only accepts 3-4 args, and the existing caller app/jobs/regular/resize_emoji.rb:14 (`OptimizedImage.downsize(path, path, 100, 100, opts)`) passes 5 args and raises ArgumentError (wrong number of arguments, given 5, expected 3..4), breaking emoji resizing. HOW: Remove the duplicate; keep a single downsize method whose signature matches all callers (the 4-arg uploads_controller call `downsize(path, path, \"80%\", allow_animation: ...)` and the 5-arg ResizeEmoji call), or rename one of them."
+     },
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       145,
+       151
+      ],
+      "texto": "`downsize` is defined twice: the original 5-param form `downsize(from, to, max_width, max_height, opts)` at lines 145-147 and the new 4-param form `downsize(from, to, dimensions, opts)` at lines 149-151. Ruby keeps only the last definition, so the effective signature is now 4 params and the 5-param version is dead code. The pre-existing consumer app/jobs/regular/resize_emoji.rb:14 still calls `OptimizedImage.downsize(path, path, 100, 100, opts)` with 5 positional args, which now raises ArgumentError on every emoji resize. Either update that caller to the new `dimensions` form or remove the redundant override so the old signature keeps working."
+     },
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       145,
+       151
+      ],
+      "texto": "`self.downsize` is defined twice in the same class scope (line 145 `(from, to, max_width, max_height, opts={})` and the new line 149 `(from, to, dimensions, opts={})`). Ruby keeps only the last definition, so the 4-argument version is dead and unreachable. The existing caller `OptimizedImage.downsize(path, path, 100, 100, opts)` in app/jobs/regular/resize_emoji.rb:14 passes 5 arguments and will now raise ArgumentError (expected 3..4). Remove the duplicate definition (keep only the `dimensions`-based one, or convert resize_emoji's call), otherwise emoji resizing breaks."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#02",
+    "descricao": "The client-side upload size check hardcodes 10 MB instead of the per-type max_<type>_size_kb setting, so attachment limits diverge from the server: larger allowed attachments are blocked and smaller limits are only enforced server-side.",
+    "textoGolden": "Hardcoding maxSizeKB = 10 * 1024 ignores Discourse.SiteSettings['max_' + type + '_size_kb'], so the client-side limit can diverge from server-side and per-type settings (also applies to the 413 handler below).",
+    "comentarios": [
+     {
+      "file": "utilities.js",
+      "lines": [
+       179,
+       249
+      ],
+      "texto": "Hardcoded max size literal 10 * 1024 replaces site-setting-derived max size. Behavioral concern outside assigned class."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "The fixed 10 MB client limit is applied to attachments as well as images, replacing max_attachment_size_kb. Sites configured to allow attachments larger than 10 MB can no longer upload those valid files through the composer, although UploadValidator still permits them. Apply the new input ceiling only to images and retain the configured attachment limit."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       180,
+       184
+      ],
+      "texto": "WHAT: Client check hardcodes maxSizeKB to 10*1024 instead of Discourse.SiteSettings['max_'+type+'_size_kb'], losing image vs attachment distinction. WHY: Sites with smaller max_attachment_size_kb pass client validation then fail server-side, and sites with limits >10MB incorrectly block valid uploads with wrong max_size_kb message. HOW: Restore per-type SiteSetting lookup (keep 10MB only as image downsize ceiling)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#03",
+    "descricao": "The upload downsizing passes a percentage ('80%') as dimensions, but for animated GIFs the gifsicle path uses --resize-fit, which expects WxH geometry, so downsizing silently fails.",
+    "textoGolden": "Passing 80% as the dimensions can fail for animated GIFs when allow_animated_thumbnails is true, since the animated path uses gifsicle --resize-fit which expects WxH geometry, not a percentage; downsizing would then silently fail.",
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "The controller passes the percentage string `\"80%\"` as the dimensions argument to `OptimizedImage.downsize`, but the consumer requires explicit `WxH` geometry: the code this PR deleted built exactly `\"#{width}x#{height}\"`, and the animated path runs `gifsicle --resize-fit #{dimensions}`, which rejects a percentage. Pass an explicit size (e.g. a computed `\"WxH\"` from the max KB target) so the auto-downsize actually reduces the file, rather than silently no-oping and leaving oversized uploads."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       70
+      ],
+      "texto": "Caller passes \"80%\" as dimensions to OptimizedImage.downsize, but the downsize/optimize instruction builders in optimized_image.rb expect explicit \"WxH\" geometry (interpolated as -resize #{dimensions}\\>). A bare percentage does not satisfy that contract and will produce a malformed geometry. Fix the caller to supply WxH dimensions or add explicit percentage handling to the callee."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#04",
+    "descricao": "Auto-downsizing passes the upload tempfile path, which lacks a .gif extension, so the animated branch is never chosen and convert keeps only the first frame, flattening oversized animated GIFs.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       64,
+       70
+      ],
+      "texto": "WHAT: The new auto-downsize call passes a tempfile path whose name has no `.GIF` extension, so `optimize` never selects the animated branch (`method_name += \"_animated\" if opts[:allow_animation] && from =~ /\\.GIF$/i`) and uses `downsize_instructions`, which runs `convert from[0]` and keeps only the first frame. WHY: Animated GIFs larger than max_image_size_kb that are uploaded through this path have their animation flattened to a single frame even though SiteSetting.allow_animated_thumbnails is enabled. HOW: Detect the image type from the original filename/content-type rather than the tempfile path (or pass a flag) so the gifsicle animated downsize path is used for GIF inputs."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "Passing the multipart tempfile path to downsize prevents animation detection when that path does not end in .gif, even when allow_animated_thumbnails is enabled. OptimizedImage.optimize checks the path suffix and otherwise uses convert with input[0], so oversized animated GIF uploads are permanently flattened to their first frame. Preserve the original image extension in the processing path or pass the image format explicitly to select animated processing."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#05",
+    "descricao": "The comment promises images are reduced to the allowed size, but the loop only tries five 80% reductions with no guarantee of reaching the limit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       70
+      ],
+      "texto": "The comment says large images are \"automatically reduced to allowed size\", but the loop only resizes by 80% up to 5 attempts (\u22480.33\u00d7 of the original in the best case) and then stops without any check that the result actually meets `max_image_size_kb`. The prose promises a guarantee the code does not provide; either make the loop actually converge to the allowed size or reword the comment to state that the image is only attempted to be reduced."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#06",
+    "descricao": "The downsize retry loop ignores the false return of a failed conversion and repeats the same failing ImageMagick call up to five times.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       66,
+       68
+      ],
+      "texto": "The retry loop ignores downsize's false return value and retries failed conversions while the file remains oversized. convert_with returns false on converter failure, so an unsupported or malformed oversized image launches the same failing external conversion up to five times per upload without any changed input. Break on a failed downsize result and return an upload error rather than repeating the conversion."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       64,
+       69
+      ],
+      "texto": "WHAT: Downsize loop ignores OptimizedImage.downsize return value and retries up to 5 times unconditionally while checking tempfile.size. WHY: Failed converts (e.g. SVG, invalid 80%> geometry, corrupt image) burn 5 ImageMagick runs then Upload.create_for still runs with oversized/unmodified file and fails validation, wasting CPU and breaking the feature. HOW: Break on false return and handle failure."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#08",
+    "descricao": "Claims up to five synchronous ImageMagick runs per oversized upload block request threads and enable DoS.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       69
+      ],
+      "texto": "WHAT: Up to 5 synchronous OptimizedImage.downsize + ImageOptim convert runs execute inline in create_upload request cycle for every oversized image. WHY: Blocks the Rails request thread with CPU-intensive shell-outs per upload, enabling easy request-thread exhaustion/DoS with large images. HOW: Move downsizing to background job or enforce single-pass/timeout."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#09",
+    "descricao": "Claims the downsize loop checking tempfile.size may never terminate because of a stale cached size, causing infinite loops.",
+    "textoGolden": "The loop checking `tempfile.size` may never terminate correctly due to stale cached size, leading to potential infinite loops or incorrect file handling after modifications.",
+    "comentarios": []
+   }
+  ]
+ },
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "6669a2d94d76eea3b99b8c476d12b1eb66726b07",
+  "base": "56abd247e1829cb6de82dfcc8ce04deb5f0d1e91",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "config/routes.rb",
+    "lines": [
+     440,
+     441
+    ],
+    "texto": "The new GET route changes the logged-in user's notification settings without a CSRF-protected submission. An attacker can navigate a victim to a known topic's unsubscribe URL and downgrade or mute that victim's notifications; ensure_logged_in and TopicView visibility checks do not establish consent. Make GET display the confirmation page and perform the change through a CSRF-protected POST or PUT."
+   },
+   {
+    "id": "S2",
+    "file": "app/controllers/topics_controller.rb",
+    "lines": [
+     105,
+     107
+    ],
+    "texto": "TopicUser.find_by can return nil, but unsubscribe immediately dereferences notification_level. A logged-in user opening a forwarded unsubscribe link for a visible topic they have never visited receives a server error because TopicView does not create the missing row. Handle the absent row and use TopicUser.change to persist the chosen level."
+   },
+   {
+    "id": "S3",
+    "file": "app/controllers/topics_controller.rb",
+    "lines": [
+     113,
+     113
+    ],
+    "texto": "Saving notification_level directly does not mark the change as an explicit user preference. For a topic-user row with notifications_reason_id unset, TopicUser.update_last_read subsequently replaces the chosen regular or muted level with tracking once the automatic tracking threshold is met. Persist the change through TopicUser.change, as set_notifications does, so notifications_reason_id and notifications_changed_at are recorded."
+   },
+   {
+    "id": "S4",
+    "file": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6",
+    "lines": [
+     6,
+     9
+    ],
+    "texto": "The client unsubscribe route only loads the normal topic view and never performs the unsubscribe operation. PostStream.loadTopicView fetches /t/:id.json, so entering this URL through an in-app transition displays the success message while leaving notifications unchanged; only a full-page request reaches TopicsController.unsubscribe. Invoke a dedicated mutation endpoint before displaying the unsubscribe confirmation."
+   },
+   {
+    "id": "S5",
+    "file": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6",
+    "lines": [
+     5,
+     8
+    ],
+    "texto": "The Ember route handles the same unsubscribe URL as the Rails action, but only fetches the normal topic view. When this URL is reached through client-side navigation, topics#unsubscribe never runs, so notification settings remain unchanged even though the template says the user will stop receiving notifications. Ensure this route performs the unsubscribe operation (or forces navigation through the server endpoint) before displaying confirmation."
+   },
+   {
+    "id": "S6",
+    "file": "config/locales/client.en.yml",
+    "lines": [
+     985,
+     985
+    ],
+    "texto": "This confirmation promises that the user will stop receiving notifications for the topic, but unsubscribe sets watching/tracking topics to `regular`, not `muted`. Regular still permits notifications such as mentions and replies, so the message incorrectly tells those users they have stopped all topic notifications. Describe the reduction in notifications accurately (and distinguish regular from muted if necessary)."
+   },
+   {
+    "id": "S7",
+    "file": "app/controllers/topics_controller.rb",
+    "lines": [
+     105,
+     107
+    ],
+    "texto": "`TopicUser.find_by` can return nil for a logged-in user who has not visited this topic. Opening the new unsubscribe URL in that state raises NoMethodError at `tu.notification_level` rather than unsubscribing. Topic visibility does not guarantee a topic-user row exists (the visit updater explicitly creates missing rows). Initialize a missing row and apply the regular default notification level before choosing the new level."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+    "descricao": "The new unsubscribe endpoint changes the user's topic notification level on a plain GET request, so a third-party page can trigger it for a logged-in user without any CSRF token.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       98,
+       115
+      ],
+      "texto": "The unsubscribe endpoint mutates notification_level (tu.save!) via a plain GET route (config/routes.rb:440-441) with skip_before_filter :check_xhr, authenticating only through the session cookie. There is no CSRF token (Rails forgery protection does not cover GET) and no capability token, unlike EmailController#unsubscribe which authorizes via DigestUnsubscribeKey. Any third-party page can embed <img src=\"https://forum/t/<id>/unsubscribe\"> and, when a logged-in user loads it, silently change that user's notification_level for the topic. Require a per-user capability token (like the digest unsubscribe key) in the URL, or perform the state change from an authenticated non-GET request that carries the CSRF token."
+     },
+     {
+      "file": "config/routes.rb",
+      "lines": [
+       440,
+       441
+      ],
+      "texto": "The new GET routes mutate the authenticated user's notification preferences without CSRF verification. An attacker can navigate a logged-in user's browser to a known topic unsubscribe URL and reduce or mute its notifications, because Rails excludes GET from forgery-token checks and unsubscribe explicitly skips check_xhr. Make GET render a confirmation page and perform the preference change through a CSRF-protected POST or PUT."
+     },
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       98,
+       113
+      ],
+      "texto": "WHAT: The unsubscribe state change (lowering/muting notification_level + save!) runs on a GET route (config/routes.rb GET t/:slug/:topic_id/unsubscribe). WHY: An attacker can forge the URL as an image/prefetch/link to silently change a victim's notification state with no CSRF token since GETs are not CSRF-protected. HOW: Make the mutation a PUT/POST with CSRF protection or require an explicit confirmation parameter/token instead of mutating on page view."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+    "descricao": "TopicsController#unsubscribe dereferences TopicUser.find_by without handling a missing row, so users with no topic_users record get a NoMethodError/500 instead of being unsubscribed.",
+    "textoGolden": "logic: Potential nil pointer exception - if no TopicUser record exists, tu will be nil and calling methods on it will crash",
+    "comentarios": [
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       105,
+       107
+      ],
+      "texto": "tu is not checked for nil before use. TopicUser.find_by(user_id: current_user.id, topic_id: params[:topic_id]) returns nil whenever the logged-in user has no topic_users row for that topic (the same lookup TopicUser.get performs), and the next line dereferences tu.notification_level, raising NoMethodError and returning a 500. Because the route is only gated by ensure_logged_in, any logged-in user can hit /t/:topic_id/unsubscribe(.json) for a topic they never opened and trigger the crash. Guard the lookup, e.g. `tu = TopicUser.find_by(...); return render json: {success: false} unless tu` (or build/return early) before reading notification_level."
+     },
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       105,
+       113
+      ],
+      "texto": "`TopicUser.find_by(...)` can return nil (e.g. the user clicks the emailed unsubscribe link for a topic for which no TopicUser row was ever created), and the very next line dereferences it (`tu.notification_level > ...`, then `tu.save!`). This raises NoMethodError on nil and the unsubscribe request 500s. Guard the nil case (e.g. return early or use `TopicUser.change`/`find_or_create_by`) before reading/writing notification_level."
+     },
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       105,
+       113
+      ],
+      "texto": "`tu = TopicUser.find_by(user_id: current_user.id, topic_id: params[:topic_id])` can return nil (find_by yields nil when no row exists), but the next lines dereference it unconditionally (`tu.notification_level`, `tu.save!`). Since the new unsubscribe routes are public GET endpoints, any logged-in user visiting /t/:slug/:topic_id/unsubscribe for a topic they have never tracked will trigger a NoMethodError and a 500 instead of a sane response. Guard the nil case (e.g. create/skip or redirect) before reading notification_level."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#03",
+    "descricao": "The message builder spec passes unsubscribe_url in the fixture but never asserts the per-topic unsubscribe link appears in the email.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/components/email/message_builder_spec.rb",
+      "lines": [
+       169,
+       180
+      ],
+      "texto": "The `unsubscribe_url` added to the `message_with_unsubscribe` fixture is never asserted. The two tests only check that the List-Unsubscribe header `be_present` and that the body matches `user_preferences_url`; neither references `unsubscribe_url`. So they would still pass if the topic-specific unsubscribe URL this PR introduces were dropped or wired to the wrong value. Add an assertion (e.g. that `message_with_unsubscribe.body` matches `/t/1234/unsubscribe`, and that the List-Unsubscribe header points at the topic unsubscribe URL) so the new behaviour is actually covered."
+     },
+     {
+      "file": "spec/components/email/message_builder_spec.rb",
+      "lines": [
+       169,
+       172
+      ],
+      "texto": "The fixture now passes unsubscribe_url, but no assertion reads it. The tests only check that the List-Unsubscribe header is present and that the body contains user_preferences_url, so they pass if the topic unsubscribe link is removed or broken. Add an assertion that the body includes \"/t/1234/unsubscribe\"."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#08",
+    "descricao": "The unsubscribe confirmation says the user will stop receiving notifications for the topic, but watching/tracking users are only moved to regular, which still sends mention/reply notifications.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "config/locales/client.en.yml",
+      "lines": [
+       985,
+       985
+      ],
+      "texto": "The confirmation promises that the user will stop receiving notifications for this topic, but TopicsController#unsubscribe sets watching/tracking users to regular, not muted. Regular still allows mention/reply notifications, so this confirmation (and the corresponding promise in the new email link text) overstates what clicking the link accomplished. Describe stopping notifications for every new post, or make the confirmation conditional on the resulting notification level so only muted users are told that all topic notifications have stopped."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#09",
+    "descricao": "Unsubscribe saves the new notification level without setting notifications_reason_id, so auto-tracked topics are promoted back to tracking on the next read, undoing the unsubscribe.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       113,
+       113
+      ],
+      "texto": "Saving the notification level directly leaves notifications_reason_id unchanged instead of recording an explicit user choice. For automatically tracked topics with a null reason, TopicUser.update_last_read promotes the row back to tracking when the reading threshold is exceeded, undoing the unsubscribe on the next read. Persist the change through TopicUser.change so notifications_reason_id and notifications_changed_at are set consistently with set_notifications."
+     },
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       113,
+       113
+      ],
+      "texto": "Saving the notification level directly bypasses the explicit-user-change metadata set by TopicUser.change. In particular, a topic_user with notifications_reason_id == nil remains eligible for TopicUser.auto_track, which checks that field and can promote the topic back to tracking after the user unsubscribes. Use the notification-change helper (or set its user-change reason and timestamp consistently) so the unsubscribe is retained as an explicit user preference."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#10",
+    "descricao": "Claims the client unsubscribe route never performs the unsubscribe when entered through an in-app transition.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6",
+      "lines": [
+       5,
+       8
+      ],
+      "texto": "The client unsubscribe route only loads the ordinary topic view and never performs the unsubscribe operation. When entered through an in-app transition rather than a full server navigation, PostStream.loadTopicView requests /t/:id.json (or consumes preload data), so the page claims notifications will stop while the persisted notification level remains unchanged. Ensure this entry path executes the unsubscribe operation before showing confirmation."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6",
+      "lines": [
+       4,
+       9
+      ],
+      "texto": "The client route loads the topic but never invokes the unsubscribe action. Notification levels are changed only by TopicsController#unsubscribe, so navigating to this route inside the Ember application can display \u201cYou will stop receiving notifications\u201d without changing the subscription. Explicitly perform the unsubscribe operation on client-side entry rather than relying on the initial HTML request to have done it."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#11",
+    "descricao": "The property name stopNotificiationsText is misspelled (should be stopNotificationsText).",
+    "textoGolden": "Typo in property name: 'stopNotificiationsText' should be 'stopNotificationsText' (missing 'n' in 'Notifications')",
+    "comentarios": []
+   }
+  ]
+ },
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "6048e2a86b50e81e1e3b1b467dfea5a895add3dc",
+  "base": "d1440bb5d2f2190ad7ae1d26c165f970055b5370",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+    "lines": [
+     57,
+     59
+    ],
+    "texto": "The new cancellation requests use `client` without setting its API key in this cron module. `sgMail.setApiKey(sendgridAPIKey)` configures a separate internal client, so the standalone cron endpoint sends unauthenticated cancellation requests and cancelled bookings' emails remain scheduled. Initialize `client` with the SendGrid API key before issuing these requests."
+   },
+   {
+    "id": "S2",
+    "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+    "lines": [
+     72,
+     74
+    ],
+    "texto": "Successful cancellations are not deleted from the database until every SendGrid request in the loop succeeds. If a later request fails, all earlier successful cancellations remain queued, and the next run POSTs those already-cancelled batches again; SendGrid rejects duplicate cancellations with 400, aborting the loop before remaining reminders can be cancelled. Await each reminder's database deletion immediately after its successful cancellation and handle failures per reminder so one rejected batch does not block the others."
+   },
+   {
+    "id": "S3",
+    "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+    "lines": [
+     213,
+     222
+    ],
+    "texto": "The immediateDelete branch cancels the SendGrid batch and returns without deleting the reminder or setting cancelled. handleNewBooking now uses this branch for the original rescheduled booking but does not remove its reminder rows. Those rows therefore remain outside the cron cleanup query (which requires cancelled: true), unlike reminders cancelled through the normal branch. Delete the reminder after successful immediate cancellation, or mark it cancelled so it can be cleaned up."
+   },
+   {
+    "id": "S4",
+    "file": "packages/trpc/server/routers/viewer/workflows.tsx",
+    "lines": [
+     575,
+     576
+    ],
+    "texto": "This consumer replaces reminders after a workflow step is edited, but the new default deleteScheduledEmailReminder behavior only marks an existing scheduled email as cancelled. Previously it cancelled the provider batch immediately. The replacement email is scheduled while the old batch remains active until the cancellation cron runs, so an old reminder due before that run can still be delivered (potentially alongside its replacement). Use immediate cancellation for this replacement path, as the deleted-step path already does, and await it before scheduling replacements."
+   },
+   {
+    "id": "S5",
+    "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+    "lines": [
+     66,
+     76
+    ],
+    "texto": "These Prisma deletes are lazy and run only after the entire external-request loop succeeds. If a cancellation request fails partway through (for example, an expired or invalid batch ID), execution jumps to the outer catch: none of the successfully cancelled rows are deleted, and no later reminders are cancelled. Since the failed row remains eligible without a lower date bound, it can repeatedly block the batch, allowing cancelled bookings' later emails to be sent. Handle failures per reminder and persist each successful cancellation independently so one bad batch cannot prevent progress on other reminders."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+    "descricao": "Reminder cancel helpers are called without await inside forEach when bookings are cancelled/rescheduled or workflows edited, so the handler can return before reminders are cancelled or deleted and failures are unobserved.",
+    "textoGolden": "Asynchronous functions deleteScheduledEmailReminder and deleteScheduledSMSReminder are called without await inside forEach loops. This occurs during booking rescheduling/cancellation, and workflow/workflow step deletion/updates. Consequently, scheduled workflow reminders may not be reliably cancelled, potentially leaving them active.",
+    "comentarios": [
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       484,
+       493
+      ],
+      "texto": "WHAT: async deleteScheduledEmailReminder/deleteScheduledSMSReminder called inside forEach without collecting/awaiting promises. WHY: handler returns before cancels complete and rejections are unobserved, so cancellations are lost and reminder emails/SMS are still sent (same fire-and-forget pattern repeated in handleNewBooking:966, bookings.tsx:488, workflows.tsx:212/376/519/574)."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       485,
+       495
+      ],
+      "texto": "Cancellation now delegates the database update/deletion to asynchronous reminder helpers without awaiting them, while removing reminder deletes from the awaited promise list. The handler can finish before cancelled flags or unscheduled-reminder deletions are persisted, allowing a subsequent scheduler run to schedule a cancelled booking's reminder and leaving cancellation work unfinished when a serverless invocation terminates. Collect and await the helper promises; apply the same correction to the modified rescheduling and workflow-update callers that discard these promises."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       485,
+       495
+      ],
+      "texto": "Await the reminder cancellation promises before completing the cancellation request. These helpers now own persistence of cancellation: email awaits a workflowReminder update and SMS awaits Twilio before deleting the row. The forEach discards their promises, and removing remindersToDelete from the awaited promise list removes the previous guarantee that reminder state is cleared before the handler returns. In a serverless request the outstanding operations can be interrupted after the response, leaving reminders active for a cancelled booking. Collect these helper promises and include them in the awaited Promise.all."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+    "descricao": "The cron cancels SendGrid sends for cancelled reminders in one try around the whole loop, so one failing cancel aborts all remaining cancellations and the row deletions, and the failing row blocks later runs.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       43,
+       77
+      ],
+      "texto": "WHAT: remindersToCancel loop awaits SendGrid cancel per-reminder inside one try and only runs Prisma deletes after the loop, with no method filter. WHY: a single throw (e.g. null SMS referenceId sent as batch_id, or one SendGrid error) aborts the loop and skips Promise.all deletes, leaving all other cancelled emails still scheduled so they are still sent."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       66,
+       74
+      ],
+      "texto": "Successful cancellation records are only deleted after every SendGrid request in the loop succeeds. If a later request fails, the catch skips all queued Prisma deletions; the next run retries an already-cancelled batch, which SendGrid rejects with 400, and aborts before processing the remaining reminders. Await each reminder's database deletion immediately after its successful cancellation and isolate errors per reminder so one failed batch does not block the others."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       53,
+       76
+      ],
+      "texto": "Handle cancellation failures per reminder rather than around the entire batch. If one SendGrid request rejects (for example, for an expired or invalid batch ID), the loop exits before cancelling the remaining reminders, and Promise.all is never reached, so even earlier successfully cancelled reminders remain in the database. The failed record stays eligible for the next run and can repeatedly block other cancellations until their emails are sent. Execute each successful deletion and isolate failures so the worker continues processing the remaining reminders."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#05",
+    "descricao": "Email reminders for cancelled bookings are only flagged cancelled and cancelled in SendGrid by the cron later, so reminders close to their send time can still be delivered.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "Deferred cancellation includes reminders less than ten minutes from their scheduled send time, when SendGrid no longer permits cancellation. A booking cancelled in that interval is only marked cancelled locally by deleteScheduledEmailReminder, and the cron's POST is rejected, so its email is still delivered. Process cancellation before SendGrid's ten-minute cutoff and explicitly handle cancellations that arrive after that deadline rather than relying on this cron query to stop delivery."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#06",
+    "descricao": "The cron cancels SendGrid scheduled sends one at a time with sequential awaits, which is slower than batching.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       53,
+       74
+      ],
+      "texto": "The new cancel loop performs a sequentially awaited SendGrid HTTP request (`await client.request(...)`) for each reminder returned by an unbounded `findMany` (no `take`), then deletes them. WHY: this is O(N) serial network round-trips per cron run; if many reminders are cancelled at once (e.g. a bulk event-type disable or booking cancellation wave) the cron handler can block for a long time on serial SendGrid latency. HOW: fan the independent SendGrid cancel requests out with `Promise.all`, and/or bound the query with `take` plus pagination, then batch the DB deletes."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       56,
+       64
+      ],
+      "texto": "WHAT: SendGrid cancel issued with sequential await inside for loop over remindersToCancel. WHY: cron blocks O(N) sequential network round-trips instead of parallel batch, materially slowing the hourly schedule job as cancelled backlog grows."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+    "descricao": "deleteScheduledEmailReminder and its immediateDelete flag do not delete anything; the names no longer describe the behaviour.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+      "lines": [
+       197,
+       232
+      ],
+      "texto": "`deleteScheduledEmailReminder` and its `immediateDelete` flag no longer match what the code does. The default path only marks the reminder `cancelled: true`, and the `immediateDelete` path only sends a cancel request to the email provider. Neither path deletes the scheduled send or the row, unlike the SMS counterpart, which still deletes. Rename them (for example `cancelScheduledEmailReminder` and `immediateCancel`) or document the behaviour."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#13",
+    "descricao": "deleteScheduledSMSReminder deletes the DB row only after a successful Twilio cancel, so a cancel failure leaves the reminder row behind now that callers no longer delete it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/lib/reminders/smsReminderManager.ts",
+      "lines": [
+       177,
+       186
+      ],
+      "texto": "twilio.cancelSMS and prisma.workflowReminder.delete share one try block. If the Twilio cancel throws, the DB row is never deleted. The reminder row then stays behind for a booking that was cancelled, rescheduled or deleted, because the callers no longer delete rows themselves. Delete the row in a finally block, or handle the cancel failure separately so the delete still runs."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#14",
+    "descricao": "Prisma is imported in workflows.tsx but no longer used.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/workflows.tsx",
+      "lines": [
+       1,
+       10
+      ],
+      "texto": "`Prisma` is imported as a value (line 9) but is no longer used anywhere in this file. This PR removed the only usages (`Prisma.BatchPayload` in the now-deleted `remindersToDelete` / `deleteReminderPromise` declarations), while the import was kept. WHY: the repo's ESLint `no-unused-vars` rule will fail CI/build for an unused import. HOW: remove `Prisma` from the import list (and keep `import type { PrismaPromise }` as a type-only import)."
+     }
+    ]
+   }
+  ]
+ },
+ "authzservice-improve-authz-caching-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "7562f37880367411a62304bcdcdc178bced23906",
+  "base": "5634ca44f799a82161f0401dadc286452f3bdbf8",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/authz/rbac/cache.go",
+    "lines": [
+     31,
+     31
+    ],
+    "texto": "The denial-cache key concatenates name and parent with an unescaped underscore, so distinct resource checks share entries. For example, name `a_b` with parent `c` and name `a` with parent `b_c` produce the same key, allowing a denied check to incorrectly deny an authorized resource until expiry. Encode the components as an unambiguous tuple, such as a JSON array."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/authz/rbac/service.go",
+    "lines": [
+     126,
+     131
+    ],
+    "texto": "An error checking the cached permission snapshot returns immediately instead of attempting the fresh-permission fallback. When an outdated snapshot lacks a newly granted direct resource permission, checkPermission can enter checkInheritedPermissions and fail while loading the folder tree; the request then fails even though fresh direct permissions would authorize it without any folder lookup. Treat this cached-check error as a reason to fall through to getIdentityPermissions, and only return an error if checking the fresh permissions fails."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/services/authz/rbac/service_test.go",
+    "lines": [
+     981,
+     982
+    ],
+    "texto": "The test says it allows access to prove permissions are not checked, but seeds `\"dashboards:uid:dash1\": false`. Consequently, bypassing the explicit denial cache can still return false through the normal permission-check/fallback path, satisfying the assertion without exercising denial-cache precedence. Seed this scope as true so removing the denial-cache lookup makes the test fail."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/services/authz/rbac/cache.go",
+    "lines": [
+     30,
+     31
+    ],
+    "texto": "The denial key does not uniquely encode the resource name and parent folder. For the same namespace, user and action, Name=\"a_b\", ParentFolder=\"c\" and Name=\"a\", ParentFolder=\"b_c\" both produce the suffix \"_a_b_c\". A denied check for the first resource therefore populates a denial for the second resource too; Check returns false directly on that cache hit without consulting its actual permissions. Encode the components unambiguously (for example as a JSON array or with length prefixes) so a cached denial cannot contaminate another resource's authorization result."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/services/authz/rbac/cache.go",
+    "lines": [
+     30,
+     31
+    ],
+    "texto": "The underscore-delimited name and parent fields are ambiguous: a check for name `a_b` in parent `c` produces the same key as name `a` in parent `b_c` for the same namespace, user and action. If the first check is denied, the second returns false immediately from the denial cache without evaluating its permissions, even if access should be allowed. Encode the fields unambiguously (for example as a JSON array or length-prefixed tuple) rather than concatenating unrestricted identifiers with underscores."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#01",
+    "descricao": "The denial cache key joins name and parent folder with underscores, so different name/parent pairs can collide and a cached denial for one resource denies another until TTL expiry.",
+    "textoGolden": "The cache key construction in `userPermDenialCacheKey` uses simple string concatenation with underscores, which can lead to ambiguous keys and collision risks when any component contains underscores or is empty. This could result in incorrect denial cache hits, affecting user permissions.",
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/cache.go",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The denial cache key does not distinguish underscores inside resource and parent UIDs from its field separators. For the same namespace, user and action, (name=\"a_b\", parent=\"c\") and (name=\"a\", parent=\"b_c\") generate the same key, so denying the first request makes Check return false for the second even if its permissions explicitly allow it. Encode the components unambiguously, for example as a JSON tuple or length-prefixed fields."
+     },
+     {
+      "file": "pkg/services/authz/rbac/cache.go",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The denial cache key is not injective: for the same namespace, user and action, `(name=\"a_b\", parent=\"c\")` and `(name=\"a\", parent=\"b_c\")` produce the same key. After the first request stores a denial, Check's new early cache return denies the second request without checking its permissions, even if it is allowed. Encode the components unambiguously (for example a JSON tuple or length-prefixed components) and add a test verifying that these two requests do not share a denial entry."
+     },
+     {
+      "file": "pkg/services/authz/rbac/cache.go",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "Make the denial-cache key encode component boundaries unambiguously (for example, length-prefix or serialize the components). For the same namespace, user and action, name `a_b` with parent `c` and name `a` with parent `b_c` both produce the suffix `_a_b_c`. Underscores can occur in resource UIDs, so denying the first request caches a key that causes Check to immediately deny the second request without evaluating its permissions, even if that resource is allowed."
+     }
+    ]
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#04",
+    "descricao": "The explicit denial-cache test seeds the cached permission as false instead of true, so it would pass without the denial-cache short-circuit and does not verify it.",
+    "textoGolden": "The test comment says the cached permissions 'allow access', but the map stores false for dashboards:uid:dash1, so checkPermission will still treat this scope as not allowed.",
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/service_test.go",
+      "lines": [
+       973,
+       995
+      ],
+      "texto": "This test claims to prove the permDenialCache short-circuit (service.go:116-121) denies access, but it seeds the cached permission as map[string]bool{\"dashboards:uid:dash1\": false} (a deny), contradicting its comment \"Allow access to the dashboard to prove this is not checked\". Because the cached set is already a deny, checkPermission returns allowed=false, the code falls through to the DB path, and the fake store also returns no permissions, so Allowed stays false. The assertion passes even if the entire permDenialCache early-return were deleted. Seed the cached permission as true (map[string]bool{\"dashboards:uid:dash1\": true}) so that only the denial-cache entry can force Allowed=false; otherwise the test does not verify the feature."
+     },
+     {
+      "file": "pkg/services/authz/rbac/service_test.go",
+      "lines": [
+       981,
+       982
+      ],
+      "texto": "The comment says \"Allow access to the dashboard to prove this is not checked\", but the code sets the permCache entry to `false`, which is a deny. The test therefore does not show that the permission cache is skipped. Set the value to `true`, or change the comment to match."
+     },
+     {
+      "file": "pkg/services/authz/rbac/service_test.go",
+      "lines": [
+       973,
+       995
+      ],
+      "texto": "The 'Should deny on explicit cache deny entry' test would still pass if the permDenialCache check were removed. permCache is seeded with dash1:false, not true as the comment claims, so the normal path also denies. Seed permCache with {\"dashboards:uid:dash1\": true} and a store that grants the permission, so Allowed=false can only come from the denial entry."
+     }
+    ]
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#05",
+    "descricao": "A cached permission set that denies a resource always triggers a full DB permission reload, so checks over many inaccessible dashboards issue one query per resource instead of being served from cache.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/service.go",
+      "lines": [
+       123,
+       139
+      ],
+      "texto": "Every distinct resource denied by the cached permission map triggers a reload of the entire user's action permission set, because the denial cache is resource-specific and a cached false result always falls through to getIdentityPermissions. Sequential checks of N inaccessible dashboards therefore execute N full permission queries and cache rewrites even with a current action-wide cache; getUserPermissions' singleflight only merges overlapping requests. Bound refreshes per user/action with a short refresh cooldown or generation marker so different resource misses can share a recent refresh."
+     }
+    ]
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#08",
+    "descricao": "The Service struct comment listing its caches was not updated for the new permDenialCache field.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/service.go",
+      "lines": [
+       55,
+       58
+      ],
+      "texto": "The struct doc comment still reads \"// Cache for user permissions, user team memberships and user basic roles\", but this PR added the new `permDenialCache` field (line 58). The comment no longer enumerates what the struct actually holds and misleads a reader about the new denial-cache field; update it to mention the permission-denial cache so the prose matches the fields."
+     }
+    ]
+   }
+  ]
+ },
+ "feature-localization-fallbacks-server-side-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "ecfa17b5a79dfdc91e7a4d50b42ae78a35d0a293",
+  "base": "728845d008f06828630a632e5c7d67e11bf15deb",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/controllers/application_controller.rb",
+    "lines": [
+     159,
+     159
+    ],
+    "texto": "WHAT: Fallback locales are explicitly loaded only in the controller callback, leaving background translations without their fallback files. WHY: Jobs::Base sets I18n.locale and executes jobs without this callback, and translate_accelerator loads only config.locale; on a fresh worker using a non-English site locale, missing keys cannot fall back to English because backend fallback calls bypass the accelerator. HOW: Ensure the full fallback list is loaded at the shared translation entry point rather than relying exclusively on the HTTP controller callback."
+   },
+   {
+    "id": "S2",
+    "file": "config/initializers/i18n.rb",
+    "lines": [
+     17,
+     17
+    ],
+    "texto": "WHAT: The fallback result now depends on SiteSetting.default_locale, but the shared accelerator cache does not include that setting or the current site in its key. WHY: translate_accelerator caches no-argument translations by key, current locale and backend identity only, so multisite requests using the same user locale but different site defaults reuse the first site's fallback text; changing the default locale also leaves cached fallback text stale. HOW: Include the effective fallback chain in the translation cache key so cached results are isolated by fallback configuration."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+    "descricao": "Fallback locale catalogs are only loaded in the controller's set_locale filter, while translate loads just the current locale, so translations outside requests (jobs, mailers) cannot fall back to the site default or English.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/application_controller.rb",
+      "lines": [
+       159,
+       159
+      ],
+      "texto": "Fallback catalogs are ensured loaded only in the controller filter, leaving non-controller translation paths without the catalogs required by the newly enabled fallback backend. Jobs::Base sets I18n.locale directly and PostAlerter uses I18n.with_locale, while the accelerator loads only the current locale and backend fallback lookups bypass that loader; missing keys therefore still produce missing translations or skip the configured site fallback until another request happens to load those catalogs. Ensure the full fallback chain is loaded at the translation boundary, rather than relying solely on the controller filter."
+     },
+     {
+      "file": "lib/freedom_patches/translate_accelerator.rb",
+      "lines": [
+       62,
+       69
+      ],
+      "texto": "The new fallbacks contract requires the fallback locales (site default and :en, from FallbackLocaleList#[]) to be loaded before Backend::Simple#translate is asked for them \u2014 Backend::Simple only returns already-loaded translations. This PR added I18n.ensure_loaded!/I18n.fallbacks.ensure_loaded! but wired it only into ApplicationController#set_locale, and the loader that actually gates every translation, I18n.translate (line 68), still loads only `config.locale`. As a result, any I18n.t performed outside the request cycle (console, background jobs, mailers) or before set_locale runs will not load the fallback locales and will silently return 'translation missing' instead of the fallback the new I18n.fallbacks advertises. Fix: have translate ensure the fallback chain is loaded (e.g. call I18n.fallbacks.ensure_loaded! / load the fallback locales here), not rely on the controller hook."
+     },
+     {
+      "file": "lib/freedom_patches/translate_accelerator.rb",
+      "lines": [
+       67,
+       68
+      ],
+      "texto": "translate loads only config.locale, but the new fallback chain (default_locale, :en) is loaded only by the controller's I18n.fallbacks.ensure_loaded!. Outside controllers (jobs, mailers, rake), a key missing in the current locale falls back to a locale that is not loaded, so it returns 'translation missing', and the LRU cache then stores that result. Fix: in translate, call I18n.fallbacks.ensure_loaded! (or load each locale in fallbacks[config.locale]) before the lookup."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#06",
+    "descricao": "The translation cache key does not include the site or its default locale, but fallback results now depend on SiteSetting.default_locale, so multisite processes or a changed default locale serve stale fallback translations.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "config/initializers/i18n.rb",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "The new fallback order depends on SiteSetting.default_locale, but the accelerator's translation cache does not include that setting or the current site in its key. In a multisite process, two sites with the same user locale and different default locales reuse the first site's cached fallback translation; changing the default locale also leaves cached fallback results stale. Include the effective fallback chain or site/default-locale context in the translation cache key."
+     }
+    ]
+   }
+  ]
+ },
+ "unified-storage-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "26fed312840cd76b766cbd2158e17a7e6c0ec548",
+  "base": "871af07203177ce59a24e742107119409274f48a",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/storage/unified/search/bleve.go",
+    "lines": [
+     137,
+     139
+    ],
+    "texto": "BuildIndex now leaves the cache unlocked throughout construction, so GetIndex can return nil for a key whose index is already being built. Concurrent Search calls or Search racing with handleEvent can therefore build separate indexes for the same key; the last cache assignment replaces the other index, potentially discarding updates written by the event handler, and repeats the full resource scan. Serialize builds per NamespacedResource and recheck the cache after acquiring that key's lock, while allowing different keys to build concurrently."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/storage/unified/resource/search.go",
+    "lines": [
+     216,
+     216
+    ],
+    "texto": "The new TotalDocs call iterates Bleve's cache without a read lock after the write-event consumer has already started. A write event for an uncached namespace can call getOrCreateIndex and publish an index while TotalDocs ranges over the map, causing a data race and potentially a fatal concurrent map iteration/write error during startup. Protect the cache iteration in bleveBackend.TotalDocs with cacheMu.RLock/RUnlock."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#01",
+    "descricao": "BuildIndex now locks only the final cache assignment, so concurrent callers for the same uncached key all build the same expensive index in parallel and the last one overwrites the others.",
+    "textoGolden": "A race condition in BuildIndex allows multiple goroutines to concurrently build the same expensive index for the same key. This is caused by moving the b.cacheMu lock from protecting the entire function to only protecting the final cache assignment. ",
+    "comentarios": [
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "WHAT: Removing the function-wide `b.cacheMu.Lock()/defer Unlock()` and keeping only the lock around `b.cache[key]=idx` removes the only thing that serialized GetIndex against an in-flight build. WHY: getOrCreateIndex (resource/search.go:287-307) does GetIndex -> if nil -> build; previously BuildIndex held the write lock for its whole body so a concurrent caller's GetIndex (RLock) blocked until the first build cached the index and then saw it (no second build). Now GetIndex can return nil while a build for the same key is still running, so two requests/watch events build the SAME key concurrently \u2014 producing two distinct index instances where the caller holding the non-cached one never observes later writes (stale search results), and, for file-backed indices (size > FileThreshold), two concurrent `bleve.New(dir, mapper)` opening the same on-disk directory. HOW: guard the build per key (e.g. re-check the cache under the write lock after acquiring it, or use a per-key single-flight/lock so only one build runs per NamespacedResource), rather than relying on a global write lock held for the entire body."
+     },
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "The cache mutex was moved to cover only the cache assignment, removing the serialization that previously surrounded the whole BuildIndex. Two concurrent BuildIndex calls for the same key can now both construct an index (including `bleve.New(dir, mapper)` on the same on-disk path) and both write `b.cache[key]`; the second overwrites the first, so callers get distinct index instances for one key and writes made through the losing instance are invisible to readers of the cached one (and the file-backed build may collide on the same directory). Keep the build for a given key serialized (e.g. restore the lock around the build, or take a per-key lock) instead of locking only the map write."
+     },
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "Locking only cache publication allows concurrent requests for the same uncached key to build separate indexes and overwrite each other's cache entries. Search and handleEvent both call getOrCreateIndex, whose GetIndex previously blocked behind the build-wide lock; now an event can update one newly built index before another build replaces it, losing that update from subsequent search results and leaving the discarded index open. Serialize builds per NamespacedResource and recheck the cache after acquiring that per-key guard."
+     }
+    ]
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#02",
+    "descricao": "The new startup log calls TotalDocs, which iterates the index cache without a lock, after the event goroutine that can add indexes has started, so a concurrent map read and write can crash the process.",
+    "textoGolden": "Calling s.search.TotalDocs() here may race with concurrent index creation: TotalDocs iterates b.cache without synchronization, and the event watcher goroutine started just above could trigger BuildIndex writes concurrently, potentially causing a concurrent map read/write panic.",
+    "comentarios": [
+     {
+      "file": "pkg/storage/unified/resource/search.go",
+      "lines": [
+       216,
+       216
+      ],
+      "texto": "The newly added `s.search.TotalDocs()` call is unsafe: `bleveBackend.TotalDocs()` (pkg/storage/unified/search/bleve.go:144-150) iterates `b.cache` without holding `cacheMu`, while the bleve.go hunk in this same PR keeps `cacheMu` for the `b.cache[key] = idx` write only. Because search.go:207-213 already started the watch-event goroutine that can call `build` \u2192 `BuildIndex` \u2192 cache write, line 216 can iterate the map concurrently with that write, causing a `concurrent map iteration and map write` panic or data race. Either guard the `TotalDocs` read with `cacheMu`, or move this call to a point where no build can run concurrently."
+     },
+     {
+      "file": "pkg/storage/unified/resource/search.go",
+      "lines": [
+       216,
+       216
+      ],
+      "texto": "The new startup log calls TotalDocs after launching the write-event listener, but bleveBackend.TotalDocs iterates b.cache without cacheMu.RLock. A write event for an unindexed resource can concurrently publish an index through BuildIndex, causing a map iteration/write race and potentially a fatal runtime error during initialization. Protect TotalDocs cache iteration with the same read lock used by GetIndex."
+     },
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "BuildIndex now writes b.cache under Lock while TotalDocs (called from search.init after the watch goroutine starts) ranges over b.cache without any lock. This can cause a concurrent map read/write fatal error. Fix by taking cacheMu.RLock in TotalDocs."
+     }
+    ]
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#03",
+    "descricao": "NewResourceServer returns an error when Init fails without cancelling the server context created earlier.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/storage/unified/resource/server.go",
+      "lines": [
+       258,
+       262
+      ],
+      "texto": "WHAT: NewResourceServer now calls s.Init(ctx) and, on error, returns `nil, err` without invoking the `cancel` func created at line 229 and without running any lifecycle cleanup. WHY: Init may have already started long-lived goroutines \u2014 searchSupport.init's event-consumption loop uses context.Background() (resource/search.go:202) and initWatcher starts a watcher bound to s.ctx (server.go:752-770) \u2014 so if search.init succeeds and initWatcher (or a later step) fails, the constructor discards the server while those goroutines keep running with no way to stop them, leaking the internal context and watcher goroutines. HOW: on the error path call `cancel()` (and any needed lifecycle.Stop) before returning, or defer the cancel until success."
+     },
+     {
+      "file": "pkg/storage/unified/resource/server.go",
+      "lines": [
+       258,
+       262
+      ],
+      "texto": "WHAT: NewResourceServer calls s.Init(ctx) synchronously but returns nil,err without calling the cancel created for s.ctx. WHY: Failed startup leaks the server context (and any lifecycle/watch resources partially started by Init), leaving goroutines/channel watches alive. HOW: On Init error call s.cancel() (and lifecycle Stop cleanup) before returning."
+     }
+    ]
+   }
+  ]
+ },
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "da09bc0808e7c6df1bc10e00d5acf764d94c7cc7",
+  "base": "c9a47dd0cebd121ff73f24e1f8c1829579daf8e3",
+  "sugestoes": [],
+  "issues": [
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#01",
+    "descricao": "In getBaseConditions, the branches for a missing authorization condition are unreachable because getAuthorizationConditions always returns a Prisma.Sql.",
+    "textoGolden": "In getBaseConditions(), the else if (filterConditions) and final else branches are unreachable. This is because getAuthorizationConditions() always returns a non-null Prisma.Sql object, making authConditions always truthy, which means only the first two if/else if conditions are ever evaluated.",
+    "comentarios": [
+     {
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       72,
+       80
+      ],
+      "texto": "getAuthorizationConditions() always returns a non-null Prisma.Sql, so the `else if (filterConditions)` and final `else` branches (returning NOTHING_CONDITION) in getBaseConditions can never execute. Simplify to: if filterConditions, combine it with authConditions; otherwise return authConditions."
+     },
+     {
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       68,
+       81
+      ],
+      "texto": "Unreachable branches in getBaseConditions: authConditions is always a truthy Prisma.Sql object (never null, NOTHING is `1=0`), so `else if (filterConditions)` and final `else { return NOTHING }` can never execute. Simplify to if(filter) return auth AND filter else return auth, or make the nothing-case explicit."
+     },
+     {
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       76,
+       77
+      ],
+      "texto": "WHAT: `getBaseConditions` returns `filterConditions` alone (no authorization predicate) when `authConditions` is falsy (`else if (filterConditions) { return filterConditions; }`). WHY: The WHERE clause returned to consumers then contains no ownership/authorization restriction, so a caller using it would return every booking matching the filters (e.g. all bookings for the given eventTypeId/memberUserId) regardless of the requesting user's org/team membership \u2014 an authorization-boundary bypass if `getAuthorizationConditions()` ever yields a falsy value. HOW: Always AND the authorization predicate with the filters and fall back to `NOTHING_CONDITION` when no auth predicate exists, e.g. `return filterConditions ? Prisma.sql`(${authConditions}) AND (${filterConditions})` : authConditions;` (or keep the `NOTHING_CONDITION` default when auth is missing)."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#03",
+    "descricao": "The getBaseConditions test uses a single booking matching both auth and filter conditions, so it would pass even if the conditions were not combined.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts",
+      "lines": [
+       480,
+       491
+      ],
+      "texto": "The rewritten \"should combine authorization and filter conditions\" test cannot fail if the combination is broken. The fixture creates a single booking that satisfies the auth condition (userId = user.id AND teamId IS NULL) and the filter condition (eventTypeId = eventType.id) independently, so getBaseConditions returning auth-only, filter-only, or the AND combination all yield the same single-row result asserted here. Only a `1=0` result would be caught. Make the data distinguish the two: add a booking that matches the filter but not the auth (e.g. a team booking with the same eventTypeId), then assert the result excludes it, so that dropping either branch changes the returned rows."
+     }
+    ]
+   }
+  ]
+ },
+ "frontend-asset-optimization-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "b1613e320acff00623e6efc59f00ee68c7684a97",
+  "base": "3ce1a5b0caab215346a51629b0344b90d67e9478",
+  "sugestoes": [],
+  "issues": [
+   {
+    "issueId": "frontend-asset-optimization-grafana-codex#01",
+    "descricao": "GetWebAssets does not re-check the cache after acquiring the write lock, so concurrent callers that missed the cache each reload the assets manifest.",
+    "textoGolden": "The GetWebAssets function implements an incomplete double-checked locking pattern for caching web assets. The function first checks if the cache is populated using a read lock (RLock), and if the cache is empty, it acquires a write lock to populate it. However, it fails to re-check whether the cache was populated by another goroutine while waiting to acquire the write lock.",
+    "comentarios": [
+     {
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       48,
+       69
+      ],
+      "texto": "WHAT: The exclusive lock acquired at line 48 is held (via defer on line 49) across the blocking file read / synchronous CDN HTTP request (lines 56-67) and there is no re-check of entryPointAssetsCache after acquiring the lock. WHY: On a cold cache, all concurrent callers (api/index.go:82, api/frontendsettings.go:62, middleware/recovery.go:141) block on the write lock and then each sequentially re-executes the full load (file I/O or blocking http.DefaultClient.Do), producing a thundering-herd serialization and N redundant loads instead of one; in Dev mode this happens on every request since the fast path is skipped, serializing all concurrent page loads. HOW: after `entryPointAssetsCacheMu.Lock()` re-check the cache (`if cfg.Env != setting.Dev && entryPointAssetsCache != nil { return entryPointAssetsCache, nil }`) so only the first goroutine performs the load, and drop the defer in favor of releasing the lock immediately after assigning `entryPointAssetsCache = result` to avoid holding it during I/O."
+     },
+     {
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       41,
+       48
+      ],
+      "texto": "cache is not re-checked under the lock after re-acquiring write Lock, so concurrent callers can each recompute web assets"
+     },
+     {
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       48,
+       49
+      ],
+      "texto": "The cache is not rechecked after acquiring the write lock, so concurrent production requests that initially observe a nil cache each reload and decode the manifest even after another request has populated it. During a cold-start request burst, these redundant filesystem reads and JSON decodes execute serially under the global lock, delaying queued page and frontend-settings requests and blocking cache readers while each reload runs. After acquiring the write lock, return the populated cache when cfg.Env != setting.Dev before performing asset loading."
+     }
+    ]
+   }
+  ]
+ },
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "dcdcadb771128e79259cc9eff9c70c38fc597976",
+  "base": "0cfc28e76ddc986d2d89dd9b9f63ee916a18a5f9",
+  "sugestoes": [],
+  "issues": [
+   {
+    "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#01",
+    "descricao": "get_failure_reason's docstring examples do not match the strings the function returns.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       130,
+       137
+      ],
+      "texto": "The `get_failure_reason` docstring describes output this function does not produce. The singular branch (line 146) returns a `SINGULAR_HUMAN_FAILURE_MAP` value such as \"A missed check-in was detected\", yet the docstring advertises \"A failed check-in was detected\"; the multi-check-in branch joins `\"%(count)d %(status)s\"` fragments with `get_text_list(..., last_word=_(\"and\"))` and appends \" check-ins detected\", yielding \"2 missed and 1 error check-ins detected\", not the docstring's \"2 missed check-ins, 1 timeout check-in and 1 error check-in were detected\". Update the examples (or the format string) so the documented contract matches the code."
+     },
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       131,
+       137
+      ],
+      "texto": "The get_failure_reason docstring examples don't match the output. It shows 'A failed check-in was detected' and '...were detected', but the code returns the per-status singular strings ('A missed check-in was detected') or '<list> check-ins detected'. Update the examples to the real output and fix the 'humam readible' typo."
+     }
+    ]
+   },
+   {
+    "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+    "descricao": "get_monitor_environment_context builds a config copy with the human-readable schedule_type but returns the original monitor.config, so the conversion is lost and the context shows the raw value.",
+    "textoGolden": "The function modifies the config variable to include display values but then returns the original monitor.config instead of the modified version.",
+    "comentarios": [
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       159,
+       171
+      ],
+      "texto": "WHAT: get_monitor_environment_context copies monitor.config to `config` and converts schedule_type display, but returns the original monitor_environment.monitor.config instead of `config`. WHY: the display conversion never takes effect so the occurrence context carries the raw schedule_type value, producing wrong output vs the function's evident intent. HOW: return `\"config\": config` instead of `\"config\": monitor_environment.monitor.config`."
+     },
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       159,
+       171
+      ],
+      "texto": "Dead computation: `config` is copied and `config['schedule_type']` transformed to display value, but return uses `monitor_environment.monitor.config` (original) instead of `config`. Change to `\"config\": config` so transformation is used."
+     },
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       160,
+       168
+      ],
+      "texto": "WHAT: In get_monitor_environment_context the code copies config and replaces config['schedule_type'] with the human-readable get_schedule_type_display(), but the returned context dict uses the original `monitor_environment.monitor.config` instead of the modified local `config`, so the mutation is dead. WHY: The occurrence's monitor context always reports the raw schedule_type value rather than the display string the code intended to substitute, producing incorrect evidence data in the emitted occurrence. HOW: return the local variable, i.e. use \"config\": config in the returned dict."
+     }
+    ]
+   }
+  ]
+ }
+}

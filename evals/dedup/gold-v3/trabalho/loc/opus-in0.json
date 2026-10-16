@@ -1,0 +1,2062 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "9fde0e906897cc0f4f71793f647dd629faba3317",
+  "base": "bc89fe00ea84d20bedcec782f0701b9711dc8201",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "lines": [
+     15,
+     15
+    ],
+    "texto": "WHAT: The sync branch returns a native fetch Response instead of the response shape expected by SDK- and Axios-based callers. WHY: Google reads res.data.access_token, Zoho reads tokenInfo.data.error, and HubSpot reads accessToken directly, so enabling synchronization causes token refresh failures or undefined token values. HOW: Parse the sync response and normalize it at each adapter boundary to the same shape returned by its refresh delegate."
+   },
+   {
+    "id": "S2",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     5,
+     11
+    ],
+    "texto": "WHAT: Computed keys made from Zod schema toString() values do not validate or preserve arbitrary token response fields. WHY: The object parser strips real expiry and metadata fields such as expires_in, expiry_date, scope, and token_type; Zoom subsequently computes NaN expiry and Office365 loses refreshed expiry information. HOW: Declare the supported expiry fields explicitly and use passthrough() to retain provider-specific fields."
+   },
+   {
+    "id": "S3",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     100
+    ],
+    "texto": "WHAT: The credential update now stores the safeParse result envelope rather than the parsed token data. WHY: parseRefreshTokenResponse returns { success, data }, so the next GoogleCalendarService construction fails googleCredentialSchema.parse(credential.key) because access_token and other token fields are nested under data, including when synchronization is disabled. HOW: Store the successful result's data property."
+   },
+   {
+    "id": "S4",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     92,
+     93
+    ],
+    "texto": "WHAT: Bigin passes the credential record ID as the synchronization helper's userId argument. WHY: The helper sends this value as calcomUserId, requesting another user's tokens when IDs differ and routing team credentials through user synchronization as well. HOW: Thread credential.userId from biginAuth into refreshAccessToken and pass that value to refreshOAuthTokens."
+   },
+   {
+    "id": "S5",
+    "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+    "lines": [
+     96,
+     96
+    ],
+    "texto": "WHAT: The new credential update references prisma without importing or declaring it. WHY: Searching this Salesforce module found only this usage, so type checking fails and executing the update raises ReferenceError. HOW: Import the Prisma client from @calcom/prisma."
+   },
+   {
+    "id": "S6",
+    "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+    "lines": [
+     75,
+     84
+    ],
+    "texto": "WHAT: getClient now unconditionally refreshes Salesforce tokens and writes credentials on every service construction. WHY: The constructor always calls getClient, even for valid access tokens, adding a token-endpoint round trip and database write to each instance; the resulting jsforce connection still receives credentialKey.access_token rather than the refreshed token. HOW: Retain the existing jsforce-managed refresh flow or refresh only when necessary and initialize the connection with the refreshed token."
+   },
+   {
+    "id": "S7",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     24,
+     27
+    ],
+    "texto": "The webhook authenticates requests using a direct string inequality comparison against CALCOM_WEBHOOK_SECRET. String equality is not guaranteed to execute in constant time, exposing a timing oracle for the shared authentication secret on an endpoint that can overwrite user integration credentials. Validate that the supplied header is a string and compare fixed-length digests of the supplied and configured secrets with crypto.timingSafeEqual (or use an equivalent constant-time secret verification helper)."
+   },
+   {
+    "id": "S8",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     7,
+     10
+    ],
+    "texto": "These comments promise that arbitrary numeric properties are recognized as expiry and that other response properties are allowed. In a z.object shape, however, z.string().toString() produces a literal property name; it does not match arbitrary keys. Zod objects also strip unrecognized properties by default. Consequently an integrator following this documented minimum-response contract can lose the expiry field instead of having it recognized. Align the schema and comments by specifying the supported expiry fields and explicitly preserving additional fields."
+   },
+   {
+    "id": "S9",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     100
+    ],
+    "texto": "parseRefreshTokenResponse returns the entire safeParse result ({ success: true, data: ... }), not the credential object returned by the previous schema.parse call. Passing that result as key stores a wrapper without top-level access_token, refresh_token or expiry_date, breaking subsequent loads even when sharing is disabled. Persist the successful result's data instead."
+   },
+   {
+    "id": "S10",
+    "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "lines": [
+     8,
+     15
+    ],
+    "texto": "The sync branch returns a raw Fetch Response, but changed Google code reads res.data.access_token and Hubspot treats the return value as a HubspotToken; Zoho consumers likewise read .data. Enabling synchronization therefore makes these refreshes fail or consume undefined token fields. Adapt the sync response to each caller's expected representation (or normalize both branches and update all callers); do not return the same raw Response to both fetch-style and SDK-style consumers."
+   },
+   {
+    "id": "S11",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     92,
+     93
+    ],
+    "texto": "refreshOAuthTokens declares its third argument as userId and serializes it as calcomUserId to the sync endpoint, but this call passes credentialId. Credential IDs are not user IDs, so synchronized refresh targets the wrong user or fails to find one. Pass the owning user's ID, preserving null for team-owned credentials."
+   },
+   {
+    "id": "S12",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     100
+    ],
+    "texto": "The previous googleCredentialSchema.parse call returned the credential object itself, but parseRefreshTokenResponse returns the safeParse result ({ success: true, data: ... }). Passing that wrapper as key stores credentials without top-level access_token/refresh_token fields, breaking subsequent credential loading even when sharing is disabled. Persist the helper result's data instead."
+   },
+   {
+    "id": "S13",
+    "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "lines": [
+     8,
+     15
+    ],
+    "texto": "The sync branch returns an unparsed fetch Response, whereas the fallback preserves each provider's existing return contract. Google reads res.data, HubSpot expects a HubspotToken object, and Zoho/Bigin read tokenInfo.data. With syncing enabled these consumers receive a Response instead, so their refresh paths fail or read invalid token fields. Adapt the sync response at those consumers (Google/Zoho need a data envelope and HubSpot needs the parsed body), while preserving Response returns for consumers that already parse fetch responses."
+   },
+   {
+    "id": "S14",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     92,
+     93
+    ],
+    "texto": "refreshOAuthTokens defines its third argument as userId and serializes it as calcomUserId, but this caller supplies credentialId. These IDs identify different records, so enabling sync requests another user's tokens or fails to locate the intended user. Pass the owning credential's userId (and preserve null for team credentials), rather than the credential record ID."
+   },
+   {
+    "id": "S15",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     100
+    ],
+    "texto": "parseRefreshTokenResponse returns the safeParse result ({ success: true, data: ... }), not the parsed credential object. Passing that entire result as Prisma's key replaces the stored Google credentials with a wrapper, so subsequent readers no longer find access_token, expiry_date, or refresh_token at the top level. Persist its data property instead."
+   },
+   {
+    "id": "S16",
+    "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "lines": [
+     8,
+     15
+    ],
+    "texto": "The enabled sync branch returns a native fetch Response without decoding it. Google immediately reads res.data.access_token, Zoho reads tokenInfo.data.error, and HubSpot expects token properties directly. Those contracts worked with their original SDK/Axios return values, but a fetch Response supplies neither shape: Google and Zoho throw on undefined data and HubSpot receives undefined token fields. Decode the endpoint response and adapt it to each caller's expected shape (or normalize both helper paths and all callers to one token-data contract)."
+   },
+   {
+    "id": "S17",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     5,
+     11
+    ],
+    "texto": "Computed property names using Zod schemas' toString() produce literal property names, not wildcard field validators. Consequently a normal response such as { access_token, expires_in } does not preserve expires_in: z.object strips unrecognized fields. In sync mode this loses the expiry required by Office365 and Zoom (and Google's expiry_date), leaving refreshed credentials without a usable updated expiration. Explicitly model the supported expiry fields and preserve additional provider fields with passthrough instead."
+   },
+   {
+    "id": "S18",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     100
+    ],
+    "texto": "parseRefreshTokenResponse returns the safeParse result ({ success, data }), whereas the previous schema.parse returned the credential object itself. Writing that wrapper to key removes access_token and refresh_token from the top-level stored credential, breaking subsequent authentication even when credential sharing is disabled. Persist the parsed data instead."
+   },
+   {
+    "id": "S19",
+    "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "lines": [
+     8,
+     15
+    ],
+    "texto": "The sync branch returns a native fetch Response, but Google reads res.data, HubSpot reads token fields directly, and the Zoho consumers read response.data. With sharing enabled these consumers receive neither shape and token refresh fails. Decode and adapt the sync payload per integration (while preserving Response for the fetch-based consumers), rather than substituting a raw Response for every provider's return value."
+   },
+   {
+    "id": "S20",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     5,
+     11
+    ],
+    "texto": "z.string().toString() is a literal object property name, not a wildcard for arbitrary response fields. Both computed keys normally stringify to the same name, so the latter overwrites the numeric validator. Because z.object strips unknown fields, normal expires_in/expiry_date fields are discarded (as is refresh_token) in sharing mode. Define the supported expiry fields explicitly and retain the required token fields instead of using schema instances as property names."
+   },
+   {
+    "id": "S21",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     92,
+     94
+    ],
+    "texto": "refreshOAuthTokens names its third parameter userId and sends it as calcomUserId to the sync endpoint. This call instead passes credentialId. These independent IDs need not match, causing refresh requests for the wrong user (or no user) when sync is enabled. Pass the owning credential's userId, including null for team credentials."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+    "descricao": "The new app-credential webhook checks its shared secret with a plain !== string comparison instead of a constant-time comparison, leaking timing information about the secret.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       23,
+       29
+      ],
+      "texto": "Direct !== comparison of webhook secret leaks via timing attack. Use constant-time comparison (e.g., crypto.timingSafeEqual on hashed/buffered values with length check) instead of `req.headers[...] !== process.env.CALCOM_WEBHOOK_SECRET`."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       24,
+       27
+      ],
+      "texto": "The webhook authenticates a secret using direct string inequality, which is not constant-time and can leak information about the secret through comparison timing. Compare fixed-length representations using a constant-time primitive (such as crypto.timingSafeEqual), handling absent or malformed headers safely, instead of comparing the secret strings directly."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       24,
+       29
+      ],
+      "texto": "The webhook secret is compared with the `!==` operator, which short-circuits on the first differing byte and leaks the secret via response timing (timing attack). An attacker can iteratively recover CALCOM_WEBHOOK_SECRET and then forge requests that create/update arbitrary user credential keys (decrypted with the AES key) via this endpoint. Use a constant-time comparison, e.g. crypto.timingSafeEqual on equal-length buffers, guarding for length mismatch first."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
+    "descricao": "The webhook parses the body with zod .parse and decrypts/JSON-parses the keys without error handling, so invalid payloads produce 500 errors instead of 400 responses.",
+    "textoGolden": "The `appCredentialWebhookRequestBodySchema.parse` function can throw on invalid payloads, resulting in 500 Internal Server Errors instead of the expected 400 Bad Request responses. This can lead to confusion for clients and hinder proper error handling.",
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       31,
+       31
+      ],
+      "texto": "WHAT: zod parse, symmetricDecrypt and JSON.parse throw unhandled (no try/catch) with no method guard. WHY: Invalid body/keys or GET request crashes handler with 500 and leaks stack, instead of 400/405. HOW: Wrap parse/decrypt in try/catch returning 400 and restrict to POST."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       31,
+       59
+      ],
+      "texto": "schema .parse plus symmetricDecrypt/JSON.parse throw unhandled (ZodError, decrypt error, SyntaxError) on invalid body or tampered keys, crashing webhook with 500. Use safeParse and try/catch with 400 responses."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#03",
+    "descricao": "The webhook's non-atomic findFirst-then-create lets concurrent deliveries for the same user and app insert duplicate credential rows.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       62,
+       70
+      ],
+      "texto": "The webhook performs a non-atomic findFirst followed by create when no credential exists. Concurrent deliveries for the same user and app can both observe no row and insert duplicates because Credential has no unique userId/appId constraint; subsequent findFirst updates only one duplicate, leaving competing credentials stale. Serialize the lookup/create operation for each user/app pair or introduce an appropriate uniqueness constraint and atomic upsert."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+    "descricao": "parseRefreshTokenResponse writes the hardcoded string 'refresh_token' when the refresh response omits a refresh token, so the stored credential gets an invalid refresh token and later refreshes fail.",
+    "textoGolden": "The parseRefreshTokenResponse function incorrectly sets refresh_token to the hardcoded string 'refresh_token' when it's missing from the OAuth refresh token response. This invalidates the token, breaking subsequent token refreshes and causing authentication failures.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       26
+      ],
+      "texto": "The parser fabricates the literal refresh token \"refresh_token\" whenever a successful response omits refresh_token, including when synchronization is disabled. Office365's response schema explicitly permits that omission, and its caller merges parsed data over existing credentials, replacing the valid saved refresh token with this invalid value and breaking the next refresh. Leave the property absent so the existing token survives the merge."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       26
+      ],
+      "texto": "When a refresh response omits refresh_token, this helper manufactures the hardcoded credential \"refresh_token\". Callers such as Office365 merge this into stored credentials, overwriting the valid existing refresh token and causing subsequent provider refreshes to use a predictable invalid token. Leave the field absent and preserve the existing credential when omission is allowed by the provider, or reject the response when a refresh token is required; do not substitute a literal authentication token."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       27
+      ],
+      "texto": "WHAT: Missing refresh_token is replaced with literal string \"refresh_token\". WHY: Stores bogus refresh token in DB, breaking all future refreshes and masking provider errors. HOW: Preserve existing credential refresh_token or throw instead of injecting placeholder."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+    "descricao": "minimumTokenResponseSchema uses computed keys from z.string().toString(), which produce a literal key rather than a wildcard, so the sync-mode schema does not validate or keep expiry and other token fields as intended.",
+    "textoGolden": "The Zod schema in parseRefreshTokenResponse uses computed property keys [z.string().toString()] and [z.string().optional().toString()] in minimumTokenResponseSchema, which is invalid Zod syntax and will throw a runtime error.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "`[z.string().toString()]` evaluates to a fixed string key such as \"ZodString\", so minimumTokenResponseSchema requires a literal numeric property with that name. Every synced token response fails validation and throws \"Invalid refreshed tokens were returned\". Use `z.object({access_token: z.string()}).passthrough()` instead."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "The computed keys `[z.string().toString()]` evaluate to the literal string \"[object Object]\", not a wildcard. The schema therefore requires a numeric property named \"[object Object]\", so safeParse always fails in credential-sync mode and the function throws \"Invalid refreshed tokens were returned\". Use `.passthrough()` on an object with access_token and optional numeric expiry fields instead."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "The computed keys `[z.string().toString()]` evaluate to a literal string like \"ZodString\" and not to a wildcard. The schema therefore requires a numeric property with that nonsense name and never matches real token responses. In sync mode every refresh throws \"Invalid refreshed tokens were returned\". Use `.passthrough()` and a real expiry check instead."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+    "descricao": "In sync mode refreshOAuthTokens returns a raw fetch Response, but callers expect their provider-specific shapes (res.data, axios .data, HubspotToken), so token refresh breaks for Google, Zoho and HubSpot when credential sharing is on.",
+    "textoGolden": "When APP_CREDENTIAL_SHARING_ENABLED and CALCOM_CREDENTIAL_SYNC_ENDPOINT are set, the refreshFunction helper returns the fetch Response, but several callers (for example GoogleCalendarService.refreshAccessToken expecting res.data, and HubspotCalendarService.refreshAccessToken expecting a HubspotToken) assume it returns the integration-specific token object. That mismatch will cause runtime errors in the sync-enabled path unless the return type or those call sites are adjusted.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "lines": [
+       8,
+       15
+      ],
+      "texto": "WHAT: In the credential-sharing branch `refreshOAuthTokens` returns the raw `fetch` `Response` object instead of a parsed token payload, yet several callers treat the result as an already-parsed token object.\nWHY: Callers such as hubspot (`hubspotRefreshToken.expiresIn`), zoho-bigin (`tokenInfo.data.error`), zohocrm (`zohoCrmTokenInfo.data.error`) and googlecalendar (`res?.data`) read `.data`/token fields off the return value; a `Response` has neither, so the sync path yields `undefined`/`NaN` or throws a TypeError \u2014 the feature's primary code path is broken for those apps.\nHOW: Parse the response (e.g. `const data = await response.json(); return data;`) before returning, or make every caller await the appropriate response handler."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "lines": [
+       8,
+       15
+      ],
+      "texto": "In sharing mode refreshOAuthTokens returns the raw fetch Response (no `.data`), but the google caller reads `res?.data` and then `token.access_token`, throwing a TypeError swallowed by the catch, so the token is never refreshed."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       94,
+       95
+      ],
+      "texto": "`res?.data` assumes the value returned by refreshOAuthTokens has a `.data` field (true for the `fetchTokens.res` branch), but when APP_CREDENTIAL_SHARING_ENABLED the helper returns a raw `fetch()` Response, which has no `.data`. Then `token.access_token` throws. Either parse the shared-mode Response here or have refreshOAuthTokens return a normalized `{ data }` shape."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+    "descricao": "Google Calendar persists the safeParse result object instead of its data as the credential key, corrupting the stored credential so later reads fail.",
+    "textoGolden": "parseRefreshTokenResponse returns a Zod safeParse result ({ success, data, error }), not the credential key object. Persisting that as key stores the wrapper instead of the token payload; we should store the parsed data or use schema parse.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns a SafeParse result {success,data}, not the parsed key. Storing it directly as `key` writes the wrapper to the credential. Unwrap like other callers: check .success and use .data."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns SafeParse result {success,data}, but call site stores that wrapper as credential `key` (previously googleCredentialSchema.parse() returned the plain object). Store `key.data` / handle wrapper, otherwise persisted credential becomes {success,data} shape and subsequent credential reads fail."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns SafeParse wrapper {success,data} but code stores the whole wrapper as credential.key. Office365calendar in same PR unwraps via .data. Persisted credential will be {success,data} instead of tokens, so next load fails validation. Unwrap to .data after success check."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#11",
+    "descricao": "After switching to parseRefreshTokenResponse, the tokenResponse.success check in Office365 refreshAccessToken is dead code and the previous error logging was dropped.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       263,
+       264
+      ],
+      "texto": "parseRefreshTokenResponse now throws when parsing fails, so the `tokenResponse.success` check on the next line is dead code and the previous error logging was removed. A failed refresh now throws out of refreshAccessToken instead of keeping the old credentials. Catch the error or restore the previous handling."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+    "descricao": "Salesforce getClient now refreshes the OAuth token and writes the credential on every service construction, adding a network round trip and DB write even when the access token is valid.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       75,
+       84
+      ],
+      "texto": "getClient now unconditionally exchanges the Salesforce refresh token on every service construction, even when the saved access token is valid. Each constructor invocation adds a blocking OAuth network round trip and credential database write before any Salesforce operation, replacing jsforce's existing on-demand refresh behavior. Keep refresh on demand or guard the exchange with a token-expiration check."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#14",
+    "descricao": "The new Salesforce token refresh uses prisma without importing it, so the code fails type checking and throws a ReferenceError at runtime.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       96,
+       99
+      ],
+      "texto": "The new credential update references prisma without importing or declaring it; searching this file finds only the new usage. This fails TypeScript checking and raises ReferenceError after a successful token exchange at runtime. Import prisma from @calcom/prisma before using it."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+    "descricao": "Zoho Bigin passes the credential id instead of the user id to refreshOAuthTokens, so the sync endpoint receives the wrong calcomUserId.",
+    "textoGolden": "The `refreshOAuthTokens` function is passed `credentialId` instead of `userId`, which breaks the credential sync functionality by causing incorrect user lookups. This issue can lead to failures in syncing user credentials, impacting user experience.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "WHAT: The 3rd argument to `refreshOAuthTokens` is `credentialId` (= `credential.id`, line 53), but the function's parameter is `userId` (`refreshOAuthTokens(refreshFunction, appSlug, userId)`).\nWHY: When APP_CREDENTIAL_SHARING_ENABLED, the sync endpoint is sent `calcomUserId: <credential id>` instead of the user id, so Bigin credentials are synced against the wrong/non-existent user (all other apps correctly pass `credential.userId`).\nHOW: Pass `credential.userId` instead of `credentialId` as the third argument."
+     },
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "refreshOAuthTokens' third parameter is the Cal.com userId (used as `calcomUserId` in the sync request and to decide whether sharing runs), but this call passes `credentialId`. Every other caller passes `credential.userId`, so the credential-sync endpoint receives a credential row id as the user id and shared credentials are fetched/updated for the wrong identity. Pass `credential.userId` here."
+     },
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "refreshOAuthTokens' third parameter is `userId` (declared in refreshOAuthTokens.ts line 3 and used as `calcomUserId: userId.toString()`), but this call passes `credentialId` (the Credential row id, line 53) instead of the user id. When credential sharing is enabled the customer's sync endpoint receives a credential id labelled as calcomUserId and cannot resolve the correct Cal.com user. Pass `credential.userId` (the BiginToken/credential payload carries it) or plumb the user id through refreshAccessToken."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+    "descricao": "Salesforce checks response.statusText !== 'OK' instead of response.ok when refreshing the token, which can misclassify successful responses, and then ignores the refreshed token.",
+    "textoGolden": "The Salesforce integration checks `response.statusText` instead of `response.ok` when handling OAuth token refresh responses. This can lead to unreliable behavior, as a successful response may not be correctly identified, resulting in the use of stale credentials and potential authentication failures.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       86,
+       107
+      ],
+      "texto": "WHAT: Checks response.statusText !== \"OK\" instead of response.ok and builds jsforce.Connection from stale credentialKey.access_token/instance_url ignoring accessTokenParsed.data. WHY: Refresh never takes effect (old token reused) and valid refreshes can throw on runtimes where statusText is empty. HOW: Check !response.ok and use parsed access_token/instance_url for connection and DB update."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
+    "descricao": "After refreshing the Salesforce token, jsforce.Connection is created with the stale access_token and instance_url instead of the newly refreshed values.",
+    "textoGolden": "The `jsforce.Connection` is created using stale `credentialKey.access_token` and `credentialKey.instance_url` after a token refresh, which can lead to authentication failures and incorrect data access. Ensure that the connection is established using the refreshed token values instead.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       96,
+       106
+      ],
+      "texto": "WHAT: The new block fetches and persists a fresh access token (`accessTokenParsed.data`) but then creates the `jsforce.Connection` with the stale `credentialKey.access_token` (line 106) instead of the just-refreshed token.\nWHY: The refreshed token is written to the DB but never used for the connection; if the old token was expired, jsforce must refresh again (extra round trip) or fail, and the DB/connection state diverge.\nHOW: Pass the new access token (`accessTokenParsed.data.access_token`) to the `jsforce.Connection`."
+     }
+    ]
+   }
+  ]
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "7355f05e6aafe2a7acc6434fb40c686665416606",
+  "base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     70,
+     70
+    ],
+    "texto": "WHAT: canManage() grants write authorization when only the VIEW scope is granted for all groups. WHY: GroupsResource.addTopLevelGroup() calls the inherited requireManage(), allowing a view-only administrator to create groups or move an existing child to the top level. HOW: Require MANAGE alone in this method, leaving VIEW acceptance in canView()."
+   },
+   {
+    "id": "S2",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     121,
+     121
+    ],
+    "texto": "WHAT: Group permission enumeration filters by the Groups resource type, but the group-resource creation path never sets that type. WHY: AdminPermissionsSchema.getOrCreateResource() creates a resource named after the group ID and updates its scopes without setting its type, so newly created per-group VIEW_MEMBERS and MANAGE_MEMBERS permissions are absent from this enumeration and user counts cannot include their members. HOW: Assign the Groups type when creating group authorization resources before relying on findByType()."
+   },
+   {
+    "id": "S3",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     122,
+     123
+    ],
+    "texto": "WHAT: getGroupIdsWithViewPermission() uses authorization-resource IDs where model group IDs are required. WHY: AdminPermissionsSchema stores the model group ID in the resource name, while hasPermission() looks up by that name and UsersResource passes the returned IDs to membership queries; using getId() therefore evaluates the wrong resource or all-groups fallback and produces membership filters that match no group. HOW: Use groupResource.getName() for both the permission lookup and the granted set."
+   },
+   {
+    "id": "S4",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/MgmtPermissionsV2.java",
+    "lines": [
+     60,
+     60
+    ],
+    "texto": "WHAT: Wiring the V2 group evaluator into user membership filtering exposes an incompatible legacy JPA query contract. WHY: UsersResource passes the evaluator's group IDs to JpaUserProvider.groupsWithPermissionsSubquery(), which additionally requires a resource named group.resource.<groupId>, whereas the new V2 schema names resources with the bare group ID; even with correctly enumerated IDs, user search and counts exclude permitted members in a V2-only realm. HOW: Update the membership-query resource check to support the V2 naming contract, or remove that legacy existence check when filtering already-authorized V2 group IDs."
+   },
+   {
+    "id": "S5",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     121,
+     124
+    ],
+    "texto": "The replacement for getGroupsWithViewPermission must still return model group IDs for UsersResource's count and search filters. Here groupResource.getId() is the authorization resource's ID, not the group's ID. Moreover, hasPermission interprets that argument as a resource name (findByName at line 141), so it misses the specific group permission and falls back to all-groups. Use groupResource.getName(), which AdminPermissionsSchema populates with the model group ID, for both evaluation and the returned set. Otherwise group-specific member-view grants fail to expose their users, and any returned authorization IDs cannot match user group membership."
+   },
+   {
+    "id": "S6",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/GroupResourceTypeEvaluationTest.java",
+    "lines": [
+     305,
+     306
+    ],
+    "texto": "The final check only verifies that joinGroup does not throw. If the endpoint accepts the request but never adds Bob to the group, testManageGroupMembership still passes. Read Bob's groups using the privileged client after this call and assert that topGroup is present, so the test verifies the membership operation as well as authorization."
+   },
+   {
+    "id": "S7",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+    "lines": [
+     133,
+     133
+    ],
+    "texto": "The new documentation points to canManageMembership, but requireManageMembers enforces canManageMembers. These are distinct permissions (manage-membership versus manage-members), so callers following this contract can expect authorization where the method actually rejects it. Link to canManageMembers instead."
+   },
+   {
+    "id": "S8",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+    "lines": [
+     145,
+     145
+    ],
+    "texto": "The return documentation says Stream, but the declaration returns Set<String> and both implementations construct or return sets. Describe the actual collection type so callers are not directed to use stream operations or stream lifecycle semantics on the return value."
+   },
+   {
+    "id": "S9",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     121,
+     124
+    ],
+    "texto": "The schema names each group authorization resource with the model group ID (resolveGroup returns group.getId()), but groupResource.getId() is the authorization resource's own ID. hasPermission then looks that value up by name, missing the specific group resource, and the returned set contains IDs that user searches cannot match to memberships. Use the resource name both for evaluation and for the returned group IDs."
+   },
+   {
+    "id": "S10",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     70,
+     70
+    ],
+    "texto": "canManage() accepts either VIEW or MANAGE, unlike canManage(group), which requires MANAGE. Consequently an administrator granted only all-groups VIEW passes requireManage() and can create groups through the global management gate. Require MANAGE here so read-only access does not authorize mutations."
+   },
+   {
+    "id": "S11",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     122,
+     123
+    ],
+    "texto": "AdminPermissionsSchema.resolveGroup uses the GroupModel ID as the authorization resource name, not as its resource ID. Here both the permission lookup and the returned set use groupResource.getId(), which is the authorization resource's separate identifier. hasPermission expects a model group ID and looks up resources by name, and the changed UsersResource passes the returned set to user searches/counts as model group IDs. Consequently a delegate granted view-members/manage-members on a particular group cannot reliably find or count its users (and evaluation may incorrectly fall back to all-groups permissions). Use the resource name for both operations."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+    "descricao": "GroupPermissionsV2.canManage() accepts the VIEW scope as well as MANAGE, so an admin with only view permission on all groups passes manage checks such as group creation.",
+    "textoGolden": "In GroupPermissionsV2.canManage(), the permission fallback checks for both VIEW and MANAGE scopes (hasPermission(null, AdminPermissionsSchema.VIEW, AdminPermissionsSchema.MANAGE)), but canManage() should only grant access for MANAGE scope, not VIEW. This means users with only VIEW permission on groups can pass the canManage() check, granting them write access they should not have. The canView() method correctly checks both VIEW and MANAGE, but canManage() should only check MANAGE.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       64,
+       71
+      ],
+      "texto": "The no-arg canManage() returns true when the caller holds only an all-groups VIEW permission (`hasPermission(null, VIEW, MANAGE)`), whereas the per-group canManage(GroupModel) (line 79) requires MANAGE. WHAT: a caller with only the view scope on all groups is treated as having manage rights. WHY: canManage()/requireManage() gate group creation and other manage operations (e.g. GroupsResource.addGroup -> auth.groups().requireManage()), so a read-only viewer of all groups can create/manage groups \u2014 privilege escalation. HOW: drop VIEW from the scope list so canManage() only returns true for MANAGE, aligning it with canManage(GroupModel): `return hasPermission(null, AdminPermissionsSchema.MANAGE);`"
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       65,
+       71
+      ],
+      "texto": "GroupPermissionsV2.canManage() (line 70) evaluates hasPermission(null, AdminPermissionsSchema.VIEW, AdminPermissionsSchema.MANAGE), identical to canView() at line 52, so a caller granted only the VIEW scope on the all-groups resource is treated as a group manager. The per-group overload canManage(GroupModel) (line 79) correctly requires only MANAGE, and AdminPermissionsSchema defines MANAGE as the manage scope for GROUPS_RESOURCE_TYPE, so the two checks disagree. requireManage() therefore succeeds for read-only administrators, letting them create/update/delete groups, add subgroups and map group roles. Drop VIEW from the scope list so canManage() checks MANAGE only."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       64,
+       71
+      ],
+      "texto": "WHAT: GroupPermissionsV2.canManage() grants global manage on VIEW scope (hasPermission(null, VIEW, MANAGE)). WHY: A caller with only view-all-groups permission passes the manage check, allowing group creation/management reserved for manage. HOW: Check only MANAGE, e.g. hasPermission(null, AdminPermissionsSchema.MANAGE)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+    "descricao": "getGroupIdsWithViewPermission uses the authorization resource id instead of the resource name (the group id) for both the permission check and the returned set, so per-group view-members grants are not resolved and user filtering gets wrong ids.",
+    "textoGolden": "In getGroupIdsWithViewPermission, hasPermission is called with groupResource.getId() and the same groupResource.getId() is added to granted, but hasPermission resolves resources by name (treating the argument as a group id) and the GroupPermissionEvaluator contract says this method returns group IDs that are later used as UserModel.GROUPS and in getUsersCount group filters. This mismatch means per-group VIEW_MEMBERS/MANAGE_MEMBERS permissions may not yield the expected group IDs for filtering and counts, and evaluation may effectively only look at the type-level 'all-groups' resource; consider revisiting whether this should operate on the underlying group ids (resource names) instead so it aligns with the JPA queries and the interface contract.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       119,
+       125
+      ],
+      "texto": "WHAT: getGroupIdsWithViewPermission() uses authz resource IDs (groupResource.getId()) as group IDs and looks them up via findByName. WHY: Resource names equal group IDs (AdminPermissionsSchema.resolveGroup returns group.getId()), so findByName(resourceId) misses and the returned set contains unusable IDs, breaking user search/count filtering by group. HOW: Use groupResource.getName() like V1 does (resource.getName().substring prefix / name) for both the hasPermission lookup and the granted set."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       119,
+       125
+      ],
+      "texto": "findByType callback passes groupResource.getId() to hasPermission() and granted set, but AdminPermissionsSchema.resolveGroup defines resource name (not UUID) as groupId and hasPermission looks up via findByName(server, groupId). Use groupResource.getName() for both check and granted set, otherwise lookups miss to all-groups fallback and callers receive authz UUIDs instead of group IDs."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       119,
+       125
+      ],
+      "texto": "getGroupIdsWithViewPermission uses groupResource.getId() for lookup and result collection, but V2 group resources are named with the group ID (resolveGroup returns group.getId()) and hasPermission does findByName. Use groupResource.getName() in both places to evaluate the correct per-group resource and to return actual group IDs."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+    "descricao": "Per-group resources are created without the Groups type, so getGroupIdsWithViewPermission's findByType never sees specific group grants.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       121,
+       121
+      ],
+      "texto": "findByType(GROUPS_RESOURCE_TYPE) does not enumerate the specific group resources created by AdminPermissionsSchema.getOrCreateResource, because that method creates them without setting their type. Consequently, specific VIEW_MEMBERS or MANAGE_MEMBERS grants are omitted from the group IDs used for user counts and database filtering. Assign the Groups type to specific group resources and ensure the all-Groups resource is not treated as a model group."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+    "descricao": "The user search filter still requires legacy 'group.resource.<id>' resources, so with V2 group permissions the members of authorized groups are excluded from user searches.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java",
+      "lines": [
+       448,
+       450
+      ],
+      "texto": "The new V2 group permission IDs are passed into a JPA filter that still requires a legacy group.resource.<groupId> authorization resource. JpaUserProvider.groupsWithPermissionsSubquery checks for that prefixed name, whereas AdminPermissionsSchema creates V2 group resources named only with the group ID, so authorized group members are excluded from user searches even with valid group IDs. Update the database filtering path to support V2 resource naming rather than requiring a legacy V1 resource."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+    "descricao": "The new Javadoc for requireManageMembers points to canManageMembership instead of canManageMembers.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       132,
+       135
+      ],
+      "texto": "The javadoc for requireManageMembers says it throws ForbiddenException if canManageMembership(GroupModel) returns false, but this method is the require-variant of canManageMembers, not canManageMembership. The text was copied from requireManageMembership above it. It should reference canManageMembers so the documented contract matches the method name and behavior."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       132,
+       135
+      ],
+      "texto": "The Javadoc for requireManageMembers says it throws if canManageMembership(GroupModel) returns false. It should refer to canManageMembers(GroupModel), which is a different check, so the doc misdescribes the method."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       132,
+       135
+      ],
+      "texto": "Javadoc for requireManageMembers references canManageMembership instead of canManageMembers (copy-paste). Fix link to {@link #canManageMembers(GroupModel)} so the contract describes the method it guards."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#07",
+    "descricao": "The Javadoc of getGroupIdsWithViewPermission says it returns a Stream though the method returns a Set.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       142,
+       147
+      ],
+      "texto": "The Javadoc for getGroupIdsWithViewPermission says it returns a 'Stream of IDs', but the method returns Set<String>. Change the @return text to describe a Set of group IDs."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       142,
+       147
+      ],
+      "texto": "@return says 'Stream of IDs' but method returns Set<String> getGroupIdsWithViewPermission. Fix doc to 'Set of IDs' to match the signature."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       145,
+       147
+      ],
+      "texto": "The new @return documentation promises a Stream of IDs, but the method declares Set<String> and both implementations return sets. Describe a set of IDs instead, so the documented return contract matches what callers actually receive."
+     }
+    ]
+   }
+  ]
+ },
+ "notification-rule-processing-engine-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "8df850371034b73dc4dd9908cc30fa09f12a1f97",
+  "base": "47e5bd23163e6037fc0741068ac78930bba2769f",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+    "lines": [
+     47,
+     47
+    ],
+    "texto": "The new list item passes only promRule, but RuleActionsButtons.V2 still renders SilenceGrafanaRuleDrawer only when rulerRuleType.grafana.alertingRule(rule) is true. Clicking the newly enabled Silence notifications menu item sets showSilenceDrawer without rendering any drawer, so silencing from either list view no longer works. Adapt the drawer path to accept the Prometheus rule UID or load the ruler rule on demand."
+   },
+   {
+    "id": "S2",
+    "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+    "lines": [
+     87,
+     87
+    ],
+    "texto": "canDelete now accepts Prometheus-rule permissions, but the delete menu item still requires rulerRule at line 165. Both new Grafana list paths omit rulerRule, so authorized users lose the Delete action despite canDelete being true. Render deletion using the identifier-based handler for Prometheus-only rules instead of requiring a ruler DTO."
+   },
+   {
+    "id": "S3",
+    "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+    "lines": [
+     83,
+     83
+    ],
+    "texto": "canPause now accepts Prometheus-rule permissions, but rendering MenuItemPauseRule still requires a Grafana rulerRule at line 123. The new Grafana list items never supply that prop, so pause and resume disappear from the list even for editable alert rules. Provide a Prometheus-compatible pause action or fetch the required ruler DTO on demand."
+   },
+   {
+    "id": "S4",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     228,
+     228
+    ],
+    "texto": "useAllAlertRuleAbilities now delegates to a hook that hardcodes isFederated to false, discarding the previous isFederatedRuleGroup(rule.group) check. Legacy RuleActionsButtons uses this wrapper for Update, so federated Mimir rules with source_tenants now receive an Edit action even though they were explicitly immutable before this change. Preserve the combined rule's federation status when computing its abilities."
+   },
+   {
+    "id": "S5",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     227,
+     228
+    ],
+    "texto": "useAllAlertRuleAbilities previously checked isFederatedRuleGroup(rule.group), so callers could rely on Update and Delete being unsupported for federated Mimir groups. This delegation passes only the ruler rule and identifier to an implementation that hardcodes isFederated = false. Consequently existing combined-rule consumers now advertise editing and deleting federated rules whenever datasource permissions allow it. Preserve the federation check in this wrapper or pass the group federation state into the delegated ability calculation."
+   },
+   {
+    "id": "S6",
+    "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+    "lines": [
+     161,
+     165
+    ],
+    "texto": "Finding the rule row waits for the Prometheus response, not the folder-permission response. GrafanaRuleListItem renders its row immediately, whereas useIsGrafanaPromRuleEditable initially has no folder and returns isEditable=false. Thus this negative assertion can pass during loading even if the resolved folder permissions are ignored and editing is subsequently allowed. Wait for the folder permission lookup to complete (for example using an observable request-completion signal and flushing its React update) before asserting that Edit is absent, so a regression that grants editing after loading fails this test."
+   },
+   {
+    "id": "S7",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     401,
+     404
+    ],
+    "texto": "skipToken is converted to undefined, but the underlying hook treats an absent rule as supported once loading is false and grants Duplicate from Grafana create permission. AlertRuleMenu ORs this result with the ruler result, so a datasource rule with duplication unsupported or denied can acquire a Duplicate action simply because the user can create Grafana rules. Return neutral abilities for skipToken after calling the hook."
+   },
+   {
+    "id": "S8",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     227,
+     228
+    ],
+    "texto": "The previous implementation checked isFederatedRuleGroup(rule.group) before allowing Update and Delete. Delegating directly to useAllRulerRuleAbilities now loses that group information; the delegated hook explicitly sets isFederated=false. Existing CombinedRule consumers therefore receive editable/removable abilities for federated groups when ordinary datasource permissions allow them. Preserve the group-level immutability check in this wrapper or pass it to the delegated hook."
+   },
+   {
+    "id": "S9",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     401,
+     405
+    ],
+    "texto": "AlertRuleMenu passes skipToken for datasource rules and ORs these results with the ruler permissions. However, converting skipToken to undefined does not disable abilities: the new calculator treats an absent rule as non-loading and non-plugin-provided, so Duplicate is supported and allowed whenever the user has Grafana rule-create permission. A datasource rule whose own Duplicate permission is denied can therefore still show that action. Return neutral [false, false] abilities for skipped inputs (in both singular and plural wrappers), while still calling hooks unconditionally."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#01",
+    "descricao": "The pause menu item is still gated on a Grafana ruler rule, but the list view now passes only the Prometheus rule, so Pause/Resume disappears for list-view rules even when the user may pause them.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       83,
+       83
+      ],
+      "texto": "The new Prometheus-based pause ability cannot display Pause or Resume for list-view rules because the menu still requires rulerRuleType.grafana.rule(rulerRule) before rendering MenuItemPauseRule. GrafanaRuleListItem now supplies only promRule, so these actions disappear even for editable rules. Adapt the pause menu item to accept the Grafana identifier and Prometheus pause state, or load the ruler rule on demand."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#02",
+    "descricao": "The Delete menu item still requires a ruler rule, which list-view Grafana rules no longer provide, so users with delete permission lose the Delete action.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       85,
+       87
+      ],
+      "texto": "The new Prometheus-based delete ability is still gated by `canDelete && rulerRule` when rendering the Delete item. Both Grafana list-view paths now omit rulerRule, so users with delete permission lose the Delete action entirely. Render deletion using the available identifier and group identifier instead of requiring the ruler DTO, adapting the callback contract accordingly."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#03",
+    "descricao": "When the Grafana prom-rule branch is skipped (datasource rules), useAllGrafanaPromRuleAbilities(undefined) still reports Duplicate as supported and allowed by Grafana create permission, and AlertRuleMenu ORs it with the ruler ability, so Duplicate appears on cloud rules even when the ruler check denies it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       89,
+       92
+      ],
+      "texto": "WHAT: canDuplicate ORs ruler ability with grafana ability where grafana path is skipToken=>undefined for cloud rules, and useAllGrafanaPromRuleAbilities(undefined) returns Duplicate=[true,true] whenever the user has global Grafana create permission. WHY: Any user with Grafana rule-create gets Duplicate menu item on cloud/Mimir rules even when ruler abilities deny it \u2014 incorrect authorization gating. HOW: Return NotSupported for all abilities when rule is skipToken/undefined, or gate grafana branch on prometheusRuleType.grafana.rule(promRule) before ORing."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       307,
+       314
+      ],
+      "texto": "useAllGrafanaPromRuleAbilities returns AlwaysSupported for Duplicate when rule is undefined (skipToken): loading is false from the !rule early-return, so MaybeSupported=true and duplicateSupported=true. ORed in AlertRuleMenu/RuleActionsButtons this leaks Grafana create permission into non-Grafana rules. Gate MaybeSupported/duplicateSupported on rule existence (e.g. NotSupported when !rule)."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       287,
+       318
+      ],
+      "texto": "useAllGrafanaPromRuleAbilities must return NotSupported for all actions when rule is undefined (skipToken). Currently MaybeSupported falls back to AlwaysSupported when !loading, so Duplicate=[true, global-create] is true for a cloud rule passed as skipToken, and AlertRuleMenu/RuleActionsButtons OR-logic then incorrectly enables Duplicate (and Explore). Guard with if (!rule) return all-NotSupported abilities or make MaybeSupported require rule."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#04",
+    "descricao": "The refactor of useAllAlertRuleAbilities into useAllRulerRuleAbilities drops the isFederatedRuleGroup check (isFederated is hardcoded false), so federated Mimir rules are reported as editable and deletable.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       223,
+       228
+      ],
+      "texto": "useAllAlertRuleAbilities now delegates to useAllRulerRuleAbilities, which hardcodes isFederated = false. The previous isFederatedRuleGroup(rule.group) check is gone, so federated Mimir rules are no longer treated as immutable and can show edit and delete abilities. Keep the federation check in this wrapper, or pass the federation state into the shared hook."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       227,
+       228
+      ],
+      "texto": "Delegating useAllAlertRuleAbilities to useAllRulerRuleAbilities discards the group's federation status and replaces the previous isFederatedRuleGroup(rule.group) check with a constant false. Legacy RuleActionsButtons consequently enables editing rules in groups with source_tenants, although these groups were explicitly immutable before this change. Preserve the CombinedRule federation check in the wrapper or pass federation status into the delegated ability calculation."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       227,
+       228
+      ],
+      "texto": "Preserve the federated-group immutability check when delegating this CombinedRule hook. Previously useAllAlertRuleAbilities inspected rule.group with isFederatedRuleGroup and disabled modification/removal for federated rules. The replacement delegates to a hook that hardcodes isFederated=false and receives no group information. Existing useAlertRuleAbility/useAlertRuleAbilities consumers therefore now receive supported update/delete abilities for federated rules when datasource permissions allow them, exposing operations that the previous contract explicitly prohibited. Pass the federation state through or retain that restriction in this wrapper."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#05",
+    "descricao": "The Grafana prom-rule abilities gate Pause, Restore, Export and DeletePermanently on alertingRule(rule) while the comment claims it checks Grafana-managed rules, so Grafana recording rules lose these actions in the list view.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       301,
+       302
+      ],
+      "texto": "The comment says all GrafanaPromRuleDTO rules are Grafana-managed, but the variable it describes is `isAlertingRule`. That variable is true only for alerting rules and false for Grafana recording rules. Fix the comment, or rename the variable, so it says the check is for alerting rules. As written, readers will expect Pause, Export and Silence to be enabled for recording rules."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       301,
+       328
+      ],
+      "texto": "The comment says all GrafanaPromRuleDTO rules are Grafana-managed, but the check used is alertingRule(rule), which is false for recording rules. Pause, Restore, ModifyExport and DeletePermanently are therefore wrongly disabled for Grafana recording rules, where the old isGrafanaManagedAlertRule check allowed them. Use prometheusRuleType.grafana.rule(rule) for these abilities, and keep alertingRule only for Silence."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#06",
+    "descricao": "The comment claims GrafanaPromRuleDTO abilities have no loading state, but the next line makes support depend on the folder loading flag.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       308,
+       309
+      ],
+      "texto": "The comment says there is no loading state, but the next line is `loading ? NotSupported : AlwaysSupported`. `loading` comes from the folder fetch. Update the comment to say that support depends on the folder loading state."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#07",
+    "descricao": "The Grafana branch of the filtered rule list renders GrafanaRuleListItem without a key prop, so React reconciles the streaming list by index and warns about missing keys.",
+    "textoGolden": "The rendered GrafanaRuleListItem is missing the required key prop for React list items. This can cause rendering issues when the list order changes.",
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+      "lines": [
+       157,
+       162
+      ],
+      "texto": "WHAT: The grafana branch of the filtered list renders <GrafanaRuleListItem .../> without a `key` prop, dropping the `key={key}` that the replaced <GrafanaRuleLoader key={key} .../> had. WHY: `rules.map` renders a dynamic list keyed by getRuleKey/hashRule; without a key React logs duplicate-key warnings and reconciles rows by index, so as the async rule stream updates/reorders the wrong rule row can be reused/mutated (stale state, swapped actions). HOW: add `key={key}` (the value is already destructured on line 152) to the <GrafanaRuleListItem> element."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+      "lines": [
+       157,
+       162
+      ],
+      "texto": "WHAT: Grafana branch of FilterViewResults renders GrafanaRuleListItem without key={key} while datasource and unknown branches pass key. WHY: Breaks React list reconciliation \u2014 wrong item reuse, stale actions/state and console key warnings for every Grafana hit. HOW: Add key={key} to the GrafanaRuleListItem element."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#08",
+    "descricao": "The test named 'should render More button with action menu options' only checks the More button exists, never the menu options.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       101
+      ],
+      "texto": "The test 'should render More button with action menu options' only checks that the More button exists. It finds the button by name 'More', so the aria-label and text assertions are tautological. It would pass even if the menu had no actions or the abilities were broken. Click the button and assert the expected menu items, or rename the test to match what it checks."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       102
+      ],
+      "texto": "Test named 'should render More button with action menu options' never verifies any action menu option: the body only asserts the More button exists and has aria-label/text 'More'. It would still pass if the dropdown were rendered empty (Silence/Duplicate/Copy link/Export all missing), i.e. the behaviour the name promises is not covered. Either open the menu and assert the menu items, or rename the test to reflect that it only checks the trigger button's rendering/accessibility."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       102
+      ],
+      "texto": "Test named 'should render More button with action menu options' never opens the menu nor asserts menu items \u2014 it only checks More button presence/aria/text. Click More and assert expected menuitems (or rename to 'should render More button') so it fails if menu actions break."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#09",
+    "descricao": "GrafanaGroupLoader's JSDoc still says it loads from Prometheus and Ruler endpoints after the ruler query was removed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx",
+      "lines": [
+       24,
+       28
+      ],
+      "texto": "The JSDoc for GrafanaGroupLoader still says \"Loads an evaluation group from Prometheus and Ruler endpoints.\" but this PR removed the ruler API query entirely \u2014 the component now only calls useGetGrafanaGroupsQuery (Prometheus). The documentation describes a data source the function no longer consumes; update it to state only the Prometheus endpoint is loaded (and the same stale \"Ruler response\" reference in the expectedRulesCount prop doc at lines 18\u201319 should be corrected)."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#11",
+    "descricao": "For list-view Grafana rules RuleActionsButtons gets only promRule, so the Silence menu item is shown but the silence drawer, still gated on a ruler alerting rule, never renders and clicking Silence does nothing.",
+    "textoGolden": "RuleActionsButtons is invoked with only promRule, but SilenceGrafanaRuleDrawer inside RuleActionsButtons still depends on a Grafana Ruler rule being present, so for Grafana rules coming from list views the 'Silence notifications' menu entry (now driven by Grafana Prom abilities) will toggle showSilenceDrawer without ever rendering the drawer. This means clicking 'Silence notifications' for these rules has no visible effect, even when abilities indicate silencing is allowed.",
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+      "lines": [
+       47,
+       47
+      ],
+      "texto": "Passing only promRule enables the Silence notifications menu item but leaves RuleActionsButtons.V2 unable to render its silence drawer, which is guarded by rulerRuleType.grafana.alertingRule(rule). Clicking Silence only updates showSilenceDrawer and displays nothing because rule is undefined. Update the drawer to accept a rule UID\u2014the inspected SilenceGrafanaRuleDrawer only needs grafana_alert.uid\u2014and allow the Prometheus alerting-rule path to render it."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+      "lines": [
+       47,
+       47
+      ],
+      "texto": "The new list item passes only promRule to RuleActionsButtons, but that component renders SilenceGrafanaRuleDrawer only under `rulerRuleType.grafana.alertingRule(rule) && showSilenceDrawer`. With rule undefined, clicking the newly enabled 'Silence notifications' action only sets state and never opens a drawer. Adapt the silence rendering path to load/use the rule by its Prometheus identifier before switching this caller to promRule-only."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+      "lines": [
+       130,
+       144
+      ],
+      "texto": "WHAT: getEditableIdentifier now enables a prom-only path (Grafana uid identifier with rulerRule undefined) but the silence drawer still renders only when rulerRuleType.grafana.alertingRule(rule) is true. WHY: In the list view Silence menu item can be shown via grafana abilities, clicking it sets showSilenceDrawer but the drawer never mounts, so Silence silently does nothing. HOW: Gate the drawer on promRule as well or provide a prom-based silence drawer."
+     }
+    ]
+   }
+  ]
+ },
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "8422030ef456e3a898415e96475b4d8ddfc7640f",
+  "base": "bdd229e3f22e307fe40b30ef99e92ff3f6723da4",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "MetricAlertDetectorHandler now inherits abstract stateful methods without implementing them. MetricAlertFire still registers this class, so Detector.detector_handler calls its constructor and raises TypeError for metric_alert_fire detectors, aborting process_detectors before evaluation. Keep this handler concrete with a dictionary-returning no-op evaluate implementation until its stateful methods and occurrence builder are implemented."
+   },
+   {
+    "id": "S2",
+    "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+    "lines": [
+     536,
+     538
+    ],
+    "texto": "The expected occurrence is built for \"val1\", but test_dedupe evaluates \"group_key\". The new hook builds the actual occurrence using the evaluated key, so its fingerprint differs from the expected occurrence and the equality assertion fails. Build the expected occurrence with \"group_key\"."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "Switching this empty handler to StatefulDetectorHandler leaves its abstract counter_names, get_dedupe_value, get_group_key_values, and build_occurrence_and_event_data unimplemented. Instantiating MetricAlertDetectorHandler now raises TypeError, so obtaining a handler for the registered metric-alert group type breaks before evaluation. Retain the concrete no-op handler until the stateful hooks are implemented, or implement all required hooks here."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "Changing this handler to StatefulDetectorHandler while leaving its body empty makes it abstract. That base requires get_dedupe_value, get_group_key_values, and the newly added build_occurrence_and_event_data hook. Instantiating the registered metric-alert detector handler now raises TypeError instead of providing the previous no-op evaluation. Keep the handler concrete with the dictionary-returning no-op evaluate contract until its stateful hooks are implemented, or implement all required hooks here."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "MetricAlertDetectorHandler was previously concrete, but switching it to StatefulDetectorHandler without implementing its abstract members makes it non-instantiable. In particular, this PR adds the required abstract build_occurrence_and_event_data method, while this subclass contains only pass. Accessing Detector.detector_handler for the registered metric-alert group type now raises TypeError rather than returning the previous no-op handler, so process_detectors fails before evaluation. Keep the no-op handler concrete (with the updated dictionary return contract) until the stateful hooks are implemented."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/workflow_engine/processors/detector.py",
+    "lines": [
+     226,
+     228
+    ],
+    "texto": "The docstring immediately below still says this method returns a list of DetectorEvaluationResult, but this change returns a dictionary keyed by DetectorGroupKey. Callers following that documentation would iterate keys rather than results. Update the return-shape description to match the new contract."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "The adjacent TODO says this will become a stateful detector when the abstraction is built, but the class now inherits that very abstraction. Remove or revise the TODO so it describes the remaining implementation work rather than a future conversion already completed."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#01",
+    "descricao": "The TODO above MetricAlertDetectorHandler says it will become a stateful detector, but the class already subclasses StatefulDetectorHandler.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       10,
+       12
+      ],
+      "texto": "The comment 'TODO: This will be a stateful detector when we build that abstraction' is now stale. MetricAlertDetectorHandler already subclasses StatefulDetectorHandler. Remove or reword the TODO."
+     },
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "Remove or revise the adjacent TODO saying this will become a stateful detector 'when we build that abstraction'. The class now inherits StatefulDetectorHandler, so the comment describes already-completed work as a future migration and misleads maintainers about which abstraction this handler uses."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+    "descricao": "MetricAlertDetectorHandler subclasses StatefulDetectorHandler without implementing its abstract methods, so instantiating it for metric alert detectors raises TypeError where it previously returned an empty-result handler.",
+    "textoGolden": "MetricAlertDetectorHandler inherits from StatefulDetectorHandler but only contains pass, failing to implement its required abstract methods: counter_names (property), get_dedupe_value(), get_group_key_values(), and build_occurrence_and_event_data(). This will cause a TypeError at runtime when the class is instantiated.",
+    "comentarios": [
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "WHAT: MetricAlertDetectorHandler now subclasses StatefulDetectorHandler with an empty body, so it does not implement the abstract methods counter_names, get_dedupe_value, get_group_key_values, and build_occurrence_and_event_data declared on StatefulDetectorHandler. WHY: the class is now abstract, and Detector.detector_handler (src/sentry/workflow_engine/models/detector.py:86) instantiates it via group_type.detector_handler(self), so any detector whose type resolves to this grouptype will raise TypeError: Can't instantiate abstract class MetricAlertDetectorHandler \u2014 the previous version implemented evaluate and was instantiable. HOW: implement the required abstract methods (or keep a concrete evaluate override) so the handler can be constructed."
+     },
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler but with `pass`, so it implements none of the abstract methods it inherits (counter_names, get_dedupe_value, get_group_key_values, and the newly added build_occurrence_and_event_data). The class is therefore still abstract and instantiating it (it is registered as `detector_handler` on MetricAlertFire and is constructed by Detector.detector_handler) raises `TypeError: Can't instantiate abstract class MetricAlertDetectorHandler with abstract methods ...`. Before this change it subclassed DetectorHandler and implemented the single abstract `evaluate`, so it was instantiable; the PR makes the metric-alert handler path throw. Either implement the required abstract methods or keep the class free of unimplemented abstracts."
+     },
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler (an abc.ABC) with only `pass`. StatefulDetectorHandler declares four abstract methods \u2014 counter_names, get_dedupe_value, get_group_key_values, and the newly added build_occurrence_and_event_data (detector.py:142-170) \u2014 none of which are implemented here. The class therefore remains abstract and cannot be instantiated; Detector.detector_handler's `group_type.detector_handler(self)` will raise `TypeError: Can't instantiate abstract class MetricAlertDetectorHandler` for the metric_alert_fire group type. Previously this class was a concrete DetectorHandler with an implemented evaluate, so this PR newly makes it uninstantiable. Implement the required abstract methods (or revert to a concrete handler) to satisfy the base-class contract."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03",
+    "descricao": "The evaluate() docstring says it returns a list of DetectorEvaluationResult, but it now returns a dict keyed by group key.",
+    "textoGolden": "Docstring says this returns a list of DetectorEvaluationResult, but the method now returns a dict keyed by DetectorGroupKey. Consider updating the docstring to match the new return type.",
+    "comentarios": [
+     {
+      "file": "src/sentry/workflow_engine/processors/detector.py",
+      "lines": [
+       226,
+       228
+      ],
+      "texto": "Update evaluate's adjacent docstring to describe a dictionary keyed by DetectorGroupKey rather than a list of DetectorEvaluationResult. This change returns a dictionary and callers now consume .values(), but the documented return contract still tells readers to expect a list; iterating the documented result as a list would instead yield group keys."
+     },
+     {
+      "file": "src/sentry/workflow_engine/processors/detector.py",
+      "lines": [
+       226,
+       231
+      ],
+      "texto": "Docstring says 'returns a list of DetectorEvaluationResult' but signature/body now return dict[DetectorGroupKey, DetectorEvaluationResult]. Update docstring to describe dict keyed by group_key."
+     },
+     {
+      "file": "src/sentry/workflow_engine/processors/detector.py",
+      "lines": [
+       226,
+       233
+      ],
+      "texto": "The evaluate() docstring still says it returns a list of `DetectorEvaluationResult`. The method now returns a dict mapping group key to `DetectorEvaluationResult`. Update the docstring to describe the dict return shape."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#04",
+    "descricao": "The mock occurrence builder ignores its value argument, so tests (e.g. group_2 expected with 6 while the packet carries 10) pass regardless of which value is passed to build_occurrence_and_event_data.",
+    "textoGolden": "Wrong value `6` passed for `group_2` occurrence \u2014 the data packet specifies `\"group_2\": 10`. Should be `10` to accurately reflect the test scenario, which will ensure the test produces the correct occurrence data.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+      "lines": [
+       244,
+       265
+      ],
+      "texto": "The new occurrence builder accepts `value` but never incorporates or asserts it, so the occurrence tests cannot detect incorrect forwarding of the measured value to `build_occurrence_and_event_data`. For example, `test_state_results_multi_group` supplies 10 for group_2 but builds its expected occurrence with 6 and still passes. A regression that passes a constant or another group's measurement at the new production hook would therefore go unnoticed. Include the value in the mock occurrence's evidence and use the actual expected measurement, or assert the hook's arguments directly."
+     },
+     {
+      "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+      "lines": [
+       244,
+       275
+      ],
+      "texto": "`build_mock_occurrence_and_event` accepts `value: int` but never uses it (the occurrence is built only from `group_key`/`new_status`), and this same helper is also the implementation of `MockDetectorStateHandler.build_occurrence_and_event_data`. Because neither the expected occurrence nor the handler output depends on the value, tests like `test_state_results_multi_group` (which incorrectly builds the group_2 occurrence with `value=6` while the packet carries `10`) and `TestEvaluate.test_dedupe` (expected built with 6 vs packet 8) pass regardless of the value actually passed into `build_occurrence_and_event_data`. If evaluation passed a wrong value, these tests would still pass, so they do not verify the value/threshold path they appear to cover. Include `value` in a field of the occurrence (or assert on it in the handler) and fix the wrong expected values so the argument is actually checked."
+     },
+     {
+      "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+      "lines": [
+       244,
+       275
+      ],
+      "texto": "`build_mock_occurrence_and_event` accepts a `value: int` parameter but never uses it \u2014 the returned IssueOccurrence is derived only from `group_key` and `new_status`. Because `value` is dead, callers can pass a mismatched value with no failure: in `test_state_results_multi_group` the packet contains `group_2: 10`, but the expected occurrence for `group_2` is built with `6`. Either use `value` when constructing the occurrence so the test validates the group value, or drop the unused parameter and pass the correct value; otherwise the test silently accepts wrong group values."
+     }
+    ]
+   }
+  ]
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "1950a511026d520a7329c7b6b9ee60a4af8f8b55",
+  "base": "b8c1cd410f4499c77a8b372decfe1718b80ccfd2",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "lines": [
+     78,
+     79
+    ],
+    "texto": "WHAT: canView(client) accepts the all-clients view permission before evaluating a client-specific denial. WHY: an administrator granted global view can still read a client explicitly denied by its individual permission; ClientsResource additionally uses canView() to skip individual authorization for the entire listing. HOW: keep global role shortcuts separate from fine-grained grants and evaluate individual client permissions before falling back to the all-clients permission, including in client listing."
+   },
+   {
+    "id": "S2",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "lines": [
+     138,
+     142
+    ],
+    "texto": "WHAT: getClientsWithPermission searches by the Clients resource type although individual client resources are created without a type. WHY: individual grants are omitted, while a granted all-clients resource adds the literal name \"Clients\" instead of client IDs; AvailableRoleMappingResource expects each returned value to resolve through realm.getClientById(cid) before dereferencing its roles. HOW: enumerate actual client models and evaluate their effective permissions, returning only their model IDs and expanding global grants appropriately."
+   },
+   {
+    "id": "S3",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "lines": [
+     148,
+     149
+    ],
+    "texto": "AbstractTokenExchangeProvider still calls AdminPermissions.management(session, realm).clients().canExchangeTo(client, targetClient, token) at line 276 as a boolean authorization check. With MgmtPermissionsV2 now returning this implementation, that existing consumer receives UnsupportedOperationException instead of an authorization decision when its cross-client exchange check is reached. Consequently enabling V2 turns this token-exchange path into a server failure rather than a controlled permission denial. Preserve a boolean denial for unsupported exchange, or update the token-exchange consumer to explicitly handle the unsupported V2 case."
+   },
+   {
+    "id": "S4",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+    "lines": [
+     95,
+     103
+    ],
+    "texto": "Both requireView() and requireViewClientScopes() have void return types, but their new Javadocs say they return true. This misstates the enforcement contract for callers: these methods should be documented as throwing ForbiddenException when the corresponding can method returns false, consistent with the other require methods in this interface."
+   },
+   {
+    "id": "S5",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "lines": [
+     78,
+     82
+    ],
+    "texto": "Calling canView() here grants access based on the all-clients VIEW permission before the specific client's resource is evaluated. Consequently an administrator granted global VIEW can still read a client for which an explicit negative VIEW permission was created. The analogous user tests in this PR require object-specific denials to override global grants. Preserve the built-in admin-role shortcut, but evaluate fine-grained VIEW through hasPermission(client, ...) so that the existing resource-specific lookup and global fallback determine access."
+   },
+   {
+    "id": "S6",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java",
+    "lines": [
+     147,
+     152
+    ],
+    "texto": "This block does not reliably test that removing a default client scope is forbidden. Before permissions are granted, getDefaultClientScopes() itself is protected and can throw ForbiddenException (as testConfigureOnlyOneClient also expects). The catch then passes without ever calling removeDefaultClientScope(), so this test stays green if removal authorization is removed. Obtain the scope ID through the privileged realm.admin() client first, then put only the restricted removal call in the exception assertion."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+    "descricao": "Claims the removal-cleanup listener is guarded by the V1 fine-grained flag, so client/role/group permissions are orphaned when V1 is disabled or only V2 is enabled.",
+    "textoGolden": "Inconsistent feature flag bug causing orphaned permissions. The AdminPermissions event listener, responsible for cleaning up permissions upon role, client, or group removal, is incorrectly guarded by the ADMIN_FINE_GRAINED_AUTHZ (V1) feature flag. This is inconsistent with other methods in the class that use ADMIN_FINE_GRAINED_AUTHZ_V2. Consequently, if ADMIN_FINE_GRAINED_AUTHZ_V2 is enabled but V1 is not, the permission cleanup logic will not execute, leading to orphaned permission data. Cleanup should occur regardless of which fine-grained authorization version is enabled.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java",
+      "lines": [
+       77,
+       95
+      ],
+      "texto": "The cleanup is now entirely wrapped in Profile.isFeatureEnabled(ADMIN_FINE_GRAINED_AUTHZ), so when the feature is disabled the pre-existing removal cleanup (roles/clients/groups .setPermissionsEnabled(..., false)) no longer runs. Realms using the non-V2 permission model will keep orphaned authorization resources/permissions after a client, role or group is removed. The gate should preserve the old behavior when the feature is off (run for V1), or the V1 cleanup must be performed elsewhere."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+    "descricao": "getClientsWithPermission in ClientPermissionsV2 only finds the type-level 'Clients' resource and returns its name, never actual client ids, so callers that resolve the returned values as client ids get wrong results or null clients.",
+    "textoGolden": "In getClientsWithPermission(String scope), iterating resourceStore.findByType(server, AdminPermissionsSchema.CLIENTS_RESOURCE_TYPE) and returning resource.getName() will only ever consider the type-level 'Clients' resource (per-client resources have no type) and return its name, while AvailableRoleMappingResource#getRoleIdsWithPermissions expects actual client IDs to pass to realm.getClientById, which can lead to incorrect behavior or a null client and subsequent failures.",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+    "descricao": "Claims getResourceTypeResource can return null in ClientPermissionsV2.hasPermission, causing a NullPointerException in findByResource.",
+    "textoGolden": "In ClientPermissionsV2.hasPermission, the method getResourceTypeResource could return null, leading to a NullPointerException in findByResource. Defensive null checks are needed to prevent this issue.",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#05",
+    "descricao": "ClientPermissionsV2 has an unused private getEvaluationContext method.",
+    "textoGolden": "Remove unused getEvaluationContext private method in ClientPermissionsV2 - it is defined but never called",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       262,
+       272
+      ],
+      "texto": "Dead computation: `getEvaluationContext(ClientModel, AccessToken)` is private and has no caller anywhere in the class. Its only possible consumer in the V1 class, `canExchangeTo`, was overridden to throw UnsupportedOperationException (line 148-150). The EvaluationContext and its overridden getBaseAttributes are built and then never used \u2014 remove the method (or wire it into canExchangeTo if token-exchange is meant to be supported)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+    "descricao": "The Javadoc of the void requireView() and requireViewClientScopes() methods says they return true instead of documenting that they throw ForbiddenException.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+      "lines": [
+       95,
+       98
+      ],
+      "texto": "The Javadoc for `void requireView()` says \"Returns {@code true} if {@link #canView()} returns {@code true}\", but requireView() is void and throws ForbiddenException rather than returning a value. It is a copy-paste of the canView() doc and should read \"Throws ForbiddenException if {@link #canView()} returns {@code false}\", matching the sibling require* methods (requireListClientScopes, requireConfigure, etc.)."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+      "lines": [
+       100,
+       103
+      ],
+      "texto": "The Javadoc for `void requireViewClientScopes()` says \"Returns {@code true} if {@link #canViewClientScopes()} returns {@code true}\", but the method is void and throws ForbiddenException. The doc describes a boolean return the method never produces; it should state that it throws ForbiddenException if canViewClientScopes() returns false, consistent with the other require* methods."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+      "lines": [
+       95,
+       103
+      ],
+      "texto": "Declaration does not match the method it documents: the javadoc for `requireView()` ('Returns {@code true} if {@link #canView()} returns {@code true}.') and for `requireViewClientScopes()` ('Returns {@code true} if {@link #canViewClientScopes()} returns {@code true}.') describes a boolean-returning accessor, but both methods are declared `void` and are the require* counterparts that throw ForbiddenException (as documented for requireManage/requireConfigure above). The text was copy-pasted from the corresponding can* methods; it should state that the method throws when canView()/canViewClientScopes() is false."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+    "descricao": "ClientPermissionsV2.canView() ignores a global MANAGE permission, so admins with only global manage take the unpaginated, per-client evaluated listing path.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       86,
+       87
+      ],
+      "texto": "canView() does not recognize an all-clients MANAGE permission even though canView(client) grants viewing through canConfigure(client) and canManage(client). For an administrator with global MANAGE but no VIEW, ClientsResource.getClients selects an unpaginated realm-wide client stream and evaluates authorization for clients before applying pagination, instead of fetching the requested database page. Include the global MANAGE permission in the global viewing capability while preserving client-specific denial semantics."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+    "descricao": "canView(client) short-circuits on the global all-clients VIEW permission, so a client-specific permission denying an admin is never evaluated and the client is still viewable.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       78,
+       82
+      ],
+      "texto": "The global VIEW check returns true before evaluating client-specific VIEW permissions, bypassing a negative permission on an individual client. An administrator granted VIEW on all clients can therefore read a client explicitly excluded by a client-specific denial; ClientsResource.getClients also bypasses per-client checks when this evaluator's parameterless canView() returns true. Evaluate the specific client resource before falling back to the all-clients permission, and ensure listing does not use a global grant to skip specific denials."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       78,
+       79
+      ],
+      "texto": "Do not short-circuit resource-specific view evaluation on the global fine-grained VIEW grant. With an all-clients VIEW permission allowing an administrator and a client-specific VIEW permission denying that administrator, canView() returns true here and the specific client permission is never evaluated. This differs from the specific-over-global override behavior exercised for users in this PR and exposes the denied client's representation. Keep the administrative-role bypass separate from fine-grained grants and evaluate the client's resource before falling back to the all-clients resource; also ensure the global view result used by client listing cannot bypass those overrides."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#11",
+    "descricao": "The negative check for removing a default client scope expects ForbiddenException, but it can come from the preceding getDefaultClientScopes() call, so the test passes even without a permission check on removal.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java",
+      "lines": [
+       147,
+       152
+      ],
+      "texto": "The expected ForbiddenException can come from getDefaultClientScopes(), before removeDefaultClientScope() is invoked. With no permission granted, the initial read is forbidden, so this test still passes if removal's manage-permission check is removed entirely; the later granted removal also succeeds in that broken implementation. Obtain the scope ID using the privileged realm client outside this try block, then invoke only removeDefaultClientScope() through the restricted client and assert that it is forbidden."
+     }
+    ]
+   }
+  ]
+ },
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "5f8a130277dbddc95d133cd2832be639baf89213",
+  "base": "e25638dab0d4b98f99c8fe8976ccaae8f4fb9db3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/models/blocked_email.rb",
+    "lines": [
+     12,
+     12
+    ],
+    "texto": "WHAT: The block lookup compares the supplied email verbatim, including its domain's letter case. WHY: A signup for block@SPAMFROMHOME.ORG bypasses a block stored as block@spamfromhome.org even though both identify the same mailbox; User.new_from_params assigns the raw request email without normalizing it. HOW: Normalize domains consistently on both BlockedEmail storage and lookup, using the application's Email.downcase convention, and normalize existing entries."
+   },
+   {
+    "id": "S2",
+    "file": "app/models/blocked_email.rb",
+    "lines": [
+     14,
+     16
+    ],
+    "texto": "WHAT: match_count is incremented with an unlocked read-modify-write sequence. WHY: Two concurrent signup attempts can both load count N and save N+1, losing a blocked attempt from the statistics. HOW: Use an atomic database increment and update last_match_at in the same statement, or lock and reload the record before modifying it."
+   },
+   {
+    "id": "S3",
+    "file": "lib/validators/email_validator.rb",
+    "lines": [
+     13,
+     13
+    ],
+    "texto": "WHAT: Email validation calls should_block?, which persists match statistics on every validation pass. WHY: UsersController#create calls user.valid? and then user.save even when validation fails, so one blocked signup increments match_count twice instead of once. HOW: Separate the blocking predicate from statistics recording and record the match once per signup attempt rather than once per model validation."
+   },
+   {
+    "id": "S4",
+    "file": "app/models/blocked_email.rb",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "The new blocklist compares email strings exactly, but BlockedEmail accepts and stores mixed-case addresses without normalization. For example, an entry for `Person@example.com` will not match `person@example.com`, despite these being treated as the same identity by the application's Email.downcase-based account lookups. This lets a blocked identity register when the list was populated with a different casing (including manual imports explicitly contemplated by the tests). Canonicalize both stored blocklist addresses and lookup inputs using the application's email normalization policy, and normalize existing/imported entries as well."
+   },
+   {
+    "id": "S5",
+    "file": "app/models/blocked_email.rb",
+    "lines": [
+     14,
+     16
+    ],
+    "texto": "Concurrent attempts matching the same blocked email lose statistics updates. Both requests can load match_count=N, increment their separate instances to N+1, and save N+1, so two matches are recorded as one. Update the counter atomically in SQL (and last_match_at in the same update), or lock and reload the row before incrementing."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#02",
+    "descricao": "When the server rejects an email, the signup form marks it with the generic 'invalid email' text instead of the server's reason (blocked or not allowed).",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+      "lines": [
+       69,
+       74
+      ],
+      "texto": "The message shown for a rejected email disagrees with the reason the code is reacting to. This branch fires when the server rejected the email (result.errors.email), and this PR gives that condition its own server string \u2014 user.email.blocked, added in config/locales/server.en.yml as \"is not allowed.\" \u2014 but the client re-labels it with the generic I18n.t('user.email.invalid'). A user whose address is perfectly well-formed but blocked/hosted on a blacklisted domain is therefore told their email is invalid, contradicting the reason just returned by the server. Use the blocked/not-allowed message (and add a matching client locale key) instead of user.email.invalid. Notice the same generic string is used at line ~94 for validation failures, so it should not be reused to represent a distinct server-side rejection."
+     }
+    ]
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+    "descricao": "BlockedEmail.should_block? looks up the email with a case-sensitive exact match and no normalisation, so changing the letter case of a blocked address bypasses the block list.",
+    "textoGolden": "The case-sensitive email lookup in `BlockedEmail.should_block?` creates a bypass risk, allowing 'User@Example.com' to bypass a block on 'user@example.com'. This can lead to unauthorized access to blocked users.",
+    "comentarios": [
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       12,
+       12
+      ],
+      "texto": "Blocked-email lookup compares the raw email without normalizing its domain. A signup for block@SPAMFROMHOME.ORG does not match a blocked record for block@spamfromhome.org despite identifying the same mailbox, allowing the signup restriction to be bypassed by changing domain capitalization. Normalize domains using Email.downcase both when storing blocked emails and when looking them up."
+     },
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "Canonicalize blocked emails consistently with the application's Email.downcase identity handling, both when storing entries and when looking them up. This exact equality query is case-sensitive, and BlockedEmail's validation callback only defaults action_type. A block-list entry such as `Block@SpamFromHome.org` therefore does not block the same identity submitted/stored as `block@spamfromhome.org`. This is particularly relevant to the explicitly supported manually populated block list. Normalize existing/imported entries as well as new ones, and add a test with differing casing between the stored entry and the lookup."
+     },
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "Case-sensitivity bypass: BlockedEmail.where(email: email) is exact case-sensitive with no normalization, while sibling checks are case-insensitive. Normalize (downcase/strip) on write and lookup."
+     }
+    ]
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+    "descricao": "BlockedEmail.should_block? updates match_count and last_match_at as a side effect of email validation, so each signup attempt (validated twice) inflates the counter and concurrent updates can lose increments.",
+    "textoGolden": "BlockedEmail.should_block_email? method has side effects during a read operation - it updates statistics even when just checking if an email should be blocked. This could cause race conditions in concurrent environments and makes the method name misleading.",
+    "comentarios": [
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       11,
+       18
+      ],
+      "texto": "WHAT: should_block? mutates match_count/last_match_at via read-modify-write save inside a validator. WHY: Every validation call (including re-validations of the same attempt or attempts failing on unrelated fields like username) inflates stats, and concurrent signups lose increments with no atomic update. HOW: Move stats update out of validation or use atomic increment (update_counters/increment_counter) only on actual blocked rejections."
+     },
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       11,
+       19
+      ],
+      "texto": "WHAT: `should_block?` mutates state (increments `match_count`, sets `last_match_at`, calls `record.save`) inside a method that is invoked from the model validation callback, and the signup controller runs validation twice per attempt (`user.valid?` at users_controller.rb:168 then `user.save` at :172). WHY: a single signup attempt increments `match_count` twice and rewrites `last_match_at`, so the per-email block statistics the feature was built to track are wrong. HOW: make the read side non-mutating for validation and record the match separately (e.g. move the increment out of validation, or guard it so it runs once per attempt), keeping the predicate pure."
+     },
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       13,
+       17
+      ],
+      "texto": "WHAT: `record.match_count += 1; record.last_match_at = ...; record.save` is a non-atomic read-modify-write with no lock or unique constraint protection. WHY: two concurrent signup attempts with the same blocked email can both read the same `match_count` and one write overwrites the other, losing counts, so the tracked statistics drift under load. HOW: use an atomic update such as `BlockedEmail.where(id: record.id).update_all('match_count = match_count + 1, last_match_at = ...')` or a database-level counter increment."
+     }
+    ]
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#07",
+    "descricao": "Claims the 'returns false' spec cannot distinguish nil from false because be_false is a truthiness matcher.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/models/blocked_email_spec.rb",
+      "lines": [
+       22,
+       24
+      ],
+      "texto": "This test is named \"returns false if a record with the email doesn't exist,\" but it cannot verify that. `BlockedEmail.should_block?` returns `record && record.action_type == actions[:block]`, which yields `nil` (not `false`) when no record exists, and under this suite's RSpec 2 semantics `subject.should be_false` is a truthiness matcher that passes for any falsy value including `nil`. The assertion therefore passes on the nil the code actually returns and would only fail on an outright `true`; it does not pin the `false`/`nil` distinction its name asserts. Assert the value exactly (e.g. `subject.should == false`, or `be_falsey`/`be_nil` if nil is intended) so a regression returning a non-false falsy value is caught."
+     }
+    ]
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08",
+    "descricao": "The domain whitelist/blacklist regex @(domains) is not anchored at the end, so an address like user@example.com.evil.com matches a whitelist entry for example.com and bypasses the restriction.",
+    "textoGolden": "The regex pattern @(#{domains}) in email_in_restriction_setting? method only matches domain suffixes, not full domains with proper boundary anchoring. An attacker can register evil.example.com to bypass a whitelist entry for example.com.",
+    "comentarios": [
+     {
+      "file": "lib/validators/email_validator.rb",
+      "lines": [
+       18,
+       22
+      ],
+      "texto": "WHAT: email_in_restriction_setting? builds unanchored Regexp \"@(domains)\" with only '.' escaped. WHY: Whitelist 'gmail.com' substring-matches 'victim@gmail.com.evil.com', so an attacker registers with an unapproved domain and bypasses the allow-list; blacklist similarly over/under-matches and other regex metachars are unescaped. HOW: Anchor and escape domains (e.g. Regexp.escape per domain split on '|' plus /\\A[^@\\s]+@(?:domain)\\z/i)."
+     }
+    ]
+   }
+  ]
+ },
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "e944e2acf1e64421860a8e827f93ad06c169621b",
+  "base": "272cfc68dcc88615396ae62ed1571918e9c58ad3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+    "lines": [
+     403,
+     406
+    ],
+    "texto": "The original model's login predicate uses organization-aware isEnabled(), so updates can skip invalidation even when persisted login-query membership changes. After warming a public organization's login cache, disabling the organization and setting one of its providers to hideOnLogin or linkOnly makes both predicates false; reenabling the organization then displays that provider because the cached IDs remain and OrganizationAwareIdentityProviderBean only rechecks isEnabled(). Compare the original and updated persisted provider flags, rather than organization-dependent effective enabled state, when deciding whether to invalidate login queries."
+   },
+   {
+    "id": "S2",
+    "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+    "lines": [
+     236,
+     240
+    ],
+    "texto": "Extending a query copies previous search results into a new revision without checking whether the previous query was concurrently invalidated. If a request reads the existing query and another transaction hides a provider and invalidates the login cache before invalidateObject runs, the request reloads only the new organization's results and republishes the stale previous organization's IDs under the freshly bumped revision; addRevisioned accepts this revision, and subsequent login pages can still display the hidden provider. Avoid copying previous results across an intervening invalidation, or store organization-specific queries under separate revisioned keys."
+   },
+   {
+    "id": "S3",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+    "lines": [
+     400,
+     414
+    ],
+    "texto": "Every getForLogin call discards its result and checks only IdentityProviderListQuery internals. The new implementation could populate those entries correctly but return an empty stream (or incorrect providers), and this entire test would still pass. Consume and assert the returned provider IDs, then repeat the same query to assert the cache-hit result as well as the initial result; retain the internal-cache assertions for the separate caching contract."
+   },
+   {
+    "id": "S4",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+    "lines": [
+     381,
+     381
+    ],
+    "texto": "The cleanup targets the literal alias `alias`, but this loop creates providers named `idp-alias-0` through `idp-alias-19`. Consequently these callbacks do not remove the resources created by the test and can instead fail with a not-found response or remove an unrelated provider. Register cleanup using the actual created alias, and fix the same literal at line 425 for `idp-alias-20`."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+    "descricao": "The test registers cleanup for the literal alias \"alias\" instead of the created IDP aliases, so the created identity providers are never cleaned up.",
+    "textoGolden": "Cleanup reference uses incorrect alias - should be 'idp-alias-' + i instead of 'alias'.",
+    "comentarios": [
+     {
+      "file": "testCacheIDPForLogin",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The cleanup registers `identityProviders().get(\"alias\")::remove` inside the loop, and also for idp-alias-20. \"alias\" is a literal string rather than the actual IDP alias, so none of the created IDPs is ever cleaned up. Use the real alias (e.g. the loop's alias variable / \"idp-alias-20\") when registering the cleanup. As written, the 21 leaked providers can skew later tests that count IDPs or login caches."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       381,
+       381
+      ],
+      "texto": "The cleanup is registered for the literal alias \"alias\" rather than the IDP just created (\"idp-alias-\" + i). The 20 created IDPs are never removed, and the same applies to the cleanup at line 425 for \"idp-alias-20\". Use the actual alias, e.g. get(\"idp-alias-\" + i)::remove, so the IDPs don't leak into other tests."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       381,
+       381
+      ],
+      "texto": "The cleanup registered here uses the literal alias \"alias\", but the provider just created has alias \"idp-alias-\" + i. The same mismatch is repeated at line 425 for \"idp-alias-20\". The cleanup can never find/remove the created providers (null dereference/404 on remove, or at best a silent no-op), so none of the 21 IDPs this test creates are cleaned up and the realm is left polluted for later tests. Use the actual alias, e.g. `testRealm().identityProviders().get(\"idp-alias-\" + i)::remove` and `get(\"idp-alias-20\")::remove`."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#05",
+    "descricao": "On a partial cache miss getForLogin merges the previously read login query into a newly revisioned entry, so a concurrent invalidation can be lost and stale IDP IDs for other organizations persist.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+      "lines": [
+       236,
+       240
+      ],
+      "texto": "Do not merge the previously read query into a newly revisioned entry without verifying its revision. A reader can obtain a query containing organization A's IDs, then another transaction disables a provider or changes its organization and invalidates this key. When the reader requests an uncached organization B, this branch obtains a fresh revision but copies the old A results into the new query and publishes it using the current counter. Subsequent A requests receive stale membership indefinitely (a disabled or moved provider still exists, so the null-ID fallback does not repair it). Rebuild rather than copy after invalidation, or ensure the old query's revision is still valid atomically before publishing the merged entry."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08",
+    "descricao": "Login-cache invalidation on update compares the organization-aware enabled state, so changing a broker to private while its organization is disabled skips invalidation and leaves the now-private IDP in the cached login list.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+      "lines": [
+       405,
+       406
+      ],
+      "texto": "The early return compares the original IDP's organization-aware enabled state rather than the persisted enabled state used to populate the login cache. If a cached public IDP's organization is disabled and an admin changes BROKER_PUBLIC to false, the original predicate is false because the organization is disabled and the updated predicate is false because the broker is private, so the stale ID remains cached; re-enabling the organization displays the now-private broker because the login bean only rechecks isEnabled. Compare raw persisted models for login-cache invalidation, for example by loading the original through idpDelegate.getById before applying this predicate."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#11",
+    "descricao": "The LoginFilter javadoc still claims its constants are all criteria for login availability although getLoginPredicate now also checks organization link and BROKER_PUBLIC.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java",
+      "lines": [
+       252,
+       256
+      ],
+      "texto": "getLoginPredicate now also filters on organization link plus the BROKER_PUBLIC config (line 254), but the enum's javadoc directly above (lines 215-217) still states that the enum \"contains all fields that are considered when deciding if a provider should be available for login or not\", presenting ENABLED/LINK_ONLY/HIDE_ON_LOGIN as the exhaustive criteria. Any reader \u2014 or a future LoginFilter constant added against that documented assumption \u2014 will believe organization link and BROKER_PUBLIC play no role. Update the javadoc to include the organization-link/public-broker condition, or move the condition into a documented LoginFilter constant."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#13",
+    "descricao": "The login-cache test creates only public org-linked IDPs, so the new BROKER_PUBLIC check in getLoginPredicate is not covered.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       369,
+       388
+      ],
+      "texto": "Test fixture never covers the new BROKER_PUBLIC branch: all org-linked IDPs are created public, so reverting the getLoginPredicate public-check leaves all counts unchanged and the test still passes. Add at least one org-linked non-public (BROKER_PUBLIC false/missing) enabled IDP and assert it is excluded from getForLogin counts."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#14",
+    "descricao": "The test never consumes or asserts getForLogin's returned providers and never repeats a query, so the cache-hit path that builds the result is untested and could return wrong IDPs without failing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       401,
+       414
+      ],
+      "texto": "Consume and assert the results of getForLogin, including a repeat query for the same mode/organization to exercise a cache hit. All calls in this test discard the returned stream and assert only IdentityProviderListQuery contents. The implementation populates that query before reconstructing the returned models, so returning an empty stream (or the wrong providers) at line 254 would still pass the entire test. Assert the expected provider identities on both the initial query and the cached query, rather than only the internal cached count."
+     }
+    ]
+   }
+  ]
+ },
+ "database-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "04cfa3bfd469c035ff8b35f9a66867c4e8d5dcf4",
+  "base": "a886bd3c79a417a70b51509384d1f1ec3e87e96b",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     609,
+     612
+    ],
+    "texto": "The SQLite fallback rebuilds the complete accumulated ID string for every ID. For large batches such as the newly tested 32767-ID batch, this copies a quadratic volume of text and creates substantial allocation/GC work before each delete, including orphan-tag cleanup. Build the list with strings.Builder so each ID is appended once."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/cleanup/cleanup.go",
+    "lines": [
+     77,
+     77
+    ],
+    "texto": "The ticker change increases the frequency of every global cleanup job from once per ten minutes to once per minute. clean() also runs filesystem cleanup, snapshot deletion, dashboard-version deletion, image deletion, invite expiration, short-URL deletion, and query-history retention/row-limit enforcement, so this introduces tenfold scheduled database and filesystem cleanup work unrelated to the annotation deadlock fix. Preserve the existing global interval."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/services/annotations/annotationsimpl/cleanup_test.go",
+    "lines": [
+     83,
+     86
+    ],
+    "texto": "This case now starts with nine freshly created annotations and runs the cleaner only once. Previously it ran against the annotations retained by the preceding cleanup case. It therefore no longer verifies the named behavior of running max-count cleanup again on its own output; a regression affecting repeated cleanup can pass. Run cleanup once on an oversized fixture, then run it again on the same retained rows and assert zero affected annotations and tags."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#04",
+    "descricao": "Leftover debug logs in the annotation cleanup emit Error-level entries with the full ID list on every batch, flooding error logs during normal operation.",
+    "textoGolden": "The code uses Error log level for what appears to be debugging information. This will pollute error logs in production. Consider using Debug or Info level instead.",
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       528,
+       538
+      ],
+      "texto": "WHAT: Leftover debug logging calls r.log.Error on every cleanup batch (also duplicated at lines 554-557 and 576-579) dumping full ids slice, cond, and nil err at Error level. WHY: Fires Error-level log per batch and serializes up to AnnotationCleanupJobBatchSize IDs (32767 in new test), spamming error logs/monitoring on every normal cleanup run. HOW: Downgrade to Debug or remove; do not log full ids at Error."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       534,
+       537
+      ],
+      "texto": "WHAT: Leftover debug logging calls `r.log.Error(\"Annotations to clean by time\", \"count\", len(ids), \"ids\", ids, ...)` (and the identical Error-level logs for 'by count' and 'Tags to clean', lines 554/557/576/579) run on every batch in production. WHY: These log the full ID slice (up to AnnotationCleanupJobBatchSize, e.g. 32767 elements) at Error severity on every cleanup iteration, flooding logs with false error noise and large payloads for a normal successful operation, and can trigger error-based alerting. HOW: Remove these log lines, or downgrade to Debug and drop the full `ids` slice (log only the count)."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       534,
+       579
+      ],
+      "texto": "Avoid using Error-level logging on the normal cleanup path. The new r.log.Error calls emit count, ids, cond, and err at lines 534/537, 554/557, and 576/579 during non-error execution, creating log noise; consider downgrading or removing these logs on the normal path."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#05",
+    "descricao": "The comment states SQLite's parameter limit is 999, which is only true for SQLite versions before 3.32.0.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       605,
+       607
+      ],
+      "texto": "The comment states that SQLite has a parameter limit of 999, but SQLite >= 3.32.0 defaults to 32766 (as the added integration test also recognizes). This branch is choosing a conservative compatibility threshold, not expressing the limit of every SQLite database. Document 999 as the older-version/compatibility threshold so maintainers do not mistake this constant for the actual limit on modern SQLite."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#06",
+    "descricao": "On MySQL and Postgres, deleteByIDs binds one placeholder per ID without limit, so a cleanup batch size above 65535 makes every DELETE fail.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       605,
+       618
+      ],
+      "texto": "The bind-parameter workaround only handles SQLite's limit; the placeholder branch is used for every other engine with len(ids) placeholders and no bound. The previous implementation had no bind parameters, so this path is new. Postgres (extended protocol) and MySQL both cap bind parameters at 65535, so a configured AnnotationCleanupJobBatchSize larger than that makes this DELETE fail at Exec with a parameter-limit error instead of cleaning anything. Clamp the number of ids per DELETE (e.g. chunk into <=1000/<=65535 id sub-batches) for all dialects, not just SQLite."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       614,
+       618
+      ],
+      "texto": "On Postgres and MySQL, deleteByIDs binds one placeholder per ID with no cap. A configured AnnotationCleanupJobBatchSize above the driver's bind-parameter limit (65535) makes every cleanup batch fail, and the cleanup job then never finishes. Split the IDs into chunks below the limit, or inline the integer IDs as the SQLite branch does."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#07",
+    "descricao": "The SQLite inline ID list is built with repeated fmt.Sprintf concatenation, which is quadratic in batch size.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       608,
+       613
+      ],
+      "texto": "WHAT: SQLite large-batch IN-list built with repeated fmt.Sprintf(\"%s, %d\", values, v) in a loop over ids. WHY: Quadratic string copying on large batches (e.g. 32767 IDs in added test) during cleanup, a background job path. HOW: Build with strings.Builder or strings.Join."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       609,
+       612
+      ],
+      "texto": "The SQLite literal-ID path rebuilds the entire accumulated string for every ID, making SQL construction quadratic in batch size. Large batches explicitly supported by this PR, including the 32,767 setting in the integration test, generate substantial repeated copying and allocation before each delete, consuming cleanup time and memory. Build the list with strings.Builder and append each formatted ID once."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#08",
+    "descricao": "The cleanup service ticker was changed from 10 minutes to 1 minute, running every cleanup job ten times as often and increasing database load.",
+    "textoGolden": "The cleanup job ticker was changed from 10 minutes to 1 minute, which can lead to increased database load and contention due to more frequent execution of cleanup tasks. This change should be reviewed to ensure it aligns with performance expectations.",
+    "comentarios": [
+     {
+      "file": "pkg/services/cleanup/cleanup.go",
+      "lines": [
+       74,
+       78
+      ],
+      "texto": "WHAT: Cleanup ticker changed from 10 minutes to 1 minute with no justification. WHY: Runs all 8 cleanup jobs including the new multi-query (SELECT+DELETE per batch) annotation cleanup 10x more often, multiplying DB load. HOW: Revert to 10 minutes or justify the frequency change separately."
+     },
+     {
+      "file": "pkg/services/cleanup/cleanup.go",
+      "lines": [
+       77,
+       77
+      ],
+      "texto": "WHAT: The cleanup job ticker interval was changed from `time.Minute * 10` to `time.Minute * 1`. WHY: This runs all cleanup jobs (annotations, expired snapshots/versions/images, short URLs, query history) 10\u00d7 more frequently, multiplying background DB load and lock contention \u2014 the opposite of the deadlock mitigation this PR targets \u2014 and appears to be a debug leftover unrelated to the described change. HOW: Restore the ticker to `time.Minute * 10`."
+     },
+     {
+      "file": "pkg/services/cleanup/cleanup.go",
+      "lines": [
+       76,
+       77
+      ],
+      "texto": "The cleanup ticker was changed from `time.Minute * 10` to `time.Minute * 1`, a 10x increase in how often the entire cleanup job runs. This job also drives the annotation/tag cleanup path changed in this PR, which now fetches ID batches into memory and emits Error-level logs per batch, so running it every minute substantially increases DB load and log volume with no functional benefit. Unless a 1-minute cadence is explicitly intended, this should stay at 10 minutes (it reads like a leftover from testing)."
+     }
+    ]
+   }
+  ]
+ },
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "5b229316ee4c661836ed1161139692a3e8527444",
+  "base": "98fa098e6fade3097a11fe7f99a98a4e6ffb4728",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/assets/stylesheets/common/base/header.scss",
+    "lines": [
+     17,
+     18
+    ],
+    "texto": "The new flex row makes the implicit Ember wrapper around header-extra-info a flex item, rather than .extra-info-wrapper inside it. For long topic titles, that outer div retains its automatic minimum width, so the overflow:hidden and ellipsis rules in desktop/topic-post.scss cannot shrink the flex item and the title pushes the navigation panel outside the header; the order applied to the nested .extra-info-wrapper also has no effect on the row. Apply the sizing/ordering constraints to the actual component root (including min-width: 0), or remove the implicit wrapper so .extra-info-wrapper itself becomes the flex item."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#01",
+    "descricao": "The flex-item styles target the inner .extra-info-wrapper instead of the component's root div, so in the flexbox header a long topic title keeps its full width and pushes the navigation panel out instead of being truncated.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/base/topic.scss",
+      "lines": [
+       29,
+       30
+      ],
+      "texto": "The flex-item styling targets the inner .extra-info-wrapper rather than the outer div generated by header-extra-info's Ember.Component. With .contents now using flexbox, that outer div retains its automatic minimum width, so a long nowrap topic title cannot shrink to the available space and pushes the navigation panel outside the header instead of being ellipsized by the existing desktop truncation rules. Move the extra-info-wrapper class onto the component's root element and set min-width: 0 on that flex item so ordering and truncation apply to the actual header child."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#02",
+    "descricao": "The align-items mixin emits no -moz-box-align, so on old Firefox versions using the display:-moz-box fallback the advertised vertical centering is not applied.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+      "lines": [
+       117,
+       122
+      ],
+      "texto": "The alignment mixin does not match the Mozilla fallback emitted by flexbox(): when display: -moz-box is selected, neither align-items nor the WebKit/MS declarations control its cross-axis alignment. Consequently @include align-items(center) in the header and small-action leaves those children at the legacy default instead of vertically centering them. Emit -moz-box-align: $alignment alongside -webkit-box-align so the advertised fallback produces the same alignment."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#03",
+    "descricao": "The align-items mixin emits -ms-align-items, which never existed in IE/Edge; the legacy property is -ms-flex-align, so the declaration is dead.",
+    "textoGolden": "-ms-align-items never existed in any version of IE/Edge; the correct legacy property is -ms-flex-align.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+      "lines": [
+       117,
+       123
+      ],
+      "texto": "WHAT: align-items() mixin emits -ms-align-items: $alignment which is not a valid IE10/11 property (only -ms-flex-align exists). WHY: dead declaration shows wrong contract and leaves IE alignment dependent solely on -ms-flex-align, which also breaks for flex-start/flex-end values. HOW: remove the -ms-align-items line and map flex-start/flex-end to start/end for -ms-flex-align/-webkit-box-align."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#05",
+    "descricao": "Removing the float-based right alignment of .d-header .panel leaves the server-rendered (no-JS) header's login panel, which sits inside .row and is not a flex item, no longer right-aligned next to the title.",
+    "textoGolden": "Mixing float: left with flexbox causes layout issues. Further this PR removes the float-based right alignment for .d-header .panel, which may cause the login panel in the non-Ember/noscript header (where .panel is nested inside .row and not a flex item) to stack under the title instead of remaining right-aligned.",
+    "comentarios": []
+   }
+  ]
+ },
+ "advanced-query-processing-architecture-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "1cab4143d443c33079566f6ca36931eb8468159f",
+  "base": "d9a8253640464014aa3662c91131278990cfb828",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+    "lines": [
+     299,
+     299
+    ],
+    "texto": "WHAT: Queries are interpolated here and then interpolated again by DataSourceWithBackend.query, reached through datasource.runQuery. WHY: A variable whose literal value contains another defined variable reference (for example, a search variable containing `$host`) is substituted once here and then has that literal reference expanded on the second pass, changing the query and results; the shard path also passes through this new interpolation step. HOW: Ensure already-interpolated split targets bypass downstream template interpolation rather than applying the template service repeatedly."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "advanced-query-processing-architecture-grafana-codex#01",
+    "descricao": "Loki split/shard queries are now interpolated with applyTemplateVariables before splitting and again on execution, so ad hoc filters are applied twice and already-substituted values are re-interpolated.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/plugins/datasource/loki/shardQuerySplitting.ts",
+      "lines": [
+       52,
+       52
+      ],
+      "texto": "WHAT: runShardSplitQuery now interpolates every target via datasource.applyTemplateVariables (line 52), but it then delegates each sub-request to runSplitQuery (line 163), which this PR also changed to call datasource.applyTemplateVariables again (querySplitting.ts:299), so each target is interpolated (and ad hoc filters applied) twice. WHY: double interpolation re-runs addAdHocFilters on an already-filtered expression; the stream-selector path masks the duplicate via labelExists() dedup in addFilterToStreamSelector (modifyQuery.ts:494), but parsed/structured-metadata labels use addFilterAsLabelFilter which does not dedup, producing duplicated label filters, and any interpolated value containing '$' can be re-interpolated. This is confirmed by the updated test expecting applyTemplateVariables toHaveBeenCalledTimes(5) for a single target (1 call here + 4 sub-requests through runSplitQuery) instead of 1. HOW: interpolate only once \u2014 either remove the interpolation added to runShardSplitQuery and let runSplitQuery do it, or have splitQueriesByStreamShard pass the already-interpolated targets without re-interpolating in runSplitQuery."
+     },
+     {
+      "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+      "lines": [
+       299,
+       299
+      ],
+      "texto": "The newly interpolated targets are interpolated again by DataSourceWithBackend.query when runQuery executes each split request. TemplateSrv.replace scans the resulting string again, so a variable whose literal value contains another defined variable token (for example, a log-search value containing `$other`) is expanded a second time and produces a different query from the non-splitting path; shard splitting also passes through this additional interpolation. Preserve the early interpolation needed for partitioning while ensuring already-interpolated targets are not interpolated again on execution, and test through the real backend query preparation rather than mocking runQuery."
+     },
+     {
+      "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+      "lines": [
+       299,
+       299
+      ],
+      "texto": "Targets are interpolated here with `applyTemplateVariables`, including ad hoc filters, and then sent to `datasource.runQuery`, which interpolates them again through the backend path (datasource.ts:324/377). The ad hoc filters may be injected twice, and already-substituted values are re-interpolated, which can produce wrong or invalid LogQL. Interpolate only once. Either clear `scopedVars` and `filters` on the sub-requests after the first pass, or skip interpolation in `runQuery` for already-interpolated requests. The same issue applies to shardQuerySplitting.ts:52."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-query-processing-architecture-grafana-codex#05",
+    "descricao": "runShardSplitQuery now filters empty/hidden targets before interpolation, so an expr that interpolates to an empty string is no longer dropped.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/plugins/datasource/loki/shardQuerySplitting.ts",
+      "lines": [
+       49,
+       52
+      ],
+      "texto": "The order of operations was inverted relative to the previous contract: interpolation used to run before the `expr`/`hide` filters (interpolateVariablesInQueries(targets).filter(...)), and now the filters run on the *raw* targets before `applyTemplateVariables` is applied. Filtering on the un-interpolated `query.expr` means the previous fallback that dropped a target once variable substitution had emptied its expression no longer exists: a target like `{ expr: '$myVar' }` whose variable resolves to '' is truthy at filter time, survives, is then interpolated to `''`, and is passed into the shard splitting/execution loop as a blank query. To preserve the old contract the filters should run on the interpolated result (or the interpolated expr should be re-checked for emptiness)."
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,2310 @@
+{
+ "replays-self-serve-bulk-delete-system-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "ea188e2d736fd6ed27c1dba8aae63b7268e2a7a9",
+  "base": "49a275847631e231672d01b5dcd66558c069d25b",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+    "lines": [
+     165,
+     173
+    ],
+    "texto": "WHAT: The feature-enabled table branch passes empty columns and empty data instead of the fetched result. WHY: Every dashboard table using use-table-widget-visualization renders without its query results even when result.data contains rows. HOW: Thread the result data, metadata, and configured columns into the new visualization, or keep the existing renderer until that mapping is implemented."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+    "lines": [
+     115,
+     115
+    ],
+    "texto": "WHAT: The chronological merge compares nodestore error timestamps in seconds with recording event timestamps in milliseconds. WHY: Errors from a normal replay are emitted before the first recording event regardless of when they actually occurred, giving the AI summary an incorrect sequence of user actions and failures. HOW: Convert error timestamps to milliseconds before sorting, comparing, and formatting the combined logs."
+   },
+   {
+    "id": "S3",
+    "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+    "lines": [
+     39,
+     42
+    ],
+    "texto": "WHAT: The new attribute-key query cache key omits the organization even though the query function fetches an organization-specific endpoint. WHY: Switching organizations with identical project/date/type options can reuse another organization's cached attribute names, exposing tenant-specific metadata and displaying incorrect autocomplete options while the new request runs. HOW: Include the organization slug in the query key, as the previous organization-specific URL did."
+   },
+   {
+    "id": "S4",
+    "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+    "lines": [
+     70,
+     73
+    ],
+    "texto": "WHAT: Custom cell renderer results are accepted only when truthy rather than when defined. WHY: Valid React results such as 0, an empty string, false, or null trigger the fallback renderer, so callers cannot intentionally render zero or suppress a cell; the header renderer has the same defect. HOW: Use an explicit undefined check in both renderer wrappers to honor the documented fallback contract."
+   },
+   {
+    "id": "S5",
+    "file": "static/app/views/explore/contexts/pageParamsContext/visualizes.tsx",
+    "lines": [
+     40,
+     45
+    ],
+    "texto": "The remaining consumer in static/app/views/explore/savedQueries/exploreParams.tsx:29 still uses `visualizes.flatMap(visualize => visualize.yAxes)`. These Visualize instances now expose only `yAxis`, so that code produces undefined entries instead of the selected aggregate fields (and fails type checking). Update that consumer to map `visualize.yAxis` as part of this contract change so saved-query Explore parameters retain their visualizations."
+   },
+   {
+    "id": "S6",
+    "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+    "lines": [
+     70,
+     72
+    ],
+    "texto": "The new Storybook documentation explicitly promises that fallback runs when the custom renderer returns `undefined`, but both body and header renderers test truthiness instead. Valid ReactNode results such as `0`, an empty string, or `null` therefore unexpectedly display the default cell content. This prevents callers from intentionally hiding a cell or rendering a bare zero. Check explicitly for undefined in both renderers so implementation matches the published contract."
+   },
+   {
+    "id": "S7",
+    "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+    "lines": [
+     39,
+     42
+    ],
+    "texto": "The new query key contains only query options, not the organization slug, although the query function fetches an organization-specific endpoint. Switching organizations with identical project/date options (particularly the all-projects selection) reuses the previous organization's cached attributes. Include organization identity in the query key so separate organizations cannot share cached answers."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     52,
+     59
+    ],
+    "texto": "These checks test truthiness rather than whether the other field is present. A report containing both age=0 and timestamp=0 passes both validators, despite the explicitly declared constraint that the fields cannot coexist. Test membership in initial_data instead; zero is a valid timestamp and a natural age for a fresh report."
+   },
+   {
+    "id": "S9",
+    "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+    "lines": [
+     165,
+     173
+    ],
+    "texto": "When use-table-widget-visualization is enabled, this renders empty columns and empty data regardless of result.data and result.meta. Every populated table widget therefore becomes empty. Pass the actual result and selected fields to the new visualization instead of placeholder objects."
+   },
+   {
+    "id": "S10",
+    "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+    "lines": [
+     39,
+     42
+    ],
+    "texto": "The request in useGetTraceItemAttributeKeys targets organization.slug, but this query key contains only filters. Switching organizations with identical filters reuses the previous organization's cached attributes (notably with all-projects selection), and the previous-data handling can display those attributes while fetching. Include the organization slug in the cache key so organization-specific responses cannot share an entry."
+   },
+   {
+    "id": "S11",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     50,
+     59
+    ],
+    "texto": "The validators promise that age and timestamp cannot both be present, but checking their truthiness accepts a report containing age=0 and timestamp=0. Zero is a valid timestamp and a natural age for a fresh report. Check key presence in both validators rather than truthiness to enforce the declared exclusivity."
+   },
+   {
+    "id": "S12",
+    "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+    "lines": [
+     165,
+     173
+    ],
+    "texto": "The new visualization renders the supplied tableData.data and columnOrder verbatim, and its column inference only applies when columns is undefined. This caller supplies both an empty columns array and empty data instead of the fetched result, so every dashboard table becomes empty for organizations with use-table-widget-visualization enabled, even when the query returned rows. Pass the actual result data/meta and appropriate columns (or omit columns to infer them)."
+   },
+   {
+    "id": "S13",
+    "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+    "lines": [
+     39,
+     42
+    ],
+    "texto": "The new useGetTraceItemAttributeKeys hook fetches an organization-specific URL, but this cache key no longer includes the organization (unlike the previous URL-based key). With identical filters, particularly all-projects selection, switching organizations reuses the other organization's attribute collection until refetch completes; a failed refetch can leave that collection displayed. Include organization.slug in the query key so the cache follows the fetcher's organization scope."
+   },
+   {
+    "id": "S14",
+    "file": "static/app/views/dashboards/widgets/tableWidget/tableWidgetVisualization.spec.tsx",
+    "lines": [
+     15,
+     20
+    ],
+    "texto": "This basic rendering test only asserts the two column headers. TableWidgetVisualization derives headers from meta.fields independently of tableData.data, so a regression such as passing data={[]} to GridEditable would still pass this test. Assert representative string and numeric body values from sampleHTTPRequestTableData as well, so the basic populated-table case actually verifies that its rows reach the renderer."
+   },
+   {
+    "id": "S15",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     50,
+     59
+    ],
+    "texto": "Both checks use truthiness to determine whether the other field is present. Zero is a legitimate age and is explicitly permitted for timestamp; a report with age=0 and timestamp=0 passes both checks, although the validators require one field to be absent. Check key membership in initial_data instead so the rule also applies at zero."
+   },
+   {
+    "id": "S16",
+    "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+    "lines": [
+     70,
+     73
+    ],
+    "texto": "The custom-renderer contract uses undefined to request fallback, but `if (cell)` also falls back for valid React output such as 0, an empty string, or null. A renderer intentionally hiding a cell with null instead displays the underlying value, and a renderer returning numeric zero can display a different default-formatted value. Use an explicit undefined check here and in the matching header-renderer check."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#01",
+    "descricao": "The age/timestamp mutual-exclusion validators check truthiness via initial_data.get(), so a zero value is treated as absent and a report carrying both fields passes validation.",
+    "textoGolden": "Validation logic incorrectly uses .get('timestamp'), which treats a timestamp of 0 as absent. It should directly check 'timestamp' in self.initial_data to ensure proper field presence detection, preventing both 'age=0' and 'timestamp' from passing mutual-exclusion validation.",
+    "comentarios": [
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       47,
+       59
+      ],
+      "texto": "The timestamp/age validators test truthiness and make both fields optional instead of enforcing exactly one field. Reports with both age=0 and timestamp=0, or with neither field, pass validation despite violating the stated mutually exclusive report formats. Enforce field presence and exclusivity in object-level validate using key membership rather than truthiness."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       50,
+       59
+      ],
+      "texto": "Check key presence rather than truthiness when enforcing age/timestamp mutual exclusion. Both fields permit 0, so a report with age=0 and timestamp=0 passes both validators even though both fields are present; a zero-valued counterpart also bypasses the corresponding check. Use `\"age\" in self.initial_data` and `\"timestamp\" in self.initial_data` (or object-level validation) and add zero-value tests."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       50,
+       59
+      ],
+      "texto": "Check field presence rather than truthiness when enforcing timestamp/age exclusivity. A report containing both `timestamp: 0` and `age: 0` passes both validators, despite the declared constraint that they must not coexist; with only one zero value, validation is also asymmetric. Use membership checks on initial_data (or object-level validation) and add zero-value mixed-field tests."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#02",
+    "descricao": "The validation-failure warning logs the entire raw, attacker-controlled browser report instead of a redacted subset.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       111,
+       114
+      ],
+      "texto": "The new validation-failure warning logs `raw_report`, the full unvalidated report object supplied by the caller. This endpoint is public and unauthenticated (permission_classes = (), @csrf_exempt), so the payload is attacker-controlled, and browser report bodies routinely carry sensitive values (CSP blocked-uri/document-uri/script-sample, sourceFile, plus the full user_agent). Logging the raw payload on every validation failure writes potentially sensitive data into application logs; log only the report `type` (or a sanitized/redacted subset) instead of the entire raw object."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       111,
+       114
+      ],
+      "texto": "Do not attach the complete raw report to the validation warning. Browser reports contain page URLs (potentially including tokens or personal data in query strings) and arbitrary body contents. Any invalid field now causes that entire payload to be emitted at warning level, exposing it in operational logs even where the existing info-level request logging is filtered out. Log the failed field names/report type or a redacted diagnostic instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#06",
+    "descricao": "fetch_error_details pairs error_ids positionally with nodestore get_multi values, but get_multi does not preserve input order (cached items are appended last) and drops missing nodes, so error details get attached to the wrong error IDs.",
+    "textoGolden": "Using zip(error_ids, events.values()) assumes the get_multi result preserves the input order; dict value order is not guaranteed to match error_ids, so event data can be paired with the wrong ID (missing nodes also shift alignment).",
+    "comentarios": [
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       110,
+       120
+      ],
+      "texto": "WHAT: fetch_error_details zips error_ids with events.values() instead of mapping by node_id, misaligning ids to payloads and dropping/mismatching on missing keys. WHY: assigns wrong title/message/timestamp to wrong error id and yields incorrect Seer logs. HOW: look up each node_id in the get_multi dict (e.g. dict keyed by node_id) and preserve error_ids order."
+     },
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       104,
+       120
+      ],
+      "texto": "`zip(error_ids, events.values())` assumes `nodestore.backend.get_multi(node_ids)` values preserve input order and that all keys exist. Dict values give no such guarantee; missing keys shorten/misalign the zip, attaching the wrong event payload to the wrong error_id. Lookup per-id: iterate node_ids/error_ids and do `events.get(node_id)` instead of zipping with `.values()`."
+     },
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       104,
+       121
+      ],
+      "texto": "fetch_error_details pairs IDs to payloads with zip(error_ids, events.values()) where events is dict from nodestore get_multi. Values order need not match IDs and missing keys misalign, attaching wrong title/message to wrong error. Look up per node_id instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#07",
+    "descricao": "The Snuba replay lookup for error IDs runs even when enable_error_context=false, adding a needless query (and failure point) to opt-out requests.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       67,
+       77
+      ],
+      "texto": "The new Snuba replay lookup executes even when enable_error_context=false. Every opt-out summary request incurs an unnecessary database round trip and can now fail on Snuba availability even though it only needs recording storage. Evaluate the flag first and perform the replay lookup only when error context is enabled."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#12",
+    "descricao": "With the use-table-widget-visualization flag on, the widget renders TableWidgetVisualization with hardcoded empty columns and data instead of the query results, so every table widget shows an empty table.",
+    "textoGolden": "Hardcoded empty data passed to TableWidgetVisualization causes it to always render an empty table instead of displaying actual results when the feature flag is enabled.",
+    "comentarios": [
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "WHAT: the `use-table-widget-visualization` branch renders `<TableWidgetVisualization columns={[]} tableData={{data: [], meta: {fields: {}, units: {}}}} />`, hardcoding empty rows and no columns instead of the actual query result. WHY: when the feature flag is enabled for an org, every table widget renders an empty table and silently drops `result.data`/`result.meta`/`columns`, a functional regression for all dashboard table widgets. HOW: build `columns`/`tableData` from the existing `result` (and `widget.queries[i].fields`/`fieldAliases`) rather than the empty placeholder objects."
+     },
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "In the new feature-flagged branch, TableWidgetVisualization is rendered with hardcoded empty props: columns={[]} (an empty array, which is truthy for the `columns ?? fallback` logic, so no columns are derived) and tableData={data: [], meta: {fields: {}, units: {}}}. All the real result data computed above (result.data, result.meta, fields, fieldAliases, eventView) is discarded, so any organization with 'use-table-widget-visualization' enabled gets an empty table instead of the query results. Pass the actual result data/columns into the visualization (or keep the old StyledSimpleTableChart) until the widget is properly wired."
+     },
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "With the 'use-table-widget-visualization' feature enabled, TableWidgetVisualization is rendered with columns=[] and empty data/meta instead of result.data and result.meta. Every table widget therefore renders empty for orgs with the flag. Fix: pass tableData={{data: result.data, meta: result.meta}} and build columns from the fields."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#13",
+    "descricao": "The custom cell renderers fall back to default rendering on any falsy return (0, '', null), not only undefined, so a renderer cannot render zero or an empty cell.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+      "lines": [
+       70,
+       73
+      ],
+      "texto": "The documented custom-renderer contract says fallback runs when the callback returns undefined, but `if (cell)` also falls back for valid ReactNode results such as `0`, an empty string, or `null`. A caller trying to render zero or deliberately suppress a cell instead gets the default field rendering. Check `cell !== undefined` here and in the head-cell renderer so the implementation honors the advertised contract."
+     },
+     {
+      "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+      "lines": [
+       70,
+       72
+      ],
+      "texto": "Use `cell !== undefined` instead of `if (cell)` to select the custom renderer result, and apply the same correction to the header renderer. The API documents undefined as the fallback sentinel, but valid ReactNode results such as numeric 0, an empty string, or null are falsy. A custom renderer returning 0 or intentionally hiding a cell with null therefore unexpectedly renders the default value instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#19",
+    "descricao": "The attribute-keys query key no longer includes the organization slug, so two organizations with the same filters share a cache entry and switching orgs can show the previous org's attribute names.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       41
+      ],
+      "texto": "The new attribute query key omits the organization even though its query function fetches an organization-specific endpoint. Switching organizations with identical project selections such as all projects and the same date range reuses the singleton query client's prior organization's attribute metadata, including while the new request refetches. Include organization.slug or organization.id in the query key."
+     },
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       42
+      ],
+      "texto": "Include the organization slug in this query key. The new useGetTraceItemAttributeKeys implementation fetches `/organizations/${organization.slug}/trace-items/attributes/`, but makeTraceItemAttributeKeysQueryOptions contains no organization identity. Two organizations with identical filters (particularly the default all-project selection) therefore share this cache entry. Switching organizations can display the previous organization's attribute names, and concurrently mounted consumers can reuse a request for the wrong organization. Preserve the organization-specific cache identity that the previous endpoint-based key provided."
+     },
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       42
+      ],
+      "texto": "Include the organization slug or ID in this query key. The query function fetches `/organizations/${organization.slug}/trace-items/attributes/`, but the key contains only query options. Two organizations with the same project selection (especially the all-projects selection), date range and dataset therefore share a cache entry. Switching organizations can display the previous organization's attributes, and overlapping requests can populate the shared entry with the wrong organization's result."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#20",
+    "descricao": "The UseTraceItemAttributeBaseProps doc says only LOGS is supported, although the hooks are also used with SPANS.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/explore/types.tsx",
+      "lines": [
+       9,
+       12
+      ],
+      "texto": "The new shared prop documentation claims the endpoint currently supports only LOGS, but this PR also uses these hooks with TraceItemDataset.SPANS (for example in TransactionNameSearchBar). Update this comment to describe both supported datasets; as written it incorrectly tells callers that a supported and actively used input is unsupported."
+     }
+    ]
+   }
+  ]
+ },
+ "implement-access-token-context-encoding-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "daffb05b5ad091d3ec09933c3c99c2b54f448696",
+  "base": "c22f76867f595f0f7c327376a66a08dca01949e8",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+    "lines": [
+     57,
+     60
+    ],
+    "texto": "The new encoder records client-credentials access tokens with the unknown grant shortcut `na` instead of `cc`. ClientCredentialsGrantType.process creates its ClientSessionContext and directly invokes responseBuilder(...).generateAccessToken() without passing through OAuth2GrantTypeBase.createTokenResponse or setting Constants.GRANT_TYPE, so every client-credentials token loses the grant information this change promises. Set Constants.GRANT_TYPE to context.getGrantType() on that client-session context before generating the access token."
+   },
+   {
+    "id": "S2",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     481,
+     483
+    ],
+    "texto": "The matcher reads the wrong character range and rejects equality rather than inequality when checking the grant shortcut. The encoder places the grant at indices 4\u20135, so a token with an incorrect grant (including `na`) still passes the authorization-code, refresh, device and CIBA event assertions whenever its suffix resembles a UUID. Validate the six-character context length and require substring(4, 6) to equal the expected shortcut."
+   },
+   {
+    "id": "S3",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     480,
+     484
+    ],
+    "texto": "The encoder in DefaultTokenContextEncoderProvider produces two session characters, two token-type characters, and then two grant characters. This matcher instead reads substring(3, 5), and returns false on equality rather than on a mismatch. Consequently, the updated code-to-token, refresh, device and CIBA assertions can all pass with an incorrect grant encoded in the token ID, hiding regressions in grant propagation. Check the six-character prefix length and compare substring(4, 6) against the expected grant, rejecting mismatches."
+   },
+   {
+    "id": "S4",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     483
+    ],
+    "texto": "The encoder places the two-character grant shortcut at offsets 4\u20136, but this matcher extracts offsets 3\u20135 and rejects matching values rather than mismatches. Consequently an ID with the wrong grant (or any other prefix with a UUID suffix) can pass these event assertions. Check the prefix length and reject when substring(4, 6) does not equal the expected shortcut."
+   },
+   {
+    "id": "S5",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     73,
+     73
+    ],
+    "texto": "The check labeled 'Null rawTokenId not allowed' actually checks grantType again. A null rawTokenId therefore passes construction and encodeTokenId turns it into the literal suffix ':null', rather than rejecting the invalid token ID."
+   },
+   {
+    "id": "S6",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+    "lines": [
+     73,
+     76
+    ],
+    "texto": "The decoder requires a six-character prefix (two characters per field), but getShortcut() is accepted without length validation; the new interface even documents three-letter shortcuts as normal. A custom grant returning three characters successfully issues tokens whose IDs subsequently throw IllegalArgumentException when decoded. Validate exactly two characters when registering shortcuts, including lazy registration, and align the interface contract."
+   },
+   {
+    "id": "S7",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+    "lines": [
+     112,
+     114
+    ],
+    "texto": "The lazy registration path bypasses the uniqueness constraint enforced at startup. If a newly deployed grant uses an existing shortcut, this put replaces the old grant's reverse mapping while its forward mapping remains cached. Previously issued tokens then decode as the new grant, and both grants issue indistinguishable context prefixes. Reserve shortcuts with putIfAbsent and reject conflicting owners before adding the forward entry; apply the same rule to the decoder's lazy refresh path."
+   },
+   {
+    "id": "S8",
+    "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+    "lines": [
+     29,
+     33
+    ],
+    "texto": "The new API documentation recommends a three-letter shortcut, whereas getTokenContextFromTokenId requires a six-character context and reserves exactly two characters for the grant shortcut. An extension author following this contract will issue IDs that this decoder rejects. Document the two-character requirement explicitly."
+   },
+   {
+    "id": "S9",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     484
+    ],
+    "texto": "isAccessTokenId(expectedGrantShortcut) claims to match the expected grant, but it compares characters 3\u20134 rather than 4\u20135 and returns false on equality. Consequently a valid UUID suffix can pass even with the wrong grant, undermining the newly updated event assertions. Extract positions 4\u20136 and reject inequality, with a prefix-length check."
+   },
+   {
+    "id": "S10",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     483
+    ],
+    "texto": "The grant occupies indices 4\u20135 in the encoder's six-character prefix, but this condition examines indices 3\u20134 and rejects equality rather than inequality. Consequently IDs such as onrtna:<valid UUID> pass even when the event expects authorization_code, masking missing or incorrect grant propagation in all four changed event assertions. Compare substring(4, 6) to the expected shortcut and reject a mismatch (with a prefix-length guard)."
+   },
+   {
+    "id": "S11",
+    "file": "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java",
+    "lines": [
+     82,
+     83
+    ],
+    "texto": "Catching RuntimeException allows an unrelated failure to satisfy the invalid-grant test. In this fixture the factory never receives postInit, so its sessionFactory is null; looking up the absent ac shortcut enters getGrantTypeByShortcut's fallback and throws NullPointerException before the decoder can perform its intended IllegalArgumentException rejection. Initialize/mock the fallback factory and catch only IllegalArgumentException so removing the explicit unknown-grant validation cannot leave this test green through an unrelated exception."
+   },
+   {
+    "id": "S12",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     483,
+     483
+    ],
+    "texto": "The encoded prefix places the grant shortcut at indices 4 and 5, after two session and two token characters. substring(3, 5) instead reads the final token-type character and first grant character (for example 'ta' from 'onrtac'). Consequently these event assertions do not verify the grant encoded by the writer. Extract substring(4, 6), guarding the prefix length before slicing."
+   },
+   {
+    "id": "S13",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     483,
+     483
+    ],
+    "texto": "The condition returns false when the extracted shortcut equals the expected shortcut. This inverts the assertion: even after correcting the extraction indices, valid tokens will fail and tokens carrying another grant will pass as long as their suffix is a UUID. Return false when the shortcut does not equal the expected value."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#01",
+    "descricao": "The AccessTokenContext constructor checks grantType twice instead of rawTokenId, so a null rawTokenId passes validation and is encoded as ':null'.",
+    "textoGolden": "In AccessTokenContext constructor, the fourth Objects.requireNonNull validates grantType twice instead of validating rawTokenId, allowing null rawTokenId values to pass validation.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       73,
+       73
+      ],
+      "texto": "WHAT: the constructor validates `grantType` a second time instead of `rawTokenId` (`Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")`). WHY: a null `rawTokenId` is silently accepted, so `encodeTokenId` produces a token id ending in `:null` and any later consumer of the raw id gets an invalid value instead of an early failure. HOW: change the argument to `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")`."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       69,
+       78
+      ],
+      "texto": "Line 73 calls Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\") \u2014 it validates grantType a second time (line 72 already does) with a message naming a different field. rawTokenId is never validated, so a null rawTokenId is accepted at construction and the advertised check/message is wrong. It should be Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       73,
+       73
+      ],
+      "texto": "The null-check message names the wrong parameter: `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")` validates `grantType` but reports `rawTokenId`, and it duplicates the check on line 72 while `rawTokenId` is never validated at all. The message that reaches the reader contradicts the code it guards; it should be `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")`."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#02",
+    "descricao": "isAccessTokenId reads the grant shortcut at the wrong offset (3,5 instead of 4,6) and inverts the comparison, so the event assertions never verify the token's grant type.",
+    "textoGolden": "In isAccessTokenId, the substring for the grant shortcut and the equality check look inverted: the grant shortcut occupies indices 4\u20135 (substring(4,6)), and a match should return true (combined with UUID check), not false.",
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       483,
+       483
+      ],
+      "texto": "WHAT: `isAccessTokenId` reads the grant shortcut from the wrong offset and inverts the comparison \u2014 `if (items[0].substring(3, 5).equals(expectedGrantShortcut)) return false;`. WHY: for the encoded id `ssttgg:raw` the grant shortcut occupies 0-based indices 4-5, so `substring(3,5)` inspects the token-type/grant boundary and can never equal the expected shortcut; combined with the inverted `return false`, the equality branch is unreachable and the matcher validates only the UUID part. As a result the new assertions in `expectCodeToToken`/`expectRefresh`/`expectDeviceCodeToToken`/`expectAuthReqIdToToken` do not actually assert the grant type and would pass even if the grant shortcut were wrong. HOW: use `items[0].substring(4, 6)` and negate the condition (`if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`)."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       476,
+       492
+      ],
+      "texto": "The matcher logic is inverted: line 483 returns false when the extracted grant shortcut EQUALS expectedGrantShortcut, so a token that actually carries the expected grant fails the matcher, while a token with any other grant shortcut falls through and passes. The condition should be negated: `if (!items[0].substring(3,5).equals(expectedGrantShortcut)) return false;`. Also note the encode site writes the grant shortcut at chars 4-6 (substring(4,6)); substring(3,5) reads one character early into the token-type field, so the offset is off by one relative to TokenManager.encodeTokenId."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       482,
+       483
+      ],
+      "texto": "The comment 'Grant type shortcut starts at character 4th char' disagrees with the encoding that this PR defines (sessionType chars 1-2, tokenType 3-4, grantType 5-6, e.g. 'trltcc'), and the code reads substring(3,5) \u2014 the 4th-5th chars, i.e. the token-type second char plus the grant first char, never the grant shortcut. The comment (and the index) should point at the 5th char / substring(4,6)."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#03",
+    "descricao": "getShortcut() Javadoc says shortcuts are usually 3 letters, but the encoding requires exactly 2-character shortcuts.",
+    "textoGolden": "Javadoc mentions \"usually like 3-letters shortcut\" but some implementations use 2-letter shortcuts (\"ac\", \"cc\", \"rt\", \"te\", \"pc\", \"ci\", \"ro\"). Consider updating documentation to reflect actual usage pattern.",
+    "comentarios": [
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The Javadoc says getShortcut() returns 'usually like 3-letters shortcut', but every implementation introduced in this PR returns a 2-character shortcut ('ac','cc','pg','pc','rt','ro','te','ci','dg') and the encoder relies on exactly 2 chars (encoded context length 6 = 2+2+2). The doc states a length the code does not produce; it should say 2-character shortcut."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Grant shortcuts are registered without enforcing the two-character length required by the decoder. A custom grant returning a three-character shortcut, which the new OAuth2GrantTypeFactory documentation explicitly suggests, produces a seven-character prefix that getTokenContextFromTokenId rejects, breaking encode/decode round trips for that grant. Validate shortcut length during registration and dynamic refresh, and document the required two-character format."
+     },
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The new contract describes getShortcut() as usually returning a three-letter shortcut, but DefaultTokenContextEncoderProvider requires exactly two characters for the grant field (six total prefix characters, decoded with substring(4, 6)). An extension author following this documentation can produce token IDs that the default decoder rejects. Document the required two-character length rather than advertising three letters."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#04",
+    "descricao": "testIncorrectGrantType catches any RuntimeException, so it passes on a NullPointerException from the unset sessionFactory rather than verifying the unknown-grant IllegalArgumentException.",
+    "textoGolden": " Catching generic RuntimeException is too broad. The implementation throws IllegalArgumentException specifically - catch that instead for more precise testing.",
+    "comentarios": [
+     {
+      "file": "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java",
+      "lines": [
+       77,
+       83
+      ],
+      "texto": "Catching RuntimeException allows this negative test to pass for an unrelated fixture failure. The fixture constructs the factory without postInit, leaving sessionFactory null; resolving the unregistered `ac` shortcut calls sessionFactory.getProviderFactoriesStream and throws NullPointerException before the decoder's intended unknown-grant IllegalArgumentException. Catch/assert IllegalArgumentException specifically and provide a factory fixture whose lookup returns no matching grant, so removing the decoder's validation would fail the test."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#05",
+    "descricao": "Client-credentials (and UMA permission) token issuance never sets the GRANT_TYPE attribute, so their access token ids are encoded with the unknown grant 'na' instead of their shortcut.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+      "lines": [
+       57,
+       60
+      ],
+      "texto": "The new grant metadata falls back to 'na' for client-credentials and UMA tokens because their issuance paths never set Constants.GRANT_TYPE on their fresh ClientSessionContext. ClientCredentialsGrantType calls responseBuilder.generateAccessToken directly, and PermissionGrantType delegates to AuthorizationTokenService, so neither executes the new assignment in createTokenResponse; tokens from these known grants therefore carry unknown grant context. Set the grant attribute in both issuance paths before generating the access token."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#06",
+    "descricao": "Lazy registration of newly deployed grants does not check shortcut uniqueness, so a grant reusing an existing shortcut silently overwrites the reverse mapping and older tokens decode to the wrong grant.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+      "lines": [
+       112,
+       114
+      ],
+      "texto": "Enforce shortcut uniqueness during lazy registration rather than overwriting grantsByShortcuts. If a newly deployed grant B uses existing grant A's shortcut, this path replaces shortcut\u2192A with shortcut\u2192B while retaining both forward entries. Previously issued A tokens then decode as B. Concurrent registrations of two new grants with the same shortcut likewise both succeed, with the last inverse-map write winning. Use collision-aware atomic registration and reject the conflicting grant before publishing its forward mapping."
+     }
+    ]
+   }
+  ]
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "92f44dcea7ff19e9123a30c63c167a2938df5a55",
+  "base": "b004587262e8221083bafbe9a0c515e7becaa7b3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     46,
+     48
+    ],
+    "texto": "WHAT: The admin-or-owner check requires both isTeamAdmin and isTeamOwner to succeed. WHY: isTeamAdmin accepts ADMIN and OWNER memberships, but isTeamOwner accepts only OWNER, so a team admin who is not the booking organizer or an attendee receives FORBIDDEN. HOW: Use the existing isTeamAdmin result alone, since it already includes owners."
+   },
+   {
+    "id": "S2",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     77,
+     77
+    ],
+    "texto": "WHAT: Blacklist enforcement compares the raw guest email against lowercased blacklist entries. WHY: An authorized attendee can add a blocked address using different casing, and the base-email normalization used by handleNewBooking is also bypassed, allowing blocked recipients to receive booking invitations. HOW: Apply the same extractBaseEmail(guest).toLowerCase() normalization used in handleNewBooking before checking the blacklist."
+   },
+   {
+    "id": "S3",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     74,
+     78
+    ],
+    "texto": "WHAT: uniqueGuests only removes existing attendees and does not deduplicate the incoming guests array. WHY: A direct mutation with the same valid address twice passes the server schema and inserts two Attendee rows because that model has no booking/email uniqueness constraint, resulting in duplicate guest entries and notifications despite the dialog's uniqueness validation. HOW: Deduplicate the input before filtering and inserting it, and enforce uniqueness in the server schema rather than relying on the dialog."
+   },
+   {
+    "id": "S4",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     74,
+     78
+    ],
+    "texto": "Blacklist entries are lowercased, but `guest` retains the casing supplied by the caller: neither the server schema nor the dialog normalizes it. With `blocked@example.com` in BLACKLISTED_GUEST_EMAILS, submitting `Blocked@example.com` passes this filter and is persisted and invited. Normalize the candidate before the blacklist comparison so case variations cannot bypass the block."
+   },
+   {
+    "id": "S5",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     74,
+     78
+    ],
+    "texto": "The filter only checks each guest against the attendees loaded before the request; it does not deduplicate the incoming array. A direct mutation with guests: [\"new@example.com\", \"new@example.com\"] passes the server schema and sends two identical attendee records to createMany, despite the dialog explicitly requiring unique emails. Deduplicate or reject repeated addresses on the server before constructing attendee records; client validation cannot enforce this invariant."
+   },
+   {
+    "id": "S6",
+    "file": "packages/ui/form/MultiEmail.tsx",
+    "lines": [
+     46,
+     46
+    ],
+    "texto": "The removal tooltip is hard-coded in English, so users of other locales see \u201cRemove email\u201d while the surrounding add action and dialog are translated. Route this tooltip through t() and provide a corresponding translation entry."
+   },
+   {
+    "id": "S7",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     74,
+     78
+    ],
+    "texto": "uniqueGuests filters against the preexisting attendees but never deduplicates guests themselves. Unlike the dialog schema, the server schema accepts repeated addresses, so a direct mutation with [\"guest@example.com\", \"guest@example.com\"] passes both through to createMany and creates duplicate attendees (or fails if constrained). Deduplicate the incoming list server-side before creating attendees."
+   },
+   {
+    "id": "S8",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     70,
+     78
+    ],
+    "texto": "The blacklist entries are explicitly lowercased, but guest is compared without the same normalization. A valid mixed-case address such as Blocked@Example.com therefore passes a blacklist containing blocked@example.com. Compare guest.toLowerCase() against the normalized blacklist."
+   },
+   {
+    "id": "S9",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     46,
+     48
+    ],
+    "texto": "isTeamAdminOrOwner combines the role checks with &&, so a team administrator who is not also its owner fails this gate and receives FORBIDDEN unless independently an organizer or attendee. The intended admin-or-owner predicate must allow either check to succeed."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+    "descricao": "isTeamAdminOrOwner combines isTeamAdmin and isTeamOwner with &&, so only team owners pass; team admins who are not organizer or attendee are wrongly rejected with FORBIDDEN.",
+    "textoGolden": "The logic for checking team admin/owner permissions is incorrect. This condition uses AND (&&) which requires both isTeamAdmin AND isTeamOwner to be true, but it should use OR (||) since a user needs to be either an admin OR an owner to have permission.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "WHAT: isTeamAdminOrOwner is computed with && instead of ||. WHY: isTeamAdmin returns truthy for role ADMIN or OWNER while isTeamOwner returns true only for OWNER, so the && expression is only true for OWNERs; team ADMINs are treated as unauthorized and get FORBIDDEN when adding guests, contradicting the variable's intent. HOW: use `(await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) || (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0))`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "The flag is named `isTeamAdminOrOwner` but is computed with `&&` (both admin AND owner). A team admin who is not the owner, or the owner who is not flagged admin, will fail this check, so the guard at line 54 wrongly throws FORBIDDEN for legitimate admins/owners. Use `||` between isTeamAdmin and isTeamOwner."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "The variable `isTeamAdminOrOwner` names an OR condition, but the code combines `isTeamAdmin(...)` and `isTeamOwner(...)` with `&&`, so it is true only when the user is both admin AND owner. Either the name is wrong or the operator is; as written the permission check at line 54 denies a plain team admin, contradicting what the identifier promises. Use `||` to match the name (or rename if AND is intended)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+    "descricao": "The guest blacklist is lowercased but incoming guest emails are compared without normalization, so a blacklisted address submitted with different casing bypasses BLACKLISTED_GUEST_EMAILS and is added and emailed.",
+    "textoGolden": "The addGuests.handler.ts blacklist check uses blacklistedGuestEmails.includes(guest) after lowercasing the blacklist but not the input guest emails, allowing attackers to bypass BLACKLISTED_GUEST_EMAILS restrictions by submitting emails with uppercase characters.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       70,
+       78
+      ],
+      "texto": "WHAT: The blacklist is compared case-sensitively against guest input while blacklistedGuestEmails are lowercased. WHY: blacklistedGuestEmails entries are lowercased but the filter compares `guest` verbatim (`!blacklistedGuestEmails.includes(guest)`); an authenticated user can add a blacklisted address simply by changing its case (e.g. `Foo@bar.com` vs `foo@bar.com`), bypassing the configured BLACKLISTED_GUEST_EMAILS restriction. HOW: normalize the guest before comparison, e.g. `!blacklistedGuestEmails.includes(guest.toLowerCase())`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       70,
+       78
+      ],
+      "texto": "Case-sensitivity bypass of the guest blacklist. `blacklistedGuestEmails` is lowercased on the list side (line 71) but the input side is compared raw: `blacklistedGuestEmails.includes(guest)` (line 77). A guest email submitted with any different casing (e.g. `Foo@Bar.com` when the blacklist holds `foo@bar.com`) passes the filter and is persisted, defeating BLACKLISTED_GUEST_EMAILS. Normalize the input before comparison, e.g. filter on `!blacklistedGuestEmails.includes(guest.toLowerCase())` (and likewise lowercase `guest` for the attendee dedup check)."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       70,
+       78
+      ],
+      "texto": "WHAT: BLACKLISTED_GUEST_EMAILS entries are lowercased but the incoming guest string is compared without lowercasing/normalizing. WHY: an attacker bypasses the blocklist with case variation (e.g. Spam@Example.com) and gets added/emailed."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+    "descricao": "The server never deduplicates the guests array, so a request with the same email twice inserts duplicate attendee rows for the booking.",
+    "textoGolden": "uniqueGuests filters out existing attendees and blacklisted emails but does not deduplicate duplicates within the input; createMany can insert duplicate attendee rows if the client submits repeated emails.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       74,
+       78
+      ],
+      "texto": "WHAT: uniqueGuests filter only dedupes against existing booking.attendees with case-sensitive === and never dedupes duplicates within the input guests array itself (server schema has no uniqueness refine unlike the client). WHY: a request with the same new email twice creates duplicate attendee rows via createMany."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       74,
+       106
+      ],
+      "texto": "uniqueGuests filters only against existing attendees/blacklist but never dedupes guests[] itself and schema has no uniqueness check. A request like guests=[a@x.com,a@x.com] passes the filter twice and createMany inserts duplicate attendee rows or throws an unhandled DB unique-constraint exception. Dedupe/normalize input (and reject intra-request duplicates) before createMany."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       74,
+       78
+      ],
+      "texto": "uniqueGuests filters against existing attendees but does not deduplicate addresses within the incoming guests array. A direct mutation with the same new address twice inserts two Attendee records and sends duplicate invitations because the server schema permits duplicates and the Attendee model has no unique booking/email constraint. Deduplicate normalized input before filtering and inserting."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#04",
+    "descricao": "Check-then-insert without a transaction or unique constraint lets two concurrent addGuests calls for the same email both pass the existing-attendee check and create duplicate attendees.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       26,
+       106
+      ],
+      "texto": "Race condition: findFirst check for existing attendees then booking.update+createMany is not atomic. Two concurrent addGuests calls with the same new email both see it as absent and both insert, creating duplicates. Guard with a unique constraint and handle conflict or run in a transaction/serializable check."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       92,
+       106
+      ],
+      "texto": "Check-then-insert race: the handler reads `booking.attendees` at the start, filters against it, then inserts in a separate `prisma.booking.update ... createMany` with no transaction or unique guard. Two concurrent addGuests calls for the same guest both see it as absent and both insert, producing duplicate attendees. Wrap the read+filter+insert in a transaction (or rely on a unique constraint on (bookingId, email) and handle the conflict) so concurrent requests cannot both succeed."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#05",
+    "descricao": "Attendee authorization and existing-attendee dedup compare emails case-sensitively, so an attendee with differently-cased stored email is FORBIDDEN and a case-variant of an existing attendee is added again.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       52,
+       76
+      ],
+      "texto": "Inconsistent email normalization for identity checks. Both the authorization check `attendee.email === user.email` (line 52) and the existing-attendee dedup `guest === attendee.email` (line 76) use strict case-sensitive equality, while emails are treated as case-insensitive everywhere else in this handler (the blacklist block directly below lowercases). Consequence: a legitimate attendee whose stored casing differs from their session email is wrongly FORBIDDEN, and a guest differing from an existing attendee only by case is duplicated rather than filtered. Compare on a normalized form (both sides `.toLowerCase()`), consistent with the blacklist normalization."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+    "descricao": "The handler passes the unfiltered guests list to sendAddGuestsEmails, which uses it to pick who gets AttendeeScheduledEmail, so existing attendees included in the request receive a new-booking confirmation instead of the add-guests email.",
+    "textoGolden": "The sendAddGuestsEmails function in email-manager.ts passes the full calendarEvent.attendees array when determining which attendees receive AttendeeScheduledEmail vs AttendeeAddGuestsEmail, but checks if newGuests.includes(attendee.email) where newGuests is the input guests array.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       167,
+       168
+      ],
+      "texto": "WHAT: sendAddGuestsEmails(evt, guests) passes the raw input guests instead of the filtered uniqueGuests. WHY: already-existing attendees included in the request are misclassified as newGuests in email-manager and receive AttendeeScheduledEmail instead of AttendeeAddGuestsEmail (wrong notification)."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       167,
+       168
+      ],
+      "texto": "Dead-transform / wrong input: `uniqueGuests` is computed (dedup vs existing attendees + blacklist) and written to DB, but `sendAddGuestsEmails(evt, guests)` passes the original `guests`. Existing attendees re-submitted are then `includes()`-matched as new and get AttendeeScheduledEmail instead of AttendeeAddGuestsEmail. Pass `uniqueGuests`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       167,
+       169
+      ],
+      "texto": "Pass `uniqueGuests` (the filtered set written to DB) to sendAddGuestsEmails instead of raw `guests`; the email layer assumes newGuests exactly equals newly created attendees for its Scheduled vs AddGuests branch."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
+    "descricao": "EventManager is created with the requesting user's credentials, so when a non-organizer adds guests the organizer's calendar event is not updated (or the wrong account is used) for references without a credentialId.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       158,
+       162
+      ],
+      "texto": "EventManager is initialized with the requesting user's credentials rather than the booking organizer's credentials. When an attendee or team owner adds guests to a booking whose calendar reference lacks credentialId, updateAllCalendarEvents selects credentials by type from the caller's calendars, so the organizer's event is not updated or the update targets the wrong account. Load credentials for booking.userId and initialize the manager with the booking owner."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#09",
+    "descricao": "Claims a failing calendar update at addGuests.handler.ts:165 aborts the mutation after guests are persisted; the calendar update path already swallows provider errors.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       165,
+       171
+      ],
+      "texto": "The attendees are written to the database at line 92, but `eventManager.updateCalendarAttendees` at line 165 runs outside the try/catch. If it throws, the mutation returns an error even though the guests are already persisted, so the DB and the calendar are out of sync. No emails are sent, and a retry then fails with 'emails_must_be_unique_valid'. Catch and handle the calendar update failure after the DB write."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       165,
+       165
+      ],
+      "texto": "The attendees are already committed to the DB when `eventManager.updateCalendarAttendees` is awaited without a try/catch. If the calendar sync throws, the mutation returns an error and skips the emails, although the guests were added. The caller sees a failure for a partly applied change and may retry. Handle calendar sync failure as best-effort, as the email send is, or run it before the DB write."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#10",
+    "descricao": "Claims any attendee can add guests and trigger invites; this is the deliberate permission model of the new feature.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       52,
+       56
+      ],
+      "texto": "Any attendee, matched only by email, is allowed to add arbitrary guests to a booking, and the handler then sends emails and calendar invites on the organizer's behalf. Any attendee can use this to send invites to arbitrary addresses. Restrict the action to the organizer and team admins, or verify that the attendee's email is confirmed."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#11",
+    "descricao": "The guests array has no server-side size limit, so any authorized caller, including an attendee, can add thousands of guests and trigger an unbounded batch of inserts and emails.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+      "lines": [
+       3,
+       6
+      ],
+      "texto": "WHAT: guests is an unbounded z.array(z.string().email()) with no max length. WHY: any authorized caller (including a mere attendee) can submit thousands of emails causing unbounded createMany inserts plus unbounded Promise.all email fanout in sendAddGuestsEmails."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+      "lines": [
+       5,
+       5
+      ],
+      "texto": "The mutation accepts an unbounded guest array that is persisted and immediately expanded into concurrent emails to every attendee. For non-seated bookings each email's ICS serializes the full attendee list, so adding N guests creates O(N) concurrent sends and O(N\u00b2) aggregate attachment work; repeated additions also resend to all existing attendees. Enforce a server-side guest-count and total-attendee limit before insertion and bound notification concurrency."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#12",
+    "descricao": "The Remove email tooltip in MultiEmail is a hard-coded English string instead of a translation key.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/ui/form/MultiEmail.tsx",
+      "lines": [
+       44,
+       51
+      ],
+      "texto": "Tooltip content=\"Remove email\" is hard-coded English user-facing text bypassing i18n while surrounding strings in the same file/PR use t(). Wrap it in t() e.g. content={t(\"remove_email\")} and add the key to locales."
+     },
+     {
+      "file": "packages/ui/form/MultiEmail.tsx",
+      "lines": [
+       46,
+       46
+      ],
+      "texto": "`Tooltip content=\"Remove email\"` is a hard-coded English user-facing string, while the surrounding code in this same component routes user text through `t()` (e.g. `t(\"add_another\")` on line 69). This string bypasses the translation mechanism and will never be localised; it should use a translation key."
+     },
+     {
+      "file": "packages/ui/form/MultiEmail.tsx",
+      "lines": [
+       46,
+       46
+      ],
+      "texto": "The new removal tooltip hard-codes `Remove email`, so users in non-English locales see English text even though the neighbouring controls use `t(...)` and this component already obtains `t` from useLocale. Route this tooltip through a translation key (and supply its English translation) rather than using the literal."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#13",
+    "descricao": "The onError fallback to unable_to_add_guests is unreachable because the template-string message is always truthy.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       42,
+       44
+      ],
+      "texto": "Unreachable fallback: `message` is a template string `${code}: ${...}` which is always truthy, so `message || t(\"unable_to_add_guests\")` never takes the fallback. Build message conditionally or test the underlying parts for emptiness."
+     },
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       42,
+       45
+      ],
+      "texto": "In `onError`, `message` is always a non-empty template string (`\"${err.data?.code}: ${t(err.message)}\"`), so the fallback `|| t(\"unable_to_add_guests\")` is unreachable and the newly added `unable_to_add_guests` translation is never shown. The user is instead shown a raw error code prefix like `BAD_REQUEST: ...` rather than the translated message; the fallback and code prefix handling should be corrected so the intended translated text reaches the user."
+     },
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       43,
+       44
+      ],
+      "texto": "The error message is built as a template string, so it is always truthy. The `|| t(\"unable_to_add_guests\")` fallback is therefore dead code, and the user can see \"undefined: ...\" or an untranslated raw message. Use `err.message ? t(err.message) : t(\"unable_to_add_guests\")`."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#14",
+    "descricao": "After a validation failure followed by a successful add, isInvalidEmail stays true, so the stale emails_must_be_unique_valid error shows the next time the dialog is opened.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       35,
+       41
+      ],
+      "texto": "WHAT: addGuestsMutation onSuccess resets multiEmailValue and closes the dialog but never resets isInvalidEmail. WHY: after one failed validation the red emails_must_be_unique_valid error persists on the next open/successful add."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#16",
+    "descricao": "sendAddGuestsEmails ignores the event type's disableStandardEmails settings, so hosts and attendees receive add-guests emails even when standard emails are disabled.",
+    "textoGolden": "The `sendAddGuestsEmails` function does not check the `disableStandardEmails` flags in the `EventType` metadata, which may result in sending emails to hosts/attendees even when standard emails are disabled for the event type.",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#e2b-01",
+    "descricao": "The add-guests handler omits booking.iCalUID from the CalendarEvent, so the add-guests emails' .ics attachments use booking.uid as UID and recipients' calendars treat them as a new event rather than an update of the original booking invite.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "3162ad68a5c87666788b27a44eb31235025091a9",
+  "base": "de11fb0166a7244115bb066edd65ec0d6b7e365c",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     253,
+     255
+    ],
+    "texto": "The new isinstance(process, multiprocessing.Process) guard is false for workers created by self.mp_context.Process from the spawn context. When a worker hangs, the manager starts a replacement without killing the old worker, leaving an untracked process that can resume flushing the same shards concurrently and produce duplicate segments; the same type check also prevents termination in join. Check against self.mp_context.Process (or multiprocessing.process.BaseProcess) instead."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     299,
+     301
+    ],
+    "texto": "submit now calls get_memory_info once per worker buffer, although SpansBuffer.get_memory_info queries the entire Redis cluster without filtering by assigned_shards. With P flusher workers, every submitted batch issues P copies of the same cluster-wide INFO request, multiplying Redis traffic and synchronous main-thread latency precisely when consumers are being scaled down. Collect cluster memory information once using one buffer instead of querying every worker buffer."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     31,
+     32
+    ],
+    "texto": "The new docstring promises one process per shard, but the implementation distributes shards across min(max_processes, shard_count) processes, and the consumer CLI defaults max_processes to 1. With multiple shards the normal configuration therefore shares a single process rather than providing the stated per-shard parallelism. Describe the capped worker pool and shard sharing instead."
+   },
+   {
+    "id": "S4",
+    "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+    "lines": [
+     119,
+     121
+    ],
+    "texto": "The sum verifies four assignment entries, not that all four shards are assigned. For example, a regression producing {0: [0, 2], 1: [0, 2]} still passes every assertion in this test, although shards 1 and 3 will never be flushed. Compare the flattened assignments against the expected shard IDs (including multiplicity) so the claimed distribution check fails when shards are duplicated or omitted."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     254,
+     255
+    ],
+    "texto": "Workers are constructed using multiprocessing.get_context(\"spawn\").Process, whose SpawnProcess class is not a subclass of the default-context multiprocessing.Process wrapper. Consequently this condition is false for production workers: a hung worker is left alive while its replacement starts on the same shards. Use the actual SpawnProcess type (or exclude threading.Thread) so unhealthy workers are killed before replacement."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     338,
+     341
+    ],
+    "texto": "When next_step.join consumes the timeout, or an earlier worker uses the remaining time, this break exits the entire worker loop. Remaining workers never reach termination, leaving background flushers running after join returns. The deadline should limit waiting, not skip cleanup: iterate over every worker and terminate any remaining live processes even after the deadline. Ensure that cleanup also recognizes SpawnProcess rather than the default-context Process wrapper."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     254,
+     255
+    ],
+    "texto": "Workers are created with get_context(\"spawn\").Process, whose SpawnProcess class is not a subclass of multiprocessing.Process (the default-context Process class). Consequently this check is false for production workers. When a worker is declared hung, it remains alive while _create_process_for_shards starts another worker on the same shards and overwrites its handle. The old worker can resume concurrently with its replacement, and repeated hangs accumulate untracked workers. Check against multiprocessing.process.BaseProcess or self.mp_context.Process instead."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     338,
+     341
+    ],
+    "texto": "With multiple workers, if waiting for one consumes the join timeout, the next iteration breaks before terminating any remaining workers. Setting stopped does not stop a worker blocked in Redis or a producer future. During partition reassignment those workers can therefore remain alive after join returns while the new assignment starts flushing the same shards. The deadline should stop waiting, not skip cleanup: visit every worker and terminate any still alive even when no waiting time remains (using the spawn-context process type for the termination check)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+    "descricao": "The wait_produce timer is tagged with 'shards' while sibling flusher metrics use 'shard' for the same value, so per-shard dashboards miss it.",
+    "textoGolden": "In the SpanFlusher flush loop, metric tags inconsistently use 'shard' (e.g., in spans.buffer.flusher.produce and spans.buffer.segment_size_bytes) and 'shards' (in spans.buffer.flusher.wait_produce) for the same shard identifier value. This prevents correct metric aggregation across flush stages \u2014 dashboards and alerts filtering by tag 'shard' will miss data tagged as 'shards' and vice versa.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The `spans.buffer.flusher.wait_produce` timer is tagged with the key `\"shards\"`, while the other two metrics emitted in this same loop (`spans.buffer.flusher.produce` at line 185 and `spans.buffer.segment_size_bytes` at line 195) use the key `\"shard\"`. All three carry the same `shard_tag` value, so this is a pure key-name disagreement: any dashboard or alert that groups/filters by the `shard` tag will silently receive no data from `wait_produce`. Rename the tag key to `\"shard\"` so all flusher metrics share one tag."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The `spans.buffer.flusher.wait_produce` timer is tagged with key `shards` while every sibling metric introduced/updated in the same method (`spans.buffer.flusher.produce`, `spans.buffer.segment_size_bytes`) uses the singular key `shard`. Anything consuming this metric family by the `shard` tag (dashboards, alerts, tag-based aggregation) will silently receive no data for `wait_produce`, and per-shard breakdowns of produce latency will be incomplete. Change the tag to `tags={\"shard\": shard_tag}` so the tag contract matches the other flusher metrics."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The wait_produce timer tags with \"shards\", while the sibling metrics in the same loop use \"shard\" for the same value (shard_tag). Use one tag key, \"shard\", so queries and dashboards that group by it cover all of these metrics."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+    "descricao": "The time.sleep(0.1) added to test_basic to let flusher threads process is a no-op because the test monkeypatches time.sleep.",
+    "textoGolden": "The test_basic function in test_consumer.py uses a monkeypatched time.sleep that returns immediately, but then calls time.sleep(0.1) expecting it to actually wait.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "WHAT: The added synchronization point `time.sleep(0.1)` added after the second `step.poll()` is neutralized by the test's own `monkeypatch.setattr(\"time.sleep\", lambda _: None)` at line 15 (same `time` module), so it does not actually wait. WHY: The comment says it 'Give[s] flusher threads time to process after drift change', but the call is a no-op, so the test still races the background flusher thread before `step.join()` and is liable to be flaky / to not exercise the intended post-drift flush path. HOW: Use a non-monkeypatched wait (e.g. capture the real sleep before patching, or use the flusher's thread/process join, or poll until `messages` is non-empty with a real timeout)."
+     },
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "The added `time.sleep(0.1)` does not wait: line 15 of the same test does `monkeypatch.setattr(\"time.sleep\", lambda _: None)`, which replaces `sleep` on the global `time` module, so this call (and the flusher's own `time.sleep`) is a no-op. The comment 'Give flusher threads time to process after drift change' is therefore false \u2014 the call returns instantly and provides no synchronisation, so the test does not actually wait for the flusher to process after the drift change. Either synchronise on a real condition (e.g. wait until the expected message is produced) or, if the original `time.sleep` is needed here, patch a module-scoped reference instead of the global `time.sleep`."
+     },
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "The added `time.sleep(0.1)` is a no-op because the test patches `time.sleep` to `lambda _: None`, so nothing waits for the flusher threads before `step.join()` and the `messages` assertion. Replace it with a condition-based wait, such as polling until `messages` is non-empty with a deadline. Use the real sleep saved before patching if a delay is needed."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+    "descricao": "The restart path only kills a hung flusher if it is a multiprocessing.Process, but spawn-context workers are SpawnProcess, so hung processes are never killed and a duplicate flusher is started for the same shards.",
+    "textoGolden": "Because flusher processes are created via multiprocessing.get_context('spawn').Process, they are instances of multiprocessing.context.SpawnProcess, which on POSIX is not a subclass of multiprocessing.Process, so this isinstance check will always be false and hung processes won't be killed here.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       253,
+       255
+      ],
+      "texto": "The new isinstance(process, multiprocessing.Process) guard does not match the SpawnProcess instances created by self.mp_context.Process. When a worker hangs, the guard skips kill() and the replacement starts while the original worker remains alive, allowing overlapping flushing of the same shards if the original resumes and leaking hung workers. Check against multiprocessing.process.BaseProcess or self.mp_context.Process, and kill and join the old worker before replacing it."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       253,
+       255
+      ],
+      "texto": "The workers are created with get_context(\"spawn\").Process, which produces SpawnProcess instances; these are not instances of multiprocessing.Process (the default-context Process class). Consequently this guard skips kill() for actual production workers. When a worker hangs, the replacement starts while the original remains alive and can resume flushing the same shards. Use multiprocessing.process.BaseProcess or the spawn-context Process class for the check, and fix the identical check in join() so shutdown also terminates surviving workers."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       254,
+       255
+      ],
+      "texto": "Workers created by multiprocessing.get_context(\"spawn\").Process are SpawnProcess instances, not instances of the separate multiprocessing.Process class. Consequently this guard skips kill() for production workers. When a live worker exceeds max-unhealthy-seconds, the code starts a replacement and overwrites its handle while the original is still running. If the original resumes, both workers flush the same shards, and repeated hangs can exceed the configured process limit. Check against multiprocessing.process.BaseProcess (or explicitly distinguish threads) and stop the old worker before replacing it."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+    "descricao": "join() breaks out of the per-process loop when the shared deadline expires, skipping termination of the remaining flusher processes and leaving them running after shutdown.",
+    "textoGolden": "Breaking out of the loop when the deadline has elapsed can skip terminating remaining flusher processes, potentially leaving them running after shutdown; consider ensuring termination is attempted even if the deadline is exceeded.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       338,
+       341
+      ],
+      "texto": "join() breaks out of the worker loop when the shared deadline expires, skipping cleanup for every remaining worker. If next_step.join consumes the timeout or an earlier worker exhausts it, remaining flushers can continue running after shutdown or partition reassignment. Use the deadline only to limit waiting and still terminate and reap every remaining process."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       337,
+       341
+      ],
+      "texto": "Do not break out of worker cleanup when the join deadline expires. If the first worker consumes the timeout, the next iteration breaks before terminating that worker or any subsequent workers. They may still be blocked in Redis or producer calls despite the shared stopped flag, leaving old workers running after strategy shutdown/reassignment. Apply the deadline only to waiting, and perform termination cleanup for every worker regardless of remaining time (using a type check that recognizes spawn-context workers)."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       337,
+       344
+      ],
+      "texto": "join() waits for processes sequentially against a single shared deadline and breaks without terminating remaining processes once it expires, leaking them."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+    "descricao": "The SpanFlusher docstring says it creates one process per shard, but shards are distributed across at most max_processes processes.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       30,
+       32
+      ],
+      "texto": "The docstring says the flusher \"Creates one process per shard for parallel processing,\" but the code at lines 60-66 shares shards across a capped number of processes (num_processes = min(self.max_processes, len(buffer.assigned_shards)); each shard assigned via i % self.num_processes). With the new --flusher-processes default of 1, a single process handles every shard, so the documented contract is the opposite of the behaviour this PR introduces (confirmed by test_flusher_processes_limit, which asserts 4 shards served by 2 processes). Update the docstring to say shards are distributed across up to max_processes flusher processes."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       31,
+       32
+      ],
+      "texto": "The new docstring says this creates one process per shard, but workers are capped by max_processes and shards are distributed among them. In particular, the CLI default of 1 means all assigned shards share one process. Describe capped workers with potentially multiple shards per worker so callers do not rely on per-shard process isolation."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       31,
+       32
+      ],
+      "texto": "The docstring says the flusher 'Creates one process per shard', but the number of processes is capped by max_processes (--flusher-processes), and shards are shared across processes via i % num_processes. Reword it to say that shards are distributed across at most max_processes processes."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#06",
+    "descricao": "max_processes uses a truthiness fallback, so --flusher-processes 0 silently becomes one process per shard instead of being rejected.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "`max_processes or len(buffer.assigned_shards)` treats a falsy value as 'not provided'. The new `--flusher-processes` click option is `type=int`, so a user can pass `0`; that legitimate-but-falsy value is discarded and the flusher silently spawns one process per shard instead of honoring the requested limit. Use an explicit None check, e.g. `self.max_processes = max_processes if max_processes is not None else len(buffer.assigned_shards)` (and validate/reject 0 upstream)."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "An explicit max_processes=0 is treated as an omitted limit by `or`, so passing `--flusher-processes 0` starts one process per assigned shard instead of respecting or rejecting the supplied zero limit. The CLI accepts zero as an integer and the factory forwards it unchanged. Default only when max_processes is None, and explicitly validate that supplied process limits are positive so zero cannot silently enable potentially many workers."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "`max_processes or len(buffer.assigned_shards)` uses a truthiness test, so an explicit 0 is treated as 'unset' and silently expands to one process per shard. Use `max_processes if max_processes is not None else len(buffer.assigned_shards)` and reject values below 1."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#07",
+    "descricao": "A negative --flusher-processes value is not validated and makes SpanFlusher construction fail with KeyError.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       60,
+       66
+      ],
+      "texto": "`flusher_processes` is not validated to be >= 1. `self.max_processes = max_processes or len(buffer.assigned_shards)` lets a negative value through (it is truthy), so `self.num_processes = min(self.max_processes, len(...))` becomes negative and `range(self.num_processes)` is empty, leaving `process_to_shards_map` as `{}`. The following loop computes `process_index = i % self.num_processes`, which for any negative divisor is 0, so `self.process_to_shards_map[0].append(shard)` raises KeyError and the consumer fails to construct. Since `flusher_processes` is exposed as an int CLI option (`--flusher-processes`), a negative value is reachable from configuration. Guard with `max(1, self.num_processes)` / validate the input."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       60,
+       66
+      ],
+      "texto": "negative max_processes flows through `or` guard into min() -> empty map -> KeyError on i % num_processes; empty assigned_shards yields zero processes."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+    "descricao": "submit() queries cluster-wide Redis memory once per flusher buffer, repeating identical INFO calls per process on every submit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       299,
+       301
+      ],
+      "texto": "The new loop calls get_memory_info() once per flusher buffer even though SpansBuffer.get_memory_info delegates to iter_cluster_memory_usage(self.client), which fetches INFO for the entire Redis cluster regardless of assigned_shards. With P flusher processes and memory backpressure enabled, each submitted batch now performs P identical cluster-wide memory queries on the consumer thread instead of one, increasing Redis traffic and blocking ingestion. Fetch cluster memory information once from a single buffer."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       299,
+       301
+      ],
+      "texto": "submit() loop calls buffer.get_memory_info() per flusher but each call is cluster-wide from same client, repeating identical INFO N\u00d7 per submit."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#10",
+    "descricao": "_create_process_for_shard is added but never called.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       127,
+       132
+      ],
+      "texto": "WHAT: `_create_process_for_shard(self, shard)` is newly added but has no caller anywhere (grep for `_create_process_for_shard(` finds only its definition); the restart path actually used is `_create_process_for_shards(process_index, shards)`. WHY: This is dead code that indicates the intended per-shard restart wiring was left incomplete \u2014 any future caller relying on restarting only the process owning a given shard will silently do nothing, and it is confusing which restart path is authoritative. HOW: Remove `_create_process_for_shard`, or wire it into `_ensure_processes_alive` if per-shard restart was intended."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#12",
+    "descricao": "test_flusher_processes_limit counts assigned shards instead of checking that each shard is assigned exactly once.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       119,
+       121
+      ],
+      "texto": "The assertion counts shard entries rather than verifying shard assignment. A broken distribution such as {0: [0, 1], 1: [0, 1]} still passes all assertions in this test while shards 2 and 3 are never flushed. Assert that the flattened mapping contains exactly the expected assigned shards, with no duplicates (and verify each worker's shard buffer uses that mapping), rather than only asserting a total of four."
+     }
+    ]
+   }
+  ]
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "79d11c4890cc4792e3dc3535af59e4e5f7a2739d",
+  "base": "10aca5552314d6e5c9226f3c6d0107861c38c693",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+    "lines": [
+     58,
+     60
+    ],
+    "texto": "readSequence accepts a child whose encoded size exceeds the remaining declared sequence length. For example, `30 04 02 01 01 02 01 01` declares four content bytes but consumes six and returns two integers, so asn1derToConcatenatedRS accepts malformed DER instead of rejecting it. Reject a child larger than the remaining sequence content before adding it to the result."
+   },
+   {
+    "id": "S2",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+    "lines": [
+     58,
+     60
+    ],
+    "texto": "The remaining sequence length can become negative after readNext(), and the loop then returns successfully. For example, `30 04 02 01 01 02 01 01` declares four content bytes but contains two three-byte INTEGER encodings; this decoder returns both integers and the ECDSA converter accepts them. The second integer extends beyond the declared sequence. Reject a child whose encoded size exceeds the remaining content length before adding it to the result."
+   },
+   {
+    "id": "S3",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+    "lines": [
+     57,
+     60
+    ],
+    "texto": "The loop accepts a child even when its encoded size exceeds the remaining sequence length. For example, `30 04 02 01 01 02 01 01` declares four content bytes but contains six; this returns two INTEGERs because the remaining length becomes -2, and asn1derToConcatenatedRS then accepts it. This violates the ASN.1 sequence boundary and silently converts malformed DER into a valid signature representation. Reject children larger than the remaining sequence content rather than treating a negative remainder as completion."
+   },
+   {
+    "id": "S4",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+    "lines": [
+     57,
+     61
+    ],
+    "texto": "The loop subtracts a complete child's encoded size without checking whether it fits in the remaining sequence content. For example, `30 05 02 01 01 02 01 01` declares five content bytes, but the two INTEGER encodings consume six: length becomes -1 and the decoder returns both integers successfully. Consequently the ECDSA converter accepts malformed DER and can read bytes outside the enclosing sequence as part of it. Reject a child whose encoded size exceeds the remaining content length (or decode using a stream bounded to the sequence content)."
+   },
+   {
+    "id": "S5",
+    "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+    "lines": [
+     54,
+     56
+    ],
+    "texto": "The assertion only checks that the two conversions agree with each other, not that they preserve a valid signature. For example, swapping r and s in both conversion methods still passes this assertion while producing invalid signatures for external consumers. Verify asn1Des against data with the original public key (and/or compare it with the original DER signature) so a mutually compensating conversion error fails."
+   },
+   {
+    "id": "S6",
+    "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+    "lines": [
+     41,
+     43
+    ],
+    "texto": "All cases use the provider's default EC curve, normally P-256, including testES384 and testES512. Selecting SHA384withECDSA or SHA512withECDSA does not change the key's curve. Consequently a converter that truncates every integer to 32 bytes would still pass these cases: the wider output is merely zero-padded. Generate a key initialized with secp384r1 for ES384 and secp521r1 for ES512 so these tests actually detect loss of the high bytes of larger signatures."
+   },
+   {
+    "id": "S7",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+    "lines": [
+     103,
+     110
+    ],
+    "texto": "Reject input unless signature.length equals signLength before copying R and S. Currently, appending arbitrary bytes to a valid JOSE ECDSA signature leaves the generated DER signature unchanged, so verification can accept malformed signatures and multiple different token encodings for the same signature. This violates JOSE's fixed-width signature requirement and introduces signature malleability for consumers using this provider."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+    "descricao": "concatenatedRSToASN1DER encodes r and s into two throwaway ASN1Encoder instances before re-encoding them in the return statement.",
+    "textoGolden": "Dead code exists where ASN1Encoder instances are created and written to, but their results are immediately discarded. The actual encoding is performed by new ASN1Encoder instances created in the subsequent return statement, rendering the earlier operations useless.",
+    "comentarios": [
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       114,
+       115
+      ],
+      "texto": "Dead computation: the two ASN1Encoder.create().write(...) calls allocate encoders and encode rBigInteger/sBigInteger, but their results are discarded \u2014 the returned DER comes entirely from the expression at lines 117-121, which re-encodes the same BigIntegers. These two statements have no effect and should be removed (they are a leftover from an earlier formulation)."
+     },
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       114,
+       115
+      ],
+      "texto": "Remove these two discarded encoder writes. Each allocates an encoder and encodes a BigInteger, but neither result participates in the returned signature; lines 119\u2013120 repeat both writes on fresh encoders. This performs redundant encoding and allocations on every concatenated-signature conversion."
+     },
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       114,
+       115
+      ],
+      "texto": "The two statements `ASN1Encoder.create().write(rBigInteger);` and `ASN1Encoder.create().write(sBigInteger);` encode values and discard the results. The return expression re-encodes the same values, so these lines are dead computation left over from a copy-paste or refactor. Remove them."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#04",
+    "descricao": "order() is added to CryptoProvider as an abstract method, breaking source and binary compatibility for existing third-party CryptoProvider implementations.",
+    "textoGolden": "Abstract order() method on CryptoProvider may break backward compatibility with existing implementations",
+    "comentarios": [
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java",
+      "lines": [
+       39,
+       44
+      ],
+      "texto": "order() was added as an abstract method to the public CryptoProvider interface. CryptoIntegration.detectProvider now invokes order() on every ServiceLoader-discovered CryptoProvider via Comparator.comparingInt(CryptoProvider::order). Any CryptoProvider implementation compiled against the previous interface (an external or separately built provider jar on the classpath) will throw AbstractMethodError at detection time, i.e. during AuthzClient.create()/server bootstrap, before any provider is usable. Giving order() a default implementation (e.g. default int order() { return 0; }) avoids the binary-incompatibility."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+    "descricao": "detectProvider no longer fails when several crypto providers are present; with Default, FIPS and Elytron all at order 200, ties are resolved by classpath order and a FIPS deployment can silently run with the non-FIPS provider.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+      "lines": [
+       54,
+       72
+      ],
+      "texto": "WHAT: detectProvider sorts by order() reversed and silently picks index 0, removing the previous multiple-providers error. WHY: Default/FIPS/Elytron all return order 200, so ambiguous classpath (e.g. default+FIPS) now nondeterministically picks one by ServiceLoader order instead of failing fast, risking wrong FIPS vs non-FIPS crypto. HOW: only auto-ignore lower-order providers; throw when the top two have equal order()."
+     },
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+      "lines": [
+       56,
+       62
+      ],
+      "texto": "Reject ambiguous highest-priority providers rather than silently taking the first. Both DefaultCryptoProvider and FIPS1402Provider return order 200 in this PR, so when both are present the stable sort leaves the decision to ServiceLoader discovery order. A deployment expecting FIPS can therefore initialize the ordinary Bouncy Castle provider without an error; previously this mixed classpath failed closed. Preserve the error for tied highest-priority providers (or require an explicit security-mode/provider choice), while still allowing the lower-priority authz-client fallback."
+     },
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+      "lines": [
+       56,
+       72
+      ],
+      "texto": "detectProvider() no longer fails fast when multiple CryptoProviders are present and instead silently picks the first after sorting by order() descending. All Keycloak providers return the same order (DefaultCryptoProvider, FIPS1402Provider, WildFlyElytronProvider all return 200), so a tie between two providers is broken by the non-deterministic ServiceLoader iteration order rather than the intended priority. The previous code threw an IllegalStateException forcing the classpath to be corrected; now a deployment with two provider jars (exactly the 'multiple providers on classpath' scenario this PR enables) can silently select the unintended provider \u2014 e.g. a non-FIPS/strict provider when FIPS is required \u2014 with no error. Use a stable tie-breaker (delegate to the provider name/type) or reject equal top orders instead of relying on ServiceLoader order."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#07",
+    "descricao": "Claims a wrong-length JOSE signature causes an unchecked exception in concatenatedRSToASN1DER; verifiers catch it and report verification failure, as with the existing providers.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       103,
+       122
+      ],
+      "texto": "WHAT: concatenatedRSToASN1DER splits signature without validating signature.length==signLength. WHY: short JOSE input throws ArrayIndexOutOfBoundsException and long input is silently truncated to signLength, breaking the ECDSACryptoProvider contract (IOException on malformed) used by verifier contexts. HOW: check length upfront and throw IOException."
+     },
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       103,
+       112
+      ],
+      "texto": "concatenatedRSToASN1DER never validates signature.length == signLength before System.arraycopy(signature,0,r,1,len) / (signature,len,s,1,len). A short JWS signature throws unchecked ArrayIndexOutOfBoundsException instead of the declared IOException, breaking verification on attacker-controlled input. Validate length and throw IOException."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#10",
+    "descricao": "The ES384 and ES512 tests sign with the same default P-256 key, so the converter is never tested with real P-384 or P-521 signatures.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       39,
+       43
+      ],
+      "texto": "Single default EC keypair reused for ES256/ES384/ES512: testES384/testES512 names claim larger curves but body signs with the same P-256 key and only pads to larger signLength, so full-width 384/521-bit handling is never exercised. Generate a per-algorithm keypair with the correct curve (e.g. secp256r1/secp384r1/secp521r1) before signing."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       41,
+       42
+      ],
+      "texto": "Every case generates a default EC key rather than a key on the curve associated with the named algorithm. On the standard JDK this is P-256, so testES384 and testES512 just pad P-256 signature components to larger lengths. A converter that discards nonzero high bytes beyond 32 bytes would still pass all three cases. Initialize the key generator with the appropriate curve per case (P-256, P-384, and P-521) so the larger-component conversions are actually tested."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       41,
+       42
+      ],
+      "texto": "Generate a key on the curve corresponding to each tested algorithm rather than using the provider's default EC curve for all three tests. On the standard JDK this generates a P-256 key even for testES384 and testES512, so those tests merely pad P-256 integers to larger output lengths and never exercise actual P-384/P-521 signature encoding (including P-521's long-form sequence length)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#11",
+    "descricao": "The test only checks a round trip between the two new converters and never verifies the re-encoded DER against the original signature or with Signature.verify, so mutually consistent bugs go undetected.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       46,
+       57
+      ],
+      "texto": "Tautological round-trip assertion: rsConcat2 is derived from rsConcat via encode+decode that are inverses if self-consistent, so assertArrayEquals(rsConcat,rsConcat2) passes even if both directions are wrong. Verify against external oracle: Signature.initVerify + verify(asn1Des) and/or compare rsConcat to expected split, not just to itself."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       52,
+       56
+      ],
+      "texto": "The test only checks self-consistency: it asserts asn1derToConcatenatedRS(g(asn1derToConcatenatedRS(sign))) == asn1derToConcatenatedRS(sign), i.e. that concatenatedRSToASN1DER is a right inverse of asn1derToConcatenatedRS. It never compares against the original DER `sign`, never verifies the ECDSA signature, and never asserts the emvider output is canonical DER. Because the decoder it reads back with (ASN1Decoder.readLength) accepts non-canonical long-form lengths (e.g. 0x81) and validates only tag numbers, a regression in ASN1Encoder.writeLength that always emitted long form would still round-trip and the test would still pass, even though the produced signature would no longer be valid DER and would be rejected by the Keycloak server / a JDK Signature.verify. Assert the encoded signature is valid DER (e.g. verify it with a JDK Signature, or compare asn1derToConcatenatedRS(sign) against a known-good width-padded r||s and assert its length equals algorithm.getSignatureLength())."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       53,
+       56
+      ],
+      "texto": "The assertion only establishes agreement between the two new conversion routines, not correctness of the converted signature. For example, swapping r and s in both routines makes this entire round trip pass, although the DER result no longer verifies the signed data. Verify `asn1Des` with the public key and original data (or compare against an independently specified encoding) so mutually compensating conversion defects fail the test."
+     }
+    ]
+   }
+  ]
+ },
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "5fd11f9faa79c4aefd39975d1b0e963e5034f793",
+  "base": "30a92a4d66b417f7c19dee2b343099adc6e88aa6",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+    "lines": [
+     43,
+     45
+    ],
+    "texto": "Cache deletion does not invalidate the connectedCalendars query that supplies cacheUpdatedAt. When onSuccess is omitted, as in EventAdvancedTab, successful deletion leaves the old cache timestamp and delete action visible indefinitely because the wrapper also disables refetchOnWindowFocus. Invalidate connectedCalendars after successful deletion independently of the optional callback."
+   },
+   {
+    "id": "S2",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     1024,
+     1024
+    ],
+    "texto": "The added updateManyByCredentialId call passes an empty update, which does not advance Prisma's @updatedAt field. After availability is repopulated, SelectedCalendar.updatedAt therefore remains unchanged instead of recording the refresh as intended. Pass an explicit updatedAt value."
+   },
+   {
+    "id": "S3",
+    "file": "scripts/test-gcal-webhooks.sh",
+    "lines": [
+     68,
+     68
+    ],
+    "texto": "The environment replacement uses BSD sed's `-i ''` syntax, which fails with GNU sed. On Linux, when GOOGLE_WEBHOOK_URL already exists, the file is not updated but the script still reports success, leaving webhook tests pointed at the previous tunnel. Use a portable in-place invocation such as `sed -i.bak` and remove the backup only after success."
+   },
+   {
+    "id": "S4",
+    "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+    "lines": [
+     89,
+     92
+    ],
+    "texto": "The surrounding cache labels use useLocale translations, but the timestamp is always formatted with en-US. Users in other locales therefore see US month/day ordering and time conventions inside a translated message, which can make dates ambiguous. Use the active application locale for Intl.DateTimeFormat instead of hard-coding en-US."
+   },
+   {
+    "id": "S5",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     1023,
+     1024
+    ],
+    "texto": "Passing `{}` does not touch SelectedCalendar.updatedAt: Prisma leaves @updatedAt unchanged when the update data is empty, and updateManyByCredentialId forwards that object unchanged. Consequently successful availability refreshes leave these timestamps stale rather than recording the refresh as the comment promises. Pass an explicit updatedAt value."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+    "descricao": "fetchAvailabilityAndSetCache calls SelectedCalendarRepository.updateManyByCredentialId with an empty data object, so Prisma does not refresh the @updatedAt timestamp and SelectedCalendar.updatedAt never reflects the cache refresh.",
+    "textoGolden": "The updateManyByCredentialId call uses an empty data object, which prevents Prisma's @updatedAt decorator from updating the updatedAt timestamp. This results in inaccurate cache status tracking, as the timestamp isn't updated when the cache is refreshed. To fix this, explicitly set the updatedAt field.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       1023,
+       1024
+      ],
+      "texto": "WHAT: updateManyByCredentialId is called with empty data {} to bump SelectedCalendar.updatedAt. WHY: Prisma updateMany rejects empty data (validation error) or no-ops without touching @updatedAt, so the refresh path throws or silently leaves updatedAt stale. HOW: pass an explicit touch field e.g. { updatedAt: new Date() }."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       1023,
+       1024
+      ],
+      "texto": "Comment claims \"Update SelectedCalendar.updatedAt\" but call passes empty object {} as data, so nothing is updated (Prisma updateMany with empty data is a no-op/error). Fix comment or pass { updatedAt: new Date() } to match the stated intent."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       1023,
+       1024
+      ],
+      "texto": "updateManyByCredentialId is called with empty data {}. Prisma updateMany throws when data is empty, so this line throws on every resync after the cache write. Pass an explicit touch e.g. { updatedAt: new Date() } instead of {}."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+    "descricao": "After deleting the calendar cache, CredentialActionsDropdown does not invalidate the connectedCalendars query, so where no parent refetch callback is passed the stale cache status and delete action remain visible.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+      "lines": [
+       42,
+       50
+      ],
+      "texto": "WHAT: `deleteCacheMutation`'s `onSuccess` only calls `onSuccess?.()` and never invalidates the `viewer.calendars.connectedCalendars` query, while the sibling `disconnectMutation` explicitly invalidates it in `onSettled`. WHY: the 'Cache Status' row in the dropdown is rendered from the cached `connectedCalendars` result; after deleting the cache the query is not refetched, so the deleted status/last-updated entry stays visible and stale in the UI. HOW: invalidate the query in the cache-deletion mutation as well, e.g. `const utils = trpc.useUtils(); onSuccess: async () => { ...; await utils.viewer.calendars.connectedCalendars.invalidate(); }`."
+     },
+     {
+      "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+      "lines": [
+       42,
+       50
+      ],
+      "texto": "WHAT: deleteCacheMutation onSuccess only calls onSuccess?.() and never invalidates viewer.calendars.connectedCalendars, unlike disconnectMutation onSettled. WHY: cacheUpdatedAt stays stale after deletion so UI keeps showing old Last updated and delete action until manual refetch. HOW: add onSettled invalidate of connectedCalendars like disconnect does."
+     },
+     {
+      "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+      "lines": [
+       43,
+       46
+      ],
+      "texto": "Successful cache deletion does not invalidate the connectedCalendars query that supplies cacheUpdatedAt. The wrapper forwards only an optional parent onChanged callback and disables window-focus refetch, so the deleted cache continues to appear present with its old timestamp and delete action. Invalidate utils.viewer.calendars.connectedCalendars on successful deletion."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#04",
+    "descricao": "The cache 'last updated' timestamp is formatted with a hard-coded en-US locale instead of the user's locale, so non-US users see US-style dates in an otherwise translated label.",
+    "textoGolden": "Date is formatted with hardcoded 'en-US' locale instead of using the user's locale from useLocale, which can lead to incorrect date representation for users in different locales.",
+    "comentarios": [
+     {
+      "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+      "lines": [
+       88,
+       94
+      ],
+      "texto": "The 'Last updated' timestamp is formatted with a hard-coded \"en-US\" locale (new Intl.DateTimeFormat(\"en-US\", ...)), so every user \u2014 regardless of their locale \u2014 sees a US-style date/time while the surrounding label is translated. Use the app's locale-aware date formatting helper (the user's current locale) instead of pinning en-US."
+     },
+     {
+      "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+      "lines": [
+       88,
+       94
+      ],
+      "texto": "Date format hard-coded to \"en-US\" via Intl.DateTimeFormat while surrounding strings use t()/useLocale. Users in other locales see US short date/time. Use the active locale from useLocale/i18n instead of hard-coding \"en-US\"."
+     },
+     {
+      "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+      "lines": [
+       89,
+       92
+      ],
+      "texto": "The cache timestamp is always formatted with \"en-US\", even though the surrounding label uses the user's selected translation locale. Users in other locales therefore see US month/day ordering and time conventions inside an otherwise localized message, potentially misreading the last-update date. Use the active application locale for Intl.DateTimeFormat instead of hard-coding en-US."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#05",
+    "descricao": "The calendar cache migration keeps a generated warning saying updatedAt has no default and cannot be added to a non-empty table, although the SQL adds it with DEFAULT NOW().",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/prisma/migrations/20250715160635_add_calendar_cache_updated_at/migration.sql",
+      "lines": [
+       4,
+       4
+      ],
+      "texto": "This warning says updatedAt is added without a default and cannot be added to a nonempty table, but the migration actually supplies DEFAULT NOW(), explicitly handling existing rows. Remove or correct the warning so operators reviewing the migration are not incorrectly told that existing data makes it unsafe to run."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#06",
+    "descricao": "The test-gcal-webhooks.sh cleanup function always exits 0, including when called from the failure paths, so the script reports success when the tunnel could not be set up.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "scripts/test-gcal-webhooks.sh",
+      "lines": [
+       10,
+       18
+      ],
+      "texto": "`cleanup` always runs `exit 0`, and it is also called on the failure paths (rate limit hit, failed to extract the URL). The script therefore reports success even though the tunnel failed and GOOGLE_WEBHOOK_URL was never updated. Have `cleanup` take an exit code, and pass 1 from the failure paths."
+     },
+     {
+      "file": "scripts/test-gcal-webhooks.sh",
+      "lines": [
+       11,
+       18
+      ],
+      "texto": "cleanup() always ends in `exit 0`, and both failure paths (rate-limit at lines 46-50 and 'Failed to extract Tunnelmole URL' at lines 56-59) call cleanup. So a script named test-gcal-webhooks that did not actually obtain the tunnel URL / update GOOGLE_WEBHOOK_URL still exits with status 0, letting any automation treat the run as successful even though the setup it verifies failed. On the failure branches the script should exit non-zero (e.g. `exit 1`) so failure is observable; only the SIGINT/SIGTERM interactive shutdown should exit 0."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+    "descricao": "The webhook test script updates .env with the macOS-only `sed -i ''` syntax, which fails on Linux GNU sed and leaves GOOGLE_WEBHOOK_URL unchanged.",
+    "textoGolden": "logic: macOS-specific sed syntax with empty string after -i flag will fail on Linux systems",
+    "comentarios": [
+     {
+      "file": "scripts/test-gcal-webhooks.sh",
+      "lines": [
+       67,
+       68
+      ],
+      "texto": "WHAT: `sed -i '' -E 's|^GOOGLE_WEBHOOK_URL=.*|...|' \"$ENV_FILE\"` uses the BSD/macOS `sed -i ''` form. WHY: under GNU sed (typical Linux dev/CI environment) the empty `''` is consumed as the script operand and the command errors, so the existing `GOOGLE_WEBHOOK_URL` line is never replaced and the tunnel URL is not written to the env file. HOW: use a portable invocation, e.g. `sed -i.bak -E \"s|^GOOGLE_WEBHOOK_URL=.*|GOOGLE_WEBHOOK_URL=$TUNNEL_URL|\" \"$ENV_FILE\"` (or branch on `uname`)."
+     },
+     {
+      "file": "scripts/test-gcal-webhooks.sh",
+      "lines": [
+       67,
+       68
+      ],
+      "texto": "The environment update uses BSD sed's `-i ''` syntax, which fails with GNU sed on Linux. When GOOGLE_WEBHOOK_URL already exists, the script leaves the previous URL unchanged but still prints that it was updated, preventing webhooks from reaching the new tunnel. Use a portable replacement strategy or select the in-place syntax based on the available sed implementation and check its exit status."
+     },
+     {
+      "file": "scripts/test-gcal-webhooks.sh",
+      "lines": [
+       67,
+       73
+      ],
+      "texto": "When GOOGLE_WEBHOOK_URL already exists, `sed -i ''` uses BSD/macOS syntax and fails under GNU sed on Linux. The script nevertheless prints that the URL was updated and keeps the tunnel running, leaving webhooks configured with the old URL. Use a portable replacement approach (or select the appropriate sed syntax) and only announce success after the edit succeeds."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#08",
+    "descricao": "deleteCacheHandler throws a plain Error when the credential is missing or not owned by the user, so tRPC returns a 500 instead of a structured FORBIDDEN/NOT_FOUND error.",
+    "textoGolden": "Throwing a generic Error for authentication failures results in a 500 response in tRPC. Instead, it should return a structured TRPCError with an appropriate code, such as FORBIDDEN, to accurately reflect the error type.",
+    "comentarios": []
+   }
+  ]
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "c790227e0cda780e6fea9bb03af27948d9e286b9",
+  "base": "917c7b0764f4c6bfdca95db2c5f73dbfdbe11757",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     190,
+     197
+    ],
+    "texto": "The new retry-count update inside catch throws if the reminder was deleted while scheduling was in progress. Booking cancellation or rescheduling can delete that row via deleteScheduledSMSReminder, so Prisma's missing-record error now escapes the per-reminder catch, aborts the cron request, and skips all remaining reminders. Use updateMany with the reminder ID so an already-deleted row is a no-op, and isolate persistence failures so they cannot escape the per-reminder error boundary."
+   },
+   {
+    "id": "S2",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     38,
+     42
+    ],
+    "texto": "The retry-count branch deletes any reminder with retryCount > 1, even if it has subsequently been scheduled successfully. A reminder that fails twice has count 2; if the next scheduling attempt succeeds (the cleanup and scheduling queries are separate, so concurrent invocations can reach this state), success sets referenceId but does not clear retryCount. The next cleanup deletes that future scheduled reminder, losing its tracking record. Restrict retry exhaustion cleanup to unscheduled SMS reminders rather than treating the count alone as sufficient for deletion."
+   },
+   {
+    "id": "S3",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     38,
+     42
+    ],
+    "texto": "The retry branch deletes rows regardless of whether they are now successfully scheduled. For example, after failures raise retryCount to 2, an already-running invocation can successfully schedule the SMS and save its referenceId; the next invocation still deletes that future reminder because success does not clear retryCount. This loses the record needed to track or cancel the scheduled SMS. Restrict retry exhaustion cleanup to unscheduled reminders (and clear the counter on success)."
+   },
+   {
+    "id": "S4",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     194,
+     196
+    ],
+    "texto": "Both failure paths compute the next count from the earlier findMany snapshot. Two overlapping invocations reading retryCount 0 can both fail and write 1, so two failed attempts are recorded as only one and the exhaustion threshold is bypassed. Use Prisma's atomic increment in both failure updates rather than assigning a snapshot-derived count."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#01",
+    "descricao": "retryCount is set to reminder.retryCount + 1 from a value read at the start of the run instead of an atomic increment, so overlapping runs can lose increments.",
+    "textoGolden": "Using retryCount: reminder.retryCount + 1 reads a possibly stale value and can lose increments under concurrency; consider an atomic increment via Prisma (increment: 1) to avoid race conditions (also applies to the similar update in the catch block).",
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       179,
+       197
+      ],
+      "texto": "WHAT: retryCount is incremented with a read-value computed at the start of the run (`retryCount: reminder.retryCount + 1`) instead of an atomic increment. WHY: if two cron invocations overlap (or the same reminder is processed twice before the write commits), both read the same retryCount and both write N+1, so failures are undercounted and the reminder can loop forever without ever reaching the `retryCount > 1` deletion threshold. HOW: use `data: { retryCount: { increment: 1 } }` so the increment is atomic (the initial read value is then irrelevant)."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "`retryCount: reminder.retryCount + 1` is a read-modify-write of the value fetched at the top of the handler, not an atomic increment. Two overlapping cron runs both read the same retryCount and both write the same +1, losing an update, so failed reminders can be retried indefinitely and never reach the `gt: 1` deletion threshold. Use Prisma's atomic `retryCount: { increment: 1 }` instead of computing from the stale in-memory value (same issue in the else branch at lines 179-186)."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       183,
+       185
+      ],
+      "texto": "Retry counts are assigned from the stale findMany snapshot instead of incremented atomically, both here and in the catch branch. Two overlapping cron requests can each fail scheduling the same reminder with retryCount zero and both write one, so two failed attempts do not reach the deletion threshold and additional attempts are scheduled. Use Prisma's atomic retryCount increment operation in both failure branches."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+    "descricao": "The deleteMany OR clause applies retryCount > 1 without the SMS method filter, so the SMS cron deletes any workflow reminder (email, WhatsApp) with retryCount above 1.",
+    "textoGolden": "The deletion logic in scheduleSMSReminders.ts incorrectly deletes non-SMS workflow reminders (e.g., Email, WhatsApp) that have retryCount > 1. This occurs because the retryCount condition within the OR clause for deletion lacks a method: WorkflowMethods.SMS filter, causing it to apply to all reminder types instead of only SMS reminders, which is the intended scope of this function.",
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       28,
+       43
+      ],
+      "texto": "The comment \"//delete all scheduled sms reminders where scheduled date is past current date\" no longer describes the deleteMany below it. After this change the query also deletes reminders with retryCount > 1, and that OR branch has no `method: WorkflowMethods.SMS` filter, so non-SMS (email) reminders with retryCount > 1 are now deleted too. Update the comment (or add the missing SMS filter to the retryCount branch) so the prose matches what the code actually deletes."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       53,
+       63
+      ],
+      "texto": "The deleteMany OR clause deletes any reminder with retryCount > 1 regardless of method."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       38,
+       43
+      ],
+      "texto": "The second OR branch `{ retryCount: { gt: 1 } }` has no `method` filter, unlike the first branch (`method: WorkflowMethods.SMS`). Because `retryCount` is a generic column on WorkflowReminder used by all reminder methods, this deleteMany now permanently deletes every reminder of ANY method (including EMAIL) whose retryCount exceeds 1, even though this cron is only supposed to clean up SMS reminders. Add `method: WorkflowMethods.SMS` to this branch (or scope the whole where to SMS) so non-SMS reminders are never destroyed."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#03",
+    "descricao": "The cleanup comment describes only past-date SMS deletion and omits the new retryCount > 1 deletion branch.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       38,
+       42
+      ],
+      "texto": "Update the cleanup comment to describe the new retry-exhaustion deletion branch. It currently says this deletes scheduled SMS reminders whose date has passed, but this OR branch also deletes any reminder with retryCount > 1, including future-dated reminders and without an SMS restriction. The comment now misrepresents the scope of this destructive operation."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       28,
+       44
+      ],
+      "texto": "Stale comment: line 28 says 'delete all scheduled sms reminders where scheduled date is past current date' but the new OR clause also deletes any reminder with retryCount > 1 regardless of method or date. Update the comment to describe both branches."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+    "descricao": "The retry-count update inside the catch block is not guarded, so if it throws (for example the reminder was deleted concurrently) the error escapes the loop and the cron run fails, skipping the remaining reminders.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       189,
+       198
+      ],
+      "texto": "WHAT: the catch block performs an unguarded `prisma.workflowReminder.update` while handling the scheduling error. WHY: if this write itself rejects (e.g. the row was concurrently removed, or a transient DB error), the rejection is not caught and escapes the for-loop, aborting the whole cron run so all remaining reminders go unprocessed. HOW: wrap the retryCount update in its own try/catch (log and continue) so a failure to record the retry does not abort processing of the remaining reminders."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "This new `prisma.workflowReminder.update` sits inside the catch block, which is NOT protected by any try/catch. If this update throws (e.g. the reminder was already removed by the `deleteMany` at the top of the file during a concurrent run -> Prisma P2025, or a transient DB error), the exception escapes the `for` loop and rejects the handler, so all remaining unscheduled reminders are skipped and the cron request fails. Previously the catch only did `console.log`, so a single bad reminder never aborted the batch and the endpoint always returned 200. Wrap this update in its own try/catch (or `updateMany`/catch-and-log) so a failed retry-count write cannot take down the whole scheduling run."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "The new database update inside catch can itself throw when a reminder has been deleted during scheduling. Booking cancellation deletes reminders through handleCancelBooking and deleteScheduledSMSReminder, so a concurrent cancellation followed by a scheduling error now rejects the entire cron handler and prevents the remaining reminders from being processed. Use an updateMany filtered by the reminder ID to tolerate an already-deleted row, and guard errors from retry bookkeeping so they do not escape the per-reminder error handler."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#06",
+    "descricao": "Claims transient errors increment retryCount, so two runs during an outage delete the whole pending SMS reminder queue.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "WHAT: The catch block unconditionally increments retryCount for any exception (profile/bookerUrl/templating/rate-limit/Twilio outage). WHY: Two consecutive cron runs with a transient global failure increment every pending SMS reminder to 2 and the startup deleteMany then wipes the entire future SMS queue, not just permanently-invalid numbers. HOW: Only increment on permanent scheduleSMS failure, or distinguish transient errors from terminal ones before counting toward deletion."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
+    "descricao": "The new OR arm on retryCount has no supporting index, so the cleanup delete can no longer be fully served by the existing index and may scan the table.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       31,
+       43
+      ],
+      "texto": "WHAT: the deleteMany WHERE now uses `OR` between `(method = SMS AND scheduledDate <= now)` and `retryCount > 1`, but WorkflowReminder has no index on the newly added retryCount column. WHY: Postgres cannot satisfy a two-way OR using the existing (method, scheduled, scheduledDate) index and will fall back to a sequential scan of the entire WorkflowReminder table on every cron invocation, turning a previously indexed delete into a full table scan as the table grows. HOW: add an index on retryCount (or restructure so each branch is index-usable), then re-check the query plan."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#09",
+    "descricao": "The retryCount increment update is duplicated in the else branch and the catch block.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "scheduleSMSReminders.ts",
+      "lines": [
+       178,
+       197
+      ],
+      "texto": "The retryCount increment is duplicated in the else-branch and catch."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+    "descricao": "SMS-sending locks are counted as failed scheduling attempts: scheduleSMS returns undefined for locked users/teams, retryCount is incremented, and after two cron runs the retryCount > 1 cleanup deletes future reminders even if sending is later unlocked.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "advanced-sql-analytics-framework-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "f3317b329b4eb8fd96f99dd86525bc4a22d20248",
+  "base": "cbe1e7d63f098e306058c0fbcab2f5c30602fa7d",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/expr/sql/db.go",
+    "lines": [
+     16,
+     21
+    ],
+    "texto": "The replacement preserves the method signatures but not the behavior that the existing consumers require. SQLCommand.Execute now calls this QueryFramesInto and propagates its unconditional `not implemented` error instead of producing a result frame; sql.TablesList likewise calls RunCommands and can no longer extract table references. Even if the reader gate is corrected or these consumers are called directly, every valid SQL operation fails. Retain the functional backend until this replacement implements those operations, or provide an equivalent implementation before switching consumers."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     199
+    ],
+    "texto": "ReadQuery now depends on this helper to admit SQL expressions, but both paths return false. Previously SQL queries reached SQLExpression decoding; now even callers with FlagSqlExpressions enabled receive `sqlExpressions is not implemented`. Return the actual feature-enabled state so enabled callers retain the parsing contract."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     199
+    ],
+    "texto": "Both branches return false, regardless of FlagSqlExpressions. Consequently the new check in ReadQuery rejects every SQL expression, including when the feature is enabled, and the SQL decoding path is unreachable. Return the actual feature flag value instead."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/expr/sql/db.go",
+    "lines": [
+     16,
+     21
+    ],
+    "texto": "The replacement database is wired into both parser.TablesList (via RunCommands) and SQLCommand.Execute (via QueryFramesInto), but both methods unconditionally return \"not implemented\". This removes the working DuckDB behavior: table discovery always fails and execution can never populate a result frame, even after the feature gate is enabled. Preserve the working database implementation until this replacement can perform those operations."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#06",
+    "descricao": "The variable in TablesList is still named duckDB although it no longer holds a DuckDB instance.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/expr/sql/parser.go",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "After replacing `duck.NewInMemoryDB()` with local `NewInMemoryDB()` and removing the duck import, the local `duckDB` still carries the old implementation name though it is no longer a duck DB. Rename to `db`/`sqlDB` (as done in sql_command.go) so identifier matches code."
+     }
+    ]
+   }
+  ]
+ },
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "d38c4d5f7443223c81529c22470293771baf9f38",
+  "base": "7554b5e3c458dc79b591d5e874e79ab10cf30c2f",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/assets/stylesheets/desktop/topic-post.scss",
+    "lines": [
+     291,
+     291
+    ],
+    "texto": "This replacement changes the reply author's light-theme color from 30% lightness scaling to 70%, rather than retaining the original color as the other theme conversions do. With a black primary on a white background this turns #4d4d4d into #b3b3b3, making the small author link substantially harder to read. The dark-theme argument is likewise the inverse of the corresponding 30% author-link conversions in common/base/topic-post.scss and common/base/user.scss. Preserve 30% for the light branch and use 70% for the dark branch."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+    "descricao": "In .topic-meta-data h5 a, the light-theme color changed from scale-color($primary, 30%) to 70% because the dark-light-choose arguments were inverted, making the link much paler in light themes.",
+    "textoGolden": "In .topic-meta-data h5 a, the original code had color: scale-color($primary, $lightness: 30%) but was changed to dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%)). The lightness for the light theme changed from 30% to 70%, which is a dramatic inversion",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/desktop/topic-post.scss",
+      "lines": [
+       291,
+       291
+      ],
+      "texto": "The light-theme argument was changed from the original lightness. WHAT: the original was `scale-color($primary, $lightness: 30%)`, but the new value uses `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))` \u2014 the first (light-theme) argument is now 70%, not 30%. WHY: this silently darkens the light-theme color for `.topic-meta-data h5 a` (post-author link) from a 30% to a 70% tint, a light-theme regression outside the PR's dark-theme-only intent; the values also are inverted relative to the (X, 100\u2212X) convention used everywhere else (should be 30/70). HOW: use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/topic-post.scss",
+      "lines": [
+       291,
+       291
+      ],
+      "texto": "The original value was scale-color($primary, $lightness: 30%). After conversion the light-mode argument became $primary:70% and dark-mode $secondary:30% \u2014 both inverted away from the original 30%. Should be dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%)). As written the light-mode color is dramatically lighter than intended."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/topic-post.scss",
+      "lines": [
+       291,
+       291
+      ],
+      "texto": "This bold link inside `.reply`/`nav.post-controls` was originally `scale-color($primary, $lightness: 30%)`. The rewrite uses 70% as the light-theme argument, inverting the intended value (the complementary pair should be 30/70, not 70/30). The light theme now shows this link far lighter than before; the first argument must remain the original 30%."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+    "descricao": "In mobile .custom-message-length the light-theme lightness changed from 70% to 30% (inverted pair), making the hint text much darker than before and than desktop.",
+    "textoGolden": "In topic-post.css the original code used $lightness: 70% but the replacement uses $lightness: 30% for the light theme. This makes the text significantly darker than intended.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/mobile/modal.scss",
+      "lines": [
+       102,
+       102
+      ],
+      "texto": "The light-theme argument was changed from the original lightness. WHAT: the original was `scale-color($primary, $lightness: 70%)`, but the new value is `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))` \u2014 the first argument is now 30%, not 70%. WHY: this changes the light-theme color of `.custom-message-length` from a 70% to a 30% tint (a light-theme regression), and the pair is inverted vs. the (X, 100\u2212X) convention; the desktop counterpart at desktop/modal.scss:94 correctly kept 70/30. HOW: use `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/modal.scss",
+      "lines": [
+       102,
+       102
+      ],
+      "texto": "The original `.custom-message-length` color was `scale-color($primary, $lightness: 70%)`. The refactor changed the light-theme argument to 30%, so the light theme now renders this hint much darker than before (a 40-point lightness jump). It also no longer matches its desktop counterpart (desktop/modal.scss keeps `70%, 30%`). The first argument must stay at the original 70%: `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/modal.scss",
+      "lines": [
+       100,
+       102
+      ],
+      "texto": "`.custom-message-length` now contradicts the desktop rule for the same class. desktop/modal.scss (line 94) converted the original `scale-color($primary, $lightness: 70%)` to `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))` (keeping 70%), while this hunk produced `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`, flipping the primary lightness 70\u219230. Both files started from 70%, so mobile should be 70/30 to agree with desktop and preserve the original value."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+    "descricao": "In desktop/user.scss .name the light-theme lightness was changed from 30% to 50%, lightening the name in light themes instead of only adding a dark-theme value.",
+    "textoGolden": "This change for desktop/user.css changes $primary from 30% to 50% for the light theme; most other changes preserve the original $primary value and move the complement to $secondary for dark. Consider reviewing this (also applies to a similar .name change in the mobile variant).",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The `.name` color was `scale-color($primary, $lightness: 30%)` and is now `50%` in the light branch. This changes the light-theme color. Use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The .name color was scale-color($primary, $lightness: 30%) but the light argument was changed to 50%, so the light theme loses its contrast. Use dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The .name light value was changed from primary 30% to 50%, which lightens the text in light mode. Use dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+    "descricao": "In mobile/user.scss .name the light-theme lightness was changed from 30% to 50% instead of preserving 30% with a 70% secondary for dark themes.",
+    "textoGolden": "In mobile/user.scss line 497, the lightness value for dark themes should be inverted to 70% instead of being changed to 50%. This change may lead to unintended visual regressions in light themes.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The light-theme value no longer matches the original. WHAT: `.group-member-info .name` was `scale-color($primary, $lightness: 30%)` and now is `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` (30% \u2192 50%). WHY: this lightens the name link in the light theme, an unintended light-theme change; the equivalent rule in common/base/user.scss:124 correctly preserved 30% (30/70). HOW: use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/user.scss",
+      "lines": [
+       497,
+       497
+      ],
+      "texto": "The light-theme value no longer matches the original. WHAT: `.group-member-info .name` was `scale-color($primary, $lightness: 30%)` and now is `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` (30% \u2192 50%). WHY: this lightens the name link in the light theme, an unintended light-theme change inconsistent with the mobile/desktop counterpart that preserved 30%; desktop/user.scss:522 has the same defect. HOW: use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": ".group-member-info .name originally used scale-color($primary, $lightness: 30%). The conversion changed the light-mode argument to 50% (making it 50/50), altering the intended color. Should preserve the original: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+    "descricao": "In mobile topic-post a.star h3 the light-theme lightness changed from 20% to 50%, fading the heading and diverging from the desktop 20%/80% conversion.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/mobile/topic-post.scss",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "The light-theme value no longer matches the original. WHAT: `.topic-map h3` was `scale-color($primary, $lightness: 20%)` and now is `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` (20% \u2192 50%). WHY: this visibly lightens the topic-map heading in the light theme; the desktop counterpart at desktop/topic-post.scss:321 correctly kept 20% (20/80), so mobile diverged. HOW: use `dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/topic-post.scss",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "Original was scale-color($primary, $lightness: 20%). The conversion changed it to 50%/50%, but the desktop mirror of this rule (desktop/topic-post.scss h3) uses 20%/80%. The two files must agree; should be dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%))."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/topic-post.scss",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "This `h3` was originally `scale-color($primary, $lightness: 20%)`. The rewrite changed the light-theme argument to 50%, so the light theme renders the heading lighter than before; the correct pair is 20/80, not 50/50. The first argument must keep the original 20%."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#07",
+    "descricao": "The comment describing the topic-list cell default color still names a plain scale-color($primary, 50%) rule that the PR replaced with dark-light-choose.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/base/discourse.scss",
+      "lines": [
+       72,
+       76
+      ],
+      "texto": "The comment at lines 72-74 states \"the default for table cells in topic list is scale-color($primary, $lightness: 50%)\", but the rule it documents was converted by this PR to `dark-light-choose(scale-color($primary, $lightness: X%), scale-color($secondary, $lightness: 100-X%))` (here for coldmap-high/med/low and in common/base/_topic-list.scss th/td). The prose still names a single `$primary` expression, so it no longer describes the code: a reader comparing the two will look for a plain `$primary` 50% rule that no longer exists. Update the comment to describe the dark-light-choose baseline (e.g. \"is dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))\")."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#08",
+    "descricao": "In dark themes the notification badge background becomes a lightened $secondary while its text stays $secondary, giving dark text on a dark background with poor contrast.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/components/badges.css.scss",
+      "lines": [
+       239,
+       239
+      ],
+      "texto": "The dark-theme notification badge background now uses a lightened $secondary while its text still uses the unmodified $secondary. This puts dark text on a dark background for plain badges such as category unread counts in site-map.hbs:73; with $secondary black, the foreground is #000 and the background is approximately #4d4d4d (about 2.5:1 contrast), making the small count text difficult to read. Set the default badge foreground, including its &[href] rule, to a contrasting dark-theme color such as $primary when selecting this dark background."
+     }
+    ]
+   }
+  ]
+ }
+}
