@@ -469,8 +469,9 @@ export class AuthService implements IAuthService {
         // profile email. Trusting it lets a token that cannot read verified
         // emails (no `user:email` scope, or a failed /user/emails call) set the
         // public email to a victim's address and impersonate that account
-        // (GHSA-95hw-cx5j-2pg8). Only a verified address from /user/emails is
-        // acceptable — never seed the identity from the profile email.
+        // (GHSA-95hw-cx5j-2pg8). Only an address confirmed by /user/emails is
+        // acceptable — never seed the identity from the profile email alone.
+        const profileEmail: string | undefined = profile.data?.email ?? undefined;
         let email: string | undefined;
         try {
             const emails = await axios.get(`${baseUrl}/user/emails`, {
@@ -482,10 +483,21 @@ export class AuthService implements IAuthService {
                 primary: boolean;
                 verified: boolean;
             }> = Array.isArray(emails.data) ? emails.data : [];
-            const primary =
-                list.find((e) => e.primary && e.verified) ??
-                list.find((e) => e.verified);
-            email = primary?.email;
+            const verified = list.filter((e) => e.verified);
+            // Keep the account's existing identity. The web historically keyed
+            // the account on GitHub's public profile email (NextAuth
+            // `user.email`), so when that address is itself verified, return it
+            // as-is — this is still the GHSA-95hw fix because the profile email
+            // is only trusted once it appears in the verified list. Otherwise
+            // fall back to the primary verified address, then any verified one.
+            const profileVerified =
+                !!profileEmail &&
+                verified.some(
+                    (e) => e.email.toLowerCase() === profileEmail.toLowerCase(),
+                );
+            email = profileVerified
+                ? profileEmail
+                : (verified.find((e) => e.primary) ?? verified[0])?.email;
         } catch (error) {
             // A degradation, not a fatal error — but we must not fall back to
             // the unverified profile email, so the login is rejected below.
@@ -508,8 +520,12 @@ export class AuthService implements IAuthService {
             );
         }
 
+        // Return the address exactly as the provider stores it — do not
+        // lower-case it. `getLoginData` resolves the account case-insensitively
+        // but prefers an exact-case match, so preserving the casing keeps the
+        // user on their own row.
         return {
-            email: email.toLowerCase(),
+            email,
             name: profile.data?.name || profile.data?.login,
         };
     }
@@ -517,9 +533,16 @@ export class AuthService implements IAuthService {
     private async verifyGitlabToken(
         accessToken: string,
     ): Promise<{ email: string; name?: string }> {
+        // A self-hosted install points the web at its own GitLab through
+        // WEB_GITLAB_OAUTH_URL (apps/web/src/core/config/auth.ts); honor the
+        // same variable here so the token is validated against that instance.
+        // API_GITLAB_TOKEN_URL is the legacy/back-compat fallback and ships
+        // empty, which would otherwise send every self-hosted login to
+        // gitlab.com and 401.
         const origin = new URL(
-            process.env.API_GITLAB_TOKEN_URL ||
-                'https://gitlab.com/oauth/token',
+            process.env.WEB_GITLAB_OAUTH_URL ||
+                process.env.API_GITLAB_TOKEN_URL ||
+                'https://gitlab.com',
         ).origin;
 
         const profile = await axios.get(`${origin}/api/v4/user`, {
@@ -535,7 +558,7 @@ export class AuthService implements IAuthService {
         }
 
         return {
-            email: email.toLowerCase(),
+            email,
             name: profile.data?.name || profile.data?.username,
         };
     }
@@ -562,7 +585,7 @@ export class AuthService implements IAuthService {
             );
         }
 
-        return { email: email.toLowerCase(), name: profile.data?.name };
+        return { email, name: profile.data?.name };
     }
 
     private async refreshThirdPartyToken(
@@ -589,9 +612,12 @@ export class AuthService implements IAuthService {
                 clientSecret = process.env.API_GITHUB_CLIENT_SECRET;
                 break;
             case AuthProvider.GITLAB:
-                url =
-                    process.env.API_GITLAB_TOKEN_URL ||
-                    'https://gitlab.com/oauth/token';
+                // Same instance the login flow validated against
+                // (WEB_GITLAB_OAUTH_URL); its token endpoint is <origin>/oauth/token.
+                url = process.env.WEB_GITLAB_OAUTH_URL
+                    ? `${new URL(process.env.WEB_GITLAB_OAUTH_URL).origin}/oauth/token`
+                    : process.env.API_GITLAB_TOKEN_URL ||
+                      'https://gitlab.com/oauth/token';
                 clientId = process.env.GLOBAL_GITLAB_CLIENT_ID;
                 clientSecret = process.env.GLOBAL_GITLAB_CLIENT_SECRET;
                 break;
