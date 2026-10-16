@@ -49,6 +49,14 @@ const NIGHTLY_EVALS = [
         // A Kody Rules repost with a new site, a bug repost and a revision.
         friday: ['--limit=3'],
     },
+    {
+        id: 'parse',
+        stage: 'parse',
+        run: ['evals/parse/run.js'],
+        files: ['evals/parse/targets.json'],
+        // The cases that call the model: findings written as prose.
+        friday: ['--limit=4', '--prose'],
+    },
 ];
 
 const byId = (id) => NIGHTLY_EVALS.find((e) => e.id === id) || null;

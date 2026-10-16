@@ -108,6 +108,8 @@ async function main() {
     // that exits 0 without calling it proves nothing about the engine path.
     const steps = [
         { name: 'preflight', args: ['evals/engine-gate.js', '--profile=harness'] },
+        // Replays recorded model output; only prose recovery reaches the model.
+        { name: 'parse', model: true, args: ['evals/parse/run.js', '--model=eval-fake', '--gate'] },
         { name: 'review-chain', args: ['evals/review-chain/run.js', '--gate'] },
         { name: 'shape-invariance', args: ['evals/review-chain/shape-invariance.js', '--gate'] },
         { name: 'verifier-verdict', args: ['evals/verifier-verdict/run.js', '--gate'] },
