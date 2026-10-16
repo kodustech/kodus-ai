@@ -46,15 +46,19 @@ the agent's findings against each PR's golden bugs. Per PR it reports:
   fidelity = the agent explored beyond the recording and reflected on empty results →
   that PR's number is unreliable, discard it.
 
-The finder runs as production's generalist does (`agent-provider.js`,
-`buildProductionRun`): the PR's whole diff (`changedFilesFull`), every category
-the team leaves on (all three by default), the orchestrator's step budget, and
-the model routed through production's resolver: the env/managed route by
-default, a stored BYOK config when `RECALL_REASONING_EFFORT` is set. On a PR too
-large for the model's window it applies production's low-signal filter, file
-tiers and batches. A subscription model (`@sub`) has no production route and the
-run exits 2. `RECALL_CATEGORIES` and `RECALL_MAX_STEPS` override the defaults for
-an experiment.
+The finder runs through production's own code, not a copy of it
+(`agent-provider.js` `reviewAsProduction`): ValidateConfigStage's
+`routeCodeReviewModel`, AgentReviewStage's `resolveAgentReviewSettings` and
+`buildOrchestratorInput`, then `ReviewOrchestratorService.execute` running the
+generalist, so every category the team leaves on (all three by default), the
+orchestrator's step budget, the model resolution and, on a PR too large for the
+model's window, the low-signal filter, file tiers and batches are production's.
+The eval supplies only data: the PR's whole diff (`changedFilesFull`), the org's
+stored config (none on the env/managed route by default, a BYOK config when
+`RECALL_REASONING_EFFORT` is set) and the tools' answers. It reads the finder's
+findings by observing production's loop entry (`runAgentLoopViaCore`), before
+the mapper. A subscription model (`@sub`) has no production route and the run
+exits 2. `RECALL_CATEGORIES` sets the team's category toggles for an experiment.
 
 What this eval validates: changes to **how the finder/verify judge the code they
 already see** (prompt tweaks, sink checklists, few-shot, verify tuning, model, thinking
