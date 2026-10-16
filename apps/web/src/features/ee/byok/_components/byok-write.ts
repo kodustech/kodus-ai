@@ -82,6 +82,46 @@ export type BuildV2Edit =
     | { kind: "routing"; routing: BYOKRouting };
 
 /**
+ * The credential a save should write into, or `undefined` when it has to
+ * create one.
+ *
+ * Provider alone is not identity. `openai_compatible`, `anthropic_compatible`
+ * and Azure all point at an endpoint the org supplies, so Together AI and
+ * Fireworks are both `openai_compatible` — with different base URLs, different
+ * keys and different bills. Matching on provider alone meant the second one
+ * rewrote the first one's endpoint and hung its model off that credential, so
+ * an org could never hold two gateways at once.
+ *
+ * The endpoint only enters the comparison when the incoming save carries one.
+ * A provider whose endpoint is fixed sends no `baseURL` and keeps reusing its
+ * single credential, exactly as before.
+ */
+export const findReusableCredential = (
+    credentials: BYOKCredential[] | undefined,
+    next: { provider: string; settings?: Record<string, unknown> },
+): BYOKCredential | undefined => {
+    const wanted = normalizeEndpoint(next.settings?.baseURL);
+
+    return (credentials ?? []).find((credential) => {
+        if (credential.managed || credential.provider !== next.provider) {
+            return false;
+        }
+        if (!wanted) return true;
+        return normalizeEndpoint(credential.settings?.baseURL) === wanted;
+    });
+};
+
+/**
+ * Two spellings of one endpoint — a trailing slash, a capitalised host — are
+ * the same upstream, and treating them as different would quietly split one
+ * gateway's models across two credentials.
+ */
+const normalizeEndpoint = (value: unknown): string =>
+    typeof value === "string"
+        ? value.trim().replace(/\/+$/, "").toLowerCase()
+        : "";
+
+/**
  * Split the {@link BYOKConnectInput} the connect/edit form emits into the v2
  * halves: the CREDENTIAL settings (provider-scoped:
  * baseURL, vertexLocation, aws*, openrouter*) and the per-MODEL fields. The key

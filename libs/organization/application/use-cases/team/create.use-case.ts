@@ -15,7 +15,7 @@ import {
 import { ParametersKey } from '@libs/core/domain/enums';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import { createLogger } from '@libs/core/log/logger';
-import { buildDefaultGlobalCodeReviewConfig } from '@libs/common/utils/validateCodeReviewConfigFile';
+import { buildNewTeamGlobalCodeReviewConfig } from '@libs/common/utils/validateCodeReviewConfigFile';
 
 @Injectable()
 export class CreateTeamUseCase implements IUseCase {
@@ -119,7 +119,7 @@ export class CreateTeamUseCase implements IUseCase {
                 () =>
                     this.createOrUpdateParametersUseCase.execute(
                         ParametersKey.CODE_REVIEW_CONFIG,
-                        buildDefaultGlobalCodeReviewConfig(),
+                        buildNewTeamGlobalCodeReviewConfig(),
                         { organizationId, teamId },
                     ),
                 ParametersKey.CODE_REVIEW_CONFIG,

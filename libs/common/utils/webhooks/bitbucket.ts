@@ -67,6 +67,7 @@ export class BitbucketMappedPlatform implements IMappedPlatform {
                             payload?.pullrequest?.fromRef?.repository?.name,
                     },
                     ref: payload?.pullrequest?.fromRef?.displayId,
+                    sha: payload?.pullrequest?.fromRef?.latestCommit ?? '',
                 },
                 base: {
                     repo: {
@@ -87,6 +88,7 @@ export class BitbucketMappedPlatform implements IMappedPlatform {
                             payload?.pullrequest?.source?.repository?.full_name,
                     },
                     ref: payload?.pullrequest?.source?.branch?.name,
+                    sha: payload?.pullrequest?.source?.commit?.hash ?? '',
                 },
                 base: {
                     repo: {

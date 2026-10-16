@@ -991,7 +991,10 @@ describe('AgentReviewStage', () => {
             try {
                 const result = await (stage as any).deduplicateSuggestions(suggestions, 42);
                 expect(result.suggestions).toHaveLength(1); // merged
-                expect(result.suggestions[0].suggestionContent).toContain('Also found in');
+                expect(result.suggestions[0].alsoFoundIn).toHaveLength(1);
+                expect(result.suggestions[0].suggestionContent).toBe(
+                    suggestions[0].suggestionContent,
+                );
             } finally {
                 if (origKey === undefined) delete process.env.API_OPEN_AI_API_KEY;
                 else process.env.API_OPEN_AI_API_KEY = origKey;
@@ -1196,7 +1199,10 @@ describe('AgentReviewStage', () => {
                 const file0 = result.suggestions.find(
                     (s: any) => s.relevantFile === 'src/file-0.ts',
                 );
-                expect(file0.suggestionContent).toContain('src/file-1.ts');
+                expect(file0.alsoFoundIn).toEqual([
+                    expect.stringMatching(/^src\/file-1\.ts:/),
+                ]);
+                expect(file0.suggestionContent).toBe(suggestions[0].suggestionContent);
             } finally {
                 if (origKey === undefined) {
                     delete process.env.API_OPEN_AI_API_KEY;
@@ -1309,13 +1315,16 @@ describe('AgentReviewStage', () => {
                     42,
                 );
 
-                // suggestion 0 should have "Also found in" for suggestion 1's location
+                // The formatter receives prose separately from merged locations.
                 expect(result.suggestions).toHaveLength(1);
                 expect(result.suggestions[0].relevantFile).toBe(
                     'src/file-0.ts',
                 );
-                expect(result.suggestions[0].suggestionContent).toContain(
-                    'src/file-1.ts',
+                expect(result.suggestions[0].alsoFoundIn).toEqual([
+                    expect.stringMatching(/^src\/file-1\.ts:/),
+                ]);
+                expect(result.suggestions[0].suggestionContent).toBe(
+                    suggestions[0].suggestionContent,
                 );
             } finally {
                 if (origKey === undefined) {

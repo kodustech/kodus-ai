@@ -3,7 +3,7 @@ import { buildKodyRuleLink } from '@libs/code-review/utils/build-kody-rule-link'
 describe('buildKodyRuleLink', () => {
     const BASE = 'https://app.kodus.io';
     const RULE_ID = 'b207a89c-924b-4a0a-8070-2e860293b537';
-    const REPO_ID = '769144833';
+    const REPO_ID = '900000001';
     const DIR_ID = 'cf5284b4-2510-464a-9eca-98efbf121d04';
     const TEAM_ID = '2d696ed8-901b-4f07-97ae-0743579d1df7';
 

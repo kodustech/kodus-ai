@@ -256,6 +256,8 @@ export async function runAgentLoopCall(
               // resolveTaskSlot (route = the LlmTask, not the tier).
               route: slot?.route,
               usedFallback: slot?.usedFallback,
+              // Same condition that turns the SDK telemetry on above.
+              traced: !!telemetryMetadata,
               attrs: spanAttrs,
               exec,
           })

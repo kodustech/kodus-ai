@@ -45,6 +45,7 @@ describe('PullRequestsService.findPrLevelSuggestionsByPR (issue #1313 Fase 1b)',
             'kodustech/kodus-ai',
             'org-1',
             DeliveryStatus.SENT,
+            40,
         );
 
         expect(findPrLevelSuggestionsByPR).toHaveBeenCalledWith(
@@ -52,6 +53,7 @@ describe('PullRequestsService.findPrLevelSuggestionsByPR (issue #1313 Fase 1b)',
             'kodustech/kodus-ai',
             'org-1',
             DeliveryStatus.SENT,
+            40,
         );
         expect(result).toEqual([{ id: 'pr-sug-1' }]);
     });

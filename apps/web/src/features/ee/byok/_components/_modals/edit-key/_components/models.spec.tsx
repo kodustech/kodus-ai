@@ -1,6 +1,6 @@
 /** @jest-environment jsdom */
 import "@testing-library/jest-dom";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { FormProvider, useForm } from "react-hook-form";
 
 import { ByokModelSelect } from "./models";
@@ -24,6 +24,14 @@ jest.mock("@services/organizationParameters/hooks", () => ({
                 autoListModels: true,
                 listsModelsLive: true,
                 requiresBaseUrl: false,
+            },
+            {
+                // A custom endpoint: nothing to list before its base URL is
+                // known, then the same live listing as any http provider.
+                id: "openai_compatible",
+                autoListModels: false,
+                listsModelsLive: true,
+                requiresBaseUrl: true,
             },
         ],
     }),
@@ -217,5 +225,119 @@ describe("ByokModelSelect — Bedrock credential gate (regression: d064c37c7)", 
         expect(mockPreview).toHaveBeenCalledWith(
             expect.objectContaining({ enabled: false }),
         );
+    });
+});
+
+// Production 2026-09-25: editing a Fireworks model (openai_compatible) with a
+// stored key and its base URL filled showed only "Type a model name" — the
+// picker never asked the endpoint for its models, and there was no way back to
+// a list.
+describe("ByokModelSelect — custom endpoint (openai_compatible)", () => {
+    const FIREWORKS = "https://api.fireworks.ai/inference/v1";
+
+    it("stored key + base URL: lists the endpoint's models", () => {
+        render(
+            <LivePickerHarness
+                credentialStored
+                defaultValues={{
+                    provider: "openai_compatible",
+                    model: "",
+                    baseURL: FIREWORKS,
+                }}
+            />,
+        );
+        expect(
+            screen.queryByPlaceholderText(/type a model name/i),
+        ).not.toBeInTheDocument();
+        expect(mockPreview).toHaveBeenCalledWith(
+            expect.objectContaining({
+                provider: "openai_compatible",
+                baseURL: FIREWORKS,
+                enabled: true,
+            }),
+        );
+    });
+
+    it("editing a key whose saved model the endpoint does not list: still shows that model", () => {
+        // Endpoints list only part of what they serve; before the picker, a
+        // compatible key always opened on the typed id. Showing "Select a
+        // model" would read as the saved model being gone.
+        mockPreview.mockReturnValue({
+            data: [{ id: "accounts/fireworks/models/other", name: "Other" }],
+            isFetching: false,
+            isError: false,
+        });
+        render(
+            <LivePickerHarness
+                credentialStored
+                defaultValues={{
+                    provider: "openai_compatible",
+                    model: "accounts/fireworks/models/deepseek-v4p1",
+                    baseURL: FIREWORKS,
+                }}
+            />,
+        );
+        expect(screen.getByText("Deepseek V4p1")).toBeInTheDocument();
+        expect(screen.queryByText(/select a model/i)).not.toBeInTheDocument();
+    });
+
+    it("typed key + base URL on a fresh connect: lists live", () => {
+        render(
+            <LivePickerHarness
+                defaultValues={{
+                    provider: "openai_compatible",
+                    model: "",
+                    apiKey: "fw-typed",
+                    baseURL: FIREWORKS,
+                }}
+            />,
+        );
+        expect(mockPreview).toHaveBeenCalledWith(
+            expect.objectContaining({
+                apiKey: "fw-typed",
+                baseURL: FIREWORKS,
+                enabled: true,
+            }),
+        );
+    });
+
+    it("no base URL yet: asks for it, never calls the endpoint, keeps manual entry", () => {
+        render(
+            <LivePickerHarness
+                credentialStored
+                defaultValues={{ provider: "openai_compatible", model: "" }}
+            />,
+        );
+        expect(
+            screen.getByText(/enter the base url to load models/i),
+        ).toBeInTheDocument();
+        expect(mockPreview).toHaveBeenCalledWith(
+            expect.objectContaining({ enabled: false }),
+        );
+        expect(
+            screen.getByRole("button", { name: /type model manually/i }),
+        ).toBeInTheDocument();
+    });
+
+    it("manual entry offers the way back to the list", () => {
+        render(
+            <LivePickerHarness
+                credentialStored
+                defaultValues={{ provider: "openai_compatible", model: "" }}
+            />,
+        );
+        fireEvent.click(
+            screen.getByRole("button", { name: /type model manually/i }),
+        );
+
+        expect(
+            screen.getByPlaceholderText(/type a model name/i),
+        ).toBeInTheDocument();
+        fireEvent.click(
+            screen.getByRole("button", { name: /select from list/i }),
+        );
+        expect(
+            screen.queryByPlaceholderText(/type a model name/i),
+        ).not.toBeInTheDocument();
     });
 });

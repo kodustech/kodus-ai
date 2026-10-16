@@ -630,6 +630,18 @@ describe('observability span — present vs absent port', () => {
         expect(arg.usedFallback).toBe(true);
     });
 
+    // The span opens a Langfuse observation only for a traced call; the flag
+    // must follow the same condition that turns the SDK telemetry on.
+    it('marks the span traced only when telemetry metadata is set', async () => {
+        await runAgentLoopCall(baseParams());
+        await runAgentLoopCall({
+            ...baseParams(),
+            telemetryMetadata: { organizationId: 'org-1' },
+        });
+        expect(spanPort.runAiSdkLLMInSpan.mock.calls[0][0].traced).toBe(false);
+        expect(spanPort.runAiSdkLLMInSpan.mock.calls[1][0].traced).toBe(true);
+    });
+
     it('span name defaults to runName when spanName is unset', async () => {
         await runAgentLoopCall(baseParams());
         expect(spanPort.runAiSdkLLMInSpan.mock.calls[0][0].spanName).toBe(

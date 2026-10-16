@@ -16,7 +16,7 @@
  */
 import type { CatalogModel, ModelListing } from '../kernel/types';
 import { catalogWithReasoning } from '../kernel/listing-helpers';
-import type { KodusUpstream } from './model-id';
+import { canonicalKodusModelId, type KodusUpstream } from './model-id';
 
 export { KODUS_UPSTREAMS, type KodusUpstream } from './model-id';
 
@@ -33,8 +33,8 @@ type KodusCatalogEntry = {
 
 const ENTRIES: KodusCatalogEntry[] = [
     {
-        id: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
-        name: 'DeepSeek V4 Flash',
+        id: 'fireworks/accounts/fireworks/models/deepseek-v4p1-flash',
+        name: 'DeepSeek V4.1 Flash',
         description:
             'Fast, cheap, 1M context. The model Kodus runs trials on — our default pick.',
         recommended: true,
@@ -103,13 +103,13 @@ const BY_ID = new Map(KODUS_CATALOG.map((m) => [m.id, m]));
 export function kodusModelPricing(
     modelId: string,
 ): CatalogModel['pricing'] | undefined {
-    return BY_ID.get(modelId)?.pricing;
+    return BY_ID.get(canonicalKodusModelId(modelId))?.pricing;
 }
 
 /** Whether the id is one Kodus offers (the catalog is closed — an unlisted id
  *  has no price and therefore cannot be billed, so it must not run). */
 export function isKodusCatalogModel(modelId: string): boolean {
-    return BY_ID.has(modelId);
+    return BY_ID.has(canonicalKodusModelId(modelId));
 }
 
 const STATIC_LISTING: ModelListing = { kind: 'static', models: KODUS_CATALOG };

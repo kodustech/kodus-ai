@@ -388,7 +388,16 @@ export const KodyRuleAddOrUpdateItemModal = ({
         },
     });
 
-    const formState = form.formState;
+    // Read every flag the footer needs up front. The proxy only tracks a flag
+    // once it is read, and `!isValid || !isDirty` short-circuits, so `isDirty`
+    // was never tracked: picking a suggested rule made the form valid but left
+    // "Create rule" disabled until a keystroke.
+    const {
+        isDirty,
+        isValid,
+        isSubmitting,
+        disabled: isFormDisabled,
+    } = form.formState;
     const watchScope = form.watch("scope");
 
     const handleSubmit = form.handleSubmit(async (config) => {
@@ -1599,14 +1608,10 @@ export const KodyRuleAddOrUpdateItemModal = ({
                     <Button
                         size="md"
                         variant="primary"
-                        loading={formState.isSubmitting}
+                        loading={isSubmitting}
                         onClick={handleSubmit}
                         leftIcon={rule ? <SaveIcon /> : <PlusIcon />}
-                        disabled={
-                            formState.disabled ||
-                            !formState.isValid ||
-                            !formState.isDirty
-                        }>
+                        disabled={isFormDisabled || !isValid || !isDirty}>
                         {rule
                             ? `Update ${entityLabel.toLowerCase()}`
                             : `Create ${entityLabel.toLowerCase()}`}

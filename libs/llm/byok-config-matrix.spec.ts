@@ -35,6 +35,12 @@
  *
  * The harness (`testing/byok-wire.ts`) runs the REAL stack — resolveModelConfig,
  * the real provider module, the real AI SDK — and only stubs `globalThis.fetch`.
+ *
+ * SIBLING TABLE: this file asks what a stored config puts on the wire for
+ * reasoning, temperature and routing, over a plain (loop) turn.
+ * `json-object-contract.spec.ts` asks the STRUCTURED question — which
+ * response_format channel the call goes out on, and what the messages must
+ * carry on it (#1916). Same harness, different question.
  */
 
 jest.mock('@libs/common/utils/crypto', () => ({
@@ -270,6 +276,34 @@ const CASES = [
         },
     },
     {
+        id: 'anthropic/claude-opus-5-5 — a Claude newer than the table still gets its effort',
+        why: '#1996: the 5.x pattern was anchored with `$`, so a point release fell to `unknown` and the slot effort was never sent. Any claude-* not on the closed list of older generations is newer, so it takes adaptive + effort',
+        doc: 'platform.claude.com/docs/en/build-with-claude/extended-thinking',
+        slot: {
+            provider: 'anthropic',
+            model: 'claude-opus-5-5',
+            reasoningEffort: 'high',
+        },
+        wire: {
+            url: 'https://api.anthropic.com/v1/messages',
+            has: {
+                thinking: { type: 'adaptive' },
+                output_config: { effort: 'high' },
+            },
+            hasNot: ['temperature'],
+        },
+    },
+    {
+        id: 'anthropic/claude-opus-5-5 — "off" omits, because an unrecognized Claude may reject `disabled`',
+        why: 'Opus 5 accepts thinking:{type:"disabled"}; Opus 5.5 and Fable reject it with a 400. The id cannot say which kind a new model is, so an unrecognized Claude is never sent the disable',
+        slot: {
+            provider: 'anthropic',
+            model: 'claude-opus-5-5',
+            reasoningEffort: 'none',
+        },
+        wire: { hasNot: ['thinking'] },
+    },
+    {
         id: 'anthropic_compatible/claude-sonnet-4-5 — the older generation keeps the budget',
         why: 'Adaptive thinking is not available on 4.5 and type:"adaptive" 400s there, so the id decides in both directions',
         doc: 'platform.claude.com/docs/en/build-with-claude/extended-thinking',
@@ -492,16 +526,28 @@ const CASES = [
     },
     {
         id: 'ollama cloud — the same holds for a Kimi behind the suffix',
-        why: 'The other family that appears with `:cloud`. Kimi takes the toggle and no effort level, and the suffix does not change that either',
+        why: 'The other family that appears with `:cloud`. k2.7-code always thinks and Moonshot has no effort level, so nothing is sent: the toggle would change nothing, and the suffix does not change that either',
         slot: {
             provider: 'openai_compatible',
             model: 'kimi-k2.7-code:cloud',
             baseURL: 'https://ollama.com/v1',
             reasoningEffort: 'high',
         },
+        wire: { hasNot: ['thinking', 'reasoning_effort'] },
+    },
+    {
+        id: 'an always-thinking GLM is not told to think',
+        why: 'GLM-5.3 always thinks, so `thinking: enabled` changes nothing for it, and a strict upstream rejects the field: OpenCode Go served glm-5.3-flash from one that answered `[unknown_parameter] invalid request body: json: unknown field "thinking"` to every call of one org for two hours (2026-09-30). The effort level Z.ai documents still goes out',
+        doc: 'docs.z.ai — thinking mode; sst/opencode provider/transform.ts sends no reasoning options to GLM-5.3',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'glm-5.3-flash',
+            baseURL: 'https://opencode.ai/zen/go/v1',
+            maxConcurrentRequests: 1,
+        },
         wire: {
-            has: { thinking: { type: 'enabled' } },
-            hasNot: ['reasoning_effort'],
+            has: { reasoning_effort: 'high' },
+            hasNot: ['thinking'],
         },
     },
     {
@@ -595,6 +641,24 @@ const CASES = [
         },
     },
     {
+        id: 'bedrock claude-opus-5-5 — an unrecognized Claude gets the adaptive shape here too',
+        why: 'Bedrock reads the same generation resolver as native Claude, so the #1996 fix has to reach this envelope without a host-specific change',
+        slot: {
+            provider: 'amazon_bedrock',
+            awsRegion: 'us-east-1',
+            model: 'global.anthropic.claude-opus-5-5-v1:0',
+            reasoningEffort: 'high',
+        },
+        wire: {
+            has: {
+                additionalModelRequestFields: {
+                    thinking: { type: 'adaptive' },
+                    output_config: { effort: 'high' },
+                },
+            },
+        },
+    },
+    {
         id: 'bedrock — "off" omits, because Converse has no explicit disable',
         why: 'The AI SDK treats only enabled/adaptive as thinking and DROPS a `disabled` reasoningConfig, verified by capturing the request. Omitting is the only off this transport can express, which is also why an adaptive Claude here reports canDisableThinking:false and reroutes a structured call instead of suppressing',
         slot: {
@@ -633,6 +697,65 @@ const CASES = [
                 additionalModelRequestFields: {
                     thinking: { type: 'enabled', budget_tokens: 2048 },
                 },
+            },
+        },
+    },
+    {
+        id: 'deepseek — `reasoning_effort` pasted as the API spells it reaches the request',
+        why: 'The DeepSeek docs spell the field `reasoning_effort`, so that is what two production orgs pasted. @ai-sdk/openai-compatible reads `reasoningEffort`, strips the snake_case key, and the "max" they asked for never left: they got thinking at the default effort. The override is copied verbatim from the stored config',
+        doc: 'api-docs.deepseek.com/guides/thinking_mode',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'deepseek-v4-flash',
+            baseURL: 'https://api.deepseek.com/v1',
+            reasoningConfigOverride:
+                '{\n  "reasoning_effort": "max",\n  "thinking": { "type": "enabled" }\n}',
+        },
+        wire: {
+            has: { thinking: { type: 'enabled' }, reasoning_effort: 'max' },
+        },
+    },
+    {
+        id: 'deepseek — the adapter spelling still wins when both are pasted',
+        why: 'A user who wrote the adapter name has said exactly what they want; the docs spelling next to it must not overwrite it',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'deepseek-v4-flash',
+            baseURL: 'https://api.deepseek.com/v1',
+            reasoningConfigOverride: JSON.stringify({
+                thinking: { type: 'enabled' },
+                reasoningEffort: 'high',
+                reasoning_effort: 'max',
+            }),
+        },
+        wire: {
+            has: { thinking: { type: 'enabled' }, reasoning_effort: 'high' },
+        },
+    },
+    {
+        id: 'native OpenAI — `reasoning_effort` as the API spells it reaches the request',
+        why: 'Same adapter family, same stripped spelling: the Responses API carries it as `reasoning.effort`, and it only gets there from `reasoningEffort`',
+        slot: {
+            provider: 'openai',
+            model: 'gpt-5.4',
+            reasoningConfigOverride: JSON.stringify({ reasoning_effort: 'low' }),
+        },
+        wire: { has: { reasoning: { effort: 'low' } } },
+    },
+    {
+        id: 'claude — `output_config.effort` pasted as the API spells it reaches the request',
+        why: "Anthropic's API docs show `output_config: { effort }`, which is what a production org running claude-sonnet-5 pasted. @ai-sdk/anthropic reads `effort`, renders `output_config` itself, and stripped theirs: adaptive thinking at the default effort. The override is copied verbatim from the stored config",
+        doc: 'platform.claude.com — effort',
+        slot: {
+            provider: 'anthropic',
+            model: 'claude-sonnet-5',
+            reasoningConfigOverride:
+                '{"thinking":{"type":"adaptive"},"output_config":{"effort":"high"}}',
+        },
+        wire: {
+            has: {
+                thinking: { type: 'adaptive' },
+                output_config: { effort: 'high' },
             },
         },
     },
@@ -1015,29 +1138,11 @@ describe('production config shapes — invariants', () => {
             }
         }
 
-        // NOT an assertion that the list is empty — it is not, and pretending
-        // otherwise is how this stayed invisible. It pins the exact set, so the
-        // day a config is fixed or a new one goes silent, this test says so and
-        // names it. The one entry is a real org running Claude with Anthropic's
-        // documented wire spelling (`output_config`) where the adapter declares
-        // `effort`; they get adaptive thinking at the default effort.
-        expect(findings).toEqual([
-            {
-                provider: 'anthropic',
-                model: 'claude-sonnet-5',
-                keys: ['output_config'],
-            },
-            {
-                // The same mistake on the other transport: nested inside
-                // `thinking` this word rides along as an opaque sub-object and
-                // reaches the upstream, but at the TOP level it is a key the
-                // OpenAI-compatible schema does not declare, so it is stripped.
-                // The org has both spellings on two slots and only one works.
-                provider: 'openai_compatible',
-                model: 'deepseek-v4-flash',
-                keys: ['reasoning_effort'],
-            },
-        ]);
+        // Empty since the providers rename the vendors' wire spellings
+        // (`reasoning_effort`, `output_config.effort`) to their adapters' option
+        // names: the two stored overrides this used to pin now reach the wire.
+        // A new entry is an override going silent again, named here.
+        expect(findings).toEqual([]);
     }, 180000);
 
     it('pins every slot whose configured reasoning effort reaches nothing', async () => {
@@ -1105,10 +1210,19 @@ describe('production config shapes — invariants', () => {
             // Proxy aliases and custom names: the family resolver cannot name
             // the model, so it withholds rather than guesses.
             'openai_compatible | MiniMax-M3 | high',
+            // Kimi k3 and k2.7-code think whatever is sent and Moonshot has no
+            // effort level, so the effort has nothing to reach. The `thinking`
+            // toggle they used to get changed nothing and is not sent.
+            'openai_compatible | accounts/fireworks/models/kimi-k3 | high',
             'openai_compatible | auto | medium',
             'openai_compatible | cc/claude-opus-5 | high',
             'openai_compatible | claude-opus-4.8 | high',
             'openai_compatible | code-review | high',
+            'openai_compatible | k3 | high',
+            'openai_compatible | k3-256k | medium',
+            'openai_compatible | kimi-k2.7-code | high',
+            'openai_compatible | kimi-k2.7-code | medium',
+            'openai_compatible | kimi-k3 | high',
             'openai_compatible | kodus-review | high',
             'openai_compatible | kodus-review-fallback | high',
             'openai_compatible | mimo-v2.5 | high',

@@ -1,0 +1,222 @@
+---
+title: "通用设置"
+description: "Code review → General 上的审查核心设置 —— 节奏、PR 工作流和跳过条件 —— 以及 kodus-config.yml 的完整参考。"
+---
+
+在侧边栏中打开 **Code review → General**(页面标题为 **General settings**)。审查类别和严重程度阈值已不在此页 ——
+它们位于 **Code review → What to review**。
+
+## 核心设置
+
+<Note>
+  Kodus 有三个配置级别:全局、代码库和目录。了解它们如何工作,请参阅<a href="/zh/how_to_use/code_review/configs/inheritance_overrides">配置继承与覆盖</a>。
+</Note>
+
+### 配置优先级
+
+你可以把审查配置放在代码库根目录的 `kodus-config.yml` 文件中，而不使用网页界面。
+
+<Warning>
+  **在你主动开启之前，该文件会被忽略。** `kodusConfigFileOverridesWebPreferences` 默认为
+  `false`，这意味着 Kody 根本不会读取 `kodus-config.yml` —— 仅仅提交文件不会产生任何效果。
+
+  请先开启:在侧边栏 **Code review** 分组顶部的范围选择器中选择该代码库(或目录),打开
+  **Code review → General**,并启用 **kodus Config File Overrides Web Preferences**
+  (`kodusConfigFileOverridesWebPreferences`)。该开关只存在于代码库和目录范围。之后该文件才会生效 ——
+  届时侧边栏会在范围选择器下方显示 **kodus-config.yml applied**、**kodus-config.yml not found** 或
+  **kodus-config.yml unavailable** 徽标。
+</Warning>
+
+开启后，该文件会合并到你的网页设置之上，因此你只需声明想要修改的键 —— 未声明的项会保留网页中的值。
+
+<Note>
+  **未知的键会被静默丢弃。** 任何不属于当前 schema 的顶层键，都会在配置生效前被移除 ——
+  没有报错，也没有警告。如果某项设置看起来没有生效，请对照下面的示例检查拼写。
+</Note>
+
+<Accordion title="示例 kodus-config.yml">
+```yaml
+version: 2.0
+
+# general
+automatedReviewActive: true
+showStatusFeedback: true
+kodusConfigFileOverridesWebPreferences: false
+reviewCadence:
+    type: 'automatic' # automatic | auto_pause | manual
+    timeWindow: 15 # 分钟
+    pushesToTrigger: 3
+pullRequestApprovalActive: false
+isRequestChangesActive: false # GitLab 上不可用
+runOnDraft: true
+ignorePaths:
+    - 'yarn.lock'
+    - 'package-lock.json'
+    - 'package.json'
+    - '.env'
+    - '**/*.json'
+    # ...已省略:随产品发布的默认值还列出了数百条其他模式
+ignoredTitleKeywords: []
+baseBranches: []
+enableCommittableSuggestions: true
+byokModel: '' # 留空 = 继承(目录 -> 代码库 -> AI providers 中的主模型)
+
+# 关联代码库 —— 仅 Teams / Enterprise。审查时代理可以查阅的关联代码库。
+# 建议上限为 3；留空 = 关闭该功能。
+linkedRepositories: []
+
+# what to review:类别
+reviewOptions:
+    bug: true
+    performance: true
+    security: true
+    business_logic: true
+
+# what to review:确定性检查(需主动开启,beta)
+deterministicEvidence:
+    ciChecks: false # 读取你自己的流水线已经产出的 CI 结果
+    tools: # 即使已启用,当你的 CI 已运行等效工具时也会跳过
+        secrets: false # 对变更文件进行凭据扫描
+        dependencies: false # 此 PR 新增或升级的依赖中的已知 CVE
+
+# what to review:严重程度阈值
+suggestionControl:
+    applyFiltersToKodyRules: false
+    severityLevelFilter: 'medium' # low | medium | high | critical
+
+# what Kody writes:PR 摘要
+summary:
+    generatePRSummary: true
+    behaviourForNewCommits: 'none'
+    behaviourForExistingDescription: 'replace'
+    customInstructions: ''
+
+# kody rules
+ideRulesSyncEnabled: false
+kodyRulesGeneratorEnabled: true
+kodyLearningExcludedReviewers: []
+kodyKnowledgeApproval:
+    enabled: false
+
+# what Kody writes:审查过程中的评论 + 评论可见性
+customMessages:
+    globalSettings:
+        hideComments: false # 仅 GitHub
+        suggestionCopyPrompt: true # Bitbucket 上不可用
+    errorReviewMessage:
+        status: 'off' # off | active
+        content: ''
+    startReviewMessage:
+        status: 'every_push' # every_push | only_when_opened | off
+        content: ''
+    endReviewMessage:
+        status: 'every_push' # every_push | only_when_opened | off
+        content: ''
+```
+</Accordion>
+
+<Note>
+  该示例反映了随产品发布的默认值。权威来源是 kodus-ai 代码库中的
+  [`default-kodus-config.yml`](https://github.com/kodustech/kodus-ai/blob/main/default-kodus-config.yml)。
+</Note>
+
+## 审查行为
+
+### 自动审查
+
+Kody 可以在 PR 打开时自动审查,或仅在您评论 `@kody start-review` 时审查。
+这就是 **Enable Automated Code Review** 开关。
+
+<Info>
+  这仅影响**初始审查**。对于后续提交,请参阅下面的审查节奏。
+</Info>
+
+#### 审查节奏
+
+在 **Enable Automated Code Review** 开启时显示于其下方。Kody 如何处理后续提交的审查:
+
+<Tabs>
+  <Tab title="自动">
+    审查每次新推送。对所有更改提供持续反馈。
+  </Tab>
+
+  <Tab title="自动暂停">
+    在快速连续推送期间暂停审查(例如,15 分钟内 3 次推送)。防止在活跃编码期间产生垃圾信息。
+
+    默认值:3 次推送 / 15 分钟(**Pushes to trigger pause** / **Time window (minutes)**)
+  </Tab>
+
+  <Tab title="手动">
+    仅在您评论 `@kody start-review` 时运行后续审查。
+  </Tab>
+</Tabs>
+
+### PR 工作流
+
+#### 自动批准 PR
+**Enable Pull Request Approval** —— 当未发现问题时,Kody 会批准 PR。
+
+**平台:** GitHub, GitLab, Bitbucket, Azure Repos, Forgejo
+
+#### 请求更改
+**Enable changing status of Review to 'Request Changes'** —— 当发现严重问题时,Kody 会请求更改。
+
+**平台:** GitHub, Bitbucket, Azure Repos, Forgejo(当 GitLab 是你唯一连接的平台时,该开关会被隐藏)
+
+### 跳过条件
+
+**Ignored files:** Kody 跳过的文件的 glob 模式(例如 `**/*.js`)。该字段会以标签形式显示部分模式;
+点击 **Edit** 打开 **Ignored files** 弹窗,其中每个新模式都会校验 glob 语法是否有效,**Test a file**
+输入框会告诉你某个路径会被忽略(以及由哪个模式忽略)还是会被审查。**Apply** 只会更新该字段 ——
+在你点击 **Save settings** 之前不会保存任何内容。默认:`yarn.lock`, `package-lock.json`, `package.json`,
+`.env`, `**/*.json`,以及一长串构建、二进制和 IDE 文件。
+
+**Ignore title keywords:** 跳过包含特定关键字的 PR(不区分大小写,最多 100 个字符)
+
+**基础分支:** 限定*哪些*目标分支会被审查。
+
+<Info>
+  **留空(默认值)表示所有目标分支都会被审查** —— 并不存在内置的 `dev`/`release`/`master` 列表。
+  只有当你想*收窄*范围时才添加条目:一旦列表非空,Kody 只审查指向这些分支的 PR(你代码库的
+  默认分支始终包含在内)。
+
+  条目会与 PR 的**目标**分支进行匹配,并支持一套简单语法:
+
+  | 条目 | 匹配 |
+  | --- | --- |
+  | `main` | 目标恰好为 `main` 的 PR |
+  | `release/*` | 目标为 `release/` 下任意分支的 PR(`*` 为单层通配符) |
+  | `=main` | 精确匹配,等同于直接写 `main` |
+  | `!staging` | 排除目标为 `staging` 的 PR |
+  | `contains:hotfix` | 改为匹配**源**分支 —— 源分支名包含 `hotfix` 的任意 PR |
+
+  当多个条目同时匹配时,以最具体的那个为准。每个条目最长 100 个字符,只能使用
+  `a-z A-Z 0-9 / * - _ ! = :`,且不允许使用 `**`。
+</Info>
+
+**草稿 PR:** **Enable Running on Draft Pull Requests**(`runOnDraft`)默认开启,因此草稿也会被审查。
+关闭它可跳过草稿,直到 PR 被标记为 ready。
+
+### 此页面上的其他设置
+
+- **Show Status Feedback** —— 当审查被跳过或被阻止时,Kody 会显示状态反馈(表情回应或评论)。
+- **Enable committable suggestions**(Alpha,仅 GitHub)—— 可直接作为提交应用的建议。
+- **Code review model**(仅代码库和目录范围,配置 AI 提供商后显示)—— 该范围用于审查的模型;
+  默认继承(`byokModel`)。
+- **Kody Language**(仅 Global)—— Kody 在代码审查回复中使用的语言。
+
+## 审查类别(原 Analysis Types)
+
+Kody 从四个类别进行审查。类别已不在 **General** 中:在 **Code review → What to review** 上通过各自的
+开关启用或禁用每个类别,或通过 `kodus-config.yml` 的 `reviewOptions` 设置。
+
+- **Bug** —— 逻辑错误、竞态条件、空指针解引用、边界情况和错误行为。
+- **Security** —— 漏洞、注入、认证问题、数据泄露和密钥。
+- **Performance** —— N+1 查询、热路径分配、缺失缓存和阻塞式 I/O。
+- **Business Logic** —— 对照 PR 中关联的业务规则、需求和验收标准验证实现。参见
+  [业务逻辑验证](/zh/how_to_use/code_review/business_logic_validation)。
+
+<Note>
+  Kody Rules **不属于**上述类别 —— 它们始终运行,与 `reviewOptions` 无关。参见
+  [Kody Rules](/zh/how_to_use/code_review/configs/kody_rules)。
+</Note>

@@ -1,0 +1,267 @@
+/**
+ * A reasoning field we added, refused by the upstream that answered.
+ *
+ * Gateways route one model to several upstreams, and some of them validate the
+ * body strictly: OpenCode Go served glm-5.3-flash from one that answered
+ * `[unknown_parameter] invalid request body: json: unknown field "thinking"`
+ * for two hours and from one that accepted the same body afterwards
+ * (2026-09-30). Which upstream answers is the gateway's choice, so no fact about
+ * the host or the model can say in advance whether the field is welcome.
+ *
+ * So the call is asked again without the field the 400 names (or with it set
+ * to off, when that is what the upstream asks for), once per field
+ * and only when we are the ones who put it there. The refusal is remembered for the slot for
+ * a few minutes, because the gateway keeps a session on the same upstream and
+ * every call would otherwise pay the 400 first; after that the field is tried
+ * again.
+ */
+import type { NormalizedModel } from '@libs/llm/byok-config';
+import {
+    extractErrorText,
+    extractHttpStatus,
+} from '@libs/llm/error-classifier';
+
+export type ReasoningField = 'thinking' | 'reasoning_effort';
+
+/** The body field, and the provider-option keys that render it. */
+const OPTION_KEYS: Record<ReasoningField, string[]> = {
+    thinking: ['thinking'],
+    reasoning_effort: ['reasoningEffort', 'reasoning_effort'],
+};
+
+/** One more ask per reasoning field we can add, and no more. */
+export const MAX_REFUSAL_RETRIES = Object.keys(OPTION_KEYS).length;
+
+const FIELD = '(thinking|reasoning_effort)';
+// Wordings that refuse the FIELD itself: unknown to the upstream, or not allowed
+// together with function tools on that endpoint. A 400 about the field's VALUE
+// ("reasoning_effort 'max' is not supported", or an error envelope's `param`)
+// is a configuration the user has to see, so it is not matched.
+// `off`: the upstream wants the field set to its off value rather than removed.
+const REFUSALS: { re: RegExp; off: boolean }[] = [
+    // Go's encoding/json with DisallowUnknownFields (OpenCode Go upstreams).
+    { re: new RegExp(`unknown field\\W{1,4}${FIELD}\\b`, 'i'), off: false },
+    // pydantic extra="forbid".
+    {
+        re: new RegExp(
+            `extra inputs are not permitted\\W+field\\W{1,4}${FIELD}\\b`,
+            'i',
+        ),
+        off: false,
+    },
+    // OpenAI's own wording for an argument it does not know.
+    {
+        re: new RegExp(
+            `unrecognized request argument supplied\\W{1,4}${FIELD}\\b`,
+            'i',
+        ),
+        off: false,
+    },
+    // OpenAI's chat completions for the gpt-5.6 / gpt-6 line: the effort and an
+    // agent loop's tools cannot go together there ("…use /v1/responses or set
+    // reasoning_effort to 'none'"). Removing the field is not enough — the model
+    // reasons by default and the same 400 comes back (measured live,
+    // 2026-10-15) — so it is sent as 'none'. A call on OpenAI's own host is
+    // served on /v1/responses instead (providers/openai/endpoint.ts); this one
+    // came through a proxy, which may not serve that endpoint.
+    {
+        re: new RegExp(
+            // Only the effort: it is the field OpenAI names, and the only one
+            // with an off value to send.
+            `function tools with (reasoning_effort) (?:is|are) not supported`,
+            'i',
+        ),
+        off: true,
+    },
+];
+
+/**
+ * The body the refused request actually carried, as the AI SDK records it on
+ * its `APICallError` (or on the last attempt of a `RetryError`).
+ */
+function sentBody(
+    err: unknown,
+    depth = 0,
+): Record<string, unknown> | undefined {
+    if (!err || typeof err !== 'object' || depth > 3) return undefined;
+    const e = err as {
+        requestBodyValues?: unknown;
+        lastError?: unknown;
+        cause?: unknown;
+    };
+    const body = e.requestBodyValues;
+    if (body && typeof body === 'object' && !Array.isArray(body)) {
+        return body as Record<string, unknown>;
+    }
+    return sentBody(e.lastError, depth + 1) ?? sentBody(e.cause, depth + 1);
+}
+
+/**
+ * The reasoning field a 400 refuses, or undefined for any other error.
+ *
+ * The field must be a top-level key of the body that went out: a refusal that
+ * names a field we did not send (OpenAI's Responses API carries the effort as
+ * `reasoning.effort`, never `reasoning_effort`) is not about our body, and an
+ * error that does not say what was sent gets no second request either.
+ */
+export function rejectedReasoning(
+    err: unknown,
+): { field: ReasoningField; off: boolean } | undefined {
+    const status = extractHttpStatus(err);
+    if (status !== 400 && status !== 422) return undefined;
+    const body = sentBody(err);
+    if (!body) return undefined;
+    const text = extractErrorText(err);
+    for (const { re, off } of REFUSALS) {
+        const m = text.match(re);
+        if (!m) continue;
+        const field = m[1].toLowerCase() as ReasoningField;
+        // Defined, not merely present: the SDK keeps `reasoning_effort:
+        // undefined` in the recorded values, and JSON leaves it off the wire.
+        return body[field] !== undefined ? { field, off } : undefined;
+    }
+    return undefined;
+}
+
+/** The reasoning field a 400 refuses, or undefined for any other error. */
+export function rejectedReasoningField(
+    err: unknown,
+): ReasoningField | undefined {
+    return rejectedReasoning(err)?.field;
+}
+
+/**
+ * The call params without `field`, or undefined when no provider option carries
+ * it (the field is not ours, so repeating the call would change nothing).
+ */
+export function withoutReasoningField<
+    P extends { providerOptions?: Record<string, unknown> },
+>(params: P, field: ReasoningField): P | undefined {
+    const options = params?.providerOptions;
+    if (!options) return undefined;
+    let removed = false;
+    const next: Record<string, unknown> = {};
+    for (const [ns, value] of Object.entries(options)) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+            next[ns] = value;
+            continue;
+        }
+        const kept = { ...(value as Record<string, unknown>) };
+        for (const key of OPTION_KEYS[field]) {
+            if (key in kept) {
+                delete kept[key];
+                removed = true;
+            }
+        }
+        next[ns] = kept;
+    }
+    return removed ? { ...params, providerOptions: next } : undefined;
+}
+
+/**
+ * The call params with `field` set to off, or undefined when no provider option
+ * carries it or it is already off. Only the effort has an off value ('none').
+ */
+export function withReasoningOff<
+    P extends { providerOptions?: Record<string, unknown> },
+>(params: P, field: ReasoningField): P | undefined {
+    const options = params?.providerOptions;
+    if (!options || field !== 'reasoning_effort') return undefined;
+    let changed = false;
+    const next: Record<string, unknown> = {};
+    for (const [ns, value] of Object.entries(options)) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+            next[ns] = value;
+            continue;
+        }
+        const kept = { ...(value as Record<string, unknown>) };
+        for (const key of OPTION_KEYS[field]) {
+            if (key in kept && kept[key] !== 'none') {
+                kept[key] = 'none';
+                changed = true;
+            }
+        }
+        next[ns] = kept;
+    }
+    return changed ? { ...params, providerOptions: next } : undefined;
+}
+
+export const REFUSAL_MEMORY_MS = 10 * 60 * 1000;
+
+const refusals = new Map<
+    string,
+    Map<ReasoningField, { until: number; off: boolean }>
+>();
+
+function slotKey(slot: NormalizedModel | undefined, organizationId?: string) {
+    if (!slot) return undefined;
+    return [
+        organizationId ?? '',
+        slot.provider,
+        slot.baseURL ?? '',
+        slot.model,
+    ].join('|');
+}
+
+export function rememberRefusal(
+    slot: NormalizedModel | undefined,
+    organizationId: string | undefined,
+    field: ReasoningField,
+    now = Date.now(),
+    off = false,
+): void {
+    const key = slotKey(slot, organizationId);
+    if (!key) return;
+    // Refusals are rare, so sweeping here keeps a slot that is never called
+    // again from staying in memory for the life of the process.
+    for (const [k, byField] of refusals) {
+        for (const [f, { until }] of byField) {
+            if (until <= now) byField.delete(f);
+        }
+        if (byField.size === 0) refusals.delete(k);
+    }
+    const fields =
+        refusals.get(key) ??
+        new Map<ReasoningField, { until: number; off: boolean }>();
+    fields.set(field, { until: now + REFUSAL_MEMORY_MS, off });
+    refusals.set(key, fields);
+}
+
+/**
+ * The params without every field this slot's upstream refused recently. A field
+ * refused only next to tools is turned off only on a call that carries tools:
+ * the same upstream accepts the effort on a call without them.
+ */
+export function withoutRefusedFields<
+    P extends { providerOptions?: Record<string, unknown>; tools?: unknown },
+>(
+    params: P,
+    slot: NormalizedModel | undefined,
+    organizationId: string | undefined,
+    now = Date.now(),
+): P {
+    const key = slotKey(slot, organizationId);
+    const fields = key ? refusals.get(key) : undefined;
+    if (!fields) return params;
+    const carriesTools =
+        Array.isArray(params?.tools) && params.tools.length > 0;
+    let out = params;
+    for (const [field, { until, off }] of fields) {
+        if (until <= now) {
+            fields.delete(field);
+            continue;
+        }
+        if (off && !carriesTools) continue;
+        out =
+            (off
+                ? withReasoningOff(out, field)
+                : withoutReasoningField(out, field)) ?? out;
+    }
+    if (fields.size === 0) refusals.delete(key!);
+    return out;
+}
+
+/** Test seam: forget every remembered refusal. */
+export function clearRefusals(): void {
+    refusals.clear();
+}

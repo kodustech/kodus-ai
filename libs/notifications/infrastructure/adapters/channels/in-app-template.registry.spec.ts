@@ -85,6 +85,21 @@ describe('IN_APP_TEMPLATE_REGISTRY', () => {
         },
     };
 
+    // #1871: "Latest error: Provider returned error" told the owner nothing.
+    it('byok.llm_errors_threshold: the latest error carries its HTTP status', () => {
+        const { body } = IN_APP_TEMPLATE_REGISTRY[
+            NotificationEvent.BYOK_LLM_ERRORS_THRESHOLD
+        ]({
+            provider: 'open_router',
+            errorCount: 5,
+            sampleError: 'Rate limit exceeded: free-models-per-day',
+            httpStatus: 429,
+        });
+        expect(body).toContain(
+            'Latest error: HTTP 429 — Rate limit exceeded: free-models-per-day',
+        );
+    });
+
     it('has a builder registered for every event in NotificationEvent enum', () => {
         for (const event of Object.values(NotificationEvent)) {
             expect(IN_APP_TEMPLATE_REGISTRY[event]).toBeDefined();

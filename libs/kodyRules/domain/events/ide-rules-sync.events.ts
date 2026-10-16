@@ -22,6 +22,7 @@ export type IdeSyncDisableAction = 'keep' | 'pause' | 'delete';
 
 export interface IdeRulesSyncDisabledEvent {
     organizationAndTeamData: OrganizationAndTeamData;
-    repositoryId: string;
+    /** Every repository whose effective sync went on→off in one save. */
+    repositoryIds: string[];
     action: IdeSyncDisableAction;
 }

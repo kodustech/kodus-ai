@@ -11,6 +11,7 @@ import {
     formatCommits,
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
+import { currentDefaultWritingGuidelines } from '@libs/common/utils/writing-guidelines';
 
 const meta: PromptAgentMeta = {
     identity: {
@@ -59,6 +60,39 @@ describe('buildSystemPrompt', () => {
         );
         expect(sys).toContain('mode="self-contained"');
         expect(sys).toContain('you cannot see callers');
+    });
+});
+
+describe('writing guidelines', () => {
+    it('replaces a saved copy of an old default with the current default', () => {
+        const sys = buildSystemPrompt(
+            baseInput({
+                v2PromptOverrides: {
+                    generation: {
+                        main: 'Detailed and verifiable issue description',
+                    },
+                },
+            }),
+            meta,
+        );
+
+        expect(sys).toContain(
+            `## Writing Guidelines\n${currentDefaultWritingGuidelines()}`,
+        );
+        expect(sys).not.toContain('Detailed and verifiable issue description');
+    });
+
+    it('keeps a team-written text as is', () => {
+        const sys = buildSystemPrompt(
+            baseInput({
+                v2PromptOverrides: {
+                    generation: { main: 'Write like a mentor.' },
+                },
+            }),
+            meta,
+        );
+
+        expect(sys).toContain('## Writing Guidelines\nWrite like a mentor.');
     });
 });
 
@@ -165,6 +199,51 @@ describe('buildUserPrompt', () => {
         expect(buildUserPrompt(baseInput(), meta)).not.toContain(
             '<PreviousReviewDecisions>',
         );
+    });
+
+    // #2039/#2020 and repeats: each entry carries the Id a revision links to,
+    // the block forbids raising an entry's problem again whatever its Outcome,
+    // and an entry's text is bounded (it is rendered into every finder,
+    // verifier and rule-judge prompt).
+    it('renders each entry\'s Id, forbids re-raising any entry, and clips long suggestion text', () => {
+        const block = formatPreviousDecisions([
+            {
+                suggestionId: 'sug-77',
+                relevantFile: 'src/a.ts',
+                suggestionContent: 'x'.repeat(2000),
+                label: 'bug',
+                outcome: 'not_implemented',
+                decidedAt: '2026-01-01T00:00:00.000Z',
+            },
+        ]);
+
+        expect(block).toContain('Id: sug-77');
+        expect(block).toContain('never report the problem an entry raised again');
+        expect(block).toContain('revisesSuggestionId');
+        expect(block).not.toContain('x'.repeat(601));
+        expect(block).toContain('x'.repeat(600) + '…');
+    });
+
+    // #2097: the Kody Rules judge reports what it sees; its findings go
+    // through the repeat check.
+    it('tells the rule judge to report everything when repeats are checked later', () => {
+        const block = formatPreviousDecisions(
+            [
+                {
+                    suggestionId: 'sug-1',
+                    relevantFile: 'src/a.ts',
+                    suggestionContent: 'Use the logger.',
+                    label: 'kody_rules',
+                    outcome: 'pending',
+                    decidedAt: '2026-01-01T00:00:00.000Z',
+                },
+            ],
+            undefined,
+            { repeatsCheckedLater: true },
+        );
+
+        expect(block).toContain('a later step compares every finding with these entries');
+        expect(block).not.toContain('never report the problem an entry raised again');
     });
 
     it('labels not_implemented/pending as weak signals, never as rejection', () => {

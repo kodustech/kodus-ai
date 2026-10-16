@@ -37,7 +37,7 @@ const confirmClear = (count: number): Promise<boolean> =>
                 title="Clear mismatched model overrides?"
                 description={`This resets ${count} per-repository/directory model override${
                     count === 1 ? "" : "s"
-                } to inherit your BYOK main model. You can set them again later.`}
+                } to inherit your main model. You can set them again later.`}
                 confirmText="Clear overrides"
                 variant="primary-dark"
                 onConfirm={() => {
@@ -117,7 +117,7 @@ export const ModelOverridesBanner = ({ teamId }: { teamId?: string }) => {
             </AlertTitle>
             <AlertDescription>
                 <p className="mb-2 text-sm">
-                    These overrides were set for a different BYOK provider
+                    These overrides were set for a different provider
                     {data?.provider ? ` (now ${data.provider})` : ""}. Reviews
                     there will fail or fall back until they&apos;re updated or
                     cleared.

@@ -193,6 +193,7 @@ NOT duplicates (keep both):
 - Suggestions about different code even if the description sounds similar
 
 IGNORE the category label (bug/security/performance) when deciding — two agents can independently find the same issue.
+The "deterministic" label marks a finding a scanner produced rather than an agent. It is not a different kind of bug: when a deterministic finding and an agent finding describe the same defect, they ARE duplicates and must be grouped.
 Prefer keeping the suggestion with the most detail or clearest fix as the representative.
 
 ${summaries}`;

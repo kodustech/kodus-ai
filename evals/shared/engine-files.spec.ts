@@ -44,6 +44,26 @@ describe('engine files — nightly trigger', () => {
         const changed = ['libs/core/cache/cache.service.ts', 'pnpm-lock.yaml', 'evals/investigation/targets.json', 'README.md'];
         expect(changedEngineFiles(changed, engineFiles)).toEqual(['libs/core/cache/cache.service.ts', 'pnpm-lock.yaml', 'evals/investigation/targets.json']);
     });
+
+    it("wakes each eval on its own floors and verdict script, not another eval's", () => {
+        const kodyRules = ['libs/code-review/kody.ts', 'evals/kody-rules/real-agent.js'];
+        const changed = ['evals/investigation/targets.json', 'evals/kody-rules/kody-targets.json', 'evals/kody-rules/nightly-verdict.js'];
+        expect(changedEngineFiles(changed, kodyRules, 'evals/kody-rules/real-agent.js')).toEqual(['evals/kody-rules/kody-targets.json', 'evals/kody-rules/nightly-verdict.js']);
+        expect(changedEngineFiles(changed, engineFiles)).toEqual(['evals/investigation/targets.json']);
+    });
+
+    it('refuses to decide on a list that does not hold its own runner', () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'engine-files-'));
+        const list = path.join(dir, 'files.txt');
+        const changed = path.join(dir, 'changed.txt');
+        fs.writeFileSync(list, 'libs/code-review/kody.ts\nevals/kody-rules/real-agent.js\n');
+        fs.writeFileSync(changed, 'libs/code-review/kody.ts\n');
+        const run = (...extra: string[]) => spawnSync(process.execPath, [path.join(__dirname, 'engine-files.js'), 'changed', list, changed, ...extra], { encoding: 'utf8' });
+        expect(run().status).toBe(2);
+        const kodyRules = run('--runner=evals/kody-rules/real-agent.js');
+        expect(kodyRules.status).toBe(0);
+        expect(kodyRules.stdout.trim()).toBe('libs/code-review/kody.ts');
+    });
 });
 
 describe('engine files — trace hook', () => {

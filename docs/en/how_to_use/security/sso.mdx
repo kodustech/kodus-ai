@@ -1,0 +1,54 @@
+---
+title: "Single Sign-On"
+description: "Enable Single Sign-On (SSO) for secure and efficient access to Kodus."
+---
+
+## Overview
+
+Single Sign-On (SSO) allows you to manage access to Kodus through a single identity provider, streamlining authentication and enhancing security.
+
+## Getting Started
+
+<Steps>
+    <Step title="Access SSO settings">
+        In the sidebar, open **Organization → SSO**
+        ([app.kodus.io/organization/sso](https://app.kodus.io/organization/sso)).
+        SSO is available on the Enterprise plan (and during a trial); on other plans the page shows a locked preview.
+    </Step>
+
+    <Step title="Fill in your IdP configuration">
+        Under **SAML SSO Configuration**, fill in your IdP's settings: **IDP Issuer**, **SSO URL** and **X.509 Certificate**. These can be filled in manually or by providing either your IdP's **Metadata URL (optional)** (then **Fetch**) or a metadata XML file (**Upload Metadata XML File**).
+
+        <Info>
+            These values can usually be found in your IdP's documentation or in their admin console.
+        </Info>
+    </Step>
+
+    <Step title="Configure Kodus as a SP in your IdP">
+        Configure Kodus as a SP in your IdP by providing our entity ID (**Service Provider Entity ID**, `kodus-orchestrator` by default) and your organization's **Callback URL**, both shown on the SSO settings page.
+
+        Make sure the name ID format is set to email.
+
+        <Warning>
+            Ensure you disable signing certificates in your IdP's SP configuration.
+        </Warning>
+    </Step>
+
+    <Step title="Verify your domains">
+        Add your email domains under **Allowed Domains** and click **Verify** on each one. In **Verify Enterprise Domain**, enter an email at that domain to receive a verification link (self-hosted instances verify immediately). Each domain must show **Verified** before SSO can be enabled.
+    </Step>
+
+    <Step title="Test and enable SSO">
+        Click **Test connection** and complete a login at your IdP. After a successful test, turn on **Enable SAML SSO** and click **Save settings**. When attempting to log in with an email domain associated with your IdP, you will see **Continue with SSO**.
+    </Step>
+
+</Steps>
+
+## Optional Configuration
+
+### Mapping Attributes
+
+You can map the following attributes from your IdP to Kodus users, improving the user experience.
+
+-   First Name, mapped to `firstName`
+-   Last Name, mapped to `lastName`

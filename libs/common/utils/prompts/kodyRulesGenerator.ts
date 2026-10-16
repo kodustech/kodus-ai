@@ -151,7 +151,7 @@ ${payload.rules
         "severity": "${rule.severity}",
         "tags": "${rule.tags}",
         "examples": [
-        ${rule.examples.map(
+        ${(rule.examples ?? []).map(
             (example) => `
             {
                 "snippet": "${example.snippet}",
@@ -276,7 +276,7 @@ ${payload.newRules
         "rule": "${rule.rule}",
         "severity": "${rule.severity}",
         "examples": [
-        ${rule.examples.map(
+        ${(rule.examples ?? []).map(
             (example) => `
             {
                 "snippet": "${example.snippet}",

@@ -1,11 +1,13 @@
 name: "Preview: Cleanup"
 
 # =============================================================================
-# Terminates the pull request's preview VM when the PR closes.
+# Terminates the pull request's preview VMs when the PR closes — every shape
+# it had (cloud, self-hosted) and any preview from before shapes existed.
 #
 # The runner that tears the environment down is never the one that created it,
-# so there is no local registry to look the instance up in — runo finds it by
-# the tags it wrote on the instance (repo + branch).
+# so there is no local registry to look the instance up in — runo finds them by
+# the tags it wrote on the instance (repo + branch); without --profile, destroy
+# takes every profile of the branch.
 # =============================================================================
 
 on:

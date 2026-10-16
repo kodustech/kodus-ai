@@ -1,3 +1,6 @@
-import { GenericLoading } from "@components/ui/generic-loading";
+import { ReviewsPageSkeleton } from "@components/system/page-skeletons";
+import { ReviewsSourceTabs } from "@components/system/reviews-source-tabs";
 
-export default GenericLoading;
+export default function Loading() {
+    return <ReviewsPageSkeleton tabs={<ReviewsSourceTabs />} />;
+}

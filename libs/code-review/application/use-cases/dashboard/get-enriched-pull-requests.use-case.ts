@@ -18,6 +18,7 @@ import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/del
 import {
     authorMatchesExact,
     isOpenPullRequest,
+    matchesPullRequestState,
     deepLinkTargetRank,
     isUnresolvedDeliveredSuggestion,
 } from './utils/pull-request-metrics';
@@ -105,6 +106,13 @@ const decodeExecutionCursor = (raw?: string): ExecutionCursor | undefined => {
     }
 };
 
+/**
+ * How many execution batches one request may scan before returning what it
+ * has. Bounds the worst case (a highly selective post-query filter) at a
+ * predictable number of round trips rather than the whole history.
+ */
+const MAX_BATCHES_PER_REQUEST = 10;
+
 @Injectable()
 export class GetEnrichedPullRequestsUseCase implements IUseCase {
     private readonly logger = createLogger(GetEnrichedPullRequestsUseCase.name);
@@ -151,6 +159,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             category,
             needsAttention,
             author,
+            prState,
         } = query;
 
         if (!this.request.user?.organization?.uuid) {
@@ -289,7 +298,26 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 prFilters = prNumbers;
             }
 
-            while (enrichedPullRequests.length < limit && hasMoreExecutions) {
+            // A page is filled by scanning executions and discarding the ones
+            // that fail a post-query filter, so a selective filter makes the
+            // loop issue batch after batch. Its only exits were "page full"
+            // and "history exhausted", which for something like `prState=open`
+            // deep in the list (old PRs are nearly all closed) means one
+            // request can walk the whole execution history in sequential round
+            // trips — the shape of the #1432 slowdown this file already
+            // carries scars from.
+            //
+            // Cap the scan instead. A capped request returns a SHORT page with
+            // `hasMoreExecutions` still true, so it hands back a cursor and the
+            // client fetches again; the list stays complete because the client
+            // continues on the cursor alone and never on page length.
+            let batchesRead = 0;
+            while (
+                enrichedPullRequests.length < limit &&
+                hasMoreExecutions &&
+                batchesRead < MAX_BATCHES_PER_REQUEST
+            ) {
+                batchesRead++;
                 const {
                     data: executionsBatch,
                     total,
@@ -650,6 +678,13 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                             author &&
                             !this.matchesAuthorFilter(author, pullRequest)
                         ) {
+                            continue;
+                        }
+
+                        // The PR's own state, independent of how Kody's run
+                        // went. Same predicate `needsAttention` already uses,
+                        // so "open" means one thing across the whole screen.
+                        if (!matchesPullRequestState(pullRequest, prState)) {
                             continue;
                         }
 

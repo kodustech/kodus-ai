@@ -8,7 +8,7 @@ import type { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.inte
  * but for directory-scoped rules the UI also needs `directoryId` and
  * `teamId` in the query string — without them the page renders a 404
  * (the rule lives under a directory scope the page can't resolve from
- * the path segment alone). Reported by quintoandar (David B): every
+ * the path segment alone). Reported by a customer: every
  * link Kody pasted into a PR comment for a directory-scoped rule was
  * dead.
  *

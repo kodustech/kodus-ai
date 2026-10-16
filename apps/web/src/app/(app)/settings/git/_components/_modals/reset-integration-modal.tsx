@@ -186,7 +186,7 @@ export const ResetIntegrationModal = ({
                     <div className="flex gap-2">
                         <Button
                             size="md"
-                            variant="secondary"
+                            variant="helper"
                             loading={!enabled || loading}
                             onClick={handleDelete}
                             className="flex-1">

@@ -1,14 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Alert, AlertTitle } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
 import { Heading } from "@components/ui/heading";
 import { Page } from "@components/ui/page";
 import { Spinner } from "@components/ui/spinner";
+import { Switch } from "@components/ui/switch";
 import { toast } from "@components/ui/toaster/use-toast";
-import { useGetRepositories } from "@services/codeManagement/hooks";
 import { useGetPastReviewers } from "@services/kodyRules/hooks";
 import { createOrUpdateCodeReviewParameter } from "@services/parameters/fetch";
 import {
@@ -17,7 +17,6 @@ import {
     Check,
     ChevronsUpDown,
 } from "lucide-react";
-import { safeArray } from "src/core/utils/safe-array";
 import {
     Command,
     CommandEmpty,
@@ -46,15 +45,8 @@ export default function SelectReviewersPage() {
     // the last 3 months, so recently-departed devs are still selectable.
     const { data: reviewers = [], isLoading } = useGetPastReviewers({ teamId });
 
-    const { data: repositories = [] } = useGetRepositories(teamId);
-    const selectedRepoIds = useMemo(
-        () =>
-            safeArray<{ id: string; selected?: boolean }>(repositories)
-                .filter((repo) => repo.selected)
-                .map((repo) => repo.id),
-        [repositories],
-    );
-
+    // Off until the team opts in: learning is not turned on for them.
+    const [learnFromPastReviews, setLearnFromPastReviews] = useState(false);
     const [excluded, setExcluded] = useState<string[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [open, setOpen] = useState(false);
@@ -70,26 +62,29 @@ export default function SelectReviewersPage() {
     const goNext = () => router.push(NEXT_STEP);
 
     const handleContinue = async () => {
-        if (!teamId || selectedRepoIds.length === 0) {
+        if (!teamId) {
             goNext();
             return;
         }
         try {
             setIsSaving(true);
-            const results = await Promise.allSettled(
-                selectedRepoIds.map((repositoryId) =>
-                    createOrUpdateCodeReviewParameter(
-                        { kodyLearningExcludedReviewers: excluded },
-                        teamId,
-                        repositoryId,
-                    ),
-                ),
+            // Saved once at global level: every repository follows it unless
+            // it sets its own value later in Settings.
+            const result = await createOrUpdateCodeReviewParameter(
+                {
+                    kodyRulesGeneratorEnabled: learnFromPastReviews,
+                    ...(learnFromPastReviews && {
+                        kodyLearningExcludedReviewers: excluded,
+                    }),
+                },
+                teamId,
+                "global",
             );
-            if (results.some((r) => r.status === "rejected")) {
+            if (result?.error) {
                 toast({
                     variant: "warning",
                     description:
-                        "Some repositories couldn't be updated. You can adjust the list later in Settings.",
+                        "We couldn't save this choice. You can change it later in Settings.",
                 });
             }
             goNext();
@@ -114,17 +109,18 @@ export default function SelectReviewersPage() {
                         <GitPullRequestIcon /> Kody learns from your past reviews
                     </h1>
                     <p className="text-text-secondary text-md">
-                        Kody learns coding standards from your team&apos;s last 3
-                        months of PR reviews, and keeps learning every week.
-                        Exclude anyone whose review comments you&apos;d rather
+                        Kody can learn coding standards from your team&apos;s PR
+                        reviews: on its next weekly run it drafts rules from the
+                        last 3 months, then keeps learning every week. You can
+                        leave out anyone whose review comments you&apos;d rather
                         Kody not learn from.
                     </p>
                     <Alert>
                         <ClockFadingIcon size={24} />
                         <AlertTitle>
                             <span className="text-text-secondary text-sm">
-                                You can change this anytime in Settings, per
-                                repository.
+                                You can change this anytime in Settings, for
+                                every repository or per repository.
                             </span>
                         </AlertTitle>
                     </Alert>
@@ -135,75 +131,95 @@ export default function SelectReviewersPage() {
                 <div className="flex flex-1 flex-col gap-8">
                     <StepIndicators.Auto />
 
-                    <div className="flex flex-col gap-2">
-                        <Heading variant="h2">
-                            Whose reviews should Kody learn from?
-                        </Heading>
-                        <span className="text-text-secondary text-sm">
-                            Everyone is included by default. Select developers to
-                            exclude
-                            {excludedCount > 0
-                                ? ` — ${excludedCount} excluded`
-                                : ""}
-                            .
-                        </span>
-                    </div>
+                    <label className="bg-card-lv1 flex cursor-pointer items-center justify-between gap-6 rounded-xl p-5">
+                        <div className="flex flex-col gap-1">
+                            <Heading variant="h2">
+                                Learn from past reviews?
+                            </Heading>
+                            <span className="text-text-secondary text-sm">
+                                Kody drafts rules from your team&apos;s review
+                                comments. Off unless you turn it on.
+                            </span>
+                        </div>
+                        <Switch
+                            checked={learnFromPastReviews}
+                            onCheckedChange={setLearnFromPastReviews}
+                        />
+                    </label>
 
-                    <Popover open={open} onOpenChange={setOpen}>
-                        <PopoverTrigger asChild>
-                            <Button
-                                variant="helper"
-                                size="md"
-                                role="combobox"
-                                aria-expanded={open}
-                                className="w-full justify-between">
-                                {excludedCount > 0
-                                    ? `Excluding ${excludedCount} reviewer${excludedCount === 1 ? "" : "s"}`
-                                    : "Learning from all reviewers"}
-                                <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent
-                            className="flex w-[var(--radix-popover-trigger-width)] flex-col overflow-hidden p-0"
-                            align="start">
-                            <Command className="flex max-h-[400px] flex-col">
-                                <CommandInput placeholder="Search developers..." />
-                                <CommandList className="max-h-[250px] overflow-y-auto">
-                                    {isLoading && (
-                                        <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-                                            <Spinner className="h-4 w-4" />
-                                            Loading developers…
-                                        </div>
-                                    )}
-                                    <CommandEmpty>
-                                        No developers found.
-                                    </CommandEmpty>
-                                    <CommandGroup>
-                                        {reviewers.map((reviewer) => (
-                                            <CommandItem
-                                                key={reviewer.id}
-                                                value={`${reviewer.id}:${reviewer.name}`}
-                                                onSelect={() =>
-                                                    toggle(reviewer.id)
-                                                }>
-                                                {reviewer.name}
-                                                <Check
-                                                    className={cn(
-                                                        "mr-2 size-4",
-                                                        excluded.includes(
-                                                            reviewer.id,
-                                                        )
-                                                            ? "opacity-100"
-                                                            : "opacity-0",
-                                                    )}
-                                                />
-                                            </CommandItem>
-                                        ))}
-                                    </CommandGroup>
-                                </CommandList>
-                            </Command>
-                        </PopoverContent>
-                    </Popover>
+                    {learnFromPastReviews && (
+                        <div className="flex flex-col gap-8">
+                            <div className="flex flex-col gap-2">
+                                <Heading variant="h2">
+                                    Whose reviews should Kody learn from?
+                                </Heading>
+                                <span className="text-text-secondary text-sm">
+                                    Everyone is included by default. Select
+                                    developers to exclude
+                                    {excludedCount > 0
+                                        ? ` — ${excludedCount} excluded`
+                                        : ""}
+                                    .
+                                </span>
+                            </div>
+
+                            <Popover open={open} onOpenChange={setOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="helper"
+                                        size="md"
+                                        role="combobox"
+                                        aria-expanded={open}
+                                        className="w-full justify-between">
+                                        {excludedCount > 0
+                                            ? `Excluding ${excludedCount} reviewer${excludedCount === 1 ? "" : "s"}`
+                                            : "Learning from all reviewers"}
+                                        <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                    className="flex w-[var(--radix-popover-trigger-width)] flex-col overflow-hidden p-0"
+                                    align="start">
+                                    <Command className="flex max-h-[400px] flex-col">
+                                        <CommandInput placeholder="Search developers..." />
+                                        <CommandList className="max-h-[250px] overflow-y-auto">
+                                            {isLoading && (
+                                                <div className="text-muted-foreground flex items-center justify-center gap-2 py-6 text-sm">
+                                                    <Spinner className="h-4 w-4" />
+                                                    Loading developers…
+                                                </div>
+                                            )}
+                                            <CommandEmpty>
+                                                No developers found.
+                                            </CommandEmpty>
+                                            <CommandGroup>
+                                                {reviewers.map((reviewer) => (
+                                                    <CommandItem
+                                                        key={reviewer.id}
+                                                        value={`${reviewer.id}:${reviewer.name}`}
+                                                        onSelect={() =>
+                                                            toggle(reviewer.id)
+                                                        }>
+                                                        {reviewer.name}
+                                                        <Check
+                                                            className={cn(
+                                                                "mr-2 size-4",
+                                                                excluded.includes(
+                                                                    reviewer.id,
+                                                                )
+                                                                    ? "opacity-100"
+                                                                    : "opacity-0",
+                                                            )}
+                                                        />
+                                                    </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                    )}
 
                     <div className="flex items-center gap-3">
                         <Button
@@ -220,7 +236,7 @@ export default function SelectReviewersPage() {
                             className="flex-1"
                             onClick={handleContinue}
                             loading={isSaving}
-                            disabled={isLoading || isSaving || excluded.length === 0}>
+                            disabled={isSaving}>
                             Continue
                         </Button>
                     </div>

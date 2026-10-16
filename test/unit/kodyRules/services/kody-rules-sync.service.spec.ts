@@ -19,7 +19,7 @@ describe('KodyRulesSyncService.syncRepositoryMain', () => {
     const repository = {
         id: 'repo-1',
         name: 'backend-services',
-        fullName: 'quintoandar/backend-services',
+        fullName: 'acme/backend-services',
         defaultBranch: 'main',
     };
 
@@ -193,7 +193,7 @@ describe('KodyRulesSyncService — Bug: path scoping from sourcePath (Bug 1)', (
     const repository = {
         id: 'repo-1',
         name: 'backend-services',
-        fullName: 'quintoandar/backend-services',
+        fullName: 'acme/backend-services',
         defaultBranch: 'main',
     };
 
@@ -780,7 +780,7 @@ describe('KodyRulesSyncService — Bug: stale pinnedSync after marker removal (d
     const repository = {
         id: 'repo-1',
         name: 'backend-services',
-        fullName: 'quintoandar/backend-services',
+        fullName: 'acme/backend-services',
         defaultBranch: 'main',
     };
 
@@ -976,7 +976,7 @@ describe('KodyRulesSyncService — depin pass: syncRepositoryMain full-scan + sy
     const repository = {
         id: 'repo-1',
         name: 'backend-services',
-        fullName: 'quintoandar/backend-services',
+        fullName: 'acme/backend-services',
         defaultBranch: 'main',
     };
 

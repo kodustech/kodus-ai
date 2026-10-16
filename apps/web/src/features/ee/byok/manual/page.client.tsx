@@ -60,12 +60,15 @@ import {
 } from "../_components/_modals/edit-key/credential-config";
 import {
     buildByokBlob,
+    findReusableCredential,
     credentialSettingsFromConfig,
     modelFieldsFromConfig,
 } from "../_components/byok-write";
 import { credentialSettingsOverride } from "../_components/credential-settings-override";
 import { SuccessClaim } from "../_components/success-claim";
 import { formatModelLabel } from "../_data/model-label";
+import { AiProvidersPageSkeleton } from "@components/system/page-skeletons";
+
 import { isPlatformFundedProvider } from "../_data/platform-funded";
 import { PROVIDER_LABELS } from "../_data/provider-labels";
 import {
@@ -633,9 +636,13 @@ export function ByokManualPageClient({
         // into the existing config: edit the model in place, reuse a connected
         // provider's key, or connect a brand-new provider credential.
         const modelFields = modelFieldsFromConfig(newConfig);
-        const existingCred = (existing?.credentials ?? []).find(
-            (c) => !c.managed && c.provider === newConfig.provider,
-        );
+        // Same provider is not the same credential when the org supplies the
+        // endpoint: two `openai_compatible` gateways are two upstreams with
+        // two keys. See `findReusableCredential`.
+        const existingCred = findReusableCredential(existing?.credentials, {
+            provider: newConfig.provider,
+            settings: credentialSettingsFromConfig(newConfig),
+        });
         // The credential this save actually writes to, resolved HERE rather than
         // at mount: in the unlocked flow the provider is chosen inside the form,
         // so mount-time state knows nothing about it.
@@ -722,11 +729,14 @@ export function ByokManualPageClient({
 
     const testing = testState.status === "testing";
 
-    if (!kodusFormAllowed) return null;
+    // A direct ?provider=kodus URL on a non-entitled org bounces back to the
+    // list. Show the page's own skeleton for that frame rather than a blank
+    // white screen while the redirect lands.
+    if (!kodusFormAllowed) return <AiProvidersPageSkeleton />;
 
     return (
         <Page.Root>
-            <Page.Header className="max-w-full px-6">
+            <Page.Header>
                 <Page.TitleContainer>
                     <div className="flex items-center gap-3">
                         <Link href="/byok">
@@ -757,7 +767,7 @@ export function ByokManualPageClient({
                 </Page.TitleContainer>
             </Page.Header>
 
-            <Page.Content className="max-w-full px-6">
+            <Page.Content>
                 {envIsActiveSource && !isEditing && (
                     <Alert variant="info">
                         <InfoIcon />

@@ -7,6 +7,12 @@
 # Its env, .env.billing, comes from scripts/preview/materialize-billing-env.sh,
 # which accepts Stripe TEST credentials only: CI feeds it PREVIEW_BILLING_ENV,
 # a laptop feeds it 1Password through scripts/env/pull-billing-env.sh.
+x-logging: &default-logging
+    driver: json-file
+    options:
+        max-size: '20m'
+        max-file: '5'
+
 services:
     web:
         environment:
@@ -24,6 +30,7 @@ services:
             dockerfile: DockerFiles/Dockerfile.dev
         image: kodus-service-billing-preview:latest
         container_name: kodus-service-billing
+        logging: *default-logging
         depends_on:
             db_postgres:
                 condition: service_healthy
@@ -83,6 +90,7 @@ services:
     stripe-listen:
         image: stripe/stripe-cli:v1.51.1
         container_name: kodus_stripe_listen
+        logging: *default-logging
         env_file:
             - .env.billing
         entrypoint:

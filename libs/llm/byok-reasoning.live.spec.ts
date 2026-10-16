@@ -26,7 +26,8 @@
  * blob: a brand reads the secret `REPO_SECRET` names for it, or derives
  * `BYOK_<BRAND>_API_KEY`, and a brand that borrows reads the lender's.
  *
- *     BYOK_ANTHROPIC_API_KEY   -> anthropic, -modern, -opus-5, openai_compatible_claude
+ *     BYOK_ANTHROPIC_API_KEY   -> anthropic, -modern, -opus-5, -opus-5-5,
+ *                                 openai_compatible_claude
  *     BYOK_OPENAI_API_KEY      -> openai, openai_compatible_gpt5, openai_gpt56,
  *                                 openai_compatible_gpt56, openai_gpt6_astra
  *     BYOK_ZHIPU_API_KEY       -> zai, zai_glm53 (Zhipu is Z.ai, the GLM vendor)
@@ -51,7 +52,9 @@
  * each row naming an env var and the two drifting.
  *
  * The baseURLs written into the rows are the vendors' public endpoints, kept in
- * the file because reading a row should tell you which vendor it talks to. They
+ * the file because reading a row should tell you which vendor it talks to. The
+ * one exception is `OPENAI_PROXY`, a loopback forwarder to OpenAI for the rows
+ * that stand for a customer's OpenAI-protocol proxy (see its comment). They
  * are not configuration: changing where a row points is a code change, reviewed
  * like any other, now that there is no secret that can silently redirect it.
  */
@@ -63,12 +66,15 @@ jest.mock('@libs/common/utils/crypto', () => ({
 
 
 import { readFileSync } from 'node:fs';
+import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
 
+import { tool } from 'ai';
 import { z } from 'zod';
 
 import { LLM } from './llm';
 import type { NormalizedModel } from './byok-config';
+import { resolveTaskSlot } from './resolve-task-model';
 import { KODUS_CATALOG } from './providers/kodus/catalog';
 
 /**
@@ -155,6 +161,7 @@ function kodusCatalogRows() {
 const BORROWS_FROM: Record<string, string> = {
     'anthropic-modern': 'anthropic',
     'anthropic-opus-5': 'anthropic',
+    'anthropic-opus-5-5': 'anthropic',
     moonshot_code: 'moonshot',
     zai_glm53: 'zai',
     bedrock_opus47: 'amazon_bedrock',
@@ -268,6 +275,66 @@ const onlyDrift = async <T>(brand: string, call: Promise<T>): Promise<T> => {
         );
     }
 };
+
+/**
+ * An OpenAI-protocol proxy on loopback that forwards to OpenAI. The
+ * `openai_compatible` OpenAI rows stand for customer proxies (production points
+ * them at gateways that are not ours to call). Since #2135 a credential on
+ * api.openai.com itself is served on the native SDK, so those rows reach OpenAI
+ * through this instead: the same body a proxy would forward, on the OpenAI-
+ * protocol transport they exist to check. Started only when an OpenAI key is
+ * present.
+ */
+const OPENAI_PROXY_PORT = 18787;
+const OPENAI_PROXY = `http://127.0.0.1:${OPENAI_PROXY_PORT}/v1`;
+const forwardFetch = globalThis.fetch;
+let openaiProxy: Server | undefined;
+
+beforeAll(async () => {
+    if (!key('openai')) return;
+    openaiProxy = createServer((req, res) => {
+        // Chat completions only: the one endpoint an OpenAI-compatible slot
+        // calls, so nothing else is forwarded.
+        if (req.method !== 'POST' || req.url !== '/v1/chat/completions') {
+            res.writeHead(404);
+            res.end();
+            return;
+        }
+        const chunks: Buffer[] = [];
+        req.on('data', (c: Buffer) => chunks.push(c));
+        req.on('end', async () => {
+            try {
+                const upstream = await forwardFetch(
+                    'https://api.openai.com/v1/chat/completions',
+                    {
+                        method: 'POST',
+                        headers: {
+                            authorization: String(req.headers.authorization ?? ''),
+                            'content-type': 'application/json',
+                        },
+                        body: chunks.length ? Buffer.concat(chunks) : undefined,
+                    },
+                );
+                res.writeHead(upstream.status, {
+                    'content-type': 'application/json',
+                });
+                res.end(Buffer.from(await upstream.arrayBuffer()));
+            } catch {
+                res.writeHead(502, { 'content-type': 'text/plain' });
+                res.end('the forwarder could not reach OpenAI');
+            }
+        });
+    });
+    await new Promise<void>((resolve) =>
+        openaiProxy!.listen(OPENAI_PROXY_PORT, '127.0.0.1', resolve),
+    );
+});
+
+afterAll(async () => {
+    await new Promise<void>((resolve) =>
+        openaiProxy ? openaiProxy.close(() => resolve()) : resolve(),
+    );
+});
 
 /** Does this row have SOMETHING to authenticate with? */
 const canRun = (row: { brand: string; requires?: () => boolean }): boolean => {
@@ -467,6 +534,20 @@ const LIVE = [
     // effort currently buys nothing. The day it starts buying something — or the
     // day a 5.6 model begins reasoning on its own — these rows go red and
     // somebody gets to find out on purpose.
+    //
+    // ── RE-MEASURED 2026-09-23: the NATIVE half closed ───────────────────────
+    // `gpt-5.6-terra` on the Responses API, same `medium` effort, same request
+    // shape, no change on our side:
+    //
+    //   gpt-5.6-terra  native   medium -> 29 reasoning tokens (was 0)
+    //   gpt-5.6-sol    compat   HIGH   ->  0                  (unchanged)
+    //
+    // The row went red for the reason it was written to go red, so the native
+    // one now asserts the behaviour instead of the gap. The compat row keeps
+    // `reasons: false`: the same family, the same key, still zero. That the two
+    // moved apart is itself the finding — whatever changed is in the Responses
+    // API, not in the model, because the OpenAI-protocol transport hitting the
+    // vendor's own endpoint still gets nothing for an effort it sends.
     {
         brand: 'openai_gpt56',
         why: 'the 5.6 line is 18 production slots and had NO row — the biggest uncovered family in the corpus. terra is its largest native group (5 slots, 3 at medium), and the id is a generation newer than every OpenAI row here',
@@ -475,28 +556,26 @@ const LIVE = [
             model: 'gpt-5.6-terra',
             reasoningEffort: 'medium', // prod: 3 de 5 slots do terra usam medium; 1 high, 1 ausente
         },
-        // A KNOWN GAP, not a satisfied expectation. `reasons: false` is the
-        // right assertion — it is what was measured — but it makes the row
-        // green in exactly the degraded state it exists to document, and the
-        // coverage log cannot tell "verified reasoning" from "verified absence
-        // of it". `knownGap` is printed on its own line so a green weekly run
-        // never reads as "this brand is fine".
-        knownGap: true,
-        // Measured 0 — see the block above. Asserting the gap, not the wish.
-        reasons: false,
+        // Was a known gap; closed on its own between 2026-09-18 and 2026-09-23
+        // with no change on our side (29 reasoning tokens at the same `medium`).
+        // `knownGap` is gone with it — this row now verifies reasoning rather
+        // than documenting its absence, which is the whole point of having
+        // written the gap down as an assertion instead of a comment.
+        reasons: true,
     },
     {
         brand: 'openai_compatible_gpt56',
         // Production points these at FIVE distinct customer proxies (the corpus
         // holds them redacted). None of them is ours to call, and a row that
         // named one would be testing that customer's gateway rather than the
-        // request we build — so this points at the vendor's own endpoint, the
-        // same choice `openai_compatible_gpt5` makes one row down.
+        // request we build — so this reaches the vendor through `OPENAI_PROXY`,
+        // the same choice `openai_compatible_gpt5` makes one row down. (It
+        // pointed at api.openai.com until #2135 served that host natively.)
         why: 'sol is 5 production slots and every one of them rides an OpenAI-protocol proxy rather than the native API — a different transport for the newest reasoner id, and the majority store high',
         slot: {
             provider: 'openai_compatible',
             model: 'gpt-5.6-sol',
-            baseURL: 'https://api.openai.com/v1',
+            baseURL: OPENAI_PROXY,
             reasoningEffort: 'high', // prod: 3 de 5 slots do sol usam high; 1 medium, 1 ausente
         },
         // A KNOWN GAP, not a satisfied expectation. `reasons: false` is the
@@ -600,12 +679,34 @@ const LIVE = [
             // prices for reviews that may carry no reasoning at all.
             reasoningEffort: 'high',
         },
-        // NO reasoning assertion — deliberately, and this is the only row in the
-        // table without one.
+        // NO reasoning assertion — deliberately.
         //
-        // Opus 4.7 is adaptive, and adaptive means the MODEL decides per
-        // request. Asked directly with the shape below at effort `high`, the
-        // level AWS documents as "Claude always thinks", it answered:
+        // The reason recorded here first was that "adaptive means the MODEL
+        // decides per request". That reading is wrong, and the correction is
+        // worth keeping because the same symptom is now on the Bedrock row
+        // below: `thinking.display` defaults to `omitted` from Opus 4.7
+        // (@ai-sdk/anthropic schema, "default for Opus 4.7+"), where 4.6 and
+        // earlier default to `summarized`. The model reasons and is billed for
+        // it either way — Anthropic's pricing table states the billed count is
+        // identical — the response just carries empty thinking blocks unless
+        // `display: 'summarized'` is asked for.
+        //
+        // A claim recorded here on 2026-09-23 and withdrawn the same day: that
+        // Anthropic's `output_tokens_details.thinking_tokens` reflects the raw
+        // reasoning rather than the text returned, so the count would survive
+        // `omitted`. The vendor does document that. This run cannot corroborate
+        // it, and nothing here should be read as if it had:
+        //
+        //     anthropic-modern  inputTokens 53  outputTokens 8  text 8  reasoning 0
+        //
+        // `output_tokens` is the billed output and it equals the text exactly,
+        // so there is no room in it for thinking that happened and went
+        // unreported. Nothing was hidden because nothing was generated — which
+        // does confirm the zero is about the request, but leaves the survival
+        // question untested, since a counter with nothing to count proves
+        // neither direction. It stays a vendor statement, not a measurement.
+        //
+        // Asked directly with the shape below at effort `high`, it answered:
         //
         //     content blocks: [text]        (no thinking block)
         //     usage.output_tokens_details.thinking_tokens: 0
@@ -636,6 +737,18 @@ const LIVE = [
             // working perfectly returns ZERO reasoning tokens, and `reasons:
             // true` fails for the documented behaviour instead of a regression.
             // Proven live: bedrock_opus47 came back 200 with reasoningTokens=0.
+            reasoningEffort: 'high',
+        },
+        reasons: true,
+    },
+    {
+        brand: 'anthropic-opus-5-5',
+        why: '#1996: a point release the generation table does not name. It fell to `unknown` and ran with no effort at all; it now resolves as a newer Claude. This row is the proof the fallback reaches the vendor as adaptive + effort and is billed as reasoning — the same thing a Claude released after this file will rely on',
+        slot: {
+            provider: 'anthropic',
+            model: 'claude-opus-5-5',
+            // `high` for the same reason as the Opus 5 row above: at `low` a
+            // one-word prompt legitimately skips thinking.
             reasoningEffort: 'high',
         },
         reasons: true,
@@ -717,7 +830,55 @@ const LIVE = [
             reasoningEffort: 'high',
         },
         credentialField: 'awsBearerToken' as const,
-        reasons: true,
+        // NO reasoning assertion, for a reason this transport cannot work
+        // around: on Bedrock, reasoning TEXT is the only evidence available.
+        // `TokenUsage` in the Converse API carries inputTokens, outputTokens,
+        // totalTokens and the two cache counts — there is no thinking-token
+        // field to fall back on (AWS API reference, TokenUsage), which is why
+        // `@ai-sdk/amazon-bedrock` hardcodes `outputTokens.reasoning = void 0`
+        // and every Bedrock row here reads 0.
+        //
+        // And from Opus 4.7 the text is empty by default: `thinking.display`
+        // flipped from `summarized` to `omitted` with that generation
+        // (@ai-sdk/anthropic schema, "default for Opus 4.7+"). Claude still
+        // reasons and is still billed for it — Anthropic's pricing table says
+        // the billed count is identical under both settings — the response
+        // just carries empty thinking blocks.
+        //
+        // Measured together on 2026-09-23, same effort, prompt and key:
+        //     amazon_bedrock (sonnet-4-6)  tokens=0  textChars=54
+        //     bedrock_opus47 (opus-4-7)    tokens=0  textChars=0
+        //
+        // The raw `usage` from that run settles what those zeros mean, because
+        // `amazon_bedrock` and the native `anthropic` row are the SAME model at
+        // the SAME effort over two transports — `us.anthropic.claude-sonnet-4-6`
+        // and `claude-sonnet-4-6`:
+        //
+        //     native   in 40  out 58  ->  text  8  +  reasoning 50
+        //     bedrock  in 40  out 58  ->  text 58  +  reasoning absent
+        //
+        // Identical totals. Bedrock generated the same ~50 reasoning tokens and
+        // billed them; only the split is missing, and `text 58` is not evidence
+        // of 58 text tokens — `@ai-sdk/amazon-bedrock` copies the output total
+        // into `text` on the same line where it hardcodes `reasoning` away
+        // (dist/index.js:455), so that field carries no information at all.
+        //
+        // So the cost is visible on Bedrock and the composition is not. Every
+        // Bedrock reasoning number this repo reports is a floor of zero over a
+        // real spend, and per-model cost attribution splits it wrong by exactly
+        // the reasoning share. The gap is the transport's, not ours, but the
+        // wrong number is ours to stop publishing.
+        //
+        // So `reasons: true` here asserts something no request we send can
+        // observe. Asking for `display: 'summarized'` would restore it, but
+        // that is a PRODUCTION change — the returned text enters the message
+        // history, `sendReasoning` defaults true, and the compressor only
+        // truncates `tool` turns — so it belongs in its own change with its
+        // own measurement, not smuggled in through a contract row.
+        //
+        // What the row still earns its keep for: 4.7+ REJECTS budgetTokens,
+        // so a regression to the legacy shape is a hard 400 and turns this
+        // red. That is what it guards.
     },
     {
         brand: 'open_router_glm',
@@ -747,12 +908,13 @@ const LIVE = [
         slot: {
             provider: 'openai_compatible',
             model: 'gpt-5.4',
-            baseURL: 'https://api.openai.com/v1',
+            baseURL: OPENAI_PROXY,
             reasoningEffort: 'medium',
             temperature: 0.2,
         },
         // Same vendor, same key as the native `openai` row — what differs is the
-        // provider id we resolve through, which is the whole point.
+        // provider id we resolve through, which is the whole point. Through
+        // `OPENAI_PROXY`: on api.openai.com itself it is served natively (#2135).
         reasons: true,
     },
     {
@@ -1447,6 +1609,33 @@ describe('BYOK reasoning — LIVE provider contract', () => {
 
                 expect(typeof result.text).toBe('string');
 
+                // Raw usage for EVERY row, asserted on or not. It was added to
+                // settle two questions that could not be answered offline, and
+                // the first run it saw answered both:
+                //
+                //   - Converse passes NO thinking count. Not through the
+                //     catchall either: `amazon_bedrock` came back with
+                //     `outputTokenDetails: {textTokens: 58}` and no reasoning
+                //     key, against `text 8 + reasoning 50` from the same model
+                //     at the same effort natively. The count is gone at the
+                //     transport, not dropped by the SDK's `void 0`.
+                //   - Whether Anthropic's `thinking_tokens` survives
+                //     `display: 'omitted'` is still open, and the reason is on
+                //     the `anthropic-modern` row: that request generated no
+                //     reasoning at all, so there was no count to survive.
+                //
+                // It stays because the pair of numbers only means something
+                // side by side: a single row's zero reads as "did not think"
+                // and as "cannot see it" equally well, and the only thing that
+                // told them apart here was another transport's total for the
+                // same model. Keep printing it for every brand, including the
+                // ones that assert nothing.
+                //
+                // eslint-disable-next-line no-console
+                console.log(
+                    `[byok-live-usage] ${c.brand}: ${JSON.stringify(result.usage)}`,
+                );
+
                 if (c.reasons) {
                     // THE drift detector. A vendor that renames or stops
                     // honouring our reasoning parameter still returns 200 — it
@@ -1552,6 +1741,20 @@ const STRUCTURED_LIVE = [
             reasoningEffort: 'high',
         },
     },
+    {
+        brand: 'open_router_glm',
+        plan: 'as-is / json_object',
+        why: "a GLM through OpenRouter is outside the four allowlisted prefixes, so its structured call goes out as bare `response_format: json_object` — no schema on the wire, and the provider rejects the request outright unless the messages contain the word 'json'. This is the route 460 reviews published every duplicate on (#1916); what it proves is that the contract the executor now writes into the prompt is enough to get a PARSED object back over that channel",
+        slot: {
+            provider: 'open_router',
+            model: 'z-ai/glm-5.2',
+            // Pinned for the same reason the reasoning row above is: OpenRouter
+            // picks an upstream per call, and an unpinned row asserts the
+            // routing lottery instead of the request.
+            openrouterProviderOrder: ['z-ai'],
+            openrouterAllowFallbacks: false,
+        },
+    },
 ] as const;
 
 describe('BYOK structured output — LIVE, through LLM.run (the one door)', () => {
@@ -1596,3 +1799,202 @@ describe('BYOK structured output — LIVE, through LLM.run (the one door)', () =
         );
     }
 });
+
+/**
+ * The NEGATIVE control for the row above — the half that makes the fix a
+ * mechanism rather than a hope.
+ *
+ * The structured row proves our request works. It cannot prove WHY the previous
+ * one did not, and without that this layer is a cargo cult: someone deletes the
+ * contract sentence next year, the row still passes on a lenient upstream, and
+ * the 400 comes back for everyone else.
+ *
+ * ─── WHICH UPSTREAM, AND WHY IT MATTERS ────────────────────────────────────
+ * The first version of this row asked GLM-over-OpenRouter, because that is the
+ * route the fix targets. It ran (2026-09-23) and answered: `bareRejected:
+ * false`. That upstream does NOT enforce the keyword — it accepts a bare
+ * `json_object` and replies. Which is the issue's own point, stated in its
+ * table: the symptom depends on how each provider reacts, and the same missing
+ * contract shows up as a 400 on one upstream and an invented shape on another.
+ * So a negative control has to ask a provider that DOES enforce the rule, or it
+ * measures the wrong end of the failure.
+ *
+ * OpenAI is that provider: it documents the requirement, production logged 430
+ * dedup failures carrying its wording, and the finder's own recovery was
+ * verified against it live (finder.agent.ts, 2026-09-17). So this asks OpenAI
+ * directly, by hand — deliberately NOT through the door, since the subject is
+ * the provider's rule, not our stack.
+ *
+ * If the requirement ever disappears there, this row goes red saying so. That
+ * is the correct reading: not "we broke something", but "the contract is now
+ * belt-and-braces on OpenAI too rather than load-bearing" — worth knowing
+ * before anyone deletes it.
+ */
+describe('#1916 — the json_object keyword rule, live', () => {
+    const apiKey = key('openai');
+    const run = apiKey ? it : it.skip;
+
+    const CONTRACT =
+        'Return ONLY a JSON object that conforms EXACTLY to this JSON Schema ' +
+        '(same property names, no extra keys):\n' +
+        JSON.stringify({
+            type: 'object',
+            properties: { answer: { type: 'string' } },
+            required: ['answer'],
+        });
+
+    // Deliberately keyword-free: this is what `buildDedupPrompt` looks like on
+    // the wire — the word "json" appears exactly zero times.
+    const USER = 'Reply with the field answer set to ok.';
+
+    const ask = async (system?: string) => {
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                authorization: `Bearer ${apiKey}`,
+                'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: 'gpt-5.4-mini',
+                messages: [
+                    ...(system ? [{ role: 'system', content: system }] : []),
+                    { role: 'user', content: USER },
+                ],
+                response_format: { type: 'json_object' },
+                max_completion_tokens: 200,
+            }),
+        });
+        const body: any = await res.json().catch(() => ({}));
+        return {
+            status: res.status,
+            message: String(body?.error?.message ?? ''),
+            content: String(body?.choices?.[0]?.message?.content ?? ''),
+        };
+    };
+
+    run(
+        'the same request is rejected without the keyword and answered with it',
+        async () => {
+            const bare = await ask();
+            const withContract = await ask(CONTRACT);
+
+            expect({
+                bareRejected: bare.status >= 400,
+                bareNamesTheKeyword: /must contain the word|['"]json['"]/i.test(
+                    bare.message,
+                ),
+                withContractAnswered: withContract.status === 200,
+                withContractParses: (() => {
+                    try {
+                        return (
+                            typeof JSON.parse(withContract.content) === 'object'
+                        );
+                    } catch {
+                        return false;
+                    }
+                })(),
+            }).toEqual({
+                bareRejected: true,
+                bareNamesTheKeyword: true,
+                withContractAnswered: true,
+                withContractParses: true,
+            });
+        },
+        120_000,
+    );
+});
+
+/**
+ * #2135 — an OpenAI reasoner with a tool, live.
+ *
+ * Every row above calls with `tools: {}`, so no request here carried a function
+ * tool. An agent loop sends one together with its effort, and on chat
+ * completions the gpt-5.6 / gpt-6 line refuses the pair ("Function tools with
+ * reasoning_effort are not supported … use /v1/responses"). Both routes a
+ * customer can be on are asked, with a tool the model has to call:
+ *
+ *  - an OpenAI-compatible credential on api.openai.com, through routing, which
+ *    serves it on the native SDK;
+ *  - the same model through `OPENAI_PROXY`, over chat completions, where
+ *    OpenAI's refusal is asked again with the effort set to 'none'.
+ */
+describe('#2135 — an OpenAI reasoner with a tool, live', () => {
+    const apiKey = key('openai');
+    const run = apiKey ? it : it.skip;
+    const called: string[] = [];
+    const tools = {
+        clock: tool({
+            description: 'Returns the current time as HH:MM.',
+            inputSchema: z.object({}),
+            execute: async () => {
+                called.push('clock');
+                return '14:35';
+            },
+        }),
+    };
+    const ask = (byokConfig: unknown) =>
+        onlyDrift(
+            'openai',
+            LLM.run({
+                byokConfig: byokConfig as NormalizedModel,
+                messages: [
+                    {
+                        role: 'user',
+                        content:
+                            'Call the clock tool, then reply with the time it returned and nothing else.',
+                    },
+                ],
+                loop: { tools, maxSteps: 3 },
+                runName: 'byok-live-tools',
+                maxOutputTokens: 4_096,
+            }),
+        ) as Promise<{ text: string }>;
+
+    beforeEach(() => {
+        called.length = 0;
+    });
+
+    run(
+        'an OpenAI-compatible credential on api.openai.com is served on the native SDK and runs the tool',
+        async () => {
+            const { slot } = resolveTaskSlot(
+                {
+                    version: 2,
+                    credentials: [
+                        {
+                            id: 'c',
+                            provider: 'openai_compatible',
+                            apiKey,
+                            settings: { baseURL: 'https://api.openai.com/v1' },
+                        },
+                    ],
+                    models: [{ id: 'm', credentialId: 'c', model: 'gpt-6-sol' }],
+                    routing: { defaultModelId: 'm' },
+                } as any,
+                'codeReview',
+            );
+            expect(slot?.provider).toBe('openai');
+            const result = await ask(slot);
+            expect(called).toContain('clock');
+            expect(result.text).toContain('14:35');
+        },
+        120_000,
+    );
+
+    run(
+        'the same model behind a proxy is asked again with the effort off and runs the tool',
+        async () => {
+            const result = await ask({
+                provider: 'openai_compatible',
+                model: 'gpt-6-sol',
+                baseURL: OPENAI_PROXY,
+                apiKey,
+                reasoningEffort: 'medium',
+            });
+            expect(called).toContain('clock');
+            expect(result.text).toContain('14:35');
+        },
+        120_000,
+    );
+});
+

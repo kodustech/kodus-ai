@@ -14,12 +14,18 @@
         "depth-first prompt (a breadth task on a depth brain) — a prompt fix is a",
         "separate follow-up; these floors just stop a regression below today's real.",
         "RATCHET: when a PR intentionally moves a model, refresh its floor here with",
-        "a fresh run as evidence."
+        "a fresh run as evidence.",
+        "",
+        "deepseek-v4-flash@fireworks (the nightly model): calibrated 2026-10-14 from",
+        "3 runs of github-cases on one commit (121/129 sites; per run 43, 39 and 39",
+        "of 43; 0 of 414 clean files flagged). Same formula. The nightly runs it once",
+        "and measures again before alerting (nightly-verdict.js)."
     ],
     "dataset": "github-cases",
     "models": {
         "gpt-5.4": { "occMin": 25, "specMin": 95, "observed": { "occ": 40, "spec": 99 } },
         "gpt-5.4-mini": { "occMin": 55, "specMin": 95, "observed": { "occ": 72, "spec": 99 } },
-        "gemini-3-flash-preview": { "occMin": 20, "specMin": 95, "observed": { "occ": 35, "spec": 100 } }
+        "gemini-3-flash-preview": { "occMin": 20, "specMin": 95, "observed": { "occ": 35, "spec": 100 } },
+        "deepseek-v4-flash@fireworks": { "occMin": 86, "specMin": 95, "observed": { "occ": 94, "spec": 100 } }
     }
 }

@@ -1,6 +1,7 @@
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { CodeReviewHandlerService } from '@libs/code-review/infrastructure/adapters/services/codeReviewHandlerService.service';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { runWithModelFailover } from '@libs/llm/model-failover';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -219,5 +220,88 @@ describe('CodeReviewHandlerService - skip feedback control', () => {
             1,
         );
         expect(mockCodeManagement.addReactionToPR).toHaveBeenCalledTimes(1);
+    });
+
+    it('records on the run when a call inside the review only succeeded on the fallback model (#2066)', async () => {
+        mockPipelineExecute.mockImplementation(async () => {
+            await runWithModelFailover(
+                [
+                    { model: 'claude-opus', byokModelId: 'primary' } as any,
+                    { model: 'gpt-4.1', byokModelId: 'fallback' } as any,
+                ],
+                jest
+                    .fn()
+                    .mockRejectedValueOnce(
+                        Object.assign(new Error('401 invalid api key'), {
+                            statusCode: 401,
+                        }),
+                    )
+                    .mockResolvedValueOnce('ok'),
+                { runName: 'code-review-bug' },
+            );
+            return createSkippedPipelineResult({
+                codeReviewConfig: {
+                    automatedReviewActive: false,
+                    showStatusFeedback: false,
+                },
+            });
+        });
+
+        const result = await service.handlePullRequest(
+            organizationAndTeamData as any,
+            repository as any,
+            'main',
+            pullRequest as any,
+            PlatformType.BITBUCKET,
+            'team-automation-id',
+            'webhook',
+            'opened',
+            'execution-id',
+        );
+
+        expect(result?.reviewWarnings).toEqual([
+            expect.objectContaining({
+                kind: 'PROVIDER_FALLBACK',
+                modelName: 'gpt-4.1',
+                detail: 'main provider claude-opus failed; review ran on fallback gpt-4.1',
+            }),
+        ]);
+    });
+
+    it('records no fallback when the main model answered (#2066)', async () => {
+        mockPipelineExecute.mockImplementation(async () => {
+            await runWithModelFailover(
+                [
+                    { model: 'claude-opus', byokModelId: 'primary' } as any,
+                    { model: 'gpt-4.1', byokModelId: 'fallback' } as any,
+                ],
+                jest.fn().mockResolvedValue('ok'),
+                { runName: 'code-review-bug' },
+            );
+            return createSkippedPipelineResult({
+                codeReviewConfig: {
+                    automatedReviewActive: false,
+                    showStatusFeedback: false,
+                },
+            });
+        });
+
+        const result = await service.handlePullRequest(
+            organizationAndTeamData as any,
+            repository as any,
+            'main',
+            pullRequest as any,
+            PlatformType.BITBUCKET,
+            'team-automation-id',
+            'webhook',
+            'opened',
+            'execution-id',
+        );
+
+        expect(
+            (result?.reviewWarnings ?? []).some(
+                (w: any) => w.kind === 'PROVIDER_FALLBACK',
+            ),
+        ).toBe(false);
     });
 });

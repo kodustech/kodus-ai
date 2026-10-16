@@ -10,6 +10,9 @@ import {
     USER_NOTIFICATION_REPOSITORY_TOKEN,
     UserNotificationWithDelivery,
 } from '../domain/contracts/user-notification.repository.contract';
+import { EVENT_DEFAULTS } from '../domain/catalog/defaults';
+import { NotificationEvent } from '../domain/catalog/events';
+import { IN_APP_TEMPLATE_REGISTRY } from '../infrastructure/adapters/channels/in-app-template.registry';
 import {
     Criticality,
     DeliveryStatus,
@@ -58,7 +61,10 @@ export class NotificationQueryService {
         };
     }
 
-    async unreadCount(userId: string, organizationId?: string): Promise<number> {
+    async unreadCount(
+        userId: string,
+        organizationId?: string,
+    ): Promise<number> {
         return this.userNotificationRepo.countUnread(userId, organizationId);
     }
 
@@ -82,93 +88,150 @@ export class NotificationQueryService {
     }
 
     /**
-     * Dev-only helper: insert a handful of fake in-app notifications for the
-     * current user so the drawer has something to render. Mixes criticalities,
-     * categories, and read/unread states.
+     * Dev-only helper: insert a handful of in-app notifications for the
+     * current user so the drawer has something to render. Titles, bodies and
+     * CTAs come from the same in-app template registry production uses, so
+     * what a developer sees here is what a real delivery looks like — the
+     * seeder used to hardcode its own copy and drifted from the templates.
      */
     async seedFakeNotifications(
         userId: string,
         organizationId: string,
+        /**
+         * Rules the organization really has, so the links in the drawer open
+         * a rule instead of a dead id. The caller supplies them: the rules
+         * service is not in this module's graph (rules already depend on
+         * notifications, and importing it back would close the cycle).
+         */
+        sampleRules: Array<{
+            uuid?: string;
+            title?: string;
+            repositoryId?: string;
+        }> = [],
     ): Promise<{ created: number }> {
         const correlationId = `dev-seed-${randomUUID()}`;
 
-        const fakes: Array<{
-            event: string;
-            criticality: Criticality;
-            category: string;
-            title: string;
-            body: string;
-            ctaUrl?: string;
-            read: boolean;
+        // Global rules first: they resolve in every scope, while a rule
+        // whose repository is no longer configured has no page to open.
+        const realRules = sampleRules
+            .filter((rule) => rule.uuid)
+            .sort(
+                (a, b) =>
+                    Number(b.repositoryId === 'global') -
+                    Number(a.repositoryId === 'global'),
+            );
+        const sampleRule = (index: number) => {
+            const rule = realRules[index];
+            return {
+                ruleId: rule?.uuid ?? randomUUID(),
+                ruleName: rule?.title ?? 'A Kody rule',
+                repositoryId: rule?.repositoryId,
+            };
+        };
+        const firstRule = sampleRule(0);
+        const secondRule = sampleRule(1);
+
+        const samples: Array<{
+            event: NotificationEvent;
+            metadata: Record<string, unknown>;
+            read?: boolean;
         }> = [
             {
-                event: 'kody_rules.generated',
-                criticality: Criticality.INFORMATIONAL,
-                category: 'kody_rules',
-                title: 'Kody rules generated',
-                body: 'Kody finished generating rules from your most recent reviews. Check them out and approve the ones you want active.',
-                ctaUrl: '/library/kody-rules',
-                read: false,
+                event: NotificationEvent.KODY_RULES_GENERATED,
+                metadata: {
+                    organizationName: 'your organization',
+                    rules: [
+                        'Avoid empty catch blocks',
+                        'Prefer Map for lookups inside loops',
+                    ],
+                },
             },
             {
-                event: 'team.member_invited',
-                criticality: Criticality.TRANSACTIONAL,
-                category: 'team',
-                title: 'New teammate joined',
-                body: 'Alex Rivera accepted your invite and joined the organization.',
-                read: false,
+                event: NotificationEvent.RULE_FILE_REFERENCES_INVALID,
+                metadata: {
+                    source: 'ide',
+                    repoName: 'kodus-ai',
+                    repositoryId: firstRule.repositoryId,
+                    invalidCount: 2,
+                    issues: [
+                        {
+                            ruleId: firstRule.ruleId,
+                            ruleName: firstRule.ruleName,
+                            filePath: 'libs/core/log/logger.ts',
+                            reason: 'File not found in default branch',
+                        },
+                        {
+                            ruleId: secondRule.ruleId,
+                            ruleName: secondRule.ruleName,
+                            filePath:
+                                'libs/core/infrastructure/database/migrations/',
+                            reason: 'File not found in default branch',
+                        },
+                    ],
+                },
             },
             {
-                event: 'sso.domain_verification',
-                criticality: Criticality.CRITICAL,
-                category: 'sso',
-                title: 'SSO domain verified',
-                body: 'Your SSO domain kodus.io has been verified. SSO is now active for new sign-ins.',
-                ctaUrl: '/organization/sso',
-                read: false,
+                event: NotificationEvent.IDE_RULES_SYNCED,
+                metadata: {
+                    repoName: 'kodus-ai',
+                    repositoryId: firstRule.repositoryId,
+                    rulesCount: 12,
+                    syncMode: 'fast',
+                },
             },
             {
-                event: 'cockpit.weekly_recap',
-                criticality: Criticality.INFORMATIONAL,
-                category: 'cockpit',
-                title: 'Your weekly recap is ready',
-                body: 'PR cycle time dropped 12% this week. See what changed.',
-                ctaUrl: '/cockpit',
+                event: NotificationEvent.IDE_RULES_SYNC_FAILED,
+                metadata: {
+                    repoName: 'seo-copilot',
+                    reason: 'Default branch could not be read',
+                    correlationId,
+                },
+            },
+            {
+                event: NotificationEvent.REVIEW_FAILED,
+                metadata: {
+                    repoName: 'kodus-ai',
+                    reason: 'The model returned an empty response',
+                    prUrl: 'https://github.com/kodustech/kodus-ai/pull/1876',
+                    correlationId,
+                },
                 read: true,
             },
             {
-                event: 'kody_rules.generated',
-                criticality: Criticality.INFORMATIONAL,
-                category: 'kody_rules',
-                title: 'Older rules batch',
-                body: 'A previous batch of generated Kody rules is still awaiting review.',
+                event: NotificationEvent.SSO_DOMAIN_VERIFICATION,
+                metadata: { domain: 'kodus.io', email: 'owner@kodus.io' },
                 read: true,
             },
         ];
 
-        for (const f of fakes) {
+        for (const sample of samples) {
+            const defaults = EVENT_DEFAULTS[sample.event];
+            const template = IN_APP_TEMPLATE_REGISTRY[sample.event]?.(
+                sample.metadata,
+            );
+
             const delivery = await this.deliveryRepo.create({
                 organization: { uuid: organizationId },
-                event: f.event,
-                criticality: f.criticality,
+                event: sample.event,
+                criticality: defaults.criticality,
                 channel: NotificationChannel.IN_APP,
-                title: f.title,
-                body: f.body,
-                ctaUrl: f.ctaUrl,
-                category: f.category,
+                title: template?.title ?? defaults.label,
+                body: template?.body ?? '',
+                ctaUrl: template?.ctaUrl,
+                category: defaults.category,
                 recipientUser: { uuid: userId },
                 deliveryStatus: DeliveryStatus.DELIVERED,
-                metadata: { seeded: true },
+                metadata: { ...sample.metadata, seeded: true },
                 correlationId,
             });
 
             await this.userNotificationRepo.create({
                 userId,
                 deliveryId: delivery.uuid!,
-                readAt: f.read ? new Date() : null,
+                readAt: sample.read ? new Date() : null,
             });
         }
 
-        return { created: fakes.length };
+        return { created: samples.length };
     }
 }

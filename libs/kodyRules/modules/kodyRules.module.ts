@@ -26,6 +26,7 @@ import { AddLibraryKodyRulesUseCase } from '../application/use-cases/add-library
 import { ApplyPendingKodyRulesUseCase } from '../application/use-cases/apply-pending-kody-rules.use-case';
 import { ChangeStatusKodyRulesUseCase } from '../application/use-cases/change-status-kody-rules.use-case';
 import { CheckSyncStatusUseCase } from '../application/use-cases/check-sync-status.use-case';
+import { SyncRulesOnPlanChangeUseCase } from '../application/use-cases/sync-rules-on-plan-change.use-case';
 import { ListPastReviewersUseCase } from '../application/use-cases/list-past-reviewers.use-case';
 import { ConvertPendingUpdatesToNewUseCase } from '../application/use-cases/convert-pending-updates-to-new.use-case';
 import { CreateOrUpdateKodyRulesUseCase } from '../application/use-cases/create-or-update.use-case';
@@ -40,6 +41,7 @@ import { FindLibraryKodyRulesUseCase } from '../application/use-cases/find-libra
 import { FindRecommendedKodyRulesUseCase } from '../application/use-cases/find-recommended-kody-rules.use-case'; // Added
 import { CountRulesByRepositoryUseCase } from '../application/use-cases/count-rules-by-repository.use-case';
 import { FindRulesInOrganizationByRuleFilterKodyRulesUseCase } from '../application/use-cases/find-rules-in-organization-by-filter.use-case';
+import { GetKodyRulesIndexUseCase } from '../application/use-cases/get-kody-rules-index.use-case';
 import { GetPendingKodyRulesUseCase } from '../application/use-cases/get-pending-kody-rules.use-case';
 import { FindSuggestionsByRuleUseCase } from '../application/use-cases/find-suggestions-by-rule.use-case';
 import { GenerateKodyRulesUseCase } from '../application/use-cases/generate-kody-rules.use-case';
@@ -70,6 +72,7 @@ import { KodyRuleSummaryService } from '../infrastructure/adapters/services/kody
 import { RuleLikeModule } from './ruleLike.module';
 
 import { PermissionsModule } from '@libs/identity/modules/permissions.module';
+import { TeamModule } from '@libs/organization/modules/team.module';
 import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
 import { KodyRulesSyncListener } from '../infrastructure/adapters/listeners/kody-rules-sync.listener';
 import { CodeReviewConfigurationModule } from '@libs/code-review/modules/code-review-configuration.module';
@@ -91,6 +94,7 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         forwardRef(() => ParametersModule),
         forwardRef(() => UserModule),
         forwardRef(() => OrganizationModule),
+        forwardRef(() => TeamModule),
         forwardRef(() => OrganizationParametersModule),
         forwardRef(() => RuleLikeModule),
         forwardRef(() => LicenseModule),
@@ -120,6 +124,7 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         ApplyPendingKodyRulesUseCase,
         FindByOrganizationIdKodyRulesUseCase,
         FindRulesInOrganizationByRuleFilterKodyRulesUseCase,
+        GetKodyRulesIndexUseCase,
         GetPendingKodyRulesUseCase,
         CountRulesByRepositoryUseCase,
         ChangeStatusKodyRulesUseCase,
@@ -143,6 +148,7 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         ExternalReferenceLoaderService,
         AddLibraryKodyRulesUseCase,
         CheckSyncStatusUseCase,
+        SyncRulesOnPlanChangeUseCase,
         ListPastReviewersUseCase,
         DeleteRuleInOrganizationByIdKodyRulesUseCase,
         FastSyncIdeRulesUseCase,
@@ -170,6 +176,7 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         ApplyPendingKodyRulesUseCase,
         FindByOrganizationIdKodyRulesUseCase,
         FindRulesInOrganizationByRuleFilterKodyRulesUseCase,
+        GetKodyRulesIndexUseCase,
         GetPendingKodyRulesUseCase,
         CountRulesByRepositoryUseCase,
         ChangeStatusKodyRulesUseCase,
@@ -187,6 +194,7 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         GetGlobalRulesImportStatusUseCase,
         AddLibraryKodyRulesUseCase,
         CheckSyncStatusUseCase,
+        SyncRulesOnPlanChangeUseCase,
         ListPastReviewersUseCase,
         DeleteRuleInOrganizationByIdKodyRulesUseCase,
         FastSyncIdeRulesUseCase,

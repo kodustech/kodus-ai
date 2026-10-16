@@ -22,10 +22,10 @@ describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
     ) {
         const kodyRulesSyncService = {
             syncFromChangedFiles: jest.fn().mockResolvedValue(undefined),
-            purgeAllIdeSyncRulesForRepository: jest
+            purgeAllIdeSyncRulesForRepositories: jest
                 .fn()
                 .mockResolvedValue(undefined),
-            pauseAllIdeSyncRulesForRepository: jest
+            pauseAllIdeSyncRulesForRepositories: jest
                 .fn()
                 .mockResolvedValue(undefined),
             resumeAllIdeSyncRulesForRepository: jest
@@ -68,18 +68,18 @@ describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
 
         await listener.handleIdeRulesSyncDisabled({
             organizationAndTeamData,
-            repositoryId: 'repo-1',
+            repositoryIds: ['repo-1', 'repo-2'],
             action: 'delete',
         });
 
         expect(
-            kodyRulesSyncService.purgeAllIdeSyncRulesForRepository,
+            kodyRulesSyncService.purgeAllIdeSyncRulesForRepositories,
         ).toHaveBeenCalledWith({
             organizationAndTeamData,
-            repositoryId: 'repo-1',
+            repositoryIds: ['repo-1', 'repo-2'],
         });
         expect(
-            kodyRulesSyncService.pauseAllIdeSyncRulesForRepository,
+            kodyRulesSyncService.pauseAllIdeSyncRulesForRepositories,
         ).not.toHaveBeenCalled();
     });
 
@@ -88,18 +88,18 @@ describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
 
         await listener.handleIdeRulesSyncDisabled({
             organizationAndTeamData,
-            repositoryId: 'repo-1',
+            repositoryIds: ['repo-1', 'repo-2'],
             action: 'pause',
         });
 
         expect(
-            kodyRulesSyncService.pauseAllIdeSyncRulesForRepository,
+            kodyRulesSyncService.pauseAllIdeSyncRulesForRepositories,
         ).toHaveBeenCalledWith({
             organizationAndTeamData,
-            repositoryId: 'repo-1',
+            repositoryIds: ['repo-1', 'repo-2'],
         });
         expect(
-            kodyRulesSyncService.purgeAllIdeSyncRulesForRepository,
+            kodyRulesSyncService.purgeAllIdeSyncRulesForRepositories,
         ).not.toHaveBeenCalled();
     });
 
@@ -108,15 +108,15 @@ describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
 
         await listener.handleIdeRulesSyncDisabled({
             organizationAndTeamData,
-            repositoryId: 'repo-1',
+            repositoryIds: ['repo-1', 'repo-2'],
             action: 'keep',
         });
 
         expect(
-            kodyRulesSyncService.purgeAllIdeSyncRulesForRepository,
+            kodyRulesSyncService.purgeAllIdeSyncRulesForRepositories,
         ).not.toHaveBeenCalled();
         expect(
-            kodyRulesSyncService.pauseAllIdeSyncRulesForRepository,
+            kodyRulesSyncService.pauseAllIdeSyncRulesForRepositories,
         ).not.toHaveBeenCalled();
         expect(
             kodyRulesSyncService.resumeAllIdeSyncRulesForRepository,
@@ -132,31 +132,36 @@ describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
 
         await listener.handleIdeRulesSyncDisabled({
             organizationAndTeamData,
-            repositoryId: 'repo-1',
+            repositoryIds: ['repo-1'],
         } as any);
 
         expect(
-            kodyRulesSyncService.purgeAllIdeSyncRulesForRepository,
+            kodyRulesSyncService.purgeAllIdeSyncRulesForRepositories,
         ).not.toHaveBeenCalled();
         expect(
-            kodyRulesSyncService.pauseAllIdeSyncRulesForRepository,
+            kodyRulesSyncService.pauseAllIdeSyncRulesForRepositories,
         ).not.toHaveBeenCalled();
     });
 
-    it('ignores the event when repositoryId is missing', async () => {
+    it('ignores the event when it carries no repositories', async () => {
         const { listener, kodyRulesSyncService } = buildListener();
 
         await listener.handleIdeRulesSyncDisabled({
             organizationAndTeamData,
-            repositoryId: undefined as any,
+            repositoryIds: [],
+            action: 'delete',
+        });
+        await listener.handleIdeRulesSyncDisabled({
+            organizationAndTeamData,
+            repositoryIds: undefined as any,
             action: 'delete',
         });
 
         expect(
-            kodyRulesSyncService.purgeAllIdeSyncRulesForRepository,
+            kodyRulesSyncService.purgeAllIdeSyncRulesForRepositories,
         ).not.toHaveBeenCalled();
         expect(
-            kodyRulesSyncService.pauseAllIdeSyncRulesForRepository,
+            kodyRulesSyncService.pauseAllIdeSyncRulesForRepositories,
         ).not.toHaveBeenCalled();
     });
 

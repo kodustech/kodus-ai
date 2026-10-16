@@ -160,6 +160,7 @@ export async function runAgentLoopViaCore(
                 : undefined,
             maxSteps: input.maxSteps ?? 20,
             providerOptions,
+            acceptsRevisions: !!input.previousDecisions?.length,
         });
 
     // Base pass uses the reported `coverageLedger` (read back below for the
@@ -235,6 +236,7 @@ export async function runAgentLoopViaCore(
                     secrets.byokConfig,
                     input.telemetryMetadata?.organizationId,
                     input.usageRunName,
+                    input.previousDecisions,
                 ),
         },
         { prompt: input.userPrompt },
@@ -311,7 +313,7 @@ export async function runAgentLoopViaCore(
                           index: i,
                           relevantFile: f.relevantFile,
                           action: 'keep' as const,
-                          parseMode: 'direct' as const,
+                          parseMode: r.keptParseMode[i] ?? 'default-keep',
                           rationale: '',
                           verifierEvidence: r.keptEvidence[i] ?? {
                               strongFiles: [],
@@ -322,7 +324,7 @@ export async function runAgentLoopViaCore(
                           index: r.kept.length + i,
                           relevantFile: d.finding.relevantFile,
                           action: 'drop' as const,
-                          parseMode: 'direct' as const,
+                          parseMode: d.parseMode,
                           rationale: d.evidence ?? '',
                           verifierEvidence: d.verifierEvidence,
                       })),

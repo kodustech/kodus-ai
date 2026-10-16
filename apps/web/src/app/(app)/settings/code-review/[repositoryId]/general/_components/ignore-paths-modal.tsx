@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
+import { toast } from "@components/ui/toaster/use-toast";
 import {
     Dialog,
     DialogContent,
@@ -247,10 +248,26 @@ export const IgnorePathsModal = ({
                             Cancel
                         </Button>
 
+                        {/* Apply closes the modal and writes the field, and
+                            nothing else on screen changes — so without this the
+                            only visible result of clicking was the modal
+                            disappearing, which reads as a no-op. Say what
+                            happened, and say what still has to happen, since
+                            the footer above is gone the moment this fires. */}
                         <Button
                             size="md"
                             variant="primary"
-                            onClick={() => onSave(paths)}>
+                            onClick={() => {
+                                onSave(paths);
+                                toast({
+                                    variant: "info",
+                                    title: paths.length
+                                        ? `${paths.length} ignored ${paths.length === 1 ? "path" : "paths"} updated`
+                                        : "Ignored paths cleared",
+                                    description:
+                                        "Save settings to persist the change.",
+                                });
+                            }}>
                             Apply
                         </Button>
                     </div>

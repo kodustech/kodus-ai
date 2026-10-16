@@ -405,8 +405,12 @@ export const EMAIL_TEMPLATE_REGISTRY: Partial<
         const errorCount = (metadata.errorCount as number | undefined) ?? 0;
         const windowStart = metadata.windowStart as string | undefined;
         const windowEnd = metadata.windowEnd as string | undefined;
+        const status =
+            typeof metadata.httpStatus === 'number'
+                ? `HTTP ${metadata.httpStatus} — `
+                : '';
         const sampleError =
-            (metadata.sampleError as string) ?? 'see logs for details';
+            status + ((metadata.sampleError as string) ?? 'see logs for details');
         const labelFormat = (iso?: string) =>
             iso
                 ? new Date(iso).toLocaleString('en-US', {

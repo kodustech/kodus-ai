@@ -8,6 +8,11 @@ import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMark
 import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReviewBadge';
 import { getLabelShield } from '@libs/common/utils/codeManagement/labels';
 import { getSeverityLevelShield } from '@libs/common/utils/codeManagement/severityLevel';
+import {
+    formatFixBlock,
+    formatTitleLine,
+    resolveAgentPrompt,
+} from '@libs/common/utils/codeManagement/suggestion-comment-blocks';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
 import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integration-service.decorator';
 import {
@@ -63,6 +68,11 @@ import {
     GetIssueParams,
     ListIssuesParams,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
+import {
+    CheckEvidence,
+    CheckEvidenceConclusion,
+    GetCheckEvidenceParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 import { Organization } from '@libs/platform/domain/platformIntegrations/types/codeManagement/organization.type';
 import {
     OneSentenceSummaryItem,
@@ -76,6 +86,12 @@ import {
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
 import { RepositoryFile } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryFile.type';
+import {
+    isDeniedStatus,
+    RepositoryAccessDiagnosis,
+    summarizeProviderError,
+    UNKNOWN_REPOSITORY_ACCESS,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
 import {
     buildDefaultSourceBranchName,
     DEFAULT_COMMIT_MESSAGE,
@@ -93,6 +109,7 @@ import {
     type Organization as ForgejoOrganization,
     type PullRequest as ForgejoPullRequest,
     type PullReview as ForgejoPullReview,
+    type PullReviewComment as ForgejoPullReviewComment,
     type Repository as ForgejoRepository,
     type User as ForgejoUser,
     getTree,
@@ -104,6 +121,7 @@ import {
     issueGetIssue,
     issueGetIssueReactions,
     issueListIssues,
+    repoListStatusesByRef,
     issuePostCommentReaction,
     issuePostIssueReaction,
     orgListCurrentUserOrgs,
@@ -220,6 +238,81 @@ export class ForgejoService implements Omit<
                 name: comment.user?.full_name ?? comment.user?.login ?? '',
             },
         };
+    }
+
+    async getCheckEvidence(
+        params: GetCheckEvidenceParams,
+    ): Promise<CheckEvidence[]> {
+        const { organizationAndTeamData, repository, commitSha } = params;
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return [];
+        }
+
+        try {
+            const client = this.createForgejoClient(authDetail);
+
+            const result = await repoListStatusesByRef({
+                client,
+                path: {
+                    owner: repository.owner,
+                    repo: repository.name,
+                    ref: commitSha,
+                },
+                query: { limit: 100 },
+            });
+
+            return (result.data ?? []).map((status) =>
+                this.mapForgejoCommitStatus(status),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read Forgejo commit statuses',
+                context: ForgejoService.name,
+                error,
+                metadata: { repository: repository.name, commitSha },
+            });
+            return [];
+        }
+    }
+
+    private mapForgejoCommitStatus(status: {
+        id?: number;
+        context?: string;
+        status?: string;
+        target_url?: string;
+        updated_at?: string;
+    }): CheckEvidence {
+        const pending = status.status === 'pending';
+
+        return {
+            id: String(status.id ?? ''),
+            name: status.context ?? '',
+            status: pending ? 'in_progress' : 'completed',
+            conclusion: pending
+                ? null
+                : this.mapForgejoConclusion(status.status),
+            url: status.target_url ?? null,
+            completedAt: pending ? null : (status.updated_at ?? null),
+            platform: PlatformType.FORGEJO,
+        };
+    }
+
+    private mapForgejoConclusion(
+        status: string | undefined,
+    ): CheckEvidenceConclusion | null {
+        switch (status) {
+            case 'success':
+                return 'success';
+            case 'failure':
+            case 'error':
+                return 'failure';
+            case 'warning':
+                return 'neutral';
+            default:
+                return null;
+        }
     }
 
     async listIssues(params: ListIssuesParams): Promise<CodeManagementIssue[]> {
@@ -2997,7 +3090,54 @@ export class ForgejoService implements Omit<
                 },
             });
             const review = result.data;
-            const createdComment = review?.comments?.[0];
+            // The SDK's PullReview type does not model `comments`, which the
+            // create response carries only on some Forgejo versions, so the
+            // field is read with a runtime guard and typed from the SDK's own
+            // comment type rather than asserted with an unchecked cast.
+            const rawComments = (review as { comments?: unknown })?.comments;
+            let createdComment: ForgejoPullReviewComment | undefined;
+            if (Array.isArray(rawComments)) {
+                createdComment = rawComments[0] as ForgejoPullReviewComment;
+            }
+
+            // Forgejo (16.x) answers the create-review request with the review,
+            // `comments_count`, but no `comments` array, so the id of the
+            // created comment is not in the response — reaching it means
+            // listing the review's comments (#2051). That review was created by
+            // this very call, so its newest comment is the one we just posted.
+            if (!createdComment && review?.id != null) {
+                try {
+                    const commentsResult = await repoGetPullReviewComments({
+                        client,
+                        path: {
+                            owner: repoInfo.owner,
+                            repo: repoInfo.repo,
+                            index: params.prNumber,
+                            id: review.id,
+                        },
+                    });
+                    createdComment = [...(commentsResult.data ?? [])].sort(
+                        (a, b) => (b.id ?? 0) - (a.id ?? 0),
+                    )[0];
+                } catch (lookupError) {
+                    // The comment is already posted — never fail the create
+                    // because the id lookup did: the caller's retry logic
+                    // would post it a second time under the same review id,
+                    // and a message containing "line"/"position" would be
+                    // misread as a line mismatch. Best-effort, like the other
+                    // SDK call sites in this file.
+                    this.logger.warn({
+                        message: `Could not resolve the created comment id for PR#${params.prNumber}`,
+                        context: ForgejoService.name,
+                        error: lookupError,
+                        metadata: {
+                            reviewId: review.id,
+                            organizationAndTeamData:
+                                params.organizationAndTeamData,
+                        },
+                    });
+                }
+            }
 
             this.logger.log({
                 message: `Created review comment for PR#${params.prNumber}`,
@@ -3041,21 +3181,12 @@ export class ForgejoService implements Omit<
         translations: any,
         suggestionCopyPrompt: boolean,
     ): string {
-        const improvedCode = lineComment?.body?.improvedCode;
-        const language =
-            lineComment?.suggestion?.language?.toLowerCase() ||
-            repository?.language?.toLowerCase() ||
-            '';
-
         const severityShield = lineComment?.suggestion
             ? getSeverityLevelShield(lineComment.suggestion.severity)
             : '';
 
-        const codeBlock = improvedCode
-            ? `\n\`\`\`${language}\n${improvedCode}\n\`\`\`\n`
-            : '';
 
-        const suggestionContent = lineComment?.body?.suggestionContent || '';
+        const suggestionContent = `${formatTitleLine(lineComment?.suggestion?.oneSentenceSummary)}${lineComment?.body?.suggestionContent || ''}`;
         const actionStatement = lineComment?.body?.actionStatement
             ? `${lineComment.body.actionStatement}\n\n`
             : '';
@@ -3069,9 +3200,15 @@ export class ForgejoService implements Omit<
                 severityShield,
             ].join(' ') + '\n\n';
 
-        const copyPrompt = suggestionCopyPrompt
-            ? this.formatPromptForLLM(lineComment)
-            : '';
+        const copyPrompt = formatFixBlock({
+            copyPrompt: suggestionCopyPrompt ?? true,
+            path: lineComment?.path,
+            startLine: lineComment?.start_line,
+            endLine: lineComment?.line,
+            prompt: resolveAgentPrompt(lineComment?.suggestion),
+            improvedCode: lineComment?.body?.improvedCode,
+            language: lineComment?.suggestion?.language || repository?.language,
+        });
 
         const formatSub = (text: string) =>
             text ? `<sub>${text}</sub>\n` : '';
@@ -3080,7 +3217,6 @@ export class ForgejoService implements Omit<
             badges,
             suggestionContent,
             actionStatement,
-            codeBlock,
             copyPrompt,
             formatSub(translations?.talkToKody || ''),
             formatSub(translations?.feedback || '') +
@@ -3089,32 +3225,6 @@ export class ForgejoService implements Omit<
             .filter(Boolean)
             .join('\n')
             .trim();
-    }
-
-    private formatPromptForLLM(lineComment: any): string {
-        let copyPrompt = '';
-        if (lineComment?.suggestion?.llmPrompt) {
-            if (lineComment.path) {
-                copyPrompt += `File ${lineComment.path}:\n\n`;
-            }
-
-            if (lineComment.start_line && lineComment.line) {
-                copyPrompt += `Line ${lineComment.start_line} to ${lineComment.line}:\n\n`;
-            } else if (lineComment.line) {
-                copyPrompt += `Line ${lineComment.line}:\n\n`;
-            }
-
-            copyPrompt += lineComment?.suggestion?.llmPrompt;
-
-            if (lineComment?.body?.improvedCode) {
-                copyPrompt +=
-                    '\n\nSuggested Code:\n\n' + lineComment?.body?.improvedCode;
-            }
-
-            copyPrompt = `\n<details>\n<summary>Prompt for LLM</summary>\n\n\`\`\`\n${copyPrompt}\n\`\`\`\n</details>\n`;
-        }
-
-        return copyPrompt;
     }
 
     async formatReviewCommentBody(params: {
@@ -3845,8 +3955,22 @@ export class ForgejoService implements Omit<
 
             const client = this.createForgejoClient(authDetail);
             const webhookUrl = this.configService.get<string>(
-                'FORGEJO_WEBHOOK_URL',
+                'API_FORGEJO_CODE_MANAGEMENT_WEBHOOK',
             );
+            // Without a URL there is nothing of ours to match; comparing
+            // against undefined would delete hooks that have no URL.
+            if (!webhookUrl) {
+                this.logger.warn({
+                    message:
+                        'Forgejo webhook URL not configured (API_FORGEJO_CODE_MANAGEMENT_WEBHOOK): nothing to delete, existing hooks are left in place',
+                    context: ForgejoService.name,
+                    metadata: {
+                        organizationId:
+                            params.organizationAndTeamData?.organizationId,
+                    },
+                });
+                return;
+            }
 
             for (const repo of repositories) {
                 const repoInfo = this.extractRepoInfo(
@@ -4047,8 +4171,9 @@ export class ForgejoService implements Omit<
 
             const client = this.createForgejoClient(authDetail);
             const webhookUrl = this.configService.get<string>(
-                'FORGEJO_WEBHOOK_URL',
+                'API_FORGEJO_CODE_MANAGEMENT_WEBHOOK',
             );
+            if (!webhookUrl) return false;
 
             const result = await repoListHooks({
                 client,
@@ -4066,6 +4191,119 @@ export class ForgejoService implements Omit<
             });
             return false;
         }
+    }
+
+    async diagnoseRepositoryAccess(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; fullName?: string };
+    }): Promise<RepositoryAccessDiagnosis> {
+        const result: RepositoryAccessDiagnosis = {
+            ...UNKNOWN_REPOSITORY_ACCESS,
+        };
+
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) {
+                result.error = 'Forgejo credential not found';
+                return result;
+            }
+
+            const repositories =
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    params.organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                );
+            const configured = repositories?.find(
+                (r: any) => r.id === params.repository.id,
+            );
+
+            const repoInfo = this.extractRepoInfo(
+                configured?.name ??
+                    params.repository.fullName ??
+                    params.repository.name,
+                'diagnoseRepositoryAccess',
+            );
+            if (!repoInfo) {
+                result.error = 'Could not parse repository name';
+                return result;
+            }
+
+            const client = this.createForgejoClient(authDetail);
+            const path = { owner: repoInfo.owner, repo: repoInfo.repo };
+
+            try {
+                await repoGetAllCommits({
+                    client,
+                    path,
+                    query: {
+                        limit: 1,
+                        stat: false,
+                        verification: false,
+                        files: false,
+                    },
+                    throwOnError: true,
+                });
+                result.read = 'ok';
+            } catch (error) {
+                result.read = isDeniedStatus(error) ? 'denied' : 'unknown';
+                result.error = summarizeProviderError(error);
+            }
+
+            try {
+                // `permissions` describes the authenticated user on this
+                // repository; absent means the server did not say. Read
+                // access can still comment on pull requests, so only a user
+                // without `pull` is a definite no.
+                const { data } = await repoGet({
+                    client,
+                    path,
+                    throwOnError: true,
+                });
+                const permissions = data?.permissions;
+                if (permissions?.push || permissions?.admin) {
+                    result.write = 'ok';
+                } else if (permissions && permissions.pull === false) {
+                    result.write = 'denied';
+                }
+            } catch (error) {
+                result.error ??= summarizeProviderError(error);
+            }
+
+            const webhookUrl = this.configService.get<string>(
+                'API_FORGEJO_CODE_MANAGEMENT_WEBHOOK',
+            );
+
+            if (webhookUrl) {
+                try {
+                    const { data: hooks } = await repoListHooks({
+                        client,
+                        path,
+                        throwOnError: true,
+                    });
+                    result.hook = (hooks ?? []).some(
+                        (hook) =>
+                            hook.config?.url === webhookUrl && hook.active,
+                    )
+                        ? 'present'
+                        : 'missing';
+                } catch (error) {
+                    // Listing hooks needs admin on the repository; without
+                    // it we cannot tell whether the hook exists.
+                    result.error ??= summarizeProviderError(error);
+                }
+            }
+        } catch (error) {
+            // A 401/403/404 before any repository call (resolving the owner,
+            // building the client) still means the token cannot read.
+            if (isDeniedStatus(error)) {
+                result.read = 'denied';
+            }
+            result.error = summarizeProviderError(error);
+        }
+
+        return result;
     }
 
     async addReactionToPR(params: {

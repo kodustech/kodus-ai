@@ -13,8 +13,8 @@ import { FormControl } from "@components/ui/form-control";
 import { Input } from "@components/ui/input";
 import { toast } from "@components/ui/toaster/use-toast";
 import { requestSSODomainVerification } from "@services/ssoConfig/fetch";
-import { useOrganizationContext } from "src/features/organization/_providers/organization-context";
 import { isSelfHosted } from "src/core/utils/self-hosted";
+import { useOrganizationContext } from "src/features/organization/_providers/organization-context";
 
 interface DomainVerificationModalProps {
     open: boolean;
@@ -126,9 +126,8 @@ export const DomainVerificationModal = ({
                             </>
                         ) : (
                             <>
-                                Provide an email from{" "}
-                                <strong>{domain}</strong>. We will send a
-                                verification link.
+                                Provide an email from <strong>{domain}</strong>.
+                                We will send a verification link.
                             </>
                         )}
                     </DialogDescription>
@@ -151,7 +150,7 @@ export const DomainVerificationModal = ({
                     <div className="flex justify-end gap-2">
                         <Button
                             type="button"
-                            variant="secondary"
+                            variant="cancel"
                             size="md"
                             onClick={() => onOpenChange(false)}>
                             Cancel
@@ -163,7 +162,9 @@ export const DomainVerificationModal = ({
                             disabled={!domain || isSubmitting}
                             loading={isSubmitting}
                             onClick={handleSubmit}>
-                            {isSelfHosted ? "Verify domain" : "Send verification email"}
+                            {isSelfHosted
+                                ? "Verify domain"
+                                : "Send verification email"}
                         </Button>
                     </div>
                 </div>

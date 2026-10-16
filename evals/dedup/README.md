@@ -1,7 +1,7 @@
 # Dedup eval
 
 > - **Answers:** Does dedup merge findings that are different bugs, so one of them is lost?
-> - **Runs:** every engine PR, with the dedup model mocked (`--mock=identity`, `evals/wiring-smoke.js`).
+> - **Runs:** every engine PR, mocked (`--mock=identity`) and through the engine on the scripted model (`--model=eval-fake`), both in `evals/wiring-smoke.js`.
 > - **Run it:** `pnpm eval:dedup:mock` · `pnpm eval:dedup`
 > - **Gate:** goldens lost must be 0 (`evals/dedup/run.js`).
 > - **Cost:** mock: none. Live: the dedup model plus the judge.
@@ -21,7 +21,7 @@ Headline metric: **goldens lost** = goldens covered by some finding *before* ded
 ## Files
 
 - `build-dataset.js` — extract `{prId, findings, goldenComments}` per PR from a finder-recall result JSON (default `/tmp/recall-new-g3.json`) → `datasets/`. Reuses real finder output, no finder re-run.
-- `dedup-runner.js` — invokes the **real** dedup decision. Loads the live prompt+schema+model from `libs/code-review/infrastructure/agents/engine/dedup-prompt.ts` (extracted from the stage so production and this eval share one prompt — no drift). Derives `kept`/`dropped` from the model's `groups`/`unique`.
+- `dedup-runner.js` — invokes the **real** dedup decision: the live prompt+schema from `libs/code-review/infrastructure/agents/engine/dedup-prompt.ts` through `LLM.run`, the same entry point the stage calls, so the executor's structured-output recovery is measured too. The model routes through `evals/shared/tier0-models.js`. Derives `kept`/`dropped` from the model's `groups`/`unique`.
 - `dedup-eval.js` — `matchFindingsToGoldens` (the Sonnet labeling) + `computeMetrics` (over/under-merge, goldens lost).
 - `run.js` — driver: label (cached) → dedup → score → aggregate.
 

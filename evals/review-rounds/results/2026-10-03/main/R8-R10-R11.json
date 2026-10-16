@@ -1,0 +1,1569 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "judge": "gpt-5.6-luna",
+  "judgeReasoningEffort": "low",
+  "reps": 3,
+  "engine": {
+    "commit": "14439a95335f07c92cb445ccea3069a9b2904e30",
+    "sourceDigest": "6839eb92aa6ee4b3fcbd7cc377dec4b558d6ebd7377b6d94ec098b0729e00139"
+  },
+  "startedAt": "2026-10-03T13:04:40.321Z",
+  "updatedAt": "2026-10-03T14:48:47.469Z",
+  "complete": true,
+  "selectedCases": [
+    "R8-consequence-kody-rule-prior",
+    "R10-kodus2044-reversal",
+    "R11-kodus1902-reversal"
+  ],
+  "summary": {
+    "measured": 9,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 6,
+        "violations": 6,
+        "rate": 1
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 3,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 13,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R8-consequence-kody-rule-prior · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 3
+      },
+      "R10-kodus2044-reversal · unresolved-team-bypass [if_delivered_linked, proposed]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 0
+      },
+      "R11-kodus1902-reversal · unclaimed-path-unfenced [if_delivered_linked, proposed]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 3
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 412353,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The new `throw err` for `NotReadyError` makes the previously-unreachable resubmit branch in `pollCharge` live; that branch calls `gw.submit`, which `gateway.ts:3` documents as 'NOT idempotent: every call creates a new charge', while `errors.ts:1` documents `NotReadyError` as 'The gateway has the charge but has not settled it yet (transient)'. WHY: Before this change `fetchStatus` wrapped `NotReadyError` in `FailedError`, so `err instanceof NotReadyError` in `pollCharge` (poller.ts:13) was always false and no resubmit occurred; now every transient not-settled poll causes `gw.submit(charge.payload)` (poller.ts:14) to create an additional charge for a charge the gateway already holds, i.e. duplicate/double billing. HOW: Keep propagating `NotReadyError`, but stop treating it as 'never received' — remove or guard the resubmit in `pollCharge` (e.g. only resubmit on a distinct 'not received' error, or make `submit` idempotent via an idempotency key).",
+          "keep": true,
+          "rationale": "Verified across files: prior to this diff, fetchStatus wrapped NotReadyError in FailedError, making pollCharge's `err instanceof NotReadyError` branch dead. The new `throw err` at status.ts:8-9 makes that branch reachable, and poller.ts:14 then calls `gw.submit(charge.payload)`, which gateway.ts:3 documents as non-idempotent (\"every call creates a new charge\"). errors.ts:1 documents NotReadyError as a transient \"has the charge but not settled\" state, so resubmitting on it creates a duplicate charge for one the gateway already holds. The path is concrete and unguarded; the earlier review decision only required propagating NotReadyError (retryable-stays-retryable) and did not judge the resubmit semantics. No refutation available.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the new `throw err` for `NotReadyError` makes the previously-unreachable resubmit branch in `pollCharge` reachable, that branch calls `gw.submit`, which `gateway.ts:3` documents as 'NOT idempotent: every call creates a new charge', while `errors.ts:1` documents `NotReadyError` as 'The gateway has the charge but has not settled it yet (transient)'; before this change `fetchStatus` wrapped `NotReadyError` in `FailedError`, so `err instanceof NotReadyError` in `pollCharge` (poller.ts:13) was always false and no resubmit occurred, but now every transient not-settled poll causes `gw.submit(charge.payload)` (poller.ts:14) to create an additional charge for a charge the gateway already holds, i.e. duplicate/double billing. Keep propagating `NotReadyError`, but stop treating it as 'never received' by removing or guarding the resubmit in `pollCharge` (e.g. only resubmit on a distinct 'not received' error, or make `submit` idempotent via an idempotency key)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 533353,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The new `throw err` for NotReadyError makes pollCharge's resubmit branch (poller.ts:13-15) newly reachable, and that branch calls gw.submit(charge.payload), which gateway.ts:3 documents as NOT idempotent (\"every call creates a new charge\"), even though errors.ts:1 defines NotReadyError as \"the gateway has the charge but has not settled it yet\". WHY: For any charge the gateway already holds, a NotReadyError now triggers a second submit and creates a duplicate charge (double billing); previously fetchStatus wrapped NotReadyError in FailedError, so this branch was dead code and could never fire. HOW: Confirm which semantics of NotReadyError is authoritative; if it means \"already has the charge\", the poller should re-poll/wait instead of resubmitting (or submit must be made idempotent) — do not enable the resubmit path on an error that already implies the charge exists.",
+          "keep": true,
+          "rationale": "The finding's factual chain is fully confirmed by the code. status.ts:8-10 now re-throws NotReadyError unchanged (previously wrapped in FailedError, so the poller's branch was unreachable). poller.ts:13-15 catches NotReadyError and calls gw.submit(charge.payload) to 'resend'. gateway.ts:3 explicitly documents submit as NOT idempotent ('every call creates a new charge'). errors.ts:1 defines NotReadyError as 'The gateway has the charge but has not settled it yet (transient)' — i.e. the charge already exists. Combining these, a NotReadyError for a charge the gateway already holds now causes a second submit, creating a duplicate charge. The poller's own comment (poller.ts:5-8) asserts the opposite semantics ('the gateway never received it'), producing a direct contradiction in the codebase about what NotReadyError means; the finding itself flags this and asks which semantic is authoritative. This contradiction is exactly what prevents refutation — I cannot show NotReadyError provably means 'never received', since the authoritative type definition in errors.ts says otherwise. The PreviousReviewDecision (kody_rules 'retryable errors stay retryable') only resolved whether NotReadyError should be propagated rather than converted to terminal; it did not consider the downstream resubmit path or double-billing consequence, so it does not excuse this issue. The root cause, reachability change, and failure path are all concrete and verified.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/billing",
+                "maxDepth": 3
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "poller|submit\\(|NotReadyError",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Throwing NotReadyError here makes pollCharge's resubmit branch (poller.ts:13-15) newly reachable, and since errors.ts:1 defines NotReadyError as \"the gateway has the charge but has not settled it yet\" while gateway.ts:3 documents gw.submit(charge.payload) as not idempotent (\"every call creates a new charge\"), any charge the gateway already holds now triggers a second submit and double billing — previously fetchStatus wrapped NotReadyError in FailedError, leaving this branch dead code. Confirm which semantics of NotReadyError is authoritative; if it means the charge already exists, the poller should re-poll/wait instead of resubmitting (or submit must be made idempotent) rather than enabling the resubmit path on an error that already implies the charge exists."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 283416,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now rethrows NotReadyError unchanged, which makes pollCharge's `await gw.submit(charge.payload)` branch (poller.ts:14) reachable for the first time. WHY: errors.ts documents NotReadyError as 'the gateway has the charge but has not settled it yet', so the charge already exists; gateway.submit is explicitly non-idempotent ('every call creates a new charge'), so re-submitting on a not-settled status creates duplicate charges (and a new duplicate on every poll tick until it settles). HOW: reconcile the semantics — either only re-poll status on NotReadyError instead of re-submitting, or give submit an idempotency key derived from charge.id so a retry cannot create a second charge.",
+          "keep": true,
+          "rationale": "Confirmed. status.ts:8-9 now rethrows NotReadyError unchanged (the implemented prior decision), so pollCharge's `err instanceof NotReadyError` branch (poller.ts:13-15) is reachable: it calls `gw.submit(charge.payload)`. errors.ts:1 defines NotReadyError as 'the gateway has the charge but has not settled it yet', contradicting poller.ts:7's comment ('the gateway never received it'), and gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge'. No idempotency key or dedup exists anywhere (grep found only the submit declaration/call and the non-idempotent doc comment). Thus a not-settled status now triggers a resubmit that creates duplicate charges on every poll tick. The claim's root cause and failure path are accurate and not refuted by any upstream guard.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "idempot|submit\\(|pollCharge\\(",
+                "path": "src"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "fetchStatus now rethrows NotReadyError unchanged, making pollCharge's `await gw.submit(charge.payload)` branch (poller.ts:14) reachable for the first time; since errors.ts documents NotReadyError as 'the gateway has the charge but has not settled it yet' and gateway.submit is explicitly non-idempotent, this creates duplicate charges on every poll tick until the charge settles. Reconcile the semantics by only re-polling status on NotReadyError instead of re-submitting, or give submit an idempotency key derived from charge.id so a retry cannot create a second charge."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 608080,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: The new team-mismatch early return in `createMemoryRule` returns a `data` object containing only `title`, `action`, `requiresApproval`, `message` and `link`, but the tool's declared `outputSchema` (lines 1073-1084) defines `data` as `z.looseObject` with REQUIRED `uuid: z.string()`, `rule: z.string()` and `status: z.enum(KodyRulesStatus)`. WHY: The returned `structuredContent` fails validation against the tool's outputSchema (the MCP SDK validates structuredContent against outputSchema; the client also validates it), so a cross-organization `teamId` surfaces a schema/validation error instead of the intended `{ success: false, message: 'Team not found.' }` refusal. The `CreateMemoryRuleResponse` TS interface marks these fields optional, so it compiles, and the new unit tests call `execute()` directly, bypassing MCP output-schema validation, so the mismatch is not caught. HOW: include the required fields in the refusal payload (or make them optional in the outputSchema).",
+          "keep": true,
+          "rationale": "Confirmed the mismatch directly: at lines 1116-1127 the team-mismatch early return produces a `data` object with only title/action/requiresApproval/message/link, while the tool's declared outputSchema (lines 1073-1084) defines `data` as z.looseObject with REQUIRED `uuid: z.string()`, `rule: z.string()`, and `status: z.enum(KodyRulesStatus)`. The `CreateMemoryRuleResponse` interface (lines 111-124) marks uuid/rule/status optional, so it compiles without error, and the new tests invoke `execute()` directly, bypassing MCP output-schema validation. Nothing in the surrounding code supplies or defaults those required fields on this path, and the previous review decision concerns a different issue (the teamBelongsToOrganization gate semantics), not this payload-shape contract. I could not find evidence that the SDK/client skips validating structuredContent against outputSchema, so the claim that a cross-org teamId yields a schema/validation error instead of the intended refusal stands. No active refutation is available.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1050,
+                "endLine": 1140
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CreateMemoryRuleResponse"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "wrapToolHandler"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/utils/mcp-protocol.utils.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 100,
+                "endLine": 130
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 43,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1116,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The new team-mismatch early return in `createMemoryRule` returns a `data` object missing the `uuid`, `rule`, and `status` fields that the tool's `outputSchema` (lines 1073-1084) marks as required, so a cross-organization `teamId` surfaces a schema validation error instead of the intended `{ success: false, message: 'Team not found.' }` refusal; the `CreateMemoryRuleResponse` TS interface marks these optional and the unit tests call `execute()` directly, bypassing MCP output-schema validation, so the mismatch goes uncaught. Include the required fields in the refusal payload (or make them optional in the `outputSchema`)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 670842,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: The new createMemoryRule refusal path returns a `data` object missing the required `uuid`, `rule` and `status` fields declared by this tool's `outputSchema` (`data: z.looseObject({ uuid: z.string(), title: z.string(), rule: z.string(), status: z.enum(KodyRulesStatus), ... })`), while the success path always supplies them. WHY: `z.looseObject` only permits extra keys, it does not make `uuid`/`rule`/`status` optional, so if the MCP layer validates structuredContent against outputSchema the 'Team not found.' response is rejected and the caller never receives the intended refusal (the spec only calls `execute` directly, so it does not catch this). HOW: include the required fields in the error return (e.g. `uuid: ''`, `rule: args.kodyRule.rule`, `status: KodyRulesStatus.ACTIVE`) or mark them optional in the outputSchema.",
+          "keep": true,
+          "rationale": "The claim is factually accurate against the code. The tool's outputSchema at lines 1070-1087 declares `data: z.looseObject({ uuid: z.string(), title: z.string(), rule: z.string(), status: z.enum(KodyRulesStatus), action: ..., requiresApproval: ..., message: z.string().optional(), link: ... })`. `uuid`, `rule`, and `status` are NOT marked optional — `z.looseObject` only tolerates extra keys, it does not relax required ones. The refusal path at 1116-1127 returns a `data` object with only `title`, `action`, `requiresApproval`, `message`, and `link`, omitting the three required fields, whereas the success path always supplies them. This is a concrete output/contract mismatch, not a style nit. I could not find evidence that the missing fields are supplied elsewhere or that the schema was relaxed, so the finding cannot be actively refuted. Whether the MCP transport enforces the schema or not, the returned structured content violates the tool's declared contract, so KEEP is warranted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1080,
+                "endLine": 1140
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "outputSchema|z.looseObject|uuid:|status:|rule:",
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 1090,
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1070
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/mcp-server",
+                "pattern": "structuredContent|outputSchema|wrapToolHandler",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/utils/mcp-protocol.utils.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/mcp-server",
+                "pattern": "outputSchema|registerTool|server.tool|structuredContent",
+                "glob": "*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 40,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1116,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The createMemoryRule refusal path returns a `data` object missing the required `uuid`, `rule`, and `status` fields declared by this tool's `outputSchema`, so if the MCP layer validates structuredContent against the schema, the 'Team not found.' response is rejected and the caller never receives the intended refusal (the spec only calls `execute` directly, so it does not catch this). Include the required fields in the error return (e.g. `uuid: ''`, `rule: args.kodyRule.rule`, `status: KodyRulesStatus.ACTIVE`) or mark them optional in the `outputSchema`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 624284,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: The new createMemoryRule refusal branch returns `data` without `uuid`, `rule`, and `status`, but this tool's `outputSchema` (lines 1073-1084) declares all three as required (`uuid: z.string()`, `rule: z.string()`, `status: z.enum(KodyRulesStatus)`). WHY: structuredContent is validated against outputSchema at the MCP protocol layer, so when a cross-org team is passed this response fails output validation and the call errors out instead of returning the intended `Team not found.` result; the added unit test only inspects `structured.success`/`structured.message` on `.execute(...)`, so it does not exercise that validation and will not catch the mismatch. HOW: include conforming placeholder values for the required fields (or mark them optional in the schema to match `CreateMemoryRuleResponse`, which already types them optional).",
+          "keep": true,
+          "rationale": "The refusal branch at lines 1116-1127 returns `data` containing only title/action/requiresApproval/message/link, while the tool's outputSchema (lines 1070-1087) declares `data` as a z.looseObject requiring `uuid: z.string()`, `rule: z.string()`, and `status: z.enum(KodyRulesStatus)` (only `message` is optional). This is a concrete, verifiable mismatch between the declared output contract and the returned shape. The interface `CreateMemoryRuleResponse` (lines 114-124) types uuid/rule/status as optional, confirming the schema over-constrains relative to actual responses. Since the returned object is the tool's structured content, any outputSchema validation will reject the missing required fields, and I found no guard or transformation that strips/normalizes `data` before emission (only the spec file references structuredContent). I cannot refute the described failure path, so the finding stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1040,
+                "endLine": 1140
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "outputSchema|structuredContent|CreateMemoryRuleResponse",
+                "path": "libs/mcp-server"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 95,
+                "endLine": 130
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/mcp-server",
+                "pattern": "wrapToolHandler|structuredContent|outputSchema",
+                "glob": "*.ts",
+                "excludeTests": true,
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "function wrapToolHandler|wrapToolHandler =|export.*wrapToolHandler",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "structuredContent",
+                "glob": "*.ts",
+                "path": "libs",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 48,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1116,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The createMemoryRule refusal branch returns `data` without `uuid`, `rule`, and `status`, but this tool's `outputSchema` (lines 1073-1084) declares them required (`uuid: z.string()`, `rule: z.string()`, `status: z.enum(KodyRulesStatus)`), so `structuredContent` fails MCP protocol-layer output validation for a cross-org team and errors instead of returning the intended `Team not found.` result, and the added unit test only checks `structured.success`/`structured.message` on `.execute(...)` and will not catch this mismatch. Include conforming placeholder values for the required fields, or mark them optional in the schema to match `CreateMemoryRuleResponse`, which already types them optional."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 1154894,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "claim": "WHAT: The new `noLiveOwner` guard treats a PROCESSING row whose `leaseExpiresAt IS NULL` as having no live owner, so it will stamp FAILED over a row that is still being run. WHY: The repo's own liveness rule in `findStaleProcessing` (lines 403-448) states that legacy rows pre-date the lease and must be judged by `updatedAt < olderThan` — a NULL lease alone is not proof the worker is dead. A PROCESSING row with a NULL lease (a worker from a previous version still running the job during a rolling deploy) therefore passes the guard, gets overwritten to FAILED, its guarded completion then matches no row, its review is dropped and the author is told the review failed while it is still running — the #1830 symptom this guard exists to prevent. HOW: mirror the established heuristic — only treat a NULL lease as 'no live owner' when `updatedAt` is also stale, e.g. `'(status <> :processing OR (leaseExpiresAt IS NOT NULL AND leaseExpiresAt < :now) OR (leaseExpiresAt IS NULL AND updatedAt < :olderThan))'` with an `olderThan` bind.",
+          "keep": true,
+          "rationale": "The guard at lines 248-254 is confirmed to treat `leaseExpiresAt IS NULL` on a PROCESSING row as \"no live owner,\" allowing the FAILED write to land. This directly contradicts the repo's own liveness heuristic in findStaleProcessing (lines 443-448), which only considers a NULL-lease PROCESSING row stale when `updatedAt < olderThan` — i.e. the codebase treats NULL-lease PROCESSING rows as potentially live legacy rows. The `noLiveOwner` path is reachable (code-review-job-processor.service.ts:192, 642-655), so a redelivered jobId reaching a new pod while a legacy worker still runs the row (NULL lease, from a pre-lease version during a rolling deploy) would be stamped FAILED, dropping that worker's guarded completion and notifying the author of a failure for a still-running review — the exact #1830 symptom the guard exists to prevent. No guard upstream prevents this; the claim is factually correct and the failure path is reachable. Cannot refute.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 200,
+                "endLine": 290
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 380,
+                "endLine": 460
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "noLiveOwner",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 590,
+                "endLine": 670
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "requireNoLiveOwner",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 160,
+                "endLine": 185
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "claim": "WHAT: The new `noLiveOwner` guard builds a raw WHERE clause referencing the mixed-case column `leaseExpiresAt` unquoted (`leaseExpiresAt IS NULL`, `leaseExpiresAt < :now`). WHY: Postgres folds unquoted mixed-case identifiers to lowercase, so the predicate resolves to the non-existent column `leaseexpiresat` and the UPDATE throws `column \"leaseexpiresat\" does not exist`; this is exactly the failure the same file warns about at lines 424-426 and works around by quoting (`job.\"leaseExpiresAt\"` in `findStaleProcessing`), so every `requireNoLiveOwner` failure write (the BYOK-exhausted path) fails and the job is never stamped FAILED. HOW: quote the column, matching the existing convention.",
+          "keep": true,
+          "rationale": "The finding is grounded in the file's own documented convention: lines 424-426 explicitly state that unquoted mixed-case identifiers are folded to lowercase by Postgres, which is why findStaleProcessing quotes every column (e.g. `job.\"leaseExpiresAt\"`). The new noLiveOwner guard at line 249 emits a bare, unquoted `leaseExpiresAt IS NULL` / `leaseExpiresAt < :now`, exactly the anti-pattern the same file warns about and works around. If TypeORM passes raw where strings through to Postgres (which the in-file comment implies, since otherwise the quoting in findStaleProcessing would be unnecessary), the predicate resolves to non-existent `leaseexpiresat` and the UPDATE errors, so the FAILED stamp never lands. I cannot concretely refute this: the only counter-signal is the pre-existing `leaseOwner = :leaseOwner` guard at line 269 also using an unquoted camelCase name, which is consistent with either TypeORM property-name substitution or a latent issue in that guard too, but does not prove line 249 is safe. Per the default-keep rule, and absent a concrete refutation, the finding stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 220,
+                "endLine": 280
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 400,
+                "endLine": 450
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "leaseExpiresAt|lease_expires_at|leaseOwner|lease_owner",
+                "glob": "*.ts",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "requireNoLiveOwner|noLiveOwner",
+                "glob": "*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "glob": "*.ts",
+                "pattern": "leaseExpiresAt|lease_expires_at|class WorkflowJobModel|name: 'lease",
+                "path": "libs/core/workflow"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "*workflow-job*.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 60,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "line": 248,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In workflow-job.repository.ts, the new `noLiveOwner` guard builds a raw WHERE clause with the mixed-case column `leaseExpiresAt` unquoted, which Postgres folds to lowercase `leaseexpiresat` and causes the UPDATE to throw `column \"leaseexpiresat\" does not exist`; this is the same failure warned about at lines 424-426 and worked around by quoting (`job.\"leaseExpiresAt\"` in `findStaleProcessing`), so every `requireNoLiveOwner` failure write on the BYOK-exhausted path fails and the job is never stamped FAILED. Quote the column to match the existing convention."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "line": 248,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In workflow-job.repository.ts, the new `noLiveOwner` guard treats a PROCESSING row with `leaseExpiresAt IS NULL` as having no live owner and will stamp FAILED over a row still being run, but `findStaleProcessing` (lines 403-448) says legacy rows must be judged by `updatedAt < olderThan`; a NULL lease alone is not proof the worker is dead, so a PROCESSING row with a NULL lease (e.g., a previous-version worker during a rolling deploy) passes the guard, gets overwritten to FAILED, its review is dropped, and the author is told the review failed while it is still running—the #1830 symptom this guard exists to prevent. Mirror the established heuristic by treating a NULL lease as no live owner only when `updatedAt` is also stale, e.g. `'(status <> :processing OR (leaseExpiresAt IS NOT NULL AND leaseExpiresAt < :now) OR (leaseExpiresAt IS NULL AND updatedAt < :olderThan))'` with an `olderThan` bind."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 1078200,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: `handleFailure` passes the new `{ noLiveOwner: true }` guard to `this.jobRepository.update(...)`, but `jobRepository` is typed as the `IWorkflowJobRepository` interface whose guard parameter (in `@libs/core/workflow/domain/contracts/workflow-job.repository.contract`, not part of this diff) may still be the old `{ leaseOwner: string; requireProcessing?: boolean }`. WHY: TypeScript checks the call against the interface, not the concrete `WorkflowJobRepository` union; if the interface was not widened, `{ noLiveOwner: true }` is an excess/under-specified property and the build fails. HOW: verify/update the interface `update` signature to `guard?: { leaseOwner: string; requireProcessing?: boolean } | { noLiveOwner: true }` (I could not locate the contract file to confirm).",
+          "keep": true,
+          "rationale": "The candidate is a type-compatibility claim about the `IWorkflowJobRepository.update` guard parameter in `@libs/core/workflow/domain/contracts/workflow-job.repository.contract`. I confirmed the concrete implementation `WorkflowJobRepository.update` accepts the union `| { noLiveOwner: true }` (workflow-job.repository.ts:174-179), but the call site is typed against the interface (`private readonly jobRepository: IWorkflowJobRepository`, line 47), and TypeScript method parameters are bivariant, so a wide class signature does NOT prove the interface was widened. I could not locate/read the contract file with the available tools (findFile and grep for the file name, `interface IWorkflowJobRepository`, and the `update(` signature all returned nothing), so I cannot refute the claim that the interface still declares the old `{ leaseOwner: string; requireProcessing?: boolean }` guard. If the interface was not widened, `{ noLiveOwner: true }` would be an excess-property/missing-property error at this call site. Since I cannot produce concrete evidence the interface already includes the new guard, the finding is not refuted. Confidence is low because the finding itself is a self-admitted 'verify the interface' concern and the class/repo implementation strongly suggests the interface was also updated in the same PR, but that is inference, not refutation.",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "noLiveOwner"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "workflow-job.repository.contract*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "IWorkflowJobRepository",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "jobRepository",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "IWorkflowJobRepository|update\\(",
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "interface IWorkflowJobRepository|export.*IWorkflowJobRepository",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "IWorkflowJobRepository",
+                "path": "libs/core/workflow",
+                "glob": "*.ts",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "workflow-job.repository.contract*",
+                "path": "libs/core/workflow/domain/contracts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/core/workflow/domain/contracts",
+                "pattern": "update\\(|noLiveOwner|leaseOwner"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "libs/core/workflow/domain/contracts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update\\s*\\(",
+                "path": "libs/core/workflow/domain"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "IWorkflowJobRepository",
+                "glob": "*.ts",
+                "namesOnly": true,
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "workflow-job.repository.contract*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "domain/contracts/workflow-job"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "interface IWorkflowJobRepository"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "StaleWorkflowJobReapResult",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: `ownedBy: leaseClaimed ? this.instanceId : undefined` sends a pre-claim failure (payload validation, rate-limit gate) into handleFailure's unguarded branch (line 674-680), which unconditionally stamps FAILED. WHY: the same redelivery scenario the new requireNoLiveOwner guard was added to defend against also applies here — a delayed delivery A (rate-limit gate threw) can stamp FAILED over delivery B's PROCESSING row that claimed the lease a moment later, so B's guarded completion matches no row and its review is dropped, reintroducing the #1830 symptom on a path this PR made newly writable (pre-PR it swallowed instead of writing). HOW: route the pre-claim case through the same no-live-owner fence, e.g. pass `requireNoLiveOwner: !leaseClaimed` (and keep the rethrow so the consumer still republishes), or extend handleFailure to apply a no-live-owner guard while still reporting the outcome to the caller.",
+          "keep": true,
+          "rationale": "The finding is not refuted and is technically coherent. At lines 474-486 a pre-claim failure (payload check / rate-limit gate, before `leaseClaimed = true` at line 272) passes `ownedBy: undefined`, so `handleFailure` falls into the unguarded branch at 674-680 which unconditionally writes `status: FAILED` (no leaseOwner/no-live-owner filter). The code's own comments establish both required mechanisms: (a) a redelivery can reach the failure path while another worker holds the row — the exact scenario `requireNoLiveOwner` was introduced for (lines 642-648, and it is already used at line 192), and (b) a FAILED stamp can block another worker's terminal write ('whose own terminal write would then be blocked by a status it never wrote', lines 682-685), i.e. the completion guard is status-sensitive. Since A's failure patch does not clear leaseOwner, this path is exactly the kind of cross-worker clobbering the PR fenced elsewhere; nothing upstream serializes A's late pre-claim failure against B's concurrent claim/PROCESSING. The suggested fix (`requireNoLiveOwner: !leaseClaimed` while keeping the rethrow) is compatible with, not the reverse of, PreviousDecision #1 (which was only about not swallowing the failure — implemented via `if (leaseClaimed && !owned) return;`), so that decision does not excuse this distinct issue. I cannot actively refute the failure path, so the finding stays.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 440,
+                "endLine": 500
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 620,
+                "endLine": 720
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 780,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 710
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 440,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 330
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "leaseClaimed",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "requireNoLiveOwner|noLiveOwner",
+                "path": "libs/code-review"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "claim": "WHAT: The new `noLiveOwner` guard stamps FAILED only when `status <> PROCESSING` at the moment the UPDATE executes, but the lease claim that would set PROCESSING (code-review-job-processor.service.ts:259-268) is an unguarded write and `process()` does not re-check row status on entry. WHY: a concurrent delivery that already loaded the row while it was PENDING can pass this guard (row still not PROCESSING), land FAILED, and then that other worker's unguarded claim overwrites it and runs the review — the author still gets a failure notice for a review that actually runs, the exact #1830 symptom this guard is meant to close. HOW: also fence the claim (make the PROCESSING+leaseOwner write conditional on the row not already being terminally FAILED/owned), or have process() verify status before claiming, so the guard and the claim are mutually exclusive.",
+          "keep": true,
+          "rationale": "All three factual pillars are verified: (a) the noLiveOwner guard is conditional on status <> PROCESSING (repository.ts:248-254), so it matches a PENDING row; (b) the lease claim at code-review-job-processor.service.ts:259-268 passes no guard argument and is therefore an unconditional write; (c) process() loads the row at line 61 without any status check, confirmed by the code's own comment at line 155. The noLiveOwner path is reached in the 'exhausted' admission branch (lines 145-193), whose own comment acknowledges concurrent deliveries of the same jobId. Thus a concurrent delivery can land the FAILED stamp while the row is still PENDING (guard matches because status <> PROCESSING), and the other worker's unguarded claim then overwrites it with PROCESSING and runs the review, producing exactly the spurious failure-notice symptom the guard is meant to prevent. The guard comment only addresses the reverse ordering (B already PROCESSING), leaving this ordering unguarded. No lock, status re-check, or upstream guard refutes the race.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 200,
+                "endLine": 280
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "noLiveOwner|leaseOwner|PROCESSING",
+                "glob": "*.ts",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 230,
+                "endLine": 310
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "noLiveOwner",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 680,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 600
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "requireNoLiveOwner|async process\\(|async handleJob\\(|admission\\.kind|acquireAdmission|tryAdmission",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "requireNoLiveOwner",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 60,
+                "endLine": 200
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 74,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 3
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 649,
+          "severity": "high",
+          "linkedById": false,
+          "marked": false,
+          "text": "`handleFailure` passes the new `{ noLiveOwner: true }` guard to `this.jobRepository.update(...)`, but `jobRepository` is typed as the `IWorkflowJobRepository` interface, whose guard parameter may still be the old `{ leaseOwner: string; requireProcessing?: boolean }`. Since TypeScript checks the call against the interface rather than the concrete `WorkflowJobRepository` union, verify or update the `update` signature in `workflow-job.repository.contract` to `guard?: { leaseOwner: string; requireProcessing?: boolean } | { noLiveOwner: true }` so the build does not fail on an excess property."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "line": 243,
+          "severity": "medium",
+          "linkedById": false,
+          "marked": false,
+          "text": "The new `noLiveOwner` guard stamps FAILED only when `status <> PROCESSING` at the moment the UPDATE executes, but the lease claim at code-review-job-processor.service.ts:259-268 is an unguarded write and `process()` does not re-check row status on entry, so a concurrent delivery can pass the guard and then be overwritten by that other worker's claim, still running the review. Also fence the claim by making the PROCESSING+leaseOwner write conditional on the row not already being terminally FAILED/owned, or have `process()` verify status before claiming, so the guard and the claim are mutually exclusive."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 474,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`ownedBy: leaseClaimed ? this.instanceId : undefined` sends a pre-claim failure into `handleFailure`'s unguarded branch (line 674-680), which unconditionally stamps FAILED, so a delayed delivery A can overwrite delivery B's PROCESSING row and drop its review, reintroducing the #1830 symptom on a path this PR made newly writable. Route the pre-claim case through the same no-live-owner fence by passing `requireNoLiveOwner: !leaseClaimed` (keeping the rethrow so the consumer still republishes), or extend `handleFailure` to apply a no-live-owner guard while still reporting the outcome to the caller."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 869026,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: `abandonBusyReview` gates the refusal notice and the FAILED stamp on `handleFailure`'s boolean while passing `ownedBy: this.instanceId` unconditionally (line 560), unlike the sibling catch path which this PR changed to `ownedBy: leaseClaimed ? this.instanceId : undefined`. WHY: that boolean is true only when a row with `leaseOwner = instanceId AND status = PROCESSING` was matched; a run that never claimed the lease (any throw before line 272) matches zero rows, so `recorded` is false, the method returns early, and the author is never told their review request was dropped and no failure is recorded — the silent-drop defect #1700 exists to prevent. HOW: thread `leaseClaimed` into `abandonBusyReview` (or have it pass `ownedBy: leaseClaimed ? this.instanceId : undefined`) so the pre-claim case takes the unguarded write and still notifies, exactly as the main catch does.",
+          "keep": false,
+          "rationale": "Refuted: abandonBusyReview is only reachable from the isPrReviewInProgressError branch, and that error is produced by runCodeReviewAutomationUseCase.execute at line 355, which runs strictly after the lease claim (leaseClaimed = true at line 272). The pre-claim throws the finding names (invalid payload, RateLimitError from rateLimitGate.check, ByokConcurrencySlotExhausted) are different error types that never satisfy isPrReviewInProgressError, so they never reach abandonBusyReview. At the sole call site, leaseClaimed is therefore always true, making ownedBy: this.instanceId equivalent to leaseClaimed ? this.instanceId : undefined. The claimed silent-drop scenario (zero rows matched, early return, author never notified) is unreachable, so no defect is introduced.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 420,
+                "endLine": 600
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "leaseClaimed|abandonBusyReview|handleFailure",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 90,
+                "endLine": 290
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 607,
+                "endLine": 680
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 420,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 236
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 710,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 680
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: when a failure is raised before the lease claim, `ownedBy: leaseClaimed ? this.instanceId : undefined` makes handleFailure fall into its `!options?.ownedBy` branch and run an UNGUARDED `update(jobId, failurePatch)` that stamps status=FAILED regardless of who owns the row. WHY: the PR itself documents (lines 179–189) that a redelivery of the same jobId can be consumed while another worker has already claimed the row (inbox dedupes on messageId; the reaper republishes with a fresh messageId), so a pre-claim failure such as the rate-limit gate (line 127) can write FAILED over that live worker's PROCESSING row; its guarded markCompleted then matches 0 rows, the review result is dropped and the author is sent a failure notice for a review that is still running — the exact #1830 symptom this PR fences off in the BYOK branch with `requireNoLiveOwner`. HOW: route the pre-claim case through the same no-live-owner fence instead of the unguarded write, e.g. pass `requireNoLiveOwner: true` when `leaseClaimed` is false (the `leaseClaimed && !owned` guard below still keeps it failing loudly and republishing).",
+          "keep": true,
+          "rationale": "Confirmed: when leaseClaimed is false (pre-claim failures such as the rate-limit gate at line 127 / payload check at line 117), handleFailure receives ownedBy=undefined and executes the unguarded `update(jobId, failurePatch)` at lines 674-680, stamping status=FAILED with no ownership filter. The redelivery concurrency window the finding relies on is explicitly documented by the code itself (lines 179-189, 643-648: inbox dedupes on messageId, reaper republishes with fresh messageId, so a redelivery can be consumed while another worker holds the row), and lines 682-685 corroborate that such a stamp blocks the owning worker's terminal write (markCompleted matching 0 rows). This is a distinct issue from PreviousDecision #1 (which addressed the early-return swallowing failures, fixed via `leaseClaimed && !owned`), and the finding proposes a different fence (`requireNoLiveOwner: true`), so it does not contradict the applied change. Only minor imprecision: for a pure rate-limit error the author notice is skipped at line 503, so the 'failure notice sent' sub-claim is overstated for that trigger, but the core unguarded-write root cause stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 100,
+                "endLine": 200
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 400,
+                "endLine": 560
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "handleFailure|leaseClaimed|requireNoLiveOwner",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 600,
+                "endLine": 710
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 250,
+                "endLine": 300
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "claim": "WHAT: the class `update` signature was widened to accept `{ noLiveOwner: true }` (lines 177–179), but the new caller in `handleFailure` invokes it through the interface `IWorkflowJobRepository` (processor line 47 / call at 649–655). WHY: if the contract's `update` guard parameter still declares only `{ leaseOwner: string; requireProcessing?: boolean }`, passing `{ noLiveOwner: true }` is a compile-time error and the build breaks. HOW: confirm `IWorkflowJobRepository.update` in libs/core/workflow/domain/contracts/workflow-job.repository.contract.ts declares the same `{ leaseOwner: string; requireProcessing?: boolean } | { noLiveOwner: true }` union; if not, widen it to match the implementation.",
+          "keep": true,
+          "rationale": "The class method was widened to the union with { noLiveOwner: true }, and the new caller in CodeReviewJobProcessorService (line 47) invokes update through the IWorkflowJobRepository interface, so the argument is type-checked against the interface signature. Because TypeScript method parameters are bivariant, the class still implements a narrower interface method, so the class compiles but a caller passing { noLiveOwner: true } through the interface would fail to compile if the interface's guard was not widened. I could not locate/read the contract file to confirm the interface declares the union, and found no evidence refuting the drift. Default is to keep; the concern is a concrete, build-breaking type mismatch rather than style.",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "noLiveOwner",
+                "path": "libs/core/workflow"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update\\(",
+                "path": "libs/core/workflow/domain/contracts/workflow-job.repository.contract.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/core/workflow/domain/contracts/workflow-job.repository.contract.ts",
+                "pattern": "update|guard|leaseOwner"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/core/workflow",
+                "pattern": "noLiveOwner|IWorkflowJobRepository",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "interface IWorkflowJobRepository|IWorkflowJobRepository",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "workflow-job.repository.contract.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "IWorkflowJobRepository"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "*repository.contract*",
+                "path": "libs/core/workflow"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "workflow-job.repository.contract.ts",
+                "path": "libs"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update\\(|noLiveOwner|guard",
+                "path": "libs/core/workflow/domain/contracts"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "libs/core/workflow/domain/contracts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update",
+                "path": "libs/core/workflow",
+                "glob": "*contract*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "StaleWorkflowJobReapResult|WORKFLOW_JOB_REPOSITORY_TOKEN",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "libs/core/workflow/domain"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/domain/contracts/workflow-job.repository.contract.ts",
+                "startLine": 1,
+                "endLine": 120
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 74,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "line": 177,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The class `update` signature was widened to accept `{ noLiveOwner: true }` (lines 177–179), but the new caller in `handleFailure` invokes it through the interface `IWorkflowJobRepository` (processor line 47 / call at 649–655), so if the contract's `update` guard parameter still declares only `{ leaseOwner: string; requireProcessing?: boolean }`, passing `{ noLiveOwner: true }` is a compile-time error and the build breaks. Confirm `IWorkflowJobRepository.update` in libs/core/workflow/domain/contracts/workflow-job.repository.contract.ts declares the same `{ leaseOwner: string; requireProcessing?: boolean } | { noLiveOwner: true }` union, and widen it to match the implementation if not."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 474,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "When a failure is raised before the lease claim, `ownedBy: leaseClaimed ? this.instanceId : undefined` makes handleFailure fall into its `!options?.ownedBy` branch and run an unguarded `update(jobId, failurePatch)` that stamps status=FAILED regardless of who owns the row, so a pre-claim failure such as the rate-limit gate (line 127) can write FAILED over a live worker's PROCESSING row, dropping the review result and sending a failure notice for a review that is still running. Route the pre-claim case through the same no-live-owner fence by passing `requireNoLiveOwner: true` when `leaseClaimed` is false, since the `leaseClaimed && !owned` guard below still keeps it failing loudly and republishing."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    }
+  ]
+}

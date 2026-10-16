@@ -13,6 +13,7 @@ import {
     compatibleTemperaturePolicy,
     resolveCompatibleReasoningTraits,
     type ModelReasoningTraits,
+    type StructuredOutputMode,
 } from '../kernel/reasoning-traits';
 import { registerProvider } from '../kernel/registry';
 import { openRouterModelListing } from './listing';
@@ -63,6 +64,23 @@ export const openRouterModule: ProviderModule = {
         };
     },
 
+    // The WIRE answer, per model: OpenRouter proxies many upstreams and only the
+    // allowlisted prefixes honour strict json_schema. Everything else goes out as
+    // bare `json_object` — no schema, no keyword — which is the route issue #1916
+    // measured 166 reviews failing on. `build()` below reads THIS, so the
+    // declaration and the request body are one expression.
+    structuredOutputPolicy(
+        cfg: ProviderBuildConfig,
+        opts?: ProviderBuildOptions,
+    ): StructuredOutputMode {
+        // This build ANDs the caller's opt-out into its flag, so a caller that
+        // stops asking for a schema really does send bare json_object.
+        if (opts?.structuredOutputs === false) return 'json_object';
+        return openRouterHonorsJsonSchema(cfg.model)
+            ? 'json_schema'
+            : 'json_object';
+    },
+
     build(cfg: ProviderBuildConfig, opts?: ProviderBuildOptions): LanguageModel {
         return createOpenAICompatible({
             // MUST stay in lockstep with `providerOptionsNamespace` below: the
@@ -77,8 +95,8 @@ export const openRouterModule: ProviderModule = {
             baseURL: cfg.baseURL || 'https://openrouter.ai/api/v1',
             ...(opts?.fetch ? { fetch: opts.fetch } : {}),
             supportsStructuredOutputs:
-                opts?.structuredOutputs !== false &&
-                openRouterHonorsJsonSchema(cfg.model),
+                openRouterModule.structuredOutputPolicy(cfg, opts) ===
+                'json_schema',
         })(cfg.model);
     },
 

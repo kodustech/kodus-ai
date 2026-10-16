@@ -303,7 +303,7 @@ export const SelectRepositories = (props: {
                                 </span>
                                 <Button
                                     size="sm"
-                                    variant="secondary"
+                                    variant="primary-dark"
                                     onClick={handleRetry}>
                                     Try again
                                 </Button>

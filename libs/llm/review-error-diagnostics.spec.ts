@@ -29,6 +29,21 @@ describe('redactSecrets', () => {
         expect(out).not.toMatch(/sk-[A-Za-z0-9]|AIzaSy|AKIA|ghp_/);
     });
 
+    it('removes the account and key ids a Moonshot (Kimi) billing error echoes back (#2021)', () => {
+        const out = redactSecrets(
+            'Your account org-0123456789abcdef0123456789abcdef <ak-f00ba7f00ba7f00ba7> is suspended due to insufficient balance',
+        );
+
+        expect(out).not.toMatch(/org-[0-9a-f]{8}|ak-[a-z0-9]{8}/);
+        expect(out).toContain('is suspended due to insufficient balance');
+    });
+
+    it('keeps a plain word that merely starts like an id', () => {
+        expect(redactSecrets('the org-level setting is off')).toBe(
+            'the org-level setting is off',
+        );
+    });
+
     it('removes an echoed authorization header', () => {
         expect(
             redactSecrets('Authorization: Bearer eyJhbGciOi.J9.abc'),

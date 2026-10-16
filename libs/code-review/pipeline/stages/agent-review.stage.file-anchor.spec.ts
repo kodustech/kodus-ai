@@ -1,6 +1,7 @@
 import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { AgentReviewStage } from './agent-review.stage';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
+import { resolveAgentPrompt } from '@libs/common/utils/codeManagement/suggestion-comment-blocks';
 import { LLM } from '@libs/llm/llm';
 import { hasManagedModelKey } from '@libs/llm/managed-slot';
 
@@ -125,7 +126,10 @@ const makeContext = (over: Record<string, unknown> = {}) =>
         ...over,
     }) as any as CodeReviewPipelineContext;
 
-const run = async (suggestions: any[], ctxOver: Record<string, unknown> = {}) => {
+const run = async (
+    suggestions: any[],
+    ctxOver: Record<string, unknown> = {},
+) => {
     const { stage, reviewOrchestrator } = makeStage();
     reviewOrchestrator.execute.mockResolvedValue({
         suggestions,
@@ -158,15 +162,32 @@ describe('#1826 — a whole-file finding is delivered as a PR comment', () => {
     it('marks an out-of-hunk finding from a context-needing rule file-anchored (KRC-32)', async () => {
         const result = await run([ruleFinding()]);
 
-        const anchored = (result.validSuggestions ?? []).find(
-            (s: any) => s.brokenKodyRulesIds?.[0] === CONTEXT_RULE,
-        );
-        expect(anchored).toBeDefined();
-        expect(anchored.fileAnchored).toBe(true);
         // the cited lines are kept as the model gave them, NOT snapped onto
         // the hunk — the whole point is that they are outside it
-        expect(anchored.relevantLinesStart).toBe(120);
-        expect(anchored.relevantLinesEnd).toBe(180);
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            '`src/user.ts:120`',
+        );
+        expect(result.validSuggestionsByPR[0].fullExplanation).toContain(
+            '`src/user.ts:120`',
+        );
+        expect(resolveAgentPrompt(result.validSuggestionsByPR[0])).toContain(
+            '`src/user.ts:120`',
+        );
+    });
+
+    // CreateFileCommentsStage posts every entry of `validSuggestions` as a line
+    // comment. A PR-level finding left there was posted twice: once PR-level,
+    // once inline at out-of-hunk lines (GitHub: "line could not be resolved")
+    // or with no path at all ("path, line weren't supplied").
+    it('does not leave a PR-level finding in validSuggestions for the inline stage', async () => {
+        const result = await run([
+            ruleFinding(),
+            ruleFinding({ relevantFile: undefined, relevantLinesStart: 120 }),
+        ]);
+
+        expect(result.validSuggestionsByPR.length).toBeGreaterThan(0);
+        expect(result.validSuggestions ?? []).toEqual([]);
     });
 
     it('delivers it as one PR-level comment citing file:line (KRC-19)', async () => {
@@ -174,6 +195,12 @@ describe('#1826 — a whole-file finding is delivered as a PR comment', () => {
 
         expect(result.validSuggestionsByPR).toHaveLength(1);
         expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            '`src/user.ts:120`',
+        );
+        expect(result.validSuggestionsByPR[0].fullExplanation).toContain(
+            '`src/user.ts:120`',
+        );
+        expect(resolveAgentPrompt(result.validSuggestionsByPR[0])).toContain(
             '`src/user.ts:120`',
         );
         expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
@@ -321,6 +348,12 @@ describe('a kody_rules finding with a line but no file goes PR-level, not discar
             '`src/empty-patch.ts`',
         );
         expect(result.validSuggestionsByPR[0].suggestionContent).not.toContain(
+            'src/empty-patch.ts:',
+        );
+        expect(resolveAgentPrompt(result.validSuggestionsByPR[0])).toContain(
+            '`src/empty-patch.ts`',
+        );
+        expect(result.validSuggestionsByPR[0].fullExplanation).not.toContain(
             'src/empty-patch.ts:',
         );
         const emptyPatchFile = (result.fileAnalysisResults ?? []).find(

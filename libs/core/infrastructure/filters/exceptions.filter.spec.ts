@@ -73,4 +73,25 @@ describe('ExceptionsFilter', () => {
         expect(body.statusCode).toBe(400);
         expect(body.message).toBe('Invalid parameter format');
     });
+
+    it('maps a Mongo read that hit maxTimeMS to 503 and still reports it', () => {
+        // mongod aborts the query itself (error 50, MaxTimeMSExpired) when the
+        // cluster is overloaded; that is a retryable outage, not a 500 bug.
+        const timeout = Object.assign(
+            new Error('operation exceeded time limit'),
+            {
+                code: 50,
+                codeName: 'MaxTimeMSExpired',
+            },
+        );
+
+        filter.catch(timeout, host as any);
+
+        expect(response.status).toHaveBeenCalledWith(503);
+        expect(reportExceptionToSentry).toHaveBeenCalledTimes(1);
+        const body = (response.json as jest.Mock).mock.calls[0][0];
+        expect(body.statusCode).toBe(503);
+        expect(body.error).toBe('Service Unavailable');
+        expect(body.message).toBe('The database is busy, please retry shortly');
+    });
 });

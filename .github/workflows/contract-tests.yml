@@ -27,6 +27,7 @@ name: "Contract tests: external APIs"
 
 permissions:
     contents: read
+    id-token: write # quality signal (report-signal action, WIF)
 
 on:
     schedule:
@@ -205,6 +206,16 @@ jobs:
     # Credentials: one named repo secret per brand — see REPO_SECRET in the spec.
     # Every brand without a key SKIPS, so a partial-secret run reports partial
     # coverage instead of a false red, and fork PRs stay green.
+            - name: Report quality signal
+              if: always()
+              uses: ./.github/actions/report-signal
+              with:
+                  name: contract.api
+                  status: ${{ job.status }}
+                  gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
+                  gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
+                  gcp_project: ${{ vars.GCP_PROJECT }}
+
     byok-live:
         name: BYOK reasoning live contract (weekly)
         # Weekly cron (Friday) and manual dispatch ONLY — deliberately not on pull_request.
@@ -343,3 +354,13 @@ jobs:
 
                       A `dead credential` line means the secret is expired, rotated or unpaid — the request shape was never tested, so rotate it rather than hunting a changelog. Anything else is the vendor refusing or ignoring what we send, and customer reviews on that provider are degrading now. Not a release gate either way.
                       Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            - name: Report quality signal
+              if: always()
+              uses: ./.github/actions/report-signal
+              with:
+                  name: contract.byok_live
+                  status: ${{ job.status }}
+                  gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
+                  gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
+                  gcp_project: ${{ vars.GCP_PROJECT }}

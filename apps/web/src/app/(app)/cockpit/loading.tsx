@@ -1,3 +1,3 @@
-import { GenericLoading } from "@components/ui/generic-loading";
+import { CockpitPageSkeleton } from "@components/system/page-skeletons";
 
-export default GenericLoading;
+export default CockpitPageSkeleton;

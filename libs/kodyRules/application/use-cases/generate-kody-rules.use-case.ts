@@ -13,6 +13,7 @@ import {
     ICodeBaseConfigService,
 } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { requiresKnowledgeApproval } from '@libs/common/utils/kody-rules/knowledge-approval';
+import { createKodyLearningSettingsResolver } from '@libs/common/utils/kody-rules/kody-learning-settings';
 import { with429Retry } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { GenerateKodyRulesDTO } from '@libs/core/domain/dtos/generate-kody-rules.dto';
 
@@ -23,8 +24,6 @@ import {
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { resolveKodyRulesModelPolicy } from '@libs/kodyRules/application/services/kody-rules-model-policy';
 import { generateDateFilter } from '@libs/common/utils/transforms/date';
-import { deepMerge } from '@libs/common/utils/deep';
-import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 import { IntegrationConfigKey, ParametersKey } from '@libs/core/domain/enums';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
@@ -48,6 +47,7 @@ import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import { ParametersEntity } from '@libs/organization/domain/parameters/entities/parameters.entity';
 import { KodyLearningStatus } from '@libs/organization/domain/parameters/types/configValue.type';
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
@@ -162,6 +162,7 @@ export class GenerateKodyRulesUseCase {
         @Inject(forwardRef(() => CODE_BASE_CONFIG_SERVICE_TOKEN))
         private readonly codeBaseConfigService: ICodeBaseConfigService,
         private readonly permissionValidationService: PermissionValidationService,
+        private readonly telemetry: TelemetryService,
     ) {}
 
     /**
@@ -646,6 +647,14 @@ export class GenerateKodyRulesUseCase {
                     });
             }
 
+            void this.telemetry.kodyRulesImported({
+                organizationId,
+                teamId,
+                source: 'discovery',
+                ruleCount: createdRules.length,
+                repositoryCount: reposWithRules.size,
+            });
+
             return allRules.flat();
         } catch (error) {
             this.logger.error({
@@ -886,34 +895,15 @@ export class GenerateKodyRulesUseCase {
                 organizationAndTeamData,
             );
 
-            const resolvedGlobal = deepMerge(
-                getDefaultKodusConfigFile(),
-                codeReviewConfig?.configValue?.configs ?? {},
+            const resolveSettings = createKodyLearningSettingsResolver(
+                codeReviewConfig?.configValue,
             );
-            const globalExcluded = (resolvedGlobal as any)
-                ?.kodyLearningExcludedReviewers as string[] | undefined;
-
-            const byRepo = new Map<string, string[] | undefined>();
-            for (const repo of codeReviewConfig?.configValue?.repositories ??
-                []) {
-                const resolvedRepo = deepMerge(
-                    resolvedGlobal,
-                    repo.configs ?? {},
-                );
-                byRepo.set(
-                    repo.id,
-                    (resolvedRepo as any)?.kodyLearningExcludedReviewers as
-                        | string[]
-                        | undefined,
-                );
-            }
 
             return {
                 forRepo: (repositoryId: string) =>
                     toSet(
-                        byRepo.has(repositoryId)
-                            ? byRepo.get(repositoryId)
-                            : globalExcluded,
+                        resolveSettings(repositoryId)
+                            .kodyLearningExcludedReviewers,
                     ),
             };
         } catch (error) {

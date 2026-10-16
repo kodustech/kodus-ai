@@ -364,3 +364,128 @@ describe('GetModelsByProviderUseCase — BYOK-aware model listing', () => {
         expect(mockedAxios.get).not.toHaveBeenCalled();
     });
 });
+
+/**
+ * A credential only ever travels to the host it belongs to. The listing call
+ * sends a key to a URL built from a baseURL; when that baseURL comes from the
+ * request (or from an org-edited setting) and the key comes from somewhere else
+ * (the org's saved credential for a different endpoint, or Kodus' own env key),
+ * the key must not be sent.
+ */
+describe('GetModelsByProviderUseCase — a key only goes to its own host', () => {
+    const ENV_KEY = 'API_OPEN_AI_API_KEY';
+    let savedEnv: string | undefined;
+
+    beforeEach(() => {
+        mockedAxios.get.mockReset();
+        mockedAxios.get.mockResolvedValue({
+            data: { object: 'list', data: [{ id: 'm' }] },
+        } as any);
+        savedEnv = process.env[ENV_KEY];
+        process.env[ENV_KEY] = 'sk-kodus-env';
+    });
+
+    afterEach(() => {
+        if (savedEnv === undefined) delete process.env[ENV_KEY];
+        else process.env[ENV_KEY] = savedEnv;
+    });
+
+    const savedCompatible = {
+        version: 2,
+        credentials: [
+            {
+                id: 'c1',
+                provider: 'openai_compatible',
+                apiKey: 'enc-key',
+                settings: { baseURL: 'https://api.fireworks.ai/inference/v1' },
+            },
+        ],
+        models: [{ id: 'm1', credentialId: 'c1', model: 'x' }],
+    };
+
+    const authHeaders = () =>
+        mockedAxios.get.mock.calls.map(
+            ([, cfg]) => (cfg as any)?.headers?.Authorization,
+        );
+
+    it('never sends the env key to a baseURL from the request', async () => {
+        const useCase = buildUseCase(null);
+
+        await useCase
+            .execute('openai_compatible', { organizationId: 'org-1' }, {
+                baseURL: 'https://other.example.com/v1',
+            })
+            .catch(() => undefined);
+
+        expect(authHeaders()).not.toContain('Bearer sk-kodus-env');
+    });
+
+    it('never sends the saved key to a different host from the request', async () => {
+        const useCase = buildUseCase(savedCompatible);
+
+        await useCase
+            .execute('openai_compatible', { organizationId: 'org-1' }, {
+                baseURL: 'https://other.example.com/v1',
+            })
+            .catch(() => undefined);
+
+        expect(authHeaders()).not.toContain('Bearer decrypted:enc-key');
+    });
+
+    it('sends the saved key when the request names its own host', async () => {
+        const useCase = buildUseCase(savedCompatible);
+
+        await useCase.execute('openai_compatible', { organizationId: 'org-1' }, {
+            baseURL: 'https://api.fireworks.ai/inference/v1/',
+        });
+
+        expect(authHeaders()).toEqual(['Bearer decrypted:enc-key']);
+    });
+
+    it('sends a key typed in the request to the baseURL typed with it', async () => {
+        const useCase = buildUseCase(savedCompatible);
+
+        await useCase.execute('openai_compatible', { organizationId: 'org-1' }, {
+            apiKey: 'fw-typed',
+            baseURL: 'https://other.example.com/v1',
+        });
+
+        expect(authHeaders()).toEqual(['Bearer fw-typed']);
+    });
+
+    it('never sends the env key to a saved custom baseURL', async () => {
+        // A saved compatible credential that has a baseURL but no key of its
+        // own: the env key must not fill the gap.
+        const useCase = buildUseCase({
+            ...savedCompatible,
+            credentials: [{ ...savedCompatible.credentials[0], apiKey: undefined }],
+        });
+
+        await useCase
+            .execute('openai_compatible', { organizationId: 'org-1' })
+            .catch(() => undefined);
+
+        expect(authHeaders()).not.toContain('Bearer sk-kodus-env');
+    });
+
+    it('still lists a compatible endpoint left at its default with the env key', async () => {
+        // No request URL, no saved credential, no env URL: the listing lands on
+        // the default (api.openai.com), which is the env key's own host.
+        const useCase = buildUseCase(null);
+
+        await useCase.execute('openai_compatible', { organizationId: 'org-1' });
+
+        expect(mockedAxios.get.mock.calls[0][0]).toBe(
+            'https://api.openai.com/v1/models',
+        );
+        expect(authHeaders()).toEqual(['Bearer sk-kodus-env']);
+    });
+
+    it('still lists native OpenAI with the env key (fixed host)', async () => {
+        const useCase = buildUseCase(null);
+
+        await useCase.execute('openai', { organizationId: 'org-1' });
+
+        expect(authHeaders()).toEqual(['Bearer sk-kodus-env']);
+    });
+});

@@ -18,6 +18,10 @@ import {
     type FormattedCodeReviewConfig,
     type FormattedGlobalCodeReviewConfig,
 } from "../_types";
+import {
+    getChangedConfigMask,
+    pickChangedConfig,
+} from "../_utils/changed-config";
 import { mergeFormattedCodeReviewConfigForScope } from "../_utils/settings-shell";
 
 type SavePreparationResult = {
@@ -127,8 +131,24 @@ export const useCodeReviewSettingsMutation = (params: {
     ): Promise<SaveSettingsResult> => {
         const prepared = await (options?.prepare ?? defaultPrepare)(formData);
 
-        const result = await createOrUpdateCodeReviewParameter(
+        const { language: _language, ...formattedConfig } = formData;
+        // `formState.defaultValues` is the snapshot of the last render and
+        // lags behind a reset; the control holds the live defaults.
+        const changedConfig = pickChangedConfig(
             prepared.codeReviewConfig,
+            getChangedConfigMask(formattedConfig, form.control._defaultValues),
+        );
+
+        // Nothing in the code-review config changed (e.g. only the language,
+        // which `prepare` already saved).
+        if (Object.keys(changedConfig).length === 0) {
+            form.reset(prepared.savedFormData);
+            invalidateRelatedQueries();
+            return {};
+        }
+
+        const result = await createOrUpdateCodeReviewParameter(
+            changedConfig,
             teamId,
             repositoryId,
             directoryId,

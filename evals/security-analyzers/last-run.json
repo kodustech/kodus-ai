@@ -1,0 +1,32 @@
+[
+  {
+    "id": "GHSA-4x45-gxvp-6283",
+    "cwe": "command injection",
+    "language": "typescript",
+    "llmDetected": true,
+    "llmFileHit": true,
+    "llmInDiff": true,
+    "llmFindings": 4,
+    "analyzerDetected": true
+  },
+  {
+    "id": "GHSA-79wm-x847-7cvg",
+    "cwe": "command injection",
+    "language": "javascript",
+    "llmDetected": true,
+    "llmFileHit": true,
+    "llmInDiff": true,
+    "llmFindings": 5,
+    "analyzerDetected": true
+  },
+  {
+    "id": "GHSA-59fj-m2j6-hcxh",
+    "cwe": "command injection",
+    "language": "python",
+    "llmDetected": true,
+    "llmFileHit": true,
+    "llmInDiff": true,
+    "llmFindings": 1,
+    "analyzerDetected": false
+  }
+]

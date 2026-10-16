@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
+import { planCtaTarget } from "@components/system/plan-cta-target";
 import { Avatar, AvatarImage } from "@components/ui/avatar";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
@@ -19,6 +20,7 @@ import { CheckIcon, ImageOff, LockIcon } from "lucide-react";
 import type { AwaitedReturnType } from "src/core/types";
 import { cn } from "src/core/utils/components";
 import { captureGateHit } from "src/core/utils/gate-hit";
+import { useCapOwnerLabel } from "src/features/ee/subscription/_hooks/use-resource-limits";
 import {
     computeLockedPluginIds,
     countInstalledPlugins,
@@ -38,7 +40,9 @@ export const PluginsGrid = ({
     // /mcp/connections at all, so they'd otherwise look "locked" whenever
     // they fall outside the runnable set computed from that list.
     const installedCount = countInstalledPlugins(plugins);
-    const { limited, limit, plan } = useMCPPluginsLimit(installedCount);
+    const { limited, limit, plan, planType } =
+        useMCPPluginsLimit(installedCount);
+    const capOwner = useCapOwnerLabel();
 
     const lockedIds = useMemo(
         () =>
@@ -51,16 +55,40 @@ export const PluginsGrid = ({
         [limited, limit, plugins, orderedActiveIntegrationIds],
     );
 
+    // Named, not counted: "Slack and Linear never run" is a different
+    // sentence from "2 plugins are locked" — the reader recognises what they
+    // installed on purpose. Three names keep the banner to one line; the rest
+    // are counted so the sentence stays true.
+    const lockedHeadline = useMemo(() => {
+        const names = plugins
+            .filter((item) => lockedIds.has(item.id))
+            .map((item) => item.name);
+        if (names.length === 0) return null;
+
+        const shown = names.slice(0, 3);
+        const rest = names.length - shown.length;
+        const subject =
+            rest > 0
+                ? `${shown.join(", ")} and ${rest} more`
+                : shown.join(", ");
+
+        return names.length === 1
+            ? `${subject} is installed, but never runs`
+            : `${subject} are installed, but never run`;
+    }, [plugins, lockedIds]);
+
     const gateReported = useRef(false);
     useEffect(() => {
         if (lockedIds.size === 0 || gateReported.current) return;
         gateReported.current = true;
         captureGateHit({
             feature: "mcp_plugins",
-            plan,
+            surface: "locked_banner",
+            planType,
+            subscriptionStatus: plan,
             metadata: { lockedCount: lockedIds.size, installedCount },
         });
-    }, [lockedIds.size, plan, installedCount]);
+    }, [lockedIds.size, plan, planType, installedCount]);
 
     return (
         <div className="flex flex-col gap-4">
@@ -70,23 +98,24 @@ export const PluginsGrid = ({
                     className="flex flex-row items-center justify-between gap-6 p-5">
                     <div className="flex flex-col gap-1">
                         <span className="text-text-primary text-sm font-semibold">
-                            {lockedIds.size} of your plugins{" "}
-                            {lockedIds.size === 1 ? "is" : "are"} locked
+                            {lockedHeadline ??
+                                `${lockedIds.size} of your plugins ${lockedIds.size === 1 ? "is" : "are"} locked`}
                         </span>
                         <span className="text-text-secondary text-sm">
-                            The Free plan runs {limit} plugins at a time —
-                            locked plugins are skipped during reviews. Upgrade
-                            to run them all, plus unlimited Kody Rules and the
-                            Cockpit.
+                            {capOwner[0].toUpperCase() + capOwner.slice(1)} runs{" "}
+                            {limit} plugins at a time, so Kody skips{" "}
+                            {lockedIds.size === 1 ? "this one" : "these"} during
+                            every review. Teams runs them all, plus unlimited
+                            Kody Rules and the Cockpit.
                         </span>
                     </div>
                     <GateCtaLink
                         feature="mcp_plugins"
-                        plan={plan}
-                        metadata={{
-                            surface: "locked_banner",
-                            lockedCount: lockedIds.size,
-                        }}
+                        surface="locked_banner"
+                        planType={planType}
+                        subscriptionStatus={plan}
+                        {...planCtaTarget()}
+                        metadata={{ lockedCount: lockedIds.size }}
                         size="sm"
                         className="shrink-0"
                     />

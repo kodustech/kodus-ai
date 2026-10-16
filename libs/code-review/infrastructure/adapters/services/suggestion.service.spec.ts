@@ -195,3 +195,30 @@ describe('SuggestionService — pure logic', () => {
         });
     });
 });
+
+describe('SuggestionService — transformCommentResultsToPrLevelSuggestions', () => {
+    it('persists the full explanation alongside the short body', () => {
+        const [saved] = svc().transformCommentResultsToPrLevelSuggestions([
+            {
+                comment: {
+                    type: 'pr_level',
+                    suggestion: {
+                        id: 's-1',
+                        suggestionContent: 'Short body.',
+                        fullExplanation: 'The whole explanation, every sentence of it.',
+                        oneSentenceSummary: 'Title',
+                        label: 'kody_rules',
+                        severity: 'high',
+                    },
+                },
+                deliveryStatus: DeliveryStatus.SENT,
+                codeReviewFeedbackData: { commentId: 10, pullRequestReviewId: null },
+            },
+        ]);
+
+        expect(saved.suggestionContent).toBe('Short body.');
+        expect(saved.fullExplanation).toBe(
+            'The whole explanation, every sentence of it.',
+        );
+    });
+});

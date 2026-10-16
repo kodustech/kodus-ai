@@ -271,7 +271,10 @@ export class SSOConfigController {
     })
     @ApiOkResponse({ type: ApiObjectResponseDto })
     async getConnectionTestResult(@Query('sessionId') sessionId: string) {
-        return this.getSSOConnectionTestResultUseCase.execute(sessionId);
+        return this.getSSOConnectionTestResultUseCase.execute(
+            sessionId,
+            this.request?.user?.organization?.uuid,
+        );
     }
 
     @Get()

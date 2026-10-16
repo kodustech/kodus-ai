@@ -9,6 +9,8 @@
  * strategy fires. PR2/PR3 wire emission per strategy.
  */
 
+import type { ModelFailoverEvent } from '@libs/llm/model-failover';
+
 export type ReviewWarningKind =
     /** Compact system prompt was used (workflow/rules trimmed). */
     | 'PROMPT_COMPACTED'
@@ -30,7 +32,16 @@ export type ReviewWarningKind =
     /** A finding's `improvedCode` was empty, identical to `existingCode`, or
      *  syntactically truncated, so it was published as a plain comment with
      *  no code block instead of the (unusable) fix. */
-    | 'BAD_FIX_DOWNGRADED';
+    | 'BAD_FIX_DOWNGRADED'
+    /** No repository checkout: the agents reviewed the diff alone, with no
+     *  tools and no call graph. */
+    | 'SANDBOX_UNAVAILABLE'
+    /** The repository was checked out, but building the call graph failed. */
+    | 'CALLGRAPH_FAILED'
+    /** Findings were dropped because the file they named is not in the PR. */
+    | 'SUGGESTIONS_DROPPED_PATH_MISMATCH'
+    /** Some Kody Rules checks failed to run; the others still posted. */
+    | 'KODY_RULES_PARTIAL';
 
 export type ReviewWarningReason =
     | 'small_context_window'
@@ -40,7 +51,17 @@ export type ReviewWarningReason =
      *  unmet. */
     | 'lookup_unavailable'
     /** `improvedCode` failed the publication gate (issue #1833). */
-    | 'unusable_fix';
+    | 'unusable_fix'
+    /** The sandbox could not be created for this review. */
+    | 'sandbox_unavailable'
+    /** The call graph build threw during the review. */
+    | 'callgraph_failed'
+    /** A finding named a file outside the PR's changed files. */
+    | 'path_mismatch'
+    /** A Kody Rules judge shard errored. */
+    | 'judge_shard_failed'
+    /** The prompt did not fit the single-batch budget on a large PR. */
+    | 'large_pr';
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;
@@ -78,6 +99,88 @@ export function buildProviderFallbackWarning(params: {
         contextWindowTokens: 0,
         modelName: params.usedModel,
         detail: `main provider ${params.failedModel} failed; review ran on fallback ${params.usedModel}`,
+        agentName: params.agentName,
+    };
+}
+
+/**
+ * One PROVIDER_FALLBACK warning per model the review fell back to, merged into
+ * the run's warnings. Leaves `warnings` untouched when nothing failed over.
+ */
+export function withFallbackWarnings(
+    warnings: ReviewWarning[] | undefined,
+    failovers: Array<Pick<ModelFailoverEvent, 'failedModel' | 'usedModel'>>,
+): ReviewWarning[] | undefined {
+    if (!failovers.length) {
+        return warnings;
+    }
+    return dedupReviewWarnings([
+        ...(warnings ?? []),
+        ...failovers.map((f) =>
+            buildProviderFallbackWarning({
+                failedModel: f.failedModel,
+                usedModel: f.usedModel,
+            }),
+        ),
+    ]);
+}
+
+/**
+ * Losses a review used to record only in its logs (#2066): the review still
+ * succeeds, so without these it reads exactly like a full one. Admin-facing
+ * (dashboard, doctor); none of them is rendered in the PR comment.
+ */
+export function buildSandboxUnavailableWarning(params: {
+    modelName: string;
+}): ReviewWarning {
+    return {
+        kind: 'SANDBOX_UNAVAILABLE',
+        reason: 'sandbox_unavailable',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: 'the repository could not be checked out, so the review read only the diff (no tools, no call graph)',
+    };
+}
+
+export function buildCallGraphFailedWarning(params: {
+    modelName: string;
+}): ReviewWarning {
+    return {
+        kind: 'CALLGRAPH_FAILED',
+        reason: 'callgraph_failed',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: 'the call graph could not be built, so the review ran without knowing who calls the changed code',
+    };
+}
+
+export function buildPathMismatchWarning(params: {
+    count: number;
+    modelName: string;
+    agentName: string;
+}): ReviewWarning {
+    return {
+        kind: 'SUGGESTIONS_DROPPED_PATH_MISMATCH',
+        reason: 'path_mismatch',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: `${params.agentName}: ${params.count} finding(s) dropped because the file they named is not in the pull request`,
+        agentName: params.agentName,
+    };
+}
+
+export function buildKodyRulesPartialWarning(params: {
+    failed: number;
+    total: number;
+    modelName: string;
+    agentName: string;
+}): ReviewWarning {
+    return {
+        kind: 'KODY_RULES_PARTIAL',
+        reason: 'judge_shard_failed',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: `${params.failed} of ${params.total} Kody Rules check(s) failed to run; the rules on them were not applied`,
         agentName: params.agentName,
     };
 }

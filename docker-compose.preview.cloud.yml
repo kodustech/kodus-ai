@@ -1,0 +1,23 @@
+# Cloud shape of a preview: what kodus.io runs — billing, analytics, cloud
+# mode on every backend process. Layered on top of docker-compose.preview.yml
+# by .kodus/workspace.preview.yaml (runo --profile cloud).
+services:
+    kodus-api:
+        environment:
+            - API_CLOUD_MODE=true
+    worker:
+        environment:
+            - API_CLOUD_MODE=true
+    worker-analytics:
+        environment:
+            - API_CLOUD_MODE=true
+    webhooks:
+        environment:
+            - API_CLOUD_MODE=true
+    mcp-manager:
+        environment:
+            - API_CLOUD_MODE=true
+
+    web:
+        environment:
+            - API_CLOUD_MODE=true

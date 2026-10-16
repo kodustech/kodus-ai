@@ -1,22 +1,29 @@
-// Invokes the REAL production dedup decision (prompt + schema from
-// libs/.../engine/dedup-prompt.ts) on a list of suggestions, on ANY model — so we
-// can A/B which small model dedups well.
-// Loaded via ts-node so it reads the live TS prompt module — no drift.
+// Invokes the REAL production dedup decision on a list of suggestions: the same
+// prompt + schema (libs/.../engine/dedup-prompt.ts) through the same entry point
+// the stage uses — `LLM.run` (agent-review.stage.ts, deduplicateSuggestions) —
+// so the eval measures the executor's recovery ladder (json_object contract,
+// deterministic repair, re-ask) too, not a bare SDK call.
+// Loaded via ts-node so it reads the live TS modules — no drift.
 require('ts-node/register/transpile-only');
 require('tsconfig-paths/register');
 
-const { generateObject, jsonSchema } = require('ai');
+const path = require('path');
+const dotenv = require('dotenv');
+dotenv.config({ path: path.join(__dirname, '../../.env') });
+dotenv.config({ path: path.join(__dirname, '../../.env.local'), override: true });
+if (process.env.HOME) {
+    dotenv.config({ path: path.join(process.env.HOME, '.kodus-dev/config'), override: true });
+}
+
+const { jsonSchema } = require('ai');
 const {
     buildDedupPrompt,
     DEDUP_SCHEMA,
     contentSimilarity,
     DEDUP_CONTENT_THRESHOLD,
 } = require('@libs/code-review/infrastructure/agents/engine/dedup-prompt');
-const {
-    SECONDARY_MODELS,
-    SECONDARY_BASELINE,
-    buildSecondaryModel,
-} = require('../shared/secondary-models');
+const { SECONDARY_BASELINE } = require('../shared/secondary-models');
+const { TIER0, applyModelEnv } = require('../shared/tier0-models');
 
 const normSeverity = (s) => (s == null ? 'medium' : String(s).toLowerCase());
 
@@ -25,28 +32,32 @@ const DEDUP_ALIASES = {
     'gemini-3-flash': 'gemini-3-flash-preview',
     'kimi-k2.7': 'kimi-k2.7-code',
 };
-const DEDUP_MODELS = { ...SECONDARY_MODELS, ...Object.fromEntries(
-    Object.entries(DEDUP_ALIASES).map(([alias, target]) => [alias, SECONDARY_MODELS[target]]),
-) };
+// Every model routes through tier0-models (evals/AGENTS.md): the id sets the
+// env the engine's managed/self-hosted default reads, the same way prod does.
+const DEDUP_MODELS = TIER0;
 
 /**
  * @param {Array} suggestions
- * @param {string} modelKey   key into SECONDARY_MODELS (default gpt-5.4-mini = prod)
+ * @param {string} modelKey   tier0-models id (default gpt-5.4-mini = prod)
  */
 async function runDedup(suggestions, modelKey = SECONDARY_BASELINE, opts = {}) {
     if (suggestions.length <= 1) {
         return { groups: [], unique: suggestions.map((_, i) => i), kept: suggestions.map((_, i) => i), dropped: [], unmentioned: [], raw: { skipped: true } };
     }
     const resolved = DEDUP_ALIASES[modelKey] || modelKey;
-    if (!DEDUP_MODELS[resolved] && !SECONDARY_MODELS[resolved]) {
+    if (!DEDUP_MODELS[resolved]) {
         throw new Error(`unknown dedup model '${modelKey}' (have: ${Object.keys(DEDUP_MODELS).join(', ')})`);
     }
-    const model = await buildSecondaryModel(resolved);
+    applyModelEnv(resolved);
+    // Required after the env is set, like the stage: no BYOK slot → the
+    // managed/env default the id above now points at.
+    const { LLM } = require('@libs/llm/llm');
 
-    const { object } = await generateObject({
-        model,
+    const object = await LLM.run({
         schema: jsonSchema(DEDUP_SCHEMA),
-        prompt: buildDedupPrompt(suggestions, normSeverity),
+        user: buildDedupPrompt(suggestions, normSeverity),
+        runName: 'code-review-dedup',
+        spanName: 'code-review::dedup',
         ...(opts.temperature != null ? { temperature: opts.temperature } : {}),
     });
 

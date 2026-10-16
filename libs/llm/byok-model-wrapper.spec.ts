@@ -12,6 +12,7 @@ jest.mock('@libs/llm/token-estimate', () => ({
 
 import { estimateTextTokens } from '@libs/llm/token-estimate';
 import { wrapByokModel } from './byok-model-wrapper';
+import { clearRefusals, MAX_REFUSAL_RETRIES } from './rejected-reasoning-field';
 import { getLimiterForSlot } from './byok-to-vercel';
 
 const estimateMock = estimateTextTokens as unknown as jest.Mock;
@@ -422,5 +423,257 @@ describe('wrapByokModel — secret hygiene on the tpm path', () => {
         } finally {
             spies.forEach((s) => s.mockRestore());
         }
+    });
+});
+
+// ─── failure reporting (#1871) ────────────────────────────────────────────────
+// The reporter feeds the "your key is failing" banner, the in-app notification
+// and the email. For an AI SDK `APICallError` the `message` is a restatement of
+// the status ("Provider returned error") and the cause lives in `responseBody`,
+// so reporting `err.message` told owners nothing — and without the category the
+// banner could only guess at billing.
+describe('wrapByokModel — failure reporting', () => {
+    function failingModel(err: unknown) {
+        return {
+            specificationVersion: 'v4',
+            provider: 'test-provider',
+            modelId: 'test-model',
+            supportedUrls: {},
+            doGenerate: jest.fn(async () => {
+                throw err;
+            }),
+            doStream: jest.fn(async () => ({ stream: undefined })),
+        } as any;
+    }
+
+    function apiCallError() {
+        return Object.assign(new Error('Provider returned error'), {
+            statusCode: 429,
+            responseBody: JSON.stringify({
+                error: {
+                    message: 'Rate limit exceeded: free-models-per-day',
+                    code: 429,
+                },
+            }),
+        });
+    }
+
+    it('reports what the provider said, not the SDK restatement', async () => {
+        const reporter = jest.fn();
+        const wrapped = wrapByokModel(failingModel(apiCallError()), {
+            organizationId: 'org-1',
+            provider: 'open_router',
+            reporter,
+        });
+
+        await expect(
+            wrapped.doGenerate({ prompt: PROMPT } as any),
+        ).rejects.toThrow('Provider returned error');
+
+        expect(reporter).toHaveBeenCalledTimes(1);
+        const entry = reporter.mock.calls[0][0];
+        expect(entry.errorMessage).toContain(
+            'Rate limit exceeded: free-models-per-day',
+        );
+        expect(entry.category).toBe('RATE_LIMIT');
+        expect(entry.httpStatus).toBe(429);
+    });
+
+    it('falls back to the error message when the provider body says nothing', async () => {
+        const reporter = jest.fn();
+        const wrapped = wrapByokModel(
+            failingModel(new Error('socket hang up')),
+            { organizationId: 'org-1', provider: 'openai', reporter },
+        );
+
+        await expect(
+            wrapped.doGenerate({ prompt: PROMPT } as any),
+        ).rejects.toThrow('socket hang up');
+
+        expect(reporter.mock.calls[0][0].errorMessage).toBe('socket hang up');
+    });
+
+    it('reports a routing refusal as such, decided on the full error', async () => {
+        const reporter = jest.fn();
+        const err = Object.assign(new Error('Not Found'), {
+            statusCode: 404,
+            cause: new Error(
+                'No allowed providers are available for the selected model.',
+            ),
+        });
+        const wrapped = wrapByokModel(failingModel(err), {
+            organizationId: 'org-1',
+            provider: 'open_router',
+            reporter,
+        });
+
+        await expect(
+            wrapped.doGenerate({ prompt: PROMPT } as any),
+        ).rejects.toThrow('Not Found');
+
+        expect(reporter.mock.calls[0][0]).toEqual(
+            expect.objectContaining({
+                category: 'MODEL_NOT_FOUND',
+                routingRefusal: true,
+            }),
+        );
+    });
+});
+
+describe('wrapByokModel — a reasoning field the upstream refuses', () => {
+    // Each layer of the retry is pinned on its own here, with a fake model whose
+    // error states the body it "sent": the end-to-end suites cannot separate
+    // them, because a real body always agrees with the provider options.
+    const refusal = (field: string, sent: Record<string, unknown>) =>
+        Object.assign(new Error(`json: unknown field "${field}"`), {
+            statusCode: 400,
+            responseBody: `{"error":{"message":"invalid request body: json: unknown field \\"${field}\\""}}`,
+            requestBodyValues: sent,
+        });
+    const OK = {
+        content: [{ type: 'text', text: 'ok' }],
+        finishReason: 'stop',
+        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        warnings: [],
+    };
+    const fakeModel = (answer: (params: any, n: number) => unknown) => {
+        let n = 0;
+        return {
+            specificationVersion: 'v4',
+            provider: 'test-provider',
+            modelId: 'test-model',
+            supportedUrls: {},
+            doGenerate: jest.fn(async (params: any) => {
+                n += 1;
+                // A runaway loop must fail this test, not hang it.
+                if (n > 10) throw new Error('runaway retry');
+                const out = answer(params, n);
+                if (out instanceof Error) throw out;
+                return out;
+            }),
+            doStream: jest.fn(),
+        } as any;
+    };
+    const slot = (apiKey: string) =>
+        ({
+            provider: 'openai_compatible',
+            apiKey,
+            model: 'glm-5.3-flash',
+            baseURL: 'https://opencode.ai/zen/go/v1',
+        }) as unknown as NormalizedModel;
+    const withThinking = {
+        prompt: PROMPT,
+        providerOptions: {
+            openaiCompatible: {
+                thinking: { type: 'enabled' },
+                reasoningEffort: 'high',
+            },
+        },
+    } as any;
+
+    afterEach(() => clearRefusals());
+
+    it('does not ask again when the options carry nothing to drop, whatever the error claims', async () => {
+        // The error says `thinking` went out, but no provider option renders it:
+        // a second request would be the same request.
+        const model = fakeModel(() =>
+            refusal('thinking', { model: 'm', thinking: { type: 'enabled' } }),
+        );
+        await expect(
+            wrap(model, slot('w-1')).doGenerate({ prompt: PROMPT } as any),
+        ).rejects.toThrow('unknown field');
+        expect(model.doGenerate).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops after one ask per field even when every error claims the field is still there', async () => {
+        // An upstream (or a recorder) that keeps naming a field present in the
+        // body it reports: only the cap and the options running out stop it.
+        const model = fakeModel(() =>
+            refusal('thinking', { model: 'm', thinking: { type: 'enabled' } }),
+        );
+        await expect(
+            wrap(model, slot('w-2')).doGenerate(withThinking),
+        ).rejects.toThrow('unknown field');
+        expect(model.doGenerate).toHaveBeenCalledTimes(2);
+    });
+
+    it('never exceeds the cap when the error alternates between both fields', async () => {
+        const model = fakeModel((_p, n) =>
+            refusal(n % 2 ? 'thinking' : 'reasoning_effort', {
+                model: 'm',
+                thinking: { type: 'enabled' },
+                reasoning_effort: 'high',
+            }),
+        );
+        await expect(
+            wrap(model, slot('w-3')).doGenerate(withThinking),
+        ).rejects.toThrow('unknown field');
+        expect(model.doGenerate.mock.calls.length).toBeLessThanOrEqual(
+            1 + MAX_REFUSAL_RETRIES,
+        );
+    });
+
+    it('asks again with only the refused option gone', async () => {
+        const model = fakeModel((params, n) =>
+            n === 1
+                ? refusal('thinking', {
+                      model: 'm',
+                      thinking: { type: 'enabled' },
+                  })
+                : OK,
+        );
+        await wrap(model, slot('w-4')).doGenerate(withThinking);
+        expect(model.doGenerate).toHaveBeenCalledTimes(2);
+        expect(model.doGenerate.mock.calls[1][0].providerOptions).toEqual({
+            openaiCompatible: { reasoningEffort: 'high' },
+        });
+    });
+
+    it('reports nothing and changes nothing on a call that succeeds', async () => {
+        const reporter = jest.fn();
+        const model = fakeModel(() => OK);
+        await wrapByokModel(model, {
+            byokConfig: slot('w-5'),
+            organizationId: 'org-1',
+            reporter,
+        }).doGenerate(withThinking);
+        expect(model.doGenerate).toHaveBeenCalledTimes(1);
+        expect(model.doGenerate.mock.calls[0][0].providerOptions).toEqual(
+            withThinking.providerOptions,
+        );
+        expect(reporter).not.toHaveBeenCalled();
+    });
+
+    it('reports a refusal once, when it finally reaches the caller', async () => {
+        const reporter = jest.fn();
+        const model = fakeModel(() =>
+            refusal('thinking', { model: 'm', thinking: { type: 'enabled' } }),
+        );
+        await expect(
+            wrapByokModel(model, {
+                byokConfig: slot('w-6'),
+                organizationId: 'org-1',
+                reporter,
+            }).doGenerate(withThinking),
+        ).rejects.toThrow();
+        expect(reporter).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not report a refusal it recovered from', async () => {
+        const reporter = jest.fn();
+        const model = fakeModel((_p, n) =>
+            n === 1
+                ? refusal('thinking', {
+                      model: 'm',
+                      thinking: { type: 'enabled' },
+                  })
+                : OK,
+        );
+        await wrapByokModel(model, {
+            byokConfig: slot('w-7'),
+            organizationId: 'org-1',
+            reporter,
+        }).doGenerate(withThinking);
+        expect(reporter).not.toHaveBeenCalled();
     });
 });

@@ -23,12 +23,11 @@
  * replies or thread resolution — issue #1670, deferred).
  */
 export type PrDecisionOutcome =
-    | 'implemented'
-    | 'partially_implemented'
-    | 'not_implemented'
-    | 'pending';
+    'implemented' | 'partially_implemented' | 'not_implemented' | 'pending';
 
 export interface PrDecisionRecord {
+    /** Opaque reference to one posted suggestion. PR-level legacy storage can
+     *  reuse a rule id, so its reference is derived from the comment instead. */
     readonly suggestionId: string;
     /** Absent for a PR-LEVEL decision — a kody-rules PULL_REQUEST-scope
      *  finding, which judges the diff as a whole and is never anchored to one
@@ -56,6 +55,10 @@ export interface PrDecisionRecord {
      *  (the generic finder/verifier) can ignore this field — `label` alone
      *  is enough context there. */
     readonly brokenKodyRulesIds?: readonly string[];
+    /** The code the suggestion pointed at, as stored. Lets the repeat check
+     *  (`engine/repeat-check.ts`) recognize the same occurrence without a
+     *  model call. Absent on PR-level records. */
+    readonly existingCode?: string;
     readonly outcome: PrDecisionOutcome;
     /** `createdAt` of the original suggestion. */
     readonly decidedAt: string;
@@ -65,9 +68,25 @@ export interface LoadPrDecisionsParams {
     readonly organizationId: string;
     readonly prNumber: number;
     readonly repositoryFullName: string;
-    /** Only decisions touching one of these files are relevant to the current run. */
-    readonly filePaths: readonly string[];
+    /** Most recent entries to return. Defaults to {@link MAX_PR_DECISIONS}. */
+    readonly limit?: number;
 }
+
+/**
+ * How many earlier suggestions a review is shown — the most recent, across
+ * the WHOLE PR. Not scoped to the files of the current diff: a finding can
+ * repeat one anchored on another file once the code moves (#2020, and a
+ * production report of a declined suggestion reposted on another file). One
+ * cap for the whole history keeps every prompt that renders it bounded.
+ */
+export const MAX_PR_DECISIONS = 40;
+
+/**
+ * How many earlier suggestions the repeat check reads (#2097). It is not
+ * rendered into any prompt, so it is the whole PR in practice; the bound only
+ * keeps one runaway PR from loading an unbounded array.
+ */
+export const MAX_REPEAT_CHECK_DECISIONS = 500;
 
 /**
  * Read port for prior-round decisions on a PR. Implementations are infra
@@ -76,9 +95,7 @@ export interface LoadPrDecisionsParams {
  * callers are expected to fail open (treat an error as "no history").
  */
 export interface PrDecisionStore {
-    load(
-        params: LoadPrDecisionsParams,
-    ): Promise<readonly PrDecisionRecord[]>;
+    load(params: LoadPrDecisionsParams): Promise<readonly PrDecisionRecord[]>;
 }
 
 /** DI token, kept alongside the contract — same placement as

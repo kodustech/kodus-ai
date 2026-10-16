@@ -92,7 +92,7 @@ export default async function PluginsPage() {
                         </CardDescription>
                     </CardHeader>
                     <Link href="/settings/plugins/custom">
-                        <Button size="lg" variant="primary" className="mt-4">
+                        <Button size="md" variant="primary" className="mt-4">
                             Add Plugin
                         </Button>
                     </Link>

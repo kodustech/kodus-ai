@@ -36,9 +36,14 @@ export class CodeReviewSettingsLogRepository implements ICodeReviewSettingsLogRe
 
         const codeReviewSettingsLog = await query.exec();
 
-        return mapSimpleModelsToEntities(
-            codeReviewSettingsLog,
-            CodeReviewSettingsLogEntity,
+        // The mapper answers an empty result with null; the activity log
+        // reads `.length` off it, so an org with no logs (or a filter that
+        // matches none) got a 500 instead of an empty page.
+        return (
+            mapSimpleModelsToEntities<
+                CodeReviewSettingsLogModel,
+                CodeReviewSettingsLogEntity
+            >(codeReviewSettingsLog, CodeReviewSettingsLogEntity) ?? []
         );
     }
 }

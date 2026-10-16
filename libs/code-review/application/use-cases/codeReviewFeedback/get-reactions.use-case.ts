@@ -171,7 +171,7 @@ export class GetReactionsUseCase implements IUseCase {
                         }
                     };
 
-                    const commentsLinkedToSuggestions = comments.filter(
+                    const commentsLinkedToSuggestions = (comments ?? []).filter(
                         (comment) => {
                             const threadId =
                                 comment?.threadId ??

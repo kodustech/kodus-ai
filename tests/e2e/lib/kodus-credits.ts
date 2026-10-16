@@ -102,7 +102,7 @@ export async function billingCall<T>(
  *  KODUS_E2E_MODEL to run the same live cell on another catalog entry. */
 export const KODUS_E2E_MODEL =
     process.env.KODUS_E2E_MODEL ||
-    'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731';
+    'fireworks/accounts/fireworks/models/deepseek-v4p1-flash';
 
 /** Persist a v2 BYOK config whose only model is routed by Kodus (no key). */
 export async function saveKodusByok(

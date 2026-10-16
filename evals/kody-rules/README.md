@@ -1,10 +1,10 @@
 # Kody-rules adherence eval
 
 > - **Answers:** Does the Kody Rules agent flag every place a rule is broken?
-> - **Runs:** every engine PR, against the scripted model (`evals/wiring-smoke.js`). Not gated in CI.
+> - **Runs:** nightly on one real model when a file it loads changed, gated on its floor and measured again before alerting (`.github/workflows/code-review-evals-nightly.yml`, `evals/kody-rules/nightly-verdict.js`); every engine PR against the scripted model (`evals/wiring-smoke.js`).
 > - **Run it:** `pnpm eval:kody-rules` · `pnpm eval:kody-rules:gate`
 > - **Gate:** `--gate` uses the per-model floors in `evals/kody-rules/kody-targets.json`.
-> - **Cost:** real model calls per rule shard; none under the scripted model.
+> - **Cost:** real model calls per rule shard, reported as `TOKENS` and in `--output`'s `tokens`; none under the scripted model.
 
 Does the review correctly enforce team Kody Rules? The kody-rules agent is a
 separate agent from the bug/security finder, so this eval is its own thing.

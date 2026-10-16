@@ -53,12 +53,12 @@ const RESOURCE_LABELS: Partial<Record<ResourceType, string>> = {
     [ResourceType.IssuesSettings]: 'Issues Settings',
     [ResourceType.Cockpit]: 'Cockpit',
     [ResourceType.Billing]: 'Billing / Subscription',
-    [ResourceType.GitSettings]: 'Git Settings',
+    [ResourceType.GitSettings]: 'Repositories',
     [ResourceType.PluginSettings]: 'Plugins',
-    [ResourceType.Logs]: 'Activity Log',
+    [ResourceType.Logs]: 'Activity logs',
     [ResourceType.TokenUsage]: 'Token Usage',
     [ResourceType.OrganizationSettings]: 'Organization Settings',
-    [ResourceType.UserSettings]: 'User / Seats',
+    [ResourceType.UserSettings]: 'Workspace members / Seats',
 };
 
 function scopeLabel(rule: PolicyRule): string {

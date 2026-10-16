@@ -308,17 +308,35 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    async findSuggestionsOnPR(
+        prNumber: number,
+        repoFullName: string,
+        organizationId: string,
+        deliveryStatus: DeliveryStatus,
+        limit: number,
+    ): Promise<ISuggestion[]> {
+        return this.pullRequestsRepository.findSuggestionsOnPR(
+            prNumber,
+            repoFullName,
+            organizationId,
+            deliveryStatus,
+            limit,
+        );
+    }
+
     async findPrLevelSuggestionsByPR(
         prNumber: number,
         repoFullName: string,
         organizationId: string,
         deliveryStatus: DeliveryStatus,
+        limit?: number,
     ): Promise<ISuggestionByPR[]> {
         return this.pullRequestsRepository.findPrLevelSuggestionsByPR(
             prNumber,
             repoFullName,
             organizationId,
             deliveryStatus,
+            limit,
         );
     }
 
@@ -459,6 +477,10 @@ export class PullRequestsService implements IPullRequestsService {
 
     newSubDocumentId(): string {
         return this.pullRequestsRepository.newSubDocumentId();
+    }
+
+    newSuggestionId(): string {
+        return this.pullRequestsRepository.newSuggestionId();
     }
 
     async findRecentByRepositoryId(
@@ -1317,7 +1339,7 @@ export class PullRequestsService implements IPullRequestsService {
                     unusedSuggestions,
                 ).map((s) => ({
                     ...s,
-                    id: s.id || this.pullRequestsRepository.newSubDocumentId(),
+                    id: s.id || this.pullRequestsRepository.newSuggestionId(),
                 }));
 
                 const existing = existingByPath.get(filename);

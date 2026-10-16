@@ -100,6 +100,9 @@ async function main() {
         startedAt: original.startedAt,
         finishedAt: original.finishedAt,
         tokens: original.tokens,
+        // The model calls' tokens and time (run-recall.js summary.usage): a
+        // rejudge scores again, it does not run the finder again.
+        ...(original.usage ? { usage: original.usage } : {}),
         cases: rows.length,
         infraFailures,
         metrics: {

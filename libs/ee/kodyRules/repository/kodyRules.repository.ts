@@ -12,6 +12,7 @@ import {
     IKodyRule,
     IKodyRules,
     KodyRulesStatus,
+    IKodyRuleIndexEntry,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { KodyRulesModel } from '@libs/kodyRules/infrastructure/adapters/repositories/schemas/kodyRules.model';
 import { KodyRulesValidationService } from '../service/kody-rules-validation.service';
@@ -42,9 +43,17 @@ export class KodyRulesRepository implements IKodyRulesRepository {
     //#endregion
 
     //#region Get/Find
-    async findById(uuid: string): Promise<IKodyRule | null> {
+    async findById(
+        uuid: string,
+        organizationId: string,
+    ): Promise<IKodyRule | null> {
         const pipeline = [
-            { $match: { 'rules.uuid': uuid } },
+            {
+                $match: {
+                    'rules.uuid': uuid,
+                    organizationId,
+                },
+            },
             { $unwind: '$rules' },
             { $match: { 'rules.uuid': uuid } },
             { $replaceRoot: { newRoot: '$rules' } },
@@ -152,6 +161,34 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         return doc ? mapSimpleModelToEntity(doc, KodyRulesEntity) : null;
     }
 
+    async findRulesIndex(
+        organizationId: string,
+    ): Promise<IKodyRuleIndexEntry[]> {
+        // Project inside MongoDB: the embedded rules array carries each
+        // rule's body, examples and compiled detector, and a picker only
+        // needs the title and where the rule lives. Uses the organizationId
+        // index from kodyRules.model.ts.
+        const pipeline: PipelineStage[] = [
+            { $match: { organizationId } },
+            { $unwind: '$rules' },
+            {
+                $project: {
+                    _id: 0,
+                    uuid: '$rules.uuid',
+                    title: '$rules.title',
+                    repositoryId: '$rules.repositoryId',
+                    directoryId: '$rules.directoryId',
+                    type: '$rules.type',
+                    status: '$rules.status',
+                },
+            },
+        ];
+
+        return this.kodyRulesModel
+            .aggregate<IKodyRuleIndexEntry>(pipeline)
+            .exec();
+    }
+
     async countRules(
         organizationId: string,
         status?: KodyRulesStatus,
@@ -161,12 +198,10 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         // MongoDB just to return a single number. Requires the
         // organizationId index from kodyRules.model.ts for sub-ms
         // lookups.
-        const pipeline: PipelineStage[] = [
-            { $match: { organizationId } },
-        ];
+        const pipeline: PipelineStage[] = [{ $match: { organizationId } }];
         if (status) {
-            pipeline.push(
-                { $project: {
+            pipeline.push({
+                $project: {
                     total: {
                         $size: {
                             $filter: {
@@ -176,12 +211,12 @@ export class KodyRulesRepository implements IKodyRulesRepository {
                             },
                         },
                     },
-                } },
-            );
+                },
+            });
         } else {
-            pipeline.push(
-                { $project: { total: { $size: { $ifNull: ['$rules', []] } } } },
-            );
+            pipeline.push({
+                $project: { total: { $size: { $ifNull: ['$rules', []] } } },
+            });
         }
         const [result] = await this.kodyRulesModel
             .aggregate<{ total: number }>(pipeline)

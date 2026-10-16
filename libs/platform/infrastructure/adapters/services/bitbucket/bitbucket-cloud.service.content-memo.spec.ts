@@ -108,3 +108,31 @@ describe('BitbucketCloudService.getRepositoryContentFile — commit resolution',
         expect(listCommits).toHaveBeenCalledTimes(2);
     });
 });
+
+// A missing file (an unset kodus-config.yml, a stale rule reference) is a normal
+// answer: logged as error it was 10k events/day from one polling cron.
+describe('BitbucketCloudService.getRepositoryContentFile — missing file', () => {
+    const httpError = (status: number) =>
+        Object.assign(new Error('Not Found'), { name: 'HTTPError', status });
+
+    it('logs a 404 as warn and returns null', async () => {
+        const service = makeService(
+            commitOk(),
+            jest.fn().mockRejectedValue(httpError(404)),
+        );
+
+        expect(await readFile(service, 'kodus-config.yml')).toBeNull();
+        expect((service as any).logger.error).not.toHaveBeenCalled();
+        expect((service as any).logger.warn).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps other failures at error level', async () => {
+        const service = makeService(
+            commitOk(),
+            jest.fn().mockRejectedValue(httpError(500)),
+        );
+
+        expect(await readFile(service, 'kodus-config.yml')).toBeNull();
+        expect((service as any).logger.error).toHaveBeenCalledTimes(1);
+    });
+});

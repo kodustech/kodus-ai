@@ -5,19 +5,23 @@ import { render, screen } from "@testing-library/react";
 import { CockpitLockedPreview } from "./locked-preview";
 
 describe("CockpitLockedPreview", () => {
-    it("renders static sample metrics — never real analytics data", () => {
-        render(<CockpitLockedPreview />);
+    it("names the locked metrics and leaves every value empty", () => {
+        const { container } = render(<CockpitLockedPreview />);
 
-        // Sample stat cards
+        // The metric names are real — they are what's locked.
         expect(screen.getByText("Deploy Frequency")).toBeInTheDocument();
-        expect(screen.getByText("4.2/week")).toBeInTheDocument();
         expect(screen.getByText("PR Cycle Time")).toBeInTheDocument();
         expect(screen.getByText("Bug Ratio")).toBeInTheDocument();
         expect(screen.getByText("PR Size")).toBeInTheDocument();
-
-        // Sample charts
         expect(screen.getByText("Lead Time Breakdown")).toBeInTheDocument();
         expect(screen.getByText("PRs Opened vs Closed")).toBeInTheDocument();
+
+        // Every value slot is a dash, one per metric card.
+        expect(screen.getAllByText("—")).toHaveLength(4);
+
+        // And nothing reads as a measurement: no digits anywhere in the tree,
+        // so a blurred screenshot can't be mistaken for the org's own data.
+        expect(container.textContent).not.toMatch(/\d/);
     });
 
     it("renders no data-fetching hooks — a static tree with no async boundaries", () => {

@@ -392,6 +392,22 @@ export class CliReviewController {
             } catch {
                 throw new UnauthorizedException('Invalid or expired JWT token');
             }
+            // Same checks as review(): the signature alone also matches other
+            // tokens signed with this secret (e.g. the MCP service token),
+            // which carry an organizationId but are not a user session.
+            const user = await this.authService.validateUser({
+                email: payload.email,
+            });
+            if (
+                !user ||
+                user.role !== payload.role ||
+                user.status !== payload.status ||
+                user.status === STATUS.REMOVED
+            ) {
+                throw new UnauthorizedException(
+                    'User account is inactive or removed',
+                );
+            }
             const team = queryTeamId
                 ? await this.teamService.findById(queryTeamId)
                 : await this.teamService.findFirstCreatedTeam(
@@ -400,6 +416,11 @@ export class CliReviewController {
             if (!team) {
                 throw new UnauthorizedException(
                     'No active team found for the authenticated user',
+                );
+            }
+            if (team.organization?.uuid !== payload.organizationId) {
+                throw new ForbiddenException(
+                    'Team does not belong to the authenticated organization',
                 );
             }
             return {

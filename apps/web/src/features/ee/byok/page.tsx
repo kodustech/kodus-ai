@@ -15,6 +15,8 @@ import { validateOrganizationLicense } from "src/features/ee/subscription/_servi
 import { ByokPageClient } from "./_components/page.client";
 import { isBYOKSubscriptionPlan } from "./_utils";
 
+const COST_SUMMARY_TIMEOUT_MS = 3_000;
+
 export default async function ByokPage() {
     const [byokConfig, llmConfigStatus, teamId, dateRange] = await Promise.all([
         getBYOK().catch(() => null),
@@ -27,25 +29,55 @@ export default async function ByokPage() {
     // BYOK flag the Costs screen uses, so the chip value matches the Costs
     // screen it deep-links to (the chip==Costs invariant). Best-effort: a
     // failed fetch just renders the models without a cost chip.
+    // The catalog only needs `byokConfig`, so it must not queue behind the
+    // license → usage chain. Kicked off here and awaited at the end, it
+    // overlaps the two requests below instead of adding a fourth round-trip.
+    const hasKodus = (byokConfig?.credentials ?? []).some(
+        (c) => c.provider === "kodus",
+    );
+    const kodusCatalogPromise = hasKodus
+        ? getLLMProviderModels("kodus")
+              .then((models) =>
+                  Object.fromEntries(
+                      models.map((m) => [
+                          m.id,
+                          { name: m.name, pricing: m.pricing },
+                      ]),
+                  ),
+              )
+              .catch(() => undefined)
+        : Promise.resolve(undefined);
+
     const subscription = teamId
         ? await validateOrganizationLicense({ teamId }).catch(() => null)
         : null;
     const isBYOK = subscription ? isBYOKSubscriptionPlan(subscription) : false;
 
-    const summary = await getSummaryTokenUsage({
-        startDate: dateRange.startDate,
-        endDate: dateRange.endDate,
-        byok: isBYOK,
-    }).catch(() => null);
+    // Bounded: the whole page waits on this, and for a high-volume org the
+    // summary aggregation can run for minutes. Past the deadline the page
+    // renders without cost chips instead of streaming a skeleton forever.
+    const summary = await getSummaryTokenUsage(
+        {
+            startDate: dateRange.startDate,
+            endDate: dateRange.endDate,
+            byok: isBYOK,
+        },
+        { signal: AbortSignal.timeout(COST_SUMMARY_TIMEOUT_MS) },
+    ).catch(() => null);
 
     // Per-model cost keyed by BYOKModelConfig.id — the v2 replacement for the
     // removed main/fallback cost pair. Resolved per models[].model.
+    // Only when the summary answered: resolving against a timed-out or failed
+    // summary would yield "no-usage" and render a false "No usage in this
+    // period" chip on every model — no entry renders no chip instead.
     const costByModelId: Record<string, ByokModelCost> = {};
-    for (const model of byokConfig?.models ?? []) {
-        costByModelId[model.id] = resolveByokModelCost(
-            model.model,
-            summary?.byModel,
-        );
+    if (summary) {
+        for (const model of byokConfig?.models ?? []) {
+            costByModelId[model.id] = resolveByokModelCost(
+                model.model,
+                summary.byModel,
+            );
+        }
     }
 
     // Human label for the window the cost covers (same range as Costs screen).
@@ -67,22 +99,8 @@ export default async function ByokPage() {
 
     // The Kodus catalog carries the curated names and the list prices the org
     // is billed at; the rows show both so the tariff is visible after saving,
-    // not only in the picker. Fetched only when a Kodus credential exists.
-    const hasKodus = (byokConfig?.credentials ?? []).some(
-        (c) => c.provider === "kodus",
-    );
-    const kodusCatalog = hasKodus
-        ? await getLLMProviderModels("kodus")
-              .then((models) =>
-                  Object.fromEntries(
-                      models.map((m) => [
-                          m.id,
-                          { name: m.name, pricing: m.pricing },
-                      ]),
-                  ),
-              )
-              .catch(() => undefined)
-        : undefined;
+    // not only in the picker. Started above, resolved here.
+    const kodusCatalog = await kodusCatalogPromise;
 
     return (
         <ByokPageClient

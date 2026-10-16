@@ -1007,3 +1007,73 @@ describe('mixed-label reviewer', () => {
         expect(out.suggestions[0].label).toBe('security');
     });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// Losses the run records (#2066): the review still succeeds, so without a
+// warning they read exactly like a full review.
+// ════════════════════════════════════════════════════════════════════════════
+describe('losses the run records (#2066)', () => {
+    it('records findings dropped because the file they named is not in the PR', async () => {
+        runLoopMock.mockResolvedValue(
+            makeHarnessResult({
+                findings: {
+                    reasoning: 'r',
+                    suggestions: [
+                        {
+                            suggestionContent: 'Null deref',
+                            relevantFile: 'src/not-in-this-pr.ts',
+                            oneSentenceSummary: 'null deref',
+                            relevantLinesStart: 1,
+                            relevantLinesEnd: 2,
+                            severity: 'high',
+                        },
+                    ],
+                },
+            }),
+        );
+
+        const out = await newAgent().execute(makeInput());
+
+        expect(out.suggestions).toHaveLength(0);
+        expect(out.warnings).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    kind: 'SUGGESTIONS_DROPPED_PATH_MISMATCH',
+                    reason: 'path_mismatch',
+                }),
+            ]),
+        );
+    });
+
+    it('records low-signal files dropped to fit a large PR on a full-size model', async () => {
+        resolveModelMock.mockResolvedValue(
+            makeModel({ main: { maxInputTokens: 200_000 } }),
+        );
+        const hugeTest = 'x'.repeat(600_000);
+
+        const out = await newAgent().execute(
+            makeInput({
+                changedFiles: [
+                    CHANGED_FILE,
+                    {
+                        filename: 'src/a.spec.ts',
+                        patch: hugeTest,
+                        patchWithLinesStr: hugeTest,
+                    } as any,
+                ],
+            }),
+        );
+
+        const dropped = (out.warnings ?? []).find(
+            (w) => w.kind === 'LOW_SIGNAL_FILES_DROPPED',
+        );
+        expect(dropped).toMatchObject({ reason: 'large_pr' });
+        expect(dropped?.detail).toContain('1 files dropped');
+    });
+
+    it('records nothing for a PR that fits', async () => {
+        const out = await newAgent().execute(makeInput());
+
+        expect(out.warnings ?? []).toEqual([]);
+    });
+});

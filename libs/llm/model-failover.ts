@@ -15,6 +15,8 @@
  * not "the next tier" — the selection precedence (per-agent → default) is a
  * SEPARATE concern owned by the router, not re-walked here.
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 import { createLogger } from '@libs/core/log/logger';
 import { LLM_ERROR_TAG, LLM_SUCCESS_TAG } from '@libs/llm/log-tags';
 import type { NormalizedModel } from '@libs/llm/byok-config';
@@ -27,6 +29,29 @@ import {
 } from '@libs/llm/error-classifier';
 
 const logger = createLogger('ModelFailover');
+
+/** A call that failed on one model and was answered by the next. */
+export interface ModelFailoverEvent {
+    runName: string;
+    failedModel: string;
+    usedModel: string;
+}
+
+const failoverRecorder = new AsyncLocalStorage<ModelFailoverEvent[]>();
+
+/**
+ * Runs `fn` and returns every call inside it that only succeeded on a fallback
+ * model. A failover is otherwise invisible to the caller: the call returns the
+ * same value it would have on the primary, so a review that ran on the backup
+ * model reads exactly like one that did not.
+ */
+export async function recordModelFailovers<T>(
+    fn: () => Promise<T>,
+): Promise<{ value: T; failovers: ModelFailoverEvent[] }> {
+    const failovers: ModelFailoverEvent[] = [];
+    const value = await failoverRecorder.run(failovers, fn);
+    return { value, failovers };
+}
 
 /**
  * Should a failed call cascade to the FALLBACK model? True only when a DIFFERENT
@@ -206,6 +231,13 @@ export async function runWithModelFailover<T>(
 
         try {
             const result = await runOne(attempts[i], control);
+            if (i > 0) {
+                failoverRecorder.getStore()?.push({
+                    runName: opts.runName,
+                    failedModel: attempts[0]?.model ?? 'managed-default',
+                    usedModel: attempts[i]?.model ?? 'managed-default',
+                });
+            }
             // DEBUG level: completes the [LLM-ERROR]/[LLM-SUCCESS] pair at the one
             // chokepoint every LLM.run funnels through, WITHOUT flooding prod —
             // one success line per call is too much at info, so it stays off

@@ -6,6 +6,7 @@ import {
     LucideIcon,
     Network,
     Shield,
+    ShieldCheck,
     Tag,
     Target,
     Zap,
@@ -22,6 +23,8 @@ export const categoryClassnames = {
         "bg-alert/10 text-alert ring-alert/64 [--button-foreground:var(--color-alert)]",
     kody_rules:
         "bg-info/10 text-info ring-info/64 [--button-foreground:var(--color-info)]",
+    deterministic:
+        "bg-info/10 text-info ring-info/64 [--button-foreground:var(--color-info)]",
     cross_file:
         "bg-info/10 text-info ring-info/64 [--button-foreground:var(--color-info)]",
     default:
@@ -34,6 +37,7 @@ const categoryIcons: Record<IssueCategory, LucideIcon> = {
     bug: Bug,
     performance: Zap,
     kody_rules: Target,
+    deterministic: ShieldCheck,
     breaking_changes: AlertTriangle,
     cross_file: Network,
     default: Tag,
@@ -44,6 +48,7 @@ const categoryDisplayNames: Record<IssueCategory, string> = {
     bug: "Bug",
     performance: "Performance",
     kody_rules: "Kody Rule",
+    deterministic: "Deterministic",
     breaking_changes: "Breaking Change",
     cross_file: "Cross-File",
     default: "Suggestion",

@@ -196,7 +196,7 @@ export class KodyRulesTools {
                             params.organizationAndTeamData.organizationId,
                         );
 
-                    const allRules: Partial<IKodyRule>[] = entity.rules || [];
+                    const allRules: Partial<IKodyRule>[] = entity?.rules || [];
 
                     const rules: Partial<IKodyRule>[] = allRules.filter(
                         (rule: Partial<IKodyRule>) =>
@@ -282,7 +282,7 @@ export class KodyRulesTools {
                             params.organizationAndTeamData.organizationId,
                         );
 
-                    const allRules: Partial<IKodyRule>[] = entity.rules || [];
+                    const allRules: Partial<IKodyRule>[] = entity?.rules || [];
 
                     const repositoryRules: Partial<IKodyRule>[] =
                         allRules.filter(
@@ -736,6 +736,7 @@ export class KodyRulesTools {
 
                     const existingRule = await this.kodyRulesService.findById(
                         args.ruleId,
+                        args.organizationId,
                     );
 
                     if (!existingRule) {
@@ -866,6 +867,8 @@ export class KodyRulesTools {
             }),
             execute: wrapToolHandler(
                 async (args: InputType): Promise<DeleteKodyRuleResponse> => {
+                    // organizationId and teamId were already checked against
+                    // the caller's credential by McpToolAuthorizer.
                     const result =
                         await this.deleteRuleInOrganizationByIdKodyRulesUseCase.execute(
                             args.ruleId,

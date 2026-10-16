@@ -71,12 +71,11 @@ export interface AgentRunInput {
      *  over the RAW metadata, not a pre-built SDK payload. Opaque here to keep the
      *  domain contract free of the vendor type. */
     readonly telemetryMetadata?: Readonly<Record<string, unknown>>;
-    /** Opaque per-run telemetry, forwarded VERBATIM as the model call's
-     *  `telemetry`. The harness does not interpret it: the domain hands it over
-     *  already in the shape the SDK takes (e.g. `toAiSdkTelemetryArgs`), so the
-     *  vendor mapping lives in ONE place, outside the harness. Per-RUN so each
-     *  call — finder, each recall pass, each per-finding verify — can carry its
-     *  own observation name.
+    /** Per-run telemetry in the SDK's shape (e.g. `toAiSdkTelemetryArgs`).
+     *  LLM.run builds the model call's telemetry itself, named after the run's
+     *  `runName`; this field only signals that the caller wants the run traced.
+     *  The metadata it opts into travels in `runtimeContext`, which the runner
+     *  forwards as `telemetryMetadata` when that is not set.
      *
      *  Type the payload with a `type` alias, never an `interface`: interfaces
      *  get no implicit index signature and so do not satisfy `Record<string,

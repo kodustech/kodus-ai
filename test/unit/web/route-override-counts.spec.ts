@@ -43,7 +43,7 @@ describe('route override counts', () => {
         expect(
             countConfigOverridesByRoute(
                 config,
-                'review-categories',
+                'review-scope',
                 FormattedConfigLevel.REPOSITORY,
             ),
         ).toBe(1);
@@ -74,7 +74,7 @@ describe('route override counts', () => {
         expect(
             countConfigOverridesForRoutes(
                 config,
-                ['general', 'general', 'review-categories'],
+                ['general', 'general', 'review-scope'],
                 FormattedConfigLevel.DIRECTORY,
             ),
         ).toBe(3);

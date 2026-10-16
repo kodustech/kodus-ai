@@ -32,6 +32,7 @@ import {
 } from '@libs/ai-engine/infrastructure/adapters/services/context/context-reference-detection.service';
 import { deepDifference, deepMerge } from '@libs/common/utils/deep';
 import { convertTiptapJSONToText } from '@libs/common/utils/tiptap-json';
+import { alignPromptOverridesWithParent } from './align-prompt-overrides';
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 import { IntegrationConfigKey, ParametersKey } from '@libs/core/domain/enums';
 import {
@@ -89,6 +90,7 @@ import {
     KODY_RULES_SERVICE_TOKEN,
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 import { KodyRulesType } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { createKodyLearningSettingsResolver } from '@libs/common/utils/kody-rules/kody-learning-settings';
 import { GenerateInitialKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/generate-initial-kody-rules.use-case';
 import {
     InvalidGroupPathError,
@@ -99,6 +101,7 @@ import {
     LICENSE_SERVICE_TOKEN,
 } from '@libs/ee/license/interfaces/license.interface';
 import { isTeamsOrEnterpriseTierAllowed } from '@libs/ee/license/tier/teams-or-enterprise-tier-policy';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 @Injectable()
 export class UpdateOrCreateCodeReviewParameterUseCase {
@@ -124,6 +127,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         private readonly generateInitialKodyRulesUseCase: GenerateInitialKodyRulesUseCase,
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService: ILicenseService,
+        private readonly telemetry: TelemetryService,
     ) {}
 
     async execute(
@@ -217,12 +221,21 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 this.filterRepositoryInfo(codeRepositories);
 
             if (!codeReviewConfigs || !codeReviewConfigs.configs) {
-                return await this.createNewGlobalConfig(
+                const createdGlobalConfig = await this.createNewGlobalConfig(
                     organizationAndTeamData,
                     configValue,
                     filteredRepositoryInfo,
                     body.actor,
                 );
+
+                void this.telemetry.codeReviewSettingsUpdated({
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    actorUserId: body.actor?.userId ?? body.requestUser?.uuid,
+                    configLevel: ConfigLevel.GLOBAL,
+                });
+
+                return createdGlobalConfig;
             }
 
             this.mergeRepositories(codeReviewConfigs, filteredRepositoryInfo);
@@ -460,13 +473,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 }
             }
 
-            const previousIdeSyncEnabled =
-                !!repositoryId &&
-                codeReviewConfigs?.repositories?.find(
-                    (r) => r.id === repositoryId,
-                )?.configs?.ideRulesSyncEnabled === true;
-
-            const result = await this.handleConfigUpdate(
+            const { result, updatedConfig } = await this.handleConfigUpdate(
                 organizationAndTeamData,
                 codeReviewConfigs,
                 configValue,
@@ -478,51 +485,31 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 previousRulesFileNames,
             );
 
-            if (
-                previousIdeSyncEnabled &&
-                (configValue as any)?.ideRulesSyncEnabled === false
-            ) {
-                // The action picked in the toggle-off modal in the web UI.
-                // Defaulting to 'keep' here is deliberate: any caller that
-                // doesn't pass an explicit action gets the least destructive
-                // option, which avoids the silent-deletion regression.
-                const action: IdeSyncDisableAction =
-                    (configValue as any)?.ideSyncDisableAction ?? 'keep';
-
-                const event: IdeRulesSyncDisabledEvent = {
+            if (!directoryId) {
+                this.applyKodyLearningTransitions({
                     organizationAndTeamData,
-                    repositoryId: repositoryId!,
-                    action,
-                };
-                this.eventEmitter.emit(IDE_RULES_SYNC_DISABLED_EVENT, event);
+                    previousConfig: codeReviewConfigs,
+                    updatedConfig,
+                    repositoryId,
+                    ideSyncDisableAction: (configValue as any)
+                        ?.ideSyncDisableAction,
+                    generatorEnabledInPayload:
+                        configValue?.kodyRulesGeneratorEnabled === true,
+                });
             }
 
-            // Enabling the Kody Rules generator for a repo seeds its rules from
-            // the last 3 months of PR reviews right away, instead of waiting for
-            // the weekly cron (which also backfills, but only on its next run).
-            // The seed is idempotent — it skips when past-review rules already
-            // exist — so re-saving an already-enabled repo is a no-op. Fired
-            // detached so it never blocks the settings save (issue #1506).
-            if (
-                !!repositoryId &&
-                configValue?.kodyRulesGeneratorEnabled === true
-            ) {
-                void this.generateInitialKodyRulesUseCase
-                    .execute({ organizationAndTeamData, repositoryId })
-                    .catch((error) => {
-                        this.logger.error({
-                            message:
-                                'Failed to start initial Kody Rules generation',
-                            context:
-                                UpdateOrCreateCodeReviewParameterUseCase.name,
-                            error:
-                                error instanceof Error
-                                    ? error
-                                    : new Error(String(error)),
-                            metadata: { organizationAndTeamData, repositoryId },
-                        });
-                    });
-            }
+            void this.telemetry.codeReviewSettingsUpdated({
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                actorUserId: body.actor?.userId ?? body.requestUser?.uuid,
+                configLevel:
+                    directoryId && repositoryId
+                        ? ConfigLevel.DIRECTORY
+                        : repositoryId
+                          ? ConfigLevel.REPOSITORY
+                          : ConfigLevel.GLOBAL,
+                repositoryId,
+            });
 
             return result;
         } catch (error) {
@@ -633,8 +620,16 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
     ) {
         const defaultConfig: ConfigDelta = getDefaultKodusConfigFile();
 
-        const sanitizedConfigValue =
-            this.stripCustomMessagesFromConfig(configValue);
+        const { config: sanitizedConfigValue, alignedPaths } =
+            alignPromptOverridesWithParent(
+                this.stripCustomMessagesFromConfig(configValue),
+                defaultConfig,
+            );
+        this.logAlignedPromptOverrides(
+            alignedPaths,
+            organizationAndTeamData,
+            'global',
+        );
 
         const updatedConfigValue = this.stripCustomMessagesFromConfig(
             deepDifference(defaultConfig, sanitizedConfigValue),
@@ -692,6 +687,26 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         codeReviewConfigs.repositories = updatedRepositories;
     }
 
+    /** A prompt sent back unchanged is not stored as the team's own text; record when that happens. */
+    private logAlignedPromptOverrides(
+        alignedPaths: string[],
+        organizationAndTeamData: OrganizationAndTeamData,
+        level: 'global' | 'repository' | 'directory',
+        repositoryId?: string,
+    ) {
+        if (!alignedPaths.length) return;
+        this.logger.log({
+            message: `Not storing ${alignedPaths.length} prompt override(s) identical to the inherited text`,
+            context: UpdateOrCreateCodeReviewParameterUseCase.name,
+            metadata: {
+                organizationAndTeamData,
+                level,
+                repositoryId,
+                alignedPaths,
+            },
+        });
+    }
+
     private async handleConfigUpdate(
         organizationAndTeamData: OrganizationAndTeamData,
         codeReviewConfigs: CodeReviewParameter,
@@ -717,8 +732,17 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             await resolver.getResolvedParentConfig(repositoryId, directoryId),
         );
 
-        const sanitizedIncomingConfig =
-            this.stripCustomMessagesFromConfig(newConfigValue);
+        const { config: sanitizedIncomingConfig, alignedPaths } =
+            alignPromptOverridesWithParent(
+                this.stripCustomMessagesFromConfig(newConfigValue),
+                parentConfig,
+            );
+        this.logAlignedPromptOverrides(
+            alignedPaths,
+            organizationAndTeamData,
+            directoryId ? 'directory' : repositoryId ? 'repository' : 'global',
+            repositoryId,
+        );
 
         let oldConfig: ConfigDelta;
         let level: ConfigLevel;
@@ -839,7 +863,143 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             requestUser,
         });
 
-        return centralizedPr ?? true;
+        return {
+            result: centralizedPr ?? true,
+            updatedConfig: updatedCodeReviewConfigValue,
+        };
+    }
+
+    /**
+     * Learning settings resolve default → global → repository, so one save can
+     * change the effective value of many repositories (a global save) or of
+     * one that only inherited it (a repository save). Each repository whose
+     * IDE rules sync goes on→off gets the cleanup picked in the toggle-off
+     * modal. Turning the generator on in a repository save seeds that
+     * repository right away. After a global save, the weekly cron backfills.
+     */
+    private applyKodyLearningTransitions(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        previousConfig: CodeReviewParameter;
+        updatedConfig: CodeReviewParameter;
+        repositoryId?: string;
+        ideSyncDisableAction?: IdeSyncDisableAction;
+        generatorEnabledInPayload: boolean;
+    }) {
+        const {
+            organizationAndTeamData,
+            previousConfig,
+            updatedConfig,
+            repositoryId,
+        } = params;
+        const level = repositoryId
+            ? ConfigLevel.REPOSITORY
+            : ConfigLevel.GLOBAL;
+        const repositoryIds = repositoryId
+            ? [repositoryId]
+            : (updatedConfig?.repositories ?? []).map((repo) =>
+                  String(repo.id),
+              );
+
+        const resolveBefore =
+            createKodyLearningSettingsResolver(previousConfig);
+        const resolveAfter = createKodyLearningSettingsResolver(updatedConfig);
+        // Defaulting to 'keep' is deliberate: any caller that doesn't pass an
+        // explicit action gets the least destructive option, which avoids the
+        // silent-deletion regression.
+        const ideSyncDisableAction = params.ideSyncDisableAction ?? 'keep';
+        const ideSyncDisabledIds: string[] = [];
+
+        for (const id of repositoryIds) {
+            const before = resolveBefore(id);
+            const after = resolveAfter(id);
+
+            if (before.ideRulesSyncEnabled && !after.ideRulesSyncEnabled) {
+                this.logger.log({
+                    message: 'IDE rules sync turned off for repository',
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId: id,
+                        level,
+                        action: ideSyncDisableAction,
+                    },
+                });
+                ideSyncDisabledIds.push(id);
+            } else if (
+                !before.ideRulesSyncEnabled &&
+                after.ideRulesSyncEnabled
+            ) {
+                this.logger.log({
+                    message: 'IDE rules sync turned on for repository',
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId: id,
+                        level,
+                    },
+                });
+            }
+
+            if (
+                before.kodyRulesGeneratorEnabled !==
+                after.kodyRulesGeneratorEnabled
+            ) {
+                this.logger.log({
+                    message: `Kody Rules generator turned ${after.kodyRulesGeneratorEnabled ? 'on' : 'off'} for repository`,
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId: id,
+                        level,
+                        seedsNow:
+                            level === ConfigLevel.REPOSITORY &&
+                            after.kodyRulesGeneratorEnabled &&
+                            params.generatorEnabledInPayload,
+                    },
+                });
+            }
+
+            // Seeding is idempotent (it skips when past-review rules already
+            // exist), so re-saving an already-enabled repo is a no-op. Fired
+            // detached so it never blocks the settings save (issue #1506).
+            if (
+                level === ConfigLevel.REPOSITORY &&
+                after.kodyRulesGeneratorEnabled &&
+                params.generatorEnabledInPayload
+            ) {
+                this.seedInitialKodyRules(organizationAndTeamData, id);
+            }
+        }
+
+        // One cleanup for the whole save: the listener loads the org's rules
+        // once instead of once per repository.
+        if (ideSyncDisabledIds.length > 0) {
+            const event: IdeRulesSyncDisabledEvent = {
+                organizationAndTeamData,
+                repositoryIds: ideSyncDisabledIds,
+                action: ideSyncDisableAction,
+            };
+            this.eventEmitter.emit(IDE_RULES_SYNC_DISABLED_EVENT, event);
+        }
+    }
+
+    private seedInitialKodyRules(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositoryId: string,
+    ) {
+        void this.generateInitialKodyRulesUseCase
+            .execute({ organizationAndTeamData, repositoryId })
+            .catch((error) => {
+                this.logger.error({
+                    message: 'Failed to start initial Kody Rules generation',
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    error:
+                        error instanceof Error
+                            ? error
+                            : new Error(String(error)),
+                    metadata: { organizationAndTeamData, repositoryId },
+                });
+            });
     }
 
     private async createCentralizedMutationIfEnabled(params: {

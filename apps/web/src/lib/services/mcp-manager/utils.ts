@@ -66,14 +66,31 @@ export const mcpManagerFetch = async <Data>(
         });
     } catch (error) {
         // Service unavailable — MCP Manager might not be running.
+        // Our own proxy could not reach the manager. The browser never sees
+        // ECONNREFUSED, because its request to /api/proxy/mcp succeeds and the
+        // failure happens upstream of it, so the string checks below only ever
+        // matched server-side direct calls.
+        //
+        // Matched on the proxy's own body marker, not on the status: a 502,
+        // 503 or 504 RELAYED from the manager (an ingress mid-rolling-restart,
+        // the manager reporting its own backend down) means "briefly
+        // unhealthy", and treating that as "not deployed" would hide the
+        // Plugins entry for the whole staleTime window — the opposite of the
+        // fail-open this probe promises.
+        const body = (error as { body?: { code?: unknown } })?.body;
+        const proxyCouldNotReachIt =
+            (error as { statusCode?: unknown })?.statusCode === 502 &&
+            body?.code === "UPSTREAM_UNREACHABLE";
+
         if (
-            error instanceof Error &&
-            (error.message.includes("ENOTFOUND") ||
-                error.message.includes("ECONNREFUSED") ||
-                error.message.includes("Failed to fetch") ||
-                error.message.includes("fetch failed"))
+            proxyCouldNotReachIt ||
+            (error instanceof Error &&
+                (error.message.includes("ENOTFOUND") ||
+                    error.message.includes("ECONNREFUSED") ||
+                    error.message.includes("Failed to fetch") ||
+                    error.message.includes("fetch failed")))
         ) {
-            console.warn("[MCP Manager] Service unavailable:", error.message);
+            console.warn("[MCP Manager] Service unavailable:", (error as Error)?.message);
             throw new MCPServiceUnavailableError();
         }
         throw error;

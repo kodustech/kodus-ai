@@ -18,6 +18,7 @@ import {
     type LLMConfigStatus,
 } from "@services/organizationParameters/fetch";
 import { OrganizationParametersConfigKey } from "@services/parameters/types";
+import { useUnsavedChangesGuard } from "src/core/hooks/use-unsaved-changes-guard";
 import {
     ChevronsUpDownIcon,
     Layers3Icon,
@@ -132,7 +133,9 @@ export const RoutingTab = ({
         return groupModelsByProvider(config).flatMap((group) =>
             group.models.map((m) => ({
                 id: m.id,
-                label: formatModelLabel(m.model),
+                // A model saved without its id still has to render (and be
+                // searchable) — fall back to the slot id, never undefined.
+                label: formatModelLabel(m.model) || m.id,
                 provider: group.credential.provider,
                 capabilities: capsById.get(m.id),
             })),
@@ -162,6 +165,46 @@ export const RoutingTab = ({
     const hasResettableRouting =
         !!fallbackModelId || Object.keys(taskOverrides).length > 0;
 
+    const nextRouting = (): BYOKRouting => ({
+        mode: "manual",
+        defaultModelId: defaultModelId || undefined,
+        fallbackModelId:
+            showFallback && fallbackModelId ? fallbackModelId : undefined,
+        taskOverrides: cleanOverrides(
+            taskOverrides,
+            defaultModelId || undefined,
+        ),
+    });
+
+    const dirty =
+        JSON.stringify(nextRouting()) !==
+        JSON.stringify({
+            mode: "manual",
+            defaultModelId: routing.defaultModelId || undefined,
+            fallbackModelId: routing.fallbackModelId || undefined,
+            taskOverrides: cleanOverrides(
+                routing.taskOverrides ?? {},
+                routing.defaultModelId || undefined,
+            ),
+        });
+
+    // Switching tabs unmounts this panel and the state above re-seeds from
+    // `config`, so an unsaved routing edit used to vanish without a word.
+    // Registering with the app-wide guard makes a tab switch, a nav link and
+    // the command palette all stop at the same place.
+    useUnsavedChangesGuard({
+        id: "byok-routing",
+        isDirty: dirty,
+        onBlock: () =>
+            toast({
+                variant: "warning",
+                title: "Unsaved routing changes",
+                description:
+                    "Save the routing you changed, or reset it, before leaving this tab.",
+            }),
+    });
+
+
     const labelFor = (id?: string) =>
         pool.find((m) => m.id === id)?.label ?? id;
     const providerOf = (id?: string) => pool.find((m) => m.id === id)?.provider;
@@ -173,7 +216,10 @@ export const RoutingTab = ({
         return (
             <Card color="lv1">
                 <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
-                    <p className="text-text-secondary text-sm text-balance">
+                    <span className="text-text-tertiary">
+                        <Layers3Icon size={24} />
+                    </span>
+                    <p className="text-text-secondary max-w-md text-sm text-balance">
                         Connect a provider first — routing needs at least one
                         model to route to.
                     </p>
@@ -208,7 +254,7 @@ export const RoutingTab = ({
                         review, Kody Rules, chat, and more) to different models.
                     </p>
                     <Button
-                        variant="primary"
+                        variant="primary-dark"
                         size="md"
                         onClick={onGoToProviders}>
                         Connect another model
@@ -217,29 +263,6 @@ export const RoutingTab = ({
             </Card>
         );
     }
-
-    const nextRouting = (): BYOKRouting => ({
-        mode: "manual",
-        defaultModelId: defaultModelId || undefined,
-        fallbackModelId:
-            showFallback && fallbackModelId ? fallbackModelId : undefined,
-        taskOverrides: cleanOverrides(
-            taskOverrides,
-            defaultModelId || undefined,
-        ),
-    });
-
-    const dirty =
-        JSON.stringify(nextRouting()) !==
-        JSON.stringify({
-            mode: "manual",
-            defaultModelId: routing.defaultModelId || undefined,
-            fallbackModelId: routing.fallbackModelId || undefined,
-            taskOverrides: cleanOverrides(
-                routing.taskOverrides ?? {},
-                routing.defaultModelId || undefined,
-            ),
-        });
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -365,7 +388,7 @@ export const RoutingTab = ({
                                         variant="helper"
                                         size="md"
                                         role="combobox"
-                                        className="min-w-64 justify-between gap-2"
+                                        className="w-full justify-between gap-2 sm:w-auto sm:min-w-64"
                                         rightIcon={
                                             <ChevronsUpDownIcon className="-mr-2 opacity-50" />
                                         }>
@@ -417,7 +440,7 @@ export const RoutingTab = ({
                                                 variant="helper"
                                                 size="md"
                                                 role="combobox"
-                                                className="min-w-56 justify-between gap-2"
+                                                className="w-full justify-between gap-2 sm:w-auto sm:min-w-56"
                                                 rightIcon={
                                                     <ChevronsUpDownIcon className="-mr-2 opacity-50" />
                                                 }>

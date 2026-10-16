@@ -48,9 +48,9 @@ describe('nightly comparison', () => {
         const targets = { sets: { light: { models: { m: { observed: { sdPerPrRunDiff: 0.318, runs: [0.384, 0.352] } } } } } };
         expect(nightNoise(targets, 'light', 'm')).toBeCloseTo(0.05, 2);
         expect(nightNoise(targets, 'light', 'other')).toBeNull();
-        expect(catalogIdFor('deepseek-v4-flash@fireworks')).toBe('fireworks/accounts/fireworks/models/deepseek-v4-flash-0731');
+        expect(catalogIdFor('deepseek-v4-flash@fireworks')).toBe('fireworks/accounts/fireworks/models/deepseek-v4p1-flash');
         expect(catalogIdFor('gpt-5.4')).toBeNull();
-        expect(costUpperBound({ prompt: 1e6, completion: 0 }, 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731')).toBeGreaterThan(0);
+        expect(costUpperBound({ prompt: 1e6, completion: 0 }, 'fireworks/accounts/fireworks/models/deepseek-v4p1-flash')).toBeGreaterThan(0);
         expect(costUpperBound({ prompt: 1e6, completion: 0 }, 'not-in-catalog')).toBeNull();
     });
 });
@@ -194,7 +194,7 @@ describe('confirmation of a run below the floor', () => {
 });
 
 describe('gate refuses a judge it was not calibrated with', () => {
-    const run = { metrics: { recall_mean: 0.4 }, rows: [{ caseId: 'a', status: 'pass', metadata: { recall: 0.4, tpFindings: 2, fpFindings: 1, totalCalls: 40 } }] };
+    const run = { metrics: { recall_mean: 0.6 }, rows: [{ caseId: 'a', status: 'pass', metadata: { recall: 0.6, tpFindings: 2, fpFindings: 1, totalCalls: 90 } }] };
     const gateUnder = (env: Record<string, string | undefined>) => {
         const saved = { JUDGE_MODEL: process.env.JUDGE_MODEL, JUDGE_REASONING_EFFORT: process.env.JUDGE_REASONING_EFFORT };
         Object.assign(process.env, env);

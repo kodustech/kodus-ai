@@ -111,6 +111,9 @@ export class GenerateInitialKodyRulesUseCase {
                 metadata: { organizationId, teamId, repositoryId },
             });
 
+            // No telemetry here: this delegates to GenerateKodyRulesUseCase,
+            // which emits `kody_rules_imported` itself. Emitting again would
+            // double every seeding run in the funnel.
             await this.generateKodyRulesUseCase.execute(
                 {
                     teamId,

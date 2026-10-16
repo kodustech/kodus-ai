@@ -15,6 +15,8 @@ export enum LabelType {
     PERFORMANCE = 'performance',
     CROSS_FILE = 'cross_file',
     BUSINESS_LOGIC = 'business_logic',
+    /** A scanner's finding, not the model's. See libs/code-review/infrastructure/analyzers. */
+    DETERMINISTIC = 'deterministic',
 }
 
 enum ShieldColor {
@@ -72,6 +74,8 @@ const getLabelShield = (label: string) => {
             return `${shield}${ShieldColor.LIGHT_PURPLE})`;
         case LabelType.BUSINESS_LOGIC:
             return `${shield}${ShieldColor.TEAL})`;
+        case LabelType.DETERMINISTIC:
+            return `${shield}${ShieldColor.INDIGO})`;
         default:
             return '';
     }

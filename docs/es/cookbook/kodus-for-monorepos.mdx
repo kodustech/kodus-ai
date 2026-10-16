@@ -1,0 +1,130 @@
+---
+title: "Kodus para monorepos"
+description: "Configura reglas a nivel de directorio, anulaciones específicas por ruta y herencia de reglas para obtener revisiones de código precisas en un monorepo."
+icon: "folder-tree"
+---
+
+## El desafío
+
+En un monorepo, distintos paquetes tienen distintos estándares. Tu frontend en React se preocupa por los patrones de componentes, tu backend en NestJS se preocupa por la inyección de dependencias, y tus libs compartidas se preocupan por la estabilidad de la API. Una revisión única para todo no funciona.
+
+## Descripción general de la estrategia
+
+Kodus admite tres niveles de configuración que se mapean de forma natural a un monorepo:
+
+| Nivel | Aplica a | Ejemplo |
+|-------|---------|---------|
+| **Global** | Todos los repos | "Nunca commitear archivos `.env`" |
+| **Repositorio** | El monorepo | "Usar conventional commits" |
+| **Directorio** | Un paquete específico | "Los componentes React deben usar PascalCase" |
+
+## Paso 1 — Mapea tus paquetes
+
+Identifica las áreas distintas de tu monorepo y sus necesidades de revisión:
+
+```
+monorepo/
+├── apps/
+│   ├── web/          → Reglas React, patrones de componentes
+│   ├── api/          → Reglas NestJS, límites de arquitectura
+│   └── mobile/       → Reglas React Native
+├── libs/
+│   ├── shared/       → Estabilidad de API, detección de cambios incompatibles
+│   └── ui/           → Cumplimiento del sistema de diseño
+└── infra/            → Reglas Terraform/IaC
+```
+
+## Paso 2 — Crea configuraciones a nivel de directorio
+
+En la barra lateral, abre el selector de alcance en la parte superior del grupo **Code review** y elige **Add repository configuration**. En **Create repository settings**, usa **Select the target repository** (el monorepo), luego **Select the target directories** (una o más carpetas de paquetes) y haz clic en **Create settings**. Cada directorio aparece con sangría bajo el repositorio en el selector de alcance; selecciónalo para configurarlo.
+
+Cada directorio puede tener su propia:
+- **Kody Rules** (a nivel de archivo y de PR)
+- **What to review** (qué categorías habilitar y la severidad mínima para publicar)
+- **Ignored files** (en **General**)
+
+## Paso 3 — Escribe reglas específicas
+
+### Reglas de frontend (ámbito: `apps/web/`)
+
+```
+Name: React components must use design system tokens
+Execution mode: Per file
+Path: apps/web/src/components/**/*.tsx
+Severity: High
+Instructions:
+  Check fileDiff for hardcoded colors, spacing, or font sizes.
+  Components must import tokens from @file:libs/ui/src/tokens.ts.
+  Flag any hex color, pixel value, or font-size not from the token file.
+```
+
+### Reglas de backend (ámbito: `apps/api/`)
+
+```
+Name: Domain layer must not import from infrastructure
+Execution mode: Per file
+Path: apps/api/src/domain/**/*.ts
+Severity: Critical
+Instructions:
+  Check fileDiff for any import from "../infrastructure",
+  "../../infrastructure", or any path containing "/infrastructure/".
+  Domain modules must only depend on other domain modules
+  and shared interfaces.
+```
+
+### Reglas de librería compartida (ámbito: `libs/shared/`)
+
+```
+Name: Public API changes require changeset
+Execution mode: Per PR
+Severity: High
+Instructions:
+  If pr_files_diff modifies any file in libs/shared/src/index.ts
+  or adds/removes exports, check that a changeset file exists
+  in the .changeset/ directory. If missing, flag it as a
+  potential breaking change without documentation.
+```
+
+## Paso 4 — Usa Memorias para convenciones transversales
+
+Algunas convenciones aplican en todas partes. Enséñalas como Memorias:
+
+```
+@kody remember: in this monorepo, all packages use ESM imports.
+CommonJS require() is not allowed anywhere.
+```
+
+```
+@kody remember: shared libs must maintain backward compatibility.
+Any breaking change requires a major version bump and a changeset.
+```
+
+## Paso 5 — Define el umbral de severidad por directorio
+
+Los paquetes con mucho tráfico pueden necesitar filtros más estrictos. Selecciona el directorio en el selector de alcance, abre **What to review** y define **Minimum severity to post**:
+
+- **apps/web/** — **Medium** (el frontend avanza rápido)
+- **libs/shared/** — **Low/All** (la estabilidad importa)
+- **infra/** — **High** (menos pero críticas)
+
+## Paso 6 — Ignora rutas generadas
+
+Añade ignorados específicos del monorepo para evitar ruido:
+
+```yaml
+ignorePaths:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/*.generated.ts"
+  - "**/prisma/migrations/**"
+  - "**/coverage/**"
+```
+
+## Consejos
+
+- Comienza con 2-3 reglas por directorio y amplía según lo que tu equipo realmente marque en las revisiones
+- Usa la herencia de reglas — las reglas a nivel de organización cubren seguridad, las de repositorio cubren convenciones, las de directorio cubren arquitectura
+- Si una regla se activa demasiado en un paquete pero es válida en otros, excluye ese directorio de la regla en lugar de debilitarla
+
+Para más información sobre configuraciones de directorio, consulta [Configuración a nivel de directorio](/es/how_to_use/code_review/configs/directory_level). Para la herencia de reglas, consulta [Herencia de reglas](/es/how_to_use/code_review/configs/rules_inheritance).

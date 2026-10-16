@@ -10,6 +10,7 @@ import type { LanguageModel } from 'ai';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { decrypt } from '@libs/common/utils/crypto';
 import { repairBaseUrl } from '@libs/llm/base-url-hygiene';
+import { canonicalUpstreamModelId } from '@libs/llm/providers/kodus/model-id';
 // Provider registry (Phase 1): every BYOK provider resolves through REGISTRY.
 // Importing the barrel registers all provider modules via side effect.
 import { REGISTRY } from '@libs/llm/providers';
@@ -96,9 +97,18 @@ export function buildModelFromSlot(
     // An unknown provider id throws a clear per-provider error (replacing the old
     // switch's silent openai-compatible default) — unreachable for the closed
     // BYOKProvider enum, but fail-loud.
+    //
+    // `model` is repaired at the same spread for the same reason: a stored id the
+    // upstream has retired (Fireworks' deepseek-v4-flash-0731) 404s on every call
+    // until the org edits its config, so it runs as its replacement instead.
     const apiKey = decrypt(slot.apiKey);
     return REGISTRY.get(slot.provider).build(
-        { ...slot, apiKey, baseURL: repairBaseUrl(slot.baseURL) },
+        {
+            ...slot,
+            apiKey,
+            baseURL: repairBaseUrl(slot.baseURL),
+            model: canonicalUpstreamModelId(slot.model),
+        },
         options,
     );
 }

@@ -5,6 +5,7 @@ import type {
     ProviderName,
     ProviderRepoRef,
     ReviewSignal,
+    ReviewThread,
     WebhookInfo,
 } from "../lib/types.js";
 import type { Target } from "../lib/types.js";
@@ -25,6 +26,9 @@ interface BitbucketComment {
     content: { raw: string };
     created_on: string;
     user: { uuid: string; display_name: string };
+    parent?: { id: number };
+    deleted?: boolean;
+    inline?: { path?: string } | null;
 }
 
 export class BitbucketProvider extends BaseProvider {
@@ -68,7 +72,13 @@ export class BitbucketProvider extends BaseProvider {
     }
 
     private cloneUrl(): string {
-        return `https://${this.user}:${this.appPassword}@bitbucket.org/${this.workspaceSlug}.git`;
+        // An Atlassian API token (BB_TEST_USER is then the account email)
+        // authenticates git only under this fixed username; the REST calls
+        // keep using email:token.
+        const gitUser = this.user.includes("@")
+            ? "x-bitbucket-api-token-auth"
+            : this.user;
+        return `https://${encodeURIComponent(gitUser)}:${encodeURIComponent(this.appPassword)}@bitbucket.org/${this.workspaceSlug}.git`;
     }
 
     async repoRef(): Promise<ProviderRepoRef> {
@@ -643,6 +653,73 @@ export class BitbucketProvider extends BaseProvider {
             },
             { timeoutSec: opts.timeoutSec ?? 300, intervalSec: 10 },
         );
+    }
+
+    // Comments Kody opened: roots carrying Bitbucket's visible chip. Its
+    // conversation answers carry no marker there (raw HTML would show), and
+    // it may post as the harness account, so the scenario tells its answer
+    // apart as "a new comment in the thread the harness did not post".
+    async listKodyThreads(prNumber: number): Promise<ReviewThread[]> {
+        return (await this.allComments(prNumber))
+            .filter(
+                (c) =>
+                    !c.parent?.id &&
+                    !!c.inline &&
+                    (c.content?.raw ?? "").includes("kody|code-review"),
+            )
+            .map((c) => ({ id: String(c.id), body: c.content?.raw ?? "" }));
+    }
+
+    async replyInThread(
+        prNumber: number,
+        threadId: string,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }> {
+        const auth = `Basic ${Buffer.from(`${this.user}:${token}`).toString("base64")}`;
+        const resp = await http<BitbucketComment>(
+            `${this.apiBase}/repositories/${this.workspaceSlug}/pullrequests/${prNumber}/comments`,
+            {
+                method: "POST",
+                headers: { Authorization: auth, Accept: "application/json" },
+                body: {
+                    content: { raw: body },
+                    parent: { id: Number(threadId) },
+                },
+            },
+        );
+        ensureOk(resp, "bitbucket:replyInThread");
+        return { id: String(resp.body.id) };
+    }
+
+    async threadComments(
+        prNumber: number,
+        threadId: string,
+    ): Promise<ReviewThread[]> {
+        const comments = await this.allComments(prNumber);
+        const byId = new Map(comments.map((c) => [String(c.id), c]));
+        const rootOf = (c: BitbucketComment): string => {
+            let current = c;
+            for (let hops = 0; current.parent?.id && hops < 50; hops++) {
+                const parent = byId.get(String(current.parent.id));
+                if (!parent) break;
+                current = parent;
+            }
+            return String(current.id);
+        };
+        return comments
+            .filter((c) => !c.deleted && rootOf(c) === threadId)
+            .sort((a, b) => a.created_on.localeCompare(b.created_on))
+            .map((c) => ({ id: String(c.id), body: c.content?.raw ?? "" }));
+    }
+
+    private async allComments(prNumber: number): Promise<BitbucketComment[]> {
+        const resp = await http<{ values: BitbucketComment[] }>(
+            `${this.apiBase}/repositories/${this.workspaceSlug}/pullrequests/${prNumber}/comments?pagelen=100`,
+            { headers: this.headers() },
+        );
+        ensureOk(resp, "bitbucket:allComments");
+        return resp.body.values ?? [];
     }
 
     authMode(): "token" {

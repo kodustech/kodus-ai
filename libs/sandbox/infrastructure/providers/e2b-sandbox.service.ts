@@ -9,9 +9,15 @@ import {
     ISandboxProvider,
     SandboxInstance,
     SandboxRunResult,
+    toBranchName,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
+import {
+    fetchSubmodules,
+    isContainedRelativePath,
+    SubmoduleGitHost,
+} from '@libs/sandbox/infrastructure/providers/submodule-fetch';
 
 // 35 minutes — aligned with the lease lifecycle ceiling.
 // Lease docs expire at DEFAULT_LEASE_TTL_MS (30 min) and the reaper cron
@@ -24,6 +30,14 @@ import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/service
 // onPipelineFinish observer calls sandbox.cleanup() on every exit path,
 // so this is a safety ceiling, not a cost floor.
 const SANDBOX_TIMEOUT_MS = 35 * 60 * 1000;
+
+// Every sandbox is tagged with the deployment that created it, so the orphan
+// sweep (SandboxLeaseReaperService) only ever kills its own: environments can
+// share one E2B key (dev and prod do), and a sweep only sees its own Mongo.
+export const E2B_DEPLOYMENT_METADATA_KEY = 'deployment';
+export function e2bDeploymentTag(apiNodeEnv: string | undefined): string {
+    return apiNodeEnv || 'unknown';
+}
 const REPO_DIR = '/home/user/repo';
 
 const TIMEOUTS = {
@@ -31,6 +45,11 @@ const TIMEOUTS = {
     PROXY_DAEMON_MS: 10_000,
     PROXY_CONFIG_MS: 5_000,
     VERIFY_MS: 10_000,
+    // Submodule fetch is best-effort and must never hold a review hostage:
+    // a repo with several large submodules gets 2 min, then the review
+    // proceeds with whatever was populated (the rest report themselves as
+    // uninitialized to the agent).
+    SUBMODULES_MS: 120_000,
     COMMAND_LONG_MS: 30_000,
     COMMAND_SHORT_MS: 10_000,
 };
@@ -160,10 +179,7 @@ export function buildE2BRemoteCommands(
             return result.stdout;
         },
 
-        listDir: async (
-            path: string,
-            maxDepth: number,
-        ): Promise<string> => {
+        listDir: async (path: string, maxDepth: number): Promise<string> => {
             // Same shape as `grep` above, deliberately: validate, then `cd` into
             // REPO_DIR and pass the ORIGINAL RELATIVE path, so the listing comes
             // back relative to the repo root.
@@ -263,6 +279,103 @@ function buildGitAuthHeader(
         default:
             return `Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`;
     }
+}
+
+/**
+ * Populate the submodules a repository declares, after the checkout.
+ *
+ * Standalone (like `resolvePrRefspec` / `buildGitAuthHeader` above) because
+ * BOTH the create path and the reconnect path need it, and a submodule that is
+ * populated on round 1 but not on round 2 is the stale-checkout bug in another
+ * costume.
+ *
+ * Best-effort by contract: the GitHub App token may simply have no access to a
+ * private submodule repository, and that must degrade to "the agent is told the
+ * directory was never fetched" (#1939's marker), never to a failed review.
+ *
+ * Which submodules are eligible, and the scoping of the auth header, are
+ * decided by `buildSubmoduleUpdatePlan` — shared with the local provider so the
+ * two cannot drift.
+ */
+export async function fetchE2BSubmodules(
+    sandbox: Sandbox,
+    cloneUrl: string,
+    authHeader: string | undefined,
+    opts: {
+        logger?: SimpleLogger;
+        logContext?: string;
+        /**
+         * Which review this belongs to. Several reviews share one worker, so
+         * without it the `[SUBMODULES]` lines of concurrent reviews are
+         * indistinguishable in the log — which is exactly the question an
+         * operator asks when one repository's submodules did not populate.
+         */
+        logMetadata?: Record<string, unknown>;
+        /**
+         * Ref of the pull request's base branch, e.g. `origin/main`. Without
+         * it nothing is fetched — see `baseDeclaredDumpArgs`.
+         */
+        baseRef?: string;
+    } = {},
+): Promise<void> {
+    const {
+        logger,
+        logContext = 'fetchE2BSubmodules',
+        logMetadata = {},
+        baseRef,
+    } = opts;
+
+    // Thin adapter: the ORDER, the retries, the time budget and the logging
+    // all live in `fetchSubmodules`, shared with the local provider so the two
+    // cannot drift. Only these three primitives differ between them.
+    const host: SubmoduleGitHost = {
+        readGitmodules: async () => {
+            try {
+                const read = await sandbox.commands.run(
+                    `cat ${REPO_DIR}/.gitmodules`,
+                    { timeoutMs: TIMEOUTS.VERIFY_MS },
+                );
+                return read.stdout || '';
+            } catch {
+                return null;
+            }
+        },
+        git: async (args, runOpts) =>
+            sandbox.commands.run(
+                `cd ${REPO_DIR} && git ${args.map((a) => shSingleQuote(a)).join(' ')}`,
+                {
+                    timeoutMs: runOpts?.timeoutMs ?? TIMEOUTS.VERIFY_MS,
+                    ...(runOpts?.env ? { envs: runOpts.env } : {}),
+                },
+            ),
+        removeDir: async (relative) => {
+            // `relative` is built from the submodule NAME in `.gitmodules`,
+            // which the pull request author writes. `shSingleQuote` stops
+            // shell injection but not `..`, and this is `rm -rf`. The shared
+            // module rejects such a name, but the guard is repeated at the
+            // one place that deletes.
+            if (!isContainedRelativePath(relative)) {
+                throw new Error(
+                    `refusing to remove a path outside the checkout: ${relative}`,
+                );
+            }
+            await sandbox.commands.run(
+                `rm -rf ${shSingleQuote(`${REPO_DIR}/${relative}`)}`,
+                { timeoutMs: TIMEOUTS.COMMAND_SHORT_MS },
+            );
+        },
+    };
+
+    await fetchSubmodules(host, {
+        repoCloneUrl: cloneUrl,
+        baseRef,
+        authHeader,
+        totalBudgetMs: TIMEOUTS.SUBMODULES_MS,
+        stepTimeoutMs: TIMEOUTS.COMMAND_LONG_MS,
+        logger,
+        logContext,
+        logMetadata,
+    });
 }
 
 export interface SyncE2BSandboxRepoOptions {
@@ -379,6 +492,32 @@ export async function syncE2BSandboxRepo(
         return;
     }
 
+    // Round N's commit can move the submodule pointers, and `git clean -fd`
+    // does not descend into submodule directories — so without this a reused
+    // sandbox keeps round 1's submodule contents (or none at all) while the
+    // diff describes round N.
+    await fetchE2BSubmodules(
+        sandbox,
+        cloneUrl,
+        hasAuth ? authHeader : undefined,
+        {
+            logger,
+            logContext: logContext ?? 'syncE2BSandboxRepo',
+            logMetadata: { prNumber },
+            // Round N reuses the sandbox, so the base ref is whatever the
+            // previous round fetched. Absent or stale, the shared module
+            // fetches nothing and says so.
+            // Normalized like the fetch above: a host that reports
+            // `refs/heads/main` would otherwise produce
+            // `origin/refs/heads/main`, which resolves to nothing, and the
+            // submodule fetch would report "base ref is not in the sandbox"
+            // on every reconnect.
+            baseRef: params.baseBranch
+                ? `origin/${toBranchName(params.baseBranch)}`
+                : undefined,
+        },
+    );
+
     logger?.log?.({
         message: `[DEBUG] syncE2BSandboxRepo: synced reused sandbox to refspec=${refspec}`,
         context: logContext ?? 'syncE2BSandboxRepo',
@@ -468,6 +607,32 @@ export class E2BSandboxService implements ISandboxProvider {
                 params,
             );
 
+            // The checkout above is a shallow fetch with no submodule
+            // handling, so every path the repository declares in
+            // `.gitmodules` would otherwise be an empty directory the agent
+            // reads as "this code does not exist" (#1939). It runs HERE, not
+            // in `cloneRepository`, because the rule that bounds it needs the
+            // base branch to already be in the sandbox.
+            await fetchE2BSubmodules(
+                sandbox,
+                params.cloneUrl,
+                params.authToken
+                    ? this.buildAuthHeader(
+                          params.platform,
+                          params.authToken,
+                          params.authUsername,
+                      )
+                    : undefined,
+                {
+                    logger: this.logger,
+                    logContext: E2BSandboxService.name,
+                    logMetadata: { prNumber: params.prNumber },
+                    baseRef: resolvedBaseBranch
+                        ? `origin/${resolvedBaseBranch}`
+                        : undefined,
+                },
+            );
+
             const remoteCommands = this.buildRemoteCommands(sandbox);
 
             const cleanup = async () => {
@@ -491,7 +656,10 @@ export class E2BSandboxService implements ISandboxProvider {
                 repoDir: REPO_DIR,
                 run: async (
                     command: string,
-                    opts?: { timeoutMs?: number; envs?: Record<string, string> },
+                    opts?: {
+                        timeoutMs?: number;
+                        envs?: Record<string, string>;
+                    },
                 ): Promise<SandboxRunResult> => {
                     const result = await sandbox.commands.run(command, {
                         timeoutMs: opts?.timeoutMs ?? TIMEOUTS.COMMAND_LONG_MS,
@@ -685,6 +853,10 @@ export class E2BSandboxService implements ISandboxProvider {
             );
         }
 
+        // Submodules are fetched by the caller, AFTER the base branch is in
+        // the sandbox: only a submodule declared identically on the base is
+        // fetched, and that declaration is read from the base ref (#1939).
+
         // Verify repo contents after clone
         const verifyResult = await sandbox.commands.run(
             `ls -la ${REPO_DIR} && echo "---FILE-COUNT---" && find ${REPO_DIR} -maxdepth 2 -type f | head -20`,
@@ -782,8 +954,12 @@ export class E2BSandboxService implements ISandboxProvider {
         sandbox: Sandbox,
         params: CreateSandboxParams,
     ): Promise<string | undefined> {
-        const { cloneUrl, authToken, authUsername, platform, baseBranch } =
-            params;
+        const { cloneUrl, authToken, authUsername, platform } = params;
+        // Azure Repos names branches in full ("refs/heads/main"). Pasted into
+        // the refspec below that becomes "refs/heads/refs/heads/main", the
+        // fetch fails, and every tool that needs the base tree — the
+        // dependency baseline above all — silently loses it.
+        const baseBranch = toBranchName(params.baseBranch);
         if (!baseBranch) return undefined;
 
         const hasAuth = !!authToken;
@@ -805,13 +981,10 @@ export class E2BSandboxService implements ISandboxProvider {
             : `cd ${REPO_DIR} && git fetch --depth=1 ${safeCloneUrl} refs/heads/${safeBaseBranch}:refs/remotes/origin/${safeBaseBranch}`;
 
         try {
-            const result = await sandbox.commands.run(
-                baseCmd,
-                {
-                    timeoutMs: TIMEOUTS.CLONE_MS,
-                    ...(hasAuth && { envs: { GIT_AUTH_HEADER: authHeader } }),
-                },
-            );
+            const result = await sandbox.commands.run(baseCmd, {
+                timeoutMs: TIMEOUTS.CLONE_MS,
+                ...(hasAuth && { envs: { GIT_AUTH_HEADER: authHeader } }),
+            });
 
             if (result.exitCode === 0) {
                 this.logger.log({
@@ -840,6 +1013,12 @@ export class E2BSandboxService implements ISandboxProvider {
         apiKey: string,
         metadata?: Record<string, string>,
     ): Promise<{ sandbox: Sandbox; usedTemplate: boolean }> {
+        metadata = {
+            ...metadata,
+            [E2B_DEPLOYMENT_METADATA_KEY]: e2bDeploymentTag(
+                this.configService.get<string>('API_NODE_ENV'),
+            ),
+        };
         const isGraphStage =
             metadata?.stage === 'graph-build' ||
             metadata?.stage === 'graph-incremental';
@@ -859,7 +1038,7 @@ export class E2BSandboxService implements ISandboxProvider {
                     timeoutMs: SANDBOX_TIMEOUT_MS,
                     apiKey,
                     metadata,
-                    lifecycle: { onTimeout: 'pause', autoResume: true },  // SBX-03: pause not kill; autoResume must be explicit
+                    lifecycle: { onTimeout: 'pause', autoResume: true }, // SBX-03: pause not kill; autoResume must be explicit
                 });
                 return { sandbox, usedTemplate: true };
             } catch (error) {
@@ -876,7 +1055,7 @@ export class E2BSandboxService implements ISandboxProvider {
             timeoutMs: SANDBOX_TIMEOUT_MS,
             apiKey,
             metadata,
-            lifecycle: { onTimeout: 'pause', autoResume: true },  // SBX-03: pause not kill; autoResume must be explicit
+            lifecycle: { onTimeout: 'pause', autoResume: true }, // SBX-03: pause not kill; autoResume must be explicit
         });
         return { sandbox, usedTemplate: false };
     }

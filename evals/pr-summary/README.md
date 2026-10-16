@@ -1,9 +1,9 @@
 # PR-summary eval
 
-> - **Answers:** Is the PR summary generated, posted, and sent to the configured model?
-> - **Runs:** every engine PR, against the scripted model (`evals/wiring-smoke.js`) · Friday, on every tier-0 model (`evals/tier0-smoke.js`).
-> - **Run it:** `pnpm eval:pr-summary:mock` · `pnpm eval:pr-summary`
-> - **Gate:** binary assertions, with no numeric floor (see below).
+> - **Answers:** Is the PR summary generated, posted, sent to the configured model, composed as the team configured, and about what the diff does?
+> - **Runs:** nightly when the summary path or its cases change (`evals/nightly-evals.js`), Friday on every tier-0 model, and on every PR in `evals/wiring-smoke.js` against the scripted model.
+> - **Run it:** `node evals/pr-summary/run.js --model=<id>` · `pnpm eval:pr-summary:mock`
+> - **Gate:** `--gate` fails below the model's floor in `evals/pr-summary/targets.json`; a model with none is gated on the contract alone, where any failed check fails it.
 > - **Cost:** one model call per case; none mocked.
 
 Guards the **"generate PR summary on open"** feature — the AI description Kody
@@ -50,6 +50,15 @@ behaviour contract.
    spied `generateSummaryPR` (no model) and asserts the generate/post decision
    and the `isCommitRun` flag for every (mode × behaviour) combination.
 
+6. **About the diff** (real models only) — the summary uses at least one word
+   only the diff holds: parts of the changed files' and code names that the
+   title and the existing description do not carry, minus words any summary
+   uses ("update", "user"). It runs only where the diff has three such words:
+   with one, a good summary can miss it. Three cases have a title that says
+   nothing (`fix`, `wip`, `address review comments`), so their summary can only
+   come from the diff. With the diff removed from the prompt, DeepSeek failed
+   this on 4 of the 10 cases it runs on, those three among them.
+
 ## Run it
 
 ```bash
@@ -86,13 +95,17 @@ network errors — "not measured", never a silent green).
   the release train (`evals/tier0-smoke.js`), so one model degrading can't hide
   behind a healthy one.
 
-## No calibrated floor (by design)
+## Floors
 
-Unlike the recall/kody-rules evals, this gate is **binary property assertions**,
-not a numeric threshold — there is no `targets.json` to drift and nothing to
-flake on run-to-run variance. Add cases to `datasets/cases.json`; keep every
-behaviour (`replace`/`concatenate`/`complement`) represented (the harness
-preflight enforces this).
+Most checks are **binary property assertions** on the contract — routing,
+posting, composition — that hold or do not, whatever the model writes. The
+diff check (item 6) reads the model's prose, so a model is gated on it only
+with a floor of its own in `targets.json`, calibrated from runs (the nightly
+model). A model with none (the other tier-0 models on Friday) is gated on the
+contract alone, where any failed check fails it; its diff check is reported,
+not gated. Add cases to `datasets/cases.json`; keep every behaviour
+(`replace`/`concatenate`/`complement`) represented (the harness preflight
+enforces this).
 
 ## Why not flaky
 

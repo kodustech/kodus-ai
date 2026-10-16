@@ -14,15 +14,22 @@
    </a>
 </p>
 
+<p align="center"><strong>Open source AI code review you can self-host, with the LLM you choose.</strong></p>
+
+<p align="center">
+   Kodus reviews pull requests on GitHub, GitLab, Bitbucket, Azure DevOps, and Forgejo.
+   Run it on your own servers or use Kodus Cloud.
+</p>
+
 ---
 
 <p align="center">
    <a href="https://kodus.io">Website</a> ·
    <a href="https://discord.gg/6WbWrRbsH7">Community</a> ·
-   <a href="https://docs.kodus.io">Docs</a> ·
-   <a href="https://docs.kodus.io/how_to_use/en/cli/overview">CLI Docs</a> ·
+   <a href="https://docs.kodus.io?utm_source=github&utm_medium=readme">Docs</a> ·
+   <a href="https://docs.kodus.io/how_to_use/en/cli/overview?utm_source=github&utm_medium=readme">CLI Docs</a> ·
    <strong><a href="https://app.kodus.io">Try Kodus Cloud </a></strong> ·
-   <strong><a href="https://docs.kodus.io/how_to_deploy/en/deploy_kodus/generic_vm">Self-Host Guide</a></strong>
+   <strong><a href="https://docs.kodus.io/how_to_deploy/en/deploy_kodus/generic_vm?utm_source=github&utm_medium=readme">Self-Host Guide</a></strong>
 </p>
 
 <p align="center">
@@ -41,8 +48,8 @@
 - **Zero Markup on LLM Costs**: You pay model providers directly. No hidden multipliers.
 - **Learns from Your Context**: Kody adapts to your architecture, standards, and workflow.
 - **You Set the Rules**: Define custom review rules in plain language.
-- **Privacy & Security**: Source code is not used to train models, data is encrypted in transit and at rest, and self-hosted runners are supported. Self-hosted instances send one anonymous heartbeat per day (aggregated counters only — no code, names, or identifiers); opt out with `KODUS_TELEMETRY_DISABLED=true`. See [Anonymous Telemetry](https://docs.kodus.io/how_to_deploy/en/deploy_kodus/telemetry).
-- **Native Git Workflow**: Works directly in PRs with GitHub, GitLab, Bitbucket, and Azure Repos.
+- **Privacy & Security**: Source code is not used to train models, data is encrypted in transit and at rest, and self-hosted runners are supported. Self-hosted instances send one anonymous heartbeat per day. It carries aggregated counters and no code, names, or identifiers. Opt out with `KODUS_TELEMETRY_DISABLED=true`. See [Anonymous Telemetry](https://docs.kodus.io/how_to_deploy/en/deploy_kodus/telemetry?utm_source=github&utm_medium=readme).
+- **Native Git Workflow**: Works directly in PRs with GitHub, GitLab, Bitbucket, Azure DevOps, and Forgejo.
 - **CLI + CI/CD Ready**: Run reviews locally and in pipelines.
 - **Operational Impact**: Track technical debt and delivery metrics while keeping review quality high.
 
@@ -162,11 +169,15 @@ Choose the workflow that matches how you want to use Kodus.
     <td width="50%">
       <strong>Self-host Kodus</strong>
       <br />
-      Deploy Kodus on your own infrastructure with control over data, models,
-      and runtime configuration.
+      For teams that need reviews to run inside their own infrastructure. It
+      connects to self-managed GitLab and Forgejo, and it can use a model you
+      host yourself. Kodus runs with Docker on a VM you control, with at least
+      2 CPU cores, 8 GB of RAM, and 60 GB of free disk.
       <br />
       <br />
-      <a href="https://docs.kodus.io/how_to_deploy/en/deploy_kodus/generic_vm">Installation guide</a>
+      <a href="https://docs.kodus.io/how_to_deploy/en/deploy_kodus/generic_vm?utm_source=github&utm_medium=readme">Installation guide</a>
+      ·
+      <a href="https://tally.so/r/GxED1z">Request a trial license</a>
     </td>
   </tr>
   <tr>
@@ -184,11 +195,11 @@ Choose the workflow that matches how you want to use Kodus.
       <code>kodus review --prompt-only</code>
       <br />
       <br />
-      <a href="https://docs.kodus.io/how_to_use/en/cli/introduction">CLI overview</a>
+      <a href="https://docs.kodus.io/how_to_use/en/cli/introduction?utm_source=github&utm_medium=readme">CLI overview</a>
       ·
-      <a href="https://docs.kodus.io/how_to_use/en/cli/commands">Command reference</a>
+      <a href="https://docs.kodus.io/how_to_use/en/cli/commands?utm_source=github&utm_medium=readme">Command reference</a>
       ·
-      <a href="https://docs.kodus.io/how_to_use/en/cli/ci_cd">CI/CD</a>
+      <a href="https://docs.kodus.io/how_to_use/en/cli/ci_cd?utm_source=github&utm_medium=readme">CI/CD</a>
     </td>
     <td width="50%">
       <strong>Contribute Locally</strong>
@@ -204,7 +215,7 @@ Choose the workflow that matches how you want to use Kodus.
       <code>yarn setup</code>
       <br />
       <br />
-      <a href="https://docs.kodus.io/how_to_deploy/en/local_quickstart/orchestrator">Local quickstart</a>
+      <a href="https://docs.kodus.io/how_to_deploy/en/local_quickstart/orchestrator?utm_source=github&utm_medium=readme">Local quickstart</a>
     </td>
   </tr>
 </table>
@@ -233,7 +244,7 @@ kodus-ai/
 | `libs` | Shared NestJS domain modules used across Kodus applications. |
 | `libs/llm` | In-repo LLM/BYOK abstraction layer for model providers. |
 
-For full setup instructions, follow the [Local Quickstart](https://docs.kodus.io/how_to_deploy/en/local_quickstart/orchestrator).
+For full setup instructions, follow the [Local Quickstart](https://docs.kodus.io/how_to_deploy/en/local_quickstart/orchestrator?utm_source=github&utm_medium=readme).
 
 ## Open Source vs. Teams vs. Enterprise
 
@@ -262,10 +273,10 @@ For full setup instructions, follow the [Local Quickstart](https://docs.kodus.io
 | Resource | Description |
 | --- | --- |
 | [Website](https://kodus.io) | Learn more about Kodus, product capabilities, and pricing. |
-| [Documentation](https://docs.kodus.io) | Setup guides, product docs, CLI usage, and self-hosting instructions. |
+| [Documentation](https://docs.kodus.io?utm_source=github&utm_medium=readme) | Setup guides, product docs, CLI usage, and self-hosting instructions. |
 | [Kodus Cloud](https://app.kodus.io) | Start using Kodus without managing infrastructure. |
-| [Self-Host Guide](https://docs.kodus.io/how_to_deploy/en/deploy_kodus/generic_vm) | Deploy Kodus in your own environment. |
-| [CLI Docs](https://docs.kodus.io/how_to_use/en/cli/overview) | Run AI code reviews locally, in CI/CD, or inside coding agents. |
+| [Self-Host Guide](https://docs.kodus.io/how_to_deploy/en/deploy_kodus/generic_vm?utm_source=github&utm_medium=readme) | Deploy Kodus in your own environment. |
+| [CLI Docs](https://docs.kodus.io/how_to_use/en/cli/overview?utm_source=github&utm_medium=readme) | Run AI code reviews locally, in CI/CD, or inside coding agents. |
 | [Discord Community](https://discord.gg/6WbWrRbsH7) | Ask questions, get setup help, and talk with the Kodus team. |
 | [Pricing](https://kodus.io/pricing) | Compare Community, Teams, and Enterprise editions. |
 | [Schedule a Call](https://cal.com/gabrielmalinosqui/30min) | Talk with the Kodus team about setup, self-hosting, or enterprise needs. |

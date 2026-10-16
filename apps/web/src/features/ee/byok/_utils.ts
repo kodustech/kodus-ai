@@ -7,6 +7,7 @@ import {
 } from "@services/permissions/types";
 import { hasPermission } from "src/core/utils/permission-map";
 
+import { isPlatformFundedProvider } from "./_data/platform-funded";
 import type { OrganizationLicense } from "../subscription/_services/billing/types";
 import type {
     BYOKConfig,
@@ -282,4 +283,46 @@ export const providerFromModel = (model?: string): string | undefined => {
     if (m.startsWith("gpt") || m.startsWith("o1") || m.startsWith("o3"))
         return "openai";
     return undefined;
+};
+
+/**
+ * Does anything the router can actually pick resolve to a Kodus-routed model?
+ *
+ * Having a Kodus credential is not the same as using it. An org can connect
+ * Kodus, leave its own key as the org default, and never send a request
+ * through Kodus — in which case an empty prepaid balance pauses nothing, and
+ * an alarm about paused reviews is simply wrong.
+ *
+ * "Reachable" means the org default, the fallback, or a per-task override. A
+ * Kodus model that merely sits in the list does not count.
+ */
+export const routesThroughKodus = (
+    config: BYOKConfig | null | undefined,
+): boolean => {
+    const routing = config?.routing;
+    if (!routing) return false;
+
+    const kodusCredentialIds = new Set(
+        (config?.credentials ?? [])
+            .filter((credential) =>
+                isPlatformFundedProvider(credential.provider),
+            )
+            .map((credential) => credential.id),
+    );
+    if (!kodusCredentialIds.size) return false;
+
+    const kodusModelIds = new Set(
+        (config?.models ?? [])
+            .filter((model) => kodusCredentialIds.has(model.credentialId))
+            .map((model) => model.id),
+    );
+    if (!kodusModelIds.size) return false;
+
+    const reachable = [
+        routing.defaultModelId,
+        routing.fallbackModelId,
+        ...Object.values(routing.taskOverrides ?? {}),
+    ].filter(Boolean) as string[];
+
+    return reachable.some((modelId) => kodusModelIds.has(modelId));
 };

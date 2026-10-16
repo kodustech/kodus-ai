@@ -101,7 +101,6 @@ jobs:
                   echo WEB_POSTHOG_KEY=$(aws ssm get-parameter --name /prod/kodus-web/WEB_POSTHOG_KEY --query 'Parameter.Value' --output text) >> .env
 
                   echo WEB_HOSTNAME_MCP_MANAGER=$(aws ssm get-parameter --name /prod/kodus-web/WEB_HOSTNAME_MCP_MANAGER --query 'Parameter.Value' --output text) >> .env
-                  echo WEB_HOSTNAME_HELPDESK=$(aws ssm get-parameter --name /prod/kodus-web/WEB_HOSTNAME_HELPDESK --query 'Parameter.Value' --output text) >> .env
                   echo WEB_RULE_FILES_DOCS=$(aws ssm get-parameter --name /prod/kodus-web/WEB_RULE_FILES_DOCS --query 'Parameter.Value' --output text) >> .env
 
             - name: Login to Amazon ECR

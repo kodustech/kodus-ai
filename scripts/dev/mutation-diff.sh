@@ -47,6 +47,13 @@ fi
 echo "[mutation:diff] Mutating ${#FILES[@]} changed file(s) vs ${MERGE_BASE}:"
 printf '  - %s\n' "${FILES[@]}"
 
+# Both Stryker's --mutate and jest's testMatch read these paths as globs, so a
+# Next.js route segment like `(app)/[repositoryId]` would be a character class
+# and match nothing. Wrap each glob metacharacter in a one-character class
+# (`[` -> `[[]`): a backslash escape doesn't survive Stryker, which normalizes
+# `\` to `/` before matching.
+glob_escape() { printf '%s' "$1" | sed -e 's/[][()*?{}]/[&]/g'; }
+
 # Scope the dry run to the co-located specs of the changed files. Stryker's dry
 # run runs the whole configured testMatch; without this it would run the manual
 # default list (jest.stryker.config.ts) instead of the tests that actually cover
@@ -55,7 +62,7 @@ SPECS=()
 for f in "${FILES[@]}"; do
     b="${f%.ts}"
     for cand in "${b}.spec.ts" "${b}.test.ts" "${b}.input-contract.spec.ts"; do
-        [ -f "$cand" ] && SPECS+=("<rootDir>/${cand}")
+        [ -f "$cand" ] && SPECS+=("<rootDir>/$(glob_escape "$cand")")
     done
 done
 
@@ -71,6 +78,8 @@ export STRYKER_JEST_TESTMATCH="$(node -e 'process.stdout.write(JSON.stringify(pr
 echo "[mutation:diff] Scoping tests to ${#SPECS[@]} co-located spec(s)."
 
 # Comma-join for Stryker's --mutate (overrides the config's mutate list).
-MUTATE="$(IFS=,; echo "${FILES[*]}")"
+MUTATE_GLOBS=()
+for f in "${FILES[@]}"; do MUTATE_GLOBS+=("$(glob_escape "$f")"); done
+MUTATE="$(IFS=,; echo "${MUTATE_GLOBS[*]}")"
 
 exec npx stryker run --mutate "$MUTATE"

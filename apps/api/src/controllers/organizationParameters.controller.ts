@@ -80,10 +80,12 @@ import {
     OrganizationProvidersResponseDto,
 } from '../dtos/organization-parameters-response.dto';
 import { ApiBooleanResponseDto } from '../dtos/api-response.dto';
+import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 
 @ApiTags('Organization Parameters')
 @ApiBearerAuth('jwt')
 @ApiStandardResponses()
+@UseGuards(TenantScopeGuard)
 @Controller('organization-parameters')
 export class OrganizationParametersController {
     constructor(
