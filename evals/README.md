@@ -1,81 +1,49 @@
 # Code-review evals
 
-What each eval answers, when it runs, how to run it, and what to do when it goes red.
+An eval measures one step of the review with production's own code. If it runs anything production does not, its number describes a product we don't ship.
 
-Numbers and lists (floors, tier-0 models, schedules, secrets) are not copied here. Each one is linked to the file that owns it, so this page can't drift from what actually runs. Agents: the rules are in [AGENTS.md](AGENTS.md).
+This is the only page: the rules, how to create one, where to look. Numbers and lists (floors, models, schedules) live in the files linked here, never on this page.
 
-## When they run
+## Rules
 
-| When | Question | What runs | Owner of the details |
+1. **Run production's code, never a copy.** Call the highest production entry point of the step. If what you need is written inline in a bigger method, extract it into a production function and call it from both the step and the eval. Copied glue drifts, and the drift shows only in the eval.
+2. **The eval supplies data, nothing else.** Datasets, the org's stored config, the repository at the PR's head. Read intermediate results by wrapping a production method, never by replacing one. No hand-written stand-ins for engine services.
+3. **Same input production builds.** Production's builders and defaults: the whole PR, the categories, the step budget, the language, the diff format. A field production never sets is not an input.
+4. **Same tools.** Production's sandbox over the real repository at the PR's head, `exec` included. A recording that answers what production wouldn't is a different review.
+5. **Same model route.** A stored BYOK config or the managed default, through production's routing; model ids and keys only through `evals/shared/tier0-models.js`. A route production doesn't have is refused, not run.
+6. **Score what ships.** Measure after the steps production runs before posting. An eval that stops earlier says where and why in its README.
+7. **Prove it can fail.** Cases come in pairs (the step must act / must not), and a deliberate break turns the eval red before it merges.
+8. **Replacing eval code? Prove equivalence.** Diff what the step receives on every case, old against new. Identical: the floor stands. Different: explain each difference, then recalibrate.
+9. **Floors come from runs.** Two runs of the same commit, the paired per-case difference, written in the eval's `targets.json` with the judge it holds under. Never in code, docs or PR text.
+10. **Exit codes mean something.** 0 pass, 1 below the floor, 2 not measured with the reason logged. At most 5% of cases unmeasured; beyond that, exit 2. Every runner ends with `process.exit`.
+11. **Alerts stay rare and true.** A drop alerts only after the confirming run; infra never mentions anyone.
+12. **Every PR touching `libs/`, `evals/` or test fixtures** runs `pnpm eval:wiring` to "Every eval still drives the engine." and links the run. A PR that changes review behaviour also links a nightly run.
+
+## Create one
+
+1. `pnpm eval:new <name>` writes the README header (Answers, Runs, Run it, Gate, Cost), paired cases, the catalog, `targets.json`, and a runner that writes the shared result (`evals/shared/eval-result.js`), counts tokens and time, and exits 0/1/2.
+2. Point it at the step's production entry point (rules 1–6).
+3. Name its step in `evals/stages.js` and add a `model: true` step to `evals/wiring-smoke.js`.
+4. Run it twice on the nightly model, write the floor (rule 9), break it on purpose (rule 7).
+5. To measure it every night and every Friday, add it to `evals/nightly-evals.js`.
+
+## Where to look
+
+| When | Answers | Does not tell you | Where |
 |---|---|---|---|
-| Every PR touching `libs/`, `evals/`, test fixtures or dependencies | Can the evals still drive the engine? | `evals/wiring-smoke.js`: every model-backed eval end to end against a scripted local model, plus the deterministic evals. Measures nothing. No keys, ~10s. | `.github/workflows/code-review-evals-pr.yml` |
-| Nightly, each eval only if a file it loads changed since the last green night | Did review quality get worse? | finder-recall on the `light` case set, kody-rules on `github-cases`, and every eval in `evals/nightly-evals.js`, with one cheap model, each gated on a calibrated floor | `.github/workflows/code-review-evals-nightly.yml`, `evals/investigation/targets.json` → `sets.light`, `evals/kody-rules/kody-targets.json`, each eval's `targets.json` |
-| Friday, in the release train slot | Does every tier-0 model still run every stage the nightly measures? | `evals/tier0-smoke.js`: one replayed PR per model (no judge), the PR-summary eval, and every other nightly stage on a few of its cases (no floor) | `.github/workflows/code-review-evals-tier0.yml`, `evals/shared/tier0-models.js` |
+| Every PR | Do the evals still drive the engine? Scripted model, no keys. | Anything about quality: it measures nothing. | `.github/workflows/code-review-evals-pr.yml` |
+| Every night | Did quality drop? One cheap model, each eval whose loaded files changed, against its floor; a drop is confirmed by a second run before it alerts. | Whether other models behave the same. | `.github/workflows/code-review-evals-nightly.yml` |
+| Every Friday | Does every step still run on every tier-0 model? A few cases each, no floor. | Quality on those models: green means it runs. | `.github/workflows/code-review-evals-tier0.yml` |
 
-Nightly and Friday post to Discord (`DISCORD_WEBHOOK_TESTS`, falling back to the engineering webhook) and write an Actions job summary; results are uploaded as artifacts. The nightly message compares tonight with the last green night: recall and precision, the PRs that moved most and the known bugs they lost, the engine commits measured, time and cost. On a red night, a read-only Claude Code agent reads those facts, the engine diff and the repo, and the message adds its reading (regression, noise, eval problem or unclear) marked as an unverified hypothesis. The agent never changes the verdict. Cost: $0 per PR; the finder run is the expensive step, since it reviews whole PRs (each run's cost bound is in its nightly message and job summary); a few dollars per Friday (one review per model; not measured again since the nightly stages joined it).
+- **Each step's quality, what it tests and what it costs:** the quality panel's stages page, fed by `evals/stages.js` → `evals/stage-signals.js`.
+- **Results:** Discord, the Actions job summary and the run's artifacts.
+- **Floors:** each eval's `targets.json`. **Judge:** `evals/investigation/recall-judge.js`. **Models:** `evals/shared/tier0-models.js`. **Scripted model:** `evals/shared/fake-llm-server.js`.
+- **Run locally:** `pnpm eval:wiring` (no keys) · `pnpm eval:nightly` · `pnpm eval:tier0-smoke --model=<id>` · each eval's README for narrower runs.
 
-Neither trigger is a hand-kept folder list. The wiring smoke records every repo file each eval loads (`evals/shared/trace-loaded.js`): it fails if one falls outside the PR workflow's `paths`, and it hands the nightly the exact files finder-recall depends on (`evals/shared/engine-files.js`).
+### When it goes red
 
-### How the nightly avoids false alarms
-
-- A run below the floor is measured again on the same commit, and the gate decides on the mean of both (`evals/investigation/confirm-gate.js`). A drop the second run doesn't confirm is posted as "oscilou", without pinging anyone.
-- Only a confirmed new drop, or one that got worse beyond noise, pings the channel with `@here`. The same drop on later nights reads "continua abaixo do piso (dia N)" without a mention, and it isn't re-measured until an engine file changes after it.
-- Infra and missing keys never mention anyone, and never count as a measurement.
-- The agent's reading can't lower an alert.
-
-## How an eval touches the engine
-
-- **Replay.** The finder-style evals run the real engine code with a real model, but tool calls (`readFile`, `grep`, `listDir`, `findFile`) are answered from a recording of a real review (`evals/investigation/datasets`). No sandbox, no GitHub. A call the recording can't answer returns nothing; `fidelity` in the results is the share that was answered.
-- **Model routing.** `--model=<id>` goes through the engine's own self-hosted route. The ids and their key env names are in `evals/shared/tier0-models.js`. `--model=eval-fake` points that route at `evals/shared/fake-llm-server.js`, a scripted OpenAI-compatible server on 127.0.0.1.
-- **Judge.** `evals/investigation/recall-judge.js` decides whether a finding matches a known bug (`JUDGE_MODEL`, `JUDGE_API_KEY`, `JUDGE_BASE_URL`). Judges disagree by several points of recall, so a floor holds only under the judge recorded next to it.
-
-## The evals
-
-| Eval | Answers | In CI |
-|---|---|---|
-| [finder-recall](investigation/README.md) | Does the finder find a PR's known bugs? | nightly (gated) · PR (scripted model) |
-| [kody-rules](kody-rules/README.md) | Does the Kody Rules agent flag every place a rule is broken? | nightly (gated) · PR (scripted model) · Friday (every tier-0 model, a few cases) |
-| [anchoring](anchoring/README.md) | How many findings are lost because their lines miss the diff? | PR (scripted model) |
-| [pr-summary](pr-summary/README.md) | Is the summary generated, posted, and sent to the configured model? | PR (scripted model) · Friday (every tier-0 model) |
-| [reply-addressing](reply-addressing/README.md) | Does Kody answer unmentioned replies meant for it, and stay out of the rest? | nightly (gated) · PR (scripted model) · Friday (every tier-0 model, a few cases) |
-| [review-rounds](review-rounds/README.md) | Across rounds and sandbox failures, does what reaches the PR match a correct review? | nightly (gated) · PR (scripted model) · Friday (every tier-0 model, a few cases) |
-| [review-chain](review-chain/README.md) | Is every LLM call in the review chain wired to the shared output recovery? | PR |
-| [dedup](dedup/README.md) · [severity](severity/README.md) · [format](format/README.md) | Do the secondary passes keep real findings? | PR (mocked model) |
-| [promotion](promotion/README.md) | On frozen evidence, does the verifier keep or drop a candidate correctly? | on demand |
-| [verifier-verdict](verifier-verdict/README.md) | Does a verdict the verifier delivered reach the gate, and can it deliver one at all? | PR |
-| [parser](parser/README.md) | Are findings the model wrote as prose recovered? | unit spec in CI · LLM layer on demand |
-| [trace-context](trace-context/README.md) | Do recorded Trace decisions help without talking the reviewer out of real bugs? | on demand |
-| [structured-outputs](structured-outputs/README.md) | Does each provider get structured output only where it works? | on demand |
-| [scorer](scorer/README.md) | Re-score a saved submission without re-running the model | tool |
-| [secondary](secondary/README.md) | Shared datasets and model registry for dedup/severity/format | data |
-| [results](results/README.md) | What past runs measured, per model and config (hand-recorded ledger) | data |
-
-Which review stage each eval covers, and the stages no eval covers, is in `evals/stages.js`. Every night each stage reaches the quality panel as `evals.stage.<stage>` (`evals/stage-signals.js`): the finder with its recall against the floor, the others with whether their eval still runs.
-
-## Run locally
-
-```bash
-pnpm eval:wiring                                   # the PR check: no keys, ~10s
-pnpm eval:tier0-smoke --model=gpt-5.4              # one model's Friday check (vendor key from tier0-models.js)
-JUDGE_API_KEY=$OPENAI_KEY pnpm eval:nightly        # the nightly: 30 PRs, FIREWORKS_API_KEY for the model, ~30 min
-```
-
-Each eval's README has its own commands for narrower runs.
-
-## When it goes red
-
-- **Wiring smoke fails on your PR.** Your change broke an eval's hold on the engine: a renamed method, a moved file, a new dependency the eval fakes. The failing step prints its command and log tail. Reproduce with `pnpm eval:wiring` and fix the eval in the same PR.
-- **Nightly: "PRs não medidos" / "não mediu".** A key, a quota or the network. The reason is in the message (for example `judge HTTP 401`). This is not a quality result. Fix the secret, and the next night measures again because a failed night is never a baseline.
-- **Nightly: "oscilou abaixo do piso, a confirmação passou".** One run fell below, the repeat didn't. Nothing to do.
-- **Nightly: "continua abaixo do piso (dia N)".** The drop that already alerted is still there; whoever owns it keeps going. It pings again only if it gets worse.
-- **Nightly: "recall caiu … abaixo do piso".** The message lists the PRs and known bugs lost, the engine commits measured and Claude's reading. Treat the reading as a lead, not a verdict: re-run `pnpm eval:nightly` before and after the suspect commit. If the drop is an intended trade-off, recalibrate (below) in the PR that made it. The agent's full report is in the run summary and the `nightly-investigation` artifact.
-- **Nightly: "o finder parou de produzir findings / usar as ferramentas".** Not a recall wobble; the engine broke on the path the finder uses. Start from the commits in the message.
-- **Nightly: "não comparou com o piso".** Either there is no floor for that model and set, or the run used a different judge than the floor was calibrated with.
-- **Friday: ⚠️ next to a model.** That vendor's key or quota is broken; the line names the secret to fix. **❌ `model · <part>: …`**: that part no longer runs on that model (`review` is the finder, `summary` the PR summary, the rest are stage ids of `evals/stages.js`), so customers using it are affected. Decide per model, not for the whole release. A line marked _(same as last week)_ is a known, unchanged failure.
-
-## Changing things
-
-- **Recalibrate a floor.** Run the set twice on the same commit, compute the paired per-PR noise, and update the floor in the same PR. The method and the last numbers are in the `__doc` of the set in `evals/investigation/targets.json`.
-- **Change the judge.** Re-score two saved nightly runs with `evals/investigation/rejudge.js` under the new judge (no finder re-run, cents), then recalibrate from those. Check it reproduces the old judge's numbers first.
-- **Add or drop a Friday model.** Set `tier0: true` in `evals/shared/tier0-models.js` and pass its secret in `.github/workflows/code-review-evals-tier0.yml`.
-- **Add an eval.** `pnpm eval:new <name>` creates it in the shared shape (README header, cases with what each checks, catalog, runner); then name its stage in `evals/stages.js`, add a step to `evals/wiring-smoke.js` if it drives the engine, and follow [AGENTS.md](AGENTS.md). Adding it to `evals/nightly-evals.js` measures it nightly and runs it on Friday on every tier-0 model. Its cases appear on the quality panel under "What it tests" with no change there.
+- **Wiring smoke on your PR:** your change broke an eval's hold on the engine. Fix the eval in the same PR.
+- **Nightly "não mediu":** a key, a quota or the network. Not a quality result.
+- **Nightly "oscilou":** the confirming run passed. Nothing to do.
+- **Nightly "caiu abaixo do piso":** the message lists the PRs, the bugs lost and the commits. Re-run before and after the suspect commit; an intended trade-off recalibrates in the PR that made it.
+- **Friday ❌ `model · step`:** that step no longer runs on that model. **⚠️:** its key or quota.
