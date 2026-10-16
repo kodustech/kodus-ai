@@ -1,0 +1,3253 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "ef8ace6e81c2ad04800d9543336439a8767fa987",
+    "sourceDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "startedAt": "2026-10-15T22:56:31.109Z",
+  "updatedAt": "2026-10-15T23:22:07.308Z",
+  "complete": true,
+  "selectedCases": [
+    "R5-unrelated-same-area",
+    "R13-repeat-after-move",
+    "K10-rule-repost-new-file",
+    "P09-rule-changelog-entry-still-deferred",
+    "P19-rule-test-error-class-out-of-40",
+    "P29-hold-leak-on-create",
+    "P39-promo-expiry-unrelated"
+  ],
+  "casesSourceDigest": "98f8537f6cb01d7c327b962661223af98eaaaccff0876d697a184b1e43d4038d",
+  "summary": {
+    "measured": 35,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 25,
+        "violations": 1,
+        "rate": 0.04
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 25,
+        "violations": 1,
+        "rate": 0.04
+      },
+      "index-reference (#2039)": {
+        "n": 35,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R5-unrelated-same-area · swapped-args [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "R13-repeat-after-move · resubmit-repeat-moved [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K10-rule-repost-new-file · rangeLabel-start-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K10-rule-repost-new-file · dayKey-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P09-rule-changelog-entry-still-deferred · changelog-deferred-repeat [not_deliver]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 1
+      },
+      "P09-rule-changelog-entry-still-deferred · changelog-deferred-new-site [deliver]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 4
+      },
+      "P19-rule-test-error-class-out-of-40 · rate-limited-plain-exception-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P19-rule-test-error-class-out-of-40 · refund-plain-exception-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P29-hold-leak-on-create · book-hold-leak-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P39-promo-expiry-unrelated · promo-expiry-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "eval": "review-rounds",
+  "question": "When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, revisions linked, nothing already sent posted again?",
+  "metric": {
+    "name": "of claims handled right",
+    "value": 0.96,
+    "floor": 0.8,
+    "baseline": 0.903
+  },
+  "runs": 5,
+  "tokens": {
+    "in": 2717043,
+    "out": 121278,
+    "cacheRead": 2276186,
+    "cacheWrite": 0
+  },
+  "infra": {
+    "errored": 0,
+    "total": 35
+  },
+  "cases": [
+    {
+      "id": "R5-unrelated-same-area",
+      "checks": "swapped-args: posted",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "swapped-args",
+          "ok": true
+        },
+        {
+          "what": "swapped-args",
+          "ok": true
+        },
+        {
+          "what": "swapped-args",
+          "ok": true
+        },
+        {
+          "what": "swapped-args",
+          "ok": true
+        },
+        {
+          "what": "swapped-args",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "R13-repeat-after-move",
+      "checks": "resubmit-repeat-moved: not posted",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "resubmit-repeat-moved",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat-moved",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat-moved",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat-moved",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat-moved",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "K10-rule-repost-new-file",
+      "checks": "rangeLabel-start-repeat: not posted; dayKey-new-site: posted",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P09-rule-changelog-entry-still-deferred",
+      "checks": "Kody process rule on a changelog entry that defers its content to a later PR; the developer edited the entry and it still defers; stored implemented; 12 earlier comments",
+      "hits": 8,
+      "total": 10,
+      "detail": [
+        {
+          "what": "changelog-deferred-repeat",
+          "ok": true
+        },
+        {
+          "what": "changelog-deferred-new-site",
+          "ok": true
+        },
+        {
+          "what": "changelog-deferred-repeat",
+          "ok": false
+        },
+        {
+          "what": "changelog-deferred-new-site",
+          "ok": false
+        },
+        {
+          "what": "changelog-deferred-repeat",
+          "ok": true
+        },
+        {
+          "what": "changelog-deferred-new-site",
+          "ok": true
+        },
+        {
+          "what": "changelog-deferred-repeat",
+          "ok": true
+        },
+        {
+          "what": "changelog-deferred-new-site",
+          "ok": true
+        },
+        {
+          "what": "changelog-deferred-repeat",
+          "ok": true
+        },
+        {
+          "what": "changelog-deferred-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P19-rule-test-error-class-out-of-40",
+      "checks": "Kody Rule (test helpers build the concrete error class); the earlier comment covered two helpers, one was fixed and the other only had its line re-touched; stored partially_implemented; more than 40 later comments push it out of the history",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "rate-limited-plain-exception-repeat",
+          "ok": true
+        },
+        {
+          "what": "refund-plain-exception-new-site",
+          "ok": true
+        },
+        {
+          "what": "rate-limited-plain-exception-repeat",
+          "ok": true
+        },
+        {
+          "what": "refund-plain-exception-new-site",
+          "ok": true
+        },
+        {
+          "what": "rate-limited-plain-exception-repeat",
+          "ok": true
+        },
+        {
+          "what": "refund-plain-exception-new-site",
+          "ok": true
+        },
+        {
+          "what": "rate-limited-plain-exception-repeat",
+          "ok": true
+        },
+        {
+          "what": "refund-plain-exception-new-site",
+          "ok": true
+        },
+        {
+          "what": "rate-limited-plain-exception-repeat",
+          "ok": true
+        },
+        {
+          "what": "refund-plain-exception-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P29-hold-leak-on-create",
+      "checks": "Bug finder; a seat hold leaks when a later step fails; the earlier rollback fix covered the other paths and the create path still leaks; stored implemented; 6 earlier comments",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "book-hold-leak-repeat",
+          "ok": true
+        },
+        {
+          "what": "book-hold-leak-repeat",
+          "ok": true
+        },
+        {
+          "what": "book-hold-leak-repeat",
+          "ok": true
+        },
+        {
+          "what": "book-hold-leak-repeat",
+          "ok": true
+        },
+        {
+          "what": "book-hold-leak-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P39-promo-expiry-unrelated",
+      "checks": "Finder (Python): an unrelated new bug in the same function an earlier, fully implemented comment was about; 5 earlier comments",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "promo-expiry-unrelated",
+          "ok": true
+        },
+        {
+          "what": "promo-expiry-unrelated",
+          "ok": true
+        },
+        {
+          "what": "promo-expiry-unrelated",
+          "ok": true
+        },
+        {
+          "what": "promo-expiry-unrelated",
+          "ok": true
+        },
+        {
+          "what": "promo-expiry-unrelated",
+          "ok": true
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 68711,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: FailedError is constructed with its arguments in the wrong order — `new FailedError(String(err), chargeId)` passes the stringified error as `chargeId` and the charge id as `cause`. WHY: The constructor signature is `constructor(readonly chargeId: string, readonly cause?: unknown)` (src/billing/errors.ts:4), so every consumer of the thrown FailedError now reads a mangled error string from `err.chargeId` and loses the real cause, breaking logging, retry keying, and any UI that identifies the failed charge. HOW: Restore the correct order: `throw new FailedError(chargeId, err);`.",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts:4 declares `constructor(readonly chargeId: string, readonly cause?: unknown)`, but status.ts:11 calls `new FailedError(String(err), chargeId)`, swapping the arguments. Consumers reading `err.chargeId` get the stringified error and the real cause is lost. The constructor's own `super(chargeId)` also confirms the first param is intended as the charge id. This is a real behavior bug, not covered by the earlier NotReadyError-propagation decision.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: `new FailedError(String(err), chargeId)` passes the arguments in reverse of the constructor signature `constructor(readonly chargeId: string, readonly cause?: unknown)`. WHY: `err.chargeId` ends up holding the stringified error, `err.cause` holds the charge id, and `Error.message` (set via `super(chargeId)`) becomes the error text instead of the charge id, so any caller keying off `chargeId`/`message` misidentifies the failed charge. HOW: restore the documented order: `throw new FailedError(chargeId, err);`.",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts declares `constructor(readonly chargeId: string, readonly cause?: unknown)` and calls `super(chargeId)`. The call site passes `new FailedError(String(err), chargeId)`, so chargeId is populated with the stringified error, cause with the charge id, and Error.message becomes the error text instead of the charge id. The arguments are genuinely reversed. This is a different problem from the previous decision (which addressed NotReadyError propagation), not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class FailedError|FailedError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "text": "Every consumer of the thrown `FailedError` reads a mangled error string from `err.chargeId` and loses the real cause, breaking logging, retry keying, and any UI that identifies the failed charge because `new FailedError(String(err), chargeId)` passes the arguments in reverse of `constructor(readonly chargeId: string, readonly cause?: unknown)` (src/billing/errors.ts:4). Restore the correct order with `throw new FailedError(chargeId, err);`."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "text": "Because `new FailedError(String(err), chargeId)` reverses `constructor(readonly chargeId: string, readonly cause?: unknown)`, `err.chargeId` holds the stringified error, `err.cause` holds the charge id, and `Error.message` (set via `super(chargeId)`) becomes the error text instead of the charge id, so callers keying off `chargeId` or `message` misidentify the failed charge. Restore the documented order with `throw new FailedError(chargeId, err);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 58266,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: `new FailedError(String(err), chargeId)` passes the arguments in the wrong order — FailedError's constructor is `(chargeId: string, cause?: unknown)` (src/billing/errors.ts:4), so the gateway error text is stored as `chargeId` and the real charge id as `cause`. WHY: consumers of the thrown FailedError (poller.ts:11 rethrows it unchanged at line 17) read the wrong charge id — `error.chargeId` and `error.message` both become the stringified gateway error instead of the charge identifier, breaking correlation/retry of the failed charge and mislabeling the cause. HOW: swap the arguments back to `new FailedError(chargeId, err)`.",
+          "keep": true,
+          "rationale": "Confirmed: FailedError's constructor is `(chargeId: string, cause?: unknown)` (errors.ts:4), but status.ts:11 calls `new FailedError(String(err), chargeId)`, swapping the args. The gateway error string becomes `chargeId` (and `message` via super(chargeId)), and the real charge id is stored as `cause`. Consumers reading `error.chargeId` get the wrong value, breaking correlation/retry. This is a distinct bug from the earlier NotReadyError propagation decision (round-a-propagate), which addressed misclassification of transient errors, not argument ordering.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: `new FailedError(String(err), chargeId)` passes the arguments in the wrong order relative to FailedError's constructor `(chargeId, cause)`, so `chargeId` holds the stringified gateway error and `cause` holds the charge id. WHY: any consumer (pollCharge rethrows this error) reading `err.chargeId`/`err.cause` gets swapped values, and `Error.message` becomes the raw error string instead of the charge id, breaking error reporting/routing. HOW: swap the arguments to `new FailedError(chargeId, err)`.",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts line 4 declares `constructor(readonly chargeId: string, readonly cause?: unknown) { super(chargeId); }`, so the first arg is chargeId and becomes the Error message. The call site `new FailedError(String(err), chargeId)` passes the stringified gateway error as chargeId and the charge id as cause — swapped. Consumers reading `err.chargeId` get the raw error string and message is the error string instead of the charge id, breaking error reporting/routing. The fix is to swap arguments. This is a distinct issue from the prior NotReadyError propagation decision (which concerned a different line and a different failure).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class FailedError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 30,
+                "path": "src/billing/errors.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "text": "Consumers such as the rethrow in `poller.ts:17` read the wrong charge id: `error.chargeId` and `error.message` both become the stringified gateway error instead of the charge identifier, breaking correlation and retry of the failed charge and mislabeling the cause, since `FailedError`'s constructor at `src/billing/errors.ts:4` takes `(chargeId: string, cause?: unknown)`. Swap the arguments back to `new FailedError(chargeId, err)`."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "text": "Any consumer, including `pollCharge`, which rethrows this error, sees swapped `err.chargeId` and `err.cause` values, and `Error.message` becomes the raw error string instead of the charge id, breaking error reporting and routing because `FailedError`'s constructor is `(chargeId, cause)`. Swap the arguments to `new FailedError(chargeId, err)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 56908,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The FailedError arguments are swapped — `new FailedError(String(err), chargeId)` passes the error text as the first (chargeId) parameter and the real chargeId as the second (cause) parameter, while the constructor is `(chargeId: string, cause?: unknown)`. WHY: Every FailedError now carries the wrong chargeId (it holds the error string) and loses the underlying error (it holds the chargeId), and its message is the error text instead of the charge identifier, breaking the error contract for any consumer that reads chargeId/cause. HOW: Restore the original order: `throw new FailedError(chargeId, err);`.",
+          "keep": true,
+          "rationale": "Confirmed: FailedError constructor is `(chargeId: string, cause?: unknown)` (errors.ts:4). Line 11 calls `new FailedError(String(err), chargeId)`, passing the error text as chargeId and the real chargeId as cause — genuinely swapped. The message/chargeId/cause all become wrong, breaking the error contract for consumers. The prior review decision (round-a-propagate) concerned NotReadyError propagation at lines 8-9, a different issue; this finding is a distinct bug on line 11.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class FailedError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "text": "Every `FailedError` now stores the error text in `chargeId` and the charge identifier in `cause`, so consumers reading those fields get the wrong values, the underlying error is lost, and its message shows the error text instead of the charge identifier. Swap the arguments back to `throw new FailedError(chargeId, err)` to match the constructor's `(chargeId: string, cause?: unknown)` order."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 50876,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The FailedError constructor arguments are swapped — `String(err)` is passed as the `chargeId` parameter and the real `chargeId` is passed as `cause`, whereas FailedError's signature is `(chargeId: string, cause?: unknown)`. WHY: Any caller/consumer that reads `error.chargeId` (to log, look up, or retry the charge) now receives a stringified exception message like \"Error: gateway timeout\" instead of the actual charge id, silently breaking charge identification. HOW: Restore the correct argument order: `throw new FailedError(chargeId, err);` (the constructor already accepts `unknown` for cause, so no String() coercion is needed).",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts declares `constructor(readonly chargeId: string, readonly cause?: unknown) { super(chargeId); }`, but status.ts:11 calls `new FailedError(String(err), chargeId)`, swapping the arguments. `.chargeId` and the error message become \"Error: ...\" instead of the actual charge id, breaking charge identification. This is a distinct problem from the previous decision (which concerned NotReadyError propagation), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class FailedError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "chargeId",
+                "path": "src/billing"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The arguments to `FailedError` are swapped — `String(err)` is passed as the `chargeId` parameter and `chargeId` is passed as the `cause` parameter, whereas the constructor is `FailedError(chargeId: string, cause?: unknown)`. WHY: Every consumer reading `error.chargeId` now gets the stringified underlying error (e.g. 'Error: gateway 500') instead of the charge identifier, breaking logging/dead-letter/retry bookkeeping that keys on the charge id, while the real id is buried in `cause`. HOW: restore the original order: `throw new FailedError(chargeId, err);`.",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts declares `constructor(readonly chargeId: string, readonly cause?: unknown)`, while status.ts:11 calls `new FailedError(String(err), chargeId)` — the two arguments are swapped. Consumers reading `error.chargeId` receive the stringified underlying error and the real charge id lands in `cause`, breaking retry/dead-letter bookkeeping keyed on the charge id. This is a distinct problem from the earlier NotReadyError-propagation decision (which concerns a different failure path), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class FailedError|FailedError\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "\\.chargeId|FailedError",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "text": "Any caller that reads `error.chargeId` now receives a stringified exception message like \"Error: gateway timeout\" instead of the actual charge id, silently breaking charge identification. Restore the correct argument order so `chargeId` is passed first and `err` as `cause`, since the constructor already accepts `unknown` for `cause` and no `String()` coercion is needed."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "text": "Every consumer reading `error.chargeId` now gets the stringified underlying error (e.g. 'Error: gateway 500') instead of the charge identifier, breaking logging, dead-letter, and retry bookkeeping that keys on the charge id while the real id is buried in `cause`. Restore the original argument order so `chargeId` is passed first and `err` as `cause`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 50018,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The FailedError constructor arguments are swapped — `new FailedError(String(err), chargeId)` passes the error text as `chargeId` and the charge ID as `cause`, but the constructor is `constructor(readonly chargeId: string, readonly cause?: unknown)`. WHY: Every non-NotReadyError failure surfaces upstream (poller.ts rethrows it) with `chargeId` set to the stringified error and `cause` set to the charge ID, corrupting both fields for any consumer that logs, retries, or reconciles by charge ID. HOW: Restore the correct order: `throw new FailedError(chargeId, err);`.",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts defines `constructor(readonly chargeId: string, readonly cause?: unknown)`, while status.ts:11 calls `new FailedError(String(err), chargeId)` — arguments are swapped, so chargeId receives the stringified error and cause receives the charge ID. This corrupts both fields for upstream consumers. This is a distinct issue from the prior decision (NotReadyError propagation), not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class FailedError|new FailedError|FailedError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "text": "The swapped arguments set `chargeId` to the stringified error and `cause` to the charge ID, so every non-`NotReadyError` failure rethrown by `poller.ts` corrupts both fields for any consumer that logs, retries, or reconciles by charge ID. Restore the constructor order as `new FailedError(chargeId, err)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26582,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 41447,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/tick.ts",
+          "claim": "WHAT: The added comment declares NotReadyError means 'the gateway never received it' and the catch swallows it, returning { state: 'resubmitted' } instead of re-throwing, even though NotReadyError is documented in errors.ts as 'The gateway has the charge but has not settled it yet (transient)'. WHY: A transient, retry-required condition is converted into a successful terminal result, so any caller/retry wrapper that relied on pollCharge propagating NotReadyError to schedule the next tick will stop polling and the charge remains unsettled indefinitely. HOW: Do not return a success state for a transient error — either re-throw NotReadyError so the caller can retry, or keep the retry inside this function but return a non-terminal 'pending' state and let the caller decide.",
+          "keep": false,
+          "rationale": "The finding's factual premises are correct: errors.ts documents NotReadyError as transient ('The gateway has the charge but has not settled it yet'), while tick.ts's comment (line 7) claims the opposite ('the gateway never received it'), and the catch at lines 13-15 resubmits and returns a terminal success state. However, PreviousReviewDecisions entry 'round-a-resubmit' already raised this exact problem on this same PR at pollCharge (src/billing/poller.ts re-exports pollCharge from './tick', so it is the same function, same operation): 'pollCharge resubmits the charge on NotReadyError... Wait instead of resubmitting.' The failure is the same — pollCharge mishandling NotReadyError by resubmitting instead of treating it as transient/pending — just re-worded around the added comment and the terminal state. Per the rules, a finding whose consequence is the failure an entry already described (same function, same NotReadyError branch, same operation) is a repeat regardless of the new cause it names or the fix it proposes. No commit evidence shows the area was deliberately reworked in a way that makes the prior decision stale.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/tick.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|NotReadyError",
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 35704,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 35105,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 43627,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K10-rule-repost-new-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17236,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "`dayKey` derives its calendar day with `toISOString().slice(0, 10)`, so for users west of UTC the key is the previous day. Use `formatLocalDate(at)` from `src/reports/dates.ts`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K10-rule-repost-new-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14132,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "`dayKey` builds the key with `toISOString().slice(0, 10)`, which returns the previous day for users west of UTC and can put the report on the wrong local calendar day. Use `formatLocalDate(at)` from `./dates` so the key reflects the local calendar day."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K10-rule-repost-new-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18741,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "Users west of UTC get the previous calendar day because `dayKey` derives it with `at.toISOString().slice(0, 10)`. Use `formatLocalDate(at)` from `./dates` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K10-rule-repost-new-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23122,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "For users west of UTC, `dayKey` computes the previous calendar day because `toISOString().slice(0, 10)` is UTC-based. Use `formatLocalDate` from `src/reports/dates.ts` instead so the local calendar day is returned."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K10-rule-repost-new-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14937,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "Using `at.toISOString().slice(0, 10)` makes `dayKey` return the previous calendar day for users west of UTC. Replace it with `formatLocalDate(at)` from `./dates` so the value is formatted in local calendar time."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20495,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "CHANGELOG.md",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "text": "Leaving `Retry details TBD` in the Webhooks changelog entry violates the rule that a changelog entry lands with the change, so released notes would ship incomplete. Replace the placeholder in `CHANGELOG.md` with the actual retry details, or remove the dangling clause if there are none to document."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 32044,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "file": "CHANGELOG.md",
+          "line": 13,
+          "text": "**Revises an earlier Kody suggestion** on `CHANGELOG.md:11` (2026-10-06 12:00 UTC).\n\nThe Exports entry still promises that the full column list will be added in a follow-up PR, so the released notes would ship incomplete and violate the \"Changelog entry lands with the change\" rule. List every new tax column (`tax_rate`, `tax_cents`, `tax_total`, `tax_jurisdiction`) in this PR instead.\n\n**Also found in:**\n- `CHANGELOG.md:7-7`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "alsoFoundIn": true,
+          "text": "**Revises an earlier Kody suggestion** on `CHANGELOG.md:11` (2026-10-06 12:00 UTC).\n\nThe Exports entry still promises that the full column list will be added in a follow-up PR, so the released notes would ship incomplete and violate the \"Changelog entry lands with the change\" rule. List every new tax column (`tax_rate`, `tax_cents`, `tax_total`, `tax_jurisdiction`) in this PR instead.\n\n**Also found in:**\n- `CHANGELOG.md:7-7`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17221,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "CHANGELOG.md",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "text": "A placeholder in the Webhooks changelog entry ships an incomplete release note because the changelog is read at release time. Replace `Retry details TBD.` with the actual retry behavior for `invoice.paid` in this PR so the entry lands with the change."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 15591,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "CHANGELOG.md",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "text": "The `Retry details TBD.` placeholder in `CHANGELOG.md` defers part of the entry against the rule \"Changelog entry lands with the change\", and because the changelog is read at release time, a promised follow-up is easy to lose and the released notes would ship incomplete. Write the final entry in this PR describing the retry behavior now, or drop the sentence if it is not part of this change."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16371,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "CHANGELOG.md",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "text": "Because `CHANGELOG.md` notes are read at release time and promised follow-ups are easily lost, the `Retry details TBD.` placeholder in the Webhooks entry can ship incomplete release notes and violates the \"Changelog entry lands with the change\" rule. Replace the deferred sentence with the actual retry details or drop it before merging."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P19-rule-test-error-class-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19361,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P19-rule-test-error-class-out-of-40",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 5,
+          "text": "Because the helper returns a bare `Exception` with `status_code` and `charge_id` attributes, callers catching the real `RefundWindowClosed`/`RefundError` with a 409 status will not match it, so tests can pass or fail for the wrong reason. Define or import the concrete refund error class and raise it with the charge id instead of attaching attributes to a plain `Exception`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P19-rule-test-error-class-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 33709,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P19-rule-test-error-class-out-of-40",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 5,
+          "text": "Because the helper raises a plain `Exception` with `status_code` and `charge_id` attached, tests won't exercise the same `except` handling or attribute behavior as production. Define or import the real refund error class such as `RefundWindowClosedError` and raise/return an instance of it."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P19-rule-test-error-class-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 30328,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P19-rule-test-error-class-out-of-40",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 5,
+          "text": "Because the helper raises a plain `Exception` with `status_code`/`charge_id` stapled on instead of the concrete error class the production code raises, which rule [1] forbids, any `except SomeRefundError` won't catch the fake and the test can pass against the wrong behaviour. Define or import the real refund-window error class (e.g. `RefundWindowClosedError`) and raise/return an instance of it, passing `charge_id` through its constructor rather than assigning attributes afterwards."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P19-rule-test-error-class-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26042,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P19-rule-test-error-class-out-of-40",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 5,
+          "text": "Because `tests/helpers/refund_errors.py` raises a plain `Exception` with `status_code`/`charge_id` attributes instead of the concrete refund error class required by rule [1], `except RefundWindowClosedError` will never catch it and the tests pass while the real error handling path is untested. Import or define the real refund error class (e.g. `RefundWindowClosedError` carrying the status code and charge id) and raise it here instead of mutating a bare `Exception`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P19-rule-test-error-class-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28916,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P19-rule-test-error-class-out-of-40",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 5,
+          "text": "Because the helper builds a plain `Exception` and staples `status_code`/`charge_id` onto it, against rule [1], any `except RefundWindowClosed` in production or tests will not catch the fake, so the tests exercise a different failure path than production. Define or import the real refund error class and instantiate it, passing `charge_id` through its constructor, instead of assigning attributes onto a bare `Exception`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 78471,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In changeSeat, free(booking.seatId) runs inside the try after commit(hold), so if free() throws the catch calls this.holds.release(hold) on a hold that was already committed. WHY: per SeatHolds (seat-holds.ts:5) a hold is ended by commit() OR release(), never both — releasing an already-committed hold is an invalid transition that can free the newly committed seat, letting another user acquire/book it while the booking still points at it (double-booking). HOW: move free(booking.seatId) out of the try (or into a separate try that does not release the committed hold), e.g. commit the hold, return, and free the old seat outside the catch that releases `hold`.",
+          "keep": true,
+          "rationale": "Confirmed by reading bookings.service.ts:22-33 and seat-holds.ts:5. `free(booking.seatId)` sits inside the try after `commit(hold)`; if `free()` throws, the catch calls `this.holds.release(hold)` on an already-committed hold. The interface explicitly documents holds are ended by commit() OR release() (never both), so releasing a committed hold is an invalid transition that can free the just-committed seat and enable a double-booking. This is a distinct failure from the earlier PreviousDecision (a hold *leak* on failure), not a repeat — it is over-release of a committed hold. No guard prevents free() from throwing, so the root cause and failure path stand. Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P29-hold-leak-on-create",
+          "label": "bug",
+          "marked": false,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 25,
+          "text": "**Revises an earlier Kody suggestion** on `src/bookings/bookings.service.ts:13` (2026-10-06 12:00 UTC).\n\nIf `free(booking.seatId)` throws after `commit(hold)`, the catch calls `this.holds.release(hold)` on an already-committed hold, an invalid transition per `SeatHolds` (seat-holds.ts:5) that can free the newly committed seat and let another user book it while the booking still points at it (double-booking). Move `free(booking.seatId)` out of the `try` so the catch only releases holds that were never committed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 73912,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: The new comment on line 12 states book() releases the hold on decline/insert failure, but book() has no try/catch — only the comment and the priceCents check were added, so the hold acquired at line 15 is still never released when payments.charge or repo.insert throws. WHY: Because holds never expire (seat-holds.ts:5), a declined card or failed insert leaves the seat permanently blocked for every user, while the comment falsely documents the leak as fixed. HOW: Wrap the charge/insert/commit in try/catch and release the hold on failure, exactly as done in changeSeat/addGuest.",
+          "keep": false,
+          "rationale": "The finding is a repeat of PreviousReviewDecisions entry round-a-P29-hold-leak-on-create (src/bookings/bookings.service.ts:13-16), which already raised the exact same problem: book() acquires a hold then charges/inserts, and if charge or insert throws, the hold is never released (holds never expire), leaving the seat blocked. The current finding describes the identical failure in the same operation and location, only blaming the new comment/priceCents check. Its Outcome is \"implemented\" and the current code shows no rework reversing that. Per the rules, a finding that raises again the problem an entry already raised must be dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In changeSeat the catch calls holds.release(hold) even when the failure happens after holds.commit(hold) has already succeeded — i.e. when free(booking.seatId) on line 27 throws. WHY: Per the contract (seat-holds.ts:5) a hold ends at commit() OR release(); releasing an already-committed hold is an invalid transition and can free the new seat the booking now occupies, leaving the seat marked available while it is booked. HOW: Only release when the hold has not yet been committed, e.g. track a `committed` flag and skip release once commit succeeded (or move free() outside the try that releases).",
+          "keep": true,
+          "rationale": "The code at src/bookings/bookings.service.ts:24-32 confirms the claimed structure: commit(hold) at line 26, then free(booking.seatId) at line 27, with the catch at line 30 unconditionally calling release(hold). Since free() is an awaited async call, it can throw after commit() succeeded, so release() would be invoked on an already-committed hold. The interface (seat-holds.ts:5) states \"only commit() OR release() ends one,\" supporting that these are terminal, mutually exclusive transitions and that releasing a committed hold is an invalid operation. I cannot refute the failure path; the implementation could not be inspected to prove release-after-commit is a harmless no-op. This is also a distinct problem from PreviousDecision index 3 (the hold-leak), which asked to add the release in the catch — this finding is about that applied fix being wrong when commit already happened, a different failure consequence.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|commit|free|acquire",
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 25,
+                "path": "src/bookings/seat-holds.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "free\\(|release\\(|commit\\(",
+                "path": "src/bookings"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 26,
+          "text": "In `changeSeat`, when `free(booking.seatId)` on line 27 throws after `holds.commit(hold)` has succeeded, the `catch` still calls `holds.release(hold)`, which violates the contract in `seat-holds.ts:5` that a hold ends at `commit()` or `release()` and can free the new seat the booking now occupies, leaving it marked available while booked. Only call `holds.release(hold)` when the hold has not been committed, for example by tracking a `committed` flag and skipping release once commit succeeds or by moving `free()` outside the try that releases."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 92842,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In changeSeat, free(booking.seatId) runs inside the try block after commit(hold) has already succeeded, so if free throws the catch calls release(hold) on a hold that was already committed. WHY: seat-holds.ts:5 documents that a hold is ended by commit() OR release(); releasing an already-committed hold is a second end of the same hold — it either throws (masking the original free() error and losing the real failure) or silently no-ops, leaving the old seat un-freed while the booking points at the new seat. HOW: only release when the commit has not yet happened, e.g. commit after the try (or track a committed flag) and release only on failure before commit.",
+          "keep": true,
+          "rationale": "Confirmed: in changeSeat, commit(hold) (line 26) precedes free(booking.seatId) (line 27) inside the try, so if free throws, catch calls release(hold) (line 30) on an already-committed hold. seat-holds.ts:5 documents a hold is ended by commit() OR release(), so this is a second end of the same hold — either throws (masking the original free error) or no-ops (old seat left un-freed). The root cause is factually correct. This is a distinct problem from the prior hold-leak decision (index 3), and in fact arises as a consequence of that applied fix, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "free|commit|release|acquire",
+                "glob": "**/seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "seat-holds*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class.*SeatHolds|implements SeatHolds|commit\\(|release\\(|free\\(",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 24,
+          "text": "If `free` throws after `commit(hold)` has succeeded, the `catch` calls `release(hold)` on a hold that was already committed — per `seat-holds.ts:5` a hold is ended by `commit()` or `release()`, so this second end either throws and masks the original `free()` error or silently no-ops, leaving the old seat un-freed while the booking points at the new seat. Track a `committed` flag (or move the commit after the try) and only release when the commit has not yet happened."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 77982,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In changeSeat, the new try/catch wraps commit(hold) and free(booking.seatId) together, so if commit succeeds but free(booking.seatId) throws, the catch calls release(hold) on a hold that was already committed. WHY: release() on a committed hold can undo the just-committed seat (allowing the seat the booking now points to be re-acquired, i.e. double booking) or itself throw and mask the original free() error, leaving inconsistent hold state. HOW: move commit out of the guarded region so only the pre-commit work is rolled back — e.g. update the booking inside try/catch and release the hold on failure, then commit and free after the try, so a free() failure cannot trigger release of a committed hold.",
+          "keep": true,
+          "rationale": "The code confirms the claim: in changeSeat, commit(hold) and free(booking.seatId) are both inside the try, and the catch unconditionally calls release(hold). If commit succeeds but free throws, release() is invoked on an already-committed hold. seat-holds.ts documents that \"only commit() or release() ends one,\" so releasing a committed hold is a real state-corrupting path (potentially undoing the committed seat / masking the free() error). This is a distinct failure from PreviousDecision #3 (hold leak when a pre-commit step fails), not a repeat. No guard prevents the sequence, so the finding stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|commit|free|acquire",
+                "glob": "**/holds*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 24,
+          "text": "In `changeSeat`, wrapping `commit(hold)` and `free(booking.seatId)` in the same `try/catch` means a failure in `free(booking.seatId)` after a successful commit triggers `release(hold)` on an already committed hold, which can undo the committed seat and allow double booking or mask the original `free` error and leave inconsistent hold state. Move `commit` out of the guarded region so only the pre-commit work is rolled back: update the booking inside `try/catch` and `release` the hold on failure, then `commit` and `free` after the `try`, ensuring a `free` failure cannot release a committed hold."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 66201,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In changeSeat the catch block unconditionally calls holds.release(hold) even when holds.commit(hold) already succeeded and the failure came from the subsequent holds.free(booking.seatId). WHY: commit() already ended the hold per the SeatHolds contract, so releasing it is an invalid state transition, and because holds never expire the old seat (booking.seatId) is left permanently blocked for everyone. HOW: track whether the hold was committed and only release it if the failure happened before commit; free the old seat outside the release path (e.g. let a failed free() surface without releasing an already-committed hold).",
+          "keep": true,
+          "rationale": "Confirmed. In changeSeat, the try block does repo.update -> holds.commit(hold) -> holds.free(booking.seatId). The catch block unconditionally calls holds.release(hold). If commit() succeeds but the subsequent free(booking.seatId) throws, the catch releases an already-committed hold — an invalid transition per the SeatHolds contract ('Holds never expire: only commit() or release() ends one'). Moreover, if free() fails, booking.seatId is never freed and holds never expire, so the old seat stays permanently blocked for everyone. This is a distinct problem from the previous 'hold leak on create' entry (round-a-P29), which covered holds leaked when nothing after acquire fails to release; here the bug is the opposite — releasing a hold that was already committed after the new seat path succeeded, and the un-freed old seat. The root cause and failure path are concrete and reachable, not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class .*Holds|async (acquire|commit|release|free)|expire",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 60,
+                "path": "src/bookings/seat-holds.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: book() still has no try/catch, so when payments.charge throws (declined card) or repo.insert fails, the seat hold acquired on line 15 is never released. WHY: per the SeatHolds contract holds never expire — only commit() or release() ends one — so the seat stays permanently blocked for all users, exactly the leak the PR fixed in changeSeat/addGuest but left in book while the new comment on line 12 falsely claims book releases the hold on failure. HOW: wrap the charge/insert/commit steps in try/catch and call await this.holds.release(hold) before rethrowing.",
+          "keep": false,
+          "rationale": "The technical claim is accurate: book() at lines 13-20 has no try/catch, and seat-holds.ts confirms holds never expire (only commit/release ends one), so a charge/insert failure leaks the hold. However, this exact problem was already raised on this same PR by PreviousDecision round-a-P29-hold-leak-on-create (lines 13-16, same file, same function, same failure — seat permanently blocked when charge/insert throws — and same proposed fix: wrap in try/catch, release, rethrow). The current finding is a re-raise of that entry's problem (same failure, same operation), which the rules require dropping regardless of that entry's \"implemented\" outcome. The line-12 comment mismatch does not change the failure being reported.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|commit|acquire",
+                "path": "src/bookings"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "line": 24,
+          "label": "bug",
+          "earlierId": "round-a-P29-hold-leak-on-create",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 95712,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: The expiry guard is inverted — `if promo.expires_at > datetime.now(timezone.utc): raise PromoExpired(code)` raises PromoExpired for promos that are still valid. WHY: models.py:18 documents expires_at as the instant the promo 'can be used until', so a valid promo has expires_at in the future; this check rejects every usable promo, while genuinely expired promos (expires_at <= now) fall through and still grant the discount. HOW: Invert the comparison to `if promo.expires_at <= datetime.now(timezone.utc): raise PromoExpired(code)`.",
+          "keep": true,
+          "rationale": "Confirmed. models.py:18 documents expires_at as the instant the promo can be used until, so a valid promo has expires_at in the future. apply.py:12 raises PromoExpired when expires_at > now — i.e., for still-valid promos — while genuinely expired promos (expires_at <= now) fall through and grant the discount. The comparison is inverted, exactly as claimed. No previous decision addresses this expiry guard.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "text": "Valid promos are rejected with `PromoExpired` while genuinely expired ones (`expires_at <= now`) still grant the discount, contradicting the `expires_at` semantics documented at models.py:18. Invert the comparison to `if promo.expires_at <= datetime.now(timezone.utc): raise PromoExpired(code)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 81009,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: the expiry check is inverted — it raises PromoExpired when expires_at is in the future (promo still valid) and lets expired promos through. WHY: models.py:18 documents expires_at as the instant the promo can be used until, so the guard `expires_at > now` rejects every valid promo with PromoExpired and only applies the discount to already-expired codes, breaking promo redemption entirely. HOW: raise only when the promo has actually lapsed: `if promo.expires_at <= datetime.now(timezone.utc): raise PromoExpired(code)`.",
+          "keep": true,
+          "rationale": "Confirmed inverted expiry check. models.py:18 documents expires_at as \"the promo can be used until this instant\", so a future expires_at means the promo is still valid. apply.py:12-13 raises PromoExpired precisely when expires_at > now (valid) and permits already-expired codes (expires_at <= now) to be applied. The proposed fix (`if promo.expires_at <= now: raise PromoExpired`) matches the documented semantics. This is a real functional bug not covered by any previous decision (index 2 addressed code normalization, a different problem).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: expires_at is declared as a plain `datetime` with only a 'UTC' comment, but is compared against a timezone-aware `datetime.now(timezone.utc)`. WHY: a Promo built with a naive datetime (the type permits it) makes the comparison raise TypeError: can't compare offset-naive and offset-aware datetimes, crashing apply_promo for that code. HOW: either enforce awareness at construction (e.g. a validator that attaches/requires tzinfo) or normalize before comparing, e.g. compare `promo.expires_at.replace(tzinfo=timezone.utc) if promo.expires_at.tzinfo is None else promo.expires_at` against now.",
+          "keep": true,
+          "rationale": "Confirmed: Promo.expires_at is a plain `datetime` dataclass field with only a '# UTC' comment (models.py:18) and no validator or constructor enforcing tz-awareness, while apply.py:12 compares it against timezone-aware datetime.now(timezone.utc). A naive datetime (permitted by the type) would raise TypeError at the comparison. No construction site in the repo normalizes tzinfo (grep for expires_at=/Promo(/tzinfo found only the model and the comparison), so nothing guarantees awareness. The claim's root cause and failure path are factually accurate and not refuted by any prior review decision (the promo-related prior entry concerns code normalization, a different operation/consequence).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at",
+                "path": "shop"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "shop",
+                "pattern": "Promo\\(|expires_at=|tzinfo|timezone"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: the expiry check is inverted — it raises PromoExpired when expires_at is in the future (promo still valid) and lets expired promos through. WHY: models.py documents expires_at as 'the promo can be used until this instant', so the valid window is now <= expires_at and the expired condition is now > expires_at; as written, every currently-valid promo is rejected while every expired promo is accepted and still grants a discount. HOW: invert the comparison to `if promo.expires_at < datetime.now(timezone.utc):`.",
+          "keep": true,
+          "rationale": "Confirmed by reading the code. models.py line 18 documents expires_at as \"the promo can be used until this instant\", so a still-valid promo satisfies expires_at >= now. apply.py line 12 raises PromoExpired when promo.expires_at > now, which rejects valid promos and allows expired ones (expires_at < now) to grant a discount. The comparison is genuinely inverted; the suggested fix `if promo.expires_at < datetime.now(timezone.utc)` matches the documented semantics. Not a duplicate of the prior decisions (those concern code normalization and unrelated reports code).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 3
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "text": "Because `models.py` documents `expires_at` as the instant a promo can be used until, every currently-valid promo is rejected with `PromoExpired` while expired promos still grant a discount. Invert the comparison to `if promo.expires_at < datetime.now(timezone.utc):` so only promos past `expires_at` are rejected."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "text": "With `models.py:18` documenting `expires_at` as the instant the promo can be used until, the guard `expires_at > now` rejects every valid promo with `PromoExpired` and only applies the discount to already-expired codes, breaking promo redemption entirely. Raise only when the promo has actually lapsed: `if promo.expires_at <= datetime.now(timezone.utc): raise PromoExpired(code)`."
+        },
+        {
+          "sourceIndex": 2,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "text": "A Promo built with a naive `datetime` makes the comparison against timezone-aware `datetime.now(timezone.utc)` raise `TypeError: can't compare offset-naive and offset-aware datetimes`, crashing `apply_promo` for that code. Enforce awareness at construction or normalize before comparing, e.g. compare `promo.expires_at.replace(tzinfo=timezone.utc) if promo.expires_at.tzinfo is None else promo.expires_at` against now."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 46912,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: the expiry guard is inverted — it raises PromoExpired when expires_at is still in the future (expires_at > datetime.now(timezone.utc)) instead of when it has passed. WHY: models.py documents expires_at as the instant the promo can be used UNTIL, so every still-valid promo is now rejected with PromoExpired and every already-expired promo is silently accepted and discounted, breaking the contract of apply_promo for all callers. HOW: invert the comparison to raise only when the promo has actually expired.",
+          "keep": true,
+          "rationale": "models.py line 18 documents expires_at as the instant the promo can be used UNTIL, so validity requires expires_at > now. The guard at apply.py:12 raises PromoExpired exactly when expires_at is in the future, rejecting every still-valid promo, and lets every already-expired promo through to be discounted. The inverted comparison is a real wrong-result bug affecting all callers; not a repeat of the earlier normalization suggestion (a different failure at line 7).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at",
+                "path": "shop/promos"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 25,
+                "path": "shop/promos/models.py",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "text": "The inverted guard raises `PromoExpired` for every still-valid promo while silently accepting and discounting already-expired ones, breaking the `apply_promo` contract for all callers. Invert the comparison so `PromoExpired` is raised only when `expires_at` has actually passed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 71407,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: The expiry check is inverted — `if promo.expires_at > datetime.now(timezone.utc): raise PromoExpired(code)` raises PromoExpired exactly when the promo is still valid (expiry in the future). WHY: Every valid promo is rejected while genuinely expired promos (expires_at in the past) pass the check and grant a discount, breaking the expiry contract stated by the model comment 'the promo can be used until this instant'. HOW: Flip the comparison to raise when the promo has already expired: `if promo.expires_at < datetime.now(timezone.utc): raise PromoExpired(code)` (use `<=` if the instant itself should be expired).",
+          "keep": true,
+          "rationale": "Confirmed by reading apply.py:12-13 and models.py:18. The model documents expires_at as \"the promo can be used until this instant\", so a promo is valid when now <= expires_at. The code raises PromoExpired when expires_at > now (still-valid promo) and lets genuinely expired promos (expires_at < now) pass and grant a discount — the comparison is inverted exactly as claimed. No prior review decision covers this expiry logic.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "models.py",
+                "path": "shop/promos"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "text": "Because the expiry check is inverted, every valid promo is rejected with `PromoExpired` while genuinely expired promos pass and grant a discount, breaking the model comment’s contract that the promo can be used until `expires_at`. Flip the comparison to raise when `promo.expires_at < datetime.now(timezone.utc)` with `PromoExpired(code)`, using `<=` if the exact instant should be expired."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39667,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: The expiry guard is inverted — it raises PromoExpired when `promo.expires_at > datetime.now(timezone.utc)` (i.e. when the promo is still valid). WHY: Per the model contract (models.py:18, 'the promo can be used until this instant'), a promo is valid while now <= expires_at; as written, every non-expired promo is rejected with PromoExpired while already-expired promos pass and incorrectly grant a discount, producing wrong results and lost/incorrect revenue. HOW: invert the comparison to `if promo.expires_at < datetime.now(timezone.utc):`.",
+          "keep": true,
+          "rationale": "Confirmed inverted logic: line 12 raises PromoExpired when expires_at is in the future (promo still valid) and allows expired promos to grant discounts. models.py:18 documents the promo as usable until expires_at, so the comparison should be `<`. Not a repeat of the previous promo decision, which concerned code normalization at the lookup.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at",
+                "path": "shop/promos"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "text": "Every non-expired promo is rejected with `PromoExpired` while already-expired promos pass and incorrectly grant a discount, contradicting the model contract in models.py:18 that a promo is valid while `now <= expires_at`. Invert the comparison to `if promo.expires_at < datetime.now(timezone.utc):` so only genuinely expired promos raise."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}
