@@ -45,6 +45,7 @@ countTokens();
 const { ConversationAgentProvider } = require('../../libs/agents/infrastructure/services/agents/conversation/conversationAgent.ts');
 const { readDecision } = require('../../libs/agents/infrastructure/services/agents/conversation/conversation-decision.ts');
 const { PermissionValidationService } = require('../../libs/ee/shared/services/permissionValidation.service.ts');
+const { ParametersService } = require('../../libs/organization/infrastructure/adapters/services/parameters.service.ts');
 const { LocalSandboxService } = require('../../libs/sandbox/infrastructure/providers/local-sandbox.service.ts');
 const { AiSdkAgentRunner } = require('../../libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner.ts');
 
@@ -110,8 +111,11 @@ async function runCase(c, judgeKey) {
         repoDir: dir,
         baseBranch: 'main',
     };
-    const parameters = { findByKey: async (key) => (key === 'language_config' ? { configValue: c.language } : null) };
-    const agent = new ConversationAgentProvider(parameters, new PermissionValidationService(undefined, undefined));
+    // The production parameters service over a repository that holds the
+    // team's language_config: the service's own lookup runs, only the storage
+    // is in memory.
+    const parametersRepository = { findByKey: async (key) => (key === 'language_config' ? { configKey: key, configValue: c.language, active: true } : null) };
+    const agent = new ConversationAgentProvider(new ParametersService(parametersRepository), new PermissionValidationService(undefined, undefined));
     const states = [];
     try {
         const reply = await runs.run(states, () => agent.execute(c.reply, { organizationAndTeamData: ORG, prepareContext: threadContext(c), thread: { id: `eval-${c.id}` }, sandbox }));
