@@ -70,15 +70,19 @@ function fromText(answer) {
 }
 
 // The findings the model wrote, whatever their shape on the wire.
-function written(payload) {
-    let items = payload?.suggestions;
-    if (typeof items === 'string') {
-        try {
-            items = JSON.parse(items);
-        } catch {
-            items = [];
-        }
+// A payload's findings list as the model sent it, a JSON string parsed.
+function listOf(payload) {
+    const items = payload?.suggestions;
+    if (typeof items !== 'string') return items;
+    try {
+        return JSON.parse(items);
+    } catch {
+        return undefined;
     }
+}
+
+function written(payload) {
+    const items = listOf(payload);
     return Array.isArray(items) ? items.filter((s) => s && typeof s === 'object' && !('$text' in s)) : [];
 }
 
@@ -191,7 +195,7 @@ async function runCase(c) {
         for (const [i, end] of recorded.ends.entries()) {
             const payload = end.submitResult === undefined ? undefined : asArtifact(end.submitResult);
             const label = LABELS[`${c.payload}#${i}`];
-            const list = payloadOf(end)?.suggestions;
+            const list = listOf(payloadOf(end));
             // An end with no call and no text wrote nothing either.
             const empty = end.submitResult === undefined && !String(end.text || '').trim();
             const wroteNone = label ? !label.findings.length : (Array.isArray(list) && !list.length) || empty;

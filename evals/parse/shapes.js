@@ -26,12 +26,12 @@ const asProse = (s, i) =>
 // string breaks there. Throws when nothing broke: a case that still parses
 // would pass without measuring the break.
 function brokenAtSecond(suggestions) {
-    const json = JSON.stringify(suggestions);
     const second = JSON.stringify(suggestions[1]);
     const field = ['improvedCode', 'existingCode', 'suggestionContent'].find((k) => typeof suggestions[1]?.[k] === 'string');
     const broken = field ? second.replace(`"${field}":"`, `"${field}":"x = "y" + `) : second;
     if (broken === second) throw new Error('suggestions-broken-json: the second finding has no string field to break');
-    return json.replace(second, broken);
+    // Item by item: a first finding identical to the second must stay whole.
+    return `[${suggestions.map((s, i) => (i === 1 ? broken : JSON.stringify(s))).join(',')}]`;
 }
 
 const SHAPES = {
