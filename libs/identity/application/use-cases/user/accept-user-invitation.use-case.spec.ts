@@ -31,11 +31,12 @@ describe('AcceptUserInvitationUseCase', () => {
         ),
     };
     const createProfile = { execute: jest.fn() };
+    const telemetry = { userInvitationAccepted: jest.fn() };
     const useCase = new AcceptUserInvitationUseCase(
         usersService as any,
         { hashPassword: jest.fn(async () => 'hash') } as any,
         createProfile as any,
-        { userInvitationAccepted: jest.fn() } as any,
+        telemetry as any,
         profileService as any,
     );
 
@@ -65,5 +66,69 @@ describe('AcceptUserInvitationUseCase', () => {
             expect.objectContaining({ status: STATUS.ACTIVE }),
         );
         expect(createProfile.execute).toHaveBeenCalled();
+    });
+
+    it('answers "User could not be found" when the invitation is not open', async () => {
+        await expect(accept('active')).rejects.toThrow(
+            'User could not be found',
+        );
+    });
+
+    it('rejects a request without a payload', async () => {
+        await expect(useCase.execute(undefined as any)).rejects.toBeInstanceOf(
+            NotFoundException,
+        );
+        expect(usersService.update).not.toHaveBeenCalled();
+    });
+
+    it('creates no profile when the guarded update matches no row', async () => {
+        // Another request accepted the invitation between the check and the
+        // update, so the PENDING filter no longer matches.
+        usersService.update.mockResolvedValueOnce(undefined as any);
+
+        await expect(accept('invited')).rejects.toThrow(
+            'User could not be found',
+        );
+        expect(createProfile.execute).not.toHaveBeenCalled();
+    });
+
+    it('creates the profile with the submitted name and phone', async () => {
+        await useCase.execute({
+            uuid: 'invited',
+            name: 'Someone',
+            phone: '+55 11 99999-0000',
+            password: 'Str0ngP@ssw0rd!',
+        } as any);
+
+        expect(createProfile.execute).toHaveBeenCalledWith({
+            user: { uuid: 'invited' },
+            name: 'Someone',
+            phone: '+55 11 99999-0000',
+        });
+    });
+
+    it('reports the accepted invitation with the user and organization', async () => {
+        usersService.update.mockResolvedValueOnce({
+            uuid: 'invited',
+            email: 'invited@acme.dev',
+            organization: { uuid: 'org-1' },
+        } as any);
+
+        await accept('invited');
+
+        expect(telemetry.userInvitationAccepted).toHaveBeenCalledWith({
+            userId: 'invited',
+            email: 'invited@acme.dev',
+            name: 'Someone',
+            organizationId: 'org-1',
+        });
+    });
+
+    it('does not report an accepted invitation without an email', async () => {
+        usersService.update.mockResolvedValueOnce({ uuid: 'invited' } as any);
+
+        await accept('invited');
+
+        expect(telemetry.userInvitationAccepted).not.toHaveBeenCalled();
     });
 });

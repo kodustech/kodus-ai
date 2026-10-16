@@ -106,11 +106,21 @@ export const AcceptInviteForm = (props: {
     const onSubmit = form.handleSubmit(async (data) => {
         const { password, name } = data;
 
-        const register = await completeUserInvitation({
-            name,
-            password,
-            uuid: props.inviteId,
-        });
+        let register: Awaited<ReturnType<typeof completeUserInvitation>>;
+        try {
+            register = await completeUserInvitation({
+                name,
+                password,
+                uuid: props.inviteId,
+            });
+        } catch {
+            toast({
+                description:
+                    "We couldn't accept this invitation. Please try again or ask your organization administrator for a new invite.",
+                variant: "danger",
+            });
+            return;
+        }
 
         if (register?.data?.statusCode === 201) {
             toast({
