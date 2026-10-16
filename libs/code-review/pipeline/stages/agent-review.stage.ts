@@ -4,8 +4,6 @@ import { createLogger } from '@libs/core/log/logger';
 import { jsonSchema, type EmbeddingModel } from 'ai';
 import { tracedEmbed as embed } from '@libs/llm/llm-call';
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
-import { resolveContextWindow } from '@libs/llm/model-context-window';
 import {
     DEDUP_SCHEMA,
     DEDUP_CONTENT_THRESHOLD,
@@ -48,6 +46,7 @@ import { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/c
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { ReviewOrchestratorService } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
 import { buildOrchestratorInput } from './build-orchestrator-input';
+import { resolveAgentReviewSettings } from './agent-review-settings';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { FeatureGateService, FEATURE_KEYS } from '@libs/feature-gate';
 import {
@@ -477,46 +476,14 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             });
         }
 
-        const reviewOptions = context.codeReviewConfig?.reviewOptions || {
-            bug: true,
-            security: true,
-            performance: true,
-        };
-
-        // Resolve adaptive-fit profile once for this run. The profile drives
-        // which fidelity strategies (drop callGraph, compact prompt, etc) fire
-        // and is also passed through to BaseCodeReviewAgentProvider via
-        // ReviewAgentInput so per-agent code paths gate on the same flags.
-        // Per-repo/directory model override (byokModel) takes priority over
-        // the org-level main.model when present — same resolution the agent
-        // uses internally (`base-code-review-agent.provider.ts:541-551`).
-        const resolvedSlot = context.codeReviewConfig?.resolvedModelSlot;
-        // byokModelId (id) wins over the legacy byokModel NAME (D-05). When a
-        // byokModelId is set, ValidateConfigStage has already routed the
-        // codeReview task to that id-addressed model into the resolved slot
-        // (same routing the model factory runs), so the legacy NAME re-apply
-        // is skipped here — the id-routed model stands. Only when no id is set
-        // does the legacy NAME window still apply the override onto the slot.
-        const overrideModel = context.codeReviewConfig?.byokModelId?.trim()
-            ? undefined
-            : context.codeReviewConfig?.byokModel?.trim();
-        const effectiveSlot =
-            overrideModel && resolvedSlot
-                ? { ...resolvedSlot, model: overrideModel }
-                : resolvedSlot;
-        // Use the same model-name formatter the agent uses (provider:model)
-        // so stage-emitted warnings and agent-emitted warnings share a
-        // dedup key. Otherwise dedupReviewWarnings sees them as distinct
-        // and the user sees duplicate bullets (PROMPT_COMPACTED listed
-        // twice — once with "gemini-2.5-flash" and once with
-        // "google_gemini:gemini-2.5-flash"). getModelName is native: it
-        // takes the resolved slot directly (no `{main}` wrapping).
-        const effectiveModelName = getModelName(effectiveSlot ?? undefined);
-        const effectiveContextWindow = resolveContextWindow({
-            byokMaxInputTokens: resolvedSlot?.maxInputTokens,
-            modelName: overrideModel || resolvedSlot?.model || '',
-        });
-        const adaptiveProfile = resolveAdaptiveProfile(effectiveContextWindow);
+        // Categories and the adaptive-fit profile for the resolved model
+        // (agent-review-settings.ts, also run by the finder eval).
+        const {
+            reviewOptions,
+            effectiveModelName,
+            effectiveContextWindow,
+            adaptiveProfile,
+        } = resolveAgentReviewSettings(context.codeReviewConfig);
         const stageWarnings: ReviewWarning[] = [];
         const emitStageWarning = (
             kind: ReviewWarning['kind'],

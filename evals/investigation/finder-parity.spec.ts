@@ -96,3 +96,40 @@ describe('finder model route', () => {
         expect(() => internals.resolveRoute({ provider: 'tier0', model: 'gpt-5.6-luna@sub' })).toThrow(internals.NotAProductionRoute);
     });
 });
+
+describe('finder input data', () => {
+    const saved = { ...process.env };
+    afterEach(() => {
+        process.env = { ...saved };
+    });
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { internals } = require('./agent-provider');
+
+    it("passes the dataset's changed files through, the rendered patch standing in for a missing raw one", () => {
+        const row = { filename: 'src/a.ts', patchWithLinesStr: '@@ -1 +1,2 @@\n  1 +x', status: 'modified', additions: 7, deletions: 2 };
+        const raw = { filename: 'src/b.ts', patch: '@@ -1 +1 @@\n+y', patchWithLinesStr: 'rendered', additions: 1, deletions: 0 };
+        expect(internals.changedFilesOf({ changedFilesFull: JSON.stringify([row, raw]), changedFiles: '[]' })).toEqual([
+            { ...row, patch: row.patchWithLinesStr },
+            raw,
+        ]);
+        expect(internals.changedFilesOf({ changedFiles: JSON.stringify([raw]) })).toEqual([raw]);
+    });
+
+    it('sets the team category toggles only when RECALL_CATEGORIES asks', () => {
+        delete process.env.RECALL_CATEGORIES;
+        expect(internals.reviewOptionsFromEnv()).toBeUndefined();
+        process.env.RECALL_CATEGORIES = 'bug, security';
+        expect(internals.reviewOptionsFromEnv()).toEqual({ bug: true, security: true, performance: false });
+    });
+
+    it("reports one batch's loop as is, and several in order with counts summed", () => {
+        const one = { findings: { reasoning: 'r', suggestions: [{ a: 1 }] }, steps: 3, usage: { inputTokens: 5 } };
+        expect(internals.combineLoops([{ result: one }])).toBe(one);
+        const two = { findings: { reasoning: 's', suggestions: [{ b: 2 }] }, steps: 4, usage: { inputTokens: 6 } };
+        expect(internals.combineLoops([{ result: one }, { result: two }])).toMatchObject({
+            findings: { reasoning: 'r\n\ns', suggestions: [{ a: 1 }, { b: 2 }] },
+            steps: 7,
+            usage: { inputTokens: 11 },
+        });
+    });
+});

@@ -67,32 +67,16 @@ function normalizePath(value) {
         .replace(/\/+/g, '/');
 }
 
-function countPatchLines(patch) {
-    let additions = 0;
-    let deletions = 0;
-    for (const line of String(patch || '').split('\n')) {
-        if (line.startsWith('+') && !line.startsWith('+++')) additions++;
-        else if (line.startsWith('-') && !line.startsWith('---')) deletions++;
-    }
-    return { additions, deletions };
-}
-
-// additions/deletions/status are what production's file scorer ranks by
-// (file-priority-scorer.ts:71-74, :158-169); dropping them tied every file.
-function normalizeChangedFiles(files) {
-    return (files || []).map((file) => {
-        const patch = file.patch || file.patchWithLinesStr || file.diff || '';
-        const counted = countPatchLines(patch);
-        return {
-            filename: normalizePath(file.filename || file.path || file.filePath),
-            patchWithLinesStr:
-                file.patchWithLinesStr || file.patch || file.diff || '',
-            patch,
-            additions: file.additions ?? counted.additions,
-            deletions: file.deletions ?? counted.deletions,
-            ...(file.status ? { status: file.status } : {}),
-        };
-    });
+// The PR's changed files as the dataset recorded them: the whole diff
+// (changedFilesFull, rendered by production's chain in materialize-full-diff.js)
+// or the corpus's first, partial field. Passed through: filename, status,
+// additions and deletions are the platform's, never recomputed. The datasets
+// carry no raw patch; production's only reader of `patch` on this path (the
+// coverage ledger's changed ranges) reads the hunk headers, which the rendered
+// patchWithLinesStr keeps, so it stands in for the patch a file does not carry.
+function changedFilesOf(caseData) {
+    const files = parseMaybeJson(caseData.changedFilesFull) || parseMaybeJson(caseData.changedFiles) || [];
+    return files.map((file) => (file.patch ? file : { ...file, patch: file.patchWithLinesStr }));
 }
 
 function defaultApiKeyEnv(provider) {
@@ -464,189 +448,143 @@ class ReplayRemoteCommands {
     }
 }
 
-// The input production's execute() hands the agent loop, built with the same
-// functions in the same order (base-code-review-agent.provider.ts:127-420, and
-// the orchestrator before it). The eval calls the loop itself rather than
-// execute() because it scores the finder's own findings (the loop's result),
-// before the finding mapper (measured by evals/parse); everything execute()
-// does to the input on the way to the loop is reproduced here.
-//
-// `batch`: one batch of a PR production splits (runChunkedReview,
-// batch-runner.ts:86-120): its files, index and total.
-async function buildProductionRun(caseData, permissionService, batch) {
-    const lib = (p) => require(path.join(__dirname, '../../libs', p));
-    const { GeneralistAgentProvider } = lib('code-review/infrastructure/agents/providers/generalist-agent.provider.ts');
-    const { ReviewOrchestratorService } = lib('code-review/infrastructure/agents/review-orchestrator.service.ts');
-    const { resolveReviewAgentModel } = lib('code-review/infrastructure/agents/collaborators/model-factory.ts');
-    const { resolveContextWindow } = lib('llm/model-context-window.ts');
-    const { resolveAdaptiveProfile } = lib('code-review/infrastructure/agents/engine/adaptive-fit.ts');
-    const planner = lib('code-review/infrastructure/agents/collaborators/context-fit-planner.ts');
-    const { assignFileTiers, computeFileScores } = lib('code-review/infrastructure/agents/engine/file-priority-scorer.ts');
-
-    const provider = new GeneralistAgentProvider(permissionService, {}, undefined, undefined);
-    // The PR's whole diff, rendered as fetch-changed-files.stage.ts renders it
-    // (materialize-full-diff.js on feat/improve-harness-to-big-models).
-    // `changedFiles` is the corpus's first field: at most 6 files, tests left
-    // out, with no record of the rest. A dataset without the full diff falls
-    // back to it.
-    const prFiles = normalizeChangedFiles(
-        parseMaybeJson(caseData.changedFilesFull) || parseMaybeJson(caseData.changedFiles),
+// ── What production's loop receives and returns, observed ─────────────────────
+// The review runs as production runs it (reviewAsProduction): the eval does not
+// rebuild any of it. To score the finder's own findings (before the mapper,
+// which evals/parse measures) it observes production's loop entry,
+// runAgentLoopViaCore, which BaseCodeReviewAgentProvider.execute calls once per
+// review (once per batch when it splits the PR): the wrapper records the call's
+// parameters and result and returns that result untouched.
+const { AsyncLocalStorage } = require('async_hooks');
+const observedLoops = new AsyncLocalStorage();
+let loopObserved = false;
+function observeTheLoop() {
+    if (loopObserved) return;
+    const adapterPath = require.resolve(
+        path.join(__dirname, '../../libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.ts'),
     );
-    const reviewMode = caseData.reviewMode || 'normal';
-    let input = {
-        organizationAndTeamData: EVAL_ORG,
-        changedFiles: batch ? batch.changedFiles : prFiles,
-        remoteCommands: {},
-        prNumber: caseData.prNumber || 1,
-        repositoryFullName: caseData.repositoryFullName || 'eval/repo',
-        // build-orchestrator-input.ts:107-108 sends en-US when the team set none.
-        languageResultPrompt: caseData.languageResultPrompt || 'en-US',
-        memoryRules: parseMaybeJson(caseData.memoryRules) || [],
-        traceDecisions: parseMaybeJson(caseData.traceDecisions) || undefined,
-        v2PromptOverrides: parseMaybeJson(caseData.v2PromptOverrides),
-        generationMain: caseData.generationMain,
-        prTitle: caseData.prTitle,
-        prBody: caseData.prBody,
-        reviewMode,
-        // The orchestrator's step budget for the generalist, from the PR's file
-        // count (review-orchestrator.service.ts:196-205, :335-370): 20 in normal
-        // mode plus half a step per file past eight, up to 100. The datasets pin
-        // 12, which production never runs with. RECALL_MAX_STEPS overrides it
-        // for an experiment.
-        maxSteps:
-            Number(process.env.RECALL_MAX_STEPS) ||
-            ReviewOrchestratorService.prototype.getMaxStepsForAgent.call(null, 'generalist', reviewMode, prFiles.length),
-        // Production asks the generalist for every category the team left on
-        // (review-orchestrator.service.ts:109-113, from reviewOptions, all on
-        // by default: agent-review.stage.ts:480-484), which is also the
-        // generalist's own default (generalist-agent.provider.ts:59-63). The
-        // datasets pin ["bug"]; that pin is no longer the default.
-        // RECALL_CATEGORIES=bug,security narrows it for an experiment.
-        requestedCategories: process.env.RECALL_CATEGORIES
-            ? process.env.RECALL_CATEGORIES.split(',').map((c) => c.trim()).filter(Boolean)
-            : undefined,
-        callGraph: parseMaybeJson(caseData.callGraph),
-        // No callGraphJson: production never sets one (the pipeline context's
-        // callGraphJson has no writer in libs/ or apps/; only the scorer reads
-        // it, base-code-review-agent.provider.ts:367-371), so its file scores
-        // rank by diff size. The datasets' callGraphJson is not used.
-        baseBranch: caseData.baseBranch || 'main',
-        // A batch carries what runChunkedReview copies from its parent input:
-        // the parent's tiers, its runtime name, its place (batch-runner.ts:113-120).
-        ...(batch
-            ? {
-                  fileTiers: batch.fileTiers,
-                  agentRuntimeName: batch.runtimeName,
-                  batchIndex: batch.index,
-                  batchTotal: batch.total,
-                  recursionDepth: batch.depth,
-              }
-            : {}),
+    const real = require(adapterPath);
+    require.cache[adapterPath].exports = {
+        ...real,
+        runAgentLoopViaCore: async (params, secrets) => {
+            const result = await real.runAgentLoopViaCore(params, secrets);
+            observedLoops.getStore()?.push({ params, result });
+            return result;
+        },
     };
-
-    // execute(): the model, its window and the adaptive profile (:194-245).
-    const { byokConfig, main } = await resolveReviewAgentModel(input, permissionService);
-    const contextWindow = resolveContextWindow({ byokMaxInputTokens: main.maxInputTokens, modelName: main.modelName });
-    const adaptiveProfile = resolveAdaptiveProfile(contextWindow);
-    // build-orchestrator-input.ts:153-154: the stage's profile skips the heavy
-    // passes on a small window.
-    input = { ...input, adaptiveProfile, skipHeavyPasses: adaptiveProfile.skipHeavyPasses || undefined };
-    planner.assertContextWindowFitsOverhead({ input, contextWindow, modelName: main.modelName });
-    const promptBudget = Math.floor(contextWindow * planner.PROMPT_BUDGET_RATIO);
-
-    // Adaptive fit: long diffs cut to the profile's cap (:266-300).
-    if (adaptiveProfile.maxDiffChars && input.changedFiles?.length) {
-        const cap = adaptiveProfile.maxDiffChars;
-        input = {
-            ...input,
-            changedFiles: input.changedFiles.map((f) => {
-                const diff = f.patchWithLinesStr ?? f.patch ?? '';
-                if (diff.length <= cap) return f;
-                const cut = `${diff.slice(0, cap)}\n... (diff truncated to ${cap} chars by adaptive-fit; readFile for the rest)`;
-                return f.patchWithLinesStr ? { ...f, patchWithLinesStr: cut } : { ...f, patch: cut };
-            }),
-        };
-    }
-
-    // Large PR: drop low-signal files, then tier what is left (:302-416).
-    let estimatedPromptTokens = planner.estimatePromptTokens(input);
-    let lowSignalDropped = 0;
-    const shouldFireFilter =
-        input.changedFiles.length > 1 &&
-        (adaptiveProfile.lowSignalFilterUnconditional ||
-            (estimatedPromptTokens > promptBudget && input.reviewMode !== 'deep'));
-    if (shouldFireFilter) {
-        const filtered = planner.applyLargePrAggressiveFilter(input.changedFiles);
-        lowSignalDropped = input.changedFiles.length - filtered.length;
-        if (lowSignalDropped > 0) input = { ...input, changedFiles: filtered };
-        const fileTiers = assignFileTiers(computeFileScores(input.changedFiles, input.callGraphJson));
-        if (adaptiveProfile.allOptional) {
-            for (const filename of fileTiers.keys()) fileTiers.set(filename, 'optional');
-        }
-        input = { ...input, fileTiers };
-        estimatedPromptTokens = planner.estimatePromptTokens(input);
-    }
-
-    // Still over budget: production splits the PR into batches, each reviewed
-    // by its own execute() (:420-505 → runChunkedReview).
-    let chunks = null;
-    if (estimatedPromptTokens > promptBudget && input.changedFiles.length > 1) {
-        const overheadTokens = planner.estimateNonDiffOverheadTokens(input);
-        const chunkDiffBudget = Math.max(promptBudget - overheadTokens, Math.floor(contextWindow * 0.3));
-        const preview = planner.chunkFilesByTokenBudget(input.changedFiles, chunkDiffBudget);
-        if (!(preview.length === 1 && preview[0].length === input.changedFiles.length)) chunks = preview;
-    }
-
-    return {
-        provider,
-        input,
-        byokConfig,
-        main,
-        contextWindow,
-        estimatedPromptTokens,
-        lowSignalDropped,
-        chunks,
-        systemPrompt: chunks ? null : provider.buildSystemPrompt(input),
-        userPrompt: chunks ? null : provider.buildUserPrompt(input),
-    };
+    loopObserved = true;
 }
 
-// The loop parameters execute() builds from that input (:563-640).
-function productionLoopInput(run) {
-    const { input, main, provider } = run;
+// RECALL_CATEGORIES=bug,security: the team's category toggles (reviewOptions),
+// for an experiment. Without it the team set none, so production runs all three.
+function reviewOptionsFromEnv() {
+    const raw = process.env.RECALL_CATEGORIES;
+    if (!raw) return undefined;
+    const on = new Set(raw.split(',').map((c) => c.trim()).filter(Boolean));
+    return { bug: on.has('bug'), security: on.has('security'), performance: on.has('performance') };
+}
+
+/**
+ * One review of the case's PR through production's own path: the review
+ * config the team stores (from the dataset) routed by ValidateConfigStage's
+ * routeCodeReviewModel, AgentReviewStage's resolveAgentReviewSettings, the
+ * stage's buildOrchestratorInput, and ReviewOrchestratorService.execute running
+ * the generalist. The eval supplies only data: the stored config, the PR, the
+ * changed files and the tools' answers (remoteCommands). Returns the
+ * orchestrator's output and every loop production ran, observed.
+ */
+async function reviewAsProduction(caseData, route, permissionService, remoteCommands, sandboxType) {
+    const lib = (p) => require(path.join(__dirname, '../../libs', p));
+    observeTheLoop();
+    const { ReviewOrchestratorService } = lib('code-review/infrastructure/agents/review-orchestrator.service.ts');
+    const { GeneralistAgentProvider } = lib('code-review/infrastructure/agents/providers/generalist-agent.provider.ts');
+    const { BugAgentProvider } = lib('code-review/infrastructure/agents/providers/bug-agent.provider.ts');
+    const { SecurityAgentProvider } = lib('code-review/infrastructure/agents/providers/security-agent.provider.ts');
+    const { PerformanceAgentProvider } = lib('code-review/infrastructure/agents/providers/performance-agent.provider.ts');
+    const { buildOrchestratorInput } = lib('code-review/pipeline/stages/build-orchestrator-input.ts');
+    const { routeCodeReviewModel } = lib('code-review/pipeline/stages/route-code-review-model.ts');
+    const { resolveAgentReviewSettings } = lib('code-review/pipeline/stages/agent-review-settings.ts');
+
+    // The review config the team stores (the dataset's), then the model
+    // ValidateConfigStage routes for it into the same two fields it writes.
+    const reviewOptions = reviewOptionsFromEnv();
+    const codeReviewConfig = {
+        languageResultPrompt: caseData.languageResultPrompt,
+        kodyMemoryRules: parseMaybeJson(caseData.memoryRules),
+        v2PromptOverrides: parseMaybeJson(caseData.v2PromptOverrides),
+        reviewMode: caseData.reviewMode,
+        ...(reviewOptions ? { reviewOptions } : {}),
+    };
+    const { resolvedModelSlot } = routeCodeReviewModel(route.storedConfig, codeReviewConfig);
+    codeReviewConfig.resolvedModelSlot = resolvedModelSlot;
+    codeReviewConfig.byokConfig = resolvedModelSlot;
+
+    // The pipeline context the agent stage reads, from the case's data.
+    const baseBranch = caseData.baseBranch || 'main';
+    const context = {
+        organizationAndTeamData: EVAL_ORG,
+        codeReviewConfig,
+        pullRequest: { number: caseData.prNumber || 1, title: caseData.prTitle, body: caseData.prBody, base: { ref: baseBranch } },
+        repository: { fullName: caseData.repositoryFullName || 'eval/repo', defaultBranch: baseBranch },
+        sandboxHandle: { type: sandboxType, remoteCommands, baseBranch },
+        traceDecisions: parseMaybeJson(caseData.traceDecisions) || undefined,
+    };
+    const settings = resolveAgentReviewSettings(codeReviewConfig);
+    const input = buildOrchestratorInput(context, {
+        changedFiles: changedFilesOf(caseData),
+        prNumber: context.pullRequest.number,
+        repositoryId: caseData.repositoryId,
+        reviewOptions: settings.reviewOptions,
+        // No call graph: the stage builds one from the repository's AST graph
+        // (GraphContextService), which the datasets do not carry; it starts as
+        // '' and stays so when none is built.
+        callGraph: '',
+        adaptiveProfile: settings.adaptiveProfile,
+        // RECALL_HEAVY=1: the review asks for heavy mode (the stage then checks
+        // its release gate; the eval asks for it directly).
+        heavy: process.env.RECALL_HEAVY === '1',
+    });
+
+    const agent = (Provider) => new Provider(permissionService, {}, undefined, undefined);
+    // No Kody Rules agent: the finder eval measures the generalist alone.
+    const orchestrator = new ReviewOrchestratorService(
+        agent(BugAgentProvider),
+        agent(SecurityAgentProvider),
+        agent(PerformanceAgentProvider),
+        agent(GeneralistAgentProvider),
+    );
+    const loops = [];
+    const output = await observedLoops.run(loops, () => orchestrator.execute(input));
+    return { output, loops, input, settings };
+}
+
+// The loops of one review as one row: one loop, or one per batch in the order
+// production ran them, findings concatenated and counts summed. An account of
+// what was observed, not a step of the review.
+function combineLoops(loops) {
+    const results = loops.map((l) => l.result);
+    if (results.length === 1) return results[0];
+    const sum = (key) => results.reduce((n, r) => n + Number(r.usage?.[key] || 0), 0);
     return {
-        systemPrompt: run.systemPrompt,
-        userPrompt: run.userPrompt,
-        agentName: input.agentRuntimeName || provider.getIdentity().name,
-        usageRunName: `code-review-${provider.getCategoryLabel()}`,
-        telemetryMetadata: {
-            organizationId: input.organizationAndTeamData?.organizationId,
-            teamId: input.organizationAndTeamData?.teamId,
-            pullRequestId: input.prNumber,
-            provider: main.modelName,
+        findings: {
+            reasoning: results.map((r) => r.findings?.reasoning || '').filter(Boolean).join('\n\n'),
+            suggestions: results.flatMap((r) => r.findings?.suggestions || []),
         },
-        changedFiles: input.changedFiles,
-        prNumber: input.prNumber,
-        repositoryFullName: input.repositoryFullName,
-        baseBranch: input.baseBranch,
-        callGraph: input.callGraph,
-        fileTiers: input.fileTiers,
-        reviewMode: input.reviewMode,
-        maxSteps: input.maxSteps,
-        skipHeavyPasses: input.skipHeavyPasses,
-        skipSynthesisRescue: input.skipSynthesisRescue,
-        // heavy força as passadas de resample (mais recall via reamostragem).
-        // É EIXO DE REGIME: comparar heavy com normal é o mesmo erro que
-        // comparar assinatura com API.
-        ...(process.env.RECALL_HEAVY === '1' ? { heavy: true } : {}),
-        contextWindowTokens: run.contextWindow,
-        reasoningEffort: main.reasoningEffort,
-        reasoningConfigOverride: main.reasoningConfigOverride,
-        byokProvider: main.byokProvider,
-        modelName: main.modelName,
-        byokRole: main.role,
-        openrouterProviderOrder: main.openrouterProviderOrder,
-        openrouterAllowFallbacks: main.openrouterAllowFallbacks,
+        steps: results.reduce((n, r) => n + Number(r.steps || 0), 0),
+        finishReason: results[results.length - 1]?.finishReason,
+        source: results.map((r) => r.source).join(','),
+        usage: {
+            inputTokens: sum('inputTokens'),
+            outputTokens: sum('outputTokens'),
+            totalTokens: sum('totalTokens'),
+            reasoningTokens: sum('reasoningTokens'),
+            cacheReadTokens: sum('cacheReadTokens'),
+            cacheWriteTokens: sum('cacheWriteTokens'),
+        },
+        coverage: results.map((r) => r.coverage),
+        anomalies: results.map((r) => r.anomalies),
+        verification: results.map((r) => r.verification),
+        toolCalls: results.flatMap((r) => r.toolCalls || []),
     };
 }
 
@@ -770,100 +708,6 @@ function agentRunFailure(agentResult) {
     return null;
 }
 
-// execute() → runChunkedReview → execute() is capped here
-// (base-code-review-agent.provider.ts:52-60): a batch that would split again
-// fails, as its nested batches would.
-const MAX_RECURSION_DEPTH = 2;
-
-// One review of the PR as production runs it: one loop, or one per batch when
-// production splits the PR (runChunkedReview, batch-runner.ts:40-210). A failed
-// batch is left out like production leaves it out; only every batch failing
-// fails the review (:189-209).
-async function runProduction(caseData, permissionService, run, remoteCommands, runAgentLoop, depth = 0) {
-    if (!run.chunks) {
-        const result = await runAgentLoop(productionLoopInput(run), {
-            remoteCommands,
-            byokConfig: run.byokConfig,
-            byokErrorReporter: undefined,
-        });
-        const failure = agentRunFailure(result);
-        if (failure) {
-            throw new Error(
-                `${failure} (finishReason=${result?.finishReason || 'unknown'}, ` +
-                    `steps=${result?.steps ?? 'n/a'}, ` +
-                    `tokens=${result?.usage?.totalTokens ?? 'n/a'})`,
-            );
-        }
-        return { ...result, batches: [batchTrace(run, result)] };
-    }
-    if (depth + 1 >= MAX_RECURSION_DEPTH) throw new Error('AGENT_RECURSION_LIMIT_EXCEEDED');
-    const total = run.chunks.length;
-    const results = [];
-    const errors = [];
-    for (let i = 0; i < total; i++) {
-        // A batch that cannot be built is left out like one that fails to run
-        // (batch-runner.ts): the other batches' findings stay.
-        try {
-            // eslint-disable-next-line no-await-in-loop
-            const batchRun = await buildProductionRun(caseData, permissionService, {
-                changedFiles: run.chunks[i],
-                fileTiers: run.input.fileTiers,
-                runtimeName: `${run.provider.getIdentity().name} batch ${i + 1}/${total}`,
-                index: i + 1,
-                total,
-                depth: depth + 1,
-            });
-            // eslint-disable-next-line no-await-in-loop
-            results.push(await runProduction(caseData, permissionService, batchRun, remoteCommands, runAgentLoop, depth + 1));
-        } catch (error) {
-            errors.push(error);
-        }
-    }
-    if (!results.length) throw errors[0];
-    const merged = mergeResults(results);
-    return { ...merged, failedBatches: errors.map((e) => String(e?.message || e).slice(0, 200)) };
-}
-
-function batchTrace(run, result) {
-    return {
-        files: run.input.changedFiles.length,
-        lowSignalDropped: run.lowSignalDropped,
-        tiered: !!run.input.fileTiers,
-        estimatedPromptTokens: run.estimatedPromptTokens,
-        maxSteps: run.input.maxSteps,
-        steps: result?.steps ?? null,
-    };
-}
-
-// The batches' loop results as one, for the row: findings and calls in batch
-// order, counts summed.
-function mergeResults(results) {
-    if (results.length === 1) return results[0];
-    const sum = (key) => results.reduce((n, r) => n + Number(r.usage?.[key] || 0), 0);
-    return {
-        findings: {
-            reasoning: results.map((r) => r.findings?.reasoning || '').filter(Boolean).join('\n\n'),
-            suggestions: results.flatMap((r) => r.findings?.suggestions || []),
-        },
-        steps: results.reduce((n, r) => n + Number(r.steps || 0), 0),
-        finishReason: results[results.length - 1].finishReason,
-        source: results.map((r) => r.source).join(','),
-        usage: {
-            inputTokens: sum('inputTokens'),
-            outputTokens: sum('outputTokens'),
-            totalTokens: sum('totalTokens'),
-            reasoningTokens: sum('reasoningTokens'),
-            cacheReadTokens: sum('cacheReadTokens'),
-            cacheWriteTokens: sum('cacheWriteTokens'),
-        },
-        coverage: results.map((r) => r.coverage),
-        anomalies: results.map((r) => r.anomalies),
-        verification: results.map((r) => r.verification),
-        toolCalls: results.flatMap((r) => r.toolCalls || []),
-        batches: results.flatMap((r) => r.batches || []),
-    };
-}
-
 function writeResultArtifact(filename, payload) {
     try {
         fs.writeFileSync(
@@ -905,24 +749,9 @@ class InvestigationAgentProvider {
                 );
             }
 
-            stage = 'load-agent-loop';
-            // The legacy runAgentLoop (agent-loop.ts) was deleted in the
-            // agent-harness refactor. runAgentLoopViaCore is the drop-in seam:
-            // same (input, secrets) signature, threads secrets.remoteCommands
-            // into buildFinderToolRegistry for deterministic tool replay, and
-            // runs the finder+verify on the new harness.
-            const { runAgentLoopViaCore: runAgentLoop } = require(
-                path.join(
-                    __dirname,
-                    '../../libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.ts',
-                ),
-            );
-
             stage = 'resolve-model';
             const route = resolveRoute(this.config);
             const permissionService = evalPermissionService(route.storedConfig);
-            stage = 'build-prompts';
-            const run = await buildProductionRun(caseData, permissionService);
             stage = 'build-replay-commands';
             // RECALL_REAL_REPO=1: answer the tools from a git worktree at the
             // PR's head instead of replaying recorded tool calls. The replay
@@ -942,21 +771,46 @@ class InvestigationAgentProvider {
                 repoHandle = await prepareRepo(caseData, caseData.caseId);
                 if (repoHandle) remoteCommands = sandboxCommands(repoHandle.dir);
             }
+            const sandboxType = remoteCommands ? 'local' : 'replay';
             if (!remoteCommands) {
                 remoteCommands = new ReplayRemoteCommands(
                     parseMaybeJson(caseData.toolReplay) || {},
                 );
             }
 
-            stage = 'run-agent-loop';
-            // runAgentLoop(input, secrets): `secrets` was split out of `input` so
-            // span I/O never records keys/services. The deterministic tool replay
-            // (remoteCommands) lives in `secrets` now — passing it in `input` (the
-            // old single-arg shape) left the agent tool-less and crashed on
-            // `secrets.byokErrorReporter`.
-            const agentResult = await runProduction(caseData, permissionService, run, remoteCommands, runAgentLoop);
+            stage = 'run-review';
+            const { output: review, loops, settings } = await reviewAsProduction(
+                caseData,
+                route,
+                permissionService,
+                remoteCommands,
+                sandboxType,
+            );
+            // Production's own account of a failed agent (the orchestrator
+            // records a thrown run as a failure).
+            if (review.failures?.length) {
+                throw new Error(
+                    `the finder failed: ${review.failures.map((f) => `${f.agentName}: ${f.error?.message || f.error}`).join('; ').slice(0, 400)}`,
+                );
+            }
+            if (!loops.length) {
+                throw new Error('production ran no finder loop the eval could observe (the loop observer is not attached)');
+            }
+            // A review with every loop failed measured nothing, whatever
+            // production made of it.
+            const loopFailures = loops.map((l) => agentRunFailure(l.result));
+            if (loopFailures.every(Boolean)) {
+                const r = loops[0].result;
+                throw new Error(
+                    `${loopFailures[0]} (finishReason=${r?.finishReason || 'unknown'}, ` +
+                        `steps=${r?.steps ?? 'n/a'}, ` +
+                        `tokens=${r?.usage?.totalTokens ?? 'n/a'})`,
+                );
+            }
+            const agentResult = combineLoops(loops.filter((_, i) => !loopFailures[i]));
 
             stage = 'serialize-result';
+            const first = loops[0].params;
             const output = serializeResult(
                 caseData.caseId || 'unknown-case',
                 agentResult,
@@ -964,14 +818,21 @@ class InvestigationAgentProvider {
                 repoHandle,
                 {
                     route: route.route,
-                    model: run.main.modelName,
-                    reasoningEffort: run.main.reasoningEffort ?? null,
-                    contextWindowTokens: run.contextWindow,
-                    prFiles: normalizeChangedFiles(parseMaybeJson(caseData.changedFilesFull) || parseMaybeJson(caseData.changedFiles)).length,
+                    model: first.modelName ?? null,
+                    reasoningEffort: first.reasoningEffort ?? null,
+                    contextWindowTokens: first.contextWindowTokens ?? null,
+                    prFiles: changedFilesOf(caseData).length,
                     fullDiff: !!parseMaybeJson(caseData.changedFilesFull),
-                    categories: run.provider.getAllowedSuggestionLabels(run.input),
-                    batches: agentResult.batches || [],
-                    failedBatches: agentResult.failedBatches || [],
+                    categories: Object.entries(settings.reviewOptions)
+                        .filter(([, on]) => on !== false)
+                        .map(([category]) => category),
+                    batches: loops.map((l) => ({
+                        files: l.params.changedFiles?.length ?? null,
+                        tiered: !!l.params.fileTiers,
+                        maxSteps: l.params.maxSteps ?? null,
+                        steps: l.result?.steps ?? null,
+                    })),
+                    failedBatches: loopFailures.filter(Boolean),
                 },
             );
             writeResultArtifact('last-output.json', output);
@@ -1024,4 +885,4 @@ class InvestigationAgentProvider {
 
 module.exports = InvestigationAgentProvider;
 // For the specs: how a case reaches production's loop.
-module.exports.internals = { resolveRoute, evalPermissionService, buildProductionRun, productionLoopInput, mergeResults, NotAProductionRoute };
+module.exports.internals = { resolveRoute, evalPermissionService, changedFilesOf, reviewOptionsFromEnv, combineLoops, NotAProductionRoute };
