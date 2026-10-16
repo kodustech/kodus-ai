@@ -6,7 +6,8 @@
         "(68, 68, 68 of 70; the same two missed, rhetorical-comment and pr-template-text, both expected respond) and the",
         "first CI run of the shared nightly job (66 of 70, run 38658146036). Mean 96.4%. No reply meant for someone else",
         "was answered in the local runs. One CI run already moved 2 cases, so the margin is the binomial SE, not zero.",
-        "RATCHET: when a PR moves this on purpose, recalibrate here with two runs as evidence."
+        "RATCHET: when a PR moves this on purpose, recalibrate here with two runs as evidence.",
+        "2026-10-16: the eval now runs the use case's own path (reply-thread.ts: the thread rebuilt from GitHub-shaped comments, the gate, the conversation route through PermissionValidationService). The prompt is identical on 441 of the 443 cases of both datasets; the two that differ are bot replies, now named by their GitHub login. deepseek on it: 67 and 68 of 70 (rhetorical-comment and pr-template-text missed in both, push-notification once), inside the runs above; the floor stays."
     ],
     "models": {
         "deepseek-v4-flash@fireworks": { "floor": 0.91, "observed": 0.964 }
