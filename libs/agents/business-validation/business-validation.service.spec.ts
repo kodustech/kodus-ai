@@ -284,6 +284,92 @@ describe('BusinessValidationService · an answer without a verdict', () => {
     });
 });
 
+describe('BusinessValidationService · the log of a run', () => {
+    const service = () =>
+        new BusinessValidationService(
+            {} as any,
+            {} as any,
+            { findByKey: async () => undefined } as any,
+            { loadInstructions: () => '', listReferences: () => [] } as any,
+        );
+    const request = {
+        door: 'auto',
+        organizationAndTeamData: { organizationId: 'org-1' },
+        pullRequest: { number: 7 },
+    };
+
+    it('says why the judge could not answer', async () => {
+        const s = service();
+        const warn = jest.spyOn((s as any).logger, 'warn');
+
+        await (s as any).judgeTask(
+            request,
+            DEFAULT_BUSINESS_LOGIC_SETTINGS,
+            { task: { tracker: 'Linear', id: 'SAA-96', title: 'Notes' } },
+            'diff',
+            [],
+            'en-US',
+            async () => ({
+                judge: async () => ({
+                    needsMoreInfo: true,
+                    reason: 'analyzer_failure',
+                    missingInfo: 'Analyzer execution failed: invalid x-api-key',
+                }),
+            }),
+        );
+
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining('SAA-96 (analyzer_failure)'),
+                metadata: expect.objectContaining({
+                    pullRequest: 7,
+                    cause: 'Analyzer execution failed: invalid x-api-key',
+                }),
+            }),
+        );
+    });
+
+    it('carries each task verdict, by requirement state', () => {
+        const s = service();
+        const log = jest.spyOn((s as any).logger, 'log');
+
+        (s as any).record(
+            request,
+            {
+                kind: 'validated',
+                passed: false,
+                thinTasks: [],
+                unseenFiles: ['a.ts'],
+                checks: [
+                    {
+                        task: { tracker: 'Linear', id: 'KOD-20' },
+                        passed: false,
+                        verdict: {
+                            requirements: [
+                                { state: 'met' },
+                                { state: 'met' },
+                                { state: 'missing' },
+                            ],
+                        },
+                    },
+                ],
+            },
+            [],
+            [],
+        );
+
+        expect(log).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Business validation validated (failed)',
+                metadata: expect.objectContaining({
+                    verdicts: ['Linear:KOD-20 failed met=2 missing=1'],
+                    unseenFiles: 1,
+                }),
+            }),
+        );
+    });
+});
+
 describe('BusinessValidationService · releasing the trackers', () => {
     it('closes every tracker and still answers when one fails to close', async () => {
         const closed = jest.fn(async () => undefined);

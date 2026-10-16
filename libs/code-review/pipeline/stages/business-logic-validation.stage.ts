@@ -333,7 +333,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         message: string,
     ): CodeReviewPipelineContext {
         this.logger.log({
-            message: `[BUSINESS-LOGIC] Skipped: ${message}`,
+            message: `[BUSINESS-LOGIC] Skipped (${reason}): ${message.replace(/^Skipped: /, '')}`,
             context: this.stageName,
             metadata: {
                 organizationId: context.organizationAndTeamData?.organizationId,

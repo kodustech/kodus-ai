@@ -505,10 +505,26 @@ export class BusinessValidationService {
         });
 
         if (verdict.needsMoreInfo) {
-            return verdict.reason === 'analyzer_failure' ||
+            if (
+                verdict.reason === 'analyzer_failure' ||
                 verdict.reason === 'parser_fallback'
-                ? undefined
-                : { thin: found.task };
+            ) {
+                // The run only records `judge_failed`; the cause lives here.
+                this.logger.warn({
+                    message: `[BUSINESS-LOGIC] Could not judge ${found.task.id} (${verdict.reason})`,
+                    context: BusinessValidationService.name,
+                    metadata: {
+                        organizationId:
+                            request.organizationAndTeamData.organizationId,
+                        repositoryId: request.repository?.id,
+                        pullRequest: request.pullRequest?.number,
+                        tracker: found.task.tracker,
+                        cause: verdict.missingInfo,
+                    },
+                });
+                return undefined;
+            }
+            return { thin: found.task };
         }
         // An answer with neither a requirement list nor a status skipped the
         // verdict: that is no verdict, not a gap.
@@ -1131,7 +1147,27 @@ export class BusinessValidationService {
                     (r) => `${r.kind}:${r.id}@${r.source}`,
                 ),
                 attempts,
+                ...(outcome.kind === 'validated'
+                    ? {
+                          verdicts: outcome.checks.map(verdictLine),
+                          thinTasks: outcome.thinTasks.map((t) => t.id),
+                          unseenFiles: outcome.unseenFiles.length,
+                      }
+                    : {}),
             },
         });
     }
+}
+
+/** `Linear:KOD-20 failed met=2 missing=1`: one task's verdict, for the log. */
+function verdictLine(check: TaskCheck): string {
+    const counts = new Map<string, number>();
+    for (const r of check.verdict.requirements ?? []) {
+        counts.set(r.state, (counts.get(r.state) ?? 0) + 1);
+    }
+    return [
+        `${check.task.tracker}:${check.task.id}`,
+        check.passed ? 'passed' : 'failed',
+        ...[...counts].map(([state, n]) => `${state}=${n}`),
+    ].join(' ');
 }
