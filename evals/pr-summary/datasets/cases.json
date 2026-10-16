@@ -206,5 +206,101 @@
             "exactlyOneBlock": true,
             "bodyPreserved": true
         }
+    },
+    {
+        "caseId": "vague-title-fix",
+        "description": "Title says only \"fix\": the summary must come from the diff (retry backoff in the queue consumer).",
+        "behaviour": "replace",
+        "existingBody": "",
+        "pr": {
+            "number": 201,
+            "title": "fix",
+            "head": {
+                "ref": "patch-1",
+                "repo": {
+                    "fullName": "acme/sample-service"
+                }
+            },
+            "base": {
+                "ref": "main"
+            }
+        },
+        "changedFiles": [
+            {
+                "filename": "src/queue/consumer.ts",
+                "status": "modified",
+                "patch": "@@ -10,8 +10,12 @@ export async function consume(message: Message) {\n-    for (let attempt = 0; attempt < 3; attempt++) {\n-        try { return await handler(message); } catch { await sleep(100); }\n-    }\n+    const maxAttempts = 5;\n+    for (let attempt = 0; attempt < maxAttempts; attempt++) {\n+        try {\n+            return await handler(message);\n+        } catch {\n+            await sleep(BACKOFF_BASE_MS * 2 ** attempt);\n+        }\n+    }\n+    await deadLetter.publish(message);\n }"
+            }
+        ],
+        "expect": {
+            "postsSummary": true,
+            "exactlyOneBlock": true,
+            "bodyPreserved": false,
+            "promptContainsExistingBody": false
+        }
+    },
+    {
+        "caseId": "vague-title-wip",
+        "description": "Title says only \"wip\": the summary must come from the diff (session token rotation and revocation).",
+        "behaviour": "replace",
+        "existingBody": "",
+        "pr": {
+            "number": 202,
+            "title": "wip",
+            "head": {
+                "ref": "patch-2",
+                "repo": {
+                    "fullName": "acme/sample-service"
+                }
+            },
+            "base": {
+                "ref": "main"
+            }
+        },
+        "changedFiles": [
+            {
+                "filename": "src/auth/session.ts",
+                "status": "modified",
+                "patch": "@@ -22,3 +22,18 @@ export class SessionService {\n+    async rotateSessionToken(sessionId: string): Promise<string> {\n+        const token = randomToken();\n+        await this.store.update(sessionId, { tokenHash: sha256(token), rotatedAt: new Date() });\n+        return token;\n+    }\n+\n+    async revokeAllSessions(userId: string): Promise<number> {\n+        const sessions = await this.store.findByUser(userId);\n+        for (const s of sessions) await this.store.delete(s.id);\n+        return sessions.length;\n+    }\n }"
+            }
+        ],
+        "expect": {
+            "postsSummary": true,
+            "exactlyOneBlock": true,
+            "bodyPreserved": false,
+            "promptContainsExistingBody": false
+        }
+    },
+    {
+        "caseId": "vague-title-review",
+        "description": "Title says only \"address review comments\": the summary must come from the diff (discount rounding in cents).",
+        "behaviour": "replace",
+        "existingBody": "",
+        "pr": {
+            "number": 203,
+            "title": "address review comments",
+            "head": {
+                "ref": "patch-3",
+                "repo": {
+                    "fullName": "acme/sample-service"
+                }
+            },
+            "base": {
+                "ref": "main"
+            }
+        },
+        "changedFiles": [
+            {
+                "filename": "src/cart/pricing.ts",
+                "status": "modified",
+                "patch": "@@ -31,6 +31,7 @@ export function applyDiscount(totalCents: number, percent: number): number {\n-    const discount = (totalCents * percent) / 100;\n-    return totalCents - Math.round(discount);\n+    const discountCents = Math.floor((totalCents * percent) / 100);\n+    if (discountCents > totalCents) throw new RangeError('discount exceeds total');\n+    return totalCents - discountCents;\n }"
+            }
+        ],
+        "expect": {
+            "postsSummary": true,
+            "exactlyOneBlock": true,
+            "bodyPreserved": false,
+            "promptContainsExistingBody": false
+        }
     }
 ]

@@ -1,0 +1,12 @@
+{
+    "__doc": [
+        "Floors per model for the share of PR-summary checks passed (run.js --gate), as ratios. With no floor for a model, any failed check fails the gate: the routing, posting and composition contract is binary.",
+        "eval-fake (the wiring smoke, every PR): the contract only (the scripted text speaks of no diff, so that check runs on real models). Deterministic: every check passes.",
+        "deepseek-v4-flash@fireworks (the nightly model): calibrated 2026-10-15 from 2 local runs on the branch's base (main 4b5c881cd's summary path), 69 and 69 of 69. A binomial SE is 0 at 100%, so the floor leaves room for 2 failed checks of 69; below it the nightly confirms with a second run. The same run with the diff removed from the summary prompt scored 63 of 69: the three cases whose title says nothing (fix, wip, address review comments) went wrong.",
+        "RATCHET: a PR that adds cases or moves the value on purpose recalibrates here in the same PR, with its runs as evidence."
+    ],
+    "models": {
+        "eval-fake": { "floor": 1, "observed": 1 },
+        "deepseek-v4-flash@fireworks": { "floor": 0.97, "observed": 1 }
+    }
+}

@@ -274,8 +274,9 @@ describe('stage-signals', () => {
     it('lists the tier-0 models a Friday stage runs on, and no models for any other stage', () => {
         const nightly = { model: 'deepseek-v4-flash@fireworks', metrics: { recall_mean: 0.4 }, gate: {} };
         expect(nightlyRows(nightly, 'pass')[0].meta.friday).toEqual({ models: tier0(), result: 'review' });
+        const shared = { metric: { value: 1 }, cases: [] };
+        expect(nightlyRows(shared, 'pass', 'pr-summary')[0].meta.friday).toEqual({ models: tier0(), result: 'pr_summary' });
         const rows: Row[] = wiringRows(allOk(wiringSteps));
-        expect(rows.find((r) => r.name === 'evals.stage.pr-summary')?.meta.friday).toEqual({ models: tier0(), result: 'pr_summary' });
         expect(rows.find((r) => r.name === 'evals.stage.dedup')?.meta.friday).toBeUndefined();
     });
 });

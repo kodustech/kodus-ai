@@ -1,9 +1,9 @@
 # PR-summary eval
 
-> - **Answers:** Is the PR summary generated, posted, and sent to the configured model?
-> - **Runs:** every engine PR, against the scripted model (`evals/wiring-smoke.js`) · Friday, on every tier-0 model (`evals/tier0-smoke.js`).
-> - **Run it:** `pnpm eval:pr-summary:mock` · `pnpm eval:pr-summary`
-> - **Gate:** binary assertions, with no numeric floor (see below).
+> - **Answers:** Is the PR summary generated, posted, sent to the configured model, composed as the team configured, and about what the diff does?
+> - **Runs:** nightly when the summary path or its cases change (`evals/nightly-evals.js`), Friday on every tier-0 model, and on every PR in `evals/wiring-smoke.js` against the scripted model.
+> - **Run it:** `node evals/pr-summary/run.js --model=<id>` · `pnpm eval:pr-summary:mock`
+> - **Gate:** `--gate` fails below the model's floor in `evals/pr-summary/targets.json`; with none, any failed check fails it.
 > - **Cost:** one model call per case; none mocked.
 
 Guards the **"generate PR summary on open"** feature — the AI description Kody
@@ -49,6 +49,14 @@ behaviour contract.
    The **commit-run gate** drives `UpdateCommentsAndGenerateSummaryStage` with a
    spied `generateSummaryPR` (no model) and asserts the generate/post decision
    and the `isCommitRun` flag for every (mode × behaviour) combination.
+
+6. **About the diff** (real models only) — the summary uses at least one word
+   only the diff holds: parts of the changed files' and code names that the
+   title and the existing description do not carry, minus words any summary
+   uses ("update", "user"). Three cases have a title that says nothing (`fix`,
+   `wip`, `address review comments`), so their summary can only come from the
+   diff. With the diff removed from the prompt, DeepSeek failed this on 6 of 11
+   cases, those three among them.
 
 ## Run it
 
