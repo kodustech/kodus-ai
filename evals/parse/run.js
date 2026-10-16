@@ -33,6 +33,8 @@ const cases = require('./cases.json')
     .filter((c) => !args.prose || c.prose)
     .slice(0, args.limit ? Number(args.limit) : undefined);
 
+// libs/common/utils/crypto.ts reads API_CRYPTO_KEY at import time; CI has no .env.
+if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
 applyModelEnv(MODEL);
 countTokens();
 const { extractFindingsWithRecovery, recoverFindingsFromProse } = require('../../libs/code-review/infrastructure/agents/core/finder.agent.ts');

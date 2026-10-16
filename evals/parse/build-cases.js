@@ -12,6 +12,8 @@ const path = require('path');
 const { registerTs } = require('../shared/eval-kit');
 const { SHAPES } = require('./shapes');
 
+// libs/common/utils/crypto.ts reads API_CRYPTO_KEY at import time; CI has no .env.
+if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
 registerTs();
 const { extractFindings } = require('../../libs/code-review/infrastructure/agents/core/finder.agent.ts');
 
