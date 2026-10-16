@@ -5,6 +5,11 @@
  * form would write their pre-toggle values back. The backend merges the
  * payload over what is stored, so a key left out keeps its stored value.
  */
+import {
+    getPromptFieldText,
+    parsePromptFieldValue,
+} from "../[repositoryId]/custom-prompts/_utils/custom-prompts-state";
+
 export type ChangedConfigMask = { [key: string]: true | ChangedConfigMask };
 
 type UnknownRecord = Record<string, unknown>;
@@ -35,6 +40,12 @@ const isDeepEqual = (a: unknown, b: unknown): boolean => {
     return false;
 };
 
+// The prompt editor re-serialises stored text when it mounts, so a prompt
+// counts as changed only when its text does (as on the Custom prompts page).
+const isSamePromptText = (a: unknown, b: unknown) =>
+    getPromptFieldText(parsePromptFieldValue(a)) ===
+    getPromptFieldText(parsePromptFieldValue(b));
+
 /**
  * Compares the formatted form values with the form's defaults (the last
  * loaded or saved state). A formatted property counts as changed when its
@@ -43,6 +54,7 @@ const isDeepEqual = (a: unknown, b: unknown): boolean => {
 export const getChangedConfigMask = (
     current: unknown,
     baseline: unknown,
+    isPrompt = false,
 ): ChangedConfigMask => {
     const mask: ChangedConfigMask = {};
     if (!isPlainObject(current)) return mask;
@@ -57,8 +69,12 @@ export const getChangedConfigMask = (
                 ? baselineNode
                 : undefined;
 
+            const isSameValue = isPrompt
+                ? isSamePromptText(node.value, baselineProperty?.value)
+                : isDeepEqual(node.value, baselineProperty?.value);
+
             if (
-                !isDeepEqual(node.value, baselineProperty?.value) ||
+                !isSameValue ||
                 !isDeepEqual(node.level, baselineProperty?.level)
             ) {
                 mask[key] = true;
@@ -67,7 +83,11 @@ export const getChangedConfigMask = (
         }
 
         if (isPlainObject(node)) {
-            const nested = getChangedConfigMask(node, baselineNode);
+            const nested = getChangedConfigMask(
+                node,
+                baselineNode,
+                isPrompt || key === "v2PromptOverrides",
+            );
             if (Object.keys(nested).length > 0) mask[key] = nested;
             return;
         }
