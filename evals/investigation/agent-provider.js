@@ -67,27 +67,32 @@ function normalizePath(value) {
         .replace(/\/+/g, '/');
 }
 
-function normalizeChangedFiles(files) {
-    return (files || []).map((file) => ({
-        filename: normalizePath(file.filename || file.path || file.filePath),
-        patchWithLinesStr:
-            file.patchWithLinesStr || file.patch || file.diff || '',
-        patch: file.patch || file.patchWithLinesStr || file.diff || '',
-    }));
+function countPatchLines(patch) {
+    let additions = 0;
+    let deletions = 0;
+    for (const line of String(patch || '').split('\n')) {
+        if (line.startsWith('+') && !line.startsWith('+++')) additions++;
+        else if (line.startsWith('-') && !line.startsWith('---')) deletions++;
+    }
+    return { additions, deletions };
 }
 
-function normalizeRequestedCategories(value) {
-    const parsed = parseMaybeJson(value);
-
-    if (Array.isArray(parsed)) {
-        return parsed.filter(Boolean).map(String);
-    }
-
-    if (typeof parsed === 'string' && parsed.trim()) {
-        return [parsed.trim()];
-    }
-
-    return undefined;
+// additions/deletions/status are what production's file scorer ranks by
+// (file-priority-scorer.ts:71-74, :158-169); dropping them tied every file.
+function normalizeChangedFiles(files) {
+    return (files || []).map((file) => {
+        const patch = file.patch || file.patchWithLinesStr || file.diff || '';
+        const counted = countPatchLines(patch);
+        return {
+            filename: normalizePath(file.filename || file.path || file.filePath),
+            patchWithLinesStr:
+                file.patchWithLinesStr || file.patch || file.diff || '',
+            patch,
+            additions: file.additions ?? counted.additions,
+            deletions: file.deletions ?? counted.deletions,
+            ...(file.status ? { status: file.status } : {}),
+        };
+    });
 }
 
 function defaultApiKeyEnv(provider) {
@@ -106,132 +111,129 @@ function defaultApiKeyEnv(provider) {
     }
 }
 
-function buildOpenRouterProviderRouting(config) {
-    const providerOrder = Array.isArray(config.providerOrder)
-        ? config.providerOrder.filter(Boolean)
-        : [];
+// ── The model, routed as production routes it ──────────────────────────────
+// Production hands the finder no model. execute() routes the codeReview task to
+// a slot (resolveReviewAgentModel → permissionValidationService.resolveTaskSlot,
+// model-factory.ts:61-110), and LLM.run builds the model from that slot, or from
+// the env/managed default when there is none (ai-sdk-agent-runner.ts:245-246).
+// The loop ignores an AgentLoopInput `model` (review-agent.contract.ts:360-362),
+// so the model this eval used to build never ran: RECALL_REASONING_EFFORT never
+// reached the finder, and an `@sub` model ran the managed default.
+//
+// So the eval routes the way an org does:
+//   - by default no stored config: the env/managed route trial orgs take, with
+//     applyModelEnv pointing it at the eval's model;
+//   - with RECALL_REASONING_EFFORT, or a promptfoo config that names its own
+//     provider: a stored BYOK config (version 2) holding that model, read by
+//     production's getBYOKConfig (permissionValidation.service.ts:1170-1186) and
+//     routed by resolveTaskSlot, like a customer's BYOK model and its effort.
+// The org's stored config is the one thing the eval supplies (the
+// organization-parameters read); the routing and the model are production's.
 
-    if (
-        providerOrder.length === 0 &&
-        typeof config.allowFallbacks !== 'boolean' &&
-        typeof config.requireParameters !== 'boolean'
-    ) {
-        return null;
+// A UUID: getBYOKConfig reads an org's config only for one
+// (permissionValidation.service.ts:1173-1177).
+const EVAL_ORG = {
+    organizationId: '00000000-0000-4000-8000-00000000e7a1',
+    teamId: 'eval-team',
+};
+
+// Provider ids of evals/shared/tier0-models.js and the promptfoo configs →
+// BYOKProvider (libs/llm/model-providers.ts:15-35).
+const BYOK_PROVIDER = {
+    google: 'google_gemini',
+    openai: 'openai',
+    anthropic: 'anthropic',
+    openai_compatible: 'openai_compatible',
+    'openai-compatible': 'openai_compatible',
+    openrouter: 'open_router',
+};
+
+/** A model the eval cannot run the way production would: not measured. */
+class NotAProductionRoute extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'NotAProductionRoute';
     }
-
-    return {
-        ...(providerOrder.length > 0 ? { order: providerOrder } : {}),
-        ...(typeof config.allowFallbacks === 'boolean'
-            ? { allow_fallbacks: config.allowFallbacks }
-            : {}),
-        ...(typeof config.requireParameters === 'boolean'
-            ? { require_parameters: config.requireParameters }
-            : {}),
-    };
 }
 
-function buildOpenAICompatibleConfig(config, apiKey, defaultName) {
-    const openRouterProviderRouting =
-        config.provider === 'openrouter'
-            ? buildOpenRouterProviderRouting(config)
-            : null;
-
+function storedByokConfig({ provider, model, apiKey, baseURL, reasoningEffort, openrouterProviderOrder }) {
+    const byokProvider = openrouterProviderOrder?.length ? 'open_router' : BYOK_PROVIDER[provider];
+    if (!byokProvider) {
+        throw new NotAProductionRoute(`provider '${provider}' has no BYOK route in production`);
+    }
+    const { encrypt } = require('../../libs/common/utils/crypto.ts');
     return {
-        name: config.providerName || defaultName,
-        apiKey,
-        baseURL:
-            config.baseURL ||
-            (config.provider === 'openrouter'
-                ? 'https://openrouter.ai/api/v1'
-                : undefined),
-        ...(config.headers ? { headers: config.headers } : {}),
-        ...(config.queryParams ? { queryParams: config.queryParams } : {}),
-        ...(openRouterProviderRouting
-            ? {
-                  transformRequestBody: (body) => ({
-                      ...body,
-                      provider: {
-                          ...(body.provider || {}),
-                          ...openRouterProviderRouting,
-                      },
-                  }),
-              }
-            : {}),
+        version: 2,
+        credentials: [
+            {
+                id: 'eval-credential',
+                provider: byokProvider,
+                apiKey: encrypt(apiKey),
+                // Where resolveModelSlot reads them (resolve-model-slot.ts:86-99).
+                settings: {
+                    ...(baseURL ? { baseURL } : {}),
+                    ...(openrouterProviderOrder?.length
+                        ? { openrouterProviderOrder, openrouterAllowFallbacks: false }
+                        : {}),
+                },
+            },
+        ],
+        models: [
+            {
+                id: 'eval-model',
+                credentialId: 'eval-credential',
+                model,
+                ...(reasoningEffort ? { reasoningEffort } : {}),
+            },
+        ],
+        routing: { defaultModelId: 'eval-model' },
     };
 }
-
 
 /**
- * Injeta esforco de raciocinio explicito nas chamadas do modelo.
- *
- * POR QUE: o caminho self-hosted monta o modelo sem providerOptions, e o eval
- * nunca seta config.main.reasoningEffort — entao TODO modelo roda no default do
- * fornecedor. Isso nao e neutro: medimos gemini-3.7-flash gastando 5.2k tokens
- * de saida por caso, contra ~107k que o mesmo modelo gasta em bench publico com
- * thinking alto. O default e um eixo experimental, nao uma constante, e comparar
- * modelos com defaults diferentes compara configuracoes, nao capacidades.
- *
- * Ativa com RECALL_REASONING_EFFORT=low|medium|high. Sem a env, nada muda.
- * O valor escolhido vai para o artefato via runMetaOf(), senao o numero fica
- * sem regime declarado.
+ * How this run reaches its model: `{ storedConfig, route, modelId, reasoningEffort }`,
+ * storedConfig null on the managed route. Throws NotAProductionRoute for a
+ * model production cannot run.
  */
-function withReasoningEffort(model, modelId) {
-    const effort = process.env.RECALL_REASONING_EFFORT;
-    if (!effort) return model;
-
-    const { buildReasoningProviderOptions } = require('../../libs/llm/reasoning-options.ts');
-    // provider derivado do id: o mapeamento nativo difere por fornecedor
-    // (thinkingLevel no Gemini 3+, reasoningEffort na OpenAI, thinking.type nos
-    // OpenAI-compativeis).
-    // valores do enum BYOKProvider (byokProvider.service.ts), nao os nomes
-    const provider = /^gemini/i.test(modelId)
-        ? 'google_gemini'
-        : /^claude/i.test(modelId)
-          ? 'anthropic'
-          : /^gpt|^o\d/i.test(modelId)
-            ? 'openai'
-            : 'openai_compatible';
-    const injected = buildReasoningProviderOptions(provider, effort, modelId);
-    if (!injected || !Object.keys(injected).length) {
-        console.warn(`[reasoning] ${modelId}: nenhuma opcao mapeada para effort=${effort}`);
-        return model;
-    }
-    console.log(`[reasoning] ${modelId} effort=${effort} -> ${JSON.stringify(injected)}`);
-
-    const merge = (options) => ({
-        ...options,
-        providerOptions: { ...(options?.providerOptions || {}), ...injected },
-    });
-    return new Proxy(model, {
-        get(target, prop, receiver) {
-            if (prop === 'doGenerate' || prop === 'doStream') {
-                return async (options) => target[prop](merge(options));
-            }
-            return Reflect.get(target, prop, receiver);
-        },
-    });
-}
-
-async function createModel(config) {
+function resolveRoute(config) {
+    const effort = process.env.RECALL_REASONING_EFFORT || null;
     if (config.provider === 'tier0') {
         const modelId = process.env.RECALL_MODEL || config.model;
         const { applyModelEnv, TIER0 } = require('../shared/tier0-models');
-
-        // Assinatura: nao passa por buildModelFromSlot (que espera chave de API).
-        // Fala com chatgpt.com/backend-api via token OAuth do Codex; o wrapper
-        // resolve o streaming-only + store:false.
         const spec = TIER0[modelId];
         if (spec && spec.provider === 'codex_subscription') {
-            const { buildCodexSubscriptionModel } = require('../../libs/llm/codex-subscription-model.ts');
-            return buildCodexSubscriptionModel(spec.codexModel || modelId);
+            throw new NotAProductionRoute(
+                `${modelId} runs on a ChatGPT subscription, which production has no route for ` +
+                    '(libs/llm/codex-subscription-model.ts is used only by evals): the finder would run another model',
+            );
         }
-
-        const { buildEvalModel } = require('../shared/build-model');
+        // The env the managed route reads, and what the run's other callers
+        // (the judge excepted) fall back to.
         applyModelEnv(modelId);
-        return withReasoningEffort(buildEvalModel({}), modelId);
+        if (!effort) return { storedConfig: null, route: 'managed', modelId, reasoningEffort: null };
+        const key = (spec?.keyEnvs || []).map((name) => process.env[name]).find(Boolean);
+        if (!key) {
+            throw new Error(
+                `RECALL_REASONING_EFFORT routes ${modelId} through a BYOK config, which needs its key (${(spec?.keyEnvs || []).join(', ') || 'none known'})`,
+            );
+        }
+        return {
+            storedConfig: storedByokConfig({
+                provider: spec.provider,
+                model: spec.doModel || modelId,
+                apiKey: key,
+                baseURL: spec.baseURL,
+                reasoningEffort: effort,
+                openrouterProviderOrder: spec.openrouterProviderOrder,
+            }),
+            route: 'byok',
+            modelId,
+            reasoningEffort: effort,
+        };
     }
 
-    // Env overrides so ANY model runs from one yaml (no per-provider config):
+    // A promptfoo config naming its own provider (promptfoo*.yaml). Env
+    // overrides so ANY model runs from one yaml (no per-provider config):
     //   RECALL_MODEL, RECALL_PROVIDER, RECALL_BASEURL, RECALL_APIKEY_ENV.
     if (process.env.RECALL_PROVIDER || process.env.RECALL_BASEURL) {
         config = {
@@ -244,50 +246,36 @@ async function createModel(config) {
     const model = process.env.RECALL_MODEL || config.model;
     const apiKeyEnv = process.env.RECALL_APIKEY_ENV || config.apiKeyEnv || defaultApiKeyEnv(provider);
     const apiKey = config.apiKey || process.env[apiKeyEnv];
-
-    if (!model) {
-        throw new Error('Missing provider config.model');
-    }
-    if (!apiKey) {
-        throw new Error(`Missing API key for ${provider} in ${apiKeyEnv}`);
-    }
-
-    if (provider === 'google') {
-        const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
-        return createGoogleGenerativeAI({ apiKey })(model);
-    }
-
-    if (provider === 'anthropic') {
-        const { createAnthropic } = await import('@ai-sdk/anthropic');
-        return createAnthropic({
+    if (!model) throw new Error('Missing provider config.model');
+    if (!apiKey) throw new Error(`Missing API key for ${provider} in ${apiKeyEnv}`);
+    return {
+        storedConfig: storedByokConfig({
+            provider,
+            model,
             apiKey,
-            ...(config.baseURL ? { baseURL: config.baseURL } : {}),
-        })(model);
-    }
+            baseURL: config.baseURL || (provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : undefined),
+            reasoningEffort: effort,
+            openrouterProviderOrder: Array.isArray(config.providerOrder) ? config.providerOrder.filter(Boolean) : undefined,
+        }),
+        route: 'byok',
+        modelId: model,
+        reasoningEffort: effort,
+    };
+}
 
-    if (provider === 'openai') {
-        const { createOpenAI } = await import('@ai-sdk/openai');
-        return createOpenAI({
-            apiKey,
-            ...(config.headers ? { headers: config.headers } : {}),
-            ...(config.baseURL ? { baseURL: config.baseURL } : {}),
-        })(model);
-    }
-
-    if (provider === 'openrouter' || provider === 'openai-compatible') {
-        const { createOpenAICompatible } = await import(
-            '@ai-sdk/openai-compatible'
-        );
-        return createOpenAICompatible(
-            buildOpenAICompatibleConfig(
-                config,
-                apiKey,
-                provider === 'openrouter' ? 'openrouter' : 'openai-compatible',
-            ),
-        )(model);
-    }
-
-    throw new Error(`Unsupported provider: ${provider}`);
+// The permission service production routes through, over the eval org's stored
+// config: only the organization-parameters read is the eval's.
+function evalPermissionService(storedConfig) {
+    const { PermissionValidationService } = require(
+        path.join(__dirname, '../../libs/ee/shared/services/permissionValidation.service.ts'),
+    );
+    const { OrganizationParametersKey } = require(
+        path.join(__dirname, '../../libs/core/domain/enums/organization-parameters-key.enum.ts'),
+    );
+    return new PermissionValidationService(undefined, {
+        findByKey: async (key) =>
+            key === OrganizationParametersKey.BYOK_CONFIG && storedConfig ? { configValue: storedConfig } : null,
+    });
 }
 
 function fixtureMatches(match, actual) {
@@ -476,43 +464,189 @@ class ReplayRemoteCommands {
     }
 }
 
-function buildCurrentPrompts(caseData) {
-    const { GeneralistAgentProvider } = require(
-        path.join(
-            __dirname,
-            '../../libs/code-review/infrastructure/agents/providers/generalist-agent.provider.ts',
-        ),
-    );
+// The input production's execute() hands the agent loop, built with the same
+// functions in the same order (base-code-review-agent.provider.ts:127-420, and
+// the orchestrator before it). The eval calls the loop itself rather than
+// execute() because it scores the finder's own findings (the loop's result),
+// before the finding mapper (measured by evals/parse); everything execute()
+// does to the input on the way to the loop is reproduced here.
+//
+// `batch`: one batch of a PR production splits (runChunkedReview,
+// batch-runner.ts:86-120): its files, index and total.
+async function buildProductionRun(caseData, permissionService, batch) {
+    const lib = (p) => require(path.join(__dirname, '../../libs', p));
+    const { GeneralistAgentProvider } = lib('code-review/infrastructure/agents/providers/generalist-agent.provider.ts');
+    const { ReviewOrchestratorService } = lib('code-review/infrastructure/agents/review-orchestrator.service.ts');
+    const { resolveReviewAgentModel } = lib('code-review/infrastructure/agents/collaborators/model-factory.ts');
+    const { resolveContextWindow } = lib('llm/model-context-window.ts');
+    const { resolveAdaptiveProfile } = lib('code-review/infrastructure/agents/engine/adaptive-fit.ts');
+    const planner = lib('code-review/infrastructure/agents/collaborators/context-fit-planner.ts');
+    const { assignFileTiers, computeFileScores } = lib('code-review/infrastructure/agents/engine/file-priority-scorer.ts');
 
-    const provider = new GeneralistAgentProvider({}, {}, {});
-    const input = {
-        organizationAndTeamData: {
-            organizationId: 'eval-org',
-            teamId: 'eval-team',
-        },
-        changedFiles: normalizeChangedFiles(parseMaybeJson(caseData.changedFiles)),
+    const provider = new GeneralistAgentProvider(permissionService, {}, undefined, undefined);
+    // The PR's whole diff, rendered as fetch-changed-files.stage.ts renders it
+    // (materialize-full-diff.js on feat/improve-harness-to-big-models).
+    // `changedFiles` is the corpus's first field: at most 6 files, tests left
+    // out, with no record of the rest. A dataset without the full diff falls
+    // back to it.
+    const prFiles = normalizeChangedFiles(
+        parseMaybeJson(caseData.changedFilesFull) || parseMaybeJson(caseData.changedFiles),
+    );
+    const reviewMode = caseData.reviewMode || 'normal';
+    let input = {
+        organizationAndTeamData: EVAL_ORG,
+        changedFiles: batch ? batch.changedFiles : prFiles,
         remoteCommands: {},
         prNumber: caseData.prNumber || 1,
         repositoryFullName: caseData.repositoryFullName || 'eval/repo',
-        languageResultPrompt: caseData.languageResultPrompt || '',
+        // build-orchestrator-input.ts:107-108 sends en-US when the team set none.
+        languageResultPrompt: caseData.languageResultPrompt || 'en-US',
         memoryRules: parseMaybeJson(caseData.memoryRules) || [],
         traceDecisions: parseMaybeJson(caseData.traceDecisions) || undefined,
         v2PromptOverrides: parseMaybeJson(caseData.v2PromptOverrides),
         generationMain: caseData.generationMain,
         prTitle: caseData.prTitle,
         prBody: caseData.prBody,
-        reviewMode: caseData.reviewMode || 'normal',
-        maxSteps: caseData.maxSteps || 12,
-        requestedCategories:
-            normalizeRequestedCategories(caseData.requestedCategories),
+        reviewMode,
+        // The orchestrator's step budget for the generalist, from the PR's file
+        // count (review-orchestrator.service.ts:196-205, :335-370): 20 in normal
+        // mode plus half a step per file past eight, up to 100. The datasets pin
+        // 12, which production never runs with. RECALL_MAX_STEPS overrides it
+        // for an experiment.
+        maxSteps:
+            Number(process.env.RECALL_MAX_STEPS) ||
+            ReviewOrchestratorService.prototype.getMaxStepsForAgent.call(null, 'generalist', reviewMode, prFiles.length),
+        // Production asks the generalist for every category the team left on
+        // (review-orchestrator.service.ts:109-113, from reviewOptions, all on
+        // by default: agent-review.stage.ts:480-484), which is also the
+        // generalist's own default (generalist-agent.provider.ts:59-63). The
+        // datasets pin ["bug"]; that pin is no longer the default.
+        // RECALL_CATEGORIES=bug,security narrows it for an experiment.
+        requestedCategories: process.env.RECALL_CATEGORIES
+            ? process.env.RECALL_CATEGORIES.split(',').map((c) => c.trim()).filter(Boolean)
+            : undefined,
         callGraph: parseMaybeJson(caseData.callGraph),
+        // No callGraphJson: production never sets one (the pipeline context's
+        // callGraphJson has no writer in libs/ or apps/; only the scorer reads
+        // it, base-code-review-agent.provider.ts:367-371), so its file scores
+        // rank by diff size. The datasets' callGraphJson is not used.
         baseBranch: caseData.baseBranch || 'main',
+        // A batch carries what runChunkedReview copies from its parent input:
+        // the parent's tiers, its runtime name, its place (batch-runner.ts:113-120).
+        ...(batch
+            ? {
+                  fileTiers: batch.fileTiers,
+                  agentRuntimeName: batch.runtimeName,
+                  batchIndex: batch.index,
+                  batchTotal: batch.total,
+                  recursionDepth: batch.depth,
+              }
+            : {}),
     };
 
+    // execute(): the model, its window and the adaptive profile (:194-245).
+    const { byokConfig, main } = await resolveReviewAgentModel(input, permissionService);
+    const contextWindow = resolveContextWindow({ byokMaxInputTokens: main.maxInputTokens, modelName: main.modelName });
+    const adaptiveProfile = resolveAdaptiveProfile(contextWindow);
+    // build-orchestrator-input.ts:153-154: the stage's profile skips the heavy
+    // passes on a small window.
+    input = { ...input, adaptiveProfile, skipHeavyPasses: adaptiveProfile.skipHeavyPasses || undefined };
+    planner.assertContextWindowFitsOverhead({ input, contextWindow, modelName: main.modelName });
+    const promptBudget = Math.floor(contextWindow * planner.PROMPT_BUDGET_RATIO);
+
+    // Adaptive fit: long diffs cut to the profile's cap (:266-300).
+    if (adaptiveProfile.maxDiffChars && input.changedFiles?.length) {
+        const cap = adaptiveProfile.maxDiffChars;
+        input = {
+            ...input,
+            changedFiles: input.changedFiles.map((f) => {
+                const diff = f.patchWithLinesStr ?? f.patch ?? '';
+                if (diff.length <= cap) return f;
+                const cut = `${diff.slice(0, cap)}\n... (diff truncated to ${cap} chars by adaptive-fit; readFile for the rest)`;
+                return f.patchWithLinesStr ? { ...f, patchWithLinesStr: cut } : { ...f, patch: cut };
+            }),
+        };
+    }
+
+    // Large PR: drop low-signal files, then tier what is left (:302-416).
+    let estimatedPromptTokens = planner.estimatePromptTokens(input);
+    let lowSignalDropped = 0;
+    const shouldFireFilter =
+        input.changedFiles.length > 1 &&
+        (adaptiveProfile.lowSignalFilterUnconditional ||
+            (estimatedPromptTokens > promptBudget && input.reviewMode !== 'deep'));
+    if (shouldFireFilter) {
+        const filtered = planner.applyLargePrAggressiveFilter(input.changedFiles);
+        lowSignalDropped = input.changedFiles.length - filtered.length;
+        if (lowSignalDropped > 0) input = { ...input, changedFiles: filtered };
+        const fileTiers = assignFileTiers(computeFileScores(input.changedFiles, input.callGraphJson));
+        if (adaptiveProfile.allOptional) {
+            for (const filename of fileTiers.keys()) fileTiers.set(filename, 'optional');
+        }
+        input = { ...input, fileTiers };
+        estimatedPromptTokens = planner.estimatePromptTokens(input);
+    }
+
+    // Still over budget: production splits the PR into batches, each reviewed
+    // by its own execute() (:420-505 → runChunkedReview).
+    let chunks = null;
+    if (estimatedPromptTokens > promptBudget && input.changedFiles.length > 1) {
+        const overheadTokens = planner.estimateNonDiffOverheadTokens(input);
+        const chunkDiffBudget = Math.max(promptBudget - overheadTokens, Math.floor(contextWindow * 0.3));
+        const preview = planner.chunkFilesByTokenBudget(input.changedFiles, chunkDiffBudget);
+        if (!(preview.length === 1 && preview[0].length === input.changedFiles.length)) chunks = preview;
+    }
+
     return {
+        provider,
         input,
-        systemPrompt: provider.buildSystemPrompt(input),
-        userPrompt: provider.buildUserPrompt(input),
+        byokConfig,
+        main,
+        contextWindow,
+        estimatedPromptTokens,
+        lowSignalDropped,
+        chunks,
+        systemPrompt: chunks ? null : provider.buildSystemPrompt(input),
+        userPrompt: chunks ? null : provider.buildUserPrompt(input),
+    };
+}
+
+// The loop parameters execute() builds from that input (:563-640).
+function productionLoopInput(run) {
+    const { input, main, provider } = run;
+    return {
+        systemPrompt: run.systemPrompt,
+        userPrompt: run.userPrompt,
+        agentName: input.agentRuntimeName || provider.getIdentity().name,
+        usageRunName: `code-review-${provider.getCategoryLabel()}`,
+        telemetryMetadata: {
+            organizationId: input.organizationAndTeamData?.organizationId,
+            teamId: input.organizationAndTeamData?.teamId,
+            pullRequestId: input.prNumber,
+            provider: main.modelName,
+        },
+        changedFiles: input.changedFiles,
+        prNumber: input.prNumber,
+        repositoryFullName: input.repositoryFullName,
+        baseBranch: input.baseBranch,
+        callGraph: input.callGraph,
+        fileTiers: input.fileTiers,
+        reviewMode: input.reviewMode,
+        maxSteps: input.maxSteps,
+        skipHeavyPasses: input.skipHeavyPasses,
+        skipSynthesisRescue: input.skipSynthesisRescue,
+        // heavy força as passadas de resample (mais recall via reamostragem).
+        // É EIXO DE REGIME: comparar heavy com normal é o mesmo erro que
+        // comparar assinatura com API.
+        ...(process.env.RECALL_HEAVY === '1' ? { heavy: true } : {}),
+        contextWindowTokens: run.contextWindow,
+        reasoningEffort: main.reasoningEffort,
+        reasoningConfigOverride: main.reasoningConfigOverride,
+        byokProvider: main.byokProvider,
+        modelName: main.modelName,
+        byokRole: main.role,
+        openrouterProviderOrder: main.openrouterProviderOrder,
+        openrouterAllowFallbacks: main.openrouterAllowFallbacks,
     };
 }
 
@@ -568,7 +702,7 @@ function writeInlineRepo(files) {
     return { dir, sha: null, cleanup: async () => fs.rmSync(dir, { recursive: true, force: true }) };
 }
 
-function serializeResult(caseId, agentResult, remoteCommands, repoHandle) {
+function serializeResult(caseId, agentResult, remoteCommands, repoHandle, production) {
     return {
         caseId,
         reasoning: agentResult.findings?.reasoning || '',
@@ -596,6 +730,9 @@ function serializeResult(caseId, agentResult, remoteCommands, repoHandle) {
             headSha: repoHandle ? repoHandle.sha : null,
             // false: the exec-gated tools were not registered for this case.
             sandboxExec: typeof remoteCommands.exec === 'function',
+            // How production ran this review: its model route and model, the
+            // window, the files it got, and each batch (one unless split).
+            production: production || null,
         },
     };
 }
@@ -631,6 +768,100 @@ function agentRunFailure(agentResult) {
     }
 
     return null;
+}
+
+// execute() → runChunkedReview → execute() is capped here
+// (base-code-review-agent.provider.ts:52-60): a batch that would split again
+// fails, as its nested batches would.
+const MAX_RECURSION_DEPTH = 2;
+
+// One review of the PR as production runs it: one loop, or one per batch when
+// production splits the PR (runChunkedReview, batch-runner.ts:40-210). A failed
+// batch is left out like production leaves it out; only every batch failing
+// fails the review (:189-209).
+async function runProduction(caseData, permissionService, run, remoteCommands, runAgentLoop, depth = 0) {
+    if (!run.chunks) {
+        const result = await runAgentLoop(productionLoopInput(run), {
+            remoteCommands,
+            byokConfig: run.byokConfig,
+            byokErrorReporter: undefined,
+        });
+        const failure = agentRunFailure(result);
+        if (failure) {
+            throw new Error(
+                `${failure} (finishReason=${result?.finishReason || 'unknown'}, ` +
+                    `steps=${result?.steps ?? 'n/a'}, ` +
+                    `tokens=${result?.usage?.totalTokens ?? 'n/a'})`,
+            );
+        }
+        return { ...result, batches: [batchTrace(run, result)] };
+    }
+    if (depth + 1 >= MAX_RECURSION_DEPTH) throw new Error('AGENT_RECURSION_LIMIT_EXCEEDED');
+    const total = run.chunks.length;
+    const results = [];
+    const errors = [];
+    for (let i = 0; i < total; i++) {
+        // A batch that cannot be built is left out like one that fails to run
+        // (batch-runner.ts): the other batches' findings stay.
+        try {
+            // eslint-disable-next-line no-await-in-loop
+            const batchRun = await buildProductionRun(caseData, permissionService, {
+                changedFiles: run.chunks[i],
+                fileTiers: run.input.fileTiers,
+                runtimeName: `${run.provider.getIdentity().name} batch ${i + 1}/${total}`,
+                index: i + 1,
+                total,
+                depth: depth + 1,
+            });
+            // eslint-disable-next-line no-await-in-loop
+            results.push(await runProduction(caseData, permissionService, batchRun, remoteCommands, runAgentLoop, depth + 1));
+        } catch (error) {
+            errors.push(error);
+        }
+    }
+    if (!results.length) throw errors[0];
+    const merged = mergeResults(results);
+    return { ...merged, failedBatches: errors.map((e) => String(e?.message || e).slice(0, 200)) };
+}
+
+function batchTrace(run, result) {
+    return {
+        files: run.input.changedFiles.length,
+        lowSignalDropped: run.lowSignalDropped,
+        tiered: !!run.input.fileTiers,
+        estimatedPromptTokens: run.estimatedPromptTokens,
+        maxSteps: run.input.maxSteps,
+        steps: result?.steps ?? null,
+    };
+}
+
+// The batches' loop results as one, for the row: findings and calls in batch
+// order, counts summed.
+function mergeResults(results) {
+    if (results.length === 1) return results[0];
+    const sum = (key) => results.reduce((n, r) => n + Number(r.usage?.[key] || 0), 0);
+    return {
+        findings: {
+            reasoning: results.map((r) => r.findings?.reasoning || '').filter(Boolean).join('\n\n'),
+            suggestions: results.flatMap((r) => r.findings?.suggestions || []),
+        },
+        steps: results.reduce((n, r) => n + Number(r.steps || 0), 0),
+        finishReason: results[results.length - 1].finishReason,
+        source: results.map((r) => r.source).join(','),
+        usage: {
+            inputTokens: sum('inputTokens'),
+            outputTokens: sum('outputTokens'),
+            totalTokens: sum('totalTokens'),
+            reasoningTokens: sum('reasoningTokens'),
+            cacheReadTokens: sum('cacheReadTokens'),
+            cacheWriteTokens: sum('cacheWriteTokens'),
+        },
+        coverage: results.map((r) => r.coverage),
+        anomalies: results.map((r) => r.anomalies),
+        verification: results.map((r) => r.verification),
+        toolCalls: results.flatMap((r) => r.toolCalls || []),
+        batches: results.flatMap((r) => r.batches || []),
+    };
 }
 
 function writeResultArtifact(filename, payload) {
@@ -687,11 +918,11 @@ class InvestigationAgentProvider {
                 ),
             );
 
-            stage = 'create-model';
-            const model = await createModel(this.config);
+            stage = 'resolve-model';
+            const route = resolveRoute(this.config);
+            const permissionService = evalPermissionService(route.storedConfig);
             stage = 'build-prompts';
-            const { input, systemPrompt, userPrompt } =
-                buildCurrentPrompts(caseData);
+            const run = await buildProductionRun(caseData, permissionService);
             stage = 'build-replay-commands';
             // RECALL_REAL_REPO=1: answer the tools from a git worktree at the
             // PR's head instead of replaying recorded tool calls. The replay
@@ -723,38 +954,7 @@ class InvestigationAgentProvider {
             // (remoteCommands) lives in `secrets` now — passing it in `input` (the
             // old single-arg shape) left the agent tool-less and crashed on
             // `secrets.byokErrorReporter`.
-            const agentResult = await runAgentLoop(
-                {
-                    model,
-                    systemPrompt,
-                    userPrompt,
-                    changedFiles: input.changedFiles,
-                    prNumber: input.prNumber,
-                    repositoryFullName: input.repositoryFullName,
-                    baseBranch: input.baseBranch,
-                    reviewMode: input.reviewMode,
-                    maxSteps: input.maxSteps,
-                    // heavy força as passadas de resample (mais recall via
-                    // reamostragem). É EIXO DE REGIME: comparar heavy com normal
-                    // é o mesmo erro que comparar assinatura com API.
-                    ...(process.env.RECALL_HEAVY === '1' ? { heavy: true } : {}),
-                    agentName: `investigation-eval:${this.providerId}`,
-                },
-                {
-                    remoteCommands,
-                    byokConfig: undefined,
-                    byokErrorReporter: undefined,
-                },
-            );
-
-            const failure = agentRunFailure(agentResult);
-            if (failure) {
-                throw new Error(
-                    `${failure} (finishReason=${agentResult?.finishReason || 'unknown'}, ` +
-                        `steps=${agentResult?.steps ?? 'n/a'}, ` +
-                        `tokens=${agentResult?.usage?.totalTokens ?? 'n/a'})`,
-                );
-            }
+            const agentResult = await runProduction(caseData, permissionService, run, remoteCommands, runAgentLoop);
 
             stage = 'serialize-result';
             const output = serializeResult(
@@ -762,6 +962,17 @@ class InvestigationAgentProvider {
                 agentResult,
                 remoteCommands,
                 repoHandle,
+                {
+                    route: route.route,
+                    model: run.main.modelName,
+                    reasoningEffort: run.main.reasoningEffort ?? null,
+                    contextWindowTokens: run.contextWindow,
+                    prFiles: normalizeChangedFiles(parseMaybeJson(caseData.changedFilesFull) || parseMaybeJson(caseData.changedFiles)).length,
+                    fullDiff: !!parseMaybeJson(caseData.changedFilesFull),
+                    categories: run.provider.getAllowedSuggestionLabels(run.input),
+                    batches: agentResult.batches || [],
+                    failedBatches: agentResult.failedBatches || [],
+                },
             );
             writeResultArtifact('last-output.json', output);
 
@@ -812,3 +1023,5 @@ class InvestigationAgentProvider {
 }
 
 module.exports = InvestigationAgentProvider;
+// For the specs: how a case reaches production's loop.
+module.exports.internals = { resolveRoute, evalPermissionService, buildProductionRun, productionLoopInput, mergeResults, NotAProductionRoute };
