@@ -1,5 +1,6 @@
 /**
- * INTEGRATION TEST — UserDatabaseRepository.update against a real Postgres.
+ * INTEGRATION TEST — UserDatabaseRepository.update and .delete against a
+ * real Postgres.
  * Skips automatically if Postgres isn't reachable, like
  * message-claim.service.integration.spec.ts.
  */
@@ -86,6 +87,25 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
 
         afterAll(async () => {
             if (dataSource.isInitialized) {
+                // Rows a failing delete test may leave pointing at its user.
+                if (created.length) {
+                    for (const table of [
+                        'DELETE FROM user_notifications WHERE user_id = ANY($1)',
+                        'DELETE FROM cli_devices WHERE user_id = ANY($1)',
+                    ]) {
+                        await dataSource.query(table, [created]);
+                    }
+                }
+                if (createdOrganizations.length) {
+                    for (const table of [
+                        'DELETE FROM team_cli_key WHERE team_id IN (SELECT uuid FROM teams WHERE organization_id = ANY($1))',
+                        'DELETE FROM notification_deliveries WHERE organization_id = ANY($1)',
+                        'DELETE FROM cli_devices WHERE organization_id = ANY($1)',
+                        'DELETE FROM teams WHERE organization_id = ANY($1)',
+                    ]) {
+                        await dataSource.query(table, [createdOrganizations]);
+                    }
+                }
                 if (created.length) {
                     await dataSource.query(
                         'DELETE FROM users WHERE uuid = ANY($1)',
@@ -187,6 +207,93 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
             expect(failure).toBeInstanceOf(Error);
             expect((failure as Error).message).toBe('Failed to update user');
             expect((failure as Error).cause).toBeInstanceOf(Error);
+        });
+
+        describe('delete', () => {
+            const insertOrganization = async () => {
+                const organizationId = randomUUID();
+                await dataSource.query(
+                    'INSERT INTO organizations (uuid, name) VALUES ($1, $2)',
+                    [organizationId, `user-repo-it-${organizationId}`],
+                );
+                createdOrganizations.push(organizationId);
+                return organizationId;
+            };
+
+            // Every invited user gets a team.member_invited delivery, and
+            // removing a single-team member deletes the user.
+            it('deletes a user that other rows still point at', async () => {
+                if (!canRun) return;
+                const organizationId = await insertOrganization();
+                const uuid = await insertUser(STATUS.PENDING);
+                const teamId = randomUUID();
+                await dataSource.query(
+                    'INSERT INTO teams (uuid, name, organization_id) VALUES ($1, $2, $3)',
+                    [teamId, 'user-repo-it', organizationId],
+                );
+                const [delivery] = await dataSource.query(
+                    `INSERT INTO notification_deliveries
+                        (event, criticality, channel, title, body, category,
+                         "correlationId", organization_id, recipient_user_id,
+                         "recipientEmail")
+                     VALUES ('team.member_invited', 'system', 'email', 't',
+                         'b', 'team', $1, $2, $3, 'invitee@example.com')
+                     RETURNING uuid`,
+                    [randomUUID(), organizationId, uuid],
+                );
+                await dataSource.query(
+                    'INSERT INTO user_notifications (user_id, delivery_id) VALUES ($1, $2)',
+                    [uuid, delivery.uuid],
+                );
+                await dataSource.query(
+                    `INSERT INTO cli_devices ("deviceId", "deviceTokenHash", organization_id, user_id)
+                     VALUES ($1, 'hash', $2, $3)`,
+                    [randomUUID(), organizationId, uuid],
+                );
+                const [key] = await dataSource.query(
+                    `INSERT INTO team_cli_key (name, "keyHash", team_id, created_by_user_id)
+                     VALUES ('ci', $1, $2, $3) RETURNING uuid`,
+                    [randomUUID(), teamId, uuid],
+                );
+
+                await repository.delete(uuid);
+
+                const count = async (sql: string, params: unknown[]) =>
+                    Number((await dataSource.query(sql, params))[0].count);
+                expect(
+                    await count('SELECT count(*) FROM users WHERE uuid = $1', [
+                        uuid,
+                    ]),
+                ).toBe(0);
+                // History stays, without the user.
+                const [kept] = await dataSource.query(
+                    'SELECT recipient_user_id, "recipientEmail" FROM notification_deliveries WHERE uuid = $1',
+                    [delivery.uuid],
+                );
+                expect(kept).toEqual({
+                    recipient_user_id: null,
+                    recipientEmail: 'invitee@example.com',
+                });
+                // The in-app inbox and CLI device tokens go with the user.
+                expect(
+                    await count(
+                        'SELECT count(*) FROM user_notifications WHERE user_id = $1',
+                        [uuid],
+                    ),
+                ).toBe(0);
+                expect(
+                    await count(
+                        'SELECT count(*) FROM cli_devices WHERE user_id = $1',
+                        [uuid],
+                    ),
+                ).toBe(0);
+                // The team key keeps working without its creator.
+                const [teamKey] = await dataSource.query(
+                    'SELECT created_by_user_id FROM team_cli_key WHERE uuid = $1',
+                    [key.uuid],
+                );
+                expect(teamKey).toEqual({ created_by_user_id: null });
+            });
         });
     },
 );
