@@ -120,8 +120,14 @@ export class BackfillAstGraphBuildUseCase implements IUseCase {
                 String(repo.id);
 
             try {
+                // Use the integration_config uuid (not the team id) so
+                // repositories.integration_config_id points at a real
+                // integration_configs row. See create-repositories.ts for
+                // the rationale: writing teamId here breaks the
+                // repositories -> integration_configs join used on the
+                // webhook path, silently dropping review events.
                 const repoRecord = await this.repositoryService.findOrCreate({
-                    integrationConfigId: teamId,
+                    integrationConfigId: cfgWithIntegration.uuid,
                     externalId: String(repo.id),
                     name: repo.name,
                     fullName,
