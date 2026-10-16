@@ -23,7 +23,7 @@ const args = Object.fromEntries(process.argv.slice(2).map((a) => {
     const m = a.match(/^--([^=]+)(?:=(.*))?$/); return m ? [m[1], m[2] ?? true] : [a, true];
 }));
 const RUNS = +(args.runs || 3);
-const MODELKEY = args.model || 'gpt-5.4-mini';
+const MODELKEY = args.model || 'deepseek-v4-flash@fireworks';
 const DATASET = args.dataset || 'github-cases';
 // CI gate: with --gate, exit non-zero if metrics fall below the model's floor.
 // occurrence-recall varies a lot by model, so floors are PER-MODEL in
@@ -186,7 +186,12 @@ async function main() {
                     console.error(`  [case ${caseLabel} run ${r}] review failed: ${res.lastReviewError.category} ${String(res.lastReviewError.providerMessage || res.lastReviewError.friendlyMessage || '').slice(0, 140)}`);
                 }
                 sugg = res.suggestions.filter((s) => s.label === 'kody_rules' || (s.brokenKodyRulesIds || []).length);
-            } catch (e) { errored = true; console.error(`  [case ${caseLabel} run ${r}] ${String(e.message).slice(0, 140)}`); }
+            } catch (e) {
+                errored = true;
+                // A failed clone carries git's own reason on stderr, not in the message.
+                const why = String(e.stderr || '').trim().split('\n').pop() || String(e.message);
+                console.error(`  [case ${caseLabel} run ${r}] ${why.slice(0, 200)}`);
+            }
             if (errored) erroredRuns++;
 
             if (targets) {
@@ -300,22 +305,19 @@ async function main() {
     }
 
     if (GATE) {
-        // Infra guard: if the environment (quota/rate-limit/key) broke enough
-        // runs that the measurement is unreliable, exit 2 (infra) so CI warns
-        // instead of red-flagging quality on a bogus low recall.
-        // erroredRuns now counts thrown runs AND ran-zero-steps runs (the
-        // concrete "agent never executed" signal — not a pure 0-output guess, so
-        // a real engine regression that DOES run but finds nothing still fails
-        // the quality gate below).
-        const erroredFrac = totalRuns ? erroredRuns / totalRuns : 0;
-        if (occTotal === 0 || erroredFrac >= 0.5) {
-            console.error(`\n⚠️ INFRA: ${erroredRuns}/${totalRuns} runs never executed (quota/rate-limit/key — steps=0 or threw) — measurement unreliable, not gating.`);
+        // Not measured (evals/AGENTS.md): a run that threw (a clone, the
+        // provider) or whose review recorded an error counts in no
+        // denominator. Up to 5% of runs may be lost that way; beyond, exit 2.
+        const budget = Math.floor(totalRuns * 0.05);
+        if (totalRuns === erroredRuns || erroredRuns > budget) {
+            console.error(`\nnot measured: ${erroredRuns} of ${totalRuns} runs did not measure (budget ${budget}; see above).`);
             process.exit(2);
         }
         const occ = occTotal ? (100 * occCaught / occTotal) : 0;
         const spec = cleanFiles ? (100 * (cleanFiles - falseAlarmFiles) / cleanFiles) : 100;
         const fails = [];
-        if (haveGT && occ < OCC_MIN) fails.push(`occurrence-recall ${occ.toFixed(0)}% < ${OCC_MIN}%`);
+        // A negative control (polyglot-cases) has no sites: specificity only.
+        if (haveGT && occTotal > 0 && occ < OCC_MIN) fails.push(`occurrence-recall ${occ.toFixed(0)}% < ${OCC_MIN}%`);
         if (spec < SPEC_MIN) fails.push(`specificity ${spec.toFixed(0)}% < ${SPEC_MIN}%`);
         if (fails.length) { console.error(`\n❌ GATE FAILED: ${fails.join('; ')}`); process.exit(1); }
         console.log(`\n✅ GATE PASSED (occurrence-recall ≥ ${OCC_MIN}%, specificity ≥ ${SPEC_MIN}%)`);

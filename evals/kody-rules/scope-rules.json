@@ -4,7 +4,7 @@
     "",
     "These are FIXTURES standing in for customer rules, not a table the engine",
     "consults — the engine enumerates no language anywhere. They exist here for",
-    "the same reason detector-fp-repro.js carries LANG_BY_EXT: scoring a",
+    "the same reason the 2026 detector repro carried LANG_BY_EXT: scoring a",
     "cross-language corpus requires knowing, outside the engine, which language",
     "each file is.",
     "",

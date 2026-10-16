@@ -2,7 +2,7 @@
 // What the deterministic analyzers find on the security benchmark, through
 // production's RunAnalyzersStage.
 //
-//   node evals/security-analyzers/run-stage.js [--tranche=vuln|secrets|noise] [--limit=N] [--output=<result.json>]
+//   node evals/security-analyzers/run-stage.js [--tranche=vuln|noise] [--ids=<id prefix>] [--limit=N] [--gate] [--output=<result.json>]
 //
 // Each sample is a published vulnerability (scripts/security-benchmark/
 // dataset.json): the repository at its vulnerable commit, the diff the review
@@ -15,8 +15,8 @@
 // settings (the secret scan on), an in-memory organization record, and the
 // feature gate over its own catalog (self-hosted audience, beta features on).
 //
-// betterleaks must be installed (the production sandbox image carries it).
-// Exit: 0 measured, 2 not measured (reason printed).
+// betterleaks must be installed: production's image installs it (docker/Dockerfile).
+// Exit: 0 measured, 1 below the tranche's floor (--gate), 2 not measured (reason printed).
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
@@ -32,16 +32,22 @@ function notMeasured(reason) {
     process.exit(2);
 }
 
+// The scanner production ships, at the version its image pins: another
+// version is another scanner.
+const SHIPPED = (fs.readFileSync(path.join(__dirname, '../../docker/Dockerfile'), 'utf8').match(/ARG BETTERLEAKS_VERSION=(\S+)/) || [])[1];
+let installed = '';
 try {
-    execFileSync('betterleaks', ['--version'], { stdio: 'ignore' });
+    installed = (String(execFileSync('betterleaks', ['--version'])).match(/(\d+\.\d+\.\d+)/) || [])[1] || '';
 } catch {
-    notMeasured('betterleaks is not installed on this machine');
+    notMeasured(`betterleaks is not installed on this machine (production ships ${SHIPPED})`);
 }
+if (!SHIPPED || installed !== SHIPPED) notMeasured(`betterleaks ${installed} is installed; production ships ${SHIPPED || 'an unknown version'} (docker/Dockerfile)`);
 
 process.env.BETA_FEATURES = 'true';
 if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
 
 const dataset = require('../../scripts/security-benchmark/dataset.json');
+const TARGETS = (() => { try { return require('./targets.json').tranches || {}; } catch (e) { if (e.code === 'MODULE_NOT_FOUND') return {}; throw e; } })();
 const tranche = args.tranche || 'vuln';
 // --ids=<prefix> picks samples by id prefix (the planted secrets are `secret-*`).
 const samples = dataset.samples
@@ -127,7 +133,6 @@ async function main() {
             // eslint-disable-next-line no-await-in-loop
             const { findings, failures, routing } = await runSample(stage, sample);
             if (failures.length) throw new Error(`a tool failed: ${JSON.stringify(failures).slice(0, 160)}`);
-            // A stage that never ran the scan is not a clean sample.
             // Production's own file selection may leave the scan nothing to read
             // (a template file): that is quiet. Any other reason is a wiring break.
             const scan = routing.find((r) => r.toolId === 'secrets');
@@ -142,11 +147,31 @@ async function main() {
     }
     const hits = cases.reduce((n, c) => n + c.hits, 0);
     const total = cases.reduce((n, c) => n + c.total, 0);
+    const target = TARGETS[tranche] || {};
+    const value = total ? hits / total : null;
     console.log(`${tranche}: ${hits}/${total} ${tranche === 'noise' ? 'quiet' : 'detected'} · ${errored} of ${samples.length} did not measure`);
     if (args.output) {
-        fs.writeFileSync(args.output, `${JSON.stringify({ eval: 'security-analyzers', question: evalQuestion('evals/security-analyzers'), model: 'none', runs: 1, metric: { name: tranche === 'noise' ? 'of noise samples left quiet' : 'of vulnerabilities flagged by an analyzer', value: total ? hits / total : null, floor: null, baseline: null }, cases, tokens: {}, infra: { errored, total: samples.length } }, null, 2)}\n`);
+        const result = {
+            eval: 'security-analyzers',
+            question: evalQuestion('evals/security-analyzers'),
+            model: 'none',
+            runs: 1,
+            metric: { name: tranche === 'noise' ? 'of noise samples left quiet' : 'of vulnerabilities flagged by an analyzer', value, floor: target.floor ?? null, baseline: target.observed ?? null },
+            cases,
+            tokens: {},
+            infra: { errored, total: samples.length },
+        };
+        fs.writeFileSync(args.output, `${JSON.stringify(result, null, 2)}\n`);
     }
     if (errored > samples.length * 0.05) notMeasured(`${errored} of ${samples.length} samples failed (see above)`);
+    // The floor is for the whole tranche; a cut (--limit, --ids) is not judged.
+    if (args.gate) {
+        if (args.limit || args.ids || target.floor == null) notMeasured(`no floor for this run (evals/security-analyzers/targets.json holds whole tranches)`);
+        if (value < target.floor) {
+            console.error(`GATE FAILED: ${(value * 100).toFixed(1)}% below the ${tranche} floor in evals/security-analyzers/targets.json`);
+            process.exit(1);
+        }
+    }
     process.exit(0);
 }
 

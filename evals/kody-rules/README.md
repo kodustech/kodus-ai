@@ -73,12 +73,30 @@ on first use).
 
 ## CI gate
 
-`--gate` fails the run (exit 1) if occurrence-recall < `--occ-min` (default 70%)
-or specificity < `--spec-min` (default 95%). Thresholds reflect the validated
-gpt-5.4 numbers with margin. Pin a model in CI; the GitHub tier is frozen so the
-only variance is model noise (run ≥3 reps).
+`--gate` fails the run (exit 1) if occurrence recall or specificity falls below
+the model's floor in `kody-targets.json` (`--occ-min=` / `--spec-min=` override
+it); a model without a floor there gates on specificity ≥ 95% only. It exits 2
+when the measurement is not one: a run that threw (a clone or the provider) or
+whose review recorded an error is not counted, and more than half of them
+whose runs more than 5% did not measure is not measured. The nightly runs the calibrated model,
+`deepseek-v4-flash@fireworks`, once, and measures again before alerting
+(`nightly-verdict.js`).
 
-## Headline result — the enumeration fix
+## Result on production's review (deepseek-v4-flash@fireworks, 2026-10-16)
+
+Two runs of `github-cases`, one after the other, on one commit:
+
+| metric              | run 1          | run 2          |
+|---------------------|----------------|----------------|
+| occurrence recall   | 100% (39/39)   | 100% (39/39)   |
+| line precision      | 85% (39/46)    | 83% (39/47)    |
+| specificity         | 100% (0/139)   | 100% (0/139)   |
+
+Every case gave the same count in both. The four mechanical rules carry
+examples, so production's compile gives each a detector and the review reaches
+the detector route.
+
+## Earlier result — the enumeration fix (the replay engine this replaced)
 
 The agent was flagging each violating file once (the first occurrence) and
 stopping, because its category prompt never asked it to enumerate. The fix
@@ -94,7 +112,7 @@ stopping, because its category prompt never asked it to enumerate. The fix
 
 More than doubles occurrence recall across diverse real PRs, no specificity cost.
 
-## Open findings (surfaced by this eval)
+## Open findings (surfaced on the replay engine)
 
 - **Line precision ~72%** — on real diffs ~28% of flags land off the real line
   (mis-line, or pre-existing context the PR didn't touch — the file-membership

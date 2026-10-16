@@ -122,6 +122,8 @@ async function main() {
         { name: 'severity', args: ['evals/severity/run.js', '--mock=heuristic', '--gate'] },
         // The scripted model answers nothing usable: this measures the local fallback.
         { name: 'format', model: true, args: ['evals/format/run.js', '--model=eval-fake', '--gate'] },
+        // The stage, its MCP adapter over HTTP and production's Kodus MCP server.
+        { name: 'business-logic', model: true, args: ['evals/business-logic/run.js', '--model=eval-fake', '--gate'] },
         // The cases bring their repository: the scripted model reads it through the local sandbox.
         { name: 'memories', model: true, args: ['evals/memories/run.js', '--model=eval-fake', '--gate'] },
         // The stages after the finder on its frozen candidates (evals/funnel), on
