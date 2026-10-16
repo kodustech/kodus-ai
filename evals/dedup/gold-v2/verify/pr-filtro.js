@@ -14,6 +14,8 @@ require('tsconfig-paths/register');
  *   pf3 = formato do pf1, mas nit vira tarefa de evidencia (montar o cenario de falha) e
  *         alucinacao so cai se o trecho citado existir mesmo no arquivo (conferido em codigo).
  *   pf3d = pf3 sem o diff no prompt: so a lista de arquivos alterados; o diff vem pela ferramenta prDiff.
+ *   pf4 = pf3 + "intencional" e "nenhum chamador atual" nao derrubam uma mudanca de comportamento do proprio PR.
+ *   pf4 = pf3 + "intencional" e "nenhum chamador atual" nao derrubam uma mudanca de comportamento do proprio PR.
  *   RECALL_MODEL=<id> node evals/dedup/gold-v2/verify/pr-filtro.js --model=<gold model> --versao=pf1 [--teto=40] [--par=3] [--prefixo=09.10.26]
  */
 const fs = require('fs');
@@ -30,8 +32,8 @@ const PREFIXO = arg('prefixo', '09.10.26');
 const GOLD = arg('model'), VERSAO = arg('versao', 'pf1'), PAR = Number(arg('par', '3')), DEDUP = arg('dedup', 'v9-cobertura');
 const TETO = Number(arg('teto', '40'));
 const MODELO = process.env.RECALL_MODEL;
-if (!GOLD || !MODELO || !['pf1', 'pf2', 'pf3', 'pf3d'].includes(VERSAO)) { console.error('RECALL_MODEL=<id> --model=<gold model> --versao=pf1|pf2|pf3|pf3d'); process.exit(2); }
-const BASE = VERSAO === 'pf3d' ? 'pf3' : VERSAO;
+if (!GOLD || !MODELO || !['pf1', 'pf2', 'pf3', 'pf3d', 'pf4'].includes(VERSAO)) { console.error('RECALL_MODEL=<id> --model=<gold model> --versao=pf1|pf2|pf3|pf3d|pf4'); process.exit(2); }
+const BASE = VERSAO === 'pf3d' || VERSAO === 'pf4' ? 'pf3' : VERSAO;
 const DIFF_INLINE = VERSAO !== 'pf3d';
 const semToolChoiceNomeado = /muse|kimi|glm/i.test(MODELO);
 const OUT = path.join(__dirname, 'resultados', `${VERSAO}`, `${GOLD}.json`);
@@ -185,7 +187,10 @@ const P3 = `For every comment, try to build the failure it describes, from the c
 - hallucination: a fact the comment relies on is false — the code does not call, contain, pass or return what the comment says. Put the contradicting line in refutation: the file, the line number and that line of code copied exactly. Only use this when you read that line yourself.
 - no_concrete_failure: what the comment points at is real, but you cannot build any input or state that current code produces after which something observable goes wrong: style, naming, wording, comments, dead-but-harmless code, a micro-optimisation, a guard against a state no current code path reaches, or a request to "verify" or "consider" something.
 - non_finding: the comment reports no problem, or is empty or unreadable.
-If you cannot decide between defect and no_concrete_failure, choose defect.`;
+If you cannot decide between defect and no_concrete_failure, choose defect.${VERSAO === 'pf4' ? `
+Two reasons never make a comment no_concrete_failure when it describes behaviour that this pull request changes (a guard, filter or condition removed or moved, a call that became synchronous or blocking, a new error or failure path, a lock, ordering or check that changed, work now done before a check instead of after, a flag that now gates different code):
+- "the new behaviour looks intentional" — the author may not have meant the consequence the comment describes; judge the consequence, not the intent;
+- "no current caller, input or configuration triggers it today" — if the changed code would do the wrong thing for an input, state or caller that the code accepts, it is a defect; describe that input, state or caller in scenario.` : ''}`;
 
 const prompt = (v, diff, gs) => `${CABECA(v, diff)}
 
