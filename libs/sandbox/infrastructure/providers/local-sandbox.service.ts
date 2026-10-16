@@ -69,6 +69,24 @@ const DANGEROUS_FLAGS: Record<string, RegExp> = {
 };
 
 /**
+ * Short-flag characters that carry the same danger as the long forms when they
+ * appear inside a `-abc` cluster. clap (fd, ast-grep) and getopt (grep) let a
+ * short flag's value glue on (`-xsh` == `-x sh`) and let booleans stack before
+ * it (`-Lx` == `-L -x`, `-Rn` == `-R -n`), so the anchored `^-x$`/`^-R$` tests
+ * above miss them. The cluster is rejected when it contains any of these chars
+ * — failing closed on a grep/fd argument that happens to glue a dangerous
+ * letter after a value flag is far cheaper than an exec/symlink-escape bypass,
+ * and the long form or a separate token is always available. `find` does not
+ * cluster short flags, so it has no entry and keeps its exact match above.
+ */
+const DANGEROUS_SHORT_FLAGS: Record<string, Set<string>> = {
+    fd: new Set(['x', 'X', 'L']),
+    grep: new Set(['R']),
+    sg: new Set(['U']),
+    'ast-grep': new Set(['U']),
+};
+
+/**
  * Variables that tell git which repository to work on. They outrank `-C` and
  * `cwd`: a process started from a git hook (the pre-push test suite) inherits
  * GIT_DIR, and `git init <tempDir>` then re-initialized the caller's
@@ -674,13 +692,25 @@ export class LocalSandboxService implements ISandboxProvider {
                     // (cat/head/tail/wc/file) have no entry and pass through.
                     const dangerousFlag = DANGEROUS_FLAGS[program];
                     if (dangerousFlag) {
-                        // Match the flag token only: clap-based tools (fd)
-                        // accept the joined `--exec=sh` / `--exec-batch=cmd`
-                        // form, which an anchored `^--exec$` regex would miss,
-                        // so strip any `=value` before testing.
-                        const bad = args.find((a) =>
-                            dangerousFlag.test(a.split('=', 1)[0]),
-                        );
+                        const shortFlags = DANGEROUS_SHORT_FLAGS[program];
+                        const bad = args.find((a) => {
+                            // Long/exact forms, incl. the joined `--exec=sh`
+                            // / `-x=sh`: strip any `=value` before testing.
+                            if (dangerousFlag.test(a.split('=', 1)[0])) {
+                                return true;
+                            }
+                            // Short-flag cluster (`-Rn`, `-xsh`, `-Lx`): a
+                            // dangerous short can hide anywhere in it, glued or
+                            // stacked. Reject the cluster if any dangerous char
+                            // appears before an `=value`.
+                            if (shortFlags && /^-[^-]/.test(a)) {
+                                for (const ch of a.slice(1)) {
+                                    if (ch === '=') break;
+                                    if (shortFlags.has(ch)) return true;
+                                }
+                            }
+                            return false;
+                        });
                         if (bad) {
                             return {
                                 stdout: `Flag "${bad}" is not allowed for "${program}" in local sandbox (it can execute, write, delete, or follow symlinks out of the repo).`,
@@ -715,6 +745,21 @@ export class LocalSandboxService implements ISandboxProvider {
                         if (!this.isPathInside(repoRealForArgs, real)) {
                             return {
                                 stdout: `Argument "${arg}" resolves outside the repository (symlink escape) and is not allowed.`,
+                                stderr: '',
+                                exitCode: 1,
+                            };
+                        }
+                        // realpath resolves symlinks but not hard links: a hard
+                        // link inside the clone to an outside file has an
+                        // in-repo path yet shares the outside inode, so cat/grep
+                        // would still read it. A fresh git clone never creates
+                        // extra links, so a regular file with nlink > 1 is an
+                        // injected hard-link escape — refuse it. Directories
+                        // legitimately have nlink > 1, so this is files only.
+                        const st = await lstat(real);
+                        if (st.isFile() && st.nlink > 1) {
+                            return {
+                                stdout: `Argument "${arg}" is a hard link that escapes the repository and is not allowed.`,
                                 stderr: '',
                                 exitCode: 1,
                             };
