@@ -358,6 +358,14 @@ export class IntentJudge {
                 },
                 ctx,
             );
+            // The runner returns a failed call as a state; read as text it is
+            // an empty answer and would pass for a parse error.
+            if (state.status === 'error') {
+                const failure = state.trace.find((e) => e.kind === 'error');
+                throw new Error(
+                    String(failure?.detail?.message ?? 'the model call failed'),
+                );
+            }
             return {
                 content: finalText(state),
                 structured: options.submitResultTool

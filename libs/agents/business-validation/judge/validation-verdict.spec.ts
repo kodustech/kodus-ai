@@ -219,6 +219,24 @@ describe('analyzer run — submitValidation result tool', () => {
         expect(result.status).toBe('issues_found');
     });
 
+    it('reports the provider error of a failed run, never a parse error', async () => {
+        jest.spyOn(AiSdkAgentRunner.prototype, 'run').mockResolvedValue({
+            ...runResult(''),
+            status: 'error',
+            trace: [
+                {
+                    kind: 'error',
+                    detail: { message: 'invalid x-api-key', status: 401 },
+                },
+            ],
+        });
+
+        const result = await makeJudge().judge(judgeInput);
+
+        expect(result.reason).toBe('analyzer_failure');
+        expect(result.missingInfo).toContain('invalid x-api-key');
+    });
+
     it('takes the last submission when the analyzer called the tool more than once', () => {
         expect(
             readValidationArtifact({
