@@ -252,8 +252,8 @@ export const TaskSource = ({
                                 </span>
                             </span>
                             <span className="text-text-secondary text-xs">
-                                Only for ids like sc-123 that Kody doesn&apos;t
-                                find on its own
+                                Only for ids Kody doesn&apos;t find on its own,
+                                like T1234
                             </span>
                         </span>
                         <CollapsibleIndicator />
@@ -262,19 +262,19 @@ export const TaskSource = ({
                 <CollapsibleContent>
                     <div className="border-card-lv3/60 flex flex-col gap-2 border-t px-5 py-4">
                         <p className="text-text-secondary text-xs">
-                            Kody already finds keys like SAA-96, AB#8, #12,
-                            CU-86a1b2c3d and tracker links. For another shape,
-                            write a regular expression; its first group, when it
-                            has one, is the id. For example{" "}
-                            <code>sc-(\d+)</code> reads 123 from the branch{" "}
-                            <code>nina/sc-123-gift-cards</code>.
+                            Kody already finds keys like SAA-96 or sc-123, AB#8,
+                            #12, CU-86a1b2c3d and tracker links. For another
+                            shape, write a regular expression; its first group,
+                            when it has one, is the id Kody looks up. For
+                            example <code>{"T(\\d{4})"}</code> reads 1234 from
+                            the branch <code>nina/T1234-gift-cards</code>.
                         </p>
                         <Controller
                             name={"businessLogic.taskIdPattern.value" as never}
                             control={form.control}
                             render={({ field }) => (
                                 <Input
-                                    placeholder="e.g. sc-(\d+)"
+                                    placeholder="e.g. T(\d{4})"
                                     value={(field.value as string) ?? ""}
                                     onChange={field.onChange}
                                     maxLength={MAX_PATTERN_LEN}
