@@ -23,6 +23,10 @@ const NS_PER_MS = 1e6;
  * blocked) or does not — and then `msSinceLastProbe` tells whether probes
  * were even arriving (a failing health-check command vs. a failing probe).
  *
+ * The report runs on the thread it measures. A block that lasts until ECS
+ * kills the task never produces the spike line; the evidence is the
+ * once-per-window line going missing before the recycle.
+ *
  * Returns a stop function.
  */
 export function startEventLoopMonitor(
