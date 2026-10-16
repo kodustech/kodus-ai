@@ -47,6 +47,14 @@ const TIER0 = {
     // suspended for balance (2026-10), and OpenRouter is where the credit is.
     // Same model; the host differs from Moonshot-native.
     'kimi-k2.7-code@openrouter': { tier0: true, provider: 'openai_compatible', doModel: 'moonshotai/kimi-k2.7-code', openrouterProviderOrder: ['moonshotai'], keyEnvs: ['BYOK_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY'], baseURL: 'https://openrouter.ai/api/v1' },
+    // Production's other review models, through OpenRouter: MiniMax-M3 and
+    // GLM-5.3 carry most of the finder's parse losses (#2112), Gemini 3.1 Pro
+    // and 3.8 Flash are among the most used. Routes for the evals that record
+    // or replay model output (evals/parse); not tier-0.
+    'minimax-m3@openrouter': { provider: 'openai_compatible', doModel: 'minimax/minimax-m3', keyEnvs: ['BYOK_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY'], baseURL: 'https://openrouter.ai/api/v1' },
+    'glm-5.3@openrouter': { provider: 'openai_compatible', doModel: 'z-ai/glm-5.3', keyEnvs: ['BYOK_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY'], baseURL: 'https://openrouter.ai/api/v1' },
+    'gemini-3.1-pro@openrouter': { provider: 'openai_compatible', doModel: 'google/gemini-3.1-pro-preview-customtools', keyEnvs: ['BYOK_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY'], baseURL: 'https://openrouter.ai/api/v1' },
+    'gemini-3.8-flash@openrouter': { provider: 'openai_compatible', doModel: 'google/gemini-3.8-flash', keyEnvs: ['BYOK_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY'], baseURL: 'https://openrouter.ai/api/v1' },
     'glm-5.2': { provider: 'openai_compatible', keyEnvs: ['BYOK_ZHIPU_API_KEY', 'API_ZHIPU_API_KEY'], baseURL: 'https://api.z.ai/api/paas/v4' },
     // V4-Pro saiu de preview em 2026-08 (build 0813). Mesmo endpoint do flash.
     'deepseek-v4-pro': { provider: 'openai_compatible', keyEnvs: ['BYOK_DEEPSEEK_API_KEY', 'API_DEEPSEEK_API_KEY'], baseURL: 'https://api.deepseek.com' },

@@ -36,7 +36,8 @@
 //              (stage-signals.js READERS); its row then comes only from the
 //              nightly, never from the wiring smoke
 //   metric   — what the measured number counts, shown under it
-//   set      — what the model reviews to produce it
+//   set      — what the model reviews to produce it. The panel reads it after
+//              "<model> reviews <cases>", so it starts with a plural noun
 //   caveat   — what a green number does not prove
 //   friday   — when the Friday check (evals/tier0-smoke.js) runs it on every
 //              tier-0 model: the key of its outcome in that check's
@@ -107,13 +108,18 @@ const STAGES = [
         id: 'parse',
         name: 'Output parsing',
         group: 'Finding issues',
-        label: 'Output recovery: every LLM call parses its answer',
+        label: "Parse: the end of each finder run becomes findings",
         pipeline: ['AgentReviewStage'],
-        eval: 'evals/review-chain',
-        model: 'mocked',
-        wiring: ['review-chain', 'shape-invariance'],
+        eval: 'evals/parse',
+        model: 'real',
+        wiring: ['parse', 'review-chain', 'shape-invariance'],
+        nightly: 'shared',
+        friday: 'parse',
+        metric: 'of written findings handled right by the parse',
+        set: 'recorded finder outputs from nine production models on public PRs, with the shapes production lost (#2112)',
+        caveat: 'Replays recorded model output: a model that changes how it writes its findings shows here once its runs are recorded again (evals/parse/capture.js).',
         byHand: ['evals/parser', 'evals/structured-outputs'],
-        note: 'deterministic: every call site wired to the shared recovery, every wire shape normalized',
+        note: 'every PR against the scripted model (the deterministic part); nightly on the real model when the parse or its payloads change',
     },
     {
         id: 'severity',
