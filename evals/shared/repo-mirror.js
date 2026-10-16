@@ -147,8 +147,13 @@ function filesBetween(base = {}, head = {}) {
         const before = base[filename] ?? null;
         const after = filename in head ? head[filename] : before;
         if (before === after) continue;
-        // createPatch's header (Index, ===, ---, +++) is not in the platform's patch.
-        const patch = createPatch(filename, before ?? '', after ?? '').split('\n').slice(4).join('\n').replace(/\n$/, '');
+        // Three lines of context, as git and the platform diff; createPatch's
+        // header (Index, ===, ---, +++) is not in the platform's patch.
+        const patch = createPatch(filename, before ?? '', after ?? '', undefined, undefined, { context: 3 })
+            .split('\n')
+            .slice(4)
+            .join('\n')
+            .replace(/\n$/, '');
         const lines = patch.split('\n');
         const additions = lines.filter((l) => l.startsWith('+')).length;
         const deletions = lines.filter((l) => l.startsWith('-')).length;

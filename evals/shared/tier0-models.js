@@ -195,4 +195,25 @@ function promptfooFlags(modelId) {
     ];
 }
 
-module.exports = { TIER0, EXCLUDED_BY_DEFAULT, tier0, defaultMatrix, applyModelEnv, promptfooFlags };
+// The cloud platform's own keys, under the variables production reads them
+// from, for an eval that runs the review the way a cloud org gets it: the
+// OpenAI key the platform embedder uses (buildPlatformEmbedder: the dedup's
+// semantic tier), and the Fireworks key of the managed default model
+// (resolveManagedSlot). No org's model is configured here: the cloud has no
+// self-hosted env model (API_LLM_PROVIDER_MODEL), so a model either comes from
+// the org's stored BYOK config or is the managed default.
+const PLATFORM_KEYS = {
+    API_OPEN_AI_API_KEY: ['API_OPEN_AI_API_KEY', 'BYOK_OPENAI_API_KEY'],
+    API_FIREWORKS_API_KEY: ['API_FIREWORKS_API_KEY', 'FIREWORKS_API_KEY', 'BYOK_FIREWORKS_API_KEY'],
+};
+function applyPlatformEnv(env = process.env) {
+    delete env.API_LLM_PROVIDER_MODEL;
+    delete env.API_OPENAI_FORCE_BASE_URL;
+    for (const [name, sources] of Object.entries(PLATFORM_KEYS)) {
+        const key = sources.map((e) => env[e]).find(Boolean);
+        if (key) env[name] = key;
+        else delete env[name];
+    }
+}
+
+module.exports = { TIER0, EXCLUDED_BY_DEFAULT, tier0, defaultMatrix, applyModelEnv, applyPlatformEnv, promptfooFlags };

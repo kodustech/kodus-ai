@@ -1,49 +1,83 @@
 #!/usr/bin/env node
-// funnel/verify: every frozen candidate the verifier judged (snapshot.js)
-// through the production verifier again — `LlmVerifier` in a
-// `runVerificationPass`, built as `runAgentLoopViaCore`
-// (core-agent-loop.adapter.ts) builds it: the same runner, the finder's tool
-// registry over the PR's recorded tools, the same provider options. A known bug
-// is lost when every candidate that matches it is dropped.
-//
-// Not covered: the evidence gate, which re-verifies a kept finding the finder
-// never read, because it needs the finder's own run.
+// funnel/verify: what each agent loop's verify step got in the snapshot's
+// review (snapshot.js) — the candidates and the files the finder investigated —
+// through production's verify again (verifyFindings, finder.agent.ts: each
+// candidate judged, then the evidence gate's full re-verify of a finding on a
+// file the finder never read). The review runs as production runs it up to each
+// agent loop; in place of the loop, verify runs with the loop's own runner,
+// tools and provider options (finderRunEnvironment, core-agent-loop.adapter.ts)
+// over the PR's checkout. A known bug is lost when every candidate that matches
+// it is dropped.
 const { main } = require('../stage-run');
-const { datasetFor } = require('../known-bugs');
-const { withCallErrors } = require('../../shared/eval-kit');
+
+const lib = (p) => require(`../../../libs/${p}`);
+
+// What a loop returns when nothing came of it: the stage carries on with no
+// finding from this agent.
+function nothingFound(params) {
+    const { DiffCoverageLedger } = lib('code-review/infrastructure/agents/adapters/diff-coverage-ledger.adapter.ts');
+    const { buildAgentAnomalies } = lib('code-review/infrastructure/agents/core/agent-anomalies.ts');
+    const coverage = new DiffCoverageLedger({ changedFiles: params.changedFiles, fileTiers: params.fileTiers }).coverageSummary();
+    const zero = { inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0, reasoningTokens: 0 };
+    return {
+        findings: { reasoning: '', suggestions: [] },
+        text: '',
+        steps: 0,
+        toolCalls: [],
+        finishReason: 'completed',
+        source: 'empty',
+        usage: { ...zero, totalTokens: 0 },
+        discardedBySeverity: [],
+        droppedByVerify: [],
+        coverage,
+        verification: null,
+        verificationUsage: zero,
+        anomalies: buildAgentAnomalies({ steps: 0, toolCalls: [], coverage }),
+        warnings: [],
+    };
+}
+
+const flat = (frozen) => frozen.loops.flatMap((l) => l.candidates);
 
 main({
     id: 'verify',
     usesModel: true,
-    reaches: () => true,
-    apply: async (input, caseId) => {
-        const { AiSdkAgentRunner } = require('../../../libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner.ts');
-        const { buildFinderToolRegistry } = require('../../../libs/code-review/infrastructure/agents/adapters/finder-tools.adapter.ts');
-        const { buildProviderOptions } = require('../../../libs/llm/reasoning-options.ts');
-        const { createAgentRunContext } = require('../../../libs/llm/agent-run-context.ts');
-        const { runVerificationPass } = require('../../../libs/agent-harness/infrastructure/orchestration/verification-pass.ts');
-        const { LlmVerifier } = require('../../../libs/code-review/infrastructure/agents/core/verifier.agent.ts');
-        const { ReplayRemoteCommands } = require('../../investigation/agent-provider');
-        const vars = datasetFor(caseId);
-        const replay = typeof vars.toolReplay === 'string' ? JSON.parse(vars.toolReplay) : vars.toolReplay || {};
-
-        const runner = new AiSdkAgentRunner(undefined, { organizationId: 'funnel-eval' });
-        const { registry: tools } = buildFinderToolRegistry({ remoteCommands: new ReplayRemoteCommands(replay), repositoryFullName: vars.repositoryFullName });
-        const providerOptions = buildProviderOptions('funnel-verify', undefined, {});
-        const verifier = new LlmVerifier(runner, { modelId: 'resolved', tools, providerOptions, agentName: 'funnel-verify' });
-        const candidates = input.map((c) => ({ ...c.finding }));
-        const { ctx, cleanup } = createAgentRunContext({ runId: `funnel-verify:${caseId}` });
-        try {
-            const { classifyLLMError, LlmErrorCategory } = require('../../../libs/llm/error-classifier.ts');
-            const { result: pass, errors } = await withCallErrors(() => runVerificationPass({ candidates, verifier, concurrency: 4 }, ctx));
-            // A verifier call that fails keeps its candidate (fail-open), which
-            // would read as nothing lost; a refusal leaves the PR unmeasured.
-            const refused = errors.find((e) => ['AUTH_INVALID', 'QUOTA_EXCEEDED', 'RATE_LIMIT', 'MODEL_NOT_FOUND', 'MODEL_ACCESS_DENIED'].map((c) => LlmErrorCategory[c]).includes(classifyLLMError(e).category));
-            if (refused) throw new Error(`verifier call refused: ${String(refused.message || refused).slice(0, 160)}`);
-            const index = new Map(candidates.map((f, k) => [f, k]));
-            return pass.kept.map((f) => index.get(f)).filter((k) => k !== undefined);
-        } finally {
-            cleanup();
-        }
+    inputOf: flat,
+    // A control is judged by whichever agent loop the review runs first, as if
+    // its finder had read the file the findings are on.
+    controlInput: (candidates) => ({ loops: [{ loop: '*', investigated: ['src/cart.ts'], candidates }] }),
+    apply: async (env, frozen) => {
+        const { reviewPullRequest, loopKey } = require('../../shared/review-stage');
+        const { finderRunEnvironment } = lib('code-review/infrastructure/agents/core/core-agent-loop.adapter.ts');
+        const { verifyFindings } = lib('code-review/infrastructure/agents/core/finder.agent.ts');
+        const { createAgentRunContext } = lib('llm/agent-run-context.ts');
+        const offsets = [];
+        frozen.loops.reduce((n, l) => (offsets.push(n), n + l.candidates.length), 0);
+        const pending = new Map(frozen.loops.map((l, i) => [l.loop, i]));
+        const kept = new Set();
+        await reviewPullRequest({
+            ...env,
+            agentLoop: async (params, secrets) => {
+                const key = pending.has(loopKey(params)) ? loopKey(params) : pending.has('*') ? '*' : null;
+                if (key === null) return nothingFound(params);
+                const i = pending.get(key);
+                pending.delete(key);
+                const loop = frozen.loops[i];
+                const candidates = loop.candidates.map((x) => ({ ...x.finding }));
+                const { verifyParams } = finderRunEnvironment(params, secrets);
+                const { ctx, cleanup } = createAgentRunContext({ runId: `funnel-verify:${params.agentName}`, parentSignal: params.parentSignal });
+                try {
+                    const r = await verifyFindings(verifyParams, candidates, new Set(loop.investigated), ctx);
+                    for (const f of r.kept) kept.add(offsets[i] + candidates.indexOf(f));
+                } finally {
+                    cleanup();
+                }
+                return nothingFound(params);
+            },
+        });
+        // A loop of the snapshot the review no longer runs: its candidates
+        // were never judged, which is not a loss of the verifier's.
+        if (pending.size) throw new Error(`the review no longer runs ${pending.size} agent loop(s) of the snapshot (${[...pending.keys()][0].split('|')[0]}, …)`);
+        return kept;
     },
 });

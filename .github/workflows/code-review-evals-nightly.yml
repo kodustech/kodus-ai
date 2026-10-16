@@ -383,6 +383,9 @@ jobs:
                   BYOK_GOOGLE_API_KEY: ${{ secrets.BYOK_GOOGLE_API_KEY }}
                   # The judge, for the evals that read replies (evals/conversation).
                   JUDGE_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  # The platform's OpenAI key, under production's name: the
+                  # review's embedder (the dedup's semantic tier) reads it.
+                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
               run: |
                   read -r -a cmd <<< "$(node -e 'console.log(require("./evals/nightly-evals").byId(process.env.EVAL).run.join(" "))')"
                   measure() { node "${cmd[@]}" --model="$MODEL" --gate --output="$1"; }
@@ -471,6 +474,9 @@ jobs:
               env:
                   BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
                   JUDGE_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  # The platform's OpenAI key, under production's name: the
+                  # review's embedder (the dedup's semantic tier) reads it.
+                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
               # exit 1 = confirmed below the floor, 2 = infra or gate not evaluated
               # (wrong judge, no floor). Both fail the job;
               # the report says which. A first run below the floor that the second

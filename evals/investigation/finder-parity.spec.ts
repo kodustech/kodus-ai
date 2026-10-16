@@ -1,7 +1,9 @@
 /**
  * The finder eval runs production's route and scores one finding per known bug.
- * Routing: the env/managed route by default, a stored BYOK config when an effort
- * is asked for, and no run at all for a model production cannot reach. Scoring:
+ * Routing: as a cloud org, the managed default with no stored config for the
+ * trial's model, a stored BYOK config for any other model or an asked effort,
+ * the platform's own OpenAI key left to the embedder, and no run at all for a
+ * model production cannot reach. Scoring:
  * each known bug keeps the one finding the judge is surest of, so a repeated
  * finding is a false positive, not a second hit.
  */
@@ -55,12 +57,32 @@ describe('finder model route', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { internals } = require('./agent-provider');
 
-    it('runs the env/managed route with no stored config by default', () => {
-        process.env.EVAL_FAKE_LLM_URL = 'http://127.0.0.1:1/v1';
-        process.env.EVAL_FAKE_LLM_KEY = 'fake';
+    it("runs the trial's model on the managed default, with the platform's keys and no self-hosted env model", () => {
+        process.env.BYOK_FIREWORKS_API_KEY = 'fw';
+        process.env.BYOK_OPENAI_API_KEY = 'platform-openai';
+        process.env.API_LLM_PROVIDER_MODEL = 'some-self-hosted-model';
+        delete process.env.API_FIREWORKS_API_KEY;
+        delete process.env.FIREWORKS_API_KEY;
+        delete process.env.API_OPEN_AI_API_KEY;
         delete process.env.RECALL_REASONING_EFFORT;
         delete process.env.RECALL_MODEL;
-        expect(internals.resolveRoute({ provider: 'tier0', model: 'eval-fake' })).toMatchObject({ storedConfig: null, route: 'managed', modelId: 'eval-fake' });
+        expect(internals.resolveRoute({ provider: 'tier0', model: 'deepseek-v4-flash@fireworks' })).toMatchObject({ storedConfig: null, route: 'managed' });
+        expect(process.env.API_FIREWORKS_API_KEY).toBe('fw');
+        expect(process.env.API_OPEN_AI_API_KEY).toBe('platform-openai');
+        expect(process.env.API_LLM_PROVIDER_MODEL).toBeUndefined();
+    });
+
+    it("stores any other model as the org's BYOK config, and never puts its key where the embedder reads", () => {
+        process.env.EVAL_FAKE_LLM_URL = 'http://127.0.0.1:1/v1';
+        process.env.EVAL_FAKE_LLM_KEY = 'fake';
+        delete process.env.API_OPEN_AI_API_KEY;
+        delete process.env.BYOK_OPENAI_API_KEY;
+        delete process.env.RECALL_REASONING_EFFORT;
+        delete process.env.RECALL_MODEL;
+        const route = internals.resolveRoute({ provider: 'tier0', model: 'eval-fake' });
+        expect(route).toMatchObject({ route: 'byok', modelId: 'eval-fake', reasoningEffort: null });
+        expect(route.storedConfig.models).toEqual([{ id: 'eval-model', credentialId: 'eval-credential', model: 'eval-fake' }]);
+        expect(process.env.API_OPEN_AI_API_KEY).toBeUndefined();
     });
 
     it('stores a BYOK config carrying the asked effort, routed to the codeReview task', () => {
@@ -84,7 +106,7 @@ describe('finder model route', () => {
         process.env.EVAL_FAKE_LLM_KEY = 'fake';
         process.env.RECALL_MODEL = 'eval-fake';
         delete process.env.RECALL_REASONING_EFFORT;
-        expect(internals.resolveRoute({ provider: 'tier0', model: 'gpt-5.6-luna@sub' })).toMatchObject({ route: 'managed', modelId: 'eval-fake' });
+        expect(internals.resolveRoute({ provider: 'tier0', model: 'gpt-5.6-luna@sub' })).toMatchObject({ route: 'byok', modelId: 'eval-fake' });
         process.env.RECALL_REASONING_EFFORT = 'low';
         expect(internals.resolveRoute({ provider: 'tier0', model: 'gpt-5.6-luna@sub' }).storedConfig).toMatchObject({ models: [{ model: 'eval-fake' }] });
         process.env.RECALL_MODEL = 'gpt-5.6-luna@sub';

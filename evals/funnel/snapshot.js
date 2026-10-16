@@ -1,19 +1,28 @@
 #!/usr/bin/env node
-// Freezes the finder's output for the stage evals after it (evals/funnel):
-// runs the real finder (evals/investigation/agent-provider.js) on the nightly's
-// PRs and records every candidate the verifier judged, its verdicts, whether it
-// survived, and the known bug it matches (evals/funnel/known-bugs.js), read by
-// the recall judge with the nightly's prompt.
+// Freezes the input of each step after the agents (evals/funnel) from one
+// production review per nightly PR: evals/investigation/agent-provider.js runs
+// production's review stage (evals/shared/review-stage.js), and
+// observeTheReview records, without changing them, what each step received:
+//   verify     per agent loop, the candidates its first verification pass
+//              judged and the files the finder investigated (the evidence
+//              gate's input)
+//   anchoring  what AgentReviewStage.anchorSuggestionsToDiff received
+//   dedup      what dedupSuggestionStreams received
+//   severity   what reclassifyAndFilterSeverity received
+// Each finding is labelled with the known bug it matches (known-bugs.js), read
+// by the recall judge with the nightly's prompt.
 //
 //   node evals/funnel/snapshot.js --model=<id> [--cases=<id,id>] [--concurrency=N]
 //
-// Writes evals/funnel/snapshot/<model>.json. Spends one finder run per PR plus
-// a judge call per candidate and known bug until the first match. Run by hand,
-// then commit: the stages measure on this input, not on a fresh finder run, so
-// a stage's number moves only when the stage does.
+// Writes evals/funnel/snapshot/<model>.json. Spends one review per PR plus a
+// judge call per distinct finding and known bug until the first match. Run by
+// hand, then commit: each stage measures on this input, not on a fresh review,
+// so a stage's number moves only when the stage does. What a step derives from
+// the PR's data (the changed files, the team's config, the routed model, the
+// agent's runner and tools) is not frozen: the stage evals rebuild it with
+// production's code from the same data.
 const fs = require('fs');
 const path = require('path');
-const { AsyncLocalStorage } = require('async_hooks');
 const { execFileSync } = require('child_process');
 const { knownBugs, datasetFor } = require('./known-bugs');
 
@@ -31,53 +40,71 @@ if (!MODEL) {
 }
 
 process.env.RECALL_MODEL = MODEL;
-const Provider = require(path.join(ROOT, 'evals/investigation/agent-provider'));
+const { internals } = require(path.join(ROOT, 'evals/investigation/agent-provider'));
+const { reviewPullRequest } = require(path.join(ROOT, 'evals/shared/review-stage'));
 const LIGHT_CASES = require(path.join(ROOT, 'evals/investigation/recall-tests')).CASE_SETS.light;
 const { matchComment, loadJudgeKey, JUDGE_MODEL } = require(path.join(ROOT, 'evals/investigation/recall-judge'));
-const { LlmVerifier } = require(path.join(ROOT, 'libs/code-review/infrastructure/agents/core/verifier.agent.ts'));
-
-// Every candidate the verifier judged in this case, with its verdicts in order
-// (the evidence gate judges some twice). Observed, not changed.
-const judged = new AsyncLocalStorage();
-const verifyOriginal = LlmVerifier.prototype.verify;
-LlmVerifier.prototype.verify = async function observedVerify(candidate, ctx) {
-    const verdict = await verifyOriginal.call(this, candidate, ctx);
-    const store = judged.getStore();
-    if (store) {
-        if (!store.has(candidate)) store.set(candidate, []);
-        store.get(candidate).push({ keep: !!verdict.keep, rationale: String(verdict.rationale || '').slice(0, 600) });
-    }
-    return verdict;
-};
 
 // The text the recall judge reads for a finding (evals/investigation/recall-assertion.js).
 const findingText = (f) => [f.oneSentenceSummary, f.suggestionContent, f.label, f.relevantFile].filter(Boolean).join(' — ');
-const key = (f) => `${String(f.relevantFile || '').replace(/^\/+/, '')}|${String(f.suggestionContent || '').slice(0, 80)}`;
-const FIELDS = ['relevantFile', 'relevantLinesStart', 'relevantLinesEnd', 'language', 'label', 'severity', 'confidence', 'oneSentenceSummary', 'suggestionContent', 'existingCode', 'improvedCode'];
-const pick = (f) => Object.fromEntries(FIELDS.filter((k) => f[k] !== undefined).map((k) => [k, f[k]]));
 
-
-async function snapshotCase(provider, caseId, judgeKey) {
-    const store = new Map();
+async function snapshotCase(caseId, route, judgeKey) {
     const vars = datasetFor(caseId);
-    const r = await judged.run(store, () => provider.callApi(JSON.stringify(vars), { vars }, {}));
-    if (!r.output) throw new Error(String(r.error || 'the finder returned no output').slice(0, 200));
-    const kept = new Set((JSON.parse(r.output).findings || []).map(key));
+    const review = await reviewPullRequest({
+        pr: internals.prOf(vars),
+        team: internals.teamOf(vars),
+        route,
+        permissionService: internals.evalPermissionService(route.storedConfig),
+        observeSteps: true,
+    });
+    if (review.skipped) throw new Error(`production skipped the review: ${review.skipped}`);
+    const failed = review.loops.map((l) => l.result).filter((r) => r?.finishReason === 'error');
+    if (failed.length) throw new Error(`an agent loop failed: ${String(failed[0].errorMessage || 'error').slice(0, 160)}`);
+    const steps = review.steps || {};
+
     const bugs = knownBugs(caseId);
-    const candidates = [];
-    for (const [finding, verdicts] of store) {
-        let bug = null;
-        for (const b of bugs) {
-            // eslint-disable-next-line no-await-in-loop
-            if (await matchComment(judgeKey, b.text, findingText(finding))) {
-                bug = b.index;
-                break;
+    const labels = new Map();
+    const bugOf = async (finding) => {
+        const text = findingText(finding);
+        if (!labels.has(text)) {
+            let bug = null;
+            for (const b of bugs) {
+                // eslint-disable-next-line no-await-in-loop
+                if (await matchComment(judgeKey, b.text, text)) {
+                    bug = b.index;
+                    break;
+                }
             }
+            labels.set(text, bug);
         }
-        candidates.push({ finding: pick(finding), verdicts, kept: kept.has(key(finding)), bug });
+        return labels.get(text);
+    };
+    const labelled = async (findings) => {
+        const out = [];
+        // eslint-disable-next-line no-await-in-loop
+        for (const finding of findings || []) out.push({ finding, bug: await bugOf(finding) });
+        return out;
+    };
+
+    const verify = { loops: [] };
+    for (const loop of steps.verify || []) {
+        // eslint-disable-next-line no-await-in-loop
+        verify.loops.push({ loop: loop.loop, investigated: loop.investigated, candidates: await labelled(loop.candidates) });
     }
-    return { caseId, knownBugs: bugs.length, candidates };
+    const step = async (name) =>
+        steps[name] ? { ...(steps[name].kodyRules ? { kodyRules: steps[name].kodyRules } : {}), candidates: await labelled(steps[name].suggestions) } : { candidates: [] };
+    return {
+        caseId,
+        knownBugs: bugs.length,
+        verify,
+        anchoring: await step('anchorSuggestionsToDiff'),
+        dedup: await step('dedupSuggestionStreams'),
+        severity: await step('reclassifyAndFilterSeverity'),
+        shipped: review.shipped.length,
+    };
 }
+
+const found = (c) => new Set([...c.verify.loops.flatMap((l) => l.candidates), ...c.anchoring.candidates].filter((x) => x.bug !== null).map((x) => x.bug)).size;
 
 async function main() {
     const judgeKey = loadJudgeKey();
@@ -86,7 +113,7 @@ async function main() {
         return 2;
     }
     const caseIds = args.cases ? String(args.cases).split(',') : LIGHT_CASES;
-    const provider = new Provider({ config: { label: `funnel-snapshot-${MODEL}`, provider: 'tier0', model: MODEL } });
+    const route = internals.resolveRoute({ provider: 'tier0', model: MODEL });
     // Each PR is kept as it finishes, so a run that fails on one PR is resumed
     // instead of repeated: rerun the same command and only the missing PRs run.
     const partial = path.join(__dirname, 'snapshot', `.partial-${MODEL.replace(/[^\w.@-]+/g, '-')}`);
@@ -104,10 +131,12 @@ async function main() {
             }
             try {
                 // eslint-disable-next-line no-await-in-loop
-                cases[i] = await snapshotCase(provider, caseIds[i], judgeKey);
+                cases[i] = await snapshotCase(caseIds[i], route, judgeKey);
                 fs.writeFileSync(done, JSON.stringify(cases[i]));
                 const c = cases[i];
-                console.log(`${caseIds[i]}: ${c.candidates.length} candidates, ${c.candidates.filter((x) => x.kept).length} kept, ${new Set(c.candidates.filter((x) => x.bug !== null).map((x) => x.bug)).size}/${c.knownBugs} known bugs found`);
+                console.log(
+                    `${caseIds[i]}: verify ${c.verify.loops.reduce((n, l) => n + l.candidates.length, 0)} · anchoring ${c.anchoring.candidates.length} · dedup ${c.dedup.candidates.length} · severity ${c.severity.candidates.length} · shipped ${c.shipped} · ${found(c)}/${c.knownBugs} known bugs found`,
+                );
             } catch (error) {
                 failed.push(caseIds[i]);
                 console.error(`${caseIds[i]}: ${String(error.message || error).slice(0, 200)}`);
@@ -122,6 +151,7 @@ async function main() {
     const out = path.join(__dirname, 'snapshot', `${MODEL.replace(/[^\w.@-]+/g, '-')}.json`);
     const snapshot = {
         model: MODEL,
+        route: route.route,
         judge: JUDGE_MODEL,
         builtAt: new Date().toISOString().slice(0, 10),
         builtOn: execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(),

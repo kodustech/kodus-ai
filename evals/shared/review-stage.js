@@ -34,7 +34,15 @@ const LIBS = path.join(__dirname, '../../libs');
 const lib = (p) => require(path.join(LIBS, p));
 
 // ── Observation ─────────────────────────────────────────────────────────────
+// One store per review (AsyncLocalStorage): `loops` gets every agent loop the
+// review ran ({ params, result }); `agentLoop`, when set, runs in place of the
+// loop (the funnel's verify eval: production's verify on frozen candidates,
+// with the agent's own runner and tools); `steps`, when set, gets what each
+// post-agent step received and returned (observeTheReview).
 const observedLoops = new AsyncLocalStorage();
+// The agent loop running now: which agent, on which files.
+const currentLoop = new AsyncLocalStorage();
+const loopKey = (params) => `${params.agentName}|${(params.changedFiles || []).map((f) => f.filename).sort().join(',')}`;
 let loopObserved = false;
 function observeTheLoop() {
     if (loopObserved) return;
@@ -43,12 +51,69 @@ function observeTheLoop() {
     require.cache[adapterPath].exports = {
         ...real,
         runAgentLoopViaCore: async (params, secrets) => {
-            const result = await real.runAgentLoopViaCore(params, secrets);
-            observedLoops.getStore()?.push({ params, result });
+            const store = observedLoops.getStore();
+            const result = await currentLoop.run({ key: loopKey(params) }, () =>
+                store?.agentLoop ? store.agentLoop(params, secrets) : real.runAgentLoopViaCore(params, secrets),
+            );
+            store?.loops.push({ params, result });
             return result;
         },
     };
     loopObserved = true;
+}
+
+const clone = (value) => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)));
+
+/**
+ * Records, into the review's store `steps`, what each post-agent step of
+ * AgentReviewStage received and returned, and for each agent loop what its
+ * verify step got: the candidates it judged first and the files the finder
+ * investigated (the evidence gate's input). Wraps each method without changing
+ * its arguments or result.
+ */
+let reviewObserved = false;
+function observeTheReview() {
+    if (reviewObserved) return;
+    observeTheLoop();
+    const steps = () => observedLoops.getStore()?.steps;
+    const { AgentReviewStage } = lib('code-review/pipeline/stages/agent-review.stage.ts');
+    const wrap = (method, record) => {
+        const original = AgentReviewStage.prototype[method];
+        AgentReviewStage.prototype[method] = async function observed(...args) {
+            const input = steps() ? clone(args) : null;
+            const out = await original.apply(this, args);
+            if (steps()) steps()[method] = record(input, clone(out));
+            return out;
+        };
+    };
+    wrap('anchorSuggestionsToDiff', ([suggestions, , kodyRules], out) => ({ suggestions, kodyRules, out }));
+    wrap('dedupSuggestionStreams', ([suggestions], out) => ({ suggestions, out: out.deduped }));
+    wrap('reclassifyAndFilterSeverity', ([suggestions], out) => ({ suggestions, out }));
+
+    // Verify: runFinderWithVerify's first verification pass judges every
+    // candidate; the files the finder investigated come off its finder run.
+    const finder = lib('code-review/infrastructure/agents/core/finder.agent.ts');
+    const passes = lib('agent-harness/infrastructure/orchestration/verification-pass.ts');
+    const perRun = new AsyncLocalStorage();
+    const runPass = passes.runVerificationPass;
+    passes.runVerificationPass = async (args, ctx) => {
+        const run = perRun.getStore();
+        if (run && !run.candidates) run.candidates = clone(args.candidates);
+        return runPass(args, ctx);
+    };
+    const runFinder = finder.runFinderWithVerify;
+    finder.runFinderWithVerify = async (params, input, ctx) => {
+        if (!steps()) return runFinder(params, input, ctx);
+        const run = { candidates: null };
+        const r = await perRun.run(run, () => runFinder(params, input, ctx));
+        (steps().verify = steps().verify || []).push({
+            loop: currentLoop.getStore()?.key,
+            candidates: run.candidates || [],
+            investigated: [...finder.strongFilesFromRun(r.finderState)],
+        });
+        return r;
+    };
+    reviewObserved = true;
 }
 
 // ── The data production reads, held in memory ───────────────────────────────
@@ -254,16 +319,17 @@ async function checkout(repository) {
 }
 
 /**
- * Reviews one PR as production does. `pr` is the platform's data:
+ * One PR up to the agents, as production prepares it: the team's config, the
+ * routed model, the context ValidateConfigStage and FetchChangedFilesStage
+ * leave. `pr` is the platform's data:
  *   { repo, number, title, body, headRef, headSha, baseRef, baseSha, files, commits,
  *     repoFiles?, repoBase? (a repository written for the eval, its head and
  *     base trees, instead of `repo`; `files` then come from filesBetween) }
  * `team`: { language, memories, codeReviewConfig } as the team set them.
- * Returns what the stage hands to posting, what it discarded, the agent loops
- * it ran, and the context.
+ * Returns the context, the repository to check out, the platform, and the
+ * cleanup of a repository written for the eval.
  */
-async function reviewPullRequest({ pr, team = {}, route, permissionService, previousDecisions, previousDecisionsUseCase }) {
-    observeTheLoop();
+async function prepareReview({ pr, team = {}, route, permissionService, previousDecisions }) {
     const { routeCodeReviewModel } = lib('code-review/pipeline/stages/route-code-review-model.ts');
     const repository = {
         id: `eval-${(pr.repo || 'inline/repo').replace('/', '-')}`,
@@ -281,46 +347,66 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
         repoFiles: pr.repoFiles,
         repoBase: pr.repoBase,
     });
-    const codeManagement = platform({
-        baseRef: pr.baseRef || repo.baseBranch || 'main',
-        prFiles: pr.files,
-        prCommits: pr.commits || [],
-        content: (file) => contentAt(repo.cloneUrl, repo.head, file),
-    });
-    const store = await teamStore(team, permissionService);
+    try {
+        const codeManagement = platform({
+            baseRef: pr.baseRef || repo.baseBranch || 'main',
+            prFiles: pr.files,
+            prCommits: pr.commits || [],
+            content: (file) => contentAt(repo.cloneUrl, repo.head, file),
+        });
+        const store = await teamStore(team, permissionService);
 
-    const codeReviewConfig = await resolveTeamConfig({
-        permissionService,
-        store,
-        codeManagement,
-        repository: { id: repository.id, name: repository.name },
-        preliminaryFiles: pr.files,
-    });
-    // ValidateConfigStage: the codeReview task's routed model.
-    const routed = routeCodeReviewModel(route.storedConfig, codeReviewConfig);
-    codeReviewConfig.resolvedModelSlot = routed.resolvedModelSlot;
-    codeReviewConfig.byokConfig = routed.resolvedModelSlot;
+        const codeReviewConfig = await resolveTeamConfig({
+            permissionService,
+            store,
+            codeManagement,
+            repository: { id: repository.id, name: repository.name },
+            preliminaryFiles: pr.files,
+        });
+        // ValidateConfigStage: the codeReview task's routed model.
+        const routed = routeCodeReviewModel(route.storedConfig, codeReviewConfig);
+        codeReviewConfig.resolvedModelSlot = routed.resolvedModelSlot;
+        codeReviewConfig.byokConfig = routed.resolvedModelSlot;
 
-    let context = {
-        organizationAndTeamData: EVAL_ORG,
-        platformType: 'github',
-        repository,
-        branch: pr.headRef,
-        pullRequest: {
-            number: pr.number || 1,
-            title: pr.title,
-            body: pr.body,
-            head: { ref: pr.headRef, sha: pr.headSha },
-            base: { ref: pr.baseRef || 'main', repo: { fullName: repository.fullName } },
-        },
-        codeReviewConfig,
-        // ValidateNewCommitsStage on a first review: every commit of the PR.
-        prAllCommits: pr.commits || [],
-        prCommits: pr.commits || [],
-        previousDecisions,
-        pipelineMetadata: {},
-    };
-    context = await changedFilesThroughStage(context, codeManagement);
+        let context = {
+            organizationAndTeamData: EVAL_ORG,
+            platformType: 'github',
+            repository,
+            branch: pr.headRef,
+            pullRequest: {
+                number: pr.number || 1,
+                title: pr.title,
+                body: pr.body,
+                head: { ref: pr.headRef, sha: pr.headSha },
+                base: { ref: pr.baseRef || 'main', repo: { fullName: repository.fullName } },
+            },
+            codeReviewConfig,
+            // ValidateNewCommitsStage on a first review: every commit of the PR.
+            prAllCommits: pr.commits || [],
+            prCommits: pr.commits || [],
+            previousDecisions,
+            pipelineMetadata: {},
+        };
+        context = await changedFilesThroughStage(context, codeManagement);
+        return { context, repo, codeManagement, cleanup: repo.cleanup };
+    } catch (error) {
+        await repo.cleanup();
+        throw error;
+    }
+}
+
+/**
+ * Reviews one PR as production does (prepareReview, then the checkout and
+ * AgentReviewStage). Returns what the stage hands to posting, what it
+ * discarded, the agent loops it ran, and the context.
+ *
+ * agentLoop: (params, secrets) => output, run in place of each agent loop.
+ * observeSteps: record what each post-agent step received (observeTheReview).
+ */
+async function reviewPullRequest({ pr, team = {}, route, permissionService, previousDecisions, previousDecisionsUseCase, agentLoop, observeSteps }) {
+    observeTheLoop();
+    if (observeSteps) observeTheReview();
+    const { context, repo, codeManagement } = await prepareReview({ pr, team, route, permissionService, previousDecisions });
     if (!context.changedFiles?.length) {
         await repo.cleanup();
         return { shipped: [], discarded: [], loops: [], context, skipped: context.statusInfo?.message || 'no files to review' };
@@ -328,14 +414,14 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
 
     const sandbox = await checkout(repo);
     try {
-        context = { ...context, sandboxHandle: sandbox };
         const stage = buildAgentReviewStage({ permissionService, codeManagement, previousDecisionsUseCase });
-        const loops = [];
-        const out = await observedLoops.run(loops, () => stage.execute(context));
+        const store = { loops: [], agentLoop, steps: observeSteps ? {} : undefined };
+        const out = await observedLoops.run(store, () => stage.execute({ ...context, sandboxHandle: sandbox }));
         return {
             shipped: [...(out.validSuggestions || []), ...(out.validSuggestionsByPR || [])],
             discarded: out.discardedSuggestions || [],
-            loops,
+            loops: store.loops,
+            steps: store.steps,
             context: out,
             errors: out.errors || [],
         };
@@ -344,4 +430,4 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
     }
 }
 
-module.exports = { reviewPullRequest, buildAgentReviewStage, observeTheLoop, observedLoops, teamStore, platform, checkout };
+module.exports = { reviewPullRequest, prepareReview, buildAgentReviewStage, observeTheLoop, observeTheReview, observedLoops, loopKey, teamStore, platform, checkout };

@@ -25,18 +25,18 @@ function defaultApiKeyEnv(provider) {
 // Production hands the finder no model. execute() routes the codeReview task to
 // a slot (resolveReviewAgentModel → permissionValidationService.resolveTaskSlot,
 // model-factory.ts:61-110), and LLM.run builds the model from that slot, or from
-// the env/managed default when there is none (ai-sdk-agent-runner.ts:245-246).
-// The loop ignores an AgentLoopInput `model` (review-agent.contract.ts:360-362),
-// so the model this eval used to build never ran: RECALL_REASONING_EFFORT never
-// reached the finder, and an `@sub` model ran the managed default.
+// the managed default when there is none (ai-sdk-agent-runner.ts:245-246).
 //
-// So the eval routes the way an org does:
-//   - by default no stored config: the env/managed route trial orgs take, with
-//     applyModelEnv pointing it at the eval's model;
-//   - with RECALL_REASONING_EFFORT, or a promptfoo config that names its own
-//     provider: a stored BYOK config (version 2) holding that model, read by
-//     production's getBYOKConfig (permissionValidation.service.ts:1170-1186) and
-//     routed by resolveTaskSlot, like a customer's BYOK model and its effort.
+// So the eval routes the way a cloud org does (tier0-models.js applyPlatformEnv
+// sets the platform's own keys, and no self-hosted env model):
+//   - the managed default (KODUS_TRIAL_MODEL, the trial's DeepSeek on
+//     Fireworks) with no stored config, the route of an org without BYOK;
+//   - any other model, or a run that asks for a reasoning effort: a stored BYOK
+//     config (version 2) holding that model, read by production's getBYOKConfig
+//     (permissionValidation.service.ts:1170-1186) and routed by resolveTaskSlot,
+//     like a customer's BYOK model and its effort.
+// The model's key is in the stored config, never in API_OPEN_AI_API_KEY: that
+// variable is the platform's OpenAI key, which the dedup's embedder reads.
 // The org's stored config is the one thing the eval supplies (the
 // organization-parameters read); the routing and the model are production's.
 
@@ -109,7 +109,7 @@ function resolveRoute(config) {
     const effort = process.env.RECALL_REASONING_EFFORT || null;
     if (config.provider === 'tier0') {
         const modelId = process.env.RECALL_MODEL || config.model;
-        const { applyModelEnv, TIER0 } = require('./tier0-models');
+        const { applyPlatformEnv, TIER0 } = require('./tier0-models');
         const spec = TIER0[modelId];
         if (spec && spec.provider === 'codex_subscription') {
             throw new NotAProductionRoute(
@@ -117,16 +117,15 @@ function resolveRoute(config) {
                     '(libs/llm/codex-subscription-model.ts is used only by evals): the finder would run another model',
             );
         }
-        // The env the managed route reads, and what the run's other callers
-        // (the judge excepted) fall back to.
-        applyModelEnv(modelId);
-        if (!effort) return { storedConfig: null, route: 'managed', modelId, reasoningEffort: null };
-        const key = (spec?.keyEnvs || []).map((name) => process.env[name]).find(Boolean);
-        if (!key) {
-            throw new Error(
-                `RECALL_REASONING_EFFORT routes ${modelId} through a BYOK config, which needs its key (${(spec?.keyEnvs || []).join(', ') || 'none known'})`,
-            );
+        applyPlatformEnv();
+        if (!spec) throw new Error(`unknown tier-0 model '${modelId}'`);
+        const { KODUS_TRIAL_MODEL } = require('../../libs/llm/byok-defaults.ts');
+        if (spec.doModel === KODUS_TRIAL_MODEL && !effort) {
+            if (!process.env.API_FIREWORKS_API_KEY) throw new Error(`no API key for ${modelId} — set one of ${spec.keyEnvs.join('/')}`);
+            return { storedConfig: null, route: 'managed', modelId, reasoningEffort: null };
         }
+        const key = spec.keyEnvs.map((name) => process.env[name]).find(Boolean);
+        if (!key) throw new Error(`no API key for ${modelId} — set one of ${spec.keyEnvs.join('/') || 'none known'}`);
         return {
             storedConfig: storedByokConfig({
                 provider: spec.provider,
