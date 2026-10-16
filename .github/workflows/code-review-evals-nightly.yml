@@ -350,6 +350,8 @@ jobs:
                   cache: "pnpm"
             - name: Install deps
               run: pnpm install --frozen-lockfile
+            - name: Install ripgrep (the local sandbox's grep, for cases that bring their repository)
+              run: command -v rg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep)
             - name: Create environment.ts (gitignored EE config)
               run: |
                   cat <<'EOF' > libs/ee/configs/environment/environment.ts
