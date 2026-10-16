@@ -6,7 +6,7 @@
 //   node evals/kody-rules/context-fp-repro.js [--cases=cases-1826] [--model=gpt-5.4-mini]
 //   node evals/kody-rules/context-fp-repro.js --reps=3 --out=AFTER-1826.txt
 //
-// Like detector-fp-repro.js it drives the SHIPPED engine — `judgeKodyRulesSharded`
+// It drives the SHIPPED engine — `judgeKodyRulesSharded`
 // with the production `runJudge` closure — so the same command run before and
 // after a change measures the change rather than a model of it. In particular
 // the model call goes through `LLM.run`, which is the path that emits the
@@ -22,8 +22,8 @@
 // means something alongside the positive control, which is a separate command
 // and is NOT re-run here:
 //
-//   node evals/kody-rules/detector-fp-repro.js \
-//     --rules=detectors-positive-control --corpus=github-cases --judge
+//   node evals/kody-rules/real-agent.js --dataset=github-cases  (the rules carry examples, so
+//   production's compile gives them a detector and the review reaches the detector route)
 const fs = require('fs');
 const path = require('path');
 const esbuild = require('esbuild');

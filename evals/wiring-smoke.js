@@ -121,6 +121,8 @@ async function main() {
         { name: 'severity', args: ['evals/severity/run.js', '--mock=heuristic', '--gate'] },
         // The scripted model answers nothing usable: this measures the local fallback.
         { name: 'format', model: true, args: ['evals/format/run.js', '--model=eval-fake', '--gate'] },
+        // The stage, its MCP adapter over HTTP and production's Kodus MCP server.
+        { name: 'business-logic', model: true, args: ['evals/business-logic/run.js', '--model=eval-fake', '--gate'] },
         // The cases bring their repository: the scripted model reads it through the local sandbox.
         { name: 'memories', model: true, args: ['evals/memories/run.js', '--model=eval-fake', '--gate'] },
         // The steps after the agents (evals/funnel), each through its production
@@ -142,7 +144,11 @@ async function main() {
                 return findings >= 1 ? null : `expected the scripted finding to reach scoring, got findings=${findings}`;
             },
         },
-        { name: 'kody-rules', model: true, args: ['evals/kody-rules/real-agent.js', '--dataset=github-cases', '--model=eval-fake', '--runs=1', '--limit=1'] },
+        // Production's review of one merged PR (a real clone of its head; the
+        // smallest repository). The scripted model's compile answer scopes the
+        // rule to no file, so this proves the compile, sandbox, fetch and stage
+        // path; the judge is reached on real models (nightly, Friday).
+        { name: 'kody-rules', model: true, args: ['evals/kody-rules/real-agent.js', '--dataset=github-cases', '--model=eval-fake', '--runs=1', '--cases=typeorm/typeorm#12421::no-any-type'] },
         { name: 'pr-summary', model: true, args: ['evals/pr-summary/run.js', '--model=eval-fake', '--gate'] },
         { name: 'reply-addressing', model: true, args: ['evals/reply-addressing/run.js', '--model=eval-fake', '--limit=2'] },
         { name: 'conversation', model: true, args: ['evals/conversation/run.js', '--model=eval-fake', '--gate'] },

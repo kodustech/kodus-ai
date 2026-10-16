@@ -100,6 +100,14 @@ const NIGHTLY_EVALS = [
         friday: ['--limit=4'],
     })),
     {
+        id: 'business-logic',
+        stage: 'business-logic',
+        run: ['evals/business-logic/run.js'],
+        files: ['evals/business-logic/targets.json', 'evals/business-logic/cases.json'],
+        // A gap and a pass: the two that reach the analyzer.
+        friday: ['--limit=2'],
+    },
+    {
         id: 'memories',
         stage: 'memories',
         run: ['evals/memories/run.js'],
