@@ -359,6 +359,11 @@ async function main() {
 
     const InvestigationAgentProvider = require('./agent-provider');
     const recallAssertion = require('./recall-assertion');
+    // Tokens and time of every model call (finder loop, verify, recovery),
+    // read like billing: summary.usage (evals/shared/eval-kit.js tokensUsed).
+    // After agent-provider, so its TypeScript hook is the one loaded.
+    const { countTokens, tokensUsed } = require('../shared/eval-kit');
+    countTokens();
     const provider = new InvestigationAgentProvider({
         config: providerConfigFor(args.model),
     });
@@ -573,6 +578,7 @@ async function main() {
         startedAt,
         finishedAt: new Date().toISOString(),
         tokens,
+        usage: tokensUsed(),
         cases: rows.length,
         passed: rows.filter((row) => row.status === 'pass').length,
         failed: qualityFailures,

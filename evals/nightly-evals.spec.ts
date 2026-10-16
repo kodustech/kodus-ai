@@ -80,6 +80,12 @@ describe('evals/shared/nightly-verdict.js', () => {
         expect(pooled.metric.value).toBeCloseTo(6 / 8);
         expect(pooled.cases.map((c: { hits: number; total: number }) => `${c.hits}/${c.total}`)).toEqual(['4/4', '2/4']);
     });
+
+    it('pools what the model calls cost: counts add up, per-call times join', () => {
+        const spent = (calls: number[]) => ({ tokens: { in: 10, out: 2, cacheRead: 4, cacheWrite: 0, calls: calls.length, ms: calls.reduce((a, b) => a + b, 0), callMs: calls } });
+        const pooled = pool(result([2], spent([100, 300])), result([2], spent([200])));
+        expect(pooled.tokens).toEqual({ in: 20, out: 4, cacheRead: 8, cacheWrite: 0, calls: 3, ms: 600, callMs: [100, 300, 200] });
+    });
 });
 
 describe('evals/shared/nightly-plan.js', () => {

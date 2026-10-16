@@ -29,34 +29,56 @@ function registerTs() {
 // LLM.run reports each model call's usage through this port; production
 // registers a billing span there (libs/llm/llm-observability.ts). An eval
 // registers this one and reads the total with tokensUsed(). The kody-rules eval
-// reported 0 tokens until it did.
+// reported 0 tokens until it did. An agent loop is one call: its usage is the
+// sum of its steps (ai@7 `usage`).
 function countTokens() {
     registerTs();
     const { setLlmObservability } = require(path.join(__dirname, '../../libs/llm/llm-observability.ts'));
+    const { readAiSdkUsage, readAiSdkUsageFromError } = require(path.join(__dirname, '../../libs/llm/ai-sdk-usage.ts'));
     setLlmObservability({
         runAiSdkLLMInSpan: async ({ exec }) => {
+            const startedAt = Date.now();
             let result;
             try {
                 result = await exec();
             } catch (error) {
                 failedCalls().push(error);
                 callScope.getStore()?.push(error);
+                // A call the provider answered and the parse then rejected was
+                // still billed, as production records it; one that never got an
+                // answer (timeout, refusal) carries no usage and is not counted.
+                const billed = readAiSdkUsageFromError(error);
+                if (billed) addCall(billed.usage, Date.now() - startedAt);
                 throw error;
             }
-            const u = (result && result.usage) || {};
-            const tok = tokensUsed();
-            tok.in += u.inputTokens ?? 0;
-            tok.out += u.outputTokens ?? 0;
-            tok.cacheRead += u.inputTokenDetails?.cacheReadTokens ?? u.cachedInputTokens ?? 0;
+            addCall(readAiSdkUsage(result && result.usage), Date.now() - startedAt);
             return result;
         },
     });
 }
 
-// The running total, shared with agent-run usage spans an eval may also count.
+// The running total of what the model calls cost, shared with agent-run usage
+// spans an eval may also count. Every field sums or concatenates, so two runs
+// pool (evals/shared/nightly-verdict.js):
+//   in, out, cacheRead, cacheWrite  tokens, read like billing (libs/llm/ai-sdk-usage.ts);
+//                                   `in` includes the cached ones
+//   calls, ms                       the calls the provider answered, and their time
+//   callMs                          each of those calls' time, for percentiles
 function tokensUsed() {
-    global.__EVAL_TOK = global.__EVAL_TOK || { in: 0, out: 0, cacheRead: 0, cacheWrite: 0 };
+    global.__EVAL_TOK = global.__EVAL_TOK || { in: 0, out: 0, cacheRead: 0, cacheWrite: 0, calls: 0, ms: 0, callMs: [] };
     return global.__EVAL_TOK;
+}
+
+// One answered call: its usage (libs/llm/ai-sdk-usage.ts AiSdkUsage) and time.
+function addCall(usage, ms) {
+    const tok = tokensUsed();
+    tok.in += usage?.inputTokens ?? 0;
+    tok.out += usage?.outputTokens ?? 0;
+    tok.cacheRead += usage?.cacheReadTokens ?? 0;
+    tok.cacheWrite += usage?.cacheWriteTokens ?? 0;
+    tok.calls += 1;
+    tok.ms += Math.round(ms);
+    tok.callMs.push(Math.round(ms));
 }
 
 // The errors of the model calls that failed since countTokens(), in order. An
@@ -75,4 +97,4 @@ async function withCallErrors(fn) {
     return { result, errors };
 }
 
-module.exports = { registerTs, countTokens, tokensUsed, failedCalls, withCallErrors };
+module.exports = { registerTs, countTokens, tokensUsed, addCall, failedCalls, withCallErrors };

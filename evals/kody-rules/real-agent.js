@@ -70,7 +70,7 @@ const MODELS = {
 
 const allCases = require('./' + DATASET);
 const { evalQuestion } = require('../shared/eval-result');
-const { countTokens, tokensUsed } = require('../shared/eval-kit');
+const { countTokens, tokensUsed, addCall } = require('../shared/eval-kit');
 // --limit=N caps how many cases run (CI scopes to a small PR set).
 const cases = args.limit ? allCases.slice(0, +args.limit) : allCases;
 
@@ -146,17 +146,10 @@ function buildProvider() {
         runInSpan: async (_n, fn) => (typeof fn === 'function' ? fn() : undefined),
         runLLMInSpan: async ({ exec }) => exec([]),
         startSpan: () => ({ end() {}, update() {} }),
-        // The refactored provider emits a post-hoc usage span; evals don't ship
-        // telemetry. Instead of a no-op, accumulate token usage so the run can
-        // report total cost (for the agentic-vs-sharded cost comparison, #1449).
-        recordAgentRunUsage: async (p) => {
-            const u = (p && p.usage) || {};
-            global.__EVAL_TOK = global.__EVAL_TOK || { in: 0, out: 0, cacheRead: 0, cacheWrite: 0 };
-            global.__EVAL_TOK.in += u.inputTokens ?? 0;
-            global.__EVAL_TOK.out += u.outputTokens ?? 0;
-            global.__EVAL_TOK.cacheRead += u.cacheReadTokens ?? 0;
-            global.__EVAL_TOK.cacheWrite += u.cacheWriteTokens ?? 0;
-        },
+        // A post-hoc usage span, if a provider still emits one: evals don't ship
+        // telemetry, so it is counted with the rest (eval-kit.js tokensUsed) for
+        // the run's cost (the agentic-vs-sharded comparison, #1449).
+        recordAgentRunUsage: async (p) => addCall((p && p.usage) || {}, (p && p.durationMs) || 0),
     };
     // Positional, and the positions moved: the constructor is
     // (permissionValidationService, observabilityService, ...). This call passed

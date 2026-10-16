@@ -19,6 +19,7 @@ const path = require('path');
 const { evalQuestion, signalCases, loadCatalog, catalogProblems, signalCatalog } = require('./shared/eval-result');
 const { STAGES } = require('./stages');
 const { tier0 } = require('./shared/tier0-models');
+const { costUpperBound, catalogIdFor } = require('./investigation/nightly-compare');
 
 const NAME_PREFIX = 'evals.stage.';
 
@@ -167,6 +168,36 @@ function finderCases(rows = []) {
     });
 }
 
+// What the stage's model calls cost, for the panel: totals, per-call time
+// percentiles, and per case (one review of one case: cases × runs). The raw
+// per-call times stay in the result file, out of BigQuery. $ is the Kodus
+// catalog price with every input token at the full rate (cached ones too), so
+// it is an upper bound, and only for models the catalog sells; null otherwise.
+const percentile = (sorted, p) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.ceil(p * sorted.length) - 1)] : null);
+function usageMeta(tokens, reviews, model) {
+    if (!tokens || typeof tokens !== 'object') return null;
+    const n = (k) => (Number.isFinite(tokens[k]) ? tokens[k] : 0);
+    const callMs = Array.isArray(tokens.callMs) ? [...tokens.callMs].sort((x, y) => x - y) : [];
+    const per = (v) => (reviews > 0 ? v / reviews : null);
+    const usd = costUpperBound({ prompt: n('in'), completion: n('out') }, catalogIdFor(model));
+    return {
+        calls: n('calls'),
+        in: n('in'),
+        out: n('out'),
+        cacheRead: n('cacheRead'),
+        cacheWrite: n('cacheWrite'),
+        ms: n('ms'),
+        p50Ms: percentile(callMs, 0.5),
+        p95Ms: percentile(callMs, 0.95),
+        reviews: reviews || null,
+        perCase: reviews > 0 ? { calls: per(n('calls')), in: per(n('in')), out: per(n('out')), cacheRead: per(n('cacheRead')), cacheWrite: per(n('cacheWrite')), ms: per(n('ms')) } : null,
+        usdPerCaseMax: typeof usd === 'number' && reviews > 0 ? usd / reviews : null,
+    };
+}
+
+// The token totals as the row carried them before usage: without the per-call times.
+const tokensMeta = (tokens) => (tokens ? Object.fromEntries(Object.entries(tokens).filter(([k]) => k !== 'callMs')) : null);
+
 // How each nightly-measured stage reads its result: the number, its floor, the
 // level it usually sits at, what each case checked, and what else the panel shows.
 const READERS = {
@@ -182,6 +213,8 @@ const READERS = {
                 model: r.model || null,
                 cases: r.cases ?? null,
                 unmeasured: r.unmeasured ?? null,
+                // A confirmed night pools two runs of every case (confirm-gate.js).
+                usage: usageMeta(r.usage, (r.cases || 0) * (r.gate?.confirmation ? 2 : 1), r.model),
                 case_results: signalCases(finderCases(r.rows)),
             },
         };
@@ -196,7 +229,8 @@ const READERS = {
             model: r.model || null,
             cases: Array.isArray(r.cases) ? r.cases.length : null,
             runs: r.runs ?? null,
-            tokens: r.tokens || null,
+            tokens: tokensMeta(r.tokens),
+            usage: usageMeta(r.tokens, (Array.isArray(r.cases) ? r.cases.length : 0) * (r.runs || 1), r.model),
             case_results: signalCases(r.cases),
         },
     }),
@@ -213,7 +247,8 @@ const READERS = {
             cases: Array.isArray(r.cases) ? r.cases.length : null,
             sites: r.counts?.sites ?? null,
             runs: r.runs ?? null,
-            tokens: r.tokens || null,
+            tokens: tokensMeta(r.tokens),
+            usage: usageMeta(r.tokens, (Array.isArray(r.cases) ? r.cases.length : 0) * (r.runs || 1), r.model),
             case_results: signalCases(r.cases),
         },
     }),
@@ -273,4 +308,4 @@ function main() {
 
 if (require.main === module) process.exit(main());
 
-module.exports = { wiringRows, nightlyRows, READERS, NAME_PREFIX, catalogPath };
+module.exports = { wiringRows, nightlyRows, READERS, NAME_PREFIX, catalogPath, usageMeta };
