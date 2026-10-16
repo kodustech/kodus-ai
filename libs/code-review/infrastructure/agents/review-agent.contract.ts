@@ -431,10 +431,14 @@ export interface AgentLoopInput {
      *  `systemPrompt`/`userPrompt` above (see `formatPreviousDecisions` in
      *  prompt-builder.ts), so this field exists ONLY for the verifier hop. */
     previousDecisions?: PrDecisionRecord[];
-    /** The coding-agent instructions already in `systemPrompt`; like
-     *  `previousDecisions`, carried here only for the verifier, which judges
-     *  `repo_instruction` findings against them. */
+    /** The coding-agent instructions collected for this review. The verifier
+     *  judges `repo_instruction` findings against their text; when
+     *  `listsRepoInstructions` is set, the finder reads them through
+     *  readRepoInstruction. */
     repoInstructions?: RepoInstructionsContext;
+    /** True when `systemPrompt` lists `repoInstructions` (the agent may
+     *  report `repo_instruction`); registers readRepoInstruction. */
+    listsRepoInstructions?: boolean;
     /** Reasoning effort level from BYOK config. Mapped to provider-specific
      *  providerOptions (anthropic.thinking, google.thinkingConfig, etc). */
     reasoningEffort?: ReasoningEffort;

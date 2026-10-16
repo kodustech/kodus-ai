@@ -1316,6 +1316,126 @@ describe('contract matrix — E. N-model policy (strict json_schema vs fallback)
         ]);
     });
 
+    describe('readRepoInstruction', () => {
+        const repoInstructions = {
+            files: [
+                {
+                    path: 'CLAUDE.md',
+                    content: 'Amounts are integer cents.',
+                    appliesTo: '**',
+                    truncated: false,
+                },
+            ],
+            otherFiles: [],
+            dropped: [],
+            truncated: false,
+            indexedCount: 1,
+        };
+
+        /** Finder calls readRepoInstruction once when offered, then submits;
+         *  records the tool names offered and the prompts it saw. */
+        function readingModel() {
+            const seen = { tools: [] as string[][], prompts: [] as string[] };
+            const doGenerate = (async (opts: any) => {
+                const sys = JSON.stringify(opts?.prompt ?? '');
+                const offered = (opts?.tools ?? []).map((t: any) => t.name);
+                const isVerifier = offered.includes('submitVerdict');
+                if (!isVerifier) {
+                    seen.tools.push(offered);
+                    seen.prompts.push(sys);
+                }
+                const tc = isVerifier
+                    ? {
+                          id: 'v',
+                          name: 'submitVerdict',
+                          input: { keep: true, rationale: 'ok' },
+                      }
+                    : offered.includes('readRepoInstruction') &&
+                        !sys.includes('tool-result')
+                      ? {
+                            id: 'r',
+                            name: 'readRepoInstruction',
+                            input: { path: 'CLAUDE.md' },
+                        }
+                      : { id: 'f', name: 'submitResult', input: findings };
+                return {
+                    content: [
+                        {
+                            type: 'tool-call',
+                            toolCallId: tc.id,
+                            toolName: tc.name,
+                            input: JSON.stringify(tc.input),
+                        },
+                    ],
+                    // Structured, or the SDK reads the reason as unknown and
+                    // leaves the tool call unexecuted.
+                    finishReason: { unified: 'tool-calls', raw: 'tool_calls' },
+                    usage: { inputTokens: 5, outputTokens: 5 },
+                    warnings: [],
+                };
+            }) as any;
+            return { model: new MockLanguageModelV3({ doGenerate }), seen };
+        }
+
+        it('is offered when the prompt lists the instructions, and answers with the file text', async () => {
+            const { model, seen } = readingModel();
+            await runAgentLoopViaCore(
+                makeInput(model, {
+                    repoInstructions,
+                    listsRepoInstructions: true,
+                }),
+                secrets,
+            );
+            expect(seen.tools[0]).toContain('readRepoInstruction');
+            expect(
+                seen.prompts.some((p) =>
+                    p.includes('Amounts are integer cents.'),
+                ),
+            ).toBe(true);
+        });
+
+        it('is offered without a sandbox', async () => {
+            const { model, seen } = readingModel();
+            await runAgentLoopViaCore(
+                makeInput(model, {
+                    repoInstructions,
+                    listsRepoInstructions: true,
+                }),
+                { ...secrets, remoteCommands: undefined },
+            );
+            expect(seen.tools[0]).toContain('readRepoInstruction');
+        });
+
+        it('is not offered to an agent whose prompt does not list them', async () => {
+            const { model, seen } = readingModel();
+            await runAgentLoopViaCore(
+                makeInput(model, { repoInstructions }),
+                secrets,
+            );
+            expect(seen.tools.flat()).not.toContain('readRepoInstruction');
+        });
+
+        // Without a sandbox the heavy passes are skipped; the instructions
+        // tool must not turn them back on.
+        it('keeps a review without a sandbox off the heavy passes', async () => {
+            const plain = makeModel();
+            await runAgentLoopViaCore(
+                makeInput(plain.model, { reviewMode: 'normal' }),
+                { ...secrets, remoteCommands: undefined },
+            );
+            const listed = makeModel();
+            await runAgentLoopViaCore(
+                makeInput(listed.model, {
+                    reviewMode: 'normal',
+                    repoInstructions,
+                    listsRepoInstructions: true,
+                }),
+                { ...secrets, remoteCommands: undefined },
+            );
+            expect(listed.calls.count).toBe(plain.calls.count);
+        });
+    });
+
     // The evidence gate's forceFull re-verify (finder.agent.ts's second,
     // unevidenced-only LlmVerifier instance) is a one-line duplicate of the
     // first pass's `previousDecisions` forwarding, but was never itself

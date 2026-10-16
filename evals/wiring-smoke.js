@@ -134,9 +134,14 @@ async function main() {
             name: 'repo-instructions',
             model: true,
             args: ['evals/repo-instructions/run.js', '--model=eval-fake', '--limit=1', `--output=${path.join(scratch, 'repo-instructions.json')}`],
-            // The scripted finding is labeled repo_instruction once the block is
-            // in the prompt; the verifier must then get the instruction files.
-            check: (verdictPrompts) => {
+            // The finder only gets the index; it must read the CLAUDE.md through
+            // readRepoInstruction. The scripted finding is labeled
+            // repo_instruction once the index is in the prompt; the verifier
+            // must then get the instruction files.
+            check: (verdictPrompts, finderToolResults) => {
+                if (!finderToolResults.some((t) => t.includes(REPO_INSTRUCTIONS_DECOY))) {
+                    return 'expected the finder to read the CLAUDE.md through readRepoInstruction, no tool result carried it';
+                }
                 if (!verdictPrompts.some((p) => p.includes('labeled repo_instruction') && p.includes(REPO_INSTRUCTIONS_DECOY))) {
                     return `expected a verifier prompt carrying the CLAUDE.md, got ${verdictPrompts.length} verifier prompt(s) without it`;
                 }
@@ -155,6 +160,7 @@ async function main() {
     for (const step of steps) {
         const before = server.stats.requests;
         const verdictsBefore = server.stats.verdictPrompts.length;
+        const toolResultsBefore = server.stats.finderToolResults.length;
         // eslint-disable-next-line no-await-in-loop
         const { code, timedOut, output, ms } = await run(process.execPath, step.args, { ...env, TRACE_LOADED_LABEL: step.name });
         const calls = server.stats.requests - before;
@@ -162,7 +168,7 @@ async function main() {
         if (timedOut) problem = `did not exit within ${STEP_TIMEOUT_MS / 60000} min`;
         else if (code !== 0) problem = `exit ${code}`;
         else if (step.model && calls === 0) problem = 'never reached the model';
-        else if (step.check) problem = step.check(server.stats.verdictPrompts.slice(verdictsBefore));
+        else if (step.check) problem = step.check(server.stats.verdictPrompts.slice(verdictsBefore), server.stats.finderToolResults.slice(toolResultsBefore));
         results.push({ step, problem, calls, ms, output });
         console.log(`${problem ? '❌' : '✅'} ${step.name.padEnd(17)} ${String(Math.round(ms / 1000)).padStart(3)}s${step.model ? `  model calls=${calls}` : ''}${problem ? `  — ${problem}` : ''}`);
     }

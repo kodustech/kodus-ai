@@ -23,6 +23,7 @@ import {
 import {
     buildSystemPrompt as buildSystemPromptFor,
     buildUserPrompt as buildUserPromptFor,
+    listsRepoInstructions,
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
@@ -593,6 +594,13 @@ export abstract class BaseCodeReviewAgentProvider {
                     // Same reason: the verifier judges repo_instruction
                     // findings against these.
                     repoInstructions: input.repoInstructions,
+                    // The finder reads the listed files through
+                    // readRepoInstruction; only an agent whose prompt lists
+                    // them gets it.
+                    listsRepoInstructions: listsRepoInstructions(
+                        input.repoInstructions,
+                        this.getAllowedSuggestionLabels(input),
+                    ),
                     // HEAVY opt-in (`--heavy`) — forwarded explicitly, same reason
                     // as skipHeavyPasses above: loopParams is built field-by-field,
                     // so without this line the resample passes never run.

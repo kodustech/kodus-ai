@@ -93,6 +93,22 @@ describe('fake llm — coding-agent instructions', () => {
         expect(call('Report a change that breaks one of them with label "repo_instruction"').label).toBe('repo_instruction');
         expect(call('review').label).toBe('bug');
     });
+
+    const readInstruction = {
+        type: 'function',
+        function: {
+            name: 'readRepoInstruction',
+            parameters: { type: 'object', properties: { path: { type: 'string', enum: ['CLAUDE.md'] } }, required: ['path'] },
+        },
+    };
+
+    it('reads a listed instruction file first when readRepoInstruction is offered', () => {
+        const user = { role: 'user', content: 'review' };
+        const decision = decide({ tools: [readFile, readInstruction, submitResult], messages: [user] });
+        expect(decision.tool.function.name).toBe('readRepoInstruction');
+        const args = JSON.parse(completionFor({ messages: [user] }, decision, 1).choices[0].message.tool_calls[0].function.arguments);
+        expect(args).toEqual({ path: 'CLAUDE.md' });
+    });
 });
 
 describe('fake llm — over HTTP', () => {
@@ -119,6 +135,22 @@ describe('fake llm — over HTTP', () => {
         expect(JSON.parse(body.choices[0].message.tool_calls[0].function.arguments)).toEqual({ path: 'fake', startLine: 1 });
         expect(body.usage.total_tokens).toBeGreaterThan(0);
         expect(server.stats.toolCalls).toBe(1);
+    });
+
+    it('keeps the tool results a finder request carries', async () => {
+        await fetch(`${server.url}/chat/completions`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+                model: 'eval-fake',
+                tools: [readFile],
+                messages: [
+                    { role: 'user', content: 'x' },
+                    { role: 'tool', tool_call_id: 'c1', content: 'Amounts are integer cents.' },
+                ],
+            }),
+        });
+        expect(server.stats.finderToolResults).toContain('Amounts are integer cents.');
     });
 
     it('streams the same answer as SSE when asked to', async () => {

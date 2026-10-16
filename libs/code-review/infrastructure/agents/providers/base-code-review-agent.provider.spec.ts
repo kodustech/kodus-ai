@@ -924,6 +924,72 @@ describe('request assembly + byokConfig threading', () => {
         expect(loopParams.previousDecisions).toBe(previousDecisions);
     });
 
+    describe('listsRepoInstructions', () => {
+        const repoInstructions = {
+            files: [
+                {
+                    path: 'CLAUDE.md',
+                    content: 'Amounts are integer cents.',
+                    appliesTo: '**',
+                    truncated: false,
+                },
+            ],
+            otherFiles: [],
+            dropped: [],
+            truncated: false,
+            indexedCount: 1,
+        };
+
+        class InstructionsAgent extends BaseCodeReviewAgentProvider {
+            protected getIdentity() {
+                return {
+                    name: 'kodus-generalist',
+                    description: 'g',
+                    goal: 'g',
+                    expertise: ['x'],
+                };
+            }
+            protected getCategoryPrompt(): string {
+                return 'Review.';
+            }
+            protected getCategoryLabel(): string {
+                return 'generalist';
+            }
+            protected supportsMixedLabels(): boolean {
+                return true;
+            }
+            protected getAllowedSuggestionLabels() {
+                return ['bug', 'repo_instruction'] as Array<
+                    'bug' | 'repo_instruction'
+                >;
+            }
+        }
+
+        it('is set when the agent may report repo_instruction, so its prompt lists the files', async () => {
+            await new InstructionsAgent({} as any, {} as any).execute(
+                makeInput({ repoInstructions }),
+            );
+            const [loopParams] = runLoopMock.mock.calls[0];
+            expect(loopParams.listsRepoInstructions).toBe(true);
+            expect(loopParams.repoInstructions).toBe(repoInstructions);
+        });
+
+        it('is not set for an agent that may not report repo_instruction', async () => {
+            await newAgent().execute(makeInput({ repoInstructions }));
+            const [loopParams] = runLoopMock.mock.calls[0];
+            expect(loopParams.listsRepoInstructions).toBe(false);
+            expect(loopParams.repoInstructions).toBe(repoInstructions);
+        });
+
+        it('is not set when no instructions were collected', async () => {
+            await new InstructionsAgent({} as any, {} as any).execute(
+                makeInput(),
+            );
+            const [loopParams] = runLoopMock.mock.calls[0];
+            expect(loopParams.listsRepoInstructions).toBe(false);
+        });
+    });
+
     it('omits previousDecisions from loopParams when the input has none (backward compatible)', async () => {
         await newAgent().execute(makeInput());
         const [loopParams] = runLoopMock.mock.calls[0];

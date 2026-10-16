@@ -490,6 +490,15 @@ describe('repository instructions block', () => {
         expect(sys).toContain('appliesTo="services/billing/**"');
         expect(sys).toContain('docs/AGENTS.md');
         expect(sys).toContain('repo_instruction');
+        expect(sys).toContain('readRepoInstruction');
+    });
+
+    it('says readRepoInstruction works without the other tools', () => {
+        const sys = buildSystemPrompt(
+            baseInput({ remoteCommands: undefined, repoInstructions }),
+            generalistMeta,
+        );
+        expect(sys).toMatch(/readRepoInstruction[^.]*even[^.]*no other tools/);
     });
 
     it('leaves the file content out of the finder prompt', () => {

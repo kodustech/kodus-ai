@@ -484,6 +484,13 @@ function buildCurrentPrompts(caseData) {
         ),
     );
 
+    const { listsRepoInstructions } = require(
+        path.join(
+            __dirname,
+            '../../libs/code-review/infrastructure/agents/prompts/prompt-builder.ts',
+        ),
+    );
+
     const provider = new GeneralistAgentProvider({}, {}, {});
     const input = {
         organizationAndTeamData: {
@@ -516,6 +523,12 @@ function buildCurrentPrompts(caseData) {
         input,
         systemPrompt: provider.buildSystemPrompt(input),
         userPrompt: provider.buildUserPrompt(input),
+        // Same decision the provider makes for the review: the finder reads
+        // the listed instruction files through readRepoInstruction.
+        listsRepoInstructions: listsRepoInstructions(
+            input.repoInstructions,
+            provider.getAllowedSuggestionLabels(input),
+        ),
     };
 }
 
@@ -673,7 +686,7 @@ class InvestigationAgentProvider {
             stage = 'create-model';
             const model = await createModel(this.config);
             stage = 'build-prompts';
-            const { input, systemPrompt, userPrompt } =
+            const { input, systemPrompt, userPrompt, listsRepoInstructions } =
                 buildCurrentPrompts(caseData);
             stage = 'build-replay-commands';
             // RECALL_REAL_REPO=1: answer the tools from a git worktree at the
@@ -712,8 +725,9 @@ class InvestigationAgentProvider {
                     reviewMode: input.reviewMode,
                     maxSteps: input.maxSteps,
                     // The verifier judges repo_instruction findings against
-                    // these; the finder already has them in systemPrompt.
+                    // these; the finder reads them through readRepoInstruction.
                     repoInstructions: input.repoInstructions,
+                    listsRepoInstructions,
                     // heavy força as passadas de resample (mais recall via
                     // reamostragem). É EIXO DE REGIME: comparar heavy com normal
                     // é o mesmo erro que comparar assinatura com API.

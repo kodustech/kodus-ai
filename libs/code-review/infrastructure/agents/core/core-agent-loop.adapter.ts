@@ -29,6 +29,8 @@ import { OverflowRecoveringRunner } from './overflow-recovering-runner';
 import { estimateOverheadTokens } from '@libs/agent-harness/infrastructure/compression/token-estimator';
 import { DiffCoverageLedger } from '@libs/code-review/infrastructure/agents/adapters/diff-coverage-ledger.adapter';
 import { buildFinderToolRegistry } from '@libs/code-review/infrastructure/agents/adapters/finder-tools.adapter';
+import { buildRepoInstructionTool } from '@libs/code-review/infrastructure/agents/adapters/repo-instruction-tool';
+import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 import {
     buildFinderAgentSpec,
     runFinderWithVerify,
@@ -72,16 +74,27 @@ export async function runAgentLoopViaCore(
         reporter: secrets.byokErrorReporter,
     });
 
-    const { registry: tools, cache: toolCache } = buildFinderToolRegistry({
-        remoteCommands: secrets.remoteCommands,
-        gitHubToken: secrets.gitHubToken,
-        repositoryFullName: input.repositoryFullName,
-        documentationSearchService: secrets.documentationSearchService,
-        documentationSearchOptions: secrets.documentationSearchOptions,
-        callGraph: input.callGraph,
-        outlineFirst: input.outlineFirst,
-        linkedRepoAccess: secrets.linkedRepoAccess,
-    });
+    const { registry: sandboxTools, cache: toolCache } =
+        buildFinderToolRegistry({
+            remoteCommands: secrets.remoteCommands,
+            gitHubToken: secrets.gitHubToken,
+            repositoryFullName: input.repositoryFullName,
+            documentationSearchService: secrets.documentationSearchService,
+            documentationSearchOptions: secrets.documentationSearchOptions,
+            callGraph: input.callGraph,
+            outlineFirst: input.outlineFirst,
+            linkedRepoAccess: secrets.linkedRepoAccess,
+        });
+    // Without a sandbox there are no repository tools; that decides the
+    // self-contained regime below, before the instructions tool is added.
+    const isSelfContained = sandboxTools.list().length === 0;
+    const tools =
+        input.listsRepoInstructions && input.repoInstructions?.files?.length
+            ? new InMemoryToolRegistry([
+                  ...sandboxTools.list(),
+                  buildRepoInstructionTool(input.repoInstructions),
+              ])
+            : sandboxTools;
 
     const coverageLedger = new DiffCoverageLedger({
         changedFiles: input.changedFiles,
@@ -109,7 +122,6 @@ export async function runAgentLoopViaCore(
     // --heavy`) forces the recall passes to run regardless — the whole point of
     // heavy is more recall via resampling, so it must not be silently nullified
     // by the default fast/self-contained gating.
-    const isSelfContained = tools.list().length === 0;
     const skipHeavyPasses =
         !input.heavy &&
         (input.reviewMode === 'fast' ||

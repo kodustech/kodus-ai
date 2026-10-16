@@ -19,14 +19,16 @@
 //                                  requested json_schema, or "{}" as text
 //
 // When the prompt carries the coding-agent instructions block, the finding is
-// labeled repo_instruction, so the instructions reach the verifier. Every
-// verdict request's prompt is kept in `stats.verdictPrompts` for checks.
+// labeled repo_instruction, so the instructions reach the verifier; when
+// readRepoInstruction is offered it is the exploration call. Every verdict
+// request's prompt is kept in `stats.verdictPrompts`, and every tool result a
+// finder request carries in `stats.finderToolResults`, for checks.
 //
 // It does not try to review anything. It proves the harness can drive the real
 // engine end-to-end; quality is the nightly's job.
 const http = require('http');
 
-const EXPLORATION_PREFERENCE = [/read/i, /grep|search/i, /list|find/i];
+const EXPLORATION_PREFERENCE = [/^readRepoInstruction$/, /read/i, /grep|search/i, /list|find/i];
 const DONE_TOOL = /^(submit|done|final|finish|report)/i;
 const VERDICT_TOOL = 'submitVerdict';
 const INSTRUCTIONS_BLOCK = /label "repo_instruction"/;
@@ -130,6 +132,12 @@ function promptText(body) {
         .join('\n');
 }
 
+function toolResultTexts(body) {
+    return (Array.isArray(body.messages) ? body.messages : [])
+        .filter((m) => m.role === 'tool')
+        .map((m) => (Array.isArray(m.content) ? m.content.map((p) => p?.text ?? '').join('\n') : String(m.content ?? '')));
+}
+
 function completionFor(body, decision, seq) {
     const usage = { prompt_tokens: 100, completion_tokens: 10, total_tokens: 110 };
     const message = { role: 'assistant', content: decision.text ?? null };
@@ -175,7 +183,7 @@ function writeStream(res, completion) {
 }
 
 function startFakeLlmServer({ port = 0, host = '127.0.0.1' } = {}) {
-    const stats = { requests: 0, toolCalls: 0, finals: 0, byPath: {}, verdictPrompts: [] };
+    const stats = { requests: 0, toolCalls: 0, finals: 0, byPath: {}, verdictPrompts: [], finderToolResults: [] };
     let seq = 0;
     const server = http.createServer((req, res) => {
         let raw = '';
@@ -200,6 +208,7 @@ function startFakeLlmServer({ port = 0, host = '127.0.0.1' } = {}) {
             stats.requests += 1;
             seq += 1;
             if ((body.tools || []).some((t) => t?.function?.name === VERDICT_TOOL)) stats.verdictPrompts.push(promptText(body));
+            else stats.finderToolResults.push(...toolResultTexts(body).filter((t) => !stats.finderToolResults.includes(t)));
             const decision = decide(body);
             if (decision.tool) stats.toolCalls += 1;
             else stats.finals += 1;

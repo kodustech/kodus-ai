@@ -4,12 +4,14 @@
  *
  * These files tell coding agents how the team works. They are not review
  * policy, so they never become Kody Rules. When a repository opts in
- * (`repoInstructionsEnabled`), the generalist reads the ones that govern the
- * changed files and may report a `repo_instruction` finding that quotes the
- * instruction a change breaks.
+ * (`repoInstructionsEnabled`), the generalist gets an index of the ones that
+ * govern the changed files, reads them through readRepoInstruction, and may
+ * report a `repo_instruction` finding that quotes the instruction a change
+ * breaks.
  *
- * Selection is deterministic and done before the agent loop, so a review
- * without a sandbox gets the same context and the evals can replay it.
+ * Selection and fetching are done before the agent loop, from the target
+ * branch, so the tool works without a sandbox, never reads the PR's own edits,
+ * and the evals can replay it.
  */
 import * as yaml from 'js-yaml';
 
