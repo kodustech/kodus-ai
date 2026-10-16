@@ -2,12 +2,15 @@
  * REPLY-ADDRESSING eval: is an unmentioned reply in a Kody thread directed at
  * Kody? (#1946)
  *
- * Drives the production classifier (`classifyReplyAddressedToKody`, the one
- * `LLM.run` call ChatWithKodyFromGitUseCase makes) on `cases.json`: the 64
- * boundary conversations from the TypeSafe experiment plus threads where two
- * people talk and one of them addresses Kody. The model is routed like the
- * self-hosted managed slot (`applyModelEnv`), the same path an org without
- * BYOK takes.
+ * Runs what ChatWithKodyFromGitUseCase runs on an unmentioned reply
+ * (reply-thread.ts): the reply's thread rebuilt from the PR's comments as
+ * GitHub returns them, the free gate (`implicitReplyGate`), then the classifier
+ * on the model the org routes the conversation task to (production's
+ * PermissionValidationService over an org with no stored config: the
+ * env/managed route, `applyModelEnv`). Cases: `cases.json`, the 64 boundary
+ * conversations from the TypeSafe experiment plus threads where two people talk
+ * and one of them addresses Kody. A reply the gate silences counts as not
+ * answered, as in production.
  *
  *   node evals/reply-addressing/run.js --model=gpt-5.4-mini [--repeats=3]
  *                                      [--dataset=cases|repo-cases]
@@ -85,9 +88,13 @@ try {
     infra(`cannot route model '${MODEL}': ${e.message}`);
 }
 
-const {
-    classifyReplyAddressedToKody,
-} = require('../../libs/platform/application/use-cases/codeManagement/implicit-reply.ts');
+const { implicitReplyGate } = require('../../libs/platform/application/use-cases/codeManagement/implicit-reply.ts');
+const { buildReplyThread, classifyImplicitReply } = require('../../libs/platform/application/use-cases/codeManagement/reply-thread.ts');
+const { PlatformType } = require('../../libs/core/domain/enums/platform-type.enum.ts');
+const { EVAL_ORG, evalPermissionService } = require('../shared/org-route');
+// An org with no stored BYOK config: production's routing sends the
+// conversation task to the env/managed model.
+const permissionValidationService = evalPermissionService(null);
 
 // cases: boundary conversations. repo-cases: real replies in Kody threads on
 // kodustech/kodus-ai, labeled by hand (see README).
@@ -102,14 +109,39 @@ const isMultiHuman = (c) =>
             .map((m) => m.author),
     ).size > 1;
 
-function toThread(c) {
-    return c.messages.map((m, i) => ({
-        id: i + 1,
-        author: m.author,
-        isKody: m.author === 'Kody',
-        isBot: !!m.bot,
-        body: m.text,
-    }));
+// The thread as GitHub returns it: Kody's comments from its app (its bot login
+// and the marker every Kody comment carries), other bots by their [bot] login,
+// every reply pointing at the thread's first comment. The case's last message
+// is the reply being routed. Production reads it from here
+// (chatWithKodyFromGit.use-case.ts → reply-thread.ts).
+const KODY_LOGIN = 'kody-ai[bot]';
+function asGitHubComments(c) {
+    return c.messages.map((m, i) => {
+        const kody = m.author === 'Kody';
+        const login = kody ? KODY_LOGIN : m.bot ? `${m.author}[bot]` : m.author;
+        return {
+            id: i + 1,
+            body: kody ? `${m.text}\n\n<!-- kody-codereview -->` : m.text,
+            user: { login, type: kody || m.bot ? 'Bot' : 'User' },
+            ...(i > 0 ? { in_reply_to_id: 1 } : {}),
+            created_at: new Date(Date.UTC(2026, 9, 16, 10, i)).toISOString(),
+        };
+    });
+}
+
+// What production does with an unmentioned reply: rebuild its thread, the free
+// gate, then the classifier on the org's conversation route.
+async function answers(c) {
+    const comments = asGitHubComments(c);
+    const thread = buildReplyThread(comments[comments.length - 1], comments, PlatformType.GITHUB);
+    if (implicitReplyGate(thread)) return false;
+    return classifyImplicitReply({
+        thread,
+        permissionValidationService,
+        organizationAndTeamData: EVAL_ORG,
+        prNumber: 1,
+        platformType: PlatformType.GITHUB,
+    });
 }
 
 async function mapLimit(items, limit, fn) {
@@ -182,13 +214,7 @@ async function main() {
             multiHuman: isMultiHuman(c),
         };
         try {
-            row.answered = await classifyReplyAddressedToKody({
-                thread: toThread(c),
-                organizationAndTeamData: {
-                    organizationId: 'eval',
-                    teamId: 'eval',
-                },
-            });
+            row.answered = await answers(c);
         } catch (e) {
             row.error = String(e?.message || e).slice(0, 200);
         }

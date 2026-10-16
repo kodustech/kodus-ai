@@ -1,0 +1,12 @@
+{
+    "__doc": [
+        "Floors per model and per --kind for the share of write checks right (run.js --gate), as ratios: the memory or rule lands when the developer asks for it and nothing else does, and nothing is written in any other thread. Offers are reported beside it and have no floor (README).",
+        "eval-fake (the wiring smoke, every PR): the scripted model never writes, so only the threads that call for nothing pass: rule 8 of 12, memory 5 of 7. Deterministic. floor = observed rounded down to 3 decimals.",
+        "deepseek-v4-flash@fireworks (the nightly model): calibrated 2026-10-16 from 2 local runs, judge gpt-5.6-luna low. Rule 12 and 12 of 12, memory 7 and 7 of 7. Floors leave room for 2 failed checks of 12 (rule, 0.83) and 1 of 7 (memory, 0.85): 2 of 7 would equal a model that never writes (5 of 7). With the write gate never granting (grantIfAuthorized), rule 8 of 12 and memory 5 of 7, below both. Offers, not gated: rule 6 and 6 of 8, memory 3 and 4 of 5; every offer case offered, the misses were offers in control threads. A first run before the controls were reworded (they claimed a fix the PR head does not have, and the rule offer case said 'we want that enforced', which the agent took as a request and created the rule) is not counted.",
+        "RATCHET: a PR that adds cases, changes the judge or moves the value on purpose recalibrates here in the same PR, with its runs as evidence."
+    ],
+    "models": {
+        "eval-fake": { "rule": { "floor": 0.666, "observed": 0.6667 }, "memory": { "floor": 0.714, "observed": 0.7143 } },
+        "deepseek-v4-flash@fireworks": { "rule": { "floor": 0.83, "observed": 1 }, "memory": { "floor": 0.85, "observed": 1 } }
+    }
+}

@@ -124,7 +124,6 @@
         "byok:live:check": "jest --config jest.config.ts libs/llm/byok-reasoning.live.spec.ts -t 'reports which brands' --no-coverage --forceExit",
         "byok:live": "jest --config jest.config.ts libs/llm/byok-reasoning.live.spec.ts --no-coverage --forceExit",
         "eval:pr-summary": "node evals/pr-summary/run.js --model=gpt-5.4-mini --gate",
-        "eval:pr-summary:mock": "node evals/pr-summary/run.js --mock --gate",
         "eval:reply-addressing": "node evals/reply-addressing/run.js --model=gemini-3-flash-preview --repeats=3",
         "eval:suite": "node evals/run-suite.js",
         "eval:wiring": "node evals/wiring-smoke.js",

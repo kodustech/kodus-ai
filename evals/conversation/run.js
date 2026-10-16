@@ -1,31 +1,35 @@
 #!/usr/bin/env node
 // conversation: a developer answers a Kody comment in a PR thread, and the
 // conversation agent (ConversationAgentProvider, the class production runs)
-// replies with the PR's head in a local sandbox. Checks the reply against what
-// the code says (cases.js), through the judge asking whether the reply asserts
-// it (assertsClaim, evals/investigation/recall-judge.js), and that Kody did not
-// declare an action nobody asked for.
+// replies. Checks the reply against what the code says (cases.js), through the
+// judge asking whether the reply asserts it (assertsClaim,
+// evals/investigation/recall-judge.js), that Kody acted on nothing nobody asked
+// for (no `act` decision, nothing written to the org's stores), and its
+// language.
 //
 //   node evals/conversation/run.js [--model=<id>] [--gate] [--output=<result.json>] [--limit=N] [--concurrency=N] [--show]
 //
-// --show  prints each reply, to read what the judge read
+// --show  prints each reply, to read what the judge read; --show=prompt also the prompt
 //
-// The agent runs as an org with no BYOK config and no MCP servers: its slot is
-// the eval's model, and its tools are the sandbox's (grep, read, listDir, exec)
-// and the decision tool. Writes (memories, rules) need MCP, so this eval does
-// not cover them.
+// Each case runs as its own organization with a connected GitHub, as
+// production wires one (evals/shared/kodus-mcp.js): no BYOK config (its slot is
+// the eval's model), its team's language, and the Kodus MCP connection the
+// mcp-manager gives it, served in this process by production's MCP server over
+// in-memory stores and the PR's GitHub (evals/shared/github-rest.js). The
+// sandbox is production's local one, fetched from a git remote that carries
+// the base branch and the PR head (evals/shared/pr-remote.js). The agent's
+// tools are what production gives it: the Kodus MCP tools, the sandbox's, and
+// the decision tool.
 //
 // Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/AGENTS.md).
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
-const { AsyncLocalStorage } = require('async_hooks');
-const { execFileSync } = require('child_process');
 const { applyModelEnv } = require('../shared/tier0-models');
 const { countTokens, tokensUsed } = require('../shared/eval-kit');
 const { evalQuestion, resultProblems } = require('../shared/eval-result');
 const { languageOf } = require('../format/checks');
 const { assertsClaim, loadJudgeKey, JUDGE_MODEL } = require('../investigation/recall-judge');
+const { startKodusMcp } = require('../shared/kodus-mcp');
 const { CASES } = require('./cases');
 
 const args = Object.fromEntries(
@@ -42,101 +46,22 @@ const cases = CASES.slice(0, args.limit ? Number(args.limit) : undefined);
 if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
 applyModelEnv(MODEL);
 countTokens();
-const { ConversationAgentProvider } = require('../../libs/agents/infrastructure/services/agents/conversation/conversationAgent.ts');
-const { readDecision } = require('../../libs/agents/infrastructure/services/agents/conversation/conversation-decision.ts');
-const { PermissionValidationService } = require('../../libs/ee/shared/services/permissionValidation.service.ts');
-const { ParametersService } = require('../../libs/organization/infrastructure/adapters/services/parameters.service.ts');
-const { LocalSandboxService, sandboxEnv } = require('../../libs/sandbox/infrastructure/providers/local-sandbox.service.ts');
-const { AiSdkAgentRunner } = require('../../libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner.ts');
+const { runThread } = require('../shared/pr-thread');
 
-// The run state of each case, to read the decision the agent declared: the
-// provider returns only the reply text. Observed, not changed.
-const runs = new AsyncLocalStorage();
-const runOriginal = AiSdkAgentRunner.prototype.run;
-AiSdkAgentRunner.prototype.run = async function observedRun(...a) {
-    const state = await runOriginal.apply(this, a);
-    runs.getStore()?.push(state);
-    return state;
-};
-
-// The org: no BYOK config (getBYOKConfig returns null for an id that is not a
-// UUID, before reading anything), its language from language_config, no MCP.
-const ORG = { organizationId: 'conversation-eval', teamId: 'conversation-eval-team' };
-
-// The PR's head as a git checkout, like the production sandbox's clone.
-function writeRepo(files) {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-conversation-'));
-    for (const [file, content] of Object.entries(files)) {
-        fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
-        fs.writeFileSync(path.join(dir, file), content);
-    }
-    // sandboxEnv drops GIT_DIR and the other variables that outrank -C: run from
-    // a git hook, git would otherwise work on the caller's repository.
-    const git = (...a) => execFileSync('git', ['-C', dir, ...a], { stdio: 'ignore', env: sandboxEnv({ GIT_AUTHOR_NAME: 'dev', GIT_AUTHOR_EMAIL: 'dev@example.com', GIT_COMMITTER_NAME: 'dev', GIT_COMMITTER_EMAIL: 'dev@example.com' }) });
-    git('init', '-q', '-b', 'feature');
-    git('add', '-A');
-    git('commit', '-q', '-m', 'head of the pull request');
-    return dir;
-}
-
-// The thread context the use case builds (chatWithKodyFromGit.use-case.ts prepareContext).
-function threadContext(c) {
-    return {
-        gitUser: { id: 1, username: 'dev' },
-        userQuestion: c.reply,
-        repository: { id: 'repo-1', name: 'service', fullName: 'acme/service', defaultBranch: 'main' },
-        pullRequestDescription: '',
-        platformType: 'github',
-        pullRequest: { pullRequestNumber: 7, headRef: 'feature', baseRef: 'main' },
-        codeManagementContext: {
-            originalComment: {
-                suggestionCommentId: 1,
-                suggestionFilePath: c.kodyComment.file,
-                suggestionText: c.kodyComment.text,
-                diffHunk: c.kodyComment.diffHunk,
-                suggestionId: `s-${c.id}`,
-                label: 'bug',
-                brokenKodyRulesIds: [],
-            },
-            othersReplies: [],
-        },
-    };
-}
-
-async function runCase(c, judgeKey) {
-    const dir = writeRepo(c.repo);
-    const sandbox = {
-        remoteCommands: new LocalSandboxService(undefined).buildRemoteCommands(dir),
-        cleanup: async () => fs.rmSync(dir, { recursive: true, force: true }),
-        type: 'local',
-        sandboxId: `eval-${c.id}`,
-        repoDir: dir,
-        baseBranch: 'main',
-    };
-    // The production parameters service over a repository that holds the
-    // team's language_config: the service's own lookup runs, only the storage
-    // is in memory.
-    const parametersRepository = { findByKey: async (key) => (key === 'language_config' ? { configKey: key, configValue: c.language, active: true } : null) };
-    const agent = new ConversationAgentProvider(new ParametersService(parametersRepository), new PermissionValidationService(undefined, undefined));
-    const states = [];
-    try {
-        const reply = await runs.run(states, () => agent.execute(c.reply, { organizationAndTeamData: ORG, prepareContext: threadContext(c), thread: { id: `eval-${c.id}` }, sandbox }));
-        if (!String(reply || '').trim()) throw new Error('the agent returned no reply');
-        if (args.show) console.log(`\n── ${c.id} — ${c.reply}\n${reply}\n`);
-        const decision = states.length ? readDecision(states[states.length - 1].steps) : undefined;
-        const right = await assertsClaim(judgeKey, c.golden, reply);
-        const want = c.language === 'pt-BR' ? 'pt' : 'en';
-        const lang = languageOf(reply);
-        const detail = [
-            { what: `says: ${c.golden.slice(0, 120)}${right ? '' : ` — replied: ${String(reply).replace(/\s+/g, ' ').slice(0, 160)}`}`, ok: right },
-            { what: `declares no action nobody asked for (intent: ${decision?.intent ?? 'none'})`, ok: decision?.intent !== 'act' },
-            { what: `replies in ${c.language} (read as ${lang})`, ok: ['unknown', want].includes(lang) },
-        ];
-        // The whole reply, for whoever reads the verdict after the judge.
-        return { hits: detail.filter((d) => d.ok).length, total: detail.length, detail, reply: String(reply).slice(0, 4000) };
-    } finally {
-        await sandbox.cleanup();
-    }
+async function runCase(c, i, judgeKey, kodus) {
+    const { reply, decision, prompt, written } = await runThread(c, { index: i, kodus, id: c.id });
+    if (args.show === 'prompt') console.log(`\n── ${c.id} prompt\n${prompt}\n`);
+    if (args.show) console.log(`\n── ${c.id} — ${c.reply}\n${reply}\n`);
+    const right = await assertsClaim(judgeKey, c.golden, reply);
+    const want = c.language === 'pt-BR' ? 'pt' : 'en';
+    const lang = languageOf(reply);
+    const detail = [
+        { what: `says: ${c.golden.slice(0, 120)}${right ? '' : ` — replied: ${String(reply).replace(/\s+/g, ' ').slice(0, 160)}`}`, ok: right },
+        { what: `acts on nothing nobody asked for (intent: ${decision?.intent ?? 'none'}, writes: ${written.count})`, ok: decision?.intent !== 'act' && written.count === 0 },
+        { what: `replies in ${c.language} (read as ${lang})`, ok: ['unknown', want].includes(lang) },
+    ];
+    // The whole reply, for whoever reads the verdict after the judge.
+    return { hits: detail.filter((d) => d.ok).length, total: detail.length, detail, reply: reply.slice(0, 4000) };
 }
 
 async function main() {
@@ -145,6 +70,7 @@ async function main() {
         console.error(`not measured: no key for the judge (${JUDGE_MODEL}); set JUDGE_API_KEY`);
         return 2;
     }
+    const kodus = await startKodusMcp();
     const results = new Array(cases.length);
     let errored = 0;
     let next = 0;
@@ -153,7 +79,7 @@ async function main() {
             const i = next++;
             const c = cases[i];
             try {
-                results[i] = { id: c.id, checks: c.checks, ...(await runCase(c, judgeKey)) };
+                results[i] = { id: c.id, checks: c.checks, ...(await runCase(c, i, judgeKey, kodus)) };
             } catch (error) {
                 errored += 1;
                 console.error(`  ${c.id}: ${String(error.message || error).slice(0, 200)}`);
@@ -162,6 +88,7 @@ async function main() {
         }
     };
     await Promise.all(Array.from({ length: Math.max(1, Number(args.concurrency) || 4) }, worker));
+    await kodus.close();
 
     const hits = results.reduce((n, r) => n + r.hits, 0);
     const total = results.reduce((n, r) => n + r.total, 0);

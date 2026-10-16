@@ -198,6 +198,17 @@ const CASES = [
         golden: 'The comment no longer applies: the customer id is validated and the query now uses a parameter instead of interpolation.',
     },
     {
+        id: 'fixed-after-a-teammate-asks',
+        kind: 'claims a fix',
+        checks: 'Reads the thread, not only the last reply: a teammate asked about the fix and the developer answers it, and the code has it',
+        language: 'en-US',
+        repo: { 'src/billing/invoice.ts': INVOICE_FIXED, 'src/billing/types.ts': ORDER_TYPES },
+        kodyComment: INVOICE_COMMENT,
+        otherReplies: [{ author: 'teammate', text: 'Did the import job orders get covered too?' }],
+        reply: 'Yes, fixed in 4f2a91c.',
+        golden: 'The fix is in place: formatInvoice now handles an order with no customer before reading its name.',
+    },
+    {
         id: 'question-the-cap',
         kind: 'asks',
         checks: 'Answers a question by showing in the code that the attempt cap the developer cites is never applied',

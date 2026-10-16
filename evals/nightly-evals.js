@@ -70,9 +70,9 @@ const NIGHTLY_EVALS = [
         stage: 'pr-summary',
         run: ['evals/pr-summary/run.js'],
         files: ['evals/pr-summary/targets.json'],
-        // Every case (one call each), gated: the routing and posting contract
-        // is what died for one model in prod.
-        friday: ['--limit=11', '--gate'],
+        // Every case (one call each where a summary is asked for), gated: the
+        // routing and posting contract is what died for one model in prod.
+        friday: ['--limit=15', '--gate'],
     },
     {
         id: 'conversation',
@@ -81,6 +81,15 @@ const NIGHTLY_EVALS = [
         files: ['evals/conversation/targets.json'],
         friday: ['--limit=4'],
     },
+    // Offers are reported beside the number, not gated (evals/thread-actions).
+    ...['rule', 'memory'].map((kind) => ({
+        id: `thread-${kind}`,
+        stage: `thread-${kind}`,
+        run: ['evals/thread-actions/run.js', `--kind=${kind}`],
+        files: ['evals/thread-actions/targets.json'],
+        // A pair asking for nothing but offers, and a pair asking Kody to act.
+        friday: ['--limit=4'],
+    })),
     // The stages after the finder, on its frozen candidates (evals/funnel):
     // ungated until the relabeled dataset lands (#2114).
     ...['anchoring', 'dedup', 'severity', 'verify'].map((stage) => ({
