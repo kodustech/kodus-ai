@@ -1,0 +1,2779 @@
+{
+ "replays-self-serve-bulk-delete-system-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "ea188e2d736fd6ed27c1dba8aae63b7268e2a7a9",
+  "base": "49a275847631e231672d01b5dcd66558c069d25b",
+  "prTitle": null,
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+    "lines": [
+     165,
+     173
+    ],
+    "texto": "WHAT: The new table visualization receives hard-coded empty rows, metadata, and columns instead of the query result. WHY: Every dashboard table using the use-table-widget-visualization feature renders empty even when its query returns data. HOW: Pass result.data and result.meta to tableData and derive columns from the configured fields, or retain the existing table until the result adapter is implemented."
+   },
+   {
+    "id": "S2",
+    "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+    "lines": [
+     39,
+     42
+    ],
+    "texto": "WHAT: The attribute query cache key omits organization identity although its query function calls an organization-specific endpoint. WHY: Switching organizations with matching project filters (especially all-projects selection), date range, dataset, and attribute type reuses the previous organization's cached attribute names in the destination organization's search UI until refetch completes. HOW: Include organization.slug in the query key and its memo dependencies so cache entries remain tenant-scoped."
+   },
+   {
+    "id": "S3",
+    "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+    "lines": [
+     70,
+     73
+    ],
+    "texto": "WHAT: Both custom-cell fallback checks test truthiness instead of whether the callback returned undefined. WHY: Valid custom results such as 0 or null are replaced by default content, causing incorrect numeric output or preventing callers from intentionally hiding cell content. HOW: Use cell !== undefined in both the head and body renderer checks to preserve the documented fallback contract."
+   },
+   {
+    "id": "S4",
+    "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+    "lines": [
+     70,
+     72
+    ],
+    "texto": "The new story documents that returning undefined invokes the fallback renderer, and the callback explicitly returns React.ReactNode | undefined. However, this truthiness check also invokes fallback for valid custom results such as 0, an empty string, or null (commonly used to suppress cell content). A caller following that contract can therefore display the original field value instead of its intended custom content. Check specifically for undefined here and in the equivalent header callback."
+   },
+   {
+    "id": "S5",
+    "file": "static/app/views/explore/contexts/pageParamsContext/visualizes.tsx",
+    "lines": [
+     40,
+     45
+    ],
+    "texto": "The Visualize instances now expose only yAxis, but static/app/views/explore/savedQueries/exploreParams.tsx:29 still computes `visualizes.flatMap(visualize => visualize.yAxes)`. That consumer must be migrated along with the class: it now collects undefined rather than the visualization expressions, breaking the saved-query visualization display (and failing type checking if these are typed as Visualize). Update that consumer to map `visualize.yAxis`; serialized BaseVisualize consumers should continue using yAxes."
+   },
+   {
+    "id": "S6",
+    "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+    "lines": [
+     39,
+     42
+    ],
+    "texto": "The new query key omits the organization identity, unlike the previous key whose URL included organization.slug. For the same filters (in particular all-project selections), switching organizations reuses the previous organization's TagCollection. Attribute names can contain customer-specific or sensitive identifiers and can now appear in another organization's autocomplete; depending on cache freshness, a refetch does not prevent the cached data from being shown. Include the organization slug or ID in the query key."
+   },
+   {
+    "id": "S7",
+    "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+    "lines": [
+     39,
+     42
+    ],
+    "texto": "The new React Query key contains only query options, none of which identifies the organization. Two organizations with identical project/date selections (especially the all-projects selection) therefore share an entry despite fetching different organization-scoped URLs. Switching organizations can serve the previous organization's attributes, and concurrent consumers can reuse its in-flight request. Include organization.slug in this cache key."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     50,
+     59
+    ],
+    "texto": "These validators test truthiness instead of presence. Both age=0 and timestamp=0 are accepted integer values, so a report containing both fields with those values passes validation, violating the explicitly declared requirement that they cannot coexist. Check membership in initial_data instead of the values' truthiness (and cover the zero-valued case in the mixed-fields test)."
+   },
+   {
+    "id": "S9",
+    "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+    "lines": [
+     165,
+     173
+    ],
+    "texto": "When `use-table-widget-visualization` is enabled, this caller discards the fetched result and passes empty columns, rows and metadata. The new TableWidgetVisualization consumes these props directly (`columns ?? ...` and `data={tableData?.data ?? []}`), so it cannot infer or fetch the missing result: every dashboard table becomes empty for enabled organizations even when the query returns rows. Pass the result data and metadata, and either derive the requested columns or omit columns to use the component's metadata fallback."
+   },
+   {
+    "id": "S10",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     50,
+     59
+    ],
+    "texto": "The mutual-exclusion checks test values rather than field presence. Both fields accept 0, so a report containing both `age: 0` and `timestamp: 0` passes validation even though the fields must be mutually exclusive. Check membership in initial_data in both validators instead."
+   },
+   {
+    "id": "S11",
+    "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+    "lines": [
+     70,
+     73
+    ],
+    "texto": "The renderer contract uses `undefined` to request fallback, but `if (cell)` also discards valid ReactNode values including `0`, an empty string, false, and null. For example, a custom renderer returning 0 for a computed count instead renders the original data through the default renderer. Use an explicit undefined check here and in the equivalent header-renderer check."
+   },
+   {
+    "id": "S12",
+    "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+    "lines": [
+     165,
+     173
+    ],
+    "texto": "When use-table-widget-visualization is enabled, every table receives empty columns and empty data instead of the result being mapped here. Consequently populated dashboard tables appear empty. Pass the actual result data/meta and corresponding columns to the visualization."
+   },
+   {
+    "id": "S13",
+    "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+    "lines": [
+     39,
+     42
+    ],
+    "texto": "The query function requests an organization-specific URL, but queryKey contains only filter options. Switching organizations with identical project/date/type options (particularly all-project selection) reuses the previous organization's attribute collection, potentially displaying its keys until a refetch completes. Include the organization slug in the query key as the old URL-based key did."
+   },
+   {
+    "id": "S14",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     50,
+     59
+    ],
+    "texto": "These validators promise to reject simultaneous age and timestamp fields, but test their values rather than their presence. A report containing both age=0 and timestamp=0 is accepted, even though timestamp=0 is explicitly valid and age=0 is a normal fresh report. Check key presence to enforce the stated exclusivity for zero values too."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#01",
+    "descricao": "The age/timestamp mutual-exclusion validators check truthiness via initial_data.get(), so a zero value is treated as absent and a report carrying both fields passes validation.",
+    "textoGolden": "Validation logic incorrectly uses .get('timestamp'), which treats a timestamp of 0 as absent. It should directly check 'timestamp' in self.initial_data to ensure proper field presence detection, preventing both 'age=0' and 'timestamp' from passing mutual-exclusion validation.",
+    "comentarios": [
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       47,
+       59
+      ],
+      "texto": "The timestamp/age validators test truthiness and make both fields optional instead of enforcing exactly one field. Reports with both age=0 and timestamp=0, or with neither field, pass validation despite violating the stated mutually exclusive report formats. Enforce field presence and exclusivity in object-level validate using key membership rather than truthiness."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       50,
+       59
+      ],
+      "texto": "Check key presence rather than truthiness when enforcing age/timestamp mutual exclusion. Both fields permit 0, so a report with age=0 and timestamp=0 passes both validators even though both fields are present; a zero-valued counterpart also bypasses the corresponding check. Use `\"age\" in self.initial_data` and `\"timestamp\" in self.initial_data` (or object-level validation) and add zero-value tests."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       50,
+       59
+      ],
+      "texto": "Check field presence rather than truthiness when enforcing timestamp/age exclusivity. A report containing both `timestamp: 0` and `age: 0` passes both validators, despite the declared constraint that they must not coexist; with only one zero value, validation is also asymmetric. Use membership checks on initial_data (or object-level validation) and add zero-value mixed-field tests."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#02",
+    "descricao": "The validation-failure warning logs the entire raw, attacker-controlled browser report instead of a redacted subset.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       111,
+       114
+      ],
+      "texto": "The new validation-failure warning logs `raw_report`, the full unvalidated report object supplied by the caller. This endpoint is public and unauthenticated (permission_classes = (), @csrf_exempt), so the payload is attacker-controlled, and browser report bodies routinely carry sensitive values (CSP blocked-uri/document-uri/script-sample, sourceFile, plus the full user_agent). Logging the raw payload on every validation failure writes potentially sensitive data into application logs; log only the report `type` (or a sanitized/redacted subset) instead of the entire raw object."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       111,
+       114
+      ],
+      "texto": "Do not attach the complete raw report to the validation warning. Browser reports contain page URLs (potentially including tokens or personal data in query strings) and arbitrary body contents. Any invalid field now causes that entire payload to be emitted at warning level, exposing it in operational logs even where the existing info-level request logging is filtered out. Log the failed field names/report type or a redacted diagnostic instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#06",
+    "descricao": "fetch_error_details pairs error_ids positionally with nodestore get_multi values, but get_multi does not preserve input order (cached items are appended last) and drops missing nodes, so error details get attached to the wrong error IDs.",
+    "textoGolden": "Using zip(error_ids, events.values()) assumes the get_multi result preserves the input order; dict value order is not guaranteed to match error_ids, so event data can be paired with the wrong ID (missing nodes also shift alignment).",
+    "comentarios": [
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       110,
+       120
+      ],
+      "texto": "WHAT: fetch_error_details zips error_ids with events.values() instead of mapping by node_id, misaligning ids to payloads and dropping/mismatching on missing keys. WHY: assigns wrong title/message/timestamp to wrong error id and yields incorrect Seer logs. HOW: look up each node_id in the get_multi dict (e.g. dict keyed by node_id) and preserve error_ids order."
+     },
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       104,
+       120
+      ],
+      "texto": "`zip(error_ids, events.values())` assumes `nodestore.backend.get_multi(node_ids)` values preserve input order and that all keys exist. Dict values give no such guarantee; missing keys shorten/misalign the zip, attaching the wrong event payload to the wrong error_id. Lookup per-id: iterate node_ids/error_ids and do `events.get(node_id)` instead of zipping with `.values()`."
+     },
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       104,
+       121
+      ],
+      "texto": "fetch_error_details pairs IDs to payloads with zip(error_ids, events.values()) where events is dict from nodestore get_multi. Values order need not match IDs and missing keys misalign, attaching wrong title/message to wrong error. Look up per node_id instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#07",
+    "descricao": "The Snuba replay lookup for error IDs runs even when enable_error_context=false, adding a needless query (and failure point) to opt-out requests.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       67,
+       77
+      ],
+      "texto": "The new Snuba replay lookup executes even when enable_error_context=false. Every opt-out summary request incurs an unnecessary database round trip and can now fail on Snuba availability even though it only needs recording storage. Evaluate the flag first and perform the replay lookup only when error context is enabled."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#12",
+    "descricao": "With the use-table-widget-visualization flag on, the widget renders TableWidgetVisualization with hardcoded empty columns and data instead of the query results, so every table widget shows an empty table.",
+    "textoGolden": "Hardcoded empty data passed to TableWidgetVisualization causes it to always render an empty table instead of displaying actual results when the feature flag is enabled.",
+    "comentarios": [
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "WHAT: the `use-table-widget-visualization` branch renders `<TableWidgetVisualization columns={[]} tableData={{data: [], meta: {fields: {}, units: {}}}} />`, hardcoding empty rows and no columns instead of the actual query result. WHY: when the feature flag is enabled for an org, every table widget renders an empty table and silently drops `result.data`/`result.meta`/`columns`, a functional regression for all dashboard table widgets. HOW: build `columns`/`tableData` from the existing `result` (and `widget.queries[i].fields`/`fieldAliases`) rather than the empty placeholder objects."
+     },
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "In the new feature-flagged branch, TableWidgetVisualization is rendered with hardcoded empty props: columns={[]} (an empty array, which is truthy for the `columns ?? fallback` logic, so no columns are derived) and tableData={data: [], meta: {fields: {}, units: {}}}. All the real result data computed above (result.data, result.meta, fields, fieldAliases, eventView) is discarded, so any organization with 'use-table-widget-visualization' enabled gets an empty table instead of the query results. Pass the actual result data/columns into the visualization (or keep the old StyledSimpleTableChart) until the widget is properly wired."
+     },
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "With the 'use-table-widget-visualization' feature enabled, TableWidgetVisualization is rendered with columns=[] and empty data/meta instead of result.data and result.meta. Every table widget therefore renders empty for orgs with the flag. Fix: pass tableData={{data: result.data, meta: result.meta}} and build columns from the fields."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#13",
+    "descricao": "The custom cell renderers fall back to default rendering on any falsy return (0, '', null), not only undefined, so a renderer cannot render zero or an empty cell.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+      "lines": [
+       70,
+       73
+      ],
+      "texto": "The documented custom-renderer contract says fallback runs when the callback returns undefined, but `if (cell)` also falls back for valid ReactNode results such as `0`, an empty string, or `null`. A caller trying to render zero or deliberately suppress a cell instead gets the default field rendering. Check `cell !== undefined` here and in the head-cell renderer so the implementation honors the advertised contract."
+     },
+     {
+      "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+      "lines": [
+       70,
+       72
+      ],
+      "texto": "Use `cell !== undefined` instead of `if (cell)` to select the custom renderer result, and apply the same correction to the header renderer. The API documents undefined as the fallback sentinel, but valid ReactNode results such as numeric 0, an empty string, or null are falsy. A custom renderer returning 0 or intentionally hiding a cell with null therefore unexpectedly renders the default value instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#19",
+    "descricao": "The attribute-keys query key no longer includes the organization slug, so two organizations with the same filters share a cache entry and switching orgs can show the previous org's attribute names.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       41
+      ],
+      "texto": "The new attribute query key omits the organization even though its query function fetches an organization-specific endpoint. Switching organizations with identical project selections such as all projects and the same date range reuses the singleton query client's prior organization's attribute metadata, including while the new request refetches. Include organization.slug or organization.id in the query key."
+     },
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       42
+      ],
+      "texto": "Include the organization slug in this query key. The new useGetTraceItemAttributeKeys implementation fetches `/organizations/${organization.slug}/trace-items/attributes/`, but makeTraceItemAttributeKeysQueryOptions contains no organization identity. Two organizations with identical filters (particularly the default all-project selection) therefore share this cache entry. Switching organizations can display the previous organization's attribute names, and concurrently mounted consumers can reuse a request for the wrong organization. Preserve the organization-specific cache identity that the previous endpoint-based key provided."
+     },
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       42
+      ],
+      "texto": "Include the organization slug or ID in this query key. The query function fetches `/organizations/${organization.slug}/trace-items/attributes/`, but the key contains only query options. Two organizations with the same project selection (especially the all-projects selection), date range and dataset therefore share a cache entry. Switching organizations can display the previous organization's attributes, and overlapping requests can populate the shared entry with the wrong organization's result."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#20",
+    "descricao": "The UseTraceItemAttributeBaseProps doc says only LOGS is supported, although the hooks are also used with SPANS.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/explore/types.tsx",
+      "lines": [
+       9,
+       12
+      ],
+      "texto": "The new shared prop documentation claims the endpoint currently supports only LOGS, but this PR also uses these hooks with TraceItemDataset.SPANS (for example in TransactionNameSearchBar). Update this comment to describe both supported datasets; as written it incorrectly tells callers that a supported and actively used input is unsupported."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#03",
+    "descricao": "Claims the unauthenticated endpoint iterates an unbounded array of reports, allowing CPU/metric-spam DoS.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       106,
+       128
+      ],
+      "texto": "WHAT: endpoint loops over unbounded raw_data array validating each report and metrics.incr per report with no size limit. WHY: attacker can POST huge arrays causing CPU/memory blowup and metric spam on unauthenticated endpoint. HOW: enforce max reports per request (e.g. reject >50) before validation."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#04",
+    "descricao": "Claims BrowserReportingCollectorEndpoint returns Django HttpResponse objects although its Endpoint base expects DRF Response objects.",
+    "textoGolden": "The BrowserReportingCollectorEndpoint returns HttpResponse objects but the endpoint inherits from Endpoint which expects rest_framework.response.Response objects.",
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#05",
+    "descricao": "The assemble analytics event is recorded before the feature-flag check, so requests rejected with 404 are still counted as assemble events, skewing analytics.",
+    "textoGolden": "Analytics events are recorded before the feature flag check, resulting in analytics being logged for all requests, including those that return 404 due to the feature being disabled. This can lead to misleading analytics data.",
+    "comentarios": [
+     {
+      "file": "src/sentry/preprod/api/endpoints/organization_preprod_artifact_assemble.py",
+      "lines": [
+       81,
+       86
+      ],
+      "texto": "The 'preprod_artifact.api.assemble' analytics event is recorded before the feature-flag check at line 88 (and before any validation). When the organization lacks 'organizations:preprod-artifact-assemble' the endpoint returns 404 without assembling anything, but the assemble event has already been emitted, so this metric/analytics event over-counts requests that never performed the operation. Move the analytics.record call to after the feature check (once assembly is actually attempted/succeeds) so the event reflects the operation it names."
+     },
+     {
+      "file": "src/sentry/preprod/api/endpoints/organization_preprod_artifact_assemble.py",
+      "lines": [
+       81,
+       91
+      ],
+      "texto": "WHAT: analytics.record runs before the preprod-artifact-assemble feature check, logging assemble attempts even when disabled/unauthorized. WHY: inflates analytics, leaks usage signal, and does work before guard. HOW: move analytics.record after the feature check (or after validation)."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#08",
+    "descricao": "BaseDetectorTypeValidator.update() reads validated_data.get('detector_type') instead of 'type', so detector type changes are silently ignored.",
+    "textoGolden": "In BaseDetectorTypeValidator.update(), the validator incorrectly updates instance.type using validated_data.get('detector_type') instead of validated_data.get('type').",
+    "comentarios": [
+     {
+      "file": "src/sentry/workflow_engine/endpoints/validators/base/detector.py",
+      "lines": [
+       62,
+       65
+      ],
+      "texto": "WHAT: update() reads validated_data.get(\"detector_type\") but the field/validate_type stores it as \"type\", so type updates are silently ignored. WHY: PUT type change never applies, breaking caller assumption and diverging from create() which uses validated_data[\"type\"]. HOW: read validated_data.get(\"type\", instance.group_type)."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#09",
+    "descricao": "Claims get_condition_query_groups indexes dcg_to_slow_conditions[dcg.id] and may KeyError for a DCG missing from the precomputed map.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/workflow_engine/processors/delayed_workflow.py",
+      "lines": [
+       363,
+       365
+      ],
+      "texto": "WHAT: get_condition_query_groups directly indexes dcg_to_slow_conditions[dcg.id] which KeyErrors if data_condition_groups contains an id absent from the precomputed map. WHY: crashes delayed-workflow task and blocks firing/retries. HOW: use .get(dcg.id, []) or ensure map covers all dcgs."
+     },
+     {
+      "file": "src/sentry/workflow_engine/processors/delayed_workflow.py",
+      "lines": [
+       418,
+       420
+      ],
+      "texto": "WHAT: get_groups_to_fire directly indexes dcg_to_slow_conditions[dcg.id] with same missing-key risk as query-groups path. WHY: same task crash during evaluation when DCG sets drift. HOW: use .get with default and handle missing."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#10",
+    "descricao": "Claims the triggered_actions log now writes the full event payload with user data because event_data was switched to workflow_event_data.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/workflow_engine/processors/delayed_workflow.py",
+      "lines": [
+       583,
+       583
+      ],
+      "texto": "The log extra 'event_data' now holds workflow_event_data, which wraps the full event object, instead of the ids-only EventRedisData. This writes event payloads that can contain user data (messages, tags, user and request context) to logs. Log only identifiers instead, such as event_id, group_id and workflow ids."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#11",
+    "descricao": "Claims the success path dereferences data.summary without guarding undefined data when the query is disabled or errored.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/components/feedback/list/useFeedbackSummary.tsx",
+      "lines": [
+       61,
+       66
+      ],
+      "texto": "WHAT: success path dereferences data.summary/numFeedbacksUsed without guarding data undefined (disabled/error-transition states). WHY: throws cannot-read-property crash when query is disabled or returns no data. HOW: guard (data?.summary ?? null) and handle undefined data."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#14",
+    "descricao": "Claims the column fallback crashes when tableData is defined but meta is missing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/dashboards/widgets/tableWidget/tableWidgetVisualization.tsx",
+      "lines": [
+       92,
+       99
+      ],
+      "texto": "WHAT: column fallback uses tableData?.meta.fields without guarding meta, so defined tableData with missing meta throws TypeError. WHY: crashes render on empty/error payloads instead of empty table. HOW: use tableData?.meta?.fields with fallback to []."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#15",
+    "descricao": "Claims ExploreParams still reads visualize.yAxes after the Visualize class switched to yAxis, producing undefined saved-query params.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/explore/contexts/pageParamsContext/visualizes.tsx",
+      "lines": [
+       40,
+       45
+      ],
+      "texto": "Replacing Visualize.yAxes with yAxis leaves consumers in savedQueries/exploreParams.tsx:29 and components/seerSearch.tsx:179 reading the removed property. Those consumers now obtain undefined instead of visualization fields, breaking the existing contract and potentially TypeScript compilation. Update those consumers to use yAxis or serialize through toJSON as appropriate."
+     },
+     {
+      "file": "static/app/views/explore/contexts/pageParamsContext/visualizes.tsx",
+      "lines": [
+       40,
+       45
+      ],
+      "texto": "The removal of the instance `yAxes` field was not followed through to `static/app/views/explore/savedQueries/exploreParams.tsx:29`, which still computes `visualizes.flatMap(visualize => visualize.yAxes)`. Those accesses now produce undefined rather than the selected aggregate fields, breaking construction of saved Explore parameters. Update that consumer to map `yAxis` (while retaining arrays in the serialized contract)."
+     },
+     {
+      "file": "static/app/views/explore/contexts/pageParamsContext/visualizes.tsx",
+      "lines": [
+       40,
+       45
+      ],
+      "texto": "`static/app/views/explore/components/seerSearch.tsx:179` still constructs its visualization payload with `yAxes: v.yAxes`. With instances now exposing only `yAxis`, that payload loses its aggregate selection instead of supplying the array the Seer consumer expects. Update this consumer to use `[v.yAxis]` or the serialized `toJSON()` representation."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#16",
+    "descricao": "Asks to verify that no caller passes Visualize instances instead of BaseVisualize to updateLocationWithAggregateFields.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pageParamsContext/index.tsx",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "It was not verified whether any caller passes Visualize instances (rather than BaseVisualize) to updateLocationWithAggregateFields. If one does, those instances would be stringified in a shape that the new isBaseVisualize reader rejects, so the values would be lost or ignored when read back. Check all callers of updateLocationWithAggregateFields and make sure they pass BaseVisualize objects, or convert Visualize instances via toJSON() first."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#17",
+    "descricao": "Claims the number-type test's mock matches query.query instead of substringMatch, so its not-called assertion can never fail.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/explore/hooks/useGetTraceItemAttributeValues.spec.tsx",
+      "lines": [
+       114,
+       123
+      ],
+      "texto": "The number-type test's mock matches on `query.query === 'search-query'`, but the hook under test sends the search string as `substringMatch` (see traceItemAttributeValuesQueryKey in useGetTraceItemAttributeValues.tsx, and the correct predicate in the first test in this file). That mock can never be selected, so `expect(searchQueryMock).not.toHaveBeenCalled()` is satisfied regardless of whether the number-type short-circuit exists \u2014 the assertion no longer witnesses the behavior the test names. Fix the predicate to `query.substringMatch === 'search-query'` (and, better, assert the call did occur and returned [] to pin the guard)."
+     },
+     {
+      "file": "static/app/views/explore/hooks/useGetTraceItemAttributeValues.spec.tsx",
+      "lines": [
+       114,
+       147
+      ],
+      "texto": "The number-type test's mock matcher checks `query.query === 'search-query'`, but the hook sends the search as `substringMatch`. The mock can never match, so `expect(searchQueryMock).not.toHaveBeenCalled()` passes even if the number short-circuit were removed. Match on `query.substringMatch` as the string-type test does, so the not-called assertion can actually fail."
+     },
+     {
+      "file": "static/app/views/explore/hooks/useGetTraceItemAttributeValues.spec.tsx",
+      "lines": [
+       117,
+       121
+      ],
+      "texto": "The mock for the number-type test matches `query.query === 'search-query'`, but `traceItemAttributeValuesQueryKey` sends the search as `substringMatch`. If the numeric early-return guard is removed, the hook will issue a request that does not match this mock, so `expect(searchQueryMock).not.toHaveBeenCalled()` still passes instead of detecting the forbidden request (and the test may fail only due to an unmatched-request error). Match `substringMatch`, as the string-type test does, so this test directly detects regression of the no-request behavior."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#18",
+    "descricao": "Claims the attribute key is interpolated into the request path without encodeURIComponent, enabling path confusion.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/explore/hooks/useGetTraceItemAttributeValues.tsx",
+      "lines": [
+       68,
+       71
+      ],
+      "texto": "WHAT: attributeKey (tag.key) is interpolated raw into /trace-items/attributes/${attributeKey}/values/ without encodeURIComponent. WHY: keys containing /, brackets or encoded chars break routing or allow path confusion/smuggling to unintended endpoints. HOW: encodeURIComponent(attributeKey)."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#21",
+    "descricao": "get_environment_info fetches the recommended event per issue while building the merged-PR comment, an N+1 lookup on the comment path.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/source_code_management/commit_context.py",
+      "lines": [
+       584,
+       591
+      ],
+      "texto": "WHAT: get_environment_info calls issue.get_recommended_event() per issue inside the merged-PR comment loop. WHY: N fetches (DB/Snuba/nodestore) per comment generation amplifies latency on the PR-comment path. HOW: batch/prefetch recommended events or skip environment lookup when unavailable."
+     }
+    ]
+   }
+  ]
+ },
+ "implement-access-token-context-encoding-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "daffb05b5ad091d3ec09933c3c99c2b54f448696",
+  "base": "c22f76867f595f0f7c327376a66a08dca01949e8",
+  "prTitle": null,
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+    "lines": [
+     57,
+     60
+    ],
+    "texto": "The new grant-context extraction records client_credentials tokens as unknown because ClientCredentialsGrantType.process generates tokens directly without setting Constants.GRANT_TYPE or calling createTokenResponse. Consequently service-account access tokens receive the na grant shortcut even though the cc factory is registered, so decoding cannot recover their grant type. Set Constants.GRANT_TYPE from context.getGrantType() in ClientCredentialsGrantType before generateAccessToken(), as done for the password grant."
+   },
+   {
+    "id": "S2",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     483,
+     483
+    ],
+    "texto": "isAccessTokenId checks substring(3, 5) and rejects equality, although the encoder stores the grant shortcut at indices 4 and 5. The code, refresh, device and CIBA event assertions therefore accept an incorrect grant shortcut whenever the suffix is a UUID, masking regressions in the new metadata. Require a six-character prefix and reject when substring(4, 6) does not equal the expected shortcut."
+   },
+   {
+    "id": "S3",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     483
+    ],
+    "texto": "The encoder puts the grant shortcut at indices 4\u20135, but this matcher reads indices 3\u20134 and returns false on equality rather than inequality. For example, onrtac:<UUID> passes when the expected grant is rt, so these event assertions do not detect tokens issued with the wrong grant. Check the prefix length and compare substring(4, 6), rejecting a mismatch."
+   },
+   {
+    "id": "S4",
+    "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+    "lines": [
+     30,
+     31
+    ],
+    "texto": "The new extension contract tells implementers to return a three-letter shortcut, but DefaultTokenContextEncoderProvider requires a six-character context and decodes the grant from substring(4, 6), leaving exactly two characters. An extension following this documentation produces token IDs that the decoder rejects. Document the mandatory two-character width rather than recommending three letters."
+   },
+   {
+    "id": "S5",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     73,
+     73
+    ],
+    "texto": "The check whose message says 'Null rawTokenId not allowed' actually checks grantType again. Consequently the stated rawTokenId constraint is not enforced, and a null ID is later encoded as the literal 'null'. Check rawTokenId so the diagnostic and constructor contract match the behavior."
+   },
+   {
+    "id": "S6",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     484
+    ],
+    "texto": "This matcher does not verify the expected grant: encodeTokenId places the two-character grant at substring(4, 6), but this checks substring(3, 5) and returns false when it equals the expected value. Consequently, for example, onrtro:<uuid> passes an authorization-code expectation for ac, so the changed event assertions still pass if grant propagation is broken. Check the prefix length and reject when substring(4, 6) does not equal the expected shortcut."
+   },
+   {
+    "id": "S7",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     483
+    ],
+    "texto": "DefaultTokenContextEncoderProvider.encodeTokenId produces session(2) + token(2) + grant(2), so the grant occupies substring(4, 6). This matcher instead examines substring(3, 5) and returns false on equality. Consequently the updated event assertions accept tokens from the wrong grant (for example onrtrt:UUID when expecting ac), defeating the grant-specific checks introduced in this PR. Require equality at the encoder's actual grant offset."
+   },
+   {
+    "id": "S8",
+    "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+    "lines": [
+     29,
+     33
+    ],
+    "texto": "The new factory contract describes a three-letter shortcut, but DefaultTokenContextEncoderProvider.getTokenContextFromTokenId requires a six-character prefix and reads exactly two characters for the grant. An extension following this interface documentation can issue IDs with a seven-character prefix through encodeTokenId, only for those IDs to be rejected by the decoder. Specify exactly two characters here and validate the width when registering factory shortcuts, or make the encoding format support the documented length."
+   },
+   {
+    "id": "S9",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     73,
+     73
+    ],
+    "texto": "The constructor checks grantType twice, so a null rawTokenId is accepted despite the explicit non-null constraint. encodeTokenId subsequently concatenates it into the literal string \"null\", producing a token ID whose decoded raw ID differs from the supplied value. Validate rawTokenId itself to reject this invalid context at construction."
+   },
+   {
+    "id": "S10",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+    "lines": [
+     74,
+     76
+    ],
+    "texto": "The factory accepts shortcuts of any length, while getTokenContextFromTokenId requires exactly six prefix characters and extracts exactly two for the grant. A custom grant using a three-character shortcut (explicitly suggested by the new factory interface documentation) therefore issues IDs successfully but every such ID throws IllegalArgumentException when decoded. Validate the two-character format during both initial and lazy registration, and align the interface contract with that requirement."
+   },
+   {
+    "id": "S11",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+    "lines": [
+     112,
+     114
+    ],
+    "texto": "Unlike startup registration, this lazy deployment path does not enforce shortcut uniqueness. If a newly deployed grant reuses an existing shortcut, put replaces its owner while the original grant still maps to that shortcut. Existing tokens then decode as the new grant. Concurrent registrations of two grants sharing a shortcut produce the same corruption. Use atomic ownership checks (including in the decoder's lazy refresh path) and reject collisions rather than replacing an established mapping."
+   },
+   {
+    "id": "S12",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     483
+    ],
+    "texto": "The encoder writes the grant shortcut at indices 4\u20135 of the six-character prefix, but this matcher reads indices 3\u20134 and returns false when they equal the expected shortcut. Consequently a valid UUID with an incorrect grant prefix normally passes, so the updated event assertions no longer verify which grant issued the token. Validate the prefix length and reject a mismatch in substring(4, 6)."
+   },
+   {
+    "id": "S13",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     73,
+     73
+    ],
+    "texto": "This repeats the preceding grantType validation instead of checking rawTokenId. A context constructed with a null raw ID is therefore accepted and encodeTokenId serializes it as the literal string \"null\", rather than rejecting an invalid token identifier as the constructor intends."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#01",
+    "descricao": "The AccessTokenContext constructor checks grantType twice instead of rawTokenId, so a null rawTokenId passes validation and is encoded as ':null'.",
+    "textoGolden": "In AccessTokenContext constructor, the fourth Objects.requireNonNull validates grantType twice instead of validating rawTokenId, allowing null rawTokenId values to pass validation.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       73,
+       73
+      ],
+      "texto": "WHAT: the constructor validates `grantType` a second time instead of `rawTokenId` (`Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")`). WHY: a null `rawTokenId` is silently accepted, so `encodeTokenId` produces a token id ending in `:null` and any later consumer of the raw id gets an invalid value instead of an early failure. HOW: change the argument to `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")`."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       69,
+       78
+      ],
+      "texto": "Line 73 calls Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\") \u2014 it validates grantType a second time (line 72 already does) with a message naming a different field. rawTokenId is never validated, so a null rawTokenId is accepted at construction and the advertised check/message is wrong. It should be Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       73,
+       73
+      ],
+      "texto": "The null-check message names the wrong parameter: `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")` validates `grantType` but reports `rawTokenId`, and it duplicates the check on line 72 while `rawTokenId` is never validated at all. The message that reaches the reader contradicts the code it guards; it should be `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")`."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#02",
+    "descricao": "isAccessTokenId reads the grant shortcut at the wrong offset (3,5 instead of 4,6) and inverts the comparison, so the event assertions never verify the token's grant type.",
+    "textoGolden": "In isAccessTokenId, the substring for the grant shortcut and the equality check look inverted: the grant shortcut occupies indices 4\u20135 (substring(4,6)), and a match should return true (combined with UUID check), not false.",
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       483,
+       483
+      ],
+      "texto": "WHAT: `isAccessTokenId` reads the grant shortcut from the wrong offset and inverts the comparison \u2014 `if (items[0].substring(3, 5).equals(expectedGrantShortcut)) return false;`. WHY: for the encoded id `ssttgg:raw` the grant shortcut occupies 0-based indices 4-5, so `substring(3,5)` inspects the token-type/grant boundary and can never equal the expected shortcut; combined with the inverted `return false`, the equality branch is unreachable and the matcher validates only the UUID part. As a result the new assertions in `expectCodeToToken`/`expectRefresh`/`expectDeviceCodeToToken`/`expectAuthReqIdToToken` do not actually assert the grant type and would pass even if the grant shortcut were wrong. HOW: use `items[0].substring(4, 6)` and negate the condition (`if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`)."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       476,
+       492
+      ],
+      "texto": "The matcher logic is inverted: line 483 returns false when the extracted grant shortcut EQUALS expectedGrantShortcut, so a token that actually carries the expected grant fails the matcher, while a token with any other grant shortcut falls through and passes. The condition should be negated: `if (!items[0].substring(3,5).equals(expectedGrantShortcut)) return false;`. Also note the encode site writes the grant shortcut at chars 4-6 (substring(4,6)); substring(3,5) reads one character early into the token-type field, so the offset is off by one relative to TokenManager.encodeTokenId."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       482,
+       483
+      ],
+      "texto": "The comment 'Grant type shortcut starts at character 4th char' disagrees with the encoding that this PR defines (sessionType chars 1-2, tokenType 3-4, grantType 5-6, e.g. 'trltcc'), and the code reads substring(3,5) \u2014 the 4th-5th chars, i.e. the token-type second char plus the grant first char, never the grant shortcut. The comment (and the index) should point at the 5th char / substring(4,6)."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#03",
+    "descricao": "getShortcut() Javadoc says shortcuts are usually 3 letters, but the encoding requires exactly 2-character shortcuts.",
+    "textoGolden": "Javadoc mentions \"usually like 3-letters shortcut\" but some implementations use 2-letter shortcuts (\"ac\", \"cc\", \"rt\", \"te\", \"pc\", \"ci\", \"ro\"). Consider updating documentation to reflect actual usage pattern.",
+    "comentarios": [
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The Javadoc says getShortcut() returns 'usually like 3-letters shortcut', but every implementation introduced in this PR returns a 2-character shortcut ('ac','cc','pg','pc','rt','ro','te','ci','dg') and the encoder relies on exactly 2 chars (encoded context length 6 = 2+2+2). The doc states a length the code does not produce; it should say 2-character shortcut."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Grant shortcuts are registered without enforcing the two-character length required by the decoder. A custom grant returning a three-character shortcut, which the new OAuth2GrantTypeFactory documentation explicitly suggests, produces a seven-character prefix that getTokenContextFromTokenId rejects, breaking encode/decode round trips for that grant. Validate shortcut length during registration and dynamic refresh, and document the required two-character format."
+     },
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The new contract describes getShortcut() as usually returning a three-letter shortcut, but DefaultTokenContextEncoderProvider requires exactly two characters for the grant field (six total prefix characters, decoded with substring(4, 6)). An extension author following this documentation can produce token IDs that the default decoder rejects. Document the required two-character length rather than advertising three letters."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#04",
+    "descricao": "testIncorrectGrantType catches any RuntimeException, so it passes on a NullPointerException from the unset sessionFactory rather than verifying the unknown-grant IllegalArgumentException.",
+    "textoGolden": " Catching generic RuntimeException is too broad. The implementation throws IllegalArgumentException specifically - catch that instead for more precise testing.",
+    "comentarios": [
+     {
+      "file": "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java",
+      "lines": [
+       77,
+       83
+      ],
+      "texto": "Catching RuntimeException allows this negative test to pass for an unrelated fixture failure. The fixture constructs the factory without postInit, leaving sessionFactory null; resolving the unregistered `ac` shortcut calls sessionFactory.getProviderFactoriesStream and throws NullPointerException before the decoder's intended unknown-grant IllegalArgumentException. Catch/assert IllegalArgumentException specifically and provide a factory fixture whose lookup returns no matching grant, so removing the decoder's validation would fail the test."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#05",
+    "descricao": "Client-credentials (and UMA permission) token issuance never sets the GRANT_TYPE attribute, so their access token ids are encoded with the unknown grant 'na' instead of their shortcut.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+      "lines": [
+       57,
+       60
+      ],
+      "texto": "The new grant metadata falls back to 'na' for client-credentials and UMA tokens because their issuance paths never set Constants.GRANT_TYPE on their fresh ClientSessionContext. ClientCredentialsGrantType calls responseBuilder.generateAccessToken directly, and PermissionGrantType delegates to AuthorizationTokenService, so neither executes the new assignment in createTokenResponse; tokens from these known grants therefore carry unknown grant context. Set the grant attribute in both issuance paths before generating the access token."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#06",
+    "descricao": "Lazy registration of newly deployed grants does not check shortcut uniqueness, so a grant reusing an existing shortcut silently overwrites the reverse mapping and older tokens decode to the wrong grant.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+      "lines": [
+       112,
+       114
+      ],
+      "texto": "Enforce shortcut uniqueness during lazy registration rather than overwriting grantsByShortcuts. If a newly deployed grant B uses existing grant A's shortcut, this path replaces shortcut\u2192A with shortcut\u2192B while retaining both forward entries. Previously issued A tokens then decode as B. Concurrent registrations of two new grants with the same shortcut likewise both succeed, with the last inverse-map write winning. Use collision-aware atomic registration and reject the conflicting grant before publishing its forward mapping."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#07",
+    "descricao": "Claims setFormParams replaces form params without refreshing the cached grantType, leaving getGrantType() stale.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantType.java",
+      "lines": [
+       102,
+       107
+      ],
+      "texto": "WHAT: grantType is snapshotted once from formParams in Context ctor but setFormParams() replaces formParams without refreshing it. WHY: Any caller mutating form params after construction leaves getGrantType() stale, so OAuth2GrantTypeBase.createTokenResponse stores the wrong GRANT_TYPE and encodes the wrong token-id prefix. HOW: Update grantType inside setFormParams or make getGrantType() derive from current formParams."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#08",
+    "descricao": "getShortcut() is added to OAuth2GrantTypeFactory without a default implementation, breaking existing custom grant type factories when the encoder factory calls it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       29,
+       33
+      ],
+      "texto": "WHAT: New interface method getShortcut() has no default implementation. WHY: All existing third-party OAuth2GrantTypeFactory implementations break at runtime/compile (AbstractMethodError) when upgrading, and DefaultTokenContextEncoderProviderFactory blindly casts every OAuth2GrantType factory to OAuth2GrantTypeFactory. HOW: Provide a default e.g. default String getShortcut() { return getId(); } or handle missing shortcut."
+     },
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       29,
+       33
+      ],
+      "texto": "getShortcut() added as abstract required method breaks existing custom OAuth2GrantTypeFactory implementations (old contract had no such method). Make it a default method (e.g. default String getShortcut() { return \"na\"; } or return getId()) or handle null/missing shortcut in DefaultTokenContextEncoderProviderFactory so legacy providers keep working."
+     }
+    ]
+   }
+  ]
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "02f48f776f43734d1ac8914d3ad6a7115acdcb33",
+  "base": "f3c8e8f3487112f2c99aa78400430cce2d30be39",
+  "prTitle": null,
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     107,
+     107
+    ],
+    "texto": "WHAT: The suffix scan can overlap the prefix already removed from the diagnostic. WHY: For value `aaa<div></div>aaa`, sanitization produces `aaaaaa`, both scans consume six characters, and sanitized.substring(6, 0) throws instead of returning a validation error, aborting the Maven verifier. HOW: Limit the suffix scan to the characters remaining after the common prefix in both strings."
+   },
+   {
+    "id": "S2",
+    "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+    "lines": [
+     188,
+     188
+    ],
+    "texto": "WHAT: The message replaces i18next interpolation with Java MessageFormat placeholders and a choice expression. WHY: ThemeResource returns these values unchanged and account-ui uses plain i18next, while setUserProfileServerError supplies numeric interpolation keys, so multivalued validation errors now display literal `{0}`, `{1}`, `{2}` and the choice expression rather than the attribute and limits. HOW: Retain the double-brace placeholders and use wording supported by i18next on this client path; apply the same correction to the admin-ui resource changed in this PR."
+   },
+   {
+    "id": "S3",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     124,
+     126
+    ],
+    "texto": "WHAT: Normalization removes complete choice expressions, including any HTML in their output branches, before HTML verification. WHY: A translated error-invalid-multivalued-size containing `{2,choice,0#<img src=x onerror=alert(1)>|1#value}` is reduced to `...` and passes this check even though its selectable output contains forbidden markup. HOW: Preserve and validate branch contents instead of replacing the whole expression; exempt only the choice-format separator syntax from HTML interpretation."
+   },
+   {
+    "id": "S4",
+    "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+    "lines": [
+     71,
+     71
+    ],
+    "texto": "WHAT: The Lithuanian OTP setup instruction is replaced with an Italian sentence. WHY: login-config-totp.ftl renders loginTotpStep1 directly, so users selecting Lithuanian now receive their installation instruction in Italian; the account messages_lt.properties change repeats the same error. HOW: Replace the sentence in both Lithuanian bundles with a Lithuanian translation of the new installation instruction."
+   },
+   {
+    "id": "S5",
+    "file": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+    "lines": [
+     101,
+     101
+    ],
+    "texto": "The replacement is Italian, whereas this is the Lithuanian locale and the surrounding OTP steps are Lithuanian. Lithuanian users now receive the first setup instruction in the wrong language. Use a Lithuanian translation of the new instruction."
+   },
+   {
+    "id": "S6",
+    "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+    "lines": [
+     71,
+     71
+    ],
+    "texto": "This new instruction is Italian in the Lithuanian login bundle. Unlike the neighboring Lithuanian steps, it will be shown in the wrong language during authenticator enrollment. Translate the replacement instruction into Lithuanian."
+   },
+   {
+    "id": "S7",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     107,
+     111
+    ],
+    "texto": "The suffix scan does not account for the prefix already consumed. For example, an English plain-text key `aa` translated as `a<div></div>a` sanitizes to `aa`: the prefix scan consumes one character and the suffix scan consumes both sanitized characters. The diagnostic then calls `sanitized.substring(1, 0)`, throwing an uncaught StringIndexOutOfBoundsException instead of returning the Illegal HTML validation error. Bound the suffix scan by each string's remaining length after `start`, and add a regression test for removed markup between repeated characters."
+   },
+   {
+    "id": "S8",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     106,
+     111
+    ],
+    "texto": "The suffix scan does not exclude characters already consumed by the prefix scan. For example, a value `><div>` sanitizes to `>` (after unescaping). Both scans consume that single character, so the diagnostic calls `sanitized.substring(1, 0)` and throws StringIndexOutOfBoundsException instead of recording illegal HTML. Bound the suffix scan by each string's length minus `start`."
+   },
+   {
+    "id": "S9",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     107,
+     111
+    ],
+    "texto": "The suffix scan does not exclude characters already consumed by the prefix scan. For example, value `x<b></b>x` with HTML disallowed sanitizes to `xx`: start becomes 1 and end becomes 2, so sanitized.substring(1, 0) throws StringIndexOutOfBoundsException. Thus an illegal translation can abort verification instead of producing the intended error. Bound the suffix scan by the remaining lengths after start."
+   },
+   {
+    "id": "S10",
+    "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+    "lines": [
+     71,
+     71
+    ],
+    "texto": "The replacement is Italian, although this bundle is Lithuanian. Users selecting Lithuanian now receive an Italian instruction during OTP setup. The same replacement occurs for totpStep1 in the Lithuanian account bundle; both should retain Lithuanian text while removing the links."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+    "descricao": "The Lithuanian TOTP setup step was replaced with Italian text in both the account and login bundles.",
+    "textoGolden": "The translation is in Italian instead of Lithuanian. This should be translated to Lithuanian to match the file's locale (messages_lt.properties).",
+    "comentarios": [
+     {
+      "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The Lithuanian OTP setup instruction has been replaced with an Italian sentence. login-config-totp.ftl renders this message directly, so users selecting Lithuanian receive an instruction in the wrong language; the same copied sentence also appears in the Lithuanian account bundle at line 101. Replace both values with the Lithuanian translation of the new installation instruction."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+      "lines": [
+       101,
+       101
+      ],
+      "texto": "The replacement OTP setup instruction is Italian (\u201cInstalla una delle seguenti applicazioni sul tuo cellulare\u201d), but this is the Lithuanian locale and the surrounding setup steps are Lithuanian. Translate the new instruction into Lithuanian rather than copying the Italian translation. The same incorrect replacement appears in the login bundle at themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71 and should be corrected there too; otherwise Lithuanian users see an untranslated first step in both OTP setup flows."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The replacement OTP setup instruction is Italian, not Lithuanian (`Installa una delle seguenti applicazioni sul tuo cellulare`). The same replacement was made for `totpStep1` in the Lithuanian account bundle. Translate both replacements into Lithuanian so selecting Lithuanian does not display Italian instructions during authenticator setup."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+    "descricao": "The zh_CN totpStep1 translation is written in Traditional Chinese instead of Simplified Chinese.",
+    "textoGolden": "The totpStep1 value uses Traditional Chinese terms in the Simplified Chinese file (zh_CN), which is likely incorrect for this locale. Please verify the locale\u2011appropriate translation.",
+    "comentarios": [
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "The zh_CN (Simplified Chinese) file was given Traditional Chinese characters: totpStep1=\u5728\u60a8\u7684\u624b\u6a5f\u4e0a\u5b89\u88dd\u4ee5\u4e0b\u61c9\u7528\u7a0b\u5f0f\u4e4b\u4e00\uff1a. Compare the unchanged neighbouring lines (e.g. '\u6253\u5f00\u5e94\u7528\u626b\u63cf\u4e8c\u7ef4\u7801\u2026') which use Simplified forms; \u624b\u6a5f/\u61c9\u7528\u7a0b\u5f0f/\u5b89\u88dd are Traditional. zh_CN must be Simplified Chinese, so this string is in the wrong script/variant for the locale."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "totpStep1 in messages_zh_CN uses Traditional Chinese (\u624b\u6a5f, \u5b89\u88dd, \u61c9\u7528\u7a0b\u5f0f), not Simplified Chinese as the rest of the file does. Replace it with the Simplified form: \u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u4e4b\u4e00\uff1a"
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "The Simplified Chinese (zh_CN) totpStep1 was replaced with Traditional Chinese (\"\u5728\u60a8\u7684\u624b\u6a5f\u4e0a\u5b89\u88dd\u4ee5\u4e0b\u61c9\u7528\u7a0b\u5f0f\u4e4b\u4e00\uff1a\"). Use the Simplified form, \"\u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u7a0b\u5e8f\u4e4b\u4e00\uff1a\"."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#04",
+    "descricao": "The method santizeAnchors is misspelled; it should be sanitizeAnchors.",
+    "textoGolden": "The method name 'santizeAnchors' should be 'sanitizeAnchors' (missing 'i').",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#05",
+    "descricao": "HTML_TAGS is a non-static, non-private field instead of a private static final constant.",
+    "textoGolden": "Field HTML_TAGS should be declared as 'private static final' following Java naming conventions for constants",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+    "descricao": "The diff-trimming code computes common prefix and suffix independently, so they can overlap and substring throws StringIndexOutOfBoundsException, crashing the verifier instead of reporting the illegal HTML.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       101,
+       111
+      ],
+      "texto": "The common prefix (start) and common suffix (end) are computed independently and can overlap, for example value \"aa\" vs sanitized \"a\". Then substring(start, length - end) gets begin > end and throws StringIndexOutOfBoundsException, so the verifier crashes instead of reporting the illegal HTML. Bound the suffix scan so that start + end <= min(value.length(), sanitized.length()), e.g. `while (end < min - start && ...)`."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       102,
+       111
+      ],
+      "texto": "The common prefix and common suffix are computed independently and can overlap, so `sanitized.substring(start, sanitized.length() - end)` can have start > end and throw StringIndexOutOfBoundsException. This crashes the verifier instead of reporting 'Illegal HTML'. Cap the suffix scan with `end < Math.min(value.length(), sanitized.length()) - start`."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       102,
+       111
+      ],
+      "texto": "WHAT: Common prefix/suffix stripping for the diff message can compute start+end larger than the string length and call substring(start, length-end) with start > end. WHY: Throws StringIndexOutOfBoundsException inside the key loop and crashes verification instead of reporting Illegal HTML. HOW: Clamp end so start+end <= min lengths, e.g. stop suffix scan when end >= length-start."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#07",
+    "descricao": "normalizeValue blanks the entire choice expression for some keys before HTML validation, so markup placed inside a choice branch of those keys bypasses the new verifier.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       124,
+       126
+      ],
+      "texto": "Choice normalization removes all branch content before HTML validation, allowing prohibited markup to bypass the new translation policy. A translated error-invalid-multivalued-size value such as `{2,choice,0#values|1#<a href=\"https://malicious.example\">value</a>|1<values}` becomes `...` and passes without checking the injected link, while consumers using MessageFormat expand that branch into the rendered message. Preserve and validate branch text, normalizing only the choice comparison syntax that conflicts with HTML parsing."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       124,
+       127
+      ],
+      "texto": "WHAT: normalizeValue replaces the entire {n,choice,...} block with ... before sanitizing, so HTML inside choice options is never checked. WHY: A translation can smuggle tags (e.g. {2,choice,0#<script>...}) in error-invalid-multivalued-size/linkExpirationFormatter keys and pass the verifier, reaching UI rendering as XSS. HOW: Sanitize/validate the choice body instead of blanking it, or run the HTML policy on the inner choice text as well."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+    "descricao": "The account and admin UI bundles now use Java MessageFormat placeholders and choice syntax for error-invalid-multivalued-size, but i18next expects {{n}}, so the UI shows literal {0}/{1}/{2} and the raw choice text.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties",
+      "lines": [
+       3138,
+       3138
+      ],
+      "texto": "The admin-ui bundle is consumed by react-i18next, which interpolates with double-brace `{{0}}` syntax (the previous value was `Attribute {{0}} ... {{2}}`). This line was rewritten to Java MessageFormat/ICU syntax (`{0}` ... `{2,choice,0#values|1#value|1<values}`), which i18next does not understand: the placeholders will not be substituted and the literal `{2,choice,...}` text will be shown to users. Keep the JS-side value in `{{0}}` form (and don't introduce ICU ChoiceFormat into the JS bundle); the ICU/choice spelling belongs only in the Java theme properties."
+     },
+     {
+      "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+      "lines": [
+       188,
+       188
+      ],
+      "texto": "Same contract break in the account-ui bundle: the value was `Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).` (i18next double-brace interpolation) and was changed to `{0}`/`{2,choice,...}` MessageFormat+ICU syntax. The account console's i18next based consumer was not updated to match, so interpolation will fail and the raw placeholder/choice syntax will be rendered. Restore `{{0}}`-style placeholders for the JS bundle."
+     },
+     {
+      "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+      "lines": [
+       188,
+       188
+      ],
+      "texto": "The account-ui bundle is consumed by i18next, which interpolates with double braces (the original string was `Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).`). This PR aligned the value to the Java theme convention, replacing `{{0}}/{{1}}/{{2}}` with `{0}/{1}/{2}` and adding ICU `{2,choice,...}`. i18next will no longer substitute the placeholders and cannot interpret the ICU choice, so the account UI shows the raw `{0}`, `{1}`, `{2}` and literal choice text. Keep the JS-side double-brace form for this bundle (adapt the choice accordingly) rather than the Java single-brace/ICU form used by the theme messages."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#03",
+    "descricao": "Claims santizeAnchors consumes English matcher groups without validation, so a translation with more anchor tags than the English text gets incorrect results.",
+    "textoGolden": "The anchor sanitization logic has a potential issue where it consumes English matcher groups without proper validation. If the translated text has more anchor tags than the English text, this could lead to incorrect validation results.",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#08",
+    "descricao": "Notes that normalizeValue blanks the whole choice expression, so a wrong argument index inside the choice would not be flagged.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "VerifyMessageProperties.java",
+      "lines": [
+       17,
+       176
+      ],
+      "texto": "normalizeValue blanks the whole choice expression, so a wrong argument index inside the choice would not be flagged. The reviewer notes this is deliberate scoping for the HTML check rather than the feature under review, and is consistent with the diff's manual sk fix."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#09",
+    "descricao": "Claims the English-file path rewrite is fragile and that a messages file without an English counterpart aborts the build with a RuntimeException.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       73,
+       80
+      ],
+      "texto": "verifySafeHtml() derives the English sibling file via file.getAbsolutePath().replaceAll(\"resources-community\",\"resources\").replaceAll(\"_[a-zA-Z-_]*\\\\.properties\",\"_en.properties\") and opens it unconditionally, throwing a raw RuntimeException (not MojoExecutionException) on failure. The second regex is broad ('-'..'_' also matches '/', digits, and other chars), so a path with an underscore before the final path segment can be rewritten to a non-existent _en.properties, and any locale lacking an English counterpart aborts the build with an opaque RuntimeException. Restrict the substitution to the final segment and handle the missing English file gracefully."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       73,
+       80
+      ],
+      "texto": "The English reference file path is derived by regex replacement on the absolute path, and a missing file throws RuntimeException. A file with no '_' in its name, or a theme whose English file lives elsewhere, aborts the whole verification with a crash instead of adding a message to the result list. Fix: resolve the English file explicitly, and if it does not exist, treat the English value as empty or throw a proper MojoExecutionException."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       73,
+       80
+      ],
+      "texto": "The English counterpart file is opened unconditionally. If the derived path does not exist, a RuntimeException is thrown and the whole verification aborts instead of treating the English bundle as empty or reporting a message. Check that the file exists and handle its absence."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#11",
+    "descricao": "Notes no test covers allowed tags under POLICY_SOME_HTML, so emptying the allow-list would not fail the suite.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java",
+      "lines": [
+       36,
+       40
+      ],
+      "texto": "verifyIllegalHtmlTagDetected is the only test that selects POLICY_SOME_HTML (the English-has-HTML branch, line 91), but its fixture's tag is <div>, which is rejected by every policy. Because of this, the test (and the whole suite) still passes if POLICY_SOME_HTML's allow-list (br/p/strong/b, lines 58-61) is emptied or narrowed - i.e. if the very behaviour of permitting the allowed HTML subset in translations is broken. Add a case where the English source contains HTML and the translation uses an allowed tag (e.g. <b>...</b> or <br />), asserting that verify() returns no 'Illegal HTML' message."
+     }
+    ]
+   }
+  ]
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "bbd8c507cdf56f6b884373809e0b24abd4a2353d",
+  "base": "50f4e78a39914711d0d231a501ba215becf17ebc",
+  "prTitle": null,
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/anonymous/anonimpl/client.go",
+    "lines": [
+     44,
+     46
+    ],
+    "texto": "Authenticate treats a cached tagging result as proof that a device is admitted, but tagDeviceUI inserts the cache entry before CreateOrUpdateDevice succeeds. When the limit is full, the first request for a new device is denied while its cache entry remains; repeating the same request returns nil from the cache and grants anonymous access for the cache lifetime. Cache only successfully admitted devices, or remove the cache entry on every failed store operation before returning the error."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/anonymous/anonimpl/client.go",
+    "lines": [
+     44,
+     44
+    ],
+    "texto": "The new authentication limit is skipped entirely when X-Grafana-Device-Id is absent because TagDevice returns nil immediately for an empty device ID. A client can omit this user-controlled header and receive an anonymous identity even when the configured device limit is full. When the limit is enabled, require a valid device identifier before granting anonymous access, using a compatible identification flow for initial browser requests."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     110,
+     117
+    ],
+    "texto": "The active-device count and the subsequent upsert are separate database operations with no admission lock or atomic capacity reservation. Concurrent requests with distinct new device IDs can both observe count below deviceLimit and insert successfully, exceeding the configured limit; the unique device_id index does not prevent this. Serialize capacity checking and admission with a database-backed lock or equivalent atomic mechanism that also works across Grafana instances."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/services/anonymous/anonimpl/impl.go",
+    "lines": [
+     144,
+     147
+    ],
+    "texto": "tagDeviceUI sets localCache before calling CreateOrUpdateDevice. When the new limit check rejects a device, this return propagates the error but leaves that cache entry intact. Retrying with the same device ID then hits the cache, returns nil, and Authenticate admits the device despite the full limit for the cache lifetime. Cache only successful store operations (or remove the entry on error)."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     109,
+     117
+    ],
+    "texto": "CountDevices and the subsequent upsert are not an atomic admission operation. With one slot remaining, concurrent requests for distinct device IDs can both read count < deviceLimit and both insert successfully. This produces more active devices than the limit the new authentication path purports to enforce, including across Grafana instances. Serialize the count-and-insert admission decision using database-level coordination shared by instances."
+   },
+   {
+    "id": "S6",
+    "file": "pkg/services/anonymous/anonimpl/impl.go",
+    "lines": [
+     144,
+     147
+    ],
+    "texto": "The newly propagated limit error does not undo tagDeviceUI's cache write: that method calls localCache.SetDefault before CreateOrUpdateDevice, and returns nil immediately for cached devices. At capacity, the first request from a new device receives ErrDeviceLimitReached, but a retry with the same device key hits that cache entry and Authenticate accepts it for the cache lifetime without checking the limit. Cache only successful writes (and ensure concurrent callers cannot treat an in-flight write as success)."
+   },
+   {
+    "id": "S7",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     109,
+     118
+    ],
+    "texto": "The count and subsequent upsert are separate operations with no serialization across them. With limit N and N-1 active devices, requests for two different new devices can both read N-1, both pass this check, and both insert, leaving N+1 admitted devices. This also applies across Grafana instances, so a process-local lock alone is insufficient. Serialize admission at the database level and perform the count and write within that protected operation."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#01",
+    "descricao": "The device limit check counts devices and then inserts in separate non-atomic steps, so concurrent requests from new devices can all pass the check and exceed the configured limit.",
+    "textoGolden": "Race condition: Multiple concurrent requests could pass the device count check simultaneously and create devices beyond the limit. Consider using a database transaction or lock.",
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "The limit check counts devices and then inserts in separate steps with no lock or transaction. Concurrent requests from new devices can all see count < limit and all insert, so the limit is exceeded. Make the count-and-insert atomic, for example with a conditional INSERT ... SELECT ... WHERE (SELECT COUNT(*)) < limit."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "The device limit check is a non-atomic count followed by an insert. Concurrent requests from different new devices can all see count < limit and all insert, so the number of devices exceeds deviceLimit. Make the check and insert atomic, for example with a conditional INSERT ... SELECT WHERE (SELECT COUNT(*)) < limit, or serialize the check and insert under a lock."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "WHAT: CreateOrUpdateDevice does check-then-act (CountDevices then INSERT/UPSERT) with no lock, transaction, or unique-guard when deviceLimit>0. WHY: Two concurrent new-device requests can both observe count < limit and both insert, exceeding the configured limit and breaking the enforcement contract. HOW: Enforce atomically (e.g., conditional insert guarded by count in one statement/transaction with serializable lock, or re-check count on conflict)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#02",
+    "descricao": "Device slots are keyed by the client-controlled X-Grafana-Device-Id header with no validation or rate limiting, so an anonymous caller can fill the limit with fake IDs and deny anonymous access to every new legitimate device.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       109,
+       117
+      ],
+      "texto": "WHAT: Device slots counted toward deviceLimit are keyed by the unauthenticated X-Grafana-Device-Id header (read in impl.go TagDevice) with no validation or rate-limit. WHY: Any anonymous caller can mint arbitrary device IDs to fill the table up to the limit, after which all legitimate new anonymous devices get ErrDeviceLimitReached and authentication is denied \u2014 a trivial anonymous-access DoS introduced by the limit. HOW: Do not let a single client consume many slots (e.g., bind slot consumption to IP/fingerprint, rate-limit new-device creation, or require proof of distinct device)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#05",
+    "descricao": "TestIntegrationBeyondDeviceLimit only checks that a new device is rejected at the limit and never verifies that an existing device can still be updated at the limit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database_test.go",
+      "lines": [
+       51,
+       70
+      ],
+      "texto": "The at-limit call reuses a brand-new device ID (\"keep\") that was never inserted, so it only reaches updateDevice's `rowsAffected == 0` -> ErrDeviceLimitReached branch. The success branch of the newly added updateDevice (an existing device still being updated while the store is at the limit) is never exercised by any test \u2014 every other call uses deviceLimit 0, so updateDevice is never invoked. A regression that made updateDevice always affect 0 rows, use a wrong WHERE/SET, or unconditionally return ErrDeviceLimitReached whenever limit>0 would leave this and all other tests green. Add a case that, after the store is at the limit, calls CreateOrUpdateDevice again with the SAME DeviceID and asserts require.NoError (and ideally that client_ip/user_agent/updated_at were changed), so the update path is actually verified."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database_test.go",
+      "lines": [
+       51,
+       70
+      ],
+      "texto": "TestIntegrationBeyondDeviceLimit only checks that a new device is rejected at the limit. It would still pass if updateDevice always returned ErrDeviceLimitReached, because it never re-submits the existing device (DeviceID \"32mdo31deeqwes\") at the limit. Add a call that updates the existing device with a new UserAgent or UpdatedAt, require NoError, and check the stored row changed."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#07",
+    "descricao": "tagDeviceUI caches the device key before CreateOrUpdateDevice; when the store returns ErrDeviceLimitReached the entry stays, so the next request from the same device skips the limit check and authenticates for up to 29 minutes.",
+    "textoGolden": "The `tagDeviceUI` function populates the local cache with the device ID before the `CreateOrUpdateDevice` call. If `ErrDeviceLimitReached` is returned, the cache entry remains set, allowing subsequent requests to bypass the device limit until the cache expires after 29 minutes.",
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       47
+      ],
+      "texto": "WHAT: TagDevice failures that triggered the new ErrDeviceLimitReached early-return are not permanent, because tagDeviceUI (impl.go:87) writes the device key into localCache BEFORE CreateOrUpdateDevice (impl.go:93) and never evicts it on error; tagDeviceUI returns early on any cache hit (impl.go:83-84). WHY: the first request from a new over-limit device is denied, but the poisoned cache makes every subsequent request from that same device skip the limit check entirely and authenticate successfully, so the configurable device limit is bypassed by simply retrying. HOW: only set the cache key after CreateOrUpdateDevice returns nil (e.g. move a.localCache.SetDefault after the successful DB write, or delete the key when it returns ErrDeviceLimitReached)."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/impl.go",
+      "lines": [
+       144,
+       148
+      ],
+      "texto": "TagDevice now propagates ErrDeviceLimitReached to deny an over-limit anonymous device, but tagDeviceUI (impl.go:83-95) records the device in localCache at line 87 *before* calling a.anonStore.CreateOrUpdateDevice. When the store rejects the device with ErrDeviceLimitReached, the key is already cached, so the next request for that same device returns early at line 83 with a nil error and the device is admitted. The limit therefore only blocks the first request and is silently bypassed on retry. Fix by only setting the cache entry after CreateOrUpdateDevice succeeds (move SetDefault after the store call), or by removing/not caching the key on failure."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       46
+      ],
+      "texto": "The new authentication gate accepts retries from devices that were rejected by the limit because tagDeviceUI inserts the cache entry before CreateOrUpdateDevice succeeds. At capacity, the first request with a new X-Grafana-Device-Id fails, but subsequent requests with that same ID hit the 29-minute cache and receive an anonymous identity without admission to the device store. Cache only successful admissions, and ensure concurrent requests cannot treat an in-progress admission as successful."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#09",
+    "descricao": "Device tagging now runs synchronously in Authenticate, adding DB round-trips on cache-miss anonymous requests where it used to be fire-and-forget.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       50
+      ],
+      "texto": "WHAT: Anonymous.Authenticate changed from fire-and-forget goroutine TagDevice to synchronous TagDevice(ctx) that runs CountDevices + INSERT/UPDATE inline. WHY: Every cache-miss anonymous authentication now blocks on two DB round-trips in the login hot path, adding latency and DB load per request where previously auth returned immediately. HOW: Restore async tagging for the non-limit path or at least decouple denial from the hot path (e.g., async count with cached count, or only synchronously enforce when near limit)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#11",
+    "descricao": "The new auth.anonymous device_limit setting has no entry in conf/defaults.ini, so the GF_AUTH_ANONYMOUS_DEVICE_LIMIT environment override is ignored and the limit stays 0.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/setting/setting.go",
+      "lines": [
+       1654,
+       1654
+      ],
+      "texto": "The new device_limit setting is read without adding a corresponding key to conf/defaults.ini. applyEnvVariableOverrides only visits keys already present in the loaded INI and runs before readAuthSettings, so setting GF_AUTH_ANONYMOUS_DEVICE_LIMIT alone is ignored and leaves the limit at zero, disabling enforcement. Add an uncommented device_limit = 0 entry under auth.anonymous in defaults.ini so the standard environment override mechanism can apply it."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#03",
+    "descricao": "Claims ProvideAnonDBStore's new int64 parameter breaks wire dependency injection because wire.go still registers it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       52,
+       54
+      ],
+      "texto": "ProvideAnonDBStore now takes an extra `deviceLimit int64` parameter, but pkg/server/wire.go:374-375 still lists it as a wire provider with a Bind to AnonStore. wire cannot supply an int64, so wire generation and the build fail. Remove the provider and Bind from wire.go, since impl.go now constructs the store directly."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       52,
+       54
+      ],
+      "texto": "ProvideAnonDBStore now needs a bare int64 deviceLimit, but pkg/server/wire.go (lines 374-375) still registers it as a wire provider and binds AnonStore to it. Wire has no provider for int64, so dependency injection breaks. Remove those two wire.go entries, since ProvideAnonymousDeviceService now builds the store itself, or keep the provider signature wire-compatible, for example by taking *setting.Cfg."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#04",
+    "descricao": "Claims updateDevice reports ErrDeviceLimitReached for any zero-row update, conflating missing or stale devices with the limit being reached.",
+    "textoGolden": "The updateDevice function returns ErrDeviceLimitReached when rowsAffected == 0, but zero affected rows means the device doesn't exist or falls outside the time window, not that a limit was reached.",
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       95,
+       96
+      ],
+      "texto": "`ErrDeviceLimitReached` (\"device limit reached\") is returned for any UPDATE that affects zero rows, not only when the device limit is the cause. With MySQL the driver reports changed rows, so an UPDATE that matches an existing device but writes identical values (same client_ip, user_agent and updated_at, e.g. repeated requests within the same second) yields rowsAffected == 0 and surfaces a misleading \"device limit reached\" error to the authn client and logs. The identifier/message should either be renamed to reflect \"device not updated/found\" or the zero-row case should be distinguished from the actual limit condition."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       95,
+       97
+      ],
+      "texto": "updateDevice() reports ErrDeviceLimitReached purely from `rowsAffected == 0`. Because its WHERE clause also constrains `updated_at BETWEEN now-30d AND now+1m`, a device that simply falls outside that window (stale device, or a device id that has no matching row for any reason other than the limit) also yields 0 rows and is surfaced as 'device limit reached'. That sentinel is treated as fatal by Authenticate (client.go:45) and fails the login, so the new error is over-broad: it conflates 'device not updated' with 'limit reached' and refuses authentication for reasons unrelated to the limit. The caller distinguishes on this error, so the false positive directly causes a spurious auth failure."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#06",
+    "descricao": "Claims anonymous clients can bypass the device limit by omitting the X-Grafana-Device-Id header.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       46
+      ],
+      "texto": "The device-limit authentication gate treats requests without X-Grafana-Device-Id as admitted because TagDevice returns nil immediately for an empty header. A client can omit this client-controlled header and obtain an anonymous identity even when the configured device limit is full. When a positive limit is configured, require a valid device identifier or supply an enforced server-side identification mechanism before granting anonymous access."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#08",
+    "descricao": "Claims anonymous authentication now fails entirely when TagDevice returns ErrDeviceLimitReached, instead of the previous non-blocking async tagging.",
+    "textoGolden": "Anonymous authentication now fails entirely if anonDeviceService.TagDevice returns ErrDeviceLimitReached. Previously, device tagging was asynchronous and non-blocking. This change prevents anonymous users from authenticating when the device limit is reached.",
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       50
+      ],
+      "texto": "Authenticate() changed contract: device tagging used to run in a fire-and-forget goroutine with its own timeout, and any failure was only logged, so anonymous authentication always succeeded. It is now a synchronous call on the request path that returns `nil, err` for ErrDeviceLimitReached. Once the configured anonymous device limit is reached, every new/unknown device now fails anonymous authentication entirely (the broker receives an error instead of an Identity), rather than the request proceeding untagged. This consumes a request-context-dependent DB count+write synchronously on every anonymous request and turns a previously non-fatal, best-effort side effect into a hard login refusal \u2014 a caller-visible loss of availability that the surrounding auth flow was not updated to tolerate (no fallback identity is produced)."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       50
+      ],
+      "texto": "TagDevice is now called synchronously in Authenticate with the request ctx instead of in a goroutine with its own timeout. Every anonymous request that misses the local cache now waits on the DB writes and, when a limit is set, the COUNT query. If the client cancels the request, tagging is cancelled with it. Keep the async path for non-limit cases, or cache the count result."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       50
+      ],
+      "texto": "Device tagging used to be a best-effort goroutine with its own background context and a 2-minute timeout. It now runs synchronously on the request ctx inside Authenticate, so DB latency (a COUNT query plus an upsert on every uncached request) blocks every anonymous request. The request ctx cancelling also aborts the tagging. ErrDeviceLimitReached now makes Authenticate return an error, so anonymous access is refused once the limit is hit. Decide this deliberately: either keep the tagging async where the limit is not enforced, or map the limit error to a clear client-facing response instead of a generic auth failure."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#10",
+    "descricao": "Claims TagDevice now propagates all tagging errors instead of only the limit error, breaking callers that ignored them.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/impl.go",
+      "lines": [
+       144,
+       148
+      ],
+      "texto": "tagDeviceUI errors are now all returned, not only ErrDeviceLimitReached. TagDevice is called from places that previously ignored these failures, so any DB error from tagging now propagates to callers. Return the error only when it is ErrDeviceLimitReached, and keep logging other errors as before."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#12",
+    "descricao": "Claims updateDevice's time window is based on device.UpdatedAt rather than time.Now(), which may not match the intended logic.",
+    "textoGolden": "Time window calculation inconsistency: Using device.UpdatedAt.UTC().Add(-anonymousDeviceExpiration) as the lower bound but device.UpdatedAt as the current time may not match the intended logic. Consider using time.Now().UTC() consistently.",
+    "comentarios": []
+   }
+  ]
+ },
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "3162ad68a5c87666788b27a44eb31235025091a9",
+  "base": "de11fb0166a7244115bb066edd65ec0d6b7e365c",
+  "prTitle": null,
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     254,
+     255
+    ],
+    "texto": "WHAT: The new isinstance(process, multiprocessing.Process) guard is false for workers created by multiprocessing.get_context(\"spawn\").Process. WHY: A hung worker is left running when its replacement is started, so both can flush the same Redis queues if the old worker resumes, causing duplicate production and retaining untracked processes. HOW: Check against self.mp_context.Process (or multiprocessing.process.BaseProcess) before killing the worker."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     338,
+     341
+    ],
+    "texto": "WHAT: join breaks out of the worker loop when the shared deadline expires, skipping cleanup of all remaining workers. WHY: If next_step.join consumes the timeout, or one worker stalls until the deadline, subsequent workers remain alive and untracked after shutdown or rebalancing. HOW: Apply the deadline only to waiting, and still run process termination for every worker using the spawn-context process type."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     299,
+     301
+    ],
+    "texto": "WHAT: submit calls get_memory_info once for every process-specific buffer even though each call retrieves memory information for the entire Redis cluster. WHY: With P flusher processes, every submission performs P redundant cluster-wide INFO operations serially on the consumer thread, multiplying network traffic and blocking time precisely when parallel flushing is enabled. HOW: Query memory information from one buffer only; SpansBuffer.get_memory_info does not filter by assigned_shards."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     32,
+     32
+    ],
+    "texto": "The new docstring promises one process per shard, but the implementation caps the process count at max_processes and assigns multiple shards to each process when that cap is smaller than the shard count. In particular, the CLI defaults to one flusher process for all assigned shards. Document the cap and shared-shard behavior so callers do not infer per-shard parallelism or isolation that is not provided."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     254,
+     255
+    ],
+    "texto": "Workers are created with multiprocessing.get_context(\"spawn\").Process, whose SpawnProcess class is not a subclass of the default-context multiprocessing.Process class. Consequently this isinstance check is false for real workers. When a worker is declared hung, it is left running while a replacement is started and its handle is overwritten, allowing multiple workers to operate on the same shards and leaving the old worker unmanaged. Check against multiprocessing.process.BaseProcess (or the spawn context's Process class) instead."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     254,
+     255
+    ],
+    "texto": "Workers are created with multiprocessing.get_context(\"spawn\").Process, whose SpawnProcess class is not a subclass of multiprocessing.Process (the default-context Process class). Consequently this check is false for production workers. When a worker exceeds max-unhealthy-seconds, replacement starts without killing the old worker; if the old worker resumes, both flush the same assigned shards and the old worker is no longer tracked. Check against multiprocessing.process.BaseProcess or the explicit spawn-context class before killing."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     338,
+     341
+    ],
+    "texto": "When the deadline expires while waiting for one worker, the next iteration breaks before reaching termination for that worker or any subsequent workers. With multiple workers, join(timeout) can therefore return with untracked active flushers, including across consumer rebalances where new flushers can take over the same shards. Stop waiting once the deadline expires, but still run termination cleanup for every worker. The termination guard also needs to recognize the spawn-context workers."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+    "descricao": "The wait_produce timer is tagged with 'shards' while sibling flusher metrics use 'shard' for the same value, so per-shard dashboards miss it.",
+    "textoGolden": "In the SpanFlusher flush loop, metric tags inconsistently use 'shard' (e.g., in spans.buffer.flusher.produce and spans.buffer.segment_size_bytes) and 'shards' (in spans.buffer.flusher.wait_produce) for the same shard identifier value. This prevents correct metric aggregation across flush stages \u2014 dashboards and alerts filtering by tag 'shard' will miss data tagged as 'shards' and vice versa.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The `spans.buffer.flusher.wait_produce` timer is tagged with the key `\"shards\"`, while the other two metrics emitted in this same loop (`spans.buffer.flusher.produce` at line 185 and `spans.buffer.segment_size_bytes` at line 195) use the key `\"shard\"`. All three carry the same `shard_tag` value, so this is a pure key-name disagreement: any dashboard or alert that groups/filters by the `shard` tag will silently receive no data from `wait_produce`. Rename the tag key to `\"shard\"` so all flusher metrics share one tag."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The `spans.buffer.flusher.wait_produce` timer is tagged with key `shards` while every sibling metric introduced/updated in the same method (`spans.buffer.flusher.produce`, `spans.buffer.segment_size_bytes`) uses the singular key `shard`. Anything consuming this metric family by the `shard` tag (dashboards, alerts, tag-based aggregation) will silently receive no data for `wait_produce`, and per-shard breakdowns of produce latency will be incomplete. Change the tag to `tags={\"shard\": shard_tag}` so the tag contract matches the other flusher metrics."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The wait_produce timer tags with \"shards\", while the sibling metrics in the same loop use \"shard\" for the same value (shard_tag). Use one tag key, \"shard\", so queries and dashboards that group by it cover all of these metrics."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+    "descricao": "The time.sleep(0.1) added to test_basic to let flusher threads process is a no-op because the test monkeypatches time.sleep.",
+    "textoGolden": "The test_basic function in test_consumer.py uses a monkeypatched time.sleep that returns immediately, but then calls time.sleep(0.1) expecting it to actually wait.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "WHAT: The added synchronization point `time.sleep(0.1)` added after the second `step.poll()` is neutralized by the test's own `monkeypatch.setattr(\"time.sleep\", lambda _: None)` at line 15 (same `time` module), so it does not actually wait. WHY: The comment says it 'Give[s] flusher threads time to process after drift change', but the call is a no-op, so the test still races the background flusher thread before `step.join()` and is liable to be flaky / to not exercise the intended post-drift flush path. HOW: Use a non-monkeypatched wait (e.g. capture the real sleep before patching, or use the flusher's thread/process join, or poll until `messages` is non-empty with a real timeout)."
+     },
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "The added `time.sleep(0.1)` does not wait: line 15 of the same test does `monkeypatch.setattr(\"time.sleep\", lambda _: None)`, which replaces `sleep` on the global `time` module, so this call (and the flusher's own `time.sleep`) is a no-op. The comment 'Give flusher threads time to process after drift change' is therefore false \u2014 the call returns instantly and provides no synchronisation, so the test does not actually wait for the flusher to process after the drift change. Either synchronise on a real condition (e.g. wait until the expected message is produced) or, if the original `time.sleep` is needed here, patch a module-scoped reference instead of the global `time.sleep`."
+     },
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "The added `time.sleep(0.1)` is a no-op because the test patches `time.sleep` to `lambda _: None`, so nothing waits for the flusher threads before `step.join()` and the `messages` assertion. Replace it with a condition-based wait, such as polling until `messages` is non-empty with a deadline. Use the real sleep saved before patching if a delay is needed."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+    "descricao": "The restart path only kills a hung flusher if it is a multiprocessing.Process, but spawn-context workers are SpawnProcess, so hung processes are never killed and a duplicate flusher is started for the same shards.",
+    "textoGolden": "Because flusher processes are created via multiprocessing.get_context('spawn').Process, they are instances of multiprocessing.context.SpawnProcess, which on POSIX is not a subclass of multiprocessing.Process, so this isinstance check will always be false and hung processes won't be killed here.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       253,
+       255
+      ],
+      "texto": "The new isinstance(process, multiprocessing.Process) guard does not match the SpawnProcess instances created by self.mp_context.Process. When a worker hangs, the guard skips kill() and the replacement starts while the original worker remains alive, allowing overlapping flushing of the same shards if the original resumes and leaking hung workers. Check against multiprocessing.process.BaseProcess or self.mp_context.Process, and kill and join the old worker before replacing it."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       253,
+       255
+      ],
+      "texto": "The workers are created with get_context(\"spawn\").Process, which produces SpawnProcess instances; these are not instances of multiprocessing.Process (the default-context Process class). Consequently this guard skips kill() for actual production workers. When a worker hangs, the replacement starts while the original remains alive and can resume flushing the same shards. Use multiprocessing.process.BaseProcess or the spawn-context Process class for the check, and fix the identical check in join() so shutdown also terminates surviving workers."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       254,
+       255
+      ],
+      "texto": "Workers created by multiprocessing.get_context(\"spawn\").Process are SpawnProcess instances, not instances of the separate multiprocessing.Process class. Consequently this guard skips kill() for production workers. When a live worker exceeds max-unhealthy-seconds, the code starts a replacement and overwrites its handle while the original is still running. If the original resumes, both workers flush the same shards, and repeated hangs can exceed the configured process limit. Check against multiprocessing.process.BaseProcess (or explicitly distinguish threads) and stop the old worker before replacing it."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+    "descricao": "join() breaks out of the per-process loop when the shared deadline expires, skipping termination of the remaining flusher processes and leaving them running after shutdown.",
+    "textoGolden": "Breaking out of the loop when the deadline has elapsed can skip terminating remaining flusher processes, potentially leaving them running after shutdown; consider ensuring termination is attempted even if the deadline is exceeded.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       338,
+       341
+      ],
+      "texto": "join() breaks out of the worker loop when the shared deadline expires, skipping cleanup for every remaining worker. If next_step.join consumes the timeout or an earlier worker exhausts it, remaining flushers can continue running after shutdown or partition reassignment. Use the deadline only to limit waiting and still terminate and reap every remaining process."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       337,
+       341
+      ],
+      "texto": "Do not break out of worker cleanup when the join deadline expires. If the first worker consumes the timeout, the next iteration breaks before terminating that worker or any subsequent workers. They may still be blocked in Redis or producer calls despite the shared stopped flag, leaving old workers running after strategy shutdown/reassignment. Apply the deadline only to waiting, and perform termination cleanup for every worker regardless of remaining time (using a type check that recognizes spawn-context workers)."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       337,
+       344
+      ],
+      "texto": "join() waits for processes sequentially against a single shared deadline and breaks without terminating remaining processes once it expires, leaking them."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+    "descricao": "The SpanFlusher docstring says it creates one process per shard, but shards are distributed across at most max_processes processes.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       30,
+       32
+      ],
+      "texto": "The docstring says the flusher \"Creates one process per shard for parallel processing,\" but the code at lines 60-66 shares shards across a capped number of processes (num_processes = min(self.max_processes, len(buffer.assigned_shards)); each shard assigned via i % self.num_processes). With the new --flusher-processes default of 1, a single process handles every shard, so the documented contract is the opposite of the behaviour this PR introduces (confirmed by test_flusher_processes_limit, which asserts 4 shards served by 2 processes). Update the docstring to say shards are distributed across up to max_processes flusher processes."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       31,
+       32
+      ],
+      "texto": "The new docstring says this creates one process per shard, but workers are capped by max_processes and shards are distributed among them. In particular, the CLI default of 1 means all assigned shards share one process. Describe capped workers with potentially multiple shards per worker so callers do not rely on per-shard process isolation."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       31,
+       32
+      ],
+      "texto": "The docstring says the flusher 'Creates one process per shard', but the number of processes is capped by max_processes (--flusher-processes), and shards are shared across processes via i % num_processes. Reword it to say that shards are distributed across at most max_processes processes."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#06",
+    "descricao": "max_processes uses a truthiness fallback, so --flusher-processes 0 silently becomes one process per shard instead of being rejected.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "`max_processes or len(buffer.assigned_shards)` treats a falsy value as 'not provided'. The new `--flusher-processes` click option is `type=int`, so a user can pass `0`; that legitimate-but-falsy value is discarded and the flusher silently spawns one process per shard instead of honoring the requested limit. Use an explicit None check, e.g. `self.max_processes = max_processes if max_processes is not None else len(buffer.assigned_shards)` (and validate/reject 0 upstream)."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "An explicit max_processes=0 is treated as an omitted limit by `or`, so passing `--flusher-processes 0` starts one process per assigned shard instead of respecting or rejecting the supplied zero limit. The CLI accepts zero as an integer and the factory forwards it unchanged. Default only when max_processes is None, and explicitly validate that supplied process limits are positive so zero cannot silently enable potentially many workers."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "`max_processes or len(buffer.assigned_shards)` uses a truthiness test, so an explicit 0 is treated as 'unset' and silently expands to one process per shard. Use `max_processes if max_processes is not None else len(buffer.assigned_shards)` and reject values below 1."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#07",
+    "descricao": "A negative --flusher-processes value is not validated and makes SpanFlusher construction fail with KeyError.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       60,
+       66
+      ],
+      "texto": "`flusher_processes` is not validated to be >= 1. `self.max_processes = max_processes or len(buffer.assigned_shards)` lets a negative value through (it is truthy), so `self.num_processes = min(self.max_processes, len(...))` becomes negative and `range(self.num_processes)` is empty, leaving `process_to_shards_map` as `{}`. The following loop computes `process_index = i % self.num_processes`, which for any negative divisor is 0, so `self.process_to_shards_map[0].append(shard)` raises KeyError and the consumer fails to construct. Since `flusher_processes` is exposed as an int CLI option (`--flusher-processes`), a negative value is reachable from configuration. Guard with `max(1, self.num_processes)` / validate the input."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       60,
+       66
+      ],
+      "texto": "negative max_processes flows through `or` guard into min() -> empty map -> KeyError on i % num_processes; empty assigned_shards yields zero processes."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+    "descricao": "submit() queries cluster-wide Redis memory once per flusher buffer, repeating identical INFO calls per process on every submit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       299,
+       301
+      ],
+      "texto": "The new loop calls get_memory_info() once per flusher buffer even though SpansBuffer.get_memory_info delegates to iter_cluster_memory_usage(self.client), which fetches INFO for the entire Redis cluster regardless of assigned_shards. With P flusher processes and memory backpressure enabled, each submitted batch now performs P identical cluster-wide memory queries on the consumer thread instead of one, increasing Redis traffic and blocking ingestion. Fetch cluster memory information once from a single buffer."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       299,
+       301
+      ],
+      "texto": "submit() loop calls buffer.get_memory_info() per flusher but each call is cluster-wide from same client, repeating identical INFO N\u00d7 per submit."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#10",
+    "descricao": "_create_process_for_shard is added but never called.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       127,
+       132
+      ],
+      "texto": "WHAT: `_create_process_for_shard(self, shard)` is newly added but has no caller anywhere (grep for `_create_process_for_shard(` finds only its definition); the restart path actually used is `_create_process_for_shards(process_index, shards)`. WHY: This is dead code that indicates the intended per-shard restart wiring was left incomplete \u2014 any future caller relying on restarting only the process owning a given shard will silently do nothing, and it is confusing which restart path is authoritative. HOW: Remove `_create_process_for_shard`, or wire it into `_ensure_processes_alive` if per-shard restart was intended."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#12",
+    "descricao": "test_flusher_processes_limit counts assigned shards instead of checking that each shard is assigned exactly once.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       119,
+       121
+      ],
+      "texto": "The assertion counts shard entries rather than verifying shard assignment. A broken distribution such as {0: [0, 1], 1: [0, 1]} still passes all assertions in this test while shards 2 and 3 are never flushed. Assert that the flattened mapping contains exactly the expected assigned shards, with no duplicates (and verify each worker's shard buffer uses that mapping), rather than only asserting a total of four."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#09",
+    "descricao": "Splitting the buffer per process makes spans.buffer.max-flush-segments a per-process cap, so with P flusher processes up to P times the configured segments are loaded and flushed per cycle.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       92,
+       93
+      ],
+      "texto": "WHAT: Splitting the single buffer into per-process SpansBuffer(shards) instances breaks the global 'spans.buffer.max-flush-segments' cap, because SpansBuffer.flush_segments computes max_segments_per_shard = ceil(max_flush_segments / len(self.assigned_shards)) using only the subset of shards given to that sub-buffer. WHY: The option is documented as 'Maximum number of segments to fetch and flush per cycle' (default 500), but with P flusher processes each sub-buffer gets max_flush_segments\u00d7(total_shards/P)/total_shards per shard and flushes up to max_flush_segments, so the aggregate cap becomes P\u00d7500 per cycle \u2014 multiplying memory loaded from Redis by the process count and also making any_shard_at_limit backpressure P\u00d7 harder to trigger, exactly when the flusher is being scaled up. HOW: Either keep a single shared cap (e.g. compute num per shard from the total shard count, or pass the intended per-shard budget explicitly / divide by the total number of processes) so the per-cycle total is not multiplied by the number of flusher processes."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#11",
+    "descricao": "Claims the CLI default of 1 makes the one-process-per-shard auto mode unreachable.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/consumers/__init__.py",
+      "lines": [
+       430,
+       438
+      ],
+      "texto": "The click option declares `default=1` for `flusher_processes`, but the consumer this feeds (SpanFlusher, via ProcessSpansStrategyFactory) is designed around `None` meaning \"auto = one process per shard\" (`self.max_processes = max_processes or len(buffer.assigned_shards)`). Because the producer always passes 1, the `or` fallback never fires and the flusher is permanently capped at a single process for all shards, silently disabling the one-process-per-shard parallelism this PR introduces. The default should be `None` (or the flusher sentinel respected) so auto-scaling is actually reachable; as written the advertised behavior is dead in production."
+     }
+    ]
+   }
+  ]
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "ffbaf8c54269df2ce510de91245760fddce09896",
+  "base": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+  "prTitle": null,
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     149,
+     150
+    ],
+    "texto": "WHAT: The second definition of downsize replaces the existing five-argument method instead of adding an overload. WHY: Jobs::ResizeEmoji.execute still calls OptimizedImage.downsize(path, path, 100, 100, opts), which now raises ArgumentError and prevents emoji resizing. HOW: Use a single method that supports both the geometry-string and width/height calling conventions, or give the geometry-string helper a distinct name."
+   },
+   {
+    "id": "S2",
+    "file": "app/assets/javascripts/discourse/lib/utilities.js",
+    "lines": [
+     182,
+     182
+    ],
+    "texto": "WHAT: The fixed 10 MB client limit applies to attachments as well as images. WHY: On sites with max_attachment_size_kb above 10240, previously valid attachments are now rejected in the browser even though UploadValidator permits them and the feature only requires a new image input limit. HOW: Apply the fixed limit only to images and retain the configured attachment limit."
+   },
+   {
+    "id": "S3",
+    "file": "app/controllers/uploads_controller.rb",
+    "lines": [
+     67,
+     67
+    ],
+    "texto": "WHAT: The downsizing loop ignores a false result from OptimizedImage.downsize and retries the unchanged input. WHY: convert_with returns false for conversion failures, so a malformed or unsupported oversized image triggers five identical external conversion attempts before proceeding to upload validation. HOW: Break out of the loop when downsize returns false."
+   },
+   {
+    "id": "S4",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     149,
+     150
+    ],
+    "texto": "Ruby does not overload methods by argument count: this definition replaces the width/height version immediately above. The existing ResizeEmoji job calls OptimizedImage.downsize(path, path, 100, 100, opts), so it now raises ArgumentError instead of resizing emoji. Preserve both calling forms with a single dispatching method or use a different name for the geometry-string helper."
+   },
+   {
+    "id": "S5",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     149,
+     150
+    ],
+    "texto": "Ruby does not overload methods by arity: this definition replaces the width/height version immediately above it. The existing consumer in app/jobs/regular/resize_emoji.rb:14 still calls `OptimizedImage.downsize(path, path, 100, 100, opts)`, which now raises ArgumentError (five arguments supplied, three or four expected), breaking emoji resizing. Preserve both calling conventions with one dispatching method or give the dimensions-based helper a distinct name."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#01",
+    "descricao": "downsize is defined twice in OptimizedImage; the new (from, to, dimensions, opts) version overrides the (max_width, max_height) one, so existing callers such as ResizeEmoji that pass width and height now raise ArgumentError.",
+    "textoGolden": "The downsize method is defined twice. The second definition, which expects a single dimensions string parameter, overrides the first, which expected separate max_width and max_height parameters. This makes the original method unreachable and breaks existing code that calls it with separate width and height arguments.",
+    "comentarios": [
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       149,
+       151
+      ],
+      "texto": "WHAT: A second `def self.downsize(from, to, dimensions, opts={})` is defined that overrides the existing `downsize(from, to, max_width, max_height, opts={})` at lines 145-147. WHY: Ruby uses the last definition, so the effective downsize now only accepts 3-4 args, and the existing caller app/jobs/regular/resize_emoji.rb:14 (`OptimizedImage.downsize(path, path, 100, 100, opts)`) passes 5 args and raises ArgumentError (wrong number of arguments, given 5, expected 3..4), breaking emoji resizing. HOW: Remove the duplicate; keep a single downsize method whose signature matches all callers (the 4-arg uploads_controller call `downsize(path, path, \"80%\", allow_animation: ...)` and the 5-arg ResizeEmoji call), or rename one of them."
+     },
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       145,
+       151
+      ],
+      "texto": "`downsize` is defined twice: the original 5-param form `downsize(from, to, max_width, max_height, opts)` at lines 145-147 and the new 4-param form `downsize(from, to, dimensions, opts)` at lines 149-151. Ruby keeps only the last definition, so the effective signature is now 4 params and the 5-param version is dead code. The pre-existing consumer app/jobs/regular/resize_emoji.rb:14 still calls `OptimizedImage.downsize(path, path, 100, 100, opts)` with 5 positional args, which now raises ArgumentError on every emoji resize. Either update that caller to the new `dimensions` form or remove the redundant override so the old signature keeps working."
+     },
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       145,
+       151
+      ],
+      "texto": "`self.downsize` is defined twice in the same class scope (line 145 `(from, to, max_width, max_height, opts={})` and the new line 149 `(from, to, dimensions, opts={})`). Ruby keeps only the last definition, so the 4-argument version is dead and unreachable. The existing caller `OptimizedImage.downsize(path, path, 100, 100, opts)` in app/jobs/regular/resize_emoji.rb:14 passes 5 arguments and will now raise ArgumentError (expected 3..4). Remove the duplicate definition (keep only the `dimensions`-based one, or convert resize_emoji's call), otherwise emoji resizing breaks."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#02",
+    "descricao": "The client-side upload size check hardcodes 10 MB instead of the per-type max_<type>_size_kb setting, so attachment limits diverge from the server: larger allowed attachments are blocked and smaller limits are only enforced server-side.",
+    "textoGolden": "Hardcoding maxSizeKB = 10 * 1024 ignores Discourse.SiteSettings['max_' + type + '_size_kb'], so the client-side limit can diverge from server-side and per-type settings (also applies to the 413 handler below).",
+    "comentarios": [
+     {
+      "file": "utilities.js",
+      "lines": [
+       179,
+       249
+      ],
+      "texto": "Hardcoded max size literal 10 * 1024 replaces site-setting-derived max size. Behavioral concern outside assigned class."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "The fixed 10 MB client limit is applied to attachments as well as images, replacing max_attachment_size_kb. Sites configured to allow attachments larger than 10 MB can no longer upload those valid files through the composer, although UploadValidator still permits them. Apply the new input ceiling only to images and retain the configured attachment limit."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       180,
+       184
+      ],
+      "texto": "WHAT: Client check hardcodes maxSizeKB to 10*1024 instead of Discourse.SiteSettings['max_'+type+'_size_kb'], losing image vs attachment distinction. WHY: Sites with smaller max_attachment_size_kb pass client validation then fail server-side, and sites with limits >10MB incorrectly block valid uploads with wrong max_size_kb message. HOW: Restore per-type SiteSetting lookup (keep 10MB only as image downsize ceiling)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#03",
+    "descricao": "The upload downsizing passes a percentage ('80%') as dimensions, but for animated GIFs the gifsicle path uses --resize-fit, which expects WxH geometry, so downsizing silently fails.",
+    "textoGolden": "Passing 80% as the dimensions can fail for animated GIFs when allow_animated_thumbnails is true, since the animated path uses gifsicle --resize-fit which expects WxH geometry, not a percentage; downsizing would then silently fail.",
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "The controller passes the percentage string `\"80%\"` as the dimensions argument to `OptimizedImage.downsize`, but the consumer requires explicit `WxH` geometry: the code this PR deleted built exactly `\"#{width}x#{height}\"`, and the animated path runs `gifsicle --resize-fit #{dimensions}`, which rejects a percentage. Pass an explicit size (e.g. a computed `\"WxH\"` from the max KB target) so the auto-downsize actually reduces the file, rather than silently no-oping and leaving oversized uploads."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       70
+      ],
+      "texto": "Caller passes \"80%\" as dimensions to OptimizedImage.downsize, but the downsize/optimize instruction builders in optimized_image.rb expect explicit \"WxH\" geometry (interpolated as -resize #{dimensions}\\>). A bare percentage does not satisfy that contract and will produce a malformed geometry. Fix the caller to supply WxH dimensions or add explicit percentage handling to the callee."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#04",
+    "descricao": "Auto-downsizing passes the upload tempfile path, which lacks a .gif extension, so the animated branch is never chosen and convert keeps only the first frame, flattening oversized animated GIFs.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       64,
+       70
+      ],
+      "texto": "WHAT: The new auto-downsize call passes a tempfile path whose name has no `.GIF` extension, so `optimize` never selects the animated branch (`method_name += \"_animated\" if opts[:allow_animation] && from =~ /\\.GIF$/i`) and uses `downsize_instructions`, which runs `convert from[0]` and keeps only the first frame. WHY: Animated GIFs larger than max_image_size_kb that are uploaded through this path have their animation flattened to a single frame even though SiteSetting.allow_animated_thumbnails is enabled. HOW: Detect the image type from the original filename/content-type rather than the tempfile path (or pass a flag) so the gifsicle animated downsize path is used for GIF inputs."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "Passing the multipart tempfile path to downsize prevents animation detection when that path does not end in .gif, even when allow_animated_thumbnails is enabled. OptimizedImage.optimize checks the path suffix and otherwise uses convert with input[0], so oversized animated GIF uploads are permanently flattened to their first frame. Preserve the original image extension in the processing path or pass the image format explicitly to select animated processing."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#05",
+    "descricao": "The comment promises images are reduced to the allowed size, but the loop only tries five 80% reductions with no guarantee of reaching the limit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       70
+      ],
+      "texto": "The comment says large images are \"automatically reduced to allowed size\", but the loop only resizes by 80% up to 5 attempts (\u22480.33\u00d7 of the original in the best case) and then stops without any check that the result actually meets `max_image_size_kb`. The prose promises a guarantee the code does not provide; either make the loop actually converge to the allowed size or reword the comment to state that the image is only attempted to be reduced."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#06",
+    "descricao": "The downsize retry loop ignores the false return of a failed conversion and repeats the same failing ImageMagick call up to five times.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       66,
+       68
+      ],
+      "texto": "The retry loop ignores downsize's false return value and retries failed conversions while the file remains oversized. convert_with returns false on converter failure, so an unsupported or malformed oversized image launches the same failing external conversion up to five times per upload without any changed input. Break on a failed downsize result and return an upload error rather than repeating the conversion."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       64,
+       69
+      ],
+      "texto": "WHAT: Downsize loop ignores OptimizedImage.downsize return value and retries up to 5 times unconditionally while checking tempfile.size. WHY: Failed converts (e.g. SVG, invalid 80%> geometry, corrupt image) burn 5 ImageMagick runs then Upload.create_for still runs with oversized/unmodified file and fails validation, wasting CPU and breaking the feature. HOW: Break on false return and handle failure."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#08",
+    "descricao": "Claims up to five synchronous ImageMagick runs per oversized upload block request threads and enable DoS.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       69
+      ],
+      "texto": "WHAT: Up to 5 synchronous OptimizedImage.downsize + ImageOptim convert runs execute inline in create_upload request cycle for every oversized image. WHY: Blocks the Rails request thread with CPU-intensive shell-outs per upload, enabling easy request-thread exhaustion/DoS with large images. HOW: Move downsizing to background job or enforce single-pass/timeout."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#09",
+    "descricao": "Claims the downsize loop checking tempfile.size may never terminate because of a stale cached size, causing infinite loops.",
+    "textoGolden": "The loop checking `tempfile.size` may never terminate correctly due to stale cached size, leading to potential infinite loops or incorrect file handling after modifications.",
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#07",
+    "descricao": "Claims the API URL download limit changed from max_image_size_kb to a hardcoded 10 MB, amplifying SSRF bandwidth.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       54,
+       56
+      ],
+      "texto": "WHAT: API URL download limit changed from SiteSetting.max_image_size_kb to hardcoded 10.megabytes. WHY: Allows an API caller to force the server to fetch up to 10MB from an arbitrary URL even when admin configured a much smaller cap, amplifying SSRF bandwidth/disk usage. HOW: Keep download cap tied to min/max of settings or enforce admin cap."
+     }
+    ]
+   }
+  ]
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "c790227e0cda780e6fea9bb03af27948d9e286b9",
+  "base": "917c7b0764f4c6bfdca95db2c5f73dbfdbe11757",
+  "prTitle": null,
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     178,
+     185
+    ],
+    "texto": "WHAT: The falsy-result branch counts SMS sending locks as failed scheduling attempts. WHY: twilioProvider.scheduleSMS returns undefined without contacting Twilio when isLockedForSMSSending is true, so two cron runs exhaust the retry budget and the next run deletes future reminders even if sending is subsequently unlocked. HOW: Distinguish a deferred/locked result from a failed scheduling attempt and increment retryCount only for actual failures."
+   },
+   {
+    "id": "S2",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     190,
+     197
+    ],
+    "texto": "WHAT: The catch block awaits an update that rejects if the reminder has been deleted concurrently. WHY: deleteScheduledSMSReminder deletes reminders by ID while this handler awaits scheduling; when the subsequent update fails, this second update also fails and escapes the catch, aborting processing of every remaining reminder in the batch. HOW: Use updateMany with the reminder ID so a concurrently removed reminder produces a zero-row update rather than throwing."
+   },
+   {
+    "id": "S3",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     38,
+     42
+    ],
+    "texto": "The new retry-exhaustion branch makes the comment above deleteMany misleading: it describes deleting scheduled SMS reminders whose dates have passed, but this branch also deletes future reminders (and is not restricted by method). Update that comment to explicitly describe both expired SMS cleanup and deletion of reminders exceeding the retry limit, so maintainers do not mistake this for a date- and SMS-scoped cleanup."
+   },
+   {
+    "id": "S4",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     183,
+     185
+    ],
+    "texto": "Both failure paths write `reminder.retryCount + 1` from the snapshot loaded before scheduling. If two cron executions overlap and both load a reminder with retryCount 0, both failed attempts store 1 instead of reaching 2. The next execution consequently retries a reminder that should already meet the cleanup threshold; repeated overlaps can continue undercounting failures. Use an atomic Prisma increment in both failure paths so each failed attempt is counted."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#01",
+    "descricao": "retryCount is set to reminder.retryCount + 1 from a value read at the start of the run instead of an atomic increment, so overlapping runs can lose increments.",
+    "textoGolden": "Using retryCount: reminder.retryCount + 1 reads a possibly stale value and can lose increments under concurrency; consider an atomic increment via Prisma (increment: 1) to avoid race conditions (also applies to the similar update in the catch block).",
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       179,
+       197
+      ],
+      "texto": "WHAT: retryCount is incremented with a read-value computed at the start of the run (`retryCount: reminder.retryCount + 1`) instead of an atomic increment. WHY: if two cron invocations overlap (or the same reminder is processed twice before the write commits), both read the same retryCount and both write N+1, so failures are undercounted and the reminder can loop forever without ever reaching the `retryCount > 1` deletion threshold. HOW: use `data: { retryCount: { increment: 1 } }` so the increment is atomic (the initial read value is then irrelevant)."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "`retryCount: reminder.retryCount + 1` is a read-modify-write of the value fetched at the top of the handler, not an atomic increment. Two overlapping cron runs both read the same retryCount and both write the same +1, losing an update, so failed reminders can be retried indefinitely and never reach the `gt: 1` deletion threshold. Use Prisma's atomic `retryCount: { increment: 1 }` instead of computing from the stale in-memory value (same issue in the else branch at lines 179-186)."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       183,
+       185
+      ],
+      "texto": "Retry counts are assigned from the stale findMany snapshot instead of incremented atomically, both here and in the catch branch. Two overlapping cron requests can each fail scheduling the same reminder with retryCount zero and both write one, so two failed attempts do not reach the deletion threshold and additional attempts are scheduled. Use Prisma's atomic retryCount increment operation in both failure branches."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+    "descricao": "The deleteMany OR clause applies retryCount > 1 without the SMS method filter, so the SMS cron deletes any workflow reminder (email, WhatsApp) with retryCount above 1.",
+    "textoGolden": "The deletion logic in scheduleSMSReminders.ts incorrectly deletes non-SMS workflow reminders (e.g., Email, WhatsApp) that have retryCount > 1. This occurs because the retryCount condition within the OR clause for deletion lacks a method: WorkflowMethods.SMS filter, causing it to apply to all reminder types instead of only SMS reminders, which is the intended scope of this function.",
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       28,
+       43
+      ],
+      "texto": "The comment \"//delete all scheduled sms reminders where scheduled date is past current date\" no longer describes the deleteMany below it. After this change the query also deletes reminders with retryCount > 1, and that OR branch has no `method: WorkflowMethods.SMS` filter, so non-SMS (email) reminders with retryCount > 1 are now deleted too. Update the comment (or add the missing SMS filter to the retryCount branch) so the prose matches what the code actually deletes."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       53,
+       63
+      ],
+      "texto": "The deleteMany OR clause deletes any reminder with retryCount > 1 regardless of method."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       38,
+       43
+      ],
+      "texto": "The second OR branch `{ retryCount: { gt: 1 } }` has no `method` filter, unlike the first branch (`method: WorkflowMethods.SMS`). Because `retryCount` is a generic column on WorkflowReminder used by all reminder methods, this deleteMany now permanently deletes every reminder of ANY method (including EMAIL) whose retryCount exceeds 1, even though this cron is only supposed to clean up SMS reminders. Add `method: WorkflowMethods.SMS` to this branch (or scope the whole where to SMS) so non-SMS reminders are never destroyed."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#03",
+    "descricao": "The cleanup comment describes only past-date SMS deletion and omits the new retryCount > 1 deletion branch.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       38,
+       42
+      ],
+      "texto": "Update the cleanup comment to describe the new retry-exhaustion deletion branch. It currently says this deletes scheduled SMS reminders whose date has passed, but this OR branch also deletes any reminder with retryCount > 1, including future-dated reminders and without an SMS restriction. The comment now misrepresents the scope of this destructive operation."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       28,
+       44
+      ],
+      "texto": "Stale comment: line 28 says 'delete all scheduled sms reminders where scheduled date is past current date' but the new OR clause also deletes any reminder with retryCount > 1 regardless of method or date. Update the comment to describe both branches."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+    "descricao": "The retry-count update inside the catch block is not guarded, so if it throws (for example the reminder was deleted concurrently) the error escapes the loop and the cron run fails, skipping the remaining reminders.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       189,
+       198
+      ],
+      "texto": "WHAT: the catch block performs an unguarded `prisma.workflowReminder.update` while handling the scheduling error. WHY: if this write itself rejects (e.g. the row was concurrently removed, or a transient DB error), the rejection is not caught and escapes the for-loop, aborting the whole cron run so all remaining reminders go unprocessed. HOW: wrap the retryCount update in its own try/catch (log and continue) so a failure to record the retry does not abort processing of the remaining reminders."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "This new `prisma.workflowReminder.update` sits inside the catch block, which is NOT protected by any try/catch. If this update throws (e.g. the reminder was already removed by the `deleteMany` at the top of the file during a concurrent run -> Prisma P2025, or a transient DB error), the exception escapes the `for` loop and rejects the handler, so all remaining unscheduled reminders are skipped and the cron request fails. Previously the catch only did `console.log`, so a single bad reminder never aborted the batch and the endpoint always returned 200. Wrap this update in its own try/catch (or `updateMany`/catch-and-log) so a failed retry-count write cannot take down the whole scheduling run."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "The new database update inside catch can itself throw when a reminder has been deleted during scheduling. Booking cancellation deletes reminders through handleCancelBooking and deleteScheduledSMSReminder, so a concurrent cancellation followed by a scheduling error now rejects the entire cron handler and prevents the remaining reminders from being processed. Use an updateMany filtered by the reminder ID to tolerate an already-deleted row, and guard errors from retry bookkeeping so they do not escape the per-reminder error handler."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#06",
+    "descricao": "Claims transient errors increment retryCount, so two runs during an outage delete the whole pending SMS reminder queue.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "WHAT: The catch block unconditionally increments retryCount for any exception (profile/bookerUrl/templating/rate-limit/Twilio outage). WHY: Two consecutive cron runs with a transient global failure increment every pending SMS reminder to 2 and the startup deleteMany then wipes the entire future SMS queue, not just permanently-invalid numbers. HOW: Only increment on permanent scheduleSMS failure, or distinguish transient errors from terminal ones before counting toward deletion."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
+    "descricao": "The new OR arm on retryCount has no supporting index, so the cleanup delete can no longer be fully served by the existing index and may scan the table.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       31,
+       43
+      ],
+      "texto": "WHAT: the deleteMany WHERE now uses `OR` between `(method = SMS AND scheduledDate <= now)` and `retryCount > 1`, but WorkflowReminder has no index on the newly added retryCount column. WHY: Postgres cannot satisfy a two-way OR using the existing (method, scheduled, scheduledDate) index and will fall back to a sequential scan of the entire WorkflowReminder table on every cron invocation, turning a previously indexed delete into a full table scan as the table grows. HOW: add an index on retryCount (or restructure so each branch is index-usable), then re-check the query plan."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#09",
+    "descricao": "The retryCount increment update is duplicated in the else branch and the catch block.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "scheduleSMSReminders.ts",
+      "lines": [
+       178,
+       197
+      ],
+      "texto": "The retryCount increment is duplicated in the else-branch and catch."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#05",
+    "descricao": "Reminders with an empty message or missing phone number never increment retryCount and are re-processed on every cron run until their date passes.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       158,
+       188
+      ],
+      "texto": "retryCount is only incremented when message and sendTo are both present and scheduleSMS returns a falsy value. When sendTo is missing (e.g. a missing or invalid phone number), or the message is empty, the if-block is skipped. retryCount is never incremented, so the reminder is retried on every cron run until its date, which is the behavior this PR is meant to stop. Add an else branch that increments retryCount when the message or sendTo check fails."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       178,
+       187
+      ],
+      "texto": "WHAT: retryCount is only incremented inside if(message?.length && sendTo); when sendTo is missing or message is empty the loop silently skips with no increment. WHY: Reminders with no phone number or empty body retry forever until scheduledDate, leaving the unbounded rescheduling the PR claims to fix. HOW: Add an else that increments retryCount (or deletes/cancels) when message/sendTo is falsy."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#08",
+    "descricao": "Claims the failed-send branch does not increment retryCount on the success path.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       175,
+       200
+      ],
+      "texto": "The failed-send branch does not increment retryCount on the success path."
+     }
+    ]
+   }
+  ]
+ },
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "9501091c52ae94e8d916f79b35d21975b3f9cadb",
+  "base": "bb5a6837cb5b3d8d3b174e17d42ec14486ef8738",
+  "prTitle": null,
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/integrations/services/assignment_source.py",
+    "lines": [
+     18,
+     18
+    ],
+    "texto": "WHAT: The queued default is evaluated once when the module is imported rather than when an AssignmentSource is created. WHY: Every inbound assignment in a long-lived worker receives the same stale timestamp, and from_dict also uses that timestamp when queued is omitted, so the carrier does not record when the assignment was queued. HOW: Use a dataclass default factory to evaluate timezone.now for each instance."
+   },
+   {
+    "id": "S2",
+    "file": "tests/sentry/integrations/services/test_assignment_source.py",
+    "lines": [
+     8,
+     10
+    ],
+    "texto": "The empty-array test passes `{}`, not `[]`. It therefore exercises missing constructor arguments rather than rejection of a non-mapping input. A regression that accepts an empty list would leave this test passing. Supply an empty list to test the named case (and retain a separately named empty-dictionary case if desired)."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/integrations/services/assignment_source.py",
+    "lines": [
+     18,
+     18
+    ],
+    "texto": "The dataclass default calls timezone.now() once when the module is imported, not for each new assignment source. Consequently sources created hours later (including all from_integration calls) serialize the same stale queued timestamp rather than the time of the assignment. Use a default_factory so this timestamp reflects each source's creation time, and test creation at two distinct mocked times."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+    "descricao": "AssignmentSource.queued defaults to timezone.now() evaluated at class definition, so all instances share the import-time timestamp instead of the time they were queued.",
+    "textoGolden": "The AssignmentSource dataclass uses queued: datetime = timezone.now() as a default field value, which evaluates timezone.now() once at class definition time and shares that single datetime instance across all objects.",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       14,
+       18
+      ],
+      "texto": "WHAT: `queued: datetime = timezone.now()` evaluates once at class-definition time so every AssignmentSource without explicit queued shares the same timestamp. WHY: queued time is wrong/stale for all later instances and defeats its purpose as a queue-time marker. HOW: use `field(default_factory=timezone.now)` (with `field` import)."
+     },
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       14,
+       18
+      ],
+      "texto": "Field `queued: datetime = timezone.now()` is evaluated once at import so all AssignmentSources share the same timestamp. Use `field(default_factory=timezone.now)` so each instance measures its actual creation/queue time."
+     },
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       18,
+       18
+      ],
+      "texto": "The dataclass field default `queued: datetime = timezone.now()` is evaluated a single time when the module is imported, so every AssignmentSource created without an explicit `queued` value (which is exactly what `from_integration` does, and what `from_dict` falls back to when the key is absent) shares the same frozen import-time timestamp instead of the moment the assignment was actually queued. This makes the `queued` timestamp semantically wrong/meaningless (it reflects process start, not assignment time) and would silently misreport the queue time anywhere this value is later inspected. Fix by defaulting in a factory/`__post_init__` or making the caller pass the timestamp, e.g. set `queued` inside `from_integration` (`queued=timezone.now()`), or use `field(default_factory=timezone.now)`."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#02",
+    "descricao": "The test method name test_from_dict_inalid_data has a typo; it should be test_from_dict_invalid_data.",
+    "textoGolden": "The method name has a typo: test_from_dict_inalid_data should be test_from_dict_invalid_data.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       13,
+       19
+      ],
+      "texto": "Typo in test name test_from_dict_inalid_data hides it from name-filtered runs (e.g. -k invalid_data): fix spelling to test_from_dict_invalid_data so the invalid-payload guard is actually selected and verified."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#03",
+    "descricao": "test_from_dict_empty_array actually passes an empty dict, so the name does not match what the test exercises.",
+    "textoGolden": "Method name says 'empty_array' but tests empty dict - consider renaming to 'test_from_dict_empty_dict' for clarity.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "The test is named test_from_dict_empty_array but it passes an empty dict ({}), not an empty array; a caller reading the name will believe the empty-list/array input path is covered when it is not. Rename it to test_from_dict_empty_dict (or pass [] to actually cover the empty-array case) so the identifier agrees with the input it exercises."
+     },
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "test_from_dict_empty_array names an empty array but constructs an empty dict (`data: dict[str, Any] = {}`), so it only re-exercises the empty/None path and never covers empty-array input; a regression specific to that input would pass unnoticed. Pass a real empty array or rename the test to match its body."
+     },
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "test_from_dict_empty_array passes {} rather than an empty array. It therefore only tests missing required dictionary keys and would still pass if rejection of an array input were broken. Pass [] to exercise the named case (or rename this test to empty_dict if that is the intended contract)."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#04",
+    "descricao": "Claims to_dict() returns a raw datetime for queued that fails JSON serialization when passed as Celery task kwargs.",
+    "textoGolden": "to_dict() returns a datetime for queued; if this dict is passed in task kwargs (e.g., via apply_async), JSON serialization may fail depending on the serializer, which can cause enqueue errors.",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       27,
+       28
+      ],
+      "texto": "`to_dict` uses `asdict`, which leaves `queued` as a raw `datetime` object in the dict. That dict is passed straight into a celery task kwarg in `sync_group_assignee_outbound` (`assignment_source_dict=assignment_source.to_dict()`), i.e. it is the payload crossing the serialization boundary. Send a serializable form instead (e.g. `queued.isoformat()` / `queued.timestamp()`), and make `from_dict` parse it back to a `datetime`, so the value survives the queue round trip instead of raising at encode time or arriving as a string where the annotation promises a datetime."
+     },
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       27,
+       28
+      ],
+      "texto": "`to_dict` emits `queued` as a raw `datetime` (dataclass field default in from_integration is a live timezone.now() value), but this dict is placed into `sync_assignee_outbound.apply_async(kwargs=...)` in src/sentry/integrations/utils/sync.py:137-144 and serialized by the Celery task serializer on the way to the consumer in src/sentry/integrations/tasks/sync_assignee_outbound.py, which reconstructs it via `AssignmentSource.from_dict`. A datetime is not JSON-native, so the value either fails to serialize at enqueue (breaking outbound propagation to other integrations) or comes back as a plain string, so `from_dict` builds an AssignmentSource whose `queued` silently violates the declared `datetime` type. Serialize `queued` explicitly (e.g. `datetime.isoformat()`) in `to_dict` and parse it back in `from_dict` so the producer and consumer agree on the representation."
+     },
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       27,
+       28
+      ],
+      "texto": "WHAT: `to_dict()` via `asdict()` returns a raw `datetime` for `queued`, which is then passed as Celery task kwargs in `sync_group_assignee_outbound` (`assignment_source.to_dict()`). WHY: datetime is not JSON-serializable for the task serializer and round-trips back as a string that `from_dict` never parses, leaving `queued` as str type or crashing serialization. HOW: serialize `queued` to ISO string in `to_dict` and parse it back in `from_dict`."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#05",
+    "descricao": "The assignment_source parameter was added to the abstract sync_status_outbound instead of sync_assignee_outbound, which is the method that actually receives it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/mixins/issues.py",
+      "lines": [
+       410,
+       418
+      ],
+      "texto": "WHAT: `assignment_source` param was added to `sync_status_outbound` instead of `sync_assignee_outbound`, while the task calls `installation.sync_assignee_outbound(..., assignment_source=...)` whose abstract declares only `**kwargs`. WHY: concrete `sync_assignee_outbound` overrides without `**kwargs` will raise TypeError on the new kwarg, and the status method gains a dead param that is never checked. HOW: declare `assignment_source` explicitly on `sync_assignee_outbound` abstract (and update overrides) and remove it from `sync_status_outbound` unless status sync needs the same guard."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#06",
+    "descricao": "Claims concrete integrations overriding should_sync(self, attribute) will raise TypeError at the new two-argument call in sync_assignee_outbound.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/tasks/sync_assignee_outbound.py",
+      "lines": [
+       53,
+       56
+      ],
+      "texto": "The outbound task now calls `installation.should_sync(\"outbound_assignee\", parsed_assignment_source)` with a second argument. This PR updated the two base implementations (`IssueBasicIntegration.should_sync` and `IssueSyncIntegration.should_sync` in mixins/issues.py) to accept it, but any concrete integration that overrides `should_sync` with the pre-PR signature `(self, attribute)` was not updated. Such an override still works for the existing 1-arg caller `where_should_sync` (sync.py:48), but at this new 2-arg call site it raises `TypeError: should_sync() takes 2 positional arguments but 3 were given`, crashing the assignee-outbound task for that provider. Verify all `should_sync` overrides accept the new parameter (or pass it as a keyword so the mismatch is at least explicit), otherwise this call breaks them at runtime."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#07",
+    "descricao": "Claims a malformed assignment_source_dict makes from_dict return None, so should_sync fails open and re-enables the sync cycle.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/tasks/sync_assignee_outbound.py",
+      "lines": [
+       53,
+       56
+      ],
+      "texto": "WHAT: `AssignmentSource.from_dict()` returns None on invalid/extra/missing keys and the task treats None as no-source, so `should_sync('outbound_assignee', None)` returns True. WHY: a corrupt or tampered `assignment_source_dict` fails open and re-enables the outbound sync the PR intends to suppress, resuming the cycle. HOW: distinguish parse-failure from absent source (log + skip sync, or fail closed)."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#08",
+    "descricao": "test_to_dict asserts queued is not None, which is always true because queued has a default, so the assertion verifies nothing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       35,
+       38
+      ],
+      "texto": "test_to_dict asserts `result.get(\"queued\") is not None`, but `queued` always has a default value, so the assertion cannot fail. Pass an explicit `queued` datetime and assert that to_dict returns exactly that value, or compare the whole dict."
+     }
+    ]
+   }
+  ]
+ },
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "62bf98939eda58f0d0a1a41a58aa6d4ecdc24dba",
+  "base": "8671f860469d6d95e54df3e13f77ebc401249489",
+  "prTitle": null,
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+    "lines": [
+     48,
+     50
+    ],
+    "texto": "This new test verifies only the diagnostic text. CLIResult.assertError only checks stderr, so replacing `picocli.exit(CompatibilityResult.FEATURE_DISABLED)` with a successful exit while retaining the diagnostic would still pass. The disabled-feature status is a new public command outcome in this PR; assert that `cliResult.exitCode()` equals `CompatibilityResult.FEATURE_DISABLED` (4) as well so callers cannot silently receive success when the command was refused."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#03",
+    "descricao": "testFeatureNotEnabled only covers the metadata subcommand, so the feature guard in the check subcommand is untested.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "testFeatureNotEnabled only launches the `metadata` subcommand and never the `check` subcommand. Removing the feature guard from UpdateCompatibilityCheck.run() would therefore not fail any test. It also doesn't assert the exit code (FEATURE_DISABLED=4). Add a case for `check` and assert the exit code on both."
+     },
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "WHAT: testFeatureNotEnabled only exercises the metadata subcommand disabled path and never the check subcommand. WHY: the feature gate in UpdateCompatibilityCheck.run can be removed or broken without failing any test since no assertion covers its disabled message/exit code. HOW: also launch/assert the check command without --features (e.g. parameterize over metadata and check subcommands or add a second Launch)."
+     },
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "testFeatureNotEnabled only exercises the metadata subcommand, leaving the identical ROLLING_UPDATES gate in UpdateCompatibilityCheck unverified. If the Check gate were removed, the suite still passes. Parameterize/add a second @Launch for {UpdateCompatibility.NAME, UpdateCompatibilityCheck.NAME} (with required --file or not) asserting the disabled message and FEATURE_DISABLED exit code."
+     }
+    ]
+   },
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#04",
+    "descricao": "The disabled-feature test checks only the error message, not that the command exits with FEATURE_DISABLED (4).",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "The new disabled-feature test only verifies the error text, not the failure exit status. If the metadata command still prints this diagnostic but exits with 0 (or another incorrect code) instead of FEATURE_DISABLED (4), this test would still pass. Assert that cliResult.exitCode() equals CompatibilityResult.FEATURE_DISABLED so the test actually protects the new disabled-feature failure contract."
+     }
+    ]
+   },
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#01",
+    "descricao": "Claims the rolling-updates feature is not enabled for the null update strategy in UpgradeTest, so that case tests the operator without the gated feature.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "operator/src/test/java/org/keycloak/operator/testsuite/integration/UpgradeTest.java",
+      "lines": [
+       112,
+       115
+      ],
+      "texto": "WHAT: the new FeatureSpec/ROLLING_UPDATES enabling is placed after the pre-existing `if (updateStrategy == null) return kc;` early return, so for the null strategy the feature is never enabled. WHY: testCacheMaxCount(null) asserts eventuallyRollingUpgradeStatus and the PR docs state the operator requires the rolling-updates feature; the null-strategy parameter therefore exercises the operator WITHOUT the feature this PR gates on, so either the test passes for the wrong reason (feature gate ineffective) or it silently does not cover the gated path \u2014 the enablement should apply to every parameter that exercises update strategies. HOW: move the feature-enable block above the `updateStrategy == null` return (or set FeatureSpec whenever an update strategy behavior is asserted)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#02",
+    "descricao": "Claims RECREATE_UPGRADE_EXIT_CODE changed from 4 to 3 and 4 now means feature disabled, a breaking change that needs release notes.",
+    "textoGolden": "Need to add changelog/release notes documenting the exit code change and migration guidance",
+    "comentarios": [
+     {
+      "file": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java",
+      "lines": [
+       34,
+       35
+      ],
+      "texto": "WHAT: RECREATE_UPGRADE_EXIT_CODE is changed from 4 to 3 and the value 4 is reassigned to the new FEATURE_DISABLED constant. WHY: the exit code returned by the `update-compatibility check` command for a required recreate is an observable, explicitly-scriptable interface (the guide tells consumers to rely only on the exit code), so any automation keyed on the previously emitted value 4 will no longer detect the recreate case and could proceed with an unsafe rolling upgrade; exit code 4 silently changes meaning from 'recreate needed' to 'feature disabled'. HOW: if 3/4 are both free, keep RECREATE stable and use a distinct unused code for FEATURE_DISABLED; at minimum update the doc table so the reassignment is intentional and externally documented (the adoc context line shows 3 was already documented, so confirm old emitted behavior vs docs before shipping)."
+     },
+     {
+      "file": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java",
+      "lines": [
+       34,
+       35
+      ],
+      "texto": "RECREATE_UPGRADE_EXIT_CODE was changed from 4 to 3 and the previously-meaningful value 4 was reassigned to the new FEATURE_DISABLED outcome. The recreate exit code is a CLI output contract that external tooling/scripts key off; reusing 4 for a different result silently changes its meaning (a caller testing for 4 now treats 'feature disabled' as 'recreate required'), and recreate now returns a different code than it did before. The new feature-disabled condition should be given a fresh, unused exit code while the recreate result keeps its existing value."
+     }
+    ]
+   },
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#05",
+    "descricao": "Claims calling picocli.exit() for the disabled-feature exit code is incorrect because it calls System.exit directly.",
+    "textoGolden": "Incorrect method call for exit codes. The picocli.exit() method calls System.exit() directly, which is problematic:",
+    "comentarios": []
+   }
+  ]
+ },
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "5b229316ee4c661836ed1161139692a3e8527444",
+  "base": "98fa098e6fade3097a11fe7f99a98a4e6ffb4728",
+  "prTitle": null,
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/assets/stylesheets/common/base/header.scss",
+    "lines": [
+     17,
+     18
+    ],
+    "texto": "Making .contents a flex container leaves the header-extra-info component's outer Ember div with the default min-width:auto. The topic title inside it uses white-space:nowrap, and overflow:hidden is only on the nested .extra-info-wrapper, so a long title prevents the actual flex item from shrinking and pushes the navigation panel beyond the header instead of truncating the title. Set min-width:0 on the direct header-extra-info flex item (for example by assigning a class to that component wrapper), so the existing inner overflow and ellipsis rules can constrain the title."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#01",
+    "descricao": "The flex-item styles target the inner .extra-info-wrapper instead of the component's root div, so in the flexbox header a long topic title keeps its full width and pushes the navigation panel out instead of being truncated.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/base/topic.scss",
+      "lines": [
+       29,
+       30
+      ],
+      "texto": "The flex-item styling targets the inner .extra-info-wrapper rather than the outer div generated by header-extra-info's Ember.Component. With .contents now using flexbox, that outer div retains its automatic minimum width, so a long nowrap topic title cannot shrink to the available space and pushes the navigation panel outside the header instead of being ellipsized by the existing desktop truncation rules. Move the extra-info-wrapper class onto the component's root element and set min-width: 0 on that flex item so ordering and truncation apply to the actual header child."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#02",
+    "descricao": "The align-items mixin emits no -moz-box-align, so on old Firefox versions using the display:-moz-box fallback the advertised vertical centering is not applied.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+      "lines": [
+       117,
+       122
+      ],
+      "texto": "The alignment mixin does not match the Mozilla fallback emitted by flexbox(): when display: -moz-box is selected, neither align-items nor the WebKit/MS declarations control its cross-axis alignment. Consequently @include align-items(center) in the header and small-action leaves those children at the legacy default instead of vertically centering them. Emit -moz-box-align: $alignment alongside -webkit-box-align so the advertised fallback produces the same alignment."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#03",
+    "descricao": "The align-items mixin emits -ms-align-items, which never existed in IE/Edge; the legacy property is -ms-flex-align, so the declaration is dead.",
+    "textoGolden": "-ms-align-items never existed in any version of IE/Edge; the correct legacy property is -ms-flex-align.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+      "lines": [
+       117,
+       123
+      ],
+      "texto": "WHAT: align-items() mixin emits -ms-align-items: $alignment which is not a valid IE10/11 property (only -ms-flex-align exists). WHY: dead declaration shows wrong contract and leaves IE alignment dependent solely on -ms-flex-align, which also breaks for flex-start/flex-end values. HOW: remove the -ms-align-items line and map flex-start/flex-end to start/end for -ms-flex-align/-webkit-box-align."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#05",
+    "descricao": "Removing the float-based right alignment of .d-header .panel leaves the server-rendered (no-JS) header's login panel, which sits inside .row and is not a flex item, no longer right-aligned next to the title.",
+    "textoGolden": "Mixing float: left with flexbox causes layout issues. Further this PR removes the float-based right alignment for .d-header .panel, which may cause the login panel in the non-Ember/noscript header (where .panel is nested inside .row and not a flex item) to stack under the title instead of remaining right-aligned.",
+    "comentarios": []
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#04",
+    "descricao": "Claims the order mixin's box-ordinal-group values are off by one versus order, so legacy WebKit/Firefox render a different item order.",
+    "textoGolden": "-webkit-box-ordinal-group and -moz-box-ordinal-group require values starting from 1, not 0. If $val is 0, this will cause incorrect rendering in older browsers, leading to layout issues.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+      "lines": [
+       125,
+       131
+      ],
+      "texto": "WHAT: `@mixin order($val)` emits `-webkit-box-ordinal-group: $val`, but the old `-webkit-box` flexbox model's `-webkit-box-ordinal-group` is 1-based (default 1) while modern `order` is 0-based (default 0). WHY: the value is off by one on old WebKit engines, so the mixin does not reproduce the ordering the caller intends \u2014 the mixin exists precisely to give consistent ordering across prefixes, and callers `@include order(2)` (topic.scss:30) and `@include order(3)` (header.scss:39) will get the equivalent of `order: 1` and `order: 2` respectively on those engines, making their relative position against modern browsers inconsistent. HOW: emit `-webkit-box-ordinal-group: $val + 1;` (and keep `-ms-flex-order`/`-webkit-order`/`order` as-is, since those are 0-based)."
+     },
+     {
+      "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+      "lines": [
+       125,
+       131
+      ],
+      "texto": "The `order($val)` mixin passes the same `$val` to `-webkit-box-ordinal-group` and to `order`/`-webkit-order`/`-ms-flex-order`, but these properties use different bases: `order` (and its flexbox prefixes) is 0-based with default 0, whereas the legacy `-webkit-box-ordinal-group` (old `display: -webkit-box` model) is 1-based with default 1. So a call like `@include order(3)` (header.scss:39) emits `-webkit-box-ordinal-group: 3` while `order: 3` \u2014 the element lands at a different relative position in the legacy engine than the mixin name/value implies, i.e. the declared order does not match the order actually applied. Emit `-webkit-box-ordinal-group: $val + 1` (and keep `-moz-box-ordinal-group` consistent) so both properties produce the same position."
+     },
+     {
+      "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+      "lines": [
+       125,
+       131
+      ],
+      "texto": "The `order()` mixin passes `$val` unchanged to `-webkit-box-ordinal-group` / `-moz-box-ordinal-group`, but those legacy box properties are 1-based with a default of 1, while standard `order` is 0-based with a default of 0. The value is therefore off by one in the legacy engines: e.g. `order(0)` (or `order(1)`) would place the element before all default-order siblings in old WebKit/Gecko instead of leaving it where it is. Emit `$val + 1` for the two box-ordinal-group declarations (and keep `$val` for `-ms-flex-order`/`order`) so the prefixed fallbacks preserve the same ordering as the standard property."
+     }
+    ]
+   }
+  ]
+ }
+}

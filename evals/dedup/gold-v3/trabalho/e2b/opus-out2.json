@@ -1,0 +1,387 @@
+{
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Factory-owned shared pool is shut down by strategy close(), so the next strategy after rebalance submits into a dead pool and failures get marked complete."
+  },
+  {
+   "id": "S2",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "newGroup": null,
+   "reason": "Graceful shutdown: close stops commit thread and sets worker.shutdown before draining, abandoning queued work and losing final commits."
+  },
+  {
+   "id": "S3",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Unbounded worker queues with no backpressure let memory grow when workers fall behind."
+  },
+  {
+   "id": "S4",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Same shared-pool reuse after strategy close() shut it down on rebalance."
+  },
+  {
+   "id": "S5",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "newGroup": null,
+   "reason": "Documented successful-only commit guarantee contradicted by complete_offset in finally on processor failure; same contradiction as the issue."
+  },
+  {
+   "id": "S6",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Docstring backpressure guarantee is false because queues are unbounded and submit never rejects."
+  },
+  {
+   "id": "S7",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "newGroup": null,
+   "reason": "Failed result_processor still completes offset in finally, so failed message gets committed."
+  },
+  {
+   "id": "S8",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Strategy close() shuts down factory-shared pool; next strategy uses dead pool and commits unprocessed results."
+  },
+  {
+   "id": "S9",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#17",
+   "newGroup": null,
+   "reason": "Ordering test submits identical messages and only checks count."
+  },
+  {
+   "id": "S10",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#16",
+   "newGroup": null,
+   "reason": "Concurrency test across groups only checks eventual processing, not concurrency."
+  },
+  {
+   "id": "S11",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#05",
+   "newGroup": null,
+   "reason": "Error-handling test sleeps 0.2s while commit loop waits 1s, so it cannot observe the erroneous commit."
+  },
+  {
+   "id": "S12",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#18",
+   "newGroup": null,
+   "reason": "Graceful-shutdown test only asserts queue_pool is None, which shutdown always sets."
+  },
+  {
+   "id": "S13",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "newGroup": null,
+   "reason": "complete_offset in finally marks failed processing as committable."
+  },
+  {
+   "id": "S14",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Factory reuses a pool shut down by the previous strategy's close."
+  },
+  {
+   "id": "S15",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "newGroup": null,
+   "reason": "Setting worker.shutdown before draining makes workers exit with items still queued."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Migration indexes [0]['id'] of the embed_category lookup without checking for an empty result."
+  },
+  {
+   "id": "S2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Migration copies legacy hosts without stripping scheme/path, so they never match the bare-host lookup."
+  },
+  {
+   "id": "S3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+   "newGroup": null,
+   "reason": "Hosts saved with a port never match because lookup uses URI.host only."
+  },
+  {
+   "id": "S4",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "lower(host) compared against non-lowercased URI host; mixed-case referers rejected."
+  },
+  {
+   "id": "S5",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Same unguarded [0]['id'] on empty embed_category result in the migration."
+  },
+  {
+   "id": "S6",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Same unguarded [0]['id'] on empty embed_category result in the migration."
+  },
+  {
+   "id": "S7",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "before_validation calls sub! on nil host, raising instead of a validation error."
+  },
+  {
+   "id": "S8",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+   "newGroup": null,
+   "reason": "Port-qualified saved hosts never match URI.host lookup."
+  },
+  {
+   "id": "S9",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Incoming URI host not lowercased before comparing with lower(host)."
+  },
+  {
+   "id": "S10",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Migration inserts legacy full URLs verbatim, bypassing normalization, so lookup fails after upgrade."
+  },
+  {
+   "id": "S11",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Migration inserts legacy full URLs verbatim, bypassing normalization, so lookup fails after upgrade."
+  },
+  {
+   "id": "S12",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "The 'is false if embeddable_host is blank' spec no longer sets up the other predicates and passes for unrelated reasons."
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "S1",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "isTeamAdminOrOwner uses && so team admins who are not owners get FORBIDDEN."
+  },
+  {
+   "id": "S2",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Blacklist lowercased but guest input not normalized, so mixed-case bypasses the blacklist."
+  },
+  {
+   "id": "S3",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+   "newGroup": null,
+   "reason": "Submitted guests array is not deduplicated, so duplicate attendee rows are inserted."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reconstructed CalendarEvent omits the booking's iCalUID so invites carry a different calendar identity; no golden issue covers iCalUID."
+  },
+  {
+   "id": "S5",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+   "newGroup": null,
+   "reason": "Server does not deduplicate the submitted guests array; duplicates reach createMany."
+  },
+  {
+   "id": "S6",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Case-sensitive blacklist comparison lets mixed-case blocked emails through."
+  },
+  {
+   "id": "S7",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#12",
+   "newGroup": null,
+   "reason": "Hard-coded 'Remove email' tooltip not translated."
+  },
+  {
+   "id": "S8",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+   "newGroup": null,
+   "reason": "uniqueGuests does not dedupe within the input, duplicating attendees."
+  },
+  {
+   "id": "S9",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Blacklist lowercased but guest compared in original casing."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "S1",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Password check skipped when any totpCode is present; backup-code branch authenticates without password."
+  },
+  {
+   "id": "S2",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Non-atomic read-modify-write of backup codes lets one code be used twice or removals be overwritten."
+  },
+  {
+   "id": "S3",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Same non-atomic backup-code consumption race."
+  },
+  {
+   "id": "S4",
+   "match": "feat-2fa-backup-codes-cal-com#08",
+   "newGroup": null,
+   "reason": "Backup codes compared with indexOf instead of constant-time comparison."
+  },
+  {
+   "id": "S5",
+   "match": "feat-2fa-backup-codes-cal-com#05",
+   "newGroup": null,
+   "reason": "Copy e2e test only waits for an unconditional success toast and never checks clipboard content."
+  },
+  {
+   "id": "S6",
+   "match": "feat-2fa-backup-codes-cal-com#13",
+   "newGroup": null,
+   "reason": "Download e2e test checks only the filename, not file contents."
+  },
+  {
+   "id": "S7",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Same non-atomic backup-code consumption race."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08",
+   "newGroup": null,
+   "reason": "Update invalidation compares the organization-aware enabled state of the original IDP instead of its stored state, so invalidation is skipped while the org is disabled; different trigger field (hideOnLogin vs public) but same fix."
+  },
+  {
+   "id": "S2",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Cleanup registered for literal alias 'alias' instead of created IDP aliases."
+  },
+  {
+   "id": "S3",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Cleanup registered for literal alias 'alias' instead of created IDP aliases."
+  },
+  {
+   "id": "S4",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#14",
+   "newGroup": null,
+   "reason": "Test discards getForLogin results and never asserts returned providers or a cache hit."
+  },
+  {
+   "id": "S5",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#05",
+   "newGroup": null,
+   "reason": "Partial-miss merge carries old query results into a freshly revisioned entry, losing concurrent invalidations."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "S1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
+   "newGroup": null,
+   "reason": "External recovery-code creation leaves the old local credential active, and validation fallback lets replaced codes authenticate."
+  },
+  {
+   "id": "S2",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+   "newGroup": null,
+   "reason": "Test storage validator never consumes the used recovery code, so it can be replayed."
+  },
+  {
+   "id": "S3",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+   "newGroup": null,
+   "reason": "Validator does not consume matched code; replay possible."
+  },
+  {
+   "id": "S4",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+   "newGroup": null,
+   "reason": "Validator does not consume matched code; replay possible."
+  },
+  {
+   "id": "S5",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#03",
+   "newGroup": null,
+   "reason": "Recovery-code validator uses non-constant-time String.equals with anyMatch."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "advanced-sql-analytics-framework-grafana-codex#01",
+   "newGroup": null,
+   "reason": "enableSqlExpressions returns false regardless of the feature flag."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-sql-analytics-framework-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Stub DB methods always return errors, so table parsing and SQL execution always fail."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-sql-analytics-framework-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same stub DB replacing DuckDB that always fails RunCommands/QueryFramesInto."
+  }
+ ],
+ "database-performance-optimizations-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "database-performance-optimizations-grafana-codex#07",
+   "newGroup": null,
+   "reason": "SQLite inline ID list built with repeated fmt.Sprintf, quadratic in batch size."
+  },
+  {
+   "id": "S2",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Cleanup ticker changed from 10 minutes to 1 minute, running all jobs ten times as often."
+  },
+  {
+   "id": "S3",
+   "match": "database-performance-optimizations-grafana-codex#03",
+   "newGroup": null,
+   "reason": "SQLite-limit regression test never sends a DELETE above the limit because fixtures are split across three types."
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Suffix check mutates website_host (prepends a dot) so unrelated domains render as .example.com; no golden issue covers this mutation."
+  },
+  {
+   "id": "S2",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "website_name not in untrusted_attributes, exposing the TL0 user's website host/path hidden by the website field."
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": []
+}

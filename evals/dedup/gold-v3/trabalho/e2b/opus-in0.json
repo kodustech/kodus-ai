@@ -1,0 +1,2779 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "9fde0e906897cc0f4f71793f647dd629faba3317",
+  "base": "bc89fe00ea84d20bedcec782f0701b9711dc8201",
+  "prTitle": null,
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "lines": [
+     15,
+     15
+    ],
+    "texto": "The sync branch returns an unparsed fetch Response while several callers require a provider-specific token object or a response with a data property. Google reads res.data.access_token, Zoho CRM/Bigin read response.data.error, and HubSpot reads expiresIn/accessToken, so enabling sync breaks these refresh paths. Decode the response and explicitly adapt it to each provider's expected contract rather than returning one raw Response to all callers."
+   },
+   {
+    "id": "S2",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     97
+    ],
+    "texto": "The new parser returns a safeParse result containing success and data, and this whole wrapper is saved as credential.key. After any successful Google refresh, the next service construction parses that wrapper with googleCredentialSchema and fails because access_token and the other credentials are nested under data. Persist the parser's data property instead."
+   },
+   {
+    "id": "S3",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     5,
+     11
+    ],
+    "texto": "Computed keys made from Zod schemas are literal property names, not patterns matching arbitrary expiry or token properties. Since z.object strips unknown keys, synced responses lose expires_in, expiry_date, scope and refresh_token; Zoom then calculates an invalid expiry and cannot preserve valid credentials. Define explicit supported token fields and retain additional provider fields with passthrough."
+   },
+   {
+    "id": "S4",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     92,
+     93
+    ],
+    "texto": "The refresh wrapper receives credentialId as its userId argument. The wrapper sends this value as calcomUserId, so a credential whose ID differs from its owner's user ID requests tokens for the wrong principal. Thread credential.userId into refreshAccessToken separately from the credential ID used for persistence."
+   },
+   {
+    "id": "S5",
+    "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+    "lines": [
+     96,
+     96
+    ],
+    "texto": "The new credential update references prisma without importing or declaring it; searching this file for prisma found only this usage. This produces a TypeScript unresolved-name error and a ReferenceError if executed without type checking. Import the shared Prisma client."
+   },
+   {
+    "id": "S6",
+    "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+    "lines": [
+     75,
+     84
+    ],
+    "texto": "getClient now refreshes Salesforce tokens and writes credentials on every service construction, even when its existing access token is valid. This adds an external OAuth round trip and database write to each initialization, while the returned jsforce connection still receives credentialKey.access_token rather than the refreshed token. Keep refresh on the expired-token path and supply refreshed credentials to the connection when a refresh is necessary."
+   },
+   {
+    "id": "S7",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     7,
+     10
+    ],
+    "texto": "These comments describe dynamic property matching, but computed keys in a JavaScript object are evaluated once. `z.string().toString()` is a literal property name, not a rule matching arbitrary expiry fields, and the second computed key does not enable passthrough of other properties. Consequently a sync endpoint following the documented access-token-plus-expiry contract cannot rely on this schema preserving its expiry field. Make the comments and schema agree on explicit supported expiry names and whether other fields are retained."
+   },
+   {
+    "id": "S8",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     100
+    ],
+    "texto": "Previously googleCredentialSchema.parse returned the credential object itself. parseRefreshTokenResponse instead returns a safeParse result ({ success: true, data: ... }), but this consumer still stores the entire return value as key. After any refresh, persisted Google credentials have the wrong shape and subsequent credential parsing fails. Persist the result's data instead."
+   },
+   {
+    "id": "S9",
+    "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "lines": [
+     8,
+     15
+    ],
+    "texto": "The sync branch returns a native fetch Response, while the fallback preserves each provider's original return shape. Google still reads res.data, Hubspot expects a HubspotToken directly, and Bigin/Zoho CRM read axios-style .data. Enabling credential sync therefore breaks those refresh consumers even for a successful endpoint response. Normalize the sync payload into the shape expected by each consumer, or update those consumers to explicitly decode the fetch Response; preserve the raw Response contract for consumers that already use fetch."
+   },
+   {
+    "id": "S10",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     92,
+     93
+    ],
+    "texto": "refreshOAuthTokens defines its third argument as userId and sends it to the sync endpoint as calcomUserId. This call passes credentialId instead. With sync enabled, the endpoint looks up a different or nonexistent user rather than the credential owner, causing failed refreshes or use of another user's tokens. Pass the owning user's ID (and null for team credentials) instead."
+   },
+   {
+    "id": "S11",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     100
+    ],
+    "texto": "parseRefreshTokenResponse returns the safeParse result ({success: true, data: ...}), not the credential itself. Passing that result as key stores the wrapper in the database even when sharing is disabled. Subsequent Google credential parsing no longer finds access_token/refresh_token at the top level, breaking the integration after its first refresh. Persist the parsed data instead."
+   },
+   {
+    "id": "S12",
+    "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "lines": [
+     8,
+     15
+    ],
+    "texto": "The sync branch returns a native fetch Response, but Google reads res.data.access_token, HubSpot expects a token object, and Zoho reads tokenInfo.data.error. With syncing enabled these consumers receive no decoded token payload and fail or persist invalid token values. Normalize the sync response to each caller's expected shape (or normalize both branches and update all callers); returning Response unchanged only works for callers already using fetch."
+   },
+   {
+    "id": "S13",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     5,
+     11
+    ],
+    "texto": "Computed keys based on z.string().toString() are literal object property names, not wildcard validators. Zod object parsing strips unrecognized fields, so an ordinary sync response loses expiry_date/expires_in and refresh_token. The helper then supplies the literal refresh_token placeholder; Office365 merges and persists it over the real refresh token, and expiry is not updated. Define actual expiry fields and preserve additional fields rather than using computed schema keys."
+   },
+   {
+    "id": "S14",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     100
+    ],
+    "texto": "The new parseRefreshTokenResponse helper returns the safeParse result ({ success, data }), unlike the previous googleCredentialSchema.parse call which returned the credential object itself. Persisting `key` now stores the wrapper rather than access_token, refresh_token and expiry_date at the top level. This affects normal refreshes even with sharing disabled and breaks subsequent credential parsing. Persist the helper's data field instead."
+   },
+   {
+    "id": "S15",
+    "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "lines": [
+     8,
+     15
+    ],
+    "texto": "In sync mode this helper returns a raw Fetch Response. The changed Google caller immediately reads res.data.access_token, Zoho/Bigin read tokenInfo.data.error, and HubSpot expects a HubspotToken directly. These contracts work with their original SDK/Axios callbacks but not with a Fetch Response, so enabling sync breaks their refresh paths regardless of the endpoint's valid JSON body. Normalize the sync response into each caller's expected shape (or make the helper return parsed token data consistently and update all consumers); preserve Response handling for the fetch-based adapters."
+   },
+   {
+    "id": "S16",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     92,
+     94
+    ],
+    "texto": "refreshOAuthTokens declares its third argument as userId and sends it to the sync endpoint as calcomUserId, but this new call passes credentialId. Those are different database identifiers, so sync requests select the wrong user or fail to find one; team credentials can also incorrectly enter the user-sync branch. Pass the credential owner's userId (null for team credentials), threading it into this method if needed."
+   },
+   {
+    "id": "S17",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     100
+    ],
+    "texto": "parseRefreshTokenResponse returns the safeParse result ({success, data}), unlike the previous schema.parse call which returned credentials directly. Saving key here therefore stores the envelope instead of access_token, expiry_date and refresh_token at the credential root. Subsequent Google credential parsing fails even with credential sharing disabled. Persist the successful result's data."
+   },
+   {
+    "id": "S18",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     5,
+     11
+    ],
+    "texto": "Computed property names produced by z.string().toString() are literal strings (normally '[object Object]'), not wildcard validators. The optional property can overwrite the numeric property, and z.object strips unrecognized fields. Consequently a normal sync payload with access_token and expires_in/expiry_date loses its expiry (and other token properties), so consumers cannot persist a usable refreshed token. Declare supported expiry fields explicitly and preserve additional response properties."
+   },
+   {
+    "id": "S19",
+    "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "lines": [
+     8,
+     15
+    ],
+    "texto": "The sync branch always returns a raw fetch Response, but Google reads res.data, HubSpot expects a HubspotToken directly, and Zoho/Bigin read tokenInfo.data. These contracts are preserved by the fallback callbacks but not by this branch. When sync is enabled those integrations read undefined instead of refreshed tokens. Normalize the sync JSON into each caller's expected response shape, or change the helper and all consumers to a single parsed-token contract; simply returning Response only works for the fetch-based consumers."
+   },
+   {
+    "id": "S20",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     92,
+     93
+    ],
+    "texto": "The helper's third parameter is userId and is serialized as calcomUserId, but this caller passes credentialId (assigned from credential.id). These IDs identify different records. With syncing enabled the parent application refreshes tokens for the wrong user or rejects the lookup; team credentials also incorrectly enter the user sync branch. Thread credential.userId through refreshAccessToken and pass that nullable user ID here."
+   },
+   {
+    "id": "S21",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     24,
+     27
+    ],
+    "texto": "The new webhook authenticates requests by comparing the supplied shared secret with JavaScript !==. String equality is not constant-time and can expose information about the secret through execution time. This secret authorizes credential replacement for arbitrary users, so compare validated, single-valued header and configured-secret buffers using a constant-time primitive such as crypto.timingSafeEqual (with an explicit length check), rather than ordinary string equality."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+    "descricao": "The new app-credential webhook checks its shared secret with a plain !== string comparison instead of a constant-time comparison, leaking timing information about the secret.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       23,
+       29
+      ],
+      "texto": "Direct !== comparison of webhook secret leaks via timing attack. Use constant-time comparison (e.g., crypto.timingSafeEqual on hashed/buffered values with length check) instead of `req.headers[...] !== process.env.CALCOM_WEBHOOK_SECRET`."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       24,
+       27
+      ],
+      "texto": "The webhook authenticates a secret using direct string inequality, which is not constant-time and can leak information about the secret through comparison timing. Compare fixed-length representations using a constant-time primitive (such as crypto.timingSafeEqual), handling absent or malformed headers safely, instead of comparing the secret strings directly."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       24,
+       29
+      ],
+      "texto": "The webhook secret is compared with the `!==` operator, which short-circuits on the first differing byte and leaks the secret via response timing (timing attack). An attacker can iteratively recover CALCOM_WEBHOOK_SECRET and then forge requests that create/update arbitrary user credential keys (decrypted with the AES key) via this endpoint. Use a constant-time comparison, e.g. crypto.timingSafeEqual on equal-length buffers, guarding for length mismatch first."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
+    "descricao": "The webhook parses the body with zod .parse and decrypts/JSON-parses the keys without error handling, so invalid payloads produce 500 errors instead of 400 responses.",
+    "textoGolden": "The `appCredentialWebhookRequestBodySchema.parse` function can throw on invalid payloads, resulting in 500 Internal Server Errors instead of the expected 400 Bad Request responses. This can lead to confusion for clients and hinder proper error handling.",
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       31,
+       31
+      ],
+      "texto": "WHAT: zod parse, symmetricDecrypt and JSON.parse throw unhandled (no try/catch) with no method guard. WHY: Invalid body/keys or GET request crashes handler with 500 and leaks stack, instead of 400/405. HOW: Wrap parse/decrypt in try/catch returning 400 and restrict to POST."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       31,
+       59
+      ],
+      "texto": "schema .parse plus symmetricDecrypt/JSON.parse throw unhandled (ZodError, decrypt error, SyntaxError) on invalid body or tampered keys, crashing webhook with 500. Use safeParse and try/catch with 400 responses."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#03",
+    "descricao": "The webhook's non-atomic findFirst-then-create lets concurrent deliveries for the same user and app insert duplicate credential rows.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       62,
+       70
+      ],
+      "texto": "The webhook performs a non-atomic findFirst followed by create when no credential exists. Concurrent deliveries for the same user and app can both observe no row and insert duplicates because Credential has no unique userId/appId constraint; subsequent findFirst updates only one duplicate, leaving competing credentials stale. Serialize the lookup/create operation for each user/app pair or introduce an appropriate uniqueness constraint and atomic upsert."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+    "descricao": "parseRefreshTokenResponse writes the hardcoded string 'refresh_token' when the refresh response omits a refresh token, so the stored credential gets an invalid refresh token and later refreshes fail.",
+    "textoGolden": "The parseRefreshTokenResponse function incorrectly sets refresh_token to the hardcoded string 'refresh_token' when it's missing from the OAuth refresh token response. This invalidates the token, breaking subsequent token refreshes and causing authentication failures.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       26
+      ],
+      "texto": "The parser fabricates the literal refresh token \"refresh_token\" whenever a successful response omits refresh_token, including when synchronization is disabled. Office365's response schema explicitly permits that omission, and its caller merges parsed data over existing credentials, replacing the valid saved refresh token with this invalid value and breaking the next refresh. Leave the property absent so the existing token survives the merge."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       26
+      ],
+      "texto": "When a refresh response omits refresh_token, this helper manufactures the hardcoded credential \"refresh_token\". Callers such as Office365 merge this into stored credentials, overwriting the valid existing refresh token and causing subsequent provider refreshes to use a predictable invalid token. Leave the field absent and preserve the existing credential when omission is allowed by the provider, or reject the response when a refresh token is required; do not substitute a literal authentication token."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       27
+      ],
+      "texto": "WHAT: Missing refresh_token is replaced with literal string \"refresh_token\". WHY: Stores bogus refresh token in DB, breaking all future refreshes and masking provider errors. HOW: Preserve existing credential refresh_token or throw instead of injecting placeholder."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+    "descricao": "minimumTokenResponseSchema uses computed keys from z.string().toString(), which produce a literal key rather than a wildcard, so the sync-mode schema does not validate or keep expiry and other token fields as intended.",
+    "textoGolden": "The Zod schema in parseRefreshTokenResponse uses computed property keys [z.string().toString()] and [z.string().optional().toString()] in minimumTokenResponseSchema, which is invalid Zod syntax and will throw a runtime error.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "`[z.string().toString()]` evaluates to a fixed string key such as \"ZodString\", so minimumTokenResponseSchema requires a literal numeric property with that name. Every synced token response fails validation and throws \"Invalid refreshed tokens were returned\". Use `z.object({access_token: z.string()}).passthrough()` instead."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "The computed keys `[z.string().toString()]` evaluate to the literal string \"[object Object]\", not a wildcard. The schema therefore requires a numeric property named \"[object Object]\", so safeParse always fails in credential-sync mode and the function throws \"Invalid refreshed tokens were returned\". Use `.passthrough()` on an object with access_token and optional numeric expiry fields instead."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "The computed keys `[z.string().toString()]` evaluate to a literal string like \"ZodString\" and not to a wildcard. The schema therefore requires a numeric property with that nonsense name and never matches real token responses. In sync mode every refresh throws \"Invalid refreshed tokens were returned\". Use `.passthrough()` and a real expiry check instead."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+    "descricao": "In sync mode refreshOAuthTokens returns a raw fetch Response, but callers expect their provider-specific shapes (res.data, axios .data, HubspotToken), so token refresh breaks for Google, Zoho and HubSpot when credential sharing is on.",
+    "textoGolden": "When APP_CREDENTIAL_SHARING_ENABLED and CALCOM_CREDENTIAL_SYNC_ENDPOINT are set, the refreshFunction helper returns the fetch Response, but several callers (for example GoogleCalendarService.refreshAccessToken expecting res.data, and HubspotCalendarService.refreshAccessToken expecting a HubspotToken) assume it returns the integration-specific token object. That mismatch will cause runtime errors in the sync-enabled path unless the return type or those call sites are adjusted.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "lines": [
+       8,
+       15
+      ],
+      "texto": "WHAT: In the credential-sharing branch `refreshOAuthTokens` returns the raw `fetch` `Response` object instead of a parsed token payload, yet several callers treat the result as an already-parsed token object.\nWHY: Callers such as hubspot (`hubspotRefreshToken.expiresIn`), zoho-bigin (`tokenInfo.data.error`), zohocrm (`zohoCrmTokenInfo.data.error`) and googlecalendar (`res?.data`) read `.data`/token fields off the return value; a `Response` has neither, so the sync path yields `undefined`/`NaN` or throws a TypeError \u2014 the feature's primary code path is broken for those apps.\nHOW: Parse the response (e.g. `const data = await response.json(); return data;`) before returning, or make every caller await the appropriate response handler."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "lines": [
+       8,
+       15
+      ],
+      "texto": "In sharing mode refreshOAuthTokens returns the raw fetch Response (no `.data`), but the google caller reads `res?.data` and then `token.access_token`, throwing a TypeError swallowed by the catch, so the token is never refreshed."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       94,
+       95
+      ],
+      "texto": "`res?.data` assumes the value returned by refreshOAuthTokens has a `.data` field (true for the `fetchTokens.res` branch), but when APP_CREDENTIAL_SHARING_ENABLED the helper returns a raw `fetch()` Response, which has no `.data`. Then `token.access_token` throws. Either parse the shared-mode Response here or have refreshOAuthTokens return a normalized `{ data }` shape."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+    "descricao": "Google Calendar persists the safeParse result object instead of its data as the credential key, corrupting the stored credential so later reads fail.",
+    "textoGolden": "parseRefreshTokenResponse returns a Zod safeParse result ({ success, data, error }), not the credential key object. Persisting that as key stores the wrapper instead of the token payload; we should store the parsed data or use schema parse.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns a SafeParse result {success,data}, not the parsed key. Storing it directly as `key` writes the wrapper to the credential. Unwrap like other callers: check .success and use .data."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns SafeParse result {success,data}, but call site stores that wrapper as credential `key` (previously googleCredentialSchema.parse() returned the plain object). Store `key.data` / handle wrapper, otherwise persisted credential becomes {success,data} shape and subsequent credential reads fail."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns SafeParse wrapper {success,data} but code stores the whole wrapper as credential.key. Office365calendar in same PR unwraps via .data. Persisted credential will be {success,data} instead of tokens, so next load fails validation. Unwrap to .data after success check."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#11",
+    "descricao": "After switching to parseRefreshTokenResponse, the tokenResponse.success check in Office365 refreshAccessToken is dead code and the previous error logging was dropped.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       263,
+       264
+      ],
+      "texto": "parseRefreshTokenResponse now throws when parsing fails, so the `tokenResponse.success` check on the next line is dead code and the previous error logging was removed. A failed refresh now throws out of refreshAccessToken instead of keeping the old credentials. Catch the error or restore the previous handling."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+    "descricao": "Salesforce getClient now refreshes the OAuth token and writes the credential on every service construction, adding a network round trip and DB write even when the access token is valid.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       75,
+       84
+      ],
+      "texto": "getClient now unconditionally exchanges the Salesforce refresh token on every service construction, even when the saved access token is valid. Each constructor invocation adds a blocking OAuth network round trip and credential database write before any Salesforce operation, replacing jsforce's existing on-demand refresh behavior. Keep refresh on demand or guard the exchange with a token-expiration check."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#14",
+    "descricao": "The new Salesforce token refresh uses prisma without importing it, so the code fails type checking and throws a ReferenceError at runtime.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       96,
+       99
+      ],
+      "texto": "The new credential update references prisma without importing or declaring it; searching this file finds only the new usage. This fails TypeScript checking and raises ReferenceError after a successful token exchange at runtime. Import prisma from @calcom/prisma before using it."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+    "descricao": "Zoho Bigin passes the credential id instead of the user id to refreshOAuthTokens, so the sync endpoint receives the wrong calcomUserId.",
+    "textoGolden": "The `refreshOAuthTokens` function is passed `credentialId` instead of `userId`, which breaks the credential sync functionality by causing incorrect user lookups. This issue can lead to failures in syncing user credentials, impacting user experience.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "WHAT: The 3rd argument to `refreshOAuthTokens` is `credentialId` (= `credential.id`, line 53), but the function's parameter is `userId` (`refreshOAuthTokens(refreshFunction, appSlug, userId)`).\nWHY: When APP_CREDENTIAL_SHARING_ENABLED, the sync endpoint is sent `calcomUserId: <credential id>` instead of the user id, so Bigin credentials are synced against the wrong/non-existent user (all other apps correctly pass `credential.userId`).\nHOW: Pass `credential.userId` instead of `credentialId` as the third argument."
+     },
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "refreshOAuthTokens' third parameter is the Cal.com userId (used as `calcomUserId` in the sync request and to decide whether sharing runs), but this call passes `credentialId`. Every other caller passes `credential.userId`, so the credential-sync endpoint receives a credential row id as the user id and shared credentials are fetched/updated for the wrong identity. Pass `credential.userId` here."
+     },
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "refreshOAuthTokens' third parameter is `userId` (declared in refreshOAuthTokens.ts line 3 and used as `calcomUserId: userId.toString()`), but this call passes `credentialId` (the Credential row id, line 53) instead of the user id. When credential sharing is enabled the customer's sync endpoint receives a credential id labelled as calcomUserId and cannot resolve the correct Cal.com user. Pass `credential.userId` (the BiginToken/credential payload carries it) or plumb the user id through refreshAccessToken."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+    "descricao": "Salesforce checks response.statusText !== 'OK' instead of response.ok when refreshing the token, which can misclassify successful responses, and then ignores the refreshed token.",
+    "textoGolden": "The Salesforce integration checks `response.statusText` instead of `response.ok` when handling OAuth token refresh responses. This can lead to unreliable behavior, as a successful response may not be correctly identified, resulting in the use of stale credentials and potential authentication failures.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       86,
+       107
+      ],
+      "texto": "WHAT: Checks response.statusText !== \"OK\" instead of response.ok and builds jsforce.Connection from stale credentialKey.access_token/instance_url ignoring accessTokenParsed.data. WHY: Refresh never takes effect (old token reused) and valid refreshes can throw on runtimes where statusText is empty. HOW: Check !response.ok and use parsed access_token/instance_url for connection and DB update."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
+    "descricao": "After refreshing the Salesforce token, jsforce.Connection is created with the stale access_token and instance_url instead of the newly refreshed values.",
+    "textoGolden": "The `jsforce.Connection` is created using stale `credentialKey.access_token` and `credentialKey.instance_url` after a token refresh, which can lead to authentication failures and incorrect data access. Ensure that the connection is established using the refreshed token values instead.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       96,
+       106
+      ],
+      "texto": "WHAT: The new block fetches and persists a fresh access token (`accessTokenParsed.data`) but then creates the `jsforce.Connection` with the stale `credentialKey.access_token` (line 106) instead of the just-refreshed token.\nWHY: The refreshed token is written to the DB but never used for the connection; if the old token was expired, jsforce must refresh again (extra round trip) or fail, and the DB/connection state diverge.\nHOW: Pass the new access token (`accessTokenParsed.data.access_token`) to the `jsforce.Connection`."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#04",
+    "descricao": "Claims the JSDoc describes appData.type as 'the app slug', copied from appData.appId.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/createOAuthAppCredential.ts",
+      "lines": [
+       10,
+       15
+      ],
+      "texto": "JSDoc documents both appData.type and appData.appId as 'the app slug'. Type is the credential type, not the slug (cf. app-credential.ts uses appMetadata.type for type vs appMetadata.slug for appId). Fix type param doc to e.g. 'the app credential type'."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/createOAuthAppCredential.ts",
+      "lines": [
+       12,
+       14
+      ],
+      "texto": "The JSDoc documents two different parameters with the same text: both `@param appData.type` and `@param appData.appId` are described as \"the app slug\". The body uses `appData.type` as the credential `type` and only `appData.appId` as the app slug, so the `type` doc contradicts the code and misleads callers. Document `type` as the credential type."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#05",
+    "descricao": "Claims the team-credential branch only checks accepted membership instead of admin rights, letting non-admin members create team credentials.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/createOAuthAppCredential.ts",
+      "lines": [
+       30,
+       45
+      ],
+      "texto": "WHAT: Team branch only checks members.some accepted:true, while non-team path calls throwIfNotHaveAdminAccessToTeam. WHY: Any non-admin team member can craft state.teamId to create team-level credentials, privilege escalation vs admin-only intent. HOW: Require admin role check for team branch too."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#06",
+    "descricao": "Claims malformed OAuth state makes JSON.parse throw and crash OAuth callbacks with a 500.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/decodeOAuthState.ts",
+      "lines": [
+       9,
+       9
+      ],
+      "texto": "WHAT: JSON.parse(req.query.state) with no try/catch on attacker-controlled query param. WHY: Malformed state throws SyntaxError, crashing every OAuth callback/add and createOAuthAppCredential path with 500 instead of 400. HOW: Wrap in try/catch and return undefined / 400 on invalid state."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/decodeOAuthState.ts",
+      "lines": [
+       5,
+       12
+      ],
+      "texto": "JSON.parse(req.query.state) throws SyntaxError on malformed/tampered state with no try/catch, breaking OAuth callbacks with unhandled 500. Validate and handle parse failure."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/encodeOAuthState.ts",
+      "lines": [
+       5,
+       12
+      ],
+      "texto": "Same unguarded JSON.parse(req.query.state): malformed state throws unhandled and breaks the add flow. Guard parse failure."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#12",
+    "descricao": "Claims the Office365 video adapter passes the wrong app slug 'msteams' to refreshOAuthTokens.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/office365video/lib/VideoApiAdapter.ts",
+      "lines": [
+       73,
+       73
+      ],
+      "texto": "The app slug passed to refreshOAuthTokens is \"msteams\", but this adapter is the office365-video app. The sync endpoint is asked for the wrong app's credentials. Use the correct slug \"office365-video\"."
+     }
+    ]
+   }
+  ]
+ },
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "8ab88145113dd23a930e23b9cbbcf8b30e4c0b17",
+  "base": "a5d290951def84afdcc4c88d2f1f20023fc36e2a",
+  "prTitle": null,
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     838,
+     843
+    ],
+    "texto": "The new paginator treats the audit log's datetime ordering key as a number, calling math.floor/math.ceil on datetime objects and returning raw numeric cursor values to datetime SQL comparisons. Nonempty optimized pages raise TypeError during cursor construction, and existing timestamp cursors are not decoded to datetime as they are in DateTimePaginator. Inherit from DateTimePaginator and preserve its get_item_key and value_from_cursor implementations for this endpoint."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+    "lines": [
+     71,
+     71
+    ],
+    "texto": "The advanced-access check dereferences organization_context.member without checking whether it is None, even when optimized_pagination is absent. RpcUserOrganizationContext explicitly permits missing membership and the endpoint authorizes scoped API access rather than requiring a member, so authorized non-member requests now fail with AttributeError instead of using normal pagination. Evaluate this check only for optimized requests and guard the optional member."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     877,
+     882
+    ],
+    "texto": "The advanced negative-offset branch passes a negative start directly to a Django QuerySet slice. An optimized request with cursor=0:-1:0 raises Django's negative-indexing exception rather than returning a reverse page, and Endpoint.paginate does not translate that exception into a pagination error. Reject negative offsets with BadPaginationError or implement reverse traversal using ordering and nonnegative bounds."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     874,
+     876
+    ],
+    "texto": "The comment says Django automatically handles negative slicing, and advertises efficient traversal on that basis, but the branch below passes a negative start directly into `queryset[start_offset:stop]`. Django QuerySets reject negative indexing with an exception; they do not translate it into reverse pagination. This misdocuments the new paginator's supported inputs and invites callers to use a path that fails. Remove the negative-offset support claim and explicitly document that queryset offsets must be nonnegative unless actual offset translation is implemented."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     877,
+     886
+    ],
+    "texto": "Django QuerySets do not support negative slice indices. With advanced features enabled, a cursor offset of -1 and limit of 100 reaches queryset[-1:100], which raises ValueError instead of returning audit logs. The fallback also preserves negative offsets for previous-page cursors. Reject negative cursor offsets or normalize them to a nonnegative boundary before slicing; passing them through does not implement reverse pagination."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+    "lines": [
+     79,
+     80
+    ],
+    "texto": "The newly selected OptimizedCursorPaginator implements a numeric-key contract: get_item_key calls math.floor/math.ceil on the ordered attribute, and value_from_cursor returns a raw numeric value. This endpoint instead orders AuditLogEntry records by datetime. An optimized request returning records will therefore attempt to round a datetime and raise TypeError while building cursors; subsequent datetime cursor filtering would also need conversion. Keep DateTimePaginator here until the optimized paginator implements the same datetime-to-cursor and cursor-to-datetime conversions."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+    "lines": [
+     79,
+     80
+    ],
+    "texto": "The optimized branch replaces DateTimePaginator with a paginator that assumes numeric keys, while this caller still orders by the datetime field. OptimizedCursorPaginator.get_item_key() calls math.ceil/math.floor on the datetime object, so a nonempty audit-log page fails while building its cursors; subsequent cursor filtering also lacks datetime conversion. Preserve DateTimePaginator's datetime key/cursor conversions in the optimized implementation before using it for this endpoint."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     838,
+     843
+    ],
+    "texto": "The audit-log endpoint selects this paginator with order_by=\"-datetime\", so get_item_key receives a datetime object. math.floor/math.ceil cannot process datetime objects, causing cursor construction for nonempty results to raise TypeError. The cursor decoding also returns a raw numeric value instead of converting it back to a datetime. Reuse DateTimePaginator's key and cursor conversions for this endpoint."
+   },
+   {
+    "id": "S9",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     877,
+     882
+    ],
+    "texto": "When advanced features are enabled and cursor.offset is negative, this branch passes a negative start directly to a Django QuerySet. Django rejects negative indexing rather than applying boundary handling, so the advertised advanced pagination path raises an exception instead of returning a page. Reject negative offsets or implement reverse traversal with nonnegative slicing and appropriate ordering."
+   },
+   {
+    "id": "S10",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     838,
+     840
+    ],
+    "texto": "The endpoint selects this paginator with order_by=\"-datetime\". On a nonempty page, cursor construction calls get_item_key with an audit log whose datetime attribute is a datetime object. math.ceil/math.floor cannot round a datetime, so optimized pagination raises TypeError instead of returning the page. Use the datetime cursor conversion used by DateTimePaginator rather than numeric rounding."
+   },
+   {
+    "id": "S11",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     877,
+     882
+    ],
+    "texto": "When advanced features are enabled and a cursor contains a negative offset, this branch slices the Django queryset with a negative start. Django does not support negative queryset indexing and raises an exception; it does not automatically handle the boundary as the comment claims. Reject negative cursor offsets or clamp them before slicing rather than passing them through."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+    "descricao": "OptimizedCursorPaginator passes negative cursor offsets straight into Django queryset slicing, which Django does not support, so requests with a negative offset raise an error instead of returning a page.",
+    "textoGolden": "The OptimizedCursorPaginator in organization_auditlogs.py attempts to use negative slice offsets on Django querysets, but Django querysets do not support negative slicing and will raise an AssertionError.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       877,
+       882
+      ],
+      "texto": "The advanced negative-offset branch passes a negative slice start directly to a Django QuerySet, which does not support negative indexing. A cursor such as 0:-1:0 is accepted by Cursor.from_string but crashes the optimized audit-log request instead of providing reverse pagination. Reject negative offsets with BadPaginationError or implement reverse traversal using nonnegative slices and reversed ordering."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       874,
+       880
+      ],
+      "texto": "The comment claiming that Django ORM 'properly handles negative slicing automatically' is false: Django QuerySet slicing rejects negative indices. This branch passes cursor.offset straight into queryset[start_offset:stop], so it raises rather than supplying the documented negative-offset pagination. Correct the negative-offset support claims here, in the class docstring, and in the new BasePaginator boundary-handling comment (or implement actual supported boundary handling) so callers are not promised a pagination mode that the underlying queryset cannot provide."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       877,
+       882
+      ],
+      "texto": "Django QuerySets do not support negative slice bounds. Passing a negative cursor offset directly into `queryset[start_offset:stop]` raises an exception instead of enabling advanced pagination. Validate or normalize negative offsets before slicing, or implement reverse traversal through ordering/filtering rather than negative slices."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02",
+    "descricao": "The comment added to BasePaginator claims negative offsets are allowed and safely handled by the queryset, but the code clamps non-prev offsets to zero and leaves prev offsets as before, so the comment misdescribes the behaviour.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       179,
+       184
+      ],
+      "texto": "The added comment says this change will \"allow negative offsets to enable efficient bidirectional pagination ... safe because the underlying queryset will handle boundary conditions\", but the statement it annotates, line 182, is `start_offset = max(0, offset) if not cursor.is_prev else offset` \u2014 it clamps negative offsets to 0, i.e. it does the opposite of what the comment claims and leaves the 'negative offset' (offset < 0) paging behaviour exactly as before. The comment is now untrue for the code it sits on; either drop the 'allow negative offsets' wording or make the code actually permit them."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       179,
+       184
+      ],
+      "texto": "The comment declares this change `allow[s] negative offsets to enable efficient bidirectional pagination`, but the actual computation is `start_offset = max(0, offset) if not cursor.is_prev else offset`, which clamps non-prev offsets at 0 \u2014 i.e. it never permits a negative offset. The declared optimization is a no-op relative to the original `queryset[offset:stop]`; the comment describes behavior the code does not have."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       182,
+       184
+      ],
+      "texto": "BasePaginator now passes the raw `offset` to the slice whenever `cursor.is_prev` is true (`max(0, offset) if not cursor.is_prev else offset`). A negative offset from a user-supplied prev cursor therefore reaches `queryset[negative:stop]`, which Django rejects. This crashes every endpoint that uses BasePaginator. Fix: always use `max(0, offset)`, or validate the offset when the cursor is parsed."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#04",
+    "descricao": "The OptimizedCursorPaginator docstring claims streamlined boundary handling, an optimized query path and backward compatibility that the implementation, a copy of BasePaginator plus a negative-offset branch, does not provide.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       821,
+       832
+      ],
+      "texto": "Docstring lists 'Streamlined boundary condition handling', 'Optimized query path for large datasets', and 'maintaining backward compatibility', but get_result (845-886) is a copy of BasePaginator with only a negative-offset branch added \u2014 no streamlined handling or optimized path exists, and negative-offset slicing breaks prior cursor semantics. Doc describes behavior the function does not produce \u2014 align doc to code or implement the claimed handling."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+    "descricao": "OptimizedCursorPaginator computes cursor keys with math.floor/ceil on the raw attribute, but the audit log endpoint uses it with order_by='-datetime', so building the cursor raises TypeError for any non-empty result.",
+    "textoGolden": "get_item_key assumes a numeric key, but the paginator is used with order_by=-datetime in the audit logs endpoint; calling math.floor/ceil on a datetime will raise a TypeError.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       73,
+       83
+      ],
+      "texto": "OptimizedCursorPaginator requires numeric integer keys (get_item_key uses math.floor/ceil + int, cursor_value defaults to 0) but is instantiated here with order_by=\"-datetime\". This mismatched producer/consumer contract breaks pagination for datetime-ordered audit logs. Fix: do not use OptimizedCursorPaginator for datetime ordering; keep DateTimePaginator or make OptimizedCursorPaginator datetime-aware."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       838,
+       843
+      ],
+      "texto": "WHAT: OptimizedCursorPaginator.get_item_key/value_from_cursor mishandles datetime ordering by calling math.floor/ceil directly on a datetime and returning raw int cursor value. WHY: Used with order_by=\"-datetime\" it crashes with TypeError on floor(datetime) when building cursors and filters the datetime column against an int in build_queryset, breaking pagination. HOW: Copy DateTimePaginator logic \u2014 timestamp via strftime/multiplier with floor/ceil and convert cursor value back with datetime.fromtimestamp."
+     },
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       79,
+       80
+      ],
+      "texto": "The optimized branch selects a numeric-key paginator while ordering by the datetime field. On any nonempty first page, build_cursor invokes OptimizedCursorPaginator.get_item_key, which calls math.ceil on a datetime and raises TypeError; nonzero cursors also lack the datetime conversion provided by DateTimePaginator. Make the optimized paginator inherit DateTimePaginator or preserve its timestamp encoding and decoding."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+    "descricao": "The audit log endpoint always dereferences organization_context.member.has_global_access, which crashes with AttributeError for authorized token requests that have no member, even on the default pagination path.",
+    "textoGolden": "When requests are authenticated with API keys or org auth tokens (which have user_id=None), organization_context.member is None. Line 71 attempts to access organization_context.member.has_global_access without checking if member is None, causing an AttributeError crash when optimized_pagination=true is used, even though the request passed all permission checks with valid org:write scope.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The unconditional advanced-access check dereferences organization_context.member although RpcUserOrganizationContext permits member=None. Authorized non-member organization-token requests therefore raise AttributeError even when optimized_pagination is absent, instead of returning audit logs through the existing paginator. Guard the optional member and evaluate eligibility only when optimized pagination is requested."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#08",
+    "descricao": "The comments and enable_advanced variable describe the optimized_pagination path as a performance optimization for administrators, hiding that it enables negative-offset slicing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       68,
+       72
+      ],
+      "texto": "The comments describe a 'performance optimization' for 'authorized administrators', and the variable is named enable_advanced. In fact it opts into negative-offset slicing, and the optimized_pagination query parameter gates it. The names and comments hide what the flag actually enables. Rename them to say what is enabled, or remove the path."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#09",
+    "descricao": "A user-controlled optimized_pagination flag lets any member with global access switch to a paginator that accepts unvalidated negative cursor offsets, widening the attack surface and causing server errors.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       70,
+       83
+      ],
+      "texto": "A user-controlled `optimized_pagination` query flag switches the endpoint to a paginator that accepts attacker-supplied negative cursor offsets. This is available to any user with global access, not only to real admins. It widens the attack surface for unvalidated cursor offsets and causes server errors. The comment 'permissions are checked at the queryset level' is not backed by any check in the paginator. Fix: remove the optimized path, or have the paginator validate and clamp offsets."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#03",
+    "descricao": "Claims the prev-page trim check uses the raw offset instead of the clamped start_offset, so clamped or negative offsets mis-trim results and return wrong page boundaries.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       182,
+       184
+      ],
+      "texto": "WHAT: BasePaginator clamps with start_offset=max(0,offset) for non-prev but leaves later prev-trim check as len(results)==offset+limit+extra using the raw offset. WHY: With clamped or negative offsets the length comparison misfires, skipping/applying the extra-row trim incorrectly and returning wrong page boundaries. HOW: Use start_offset consistently in the length check or reject negative offsets upfront."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       884,
+       891
+      ],
+      "texto": "Dead computation / cross-reference mismatch: start_offset is computed and used for slicing (stop=start_offset+limit+extra) but the prev-page trim check uses the original offset (len(results)==offset+limit+extra). Use start_offset in the length check to match the slice that produced results."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#05",
+    "descricao": "Claims OptimizedCursorPaginator relies on self.key and self._is_asc that only DateTimePaginator defines, so get_item_key raises AttributeError.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       821,
+       840
+      ],
+      "texto": "`OptimizedCursorPaginator` subclasses `BasePaginator` but its `get_item_key` (and the `self.desc` used at line 903) rely on attributes `self.key` and `self._is_asc` that are set up by the concrete `DateTimePaginator`, not by `BasePaginator`. This method was copied verbatim from the datetime paginator, which suggests the class was meant to extend a cursor/datetime paginator. As written, instantiating it and calling `get_item_key` raises AttributeError (missing `self.key`/`self._is_asc`) before any results are produced. Subclass the appropriate concrete paginator (or initialize `key`/`desc`/`_is_asc`) so the attributes exist."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#10",
+    "descricao": "Claims the audit log endpoint imports an OptimizedCursorPaginator class that does not exist.",
+    "textoGolden": "Importing non-existent OptimizedCursorPaginator",
+    "comentarios": []
+   }
+  ]
+ },
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "6669a2d94d76eea3b99b8c476d12b1eb66726b07",
+  "base": "56abd247e1829cb6de82dfcc8ce04deb5f0d1e91",
+  "prTitle": null,
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/controllers/topics_controller.rb",
+    "lines": [
+     105,
+     107
+    ],
+    "texto": "TopicUser.find_by can return nil, but unsubscribe immediately reads its notification_level. A logged-in user following a shared unsubscribe link for a topic they have never visited receives a server error because TopicView initialization does not create this record. Handle an absent record and persist the chosen level through TopicUser.change, which supports creating missing rows."
+   },
+   {
+    "id": "S2",
+    "file": "config/routes.rb",
+    "lines": [
+     440,
+     441
+    ],
+    "texto": "The new GET routes mutate the authenticated user's notification preferences without a confirmation or CSRF-protected write. An attacker can navigate a logged-in victim to a known topic's unsubscribe URL to downgrade or mute notifications; ensure_logged_in authenticates the victim but does not establish their intent. Make GET display a confirmation and perform the preference change through a CSRF-protected POST or PUT."
+   },
+   {
+    "id": "S3",
+    "file": "app/controllers/topics_controller.rb",
+    "lines": [
+     113,
+     113
+    ],
+    "texto": "Saving notification_level directly leaves notifications_reason_id unset for users whose topic state has no explicit notification reason. TopicUser.auto_track selects exactly those nil-reason records and can restore tracking after the user unsubscribes, because this action did not record an explicit user choice. Persist the level through TopicUser.change so notifications_reason_id and notifications_changed_at are set consistently with other notification preference changes."
+   },
+   {
+    "id": "S4",
+    "file": "config/locales/client.en.yml",
+    "lines": [
+     985,
+     985
+    ],
+    "texto": "This confirmation promises that notifications will stop, but TopicsController#unsubscribe changes any level above regular to regular, not muted. A watching/tracking recipient can therefore still receive mention/reply notifications after seeing this message. Make the confirmation reflect the resulting notification level (or describe only the reduction in notifications), rather than promising that all notifications stop."
+   },
+   {
+    "id": "S5",
+    "file": "app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs",
+    "lines": [
+     1,
+     8
+    ],
+    "texto": "The router declares a standalone `topicUnsubscribe` route, whose default template lookup is `topic-unsubscribe`, but this file registers `topic/unsubscribe` (the template name for a nested `topic.unsubscribe` route). Neither the route nor its view overrides the template name. Consequently following the unsubscribe link changes the server-side notification state but does not render the confirmation and notification selector. Move this template to `templates/topic-unsubscribe.hbs`, or explicitly render `topic/unsubscribe` from the route."
+   },
+   {
+    "id": "S6",
+    "file": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6",
+    "lines": [
+     4,
+     9
+    ],
+    "texto": "The new Rails handler for this same URL performs the unsubscribe, but this Ember route only calls PostStream.loadTopicView and returns the topic. If the URL is reached through client-side navigation, no request reaches TopicsController#unsubscribe, so notifications remain enabled even though the unsubscribe page says they will stop. Make the client transition perform the unsubscribe operation as well (or force a document navigation to the server handler)."
+   },
+   {
+    "id": "S7",
+    "file": "app/controllers/topics_controller.rb",
+    "lines": [
+     105,
+     107
+    ],
+    "texto": "TopicUser records are created lazily, so a logged-in user can visit this URL for an accessible topic without having a corresponding row (for example before reading it). find_by then returns nil and the notification_level access raises NoMethodError instead of unsubscribing. Handle the absent record, preferably using TopicUser.change to create/update the user's notification state."
+   },
+   {
+    "id": "S8",
+    "file": "app/controllers/topics_controller.rb",
+    "lines": [
+     113,
+     113
+    ],
+    "texto": "Saving notification_level directly does not set notifications_reason_id to user_changed or notifications_changed_at as TopicUser.change does. For an automatically tracked topic whose reason is null, unsubscribe lowers the level to regular but leaves that reason null; the TopicUser read SQL can immediately promote it back to tracking once the accumulated viewing threshold is exceeded. Persist this explicit user choice through TopicUser.change so subsequent reads cannot undo it."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+    "descricao": "The new unsubscribe endpoint changes the user's topic notification level on a plain GET request, so a third-party page can trigger it for a logged-in user without any CSRF token.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       98,
+       115
+      ],
+      "texto": "The unsubscribe endpoint mutates notification_level (tu.save!) via a plain GET route (config/routes.rb:440-441) with skip_before_filter :check_xhr, authenticating only through the session cookie. There is no CSRF token (Rails forgery protection does not cover GET) and no capability token, unlike EmailController#unsubscribe which authorizes via DigestUnsubscribeKey. Any third-party page can embed <img src=\"https://forum/t/<id>/unsubscribe\"> and, when a logged-in user loads it, silently change that user's notification_level for the topic. Require a per-user capability token (like the digest unsubscribe key) in the URL, or perform the state change from an authenticated non-GET request that carries the CSRF token."
+     },
+     {
+      "file": "config/routes.rb",
+      "lines": [
+       440,
+       441
+      ],
+      "texto": "The new GET routes mutate the authenticated user's notification preferences without CSRF verification. An attacker can navigate a logged-in user's browser to a known topic unsubscribe URL and reduce or mute its notifications, because Rails excludes GET from forgery-token checks and unsubscribe explicitly skips check_xhr. Make GET render a confirmation page and perform the preference change through a CSRF-protected POST or PUT."
+     },
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       98,
+       113
+      ],
+      "texto": "WHAT: The unsubscribe state change (lowering/muting notification_level + save!) runs on a GET route (config/routes.rb GET t/:slug/:topic_id/unsubscribe). WHY: An attacker can forge the URL as an image/prefetch/link to silently change a victim's notification state with no CSRF token since GETs are not CSRF-protected. HOW: Make the mutation a PUT/POST with CSRF protection or require an explicit confirmation parameter/token instead of mutating on page view."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+    "descricao": "TopicsController#unsubscribe dereferences TopicUser.find_by without handling a missing row, so users with no topic_users record get a NoMethodError/500 instead of being unsubscribed.",
+    "textoGolden": "logic: Potential nil pointer exception - if no TopicUser record exists, tu will be nil and calling methods on it will crash",
+    "comentarios": [
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       105,
+       107
+      ],
+      "texto": "tu is not checked for nil before use. TopicUser.find_by(user_id: current_user.id, topic_id: params[:topic_id]) returns nil whenever the logged-in user has no topic_users row for that topic (the same lookup TopicUser.get performs), and the next line dereferences tu.notification_level, raising NoMethodError and returning a 500. Because the route is only gated by ensure_logged_in, any logged-in user can hit /t/:topic_id/unsubscribe(.json) for a topic they never opened and trigger the crash. Guard the lookup, e.g. `tu = TopicUser.find_by(...); return render json: {success: false} unless tu` (or build/return early) before reading notification_level."
+     },
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       105,
+       113
+      ],
+      "texto": "`TopicUser.find_by(...)` can return nil (e.g. the user clicks the emailed unsubscribe link for a topic for which no TopicUser row was ever created), and the very next line dereferences it (`tu.notification_level > ...`, then `tu.save!`). This raises NoMethodError on nil and the unsubscribe request 500s. Guard the nil case (e.g. return early or use `TopicUser.change`/`find_or_create_by`) before reading/writing notification_level."
+     },
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       105,
+       113
+      ],
+      "texto": "`tu = TopicUser.find_by(user_id: current_user.id, topic_id: params[:topic_id])` can return nil (find_by yields nil when no row exists), but the next lines dereference it unconditionally (`tu.notification_level`, `tu.save!`). Since the new unsubscribe routes are public GET endpoints, any logged-in user visiting /t/:slug/:topic_id/unsubscribe for a topic they have never tracked will trigger a NoMethodError and a 500 instead of a sane response. Guard the nil case (e.g. create/skip or redirect) before reading notification_level."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#03",
+    "descricao": "The message builder spec passes unsubscribe_url in the fixture but never asserts the per-topic unsubscribe link appears in the email.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/components/email/message_builder_spec.rb",
+      "lines": [
+       169,
+       180
+      ],
+      "texto": "The `unsubscribe_url` added to the `message_with_unsubscribe` fixture is never asserted. The two tests only check that the List-Unsubscribe header `be_present` and that the body matches `user_preferences_url`; neither references `unsubscribe_url`. So they would still pass if the topic-specific unsubscribe URL this PR introduces were dropped or wired to the wrong value. Add an assertion (e.g. that `message_with_unsubscribe.body` matches `/t/1234/unsubscribe`, and that the List-Unsubscribe header points at the topic unsubscribe URL) so the new behaviour is actually covered."
+     },
+     {
+      "file": "spec/components/email/message_builder_spec.rb",
+      "lines": [
+       169,
+       172
+      ],
+      "texto": "The fixture now passes unsubscribe_url, but no assertion reads it. The tests only check that the List-Unsubscribe header is present and that the body contains user_preferences_url, so they pass if the topic unsubscribe link is removed or broken. Add an assertion that the body includes \"/t/1234/unsubscribe\"."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#08",
+    "descricao": "The unsubscribe confirmation says the user will stop receiving notifications for the topic, but watching/tracking users are only moved to regular, which still sends mention/reply notifications.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "config/locales/client.en.yml",
+      "lines": [
+       985,
+       985
+      ],
+      "texto": "The confirmation promises that the user will stop receiving notifications for this topic, but TopicsController#unsubscribe sets watching/tracking users to regular, not muted. Regular still allows mention/reply notifications, so this confirmation (and the corresponding promise in the new email link text) overstates what clicking the link accomplished. Describe stopping notifications for every new post, or make the confirmation conditional on the resulting notification level so only muted users are told that all topic notifications have stopped."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#09",
+    "descricao": "Unsubscribe saves the new notification level without setting notifications_reason_id, so auto-tracked topics are promoted back to tracking on the next read, undoing the unsubscribe.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       113,
+       113
+      ],
+      "texto": "Saving the notification level directly leaves notifications_reason_id unchanged instead of recording an explicit user choice. For automatically tracked topics with a null reason, TopicUser.update_last_read promotes the row back to tracking when the reading threshold is exceeded, undoing the unsubscribe on the next read. Persist the change through TopicUser.change so notifications_reason_id and notifications_changed_at are set consistently with set_notifications."
+     },
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       113,
+       113
+      ],
+      "texto": "Saving the notification level directly bypasses the explicit-user-change metadata set by TopicUser.change. In particular, a topic_user with notifications_reason_id == nil remains eligible for TopicUser.auto_track, which checks that field and can promote the topic back to tracking after the user unsubscribes. Use the notification-change helper (or set its user-change reason and timestamp consistently) so the unsubscribe is retained as an explicit user preference."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#10",
+    "descricao": "Claims the client unsubscribe route never performs the unsubscribe when entered through an in-app transition.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6",
+      "lines": [
+       5,
+       8
+      ],
+      "texto": "The client unsubscribe route only loads the ordinary topic view and never performs the unsubscribe operation. When entered through an in-app transition rather than a full server navigation, PostStream.loadTopicView requests /t/:id.json (or consumes preload data), so the page claims notifications will stop while the persisted notification level remains unchanged. Ensure this entry path executes the unsubscribe operation before showing confirmation."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6",
+      "lines": [
+       4,
+       9
+      ],
+      "texto": "The client route loads the topic but never invokes the unsubscribe action. Notification levels are changed only by TopicsController#unsubscribe, so navigating to this route inside the Ember application can display \u201cYou will stop receiving notifications\u201d without changing the subscription. Explicitly perform the unsubscribe operation on client-side entry rather than relying on the initial HTML request to have done it."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#11",
+    "descricao": "The property name stopNotificiationsText is misspelled (should be stopNotificationsText).",
+    "textoGolden": "Typo in property name: 'stopNotificiationsText' should be 'stopNotificationsText' (missing 'n' in 'Notifications')",
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#04",
+    "descricao": "Claims other mailers using add_unsubscribe_link do not pass unsubscribe_url, so rendering unsubscribe_link raises I18n::MissingInterpolationArgument.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "lib/email/message_builder.rb",
+      "lines": [
+       67,
+       68
+      ],
+      "texto": "The `unsubscribe_link` translation now interpolates `%{unsubscribe_url}` (config/locales/server.en.yml), but `I18n.t('unsubscribe_link', template_args)` is only given `unsubscribe_url` when the caller supplies it (user_notifications.rb:295). Any other email built with `add_unsubscribe_link: true` but no `unsubscribe_url` will raise I18n::MissingInterpolationArgument inside html_part at send time. Pass a default unsubscribe_url into template_args (or guard the interpolation) so the new placeholder is always satisfiable."
+     },
+     {
+      "file": "config/locales/server.en.yml",
+      "lines": [
+       1852,
+       1855
+      ],
+      "texto": "`unsubscribe_link` now unconditionally interpolates `%{unsubscribe_url}`, but `Email::MessageBuilder#html_part` renders this key for every email with `add_unsubscribe_link` set, using only the opts the caller passed. This PR wires `unsubscribe_url` into just the per-topic notification email (app/mailers/user_notifications.rb:295); any other `add_unsubscribe_link` email that doesn't pass it (e.g. the digest) will now raise I18n::MissingInterpolationArgument instead of rendering its unsubscribe footer. Either make the second sentence conditional on the argument being present, or supply `unsubscribe_url` at every `add_unsubscribe_link` call site."
+     },
+     {
+      "file": "config/locales/server.en.yml",
+      "lines": [
+       1852,
+       1855
+      ],
+      "texto": "The `unsubscribe_link` translation now contains a required `%{unsubscribe_url}` interpolation, but only the per-topic notification mailer was updated to pass `unsubscribe_url` (app/mailers/user_notifications.rb:295). Any other caller that sends mail with `add_unsubscribe_link: true` and feeds this string through Email::MessageBuilder (`I18n.t('unsubscribe_link', template_args)`, lib/email/message_builder.rb:67 and :90) without an `unsubscribe_url` in its opts \u2014 e.g. the site-wide digest, which is not topic-scoped \u2014 will now raise `I18n::MissingInterpolationArgument` when rendering. Either make the topic-specific line conditional (only emitted when `unsubscribe_url` is present) or add `unsubscribe_url` to every add_unsubscribe_link caller."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#05",
+    "descricao": "Claims the unsubscribe page renders the topic title unescaped through triple braces, allowing HTML injection.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs",
+      "lines": [
+       1,
+       8
+      ],
+      "texto": "The title is interpolated unescaped and then emitted with triple braces. The controller (topic-unsubscribe.js.es6:6) builds stopNotificiationsText via I18n.t with { title: model.fancyTitle }, which performs no escaping, and this template renders it as {{{stopNotificiationsText}}}. Combined with the locale string \"...notifications for <strong>{{title}}</strong>.\" (config/locales/client.en.yml:985), any markup in the topic title is injected as raw HTML. Escape the title before interpolation (or render the composed value escaped) so user-authored titles cannot inject HTML."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs",
+      "lines": [
+       3,
+       3
+      ],
+      "texto": "Unescaped output of user-controlled content in the response. {{{stopNotificiationsText}}} uses a triple stache (no HTML escaping), and the controller builds that string by interpolating the raw topic title (`title: this.get(\"model.fancyTitle\")`, topic-unsubscribe.js.es6:6) into an i18n string containing markup. A topic whose title contains HTML/script is injected verbatim into the unsubscribe page (stored XSS). Escape the title before interpolation, or render with escaped braces and put the <strong> in the template."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs",
+      "lines": [
+       1,
+       4
+      ],
+      "texto": "Triple-brace `{{{stopNotificiationsText}}}` renders translation containing `<strong>{{title}}</strong>` with fancyTitle unescaped, so topic title HTML is injected into page; escape title interpolation or avoid triple-brace."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#06",
+    "descricao": "Claims the per-topic unsubscribe URL in emails is relative and cannot be resolved by email clients.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/mailers/user_notifications.rb",
+      "lines": [
+       295,
+       295
+      ],
+      "texto": "Make the unsubscribe URL absolute before passing it to the email builder (for example, prepend Discourse.base_url). Topic#unsubscribe_url appends `/unsubscribe` to the topic's site-relative URL, but the new server translation interpolates unsubscribe_url directly into an email Markdown link and MessageBuilder cooks it without adding the site origin. Unlike the post link in notification.html.erb, which explicitly prepends Discourse.base_url, this produces a `/t/.../unsubscribe` href that email clients cannot resolve to the forum, so the new per-topic unsubscribe link does not work reliably."
+     },
+     {
+      "file": "app/models/topic.rb",
+      "lines": [
+       719,
+       721
+      ],
+      "texto": "WHAT: unsubscribe_url returns only a relative path (\"#{url}/unsubscribe\") but the email template interpolates %{unsubscribe_url} directly as [click here](%{unsubscribe_url}). WHY: Email clients have no base host so the per-topic unsubscribe link is broken, unlike user_preferences_url which is built absolute with Discourse.base_url. HOW: Build an absolute URL, e.g. \"#{Discourse.base_url}#{url}/unsubscribe\" (or base_uri-aware absolute)."
+     },
+     {
+      "file": "app/models/topic.rb",
+      "lines": [
+       719,
+       721
+      ],
+      "texto": "unsubscribe_url returns relative path but is consumed as absolute email link; prefix with Discourse.base_url like user_preferences_url does."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#07",
+    "descricao": "Claims the topicUnsubscribe route cannot find its template because the template lives at topic/unsubscribe.hbs.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/routes/app-route-map.js.es6",
+      "lines": [
+       13,
+       13
+      ],
+      "texto": "This registers a top-level route named `topicUnsubscribe` (dasherizes to `topic-unsubscribe`), but the template added by this PR is at `templates/topic/unsubscribe.hbs`, i.e. the nested route name `topic/unsubscribe`. The route `topicUnsubscribe` will therefore not find a template. Nest the route under the topic resource (or move the template to `templates/topic-unsubscribe.hbs`) so the route name, controller and template all resolve to the same name."
+     }
+    ]
+   }
+  ]
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "prTitle": null,
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     13,
+     13
+    ],
+    "texto": "WHAT: totalPages adds an extra page when user_count is an exact multiple of limit. WHY: with 50 members and a limit of 50, the UI displays two pages and enables Next, which requests offset 50 and displays an empty member list. HOW: calculate the page count with Math.ceil(user_count / limit)."
+   },
+   {
+    "id": "S2",
+    "file": "app/assets/javascripts/discourse/routes/group-members.js.es6",
+    "lines": [
+     10,
+     11
+    ],
+    "texto": "WHAT: the public members route now loads a single 50-member page without providing a way to retrieve subsequent pages. WHY: findMembers sends the model's default limit of 50, and discourse/templates/group/members.hbs only renders members without navigation or load-more actions, so members beyond the first 50 become inaccessible for custom groups that previously returned the complete list. HOW: add public pagination controls and actions that update offset and call findMembers, as the admin page now does."
+   },
+   {
+    "id": "S3",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     11,
+     14
+    ],
+    "texto": "When user_count is an exact positive multiple of limit, floor(count / limit) + 1 overcounts pages. For example, 50 members with limit 50 reports two pages, leaves Next enabled on the first page, and allows fetching offset 50, which contains no members. Use the ceiling of the ratio to count pages."
+   },
+   {
+    "id": "S4",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     13,
+     13
+    ],
+    "texto": "For any positive member count that is an exact multiple of the limit, this reports an extra page. For example, 50 members with limit 50 displays 1/2 and leaves Next enabled; clicking it requests offset 50 and displays an empty member list. Use ceiling division so showingLast agrees with the actual number of pages."
+   },
+   {
+    "id": "S5",
+    "file": "app/controllers/groups_controller.rb",
+    "lines": [
+     22,
+     26
+    ],
+    "texto": "This now paginates every group to 50 members, whereas custom groups previously returned their entire membership. The public group-members route calls findMembers() once, and group/members.hbs only renders members without pagination controls or further requests. Consequently, users can no longer see members beyond the first 50 of a custom group (and automatic groups also drop from the previous default 200 to 50). Update the public consumer to navigate or fetch subsequent pages when introducing this endpoint contract."
+   },
+   {
+    "id": "S6",
+    "file": "app/assets/javascripts/discourse/models/group.js",
+    "lines": [
+     30,
+     35
+    ],
+    "texto": "Every completed request overwrites members, offset, and user_count without checking whether it is still current. For example, start a pagination request, then remove a member while that request is in flight. The removal triggers a second findMembers request; if that newer response arrives first and the original response arrives last, the deleted member and old count are restored in the displayed model. Rapid next/previous navigation can likewise revert the selected page. Assign each fetch a generation token and apply results only if it is still the latest request."
+   },
+   {
+    "id": "S7",
+    "file": "app/assets/javascripts/discourse/templates/group/members.hbs",
+    "lines": [
+     6,
+     6
+    ],
+    "texto": "The public members view now renders the model's paginated `members` array, but the matching change to `Group#findMembers` requests only 50 users and replaces that array with a single page. The next/previous actions and controls introduced by this PR are only on the admin screen. Consequently, public group pages with more than 50 members silently show only the first 50, with no way to reach the remaining users (previously nonautomatic groups returned all members). Wire pagination into this public view/controller as well, or preserve full-list loading for this consumer."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+    "descricao": "The admin group pager computes total pages as floor(user_count / limit) + 1, so when the member count is an exact multiple of the limit it shows an extra page and Next navigates to an empty member list.",
+    "textoGolden": "The `totalPages` calculation using `Math.floor(user_count / limit) + 1` produces an extra page when `user_count` is an exact multiple of `limit`, leading to incorrect pagination. For example, with 100 users and a limit of 50, it reports 3 pages instead of 2, allowing navigation to an empty page.",
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+      "lines": [
+       11,
+       14
+      ],
+      "texto": "totalPages (and currentPage) use `Math.floor(user_count / limit) + 1`, which is an off-by-one when user_count is an exact multiple of limit (e.g. 50 members, limit 50 \u2192 reports 2 pages although only 1 exists). This leaves `showingLast` false on the real last page, so 'next' navigates to an empty page at offset=user_count. Use `Math.ceil(user_count / limit)` (and compute currentPage consistently) to get the correct page count."
+     },
+     {
+      "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+      "lines": [
+       11,
+       14
+      ],
+      "texto": "totalPages is off by one when user_count is an exact multiple of limit: `Math.floor(user_count / limit) + 1` gives 2 for user_count=50, limit=50, although 50 members occupy exactly one page. Correct it to `Math.ceil(this.get('user_count') / this.get('limit'))`. Effect: for a group whose member count is a multiple of the page size, totalPages is one too high, showingLast remains false so the 'next' link stays enabled, and clicking it navigates to a phantom empty page."
+     },
+     {
+      "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+      "lines": [
+       11,
+       14
+      ],
+      "texto": "`totalPages` uses `Math.floor(user_count / limit) + 1`, which over-counts by one whenever `user_count` is an exact multiple of `limit` (e.g. 50 members with limit 50 yields 2 pages instead of 1). Since `showingLast` is `propertyEqual(\"currentPage\", \"totalPages\")`, on a full last page `showingLast` is false, so the `next` action stays enabled and advances `offset` to `user_count`, rendering an empty page labeled as the last page. Use `Math.ceil(user_count / limit)` (with the zero-member guard) so the count matches the real number of pages."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#03",
+    "descricao": "Several Group model functions (findMembers, destroy, userCountDisplay) return a value on some paths and undefined on others, triggering consistent-return lint warnings.",
+    "textoGolden": "Expected to return a value at the end of function - code paths without explicit returns will return undefined",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#04",
+    "descricao": "Paging actions fire overlapping member requests and each response unconditionally overwrites offset and members, so a stale response arriving last can revert the list to an earlier page.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/models/group.js",
+      "lines": [
+       30,
+       35
+      ],
+      "texto": "Guard against stale member-fetch responses before updating the model. `next` updates offset immediately and leaves navigation enabled, so with at least three pages two rapid clicks issue requests for offsets 50 and 100. If the offset-100 response arrives first and the offset-50 response arrives last, this unconditional `setProperties` resets both offset and members to the older page, undoing the latest navigation. Refreshes after membership changes can similarly be overwritten by an earlier fetch. Track a per-model request generation and apply only the latest response, or serialize navigation and refresh requests."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+    "descricao": "The public members endpoint now always caps results at 50 per page, but the public group members page has no pagination, so groups with more than 50 members are silently truncated for users.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/routes/group-members.js.es6",
+      "lines": [
+       10,
+       11
+      ],
+      "texto": "The public members route now loads only the model's default 50-member page without providing any way to request subsequent pages. The public group/members.hbs template only renders members and has no Next/Previous controls, so members after the first 50 become inaccessible (manual groups previously returned all members). Add public pagination controls and actions that update offset and reload members."
+     },
+     {
+      "file": "app/controllers/groups_controller.rb",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "The new default limit applies to nonautomatic groups as well, but the public group-members route still calls findMembers() only once and its template simply iterates members without pagination. Previously this endpoint returned every member of a nonautomatic group; now a group with more than 50 members exposes only the first 50 on its public members page, with no way to reach the rest. Update that consumer to fetch subsequent pages or provide pagination when introducing this endpoint contract."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/routes/group-members.js.es6",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "Provide pagination or load subsequent pages for the public group-members view. findMembers now requests only 50 members, and this route calls it only once while its template simply iterates members without navigation. Custom groups previously returned all members, so groups larger than 50 now have members that cannot be viewed on this page."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#07",
+    "descricao": "Creating a group ignores the alias_level the admin selected, saving only name and visibility, so new groups keep the default alias level.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       23,
+       27
+      ],
+      "texto": "Persist params[:alias_level] when creating a group, just as update does. The creation form exposes aliasLevelOptions and group.asJSON sends the selected alias_level, but create saves only name and visible. A newly created group therefore retains the default alias level instead of the administrator's selection."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+    "descricao": "Removing a member deletes the membership row directly and skips clearing the user's primary_group_id, so a removed user can keep this group as their primary group.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       84,
+       91
+      ],
+      "texto": "WHAT: remove_member uses group.users.delete(user_id) instead of the Group#remove destroy path. WHY: bypasses GroupUser destroy callbacks and primary_group_id cleanup done in destroy_deletions, leaving stale membership side-effects (e.g. dangling primary_group_id). HOW: load the User and call group.remove(user)."
+     },
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       90,
+       90
+      ],
+      "texto": "Removing a member with group.users.delete bypasses the primary_group_id cleanup previously performed by Group#destroy_deletions during usernames updates. A user whose primary group is this group remains associated with it as their primary group after membership removal, leaving stale primary-group state used by user administration and post serialization. Clear primary_group_id for the removed user when it equals this group's id as part of the removal operation."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#12",
+    "descricao": "The remove_member spec issues a PUT request although the route only maps DELETE to remove_member, so the test uses a verb never routed in production.",
+    "textoGolden": "The remove_member test uses xhr :put to call the remove_member action, but the route defines delete 'members' => 'groups#remove_member' requiring DELETE method.",
+    "comentarios": [
+     {
+      "file": "spec/controllers/admin/groups_controller_spec.rb",
+      "lines": [
+       114,
+       117
+      ],
+      "texto": "This example sends `xhr :put, :remove_member`, but the PR maps `remove_member` only to DELETE (`delete \"members\" => \"groups#remove_member\"`); PUT on that path routes to `groups#add_members`. Controller specs bypass the router, so the example still lands on `remove_member` and passes regardless \u2014 it would still pass if the DELETE route were missing or wired to the wrong action, leaving the newly introduced verb/action pairing untested. Use `xhr :delete, :remove_member`, as the sibling example at line 125 already does."
+     },
+     {
+      "file": "spec/controllers/admin/groups_controller_spec.rb",
+      "lines": [
+       114,
+       117
+      ],
+      "texto": "The test 'cannot remove members from automatic groups' sends `xhr :put, :remove_member`, but the route is `delete \"members\" => \"groups#remove_member\"`. It exercises the action with a verb that is never routed in production. Use `xhr :delete, :remove_member, group_id: 1, user_id: 42` so the test matches the real request."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#02",
+    "descricao": "Claims the now-unawaited findMembers() call creates a race where the controller has no member data available when it needs it.",
+    "textoGolden": " The findMembers() call is now asynchronous and unhandled. The controller may not have member data immediately available, creating a race condition.",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#05",
+    "descricao": "Claims the public group members template iterates a bare members property that resolves to undefined because the controller's model is now the Group object.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/routes/group-members.js.es6",
+      "lines": [
+       8,
+       12
+      ],
+      "texto": "setupController now sets controller model to the Group object (not the members array), but template iterates bare `members`. Expose the new shape to the template (e.g. controller.set('members', model.get('members')) with observer/alias, or iterate `model.members`) \u2014 otherwise `{{#each m in members}}` resolves to undefined and the members list never renders."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+    "descricao": "Claims add_members/remove_member read params[:group_id] while the route supplies the group id as params[:id], so the actions always fail with ParameterMissing.",
+    "textoGolden": "The route provides the group's ID in params[:id], but the code attempts to read it from params[:group_id], causing the action to fail. This results in a broken feature when trying to access group memberships.",
+    "comentarios": [
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       65,
+       67
+      ],
+      "texto": "add_members reads params.require(:group_id) but the member route declared in config/routes.rb supplies params[:id] (JS calls /admin/groups/:id/members.json). Request always raises ParameterMissing. Change to Group.find(params.require(:id).to_i) or accept either key."
+     },
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       84,
+       86
+      ],
+      "texto": "remove_member reads params.require(:group_id) but the member route supplies params[:id]. Same ParameterMissing on every DELETE /admin/groups/:id/members request. Change to params.require(:id)."
+     },
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       66,
+       86
+      ],
+      "texto": "add_members and remove_member read the group id via `params.require(:group_id)`, but the routes that expose them (config/routes.rb:49-50, `delete/put \"members\"` inside `resources :groups`) are member routes that supply the parameter as `:id`. The front-end calls `/admin/groups/<id>/members.json` (app/assets/javascripts/discourse/models/group.js:42,53), so `params[:group_id]` is nil and `require` raises ActionController::ParameterMissing, returning 400 \u2014 add/remove member is broken in production. Use `params.require(:id)` (or read `params[:id]`) to match the route; the specs pass `group_id:` directly via xhr, which is why they don't catch this."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#09",
+    "descricao": "Claims add_members does not strip whitespace around comma-separated usernames, so entries like 'alice, bob' silently fail to add members.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       65,
+       75
+      ],
+      "texto": "WHAT: add_members splits usernames on comma without stripping whitespace. WHY: input like \"alice, bob\" looks up \" bob\" (leading space) via find_by_username, silently fails, and still returns success_json so members are silently not added. HOW: strip each token and skip blanks before lookup."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#11",
+    "descricao": "Claims the public members endpoint accepts an unbounded or negative limit/offset, letting a caller force loading and serializing the whole membership of a large group.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/groups_controller.rb",
+      "lines": [
+       19,
+       26
+      ],
+      "texto": "WHAT: members action takes attacker-controlled limit/offset with no max or negativity clamp. WHY: a request with limit=1000000 forces loading/serializing the entire membership table in one response, causing memory/CPU blowup on large groups. HOW: clamp limit to a max (e.g. min(limit, 200)) and floor offset/limit at 0."
+     },
+     {
+      "file": "app/controllers/groups_controller.rb",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "The client-supplied limit is used with no upper bound, and a negative or zero value is not handled. A caller can request an arbitrarily large limit and force loading and serializing of every member of a large group in one request. Clamp it, for example limit = [[(params[:limit] || 50).to_i, 1].max, 200].min, and make offset non-negative."
+     }
+    ]
+   }
+  ]
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "1950a511026d520a7329c7b6b9ee60a4af8f8b55",
+  "base": "b8c1cd410f4499c77a8b372decfe1718b80ccfd2",
+  "prTitle": null,
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "lines": [
+     77,
+     82
+    ],
+    "texto": "WHAT: canView(client) accepts the all-clients view permission before evaluating a client-specific permission or deny. WHY: a delegated administrator granted global view can still read a client explicitly excluded by a negative client-specific policy; ClientsResource also uses canView() to bypass all per-client checks when listing representations. HOW: reserve the global view shortcut for built-in administrative roles and evaluate the client-specific resource before falling back to the all-clients resource, including in the listing path."
+   },
+   {
+    "id": "S2",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "lines": [
+     87,
+     87
+    ],
+    "texto": "WHAT: the global canView() check excludes the all-clients manage permission even though manage grants read access through canConfigure(client). WHY: an administrator with only the global manage permission can create clients but receives Forbidden from inherited requireList() and requireListClientScopes() unless separately assigned query/view roles, and cannot list client scopes despite being allowed to manage them. HOW: include the all-clients manage scope in the global read/list eligibility checks while preserving client-specific deny evaluation."
+   },
+   {
+    "id": "S3",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "lines": [
+     86,
+     87
+    ],
+    "texto": "A caller granted MANAGE on all Clients passes canManageClientScopes() and canView(ClientScopeModel), but fails canView() unless separately granted VIEW. The inherited canViewClientScopes() and canListClientScopes() delegate to canView(), so this administrator can manage client scopes but cannot list them (without an additional query role). Include the global manage grant in the global view check to keep these authorization paths consistent."
+   },
+   {
+    "id": "S4",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java",
+    "lines": [
+     147,
+     152
+    ],
+    "texto": "The first call in this try block is getDefaultClientScopes(), which is itself forbidden before any permission is granted. Its ForbiddenException satisfies the catch, so removeDefaultClientScope() is never reached. This test would still pass if removal incorrectly allowed callers with no permissions (including a regression that denies configure-only callers but permits unprivileged callers). Obtain the scope ID using the privileged realm client before this block, then invoke only the removal operation inside the forbidden assertion."
+   },
+   {
+    "id": "S5",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+    "lines": [
+     95,
+     102
+    ],
+    "texto": "The new Javadocs say these methods return true, but both methods return void. Their implementations throw ForbiddenException when the corresponding predicate is false. Document the exception contract instead, as the neighbouring require methods do, so callers are not told that denial is represented by a return value."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+    "descricao": "Claims the removal-cleanup listener is guarded by the V1 fine-grained flag, so client/role/group permissions are orphaned when V1 is disabled or only V2 is enabled.",
+    "textoGolden": "Inconsistent feature flag bug causing orphaned permissions. The AdminPermissions event listener, responsible for cleaning up permissions upon role, client, or group removal, is incorrectly guarded by the ADMIN_FINE_GRAINED_AUTHZ (V1) feature flag. This is inconsistent with other methods in the class that use ADMIN_FINE_GRAINED_AUTHZ_V2. Consequently, if ADMIN_FINE_GRAINED_AUTHZ_V2 is enabled but V1 is not, the permission cleanup logic will not execute, leading to orphaned permission data. Cleanup should occur regardless of which fine-grained authorization version is enabled.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java",
+      "lines": [
+       77,
+       95
+      ],
+      "texto": "The cleanup is now entirely wrapped in Profile.isFeatureEnabled(ADMIN_FINE_GRAINED_AUTHZ), so when the feature is disabled the pre-existing removal cleanup (roles/clients/groups .setPermissionsEnabled(..., false)) no longer runs. Realms using the non-V2 permission model will keep orphaned authorization resources/permissions after a client, role or group is removed. The gate should preserve the old behavior when the feature is off (run for V1), or the V1 cleanup must be performed elsewhere."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+    "descricao": "getClientsWithPermission in ClientPermissionsV2 only finds the type-level 'Clients' resource and returns its name, never actual client ids, so callers that resolve the returned values as client ids get wrong results or null clients.",
+    "textoGolden": "In getClientsWithPermission(String scope), iterating resourceStore.findByType(server, AdminPermissionsSchema.CLIENTS_RESOURCE_TYPE) and returning resource.getName() will only ever consider the type-level 'Clients' resource (per-client resources have no type) and return its name, while AvailableRoleMappingResource#getRoleIdsWithPermissions expects actual client IDs to pass to realm.getClientById, which can lead to incorrect behavior or a null client and subsequent failures.",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+    "descricao": "Claims getResourceTypeResource can return null in ClientPermissionsV2.hasPermission, causing a NullPointerException in findByResource.",
+    "textoGolden": "In ClientPermissionsV2.hasPermission, the method getResourceTypeResource could return null, leading to a NullPointerException in findByResource. Defensive null checks are needed to prevent this issue.",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#05",
+    "descricao": "ClientPermissionsV2 has an unused private getEvaluationContext method.",
+    "textoGolden": "Remove unused getEvaluationContext private method in ClientPermissionsV2 - it is defined but never called",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       262,
+       272
+      ],
+      "texto": "Dead computation: `getEvaluationContext(ClientModel, AccessToken)` is private and has no caller anywhere in the class. Its only possible consumer in the V1 class, `canExchangeTo`, was overridden to throw UnsupportedOperationException (line 148-150). The EvaluationContext and its overridden getBaseAttributes are built and then never used \u2014 remove the method (or wire it into canExchangeTo if token-exchange is meant to be supported)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+    "descricao": "The Javadoc of the void requireView() and requireViewClientScopes() methods says they return true instead of documenting that they throw ForbiddenException.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+      "lines": [
+       95,
+       98
+      ],
+      "texto": "The Javadoc for `void requireView()` says \"Returns {@code true} if {@link #canView()} returns {@code true}\", but requireView() is void and throws ForbiddenException rather than returning a value. It is a copy-paste of the canView() doc and should read \"Throws ForbiddenException if {@link #canView()} returns {@code false}\", matching the sibling require* methods (requireListClientScopes, requireConfigure, etc.)."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+      "lines": [
+       100,
+       103
+      ],
+      "texto": "The Javadoc for `void requireViewClientScopes()` says \"Returns {@code true} if {@link #canViewClientScopes()} returns {@code true}\", but the method is void and throws ForbiddenException. The doc describes a boolean return the method never produces; it should state that it throws ForbiddenException if canViewClientScopes() returns false, consistent with the other require* methods."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+      "lines": [
+       95,
+       103
+      ],
+      "texto": "Declaration does not match the method it documents: the javadoc for `requireView()` ('Returns {@code true} if {@link #canView()} returns {@code true}.') and for `requireViewClientScopes()` ('Returns {@code true} if {@link #canViewClientScopes()} returns {@code true}.') describes a boolean-returning accessor, but both methods are declared `void` and are the require* counterparts that throw ForbiddenException (as documented for requireManage/requireConfigure above). The text was copy-pasted from the corresponding can* methods; it should state that the method throws when canView()/canViewClientScopes() is false."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+    "descricao": "ClientPermissionsV2.canView() ignores a global MANAGE permission, so admins with only global manage take the unpaginated, per-client evaluated listing path.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       86,
+       87
+      ],
+      "texto": "canView() does not recognize an all-clients MANAGE permission even though canView(client) grants viewing through canConfigure(client) and canManage(client). For an administrator with global MANAGE but no VIEW, ClientsResource.getClients selects an unpaginated realm-wide client stream and evaluates authorization for clients before applying pagination, instead of fetching the requested database page. Include the global MANAGE permission in the global viewing capability while preserving client-specific denial semantics."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+    "descricao": "canView(client) short-circuits on the global all-clients VIEW permission, so a client-specific permission denying an admin is never evaluated and the client is still viewable.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       78,
+       82
+      ],
+      "texto": "The global VIEW check returns true before evaluating client-specific VIEW permissions, bypassing a negative permission on an individual client. An administrator granted VIEW on all clients can therefore read a client explicitly excluded by a client-specific denial; ClientsResource.getClients also bypasses per-client checks when this evaluator's parameterless canView() returns true. Evaluate the specific client resource before falling back to the all-clients permission, and ensure listing does not use a global grant to skip specific denials."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       78,
+       79
+      ],
+      "texto": "Do not short-circuit resource-specific view evaluation on the global fine-grained VIEW grant. With an all-clients VIEW permission allowing an administrator and a client-specific VIEW permission denying that administrator, canView() returns true here and the specific client permission is never evaluated. This differs from the specific-over-global override behavior exercised for users in this PR and exposes the denied client's representation. Keep the administrative-role bypass separate from fine-grained grants and evaluate the client's resource before falling back to the all-clients resource; also ensure the global view result used by client listing cannot bypass those overrides."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#11",
+    "descricao": "The negative check for removing a default client scope expects ForbiddenException, but it can come from the preceding getDefaultClientScopes() call, so the test passes even without a permission check on removal.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java",
+      "lines": [
+       147,
+       152
+      ],
+      "texto": "The expected ForbiddenException can come from getDefaultClientScopes(), before removeDefaultClientScope() is invoked. With no permission granted, the initial read is forbidden, so this test still passes if removal's manage-permission check is removed entirely; the later granted removal also succeeds in that broken implementation. Obtain the scope ID using the privileged realm client outside this try block, then invoke only removeDefaultClientScope() through the restricted client and assert that it is forbidden."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+    "descricao": "Claims the per-client resource lookup uses server.getId() as owner while resources are created with server.getClientId(), so client-specific permissions are never found.",
+    "textoGolden": "In hasPermission(ClientModel client, String scope), the resource lookup uses findByName(server, client.getId(), server.getId()), but AdminPermissionsSchema.getOrCreateResource creates per-client resources with the owner set to resourceServer.getClientId(), so this lookup will never find those resources and will always fall back to the 'all-clients' resource, effectively ignoring client-specific permissions.",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+    "descricao": "Claims that with both fine-grained features enabled, client deletion calls ClientPermissionsV2.setPermissionsEnabled and throws UnsupportedOperationException.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/MgmtPermissionsV2.java",
+      "lines": [
+       63,
+       68
+      ],
+      "texto": "WHAT: MgmtPermissionsV2.clients() now returns ClientPermissionsV2, whose setPermissionsEnabled()/isPermissionsEnabled()/resource()/getPermissions() throw UnsupportedOperationException, but the provider listener registered in AdminPermissions.java:89-91 still calls clients().setPermissionsEnabled(client,false) on ClientRemovedEvent. WHY: ADMIN_FINE_GRAINED_AUTHZ_V2 is not dependent on ADMIN_FINE_GRAINED_AUTHZ (see Profile.java line 58), so when both FGAP features are enabled the guard at AdminPermissions.java:77 passes, management() returns MgmtPermissionsV2, clients() returns the throwing V2 evaluator, and every client deletion raises UnsupportedOperationException instead of cleaning up the client's permissions. HOW: either have the listener skip setPermissionsEnabled when the evaluator is the V2 implementation, or implement setPermissionsEnabled/isPermissionsEnabled in ClientPermissionsV2 to delete/ignore the per-client resource instead of throwing."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java",
+      "lines": [
+       89,
+       91
+      ],
+      "texto": "Under ADMIN_FINE_GRAINED_AUTHZ the listener now runs and the ClientRemovedEvent branch calls management(...).clients().setPermissionsEnabled(client, false). management(...) returns MgmtPermissionsV2, which this PR changed to return ClientPermissionsV2, whose setPermissionsEnabled throws UnsupportedOperationException(\"Not supported in V2\"). Previously clients() returned the V1 ClientPermissions and this cleanup succeeded, so deleting a client with the feature enabled now fails with UnsupportedOperationException. Guard the call (e.g. only invoke it for non-V2 / feature-disabled evaluators) or give ClientPermissionsV2 a no-op setPermissionsEnabled so the removal event no longer throws."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java",
+      "lines": [
+       77,
+       91
+      ],
+      "texto": "With ADMIN_FINE_GRAINED_AUTHZ enabled, the ClientRemovedEvent branch calls management(...).clients().setPermissionsEnabled(client, false). But MgmtPermissionsV2.clients() now returns ClientPermissionsV2, whose setPermissionsEnabled throws UnsupportedOperationException(\"Not supported in V2\"). Deleting a client therefore raises an unhandled exception inside the provider event listener (which carries its own KeycloakSession and runs inside the removal flow), breaking client removal. The listener must not invoke the V2 throwing stub \u2014 e.g. skip this cleanup for V2 or guard on the evaluator actually supporting it."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#07",
+    "descricao": "Claims the all-clients resource lookup in hasPermission(String) cannot find the resource (owner mismatch or not lazily created), so global client permissions are ignored.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       244,
+       244
+      ],
+      "texto": "WHAT: hasPermission(String scope) resolves the all-clients resource with resourceStore.findByName(server, AdminPermissionsSchema.CLIENTS_RESOURCE_TYPE, server.getId()), passing server.getId() as the ownerId, while the resource is created with owner server.getClientId() (AdminPermissionsSchema.getOrCreateResource line 104) and the default findByName(ResourceServer,String) overload uses server.getClientId(). WHY: if ResourceServer.getId() differs from ResourceServer.getClientId(), the lookup never matches, this method always returns null->false, and the global 'all clients' MANAGE/VIEW/CONFIGURE permissions are silently ignored; the same 3-arg owner mismatch also appears in hasPermission(ClientModel client, String scope) at line 214 (client.getId() with owner server.getId()). HOW: use the 2-arg findByName(server, name) (or pass server.getClientId() as ownerId) consistently with how the resource is created."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       244,
+       247
+      ],
+      "texto": "hasPermission(String scope) looks up the all-clients resource with findByName and returns false when it is null. That call is not guaranteed to find the resource, because it is created lazily through getResourceTypeResource, which the sibling hasPermission(client, scope) uses. As a result, canView(), canManage() and canManageClientScopes() can wrongly deny access when the all-clients resource has not been created yet. Fix: obtain the resource through AdminPermissionsSchema.SCHEMA.getResourceTypeResource(session, server, CLIENTS_RESOURCE_TYPE), as the per-client variant does."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#12",
+    "descricao": "Claims the client management-permissions endpoint returns a 500 under V2 because it calls ClientPermissionsV2 methods that throw UnsupportedOperationException.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       187,
+       205
+      ],
+      "texto": "In V2, isPermissionsEnabled, resource and getPermissions now throw UnsupportedOperationException. ClientResource (around lines 710-720) calls these on permissions.clients() with no V2 guard, so the management-permissions endpoint would return a 500 instead of a clean response when V2 is active. Return a safe value (for example isPermissionsEnabled returning false) or guard the callers."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#13",
+    "descricao": "Claims hasPermission(client, scope) accepts permissions granted on other resources because it does not filter by resource id, allowing privilege escalation across clients.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       224,
+       232
+      ],
+      "texto": "WHAT: hasPermission(ClientModel,String) accepts any returned Permission whose scopes contain the expected scope without checking permission.getResourceId().equals(resource.getId()), unlike UserPermissionsV2.hasPermission which filters by resource id. WHY: An evaluation result granting the scope on a different resource (other client or the all-clients resource when evaluating a per-client resource, or vice-versa) incorrectly authorizes the requested client \u2014 privilege escalation across clients. HOW: Filter results by resource id before matching scopes, as UserPermissionsV2 does."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#14",
+    "descricao": "Claims getClientsWithPermission runs a separate policy evaluation for every client resource, causing O(N) slowdowns.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       138,
+       142
+      ],
+      "texto": "WHAT: getClientsWithPermission iterates every Clients resource via findByType and calls hasGrantedPermission->evaluatePermission separately for each resource. WHY: Listing/filtering clients triggers O(N) full policy evaluations where N is the number of client authorization resources, causing material slowdown and DB/policy-store fanout on realms with many clients. HOW: Batch-evaluate once or query granted resources via a single evaluation / indexed permission lookup instead of per-resource evaluation."
+     }
+    ]
+   }
+  ]
+ },
+ "notification-rule-processing-engine-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "8df850371034b73dc4dd9908cc30fa09f12a1f97",
+  "base": "47e5bd23163e6037fc0741068ac78930bba2769f",
+  "prTitle": null,
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+    "lines": [
+     47,
+     47
+    ],
+    "texto": "GrafanaRuleListItem now supplies only promRule, but AlertRuleMenu still requires rulerRule to render Delete. Consequently, users with delete permission lose the Delete action throughout the new Grafana list. Update the delete menu and handler contract to use the existing identifier/groupIdentifier without requiring a loaded ruler rule."
+   },
+   {
+    "id": "S2",
+    "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+    "lines": [
+     47,
+     47
+    ],
+    "texto": "The new Prometheus-only action props leave AlertRuleMenu's pause item gated by rulerRuleType.grafana.rule(rulerRule), which is false when rulerRule is absent. Users can no longer pause or resume Grafana rules from the list despite the new ability hook granting Pause. Adapt the pause item to accept the Prometheus rule/identifier and obtain the mutation data when invoked."
+   },
+   {
+    "id": "S3",
+    "file": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+    "lines": [
+     25,
+     28
+    ],
+    "texto": "RuleActionsButtons now accepts promRule without rule, but its silence drawer still mounts only when rulerRuleType.grafana.alertingRule(rule) is true. Clicking the newly enabled Silence notifications item only sets showSilenceDrawer and displays nothing for Grafana list rows. Adapt the drawer to the Prometheus UID or load the ruler rule before mounting it."
+   },
+   {
+    "id": "S4",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     227,
+     228
+    ],
+    "texto": "useAllAlertRuleAbilities previously checked isFederatedRuleGroup(rule.group) and marked Update/Delete unsupported for federated Mimir groups. Delegating here drops that group information, and useAllRulerRuleAbilities explicitly sets isFederated=false. Existing consumers of the CombinedRule hook therefore receive mutation abilities for federated rules whenever their datasource permissions allow editing/deleting, instead of the previous immutable result. Preserve the federated-group check in this wrapper or pass the group information into the delegated implementation."
+   },
+   {
+    "id": "S5",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     401,
+     404
+    ],
+    "texto": "AlertRuleMenu now passes skipToken for every non-Grafana rule and ORs the returned abilities with the ruler abilities. Converting skipToken to undefined does not disable this hook: useAllGrafanaPromRuleAbilities(undefined) sets MaybeSupported to AlwaysSupported once loading ends and grants Duplicate based on the user's Grafana rule-create permission. A user with that permission can consequently see Duplicate for a data-source rule even when its own ruler ability is unsupported or denied. Return [false, false] for every requested action when the input is skipToken (and apply the same behavior to the singular hook), while still calling the underlying hooks unconditionally."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#01",
+    "descricao": "The pause menu item is still gated on a Grafana ruler rule, but the list view now passes only the Prometheus rule, so Pause/Resume disappears for list-view rules even when the user may pause them.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       83,
+       83
+      ],
+      "texto": "The new Prometheus-based pause ability cannot display Pause or Resume for list-view rules because the menu still requires rulerRuleType.grafana.rule(rulerRule) before rendering MenuItemPauseRule. GrafanaRuleListItem now supplies only promRule, so these actions disappear even for editable rules. Adapt the pause menu item to accept the Grafana identifier and Prometheus pause state, or load the ruler rule on demand."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#02",
+    "descricao": "The Delete menu item still requires a ruler rule, which list-view Grafana rules no longer provide, so users with delete permission lose the Delete action.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       85,
+       87
+      ],
+      "texto": "The new Prometheus-based delete ability is still gated by `canDelete && rulerRule` when rendering the Delete item. Both Grafana list-view paths now omit rulerRule, so users with delete permission lose the Delete action entirely. Render deletion using the available identifier and group identifier instead of requiring the ruler DTO, adapting the callback contract accordingly."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#03",
+    "descricao": "When the Grafana prom-rule branch is skipped (datasource rules), useAllGrafanaPromRuleAbilities(undefined) still reports Duplicate as supported and allowed by Grafana create permission, and AlertRuleMenu ORs it with the ruler ability, so Duplicate appears on cloud rules even when the ruler check denies it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       89,
+       92
+      ],
+      "texto": "WHAT: canDuplicate ORs ruler ability with grafana ability where grafana path is skipToken=>undefined for cloud rules, and useAllGrafanaPromRuleAbilities(undefined) returns Duplicate=[true,true] whenever the user has global Grafana create permission. WHY: Any user with Grafana rule-create gets Duplicate menu item on cloud/Mimir rules even when ruler abilities deny it \u2014 incorrect authorization gating. HOW: Return NotSupported for all abilities when rule is skipToken/undefined, or gate grafana branch on prometheusRuleType.grafana.rule(promRule) before ORing."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       307,
+       314
+      ],
+      "texto": "useAllGrafanaPromRuleAbilities returns AlwaysSupported for Duplicate when rule is undefined (skipToken): loading is false from the !rule early-return, so MaybeSupported=true and duplicateSupported=true. ORed in AlertRuleMenu/RuleActionsButtons this leaks Grafana create permission into non-Grafana rules. Gate MaybeSupported/duplicateSupported on rule existence (e.g. NotSupported when !rule)."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       287,
+       318
+      ],
+      "texto": "useAllGrafanaPromRuleAbilities must return NotSupported for all actions when rule is undefined (skipToken). Currently MaybeSupported falls back to AlwaysSupported when !loading, so Duplicate=[true, global-create] is true for a cloud rule passed as skipToken, and AlertRuleMenu/RuleActionsButtons OR-logic then incorrectly enables Duplicate (and Explore). Guard with if (!rule) return all-NotSupported abilities or make MaybeSupported require rule."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#04",
+    "descricao": "The refactor of useAllAlertRuleAbilities into useAllRulerRuleAbilities drops the isFederatedRuleGroup check (isFederated is hardcoded false), so federated Mimir rules are reported as editable and deletable.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       223,
+       228
+      ],
+      "texto": "useAllAlertRuleAbilities now delegates to useAllRulerRuleAbilities, which hardcodes isFederated = false. The previous isFederatedRuleGroup(rule.group) check is gone, so federated Mimir rules are no longer treated as immutable and can show edit and delete abilities. Keep the federation check in this wrapper, or pass the federation state into the shared hook."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       227,
+       228
+      ],
+      "texto": "Delegating useAllAlertRuleAbilities to useAllRulerRuleAbilities discards the group's federation status and replaces the previous isFederatedRuleGroup(rule.group) check with a constant false. Legacy RuleActionsButtons consequently enables editing rules in groups with source_tenants, although these groups were explicitly immutable before this change. Preserve the CombinedRule federation check in the wrapper or pass federation status into the delegated ability calculation."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       227,
+       228
+      ],
+      "texto": "Preserve the federated-group immutability check when delegating this CombinedRule hook. Previously useAllAlertRuleAbilities inspected rule.group with isFederatedRuleGroup and disabled modification/removal for federated rules. The replacement delegates to a hook that hardcodes isFederated=false and receives no group information. Existing useAlertRuleAbility/useAlertRuleAbilities consumers therefore now receive supported update/delete abilities for federated rules when datasource permissions allow them, exposing operations that the previous contract explicitly prohibited. Pass the federation state through or retain that restriction in this wrapper."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#05",
+    "descricao": "The Grafana prom-rule abilities gate Pause, Restore, Export and DeletePermanently on alertingRule(rule) while the comment claims it checks Grafana-managed rules, so Grafana recording rules lose these actions in the list view.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       301,
+       302
+      ],
+      "texto": "The comment says all GrafanaPromRuleDTO rules are Grafana-managed, but the variable it describes is `isAlertingRule`. That variable is true only for alerting rules and false for Grafana recording rules. Fix the comment, or rename the variable, so it says the check is for alerting rules. As written, readers will expect Pause, Export and Silence to be enabled for recording rules."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       301,
+       328
+      ],
+      "texto": "The comment says all GrafanaPromRuleDTO rules are Grafana-managed, but the check used is alertingRule(rule), which is false for recording rules. Pause, Restore, ModifyExport and DeletePermanently are therefore wrongly disabled for Grafana recording rules, where the old isGrafanaManagedAlertRule check allowed them. Use prometheusRuleType.grafana.rule(rule) for these abilities, and keep alertingRule only for Silence."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#06",
+    "descricao": "The comment claims GrafanaPromRuleDTO abilities have no loading state, but the next line makes support depend on the folder loading flag.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       308,
+       309
+      ],
+      "texto": "The comment says there is no loading state, but the next line is `loading ? NotSupported : AlwaysSupported`. `loading` comes from the folder fetch. Update the comment to say that support depends on the folder loading state."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#07",
+    "descricao": "The Grafana branch of the filtered rule list renders GrafanaRuleListItem without a key prop, so React reconciles the streaming list by index and warns about missing keys.",
+    "textoGolden": "The rendered GrafanaRuleListItem is missing the required key prop for React list items. This can cause rendering issues when the list order changes.",
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+      "lines": [
+       157,
+       162
+      ],
+      "texto": "WHAT: The grafana branch of the filtered list renders <GrafanaRuleListItem .../> without a `key` prop, dropping the `key={key}` that the replaced <GrafanaRuleLoader key={key} .../> had. WHY: `rules.map` renders a dynamic list keyed by getRuleKey/hashRule; without a key React logs duplicate-key warnings and reconciles rows by index, so as the async rule stream updates/reorders the wrong rule row can be reused/mutated (stale state, swapped actions). HOW: add `key={key}` (the value is already destructured on line 152) to the <GrafanaRuleListItem> element."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+      "lines": [
+       157,
+       162
+      ],
+      "texto": "WHAT: Grafana branch of FilterViewResults renders GrafanaRuleListItem without key={key} while datasource and unknown branches pass key. WHY: Breaks React list reconciliation \u2014 wrong item reuse, stale actions/state and console key warnings for every Grafana hit. HOW: Add key={key} to the GrafanaRuleListItem element."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#08",
+    "descricao": "The test named 'should render More button with action menu options' only checks the More button exists, never the menu options.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       101
+      ],
+      "texto": "The test 'should render More button with action menu options' only checks that the More button exists. It finds the button by name 'More', so the aria-label and text assertions are tautological. It would pass even if the menu had no actions or the abilities were broken. Click the button and assert the expected menu items, or rename the test to match what it checks."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       102
+      ],
+      "texto": "Test named 'should render More button with action menu options' never verifies any action menu option: the body only asserts the More button exists and has aria-label/text 'More'. It would still pass if the dropdown were rendered empty (Silence/Duplicate/Copy link/Export all missing), i.e. the behaviour the name promises is not covered. Either open the menu and assert the menu items, or rename the test to reflect that it only checks the trigger button's rendering/accessibility."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       102
+      ],
+      "texto": "Test named 'should render More button with action menu options' never opens the menu nor asserts menu items \u2014 it only checks More button presence/aria/text. Click More and assert expected menuitems (or rename to 'should render More button') so it fails if menu actions break."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#09",
+    "descricao": "GrafanaGroupLoader's JSDoc still says it loads from Prometheus and Ruler endpoints after the ruler query was removed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx",
+      "lines": [
+       24,
+       28
+      ],
+      "texto": "The JSDoc for GrafanaGroupLoader still says \"Loads an evaluation group from Prometheus and Ruler endpoints.\" but this PR removed the ruler API query entirely \u2014 the component now only calls useGetGrafanaGroupsQuery (Prometheus). The documentation describes a data source the function no longer consumes; update it to state only the Prometheus endpoint is loaded (and the same stale \"Ruler response\" reference in the expectedRulesCount prop doc at lines 18\u201319 should be corrected)."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#11",
+    "descricao": "For list-view Grafana rules RuleActionsButtons gets only promRule, so the Silence menu item is shown but the silence drawer, still gated on a ruler alerting rule, never renders and clicking Silence does nothing.",
+    "textoGolden": "RuleActionsButtons is invoked with only promRule, but SilenceGrafanaRuleDrawer inside RuleActionsButtons still depends on a Grafana Ruler rule being present, so for Grafana rules coming from list views the 'Silence notifications' menu entry (now driven by Grafana Prom abilities) will toggle showSilenceDrawer without ever rendering the drawer. This means clicking 'Silence notifications' for these rules has no visible effect, even when abilities indicate silencing is allowed.",
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+      "lines": [
+       47,
+       47
+      ],
+      "texto": "Passing only promRule enables the Silence notifications menu item but leaves RuleActionsButtons.V2 unable to render its silence drawer, which is guarded by rulerRuleType.grafana.alertingRule(rule). Clicking Silence only updates showSilenceDrawer and displays nothing because rule is undefined. Update the drawer to accept a rule UID\u2014the inspected SilenceGrafanaRuleDrawer only needs grafana_alert.uid\u2014and allow the Prometheus alerting-rule path to render it."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+      "lines": [
+       47,
+       47
+      ],
+      "texto": "The new list item passes only promRule to RuleActionsButtons, but that component renders SilenceGrafanaRuleDrawer only under `rulerRuleType.grafana.alertingRule(rule) && showSilenceDrawer`. With rule undefined, clicking the newly enabled 'Silence notifications' action only sets state and never opens a drawer. Adapt the silence rendering path to load/use the rule by its Prometheus identifier before switching this caller to promRule-only."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+      "lines": [
+       130,
+       144
+      ],
+      "texto": "WHAT: getEditableIdentifier now enables a prom-only path (Grafana uid identifier with rulerRule undefined) but the silence drawer still renders only when rulerRuleType.grafana.alertingRule(rule) is true. WHY: In the list view Silence menu item can be shown via grafana abilities, clicking it sets showSilenceDrawer but the drawer never mounts, so Silence silently does nothing. HOW: Gate the drawer on promRule as well or provide a prom-based silence drawer."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#10",
+    "descricao": "Claims provisioned status now comes from promRule.provenance, which the Prometheus response might omit, making provisioned rules editable.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+      "lines": [
+       33,
+       44
+      ],
+      "texto": "WHAT: isProvisioned derived from promRule.provenance (new optional field) instead of ruler grafana_alert.provenance. WHY: If the Prometheus groups response omits provenance, provisioned rules render as non-provisioned and abilities (isProvisionedPromRule) fail open to editable/removable. HOW: Ensure Prometheus API populates provenance or fall back to ruler/folder metadata for the provisioned check."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#12",
+    "descricao": "Claims the promRule prop typed as Rule makes the Grafana prom-rule type guard return false for the GrafanaPromRuleDTO passed by GrafanaRuleListItem.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+      "lines": [
+       25,
+       28
+      ],
+      "texto": "The `promRule` prop is declared as `Rule` (the combined-rule type from app/types/unified-alerting, the same type used for `useRulePluginLinkExtension`), but the body consumes it as a `GrafanaPromRuleDTO`: it feeds it to `prometheusRuleType.grafana.rule(promRule) ? promRule : skipToken` -> `useGrafanaPromRuleAbility(rule: GrafanaPromRuleDTO | SkipToken, \u2026)` and to `isProvisionedPromRule(promRule: PromRuleDTO)`. The new producer GrafanaRuleListItem.tsx passes a raw GrafanaPromRuleDTO into this `Rule`-typed slot. Because `Rule` is not a prom-rule DTO, the type guard returns false for combined-rule callers (e.g. the RulesTable path) so the Grafana abilities resolve to NotSupported and the new menu entries are silently hidden, while the list-view caller only appears to work by passing a differently-typed object. Align the prop type with what the hooks/guards require (GrafanaPromRuleDTO) on the side the caller must satisfy, and update GrafanaRuleListItem accordingly."
+     }
+    ]
+   }
+  ]
+ },
+ "async-import-of-the-appstore-packages-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "820d7fa87e0c824c5dee8082a33efadb1a2566f7",
+  "base": "ba9688a04a8398c9a8332ee7061bfae2f2efd524",
+  "prTitle": null,
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/app-store/vital/lib/reschedule.ts",
+    "lines": [
+     125,
+     128
+    ],
+    "texto": "The async forEach callback turns getCalendar failures into rejected promises that the surrounding try/catch cannot catch. Invalid encrypted CalDAV/Apple credentials can throw during service construction (packages/lib/CalendarService.ts decrypts and JSON-parses the key), so rescheduling now produces an unhandled rejection instead of logging the error and continuing; the same regression appears in wipemycalother/lib/reschedule.ts. Await Promise.all over mapped callbacks inside the try block, or use an awaited for...of loop, in both implementations."
+   },
+   {
+    "id": "S2",
+    "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+    "lines": [
+     461,
+     461
+    ],
+    "texto": "The enclosing forEach does not await its async callbacks. Previously getCalendar returned synchronously, so callbacks could populate apiDeletes before yielding; this new await yields before any calendar operations are queued. The handler can consequently await the current apiDeletes array and finish without waiting for recurring calendar updates/deletions, allowing failures to escape the cancellation flow and work to be lost when the request ends. Await the credential callbacks (for example with Promise.all over map), or use an awaited for...of loop, before consuming apiDeletes."
+   },
+   {
+    "id": "S3",
+    "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+    "lines": [
+     461,
+     461
+    ],
+    "texto": "This async forEach is not awaited. Adding await getCalendar here means each callback now suspends before it can register the recurring-event operations in apiDeletes. The handler can reach its Promise.all(apiDeletes) and finish cancellation before those operations have been added, leaving external recurring events stale (and subsequent failures outside the handler's awaited work). Await the iteration itself, for example with an awaited Promise.all over map, before consuming apiDeletes."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "async-import-of-the-appstore-packages-cal-com#02",
+    "descricao": "Async callbacks passed to forEach after getCalendar became async are never awaited, so calendar and video cancellations run fire-and-forget, may not finish, and their errors escape the surrounding try/catch as unhandled rejections.",
+    "textoGolden": "The code uses forEach with async callbacks, which causes asynchronous operations (e.g., calendar/video event deletions, payment refunds) to run concurrently without being awaited. This 'fire-and-forget' behavior leads to unhandled promise rejections, race conditions, and incomplete cleanup, as surrounding try-catch blocks cannot properly handle errors from these unawaited promises. Replace forEach with for...of loops or Promise.all() with map() to ensure proper sequential execution and error handling.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/vital/lib/reschedule.ts",
+      "lines": [
+       125,
+       128
+      ],
+      "texto": "The async forEach callback moves calendar factory exceptions outside the surrounding try/catch because forEach discards its returned promise. An invalid encrypted Exchange credential throws during CalendarService construction, now producing an unhandled rejection while Reschedule continues and returns success instead of logging the error; the identical regression occurs in wipemycalother/lib/reschedule.ts. Await Promise.all over bookingRefsFiltered.map(async ...) inside the try block, or use an awaited for...of loop, so factory and deletion failures reach the catch."
+     },
+     {
+      "file": "packages/app-store/vital/lib/reschedule.ts",
+      "lines": [
+       125,
+       128
+      ],
+      "texto": "The new async forEach callback is not awaited. If getCalendar rejects (for example, the dynamically imported calendar module fails to load or its service constructor throws), the callback produces a rejected promise that forEach discards; the surrounding try/catch cannot catch it. Previously a synchronous getCalendar failure reached that catch. Await Promise.all(bookingRefsFiltered.map(async ...)) or use an awaited for...of loop so these failures remain handled and calendar cleanup completes before rescheduling continues. Apply the same fix to the equivalent changed loop in wipemycalother/lib/reschedule.ts."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       458,
+       470
+      ],
+      "texto": "WHAT: credentials.filter(...).forEach(async (credential) => { await getCalendar; apiDeletes.push(...) }) pushes to apiDeletes asynchronously after outer code consumes it. WHY: outer apiDeletes is awaited elsewhere while async callbacks have not yet pushed, so recurring-event deletions are lost/partial and errors are unobserved. HOW: replace with for...of with await or collect promises via map + await Promise.all."
+     }
+    ]
+   },
+   {
+    "issueId": "async-import-of-the-appstore-packages-cal-com#01",
+    "descricao": "Suggests wrapping the awaited dynamic app import in try-catch to handle import failures, without identifying a defect.",
+    "textoGolden": "Consider adding try-catch around the await to handle import failures gracefully",
+    "comentarios": []
+   },
+   {
+    "issueId": "async-import-of-the-appstore-packages-cal-com#03",
+    "descricao": "Claims consumers of getCalendarCredentials call methods on or null-check an un-awaited Promise; every consumer goes through getConnectedCalendars, which awaits it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/getCalendar.ts",
+      "lines": [
+       9,
+       15
+      ],
+      "texto": "WHAT: getCalendar changed to async Promise<Calendar|null> but packages/core/CalendarManager.ts getCalendarCredentials still does const calendar = getCalendar(credential) synchronously without await. WHY: every entry now stores a Promise instead of Calendar, so any consumer not patched to await item.calendar (e.g. callers in viewer.tsx/calendar.ts paths) sees a truthy Promise, breaks null checks and calls listCalendars/createEvent on wrong type. HOW: make getCalendarCredentials async and await getCalendar, updating its callers."
+     },
+     {
+      "file": "packages/core/CalendarManager.ts",
+      "lines": [
+       28,
+       32
+      ],
+      "texto": "getCalendar is now async but getCalendarCredentials still does `const calendar = getCalendar(credential)` without await in a sync function, so `calendar` is a Promise. Make getCalendarCredentials async and await getCalendar (update callers) so its contract again returns Calendar|null."
+     },
+     {
+      "file": "packages/core/CalendarManager.ts",
+      "lines": [
+       28,
+       29
+      ],
+      "texto": "getCalendar now returns a Promise, so getCalendarCredentials returns items whose `calendar` field is a Promise<Calendar|null>, not a Calendar. Only getConnectedCalendars awaits it. Other consumers (apps/web/pages/api/availability/calendar.ts and trpc viewer.tsx) that use `.calendar` directly would call methods on a Promise. Make getCalendarCredentials async and await getCalendar, or update every consumer to await `.calendar`."
+     }
+    ]
+   },
+   {
+    "issueId": "async-import-of-the-appstore-packages-cal-com#04",
+    "descricao": "Claims the import() calls in the appStore object load every app eagerly and should be thunks; the asynchronous loading works as intended.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/index.ts",
+      "lines": [
+       1,
+       31
+      ],
+      "texto": "Each `import(\"./app\")` in the object literal runs when the module is first imported, so all apps still load eagerly and nothing is lazy. A module that fails to load also produces an unhandled rejection if nobody awaits that entry. Store thunks instead, e.g. `applecalendar: () => import(\"./applecalendar\")`, and have callers do `await appStore[key]?.()`."
+     }
+    ]
+   },
+   {
+    "issueId": "async-import-of-the-appstore-packages-cal-com#05",
+    "descricao": "The commented example entry in app-store/index.ts points to ./example instead of ./_example.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/index.ts",
+      "lines": [
+       2,
+       2
+      ],
+      "texto": "The comment/example line names a module path that does not exist: the example app lives at `packages/app-store/_example`, but the comment is written as `// example: import(\"./example\"),` (the previous line referenced `\"./_example\"`). Because this comment is the copy-paste instruction for re-enabling the example app, uncommenting it verbatim fails to resolve `./example`. Point the path back at `./_example` so the prose matches the actual directory."
+     }
+    ]
+   },
+   {
+    "issueId": "async-import-of-the-appstore-packages-cal-com#06",
+    "descricao": "Claims getVideoAdapters performs N sequential module-load round trips per request; the imports already started in parallel at module load.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/videoClient.ts",
+      "lines": [
+       21,
+       33
+      ],
+      "texto": "WHAT: getVideoAdapters awaits each dynamic appStore import sequentially in for...of. WHY: availability/meeting paths now pay N sequential module-load round-trips per request instead of one parallel fan-out, adding latency on hot getAvailability/createMeeting calls with multiple credentials. HOW: collect promises then await Promise.all, e.g. Promise.all(withCredentials.map(...))."
+     }
+    ]
+   }
+  ]
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "303cdc2caf256aa5df660611120c2e3f7392365d",
+  "base": "58ba11ecbd60863e2bfc6e32f0399ed4feb3927a",
+  "prTitle": null,
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+    "lines": [
+     48,
+     48
+    ],
+    "texto": "The exported Prometheus help text says this histogram measures request sizes \"returned\", but QueryData observes len(v.JSON) from the incoming queries and CallResource observes len(req.Body). No response size is measured. This misleads operators interpreting the metric as returned payload volume; describe it as incoming plugin request sizes instead."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+    "lines": [
+     101,
+     108
+    ],
+    "texto": "Both size-instrumented cases send empty payloads, and checkHistogram only verifies a nonzero sample count, not the observed size. Consequently, replacing the size calculations in QueryData and CallResource with a constant zero leaves this test green even though request-size instrumentation is broken. Supply nonempty query JSON and resource bodies and assert the size histogram's sample sum equals their expected byte lengths."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+    "lines": [
+     128,
+     136
+    ],
+    "texto": "Both observation paths convert to float64 only after integer duration division. A 900\u00b5s plugin request is therefore recorded as 0ms, and a 1.9ms request as 1ms. This materially distorts the explicitly configured sub-millisecond histogram buckets and undercounts latency relative to the seconds metric. Divide floating-point durations in both paths instead."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+    "descricao": "TestLogger.FromContext returns a fresh TestLogger instead of the receiver, so logs written via the contextual logger are lost to assertions on the original fake.",
+    "textoGolden": "The `TestLogger.FromContext` method returns a new `TestLogger` instance via `NewTestLogger()` instead of returning the receiver (f). This causes logs to be recorded on an un-referenced instance, leading to broken test assertions that expect logs to be recorded on the original logger.",
+    "comentarios": [
+     {
+      "file": "pkg/plugins/log/fake.go",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "WHAT: TestLogger.FromContext returns a fresh NewTestLogger instead of the receiver. WHY: LoggerMiddleware calls m.logger.FromContext(ctx).Info so the write goes to a throwaway instance and assertions on the original TestLogger Calls/Message never observe it, diverging from real wrapper that preserves logger context. HOW: Return f (or a child sharing f) instead of NewTestLogger."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#06",
+    "descricao": "The test function is still named TestInstrumentationMiddleware after the middleware was renamed to MetricsMiddleware.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       21,
+       21
+      ],
+      "texto": "TestInstrumentationMiddleware still carries the old name even though this PR renamed the middleware under test to MetricsMiddleware (newMetricsMiddleware/NewMetricsMiddleware) and the file to metrics_middleware_test.go. The identifier advertises the superseded \"InstrumentationMiddleware\" name; rename it (e.g. TestMetricsMiddleware) so the test name matches the code it exercises."
+     },
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       21,
+       21
+      ],
+      "texto": "Test function still named TestInstrumentationMiddleware but it constructs and asserts MetricsMiddleware (newMetricsMiddleware). Rename to TestMetricsMiddleware to match the renamed middleware."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#01",
+    "descricao": "Claims ContextualLoggerMiddleware panics on nil requests because it reads req.PluginContext without a nil guard.",
+    "textoGolden": "The ContextualLoggerMiddleware methods (QueryData, CallResource, CheckHealth, CollectMetrics) panic when a nil request is received. This occurs because they directly access req.PluginContext (via the instrumentContext function) without first checking if req is nil. This is a regression, as previous middleware layers gracefully handled nil requests.",
+    "comentarios": [
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go",
+      "lines": [
+       39,
+       42
+      ],
+      "texto": "WHAT: QueryData/CallResource/CheckHealth/CollectMetrics dereference req (req.PluginContext) without nil guard. WHY: Sibling LoggerMiddleware in same PR added explicit if req==nil guards, and direct middleware invocation with nil panics; inconsistent contract. HOW: Add same if req==nil passthrough guard before instrumentContext."
+     },
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+      "lines": [
+       144,
+       167
+      ],
+      "texto": "QueryData/CallResource/CheckHealth/CollectMetrics dereference req (req.Queries, req.Body, req.PluginContext) without the `if req == nil` guard that LoggerMiddleware uses. A nil request panics. Add nil guards forwarding to next like LoggerMiddleware does."
+     },
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go",
+      "lines": [
+       39,
+       57
+      ],
+      "texto": "QueryData/CallResource/CheckHealth/CollectMetrics read req.PluginContext without checking req == nil. A nil request panics before LoggerMiddleware's guard. Add `if req == nil { return m.next.<Method>(ctx, req, ...) }` guards."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#02",
+    "descricao": "Claims the refactor dropped traceID from the 'Plugin Request Completed' log lines.",
+    "textoGolden": "The traceID is no longer logged for plugin requests. During a refactoring, the tracing import and the logic to extract and add traceID from the context to log parameters were removed from the LoggerMiddleware. The newly introduced ContextualLoggerMiddleware does not add this information, resulting in missing traceID in plugin request logs and impacting debugging and request tracing capabilities.",
+    "comentarios": [
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go",
+      "lines": [
+       27,
+       37
+      ],
+      "texto": "LoggerMiddleware (logger_middleware.go:58) now logs via m.logger.FromContext(ctx) and relies on the context for all per-request attributes, but the middleware that replaced its enrichment (instrumentContext) re-adds only endpoint/pluginId/dsName/dsUID/uname. The traceID that logger_middleware.go previously appended itself (via tracing.TraceIDFromContext) is never put into the contextual logger, so the 'Plugin Request Completed'/grafana-data-egress line loses its traceID and log-trace correlation silently breaks. Add the trace id to the contextual attributes here (e.g. append 'traceID', tracing.TraceIDFromContext(ctx, false) when non-empty) so the consumer's assumption holds."
+     },
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/logger_middleware.go",
+      "lines": [
+       49,
+       58
+      ],
+      "texto": "The migration to the contextual logger dropped the traceID field. Before this PR, logRequest explicitly appended \"traceID\" (from tracing.TraceIDFromContext(ctx, false)) to logParams. The change moved pluginId/endpoint/uname/dsName/dsUID into the context (ContextualLoggerMiddleware.instrumentContext) and logs via m.logger.FromContext(ctx), but instrumentContext does NOT add traceID. Result: \"Plugin Request Completed\" egress log lines silently lose their traceID, breaking correlation between plugin request logs and traces. Fix by having instrumentContext (or the logParams here) also carry the trace ID, e.g. append \"traceID\", tracing.TraceIDFromContext(ctx, false) in instrumentContext in contextual_logger_middleware.go, or re-add it to logParams here."
+     },
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/logger_middleware.go",
+      "lines": [
+       49,
+       58
+      ],
+      "texto": "The traceID key was dropped from logParams (along with the pkg/infra/tracing import) and is now expected to come from m.logger.FromContext(ctx). The only thing that populates that context is the new ContextualLoggerMiddleware.instrumentContext, which adds endpoint/pluginId/dsName/dsUID/uname but never traceID. The metrics middleware in this same PR still has to read the trace ID explicitly (metrics_middleware.go:127), confirming it is not supplied by the logger itself. Restore an explicit \"traceID\", tracing.TraceIDFromContext(ctx, false) entry in logParams, or have instrumentContext add the trace ID, otherwise 'Plugin Request Completed' logs lose trace correlation."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#04",
+    "descricao": "Claims the metrics middleware factory mutates a shared instance's next field, causing a data race between chains.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+      "lines": [
+       76,
+       82
+      ],
+      "texto": "WHAT: NewMetricsMiddleware captures a single shared *MetricsMiddleware (`imw`) and mutates `imw.next = next` inside the middleware factory, which is re-invoked on every request because Decorator rebuilds the chain per call. WHY: concurrent requests write/read `imw.next` without synchronization, causing a data race (flagged by -race) and the possibility that a request dispatches into another request's inner chain. HOW: build a fresh instance per chain, e.g. `return plugins.ClientMiddlewareFunc(func(next plugins.Client) plugins.Client { return &MetricsMiddleware{pluginMetrics: imw.pluginMetrics, pluginRegistry: imw.pluginRegistry, next: next} })`."
+     },
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+      "lines": [
+       76,
+       82
+      ],
+      "texto": "WHAT: NewMetricsMiddleware reuses a single shared MetricsMiddleware instance and mutates imw.next on every CreateClientMiddleware call. WHY: Concurrent or multiple Decorator chains overwrite next on the same object causing data race and requests routed to the wrong next client, unlike Contextual/Logger middlewares that allocate per chain. HOW: Allocate a new MetricsMiddleware per chain (copy metrics handles, set next) instead of mutating the shared imw."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#05",
+    "descricao": "Claims the request-size histogram's HELP text says 'returned' though it measures request sizes.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+      "lines": [
+       44,
+       51
+      ],
+      "texto": "The HELP text for grafana_plugin_request_size_bytes says \"histogram of plugin request sizes returned\", but the metric only measures the request sent to the plugin: QueryData sums len(v.JSON) over the outgoing queries (lines 145-148) and CallResource passes len(req.Body) (line 161). Nothing \"returned\" by the plugin is observed. This HELP string is surfaced to users in Prometheus/Grafana metric descriptions, so it documents the opposite of the recorded value; it should describe the plugin request (egress) size, not a response size."
+     },
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+      "lines": [
+       48,
+       48
+      ],
+      "texto": "The metric help text describes sizes \"returned\", but the observations measure incoming payloads: QueryData sums len(v.JSON) and CallResource uses len(req.Body), both before invoking the plugin. This description exposes request sizes as though they were response sizes to operators reading Prometheus metadata. Change the help text to describe incoming plugin request payload sizes."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#07",
+    "descricao": "Claims the test never asserts that request size is not instrumented for CheckHealth/CollectMetrics.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       101,
+       109
+      ],
+      "texto": "The request-size assertion is entirely gated behind `if tc.shouldInstrumentRequestSize`, so the `shouldInstrumentRequestSize: false` cases (CheckHealth at line 45, CollectMetrics at line 68) verify nothing about request-size instrumentation. The case names claim request size must NOT be instrumented for those endpoints, yet the body makes no assertion for them. If a regression made CheckHealth/CollectMetrics call instrumentPluginRequestSize, CollectAndCount(metricRequestSize) would become 1 and this test would still pass. Add a negative assertion for the false cases, e.g. `require.Equal(t, 0, testutil.CollectAndCount(promRegistry, metricRequestSize))`."
+     },
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       101,
+       109
+      ],
+      "texto": "The shouldInstrumentRequestSize=false cases (CheckHealth, CollectMetrics) never assert that the request size metric is absent. If size instrumentation were wrongly added to those endpoints, the test would still pass. Add an else branch that requires testutil.CollectAndCount(promRegistry, metricRequestSize) to equal 0."
+     },
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       101,
+       109
+      ],
+      "texto": "Missing negative assertion: when shouldInstrumentRequestSize is false (CheckHealth, CollectMetrics) the test asserts nothing about grafana_plugin_request_size_bytes. If instrumentPluginRequestSize were incorrectly called for those endpoints, CollectAndCount would be 1 yet the test would still pass. Add else branch asserting CollectAndCount==0 / histogram absent."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#08",
+    "descricao": "Claims checkHistogram carries foundLabels across metrics and returns errors prematurely.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       132,
+       153
+      ],
+      "texto": "WHAT: in checkHistogram, `foundLabels` is declared before the `for _, m := range metricFamily.Metric` loop and is never reset between metrics. WHY: the counter accumulates across metrics, so the `foundLabels != len(expLabels)` check is evaluated against a stale/inflated count \u2014 a metric with only a partial label match can be accepted (false pass) and a valid metric after a partial match can error (false fail), letting the metric assertions miss real regressions. HOW: move `foundLabels := 0` inside the outer loop (reset per metric)."
+     },
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       132,
+       153
+      ],
+      "texto": "`foundLabels` is declared outside the `for _, m := range metricFamily.Metric` loop and never reset per metric, and the code returns an error as soon as a metric has a matching label key with a different value (rather than `continue`-ing). The correct-metric decision therefore relies on state carried over between metrics and on a premature error return instead of an exact per-metric label comparison. With more than one series in a family this produces false failures and wrong \"expected N labels, got M\" counts. Reset the counter per metric and `continue` to the next metric when the label set does not fully match, instead of returning an error."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#09",
+    "descricao": "Claims millisecond durations are truncated by integer division before conversion to float.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+      "lines": [
+       128,
+       136
+      ],
+      "texto": "The millisecond observations truncate the duration before converting it to float64: elapsed/time.Millisecond is integer division. For example, a 900\u00b5s request is recorded as 0ms and a 1.9ms request as 1ms, misclassifying observations against the fractional millisecond buckets declared above and understating the histogram sum. Use float64(elapsed)/float64(time.Millisecond) in both the exemplar and ordinary observation paths to preserve the actual duration."
+     },
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+      "lines": [
+       127,
+       139
+      ],
+      "texto": "Incorrect measurement: float64(elapsed/time.Millisecond) and float64(elapsed / time.Millisecond) do integer division before conversion, truncating all sub-millisecond durations to 0. Buckets start at 0.005ms so precision matters. Use float64(elapsed)/float64(time.Millisecond)."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#10",
+    "descricao": "Claims the request-size test cases use empty payloads and would not detect a broken size calculation.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       50,
+       58
+      ],
+      "texto": "The request-size cases pass an empty Body and no Queries, and subsequently check only that a histogram sample exists. Replacing either size calculation with a constant zero still passes this test. Use nonempty resource bodies and query JSON payloads and assert the histogram sample sum equals their expected byte count, so broken request-size instrumentation is detected."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#11",
+    "descricao": "Claims the duration metric checks only labels and sample counts, not the observed values.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       94,
+       100
+      ],
+      "texto": "Both duration metrics are checked only for labels and a nonzero sample count. Observing a constant zero, or feeding seconds into the milliseconds metric, still passes. Assert the observed durations using a controlled elapsed interval (or check the relationship between the two histogram sums with allowance for millisecond truncation) so the test detects broken duration values and units."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#12",
+    "descricao": "Claims the duration-seconds histogram check omits status and source labels.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       94,
+       100
+      ],
+      "texto": "Assertion too loose for duration-seconds: plugin_request_duration_seconds has labels source,plugin_id,endpoint,status,target but checkHistogram is called with only plugin_id,endpoint,target. A broken status or source label (e.g. wrong status mapping) would still pass. Require all 5 labels including status==statusOK and source==grafana-backend, and verify observed size values not just sample count."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#13",
+    "descricao": "Claims LoggerMiddleware depends on ContextualLoggerMiddleware running first and would log without plugin identity if reordered.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/logger_middleware.go",
+      "lines": [
+       49,
+       58
+      ],
+      "texto": "WHAT: logRequest dropped explicit pluginId/endpoint/uname/dsName/dsUID/traceID params and now relies solely on m.logger.FromContext(ctx) populated by upstream ContextualLoggerMiddleware. WHY: Creates hidden ordering dependency (requires Contextual before Logger in pluginsintegration.go:160-161); standalone/reordered use silently logs without plugin identity. HOW: Keep explicit fallback from req.PluginContext/tracing when ctx has no attributes, or document/enforce ordering."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#14",
+    "descricao": "Claims the metrics middleware now fails the request when the plugin is not in the registry.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+      "lines": [
+       149,
+       151
+      ],
+      "texto": "WHAT: QueryData (and CallResource:161) abort the plugin call and return ErrPluginNotRegistered when instrumentPluginRequestSize/pluginTarget lookup fails. WHY: A best-effort observability lookup failure becomes a request failure, blocking the real plugin call that might have returned its own error. HOW: Log the target-lookup failure and continue to instrumentPluginRequest/next call instead of returning early."
+     },
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+      "lines": [
+       144,
+       157
+      ],
+      "texto": "Best-effort metrics now fails the request: QueryData (and CallResource/CheckHealth/CollectMetrics via the same helpers) returns ErrPluginNotRegistered from pluginTarget/instrumentPluginRequestSize without calling next when the plugin is missing from the registry. Callers lose the previous contract that instrumentation never refuses the request. Fix: do not propagate registry miss as request error \u2014 default target to unknown/skip observation and always invoke next."
+     }
+    ]
+   }
+  ]
+ },
+ "feature-localization-fallbacks-server-side-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "ecfa17b5a79dfdc91e7a4d50b42ae78a35d0a293",
+  "base": "728845d008f06828630a632e5c7d67e11bf15deb",
+  "prTitle": null,
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/controllers/application_controller.rb",
+    "lines": [
+     159,
+     159
+    ],
+    "texto": "Fallback locales are preloaded only in the controller filter, leaving non-controller translation paths with unloaded fallback dictionaries. Jobs::Base sets the site locale and executes jobs without this filter, and post_alerter switches to a user's locale with I18n.with_locale; the accelerator loads only the active locale, while backend fallback lookups bypass that loader, so missing keys return missing translations instead of falling back to English or the site language in a fresh worker. Ensure the fallback chain is loaded at the translation boundary rather than exclusively at the HTTP request boundary."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+    "descricao": "Fallback locale catalogs are only loaded in the controller's set_locale filter, while translate loads just the current locale, so translations outside requests (jobs, mailers) cannot fall back to the site default or English.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/application_controller.rb",
+      "lines": [
+       159,
+       159
+      ],
+      "texto": "Fallback catalogs are ensured loaded only in the controller filter, leaving non-controller translation paths without the catalogs required by the newly enabled fallback backend. Jobs::Base sets I18n.locale directly and PostAlerter uses I18n.with_locale, while the accelerator loads only the current locale and backend fallback lookups bypass that loader; missing keys therefore still produce missing translations or skip the configured site fallback until another request happens to load those catalogs. Ensure the full fallback chain is loaded at the translation boundary, rather than relying solely on the controller filter."
+     },
+     {
+      "file": "lib/freedom_patches/translate_accelerator.rb",
+      "lines": [
+       62,
+       69
+      ],
+      "texto": "The new fallbacks contract requires the fallback locales (site default and :en, from FallbackLocaleList#[]) to be loaded before Backend::Simple#translate is asked for them \u2014 Backend::Simple only returns already-loaded translations. This PR added I18n.ensure_loaded!/I18n.fallbacks.ensure_loaded! but wired it only into ApplicationController#set_locale, and the loader that actually gates every translation, I18n.translate (line 68), still loads only `config.locale`. As a result, any I18n.t performed outside the request cycle (console, background jobs, mailers) or before set_locale runs will not load the fallback locales and will silently return 'translation missing' instead of the fallback the new I18n.fallbacks advertises. Fix: have translate ensure the fallback chain is loaded (e.g. call I18n.fallbacks.ensure_loaded! / load the fallback locales here), not rely on the controller hook."
+     },
+     {
+      "file": "lib/freedom_patches/translate_accelerator.rb",
+      "lines": [
+       67,
+       68
+      ],
+      "texto": "translate loads only config.locale, but the new fallback chain (default_locale, :en) is loaded only by the controller's I18n.fallbacks.ensure_loaded!. Outside controllers (jobs, mailers, rake), a key missing in the current locale falls back to a locale that is not loaded, so it returns 'translation missing', and the LRU cache then stores that result. Fix: in translate, call I18n.fallbacks.ensure_loaded! (or load each locale in fallbacks[config.locale]) before the lookup."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#06",
+    "descricao": "The translation cache key does not include the site or its default locale, but fallback results now depend on SiteSetting.default_locale, so multisite processes or a changed default locale serve stale fallback translations.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "config/initializers/i18n.rb",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "The new fallback order depends on SiteSetting.default_locale, but the accelerator's translation cache does not include that setting or the current site in its key. In a multisite process, two sites with the same user locale and different default locales reuse the first site's cached fallback translation; changing the default locale also leaves cached fallback results stale. Include the effective fallback chain or site/default-locale context in the translation cache key."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#02",
+    "descricao": "Claims a fallback value cached for a not-yet-loaded locale stays stale after that locale's file is loaded, because ensure_loaded! does not invalidate the translation cache.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "lib/freedom_patches/translate_accelerator.rb",
+      "lines": [
+       62,
+       65
+      ],
+      "texto": "WHAT: The new ensure_loaded! loads fallback locale files but does not invalidate the accelerator's shared @cache (only reload! clears it on lines 39-43), while the initializer now enables I18n::Backend::Fallbacks so a lookup for a not-yet-loaded locale returns the :en/default value instead of raising MissingTranslation. WHY: That fallback value is cached by translate under the requested locale key (line 72-76); when ensure_loaded!/load_locale later loads the correct locale file (e.g. a background job at app/jobs/base.rb:151 sets I18n.locale and translates before the locale is loaded, then a web request loads it), the stale fallback string is still served from cache for that locale. HOW: clear @cache when newly loading a locale (e.g. set `@cache = nil` inside load_locale/ensure_loaded! after adding a locale to @loaded_locales, or include the loaded-locale state in the cache key)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#03",
+    "descricao": "Suggests normalizing the locale because a String locale mixed with Symbol fallback entries defeats uniq and causes double lookups or double loading.",
+    "textoGolden": "Consider normalizing the input locale (e.g., to a symbol) when checking/loading here to avoid double-loading if the same locale is passed as a String vs Symbol (also applies to other locations in the PR).",
+    "comentarios": [
+     {
+      "file": "config/initializers/i18n.rb",
+      "lines": [
+       13,
+       18
+      ],
+      "texto": "WHAT: FallbackLocaleList#[] mixes types \u2014 the incoming `locale` is left as-is (a String, since I18n.locale is set to User#effective_locale / SiteSetting.default_locale which are Strings) while the other two chain entries are Symbols (`SiteSetting.default_locale.to_sym`, `:en`), so `.uniq` cannot deduplicate the current locale and returns e.g. [\"en\", :en]. WHY: I18n::Backend::Fallbacks#translate/#exists? iterate this array and call super for every entry, so the current locale is looked up a second time on each cache miss, and FallbackLocaleList#ensure_loaded! calls I18n.ensure_loaded! for both \"en\" and :en, making load_locale parse and merge the same .yml file twice on the first request. HOW: normalize the argument first, e.g. `locale = locale.to_sym` at the top of `[]` (or build `[locale.to_sym, SiteSetting.default_locale.to_sym, :en].uniq.compact`)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#04",
+    "descricao": "Claims a nil default_locale makes FallbackLocaleList#[] raise NoMethodError on every missing translation.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "config/initializers/i18n.rb",
+      "lines": [
+       13,
+       17
+      ],
+      "texto": "WHAT: FallbackLocaleList#[] calls SiteSetting.default_locale.to_sym before uniq.compact, so a nil/missing default_locale raises NoMethodError. WHY: crashes fallback resolution (every missing key) during boot, DB-down, or unset setting instead of falling back to :en. HOW: guard nil e.g. SiteSetting.default_locale.try(:to_sym) before building the chain."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#05",
+    "descricao": "Claims every fallback lookup hits the database or Redis through SiteSetting.default_locale, amplifying per-request load.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "config/initializers/i18n.rb",
+      "lines": [
+       13,
+       17
+      ],
+      "texto": "WHAT: FallbackLocaleList#[] queries SiteSetting.default_locale on every fallbacks[locale] lookup. WHY: with fallbacks enabled every missing translation triggers a SiteSetting (DB/Redis) hit in the translate hot path, amplifying per-request query/load cost. HOW: memoize/cache the default-locale segment and invalidate only when the setting changes."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#07",
+    "descricao": "Claims a user-controlled locale with regex metacharacters reaches load_locale's Regexp and forces loading of unintended locale files.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "lib/freedom_patches/translate_accelerator.rb",
+      "lines": [
+       62,
+       65
+      ],
+      "texto": "WHAT: New I18n.ensure_loaded!(locale) forwards the locale unchecked into load_locale which builds Regexp.new(\"\\\\.#{locale}\\\\.yml$\") for load_path.grep. WHY: the locale chain includes user-controlled I18n.locale (current_user.effective_locale via FallbackLocaleList#ensure_loaded!), so regex metacharacters (e.g. .* ) widen the match and force loading of unintended/all locale files (resource exhaustion / unexpected translation loading). HOW: escape the locale with Regexp.escape and/or validate against LocaleSiteSetting.supported_locales before loading."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#08",
+    "descricao": "Claims @loaded_locales is lazily initialized and shared across threads without synchronization.",
+    "textoGolden": "The @loaded_locales instance variable in translate_accelerator.rb is lazily initialized and accessed by multiple concurrent threads without synchronization.",
+    "comentarios": []
+   }
+  ]
+ }
+}
