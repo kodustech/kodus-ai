@@ -1,0 +1,2336 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "8c206718746410428f38bed002a490ba4fcfb0a5a9e4e86aab2b98b752a62c3d"
+  },
+  "startedAt": "2026-10-15T12:56:42.518Z",
+  "updatedAt": "2026-10-15T13:28:49.069Z",
+  "complete": true,
+  "selectedCases": [
+    "R4b-kodus2011-status-stale",
+    "R11-kodus1902-reversal",
+    "P23-param-shape-read-before-helper",
+    "P30-probe-retries-timeouts-only",
+    "P39-promo-expiry-unrelated"
+  ],
+  "casesSourceDigest": "376f5e1e4f1e2fab150a415c186606832948c63c83d95baf6db9b7170d66add3",
+  "summary": {
+    "measured": 25,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 10,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 1,
+        "violations": 1,
+        "rate": 1
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 10,
+        "violations": 1,
+        "rate": 0.1
+      },
+      "index-reference (#2039)": {
+        "n": 20,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R4b-kodus2011-status-stale · entity-not-neutralized [if_delivered_linked, proposed]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "R11-kodus1902-reversal · unclaimed-path-unfenced [if_delivered_linked, proposed]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 1
+      },
+      "P23-param-shape-read-before-helper · export-filter-shape-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P23-param-shape-read-before-helper · low-stock-wrong-query-unrelated [deliver]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 4
+      },
+      "P30-probe-retries-timeouts-only · probe-reset-not-retried-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P39-promo-expiry-unrelated · promo-expiry-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R4b-kodus2011-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 69364,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R4b-kodus2011-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 57188,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R4b-kodus2011-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 69963,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R4b-kodus2011-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 86714,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R4b-kodus2011-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 107468,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 121977,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "claim": "WHAT: The new `noLiveOwner` guard's raw WHERE fragment references the mixed-case column unquoted (`leaseExpiresAt`), while every other query in this file quotes it (`job.\"leaseExpiresAt\"`). WHY: Postgres folds unquoted mixed-case identifiers to lowercase, so the clause resolves to a non-existent column `leaseexpiresat`, the UPDATE throws, `update()` rethrows (line 284), and the `requireNoLiveOwner` write never lands — so the BYOK-deferral and pre-lease failure paths crash instead of stamping FAILED, exactly the #1830 scenario the fence was added to handle. The file itself documents this at lines 424-426. HOW: quote the column: `'(status <> :processing OR \"leaseExpiresAt\" IS NULL OR \"leaseExpiresAt\" < :now)'`.",
+          "keep": true,
+          "rationale": "The cited line 249 uses the unquoted mixed-case identifier `leaseExpiresAt` in a raw WHERE fragment, while the same file consistently quotes it as `\"leaseExpiresAt\"` (lines 432, 444, 446) and explicitly documents at lines 424-426 that unquoted mixed-case identifiers are folded to lowercase by Postgres and error out. The UPDATE would throw, be rethrown at line 291, and the noLiveOwner stamp never lands. The claim's root cause and failure path are factually supported by the file itself. Not a repeat of the earlier #1830 lease-owner finding (different guard, different failure).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 220,
+                "endLine": 300
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 410,
+                "endLine": 440
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "leaseExpiresAt",
+                "path": "libs/core/workflow/infrastructure",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "workflow-job.model*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "leaseExpiresAt|leaseexpiresat|class WorkflowJobModel",
+                "path": "libs"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "claim": "WHAT: The new `noLiveOwner` guard references the lease column as unquoted `leaseExpiresAt`, while the same column is referenced elsewhere in this file as the quoted `job.\"leaseExpiresAt\"` (reaper, lines 432/444/446). WHY: if the entity maps to a camelCase column, Postgres folds the unquoted identifier to `leaseexpiresat` and the UPDATE throws `column \"leaseexpiresat\" does not exist`; the BYOK-exhausted failure path then never stamps FAILED and the failure is swallowed instead of recorded. HOW: use the quoted form to match the reaper's usage, e.g. `'(status <> :processing OR \"leaseExpiresAt\" IS NULL OR \"leaseExpiresAt\" < :now)'` (and verify the same for the pre-existing `leaseOwner` guard).",
+          "keep": true,
+          "rationale": "no parseable verdict — kept by default",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 230,
+                "endLine": 270
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 420,
+                "endLine": 455
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "leaseExpiresAt|leaseOwner",
+                "glob": "*.ts",
+                "path": "libs/core/workflow",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "workflow-job*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "leaseExpiresAt|lease_expires_at",
+                "glob": "*workflow*model*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "WorkflowJobModel*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class WorkflowJobModel"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "WorkflowJobModel",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 57,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "line": 248,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the new `noLiveOwner` guard uses unquoted `leaseExpiresAt` while the rest of the file uses `job.\"leaseExpiresAt\"`, Postgres folds it to `leaseexpiresat` and the UPDATE throws `column \"leaseexpiresat\" does not exist`, so the BYOK-exhausted failure path never stamps FAILED and the failure is swallowed. Use the quoted form, matching the reaper at lines 432/444/446, e.g. `'(status <> :processing OR \"leaseExpiresAt\" IS NULL OR \"leaseExpiresAt\" < :now)'`, and verify the same for the pre-existing `leaseOwner` guard."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "line": 248,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Since the `noLiveOwner` raw WHERE fragment references mixed-case `leaseExpiresAt` unquoted while every other query quotes it as `job.\"leaseExpiresAt\"`, Postgres resolves it to the nonexistent lowercase column `leaseexpiresat`, the UPDATE throws, `update()` rethrows at line 284, and the `requireNoLiveOwner` write never lands, causing the BYOK-deferral and pre-lease failure paths to crash instead of stamping FAILED for the #1830 scenario. Quote the column as `\"leaseExpiresAt\"` in the fragment so it matches the rest of the file and the documentation at lines 424-426."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 136061,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: When `leaseClaimed` is false the catch passes `ownedBy: undefined`, so `handleFailure` takes its `if (!options?.ownedBy)` branch and performs an UNGUARDED `jobRepository.update(jobId, failurePatch)` that stamps FAILED with no ownership condition. WHY: A redelivery of the same jobId (inbox dedupes on (consumerId,messageId), reaper republishes with a fresh messageId) that throws before the lease claim — payload validation, the rate-limit gate, or the BYOK gate — will overwrite the row of a worker that has already claimed it PROCESSING; that worker's guarded completion then matches no row, its review result is dropped, and the author gets a failure notice for a review that is still running (the #1830 symptom). HOW: Pass the same no-live-owner fence used by the BYOK branch instead of an unguarded write, e.g. `ownedBy: leaseClaimed ? this.instanceId : undefined, requireNoLiveOwner: !leaseClaimed`, and treat `owned === false` as \"a live worker owns it\" so the run stops without stamping.",
+          "keep": true,
+          "rationale": "The claim is technically confirmed. `leaseClaimed` is false until line 272, so any error thrown before the claim (payload validation, rate-limit gate, BYOK gate) enters the catch at line 474 with `ownedBy: undefined`, which routes `handleFailure` into the `if (!options?.ownedBy)` branch at line 674 that performs the UNGUARDED `jobRepository.update(jobId, failurePatch)`. The code already has the exact fence the finding proposes (`requireNoLiveOwner` at lines 642-672, doing a `noLiveOwner: true` guarded write) — used by the BYOK path at line 190 but not by this catch, so the unguarded write can stamp FAILED over a row a live worker has already claimed PROCESSING. This is a DIFFERENT failure than PreviousDecision kodus-1902-round-a: that entry addressed the failure being *swallowed* (consumer marks inbox PROCESSED, never rethrows) and its fix is precisely what produced the current `ownedBy: leaseClaimed ? this.instanceId : undefined` line and its explanatory comment. The current finding concerns the opposite consequence of that applied fix — an unguarded write overwriting a live worker's row, dropping its review and sending a false failure notice. Different consequence in the same operation, arising because the earlier suggestion was applied, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 440,
+                "endLine": 500
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "handleFailure",
+                "path": "libs/code-review/workflow"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 690,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 607
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 210,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 140
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "pattern": "leaseClaimed"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "pattern": "noLiveOwner"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 41,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 474,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "When `leaseClaimed` is false the catch passes `ownedBy: undefined`, so `handleFailure` takes its `if (!options?.ownedBy)` branch and performs an unguarded `jobRepository.update(jobId, failurePatch)` that stamps FAILED with no ownership condition — a redelivery of the same `jobId` that throws before the lease claim (payload validation, the rate-limit gate, or the BYOK gate) then overwrites the row of a worker that already claimed it PROCESSING, that worker's guarded completion matches no row, its review result is dropped, and the author gets a failure notice for a review that is still running. Pass the same no-live-owner fence used by the BYOK branch, e.g. `ownedBy: leaseClaimed ? this.instanceId : undefined, requireNoLiveOwner: !leaseClaimed`, and treat `owned === false` as a live worker owning the row so the run stops without stamping."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 213443,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: `abandonBusyReview` now returns early and skips `notifyCommandReviewRefused` whenever the guarded `handleFailure` write does not land (`!recorded`). WHY: the guard is `{ leaseOwner: this.instanceId }` with `requireProcessing` defaulting to true, so any row whose lease was reclaimed or whose status is no longer PROCESSING at this point (renewer stalled long enough for the reaper to requeue, or a redelivery already moved the row) makes the write match zero rows — this run then silently drops the author-facing refusal notice even though no other worker is guaranteed to re-drive the same PR-busy outcome, so the user who requested the review gets no answer at all (the exact silence the method exists to prevent). HOW: distinguish 'another worker now owns the row' from 'no worker owns it' the same way the main catch does — pass a `requireNoLiveOwner: true` write (or fall back to the unguarded write) when `leaseClaimed` is false / the lease is not known-live, so the refusal notice still fires whenever no live worker is running the job.",
+          "keep": true,
+          "rationale": "The finding concerns `abandonBusyReview` (lines 559-576), which unconditionally passes `ownedBy: this.instanceId` to `handleFailure`. handleFailure (686-705) then uses the `{ leaseOwner: options.ownedBy }` guard, which matches zero rows whenever the row's status is no longer PROCESSING or the leaseOwner differs — returning false. In that case the method skips `notifyCommandReviewRefused` entirely, so the author who requested the review gets no answer. This is a DIFFERENT issue from the PreviousDecision (kodus-1902-round-a), which addressed the pre-claim/no-lease case in the main catch (`ownedBy: leaseClaimed ? ... : undefined`, line 484) and its associated early-return swallowing. The previous decision was about failures raised before the lease claim; this finding is about the notice being dropped in `abandonBusyReview` when a guarded write fails to land because the lease was reclaimed/lost. The consequence (author-facing refusal notice silently dropped in the busy-PR give-up path) is a distinct failure in a distinct operation, not the same crash/wrong-result the earlier entry described. The evidence (unconditional `ownedBy`, guarded write returning false, early return skipping notify) supports the claim; I cannot refute that the refusal notice is dropped in this path. Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 430,
+                "endLine": 620
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "handleFailure",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 600,
+                "endLine": 720
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 140,
+                "endLine": 230
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 440,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 360
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "leaseClaimed|acquiredLock|const job =",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: abandonBusyReview now gates the refusal notice on a lease-guarded handleFailure call that requires the row to still be PROCESSING (`{leaseOwner}` without `requireProcessing:false`), but this path is reached only after the retry window is spent and prReviewDeferralService.defer(job, deferral) has already re-queued the job on prior attempts — which can move the row off PROCESSING. WHY: the guarded UPDATE then matches zero rows, `recorded` is false, the method returns before notifyCommandReviewRefused, and the person who asked for the review is never told their request was dropped — the exact silent-drop symptom (#1700) this method exists to prevent; previously the handleFailure call here was unguarded, so the notice always ran. HOW: pass an unguarded/`requireNoLiveOwner`-style write here (or only skip the notice when the row was genuinely reclaimed), e.g. `handleFailure(job.id, error, { organizationId: this.organizationIdFor(job) })` so a PENDING/requeued row still gets the FAILED stamp and the notice.",
+          "keep": false,
+          "rationale": "REFUTED: The finding's root cause is factually wrong. It claims the guarded handleFailure in abandonBusyReview requires the row to still be PROCESSING and that defer() moving the row off PROCESSING makes the UPDATE match zero rows. But handleFailure with ownedBy issues the update guarded by `{ leaseOwner: options.ownedBy }` (line 686-690) — the guard is on LEASE OWNERSHIP, not on status being PROCESSING. There is no `requireProcessing:false` option; the actual options are ownedBy/organizationId/requireNoLiveOwner. If this run still holds the lease (owner === instanceId), the write lands regardless of a prior defer() re-queue, so the notice runs. If another worker claimed the lease after defer(), skipping the notice is the intended correct behavior — that worker re-drives and may notify — not a silent drop. The described failure path (guard on PROCESSING status) cannot occur in this code. This also overlaps the already-implemented ownership-fence decision (kodus-1902-round-a), and the current claim asserts a guard semantics that the code does not have.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 490,
+                "endLine": 600
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "abandonBusyReview|handleFailure\\(|defer\\(",
+                "path": "libs/code-review"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 500,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 400
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 700,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 600
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class PrReviewDeferralService|async defer\\(|next\\(|defer\\(",
+                "path": "libs/code-review",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "defer|next\\(|leaseOwner|JobStatus|status:",
+                "path": "libs/code-review/workflow/pr-review-deferral.service.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 55,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 559,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "When the guarded `handleFailure` write matches zero rows because the `{ leaseOwner: this.instanceId }` guard with `requireProcessing` defaulting to true no longer applies (the lease was reclaimed or the status is no longer `PROCESSING` after a reaper requeue or redelivery), this run returns before `notifyCommandReviewRefused`, silently dropping the author-facing refusal notice even though no other worker is guaranteed to re-drive the same PR-busy outcome. Distinguish \"another worker now owns the row\" from \"no worker owns it\" the same way the main catch does by using a `requireNoLiveOwner: true` write or falling back to an unguarded write when `leaseClaimed` is false or the lease is not known-live, so the refusal notice still fires whenever no live worker is running the job."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 134042,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: `abandonBusyReview` calls `handleFailure` with `ownedBy: this.instanceId` unconditionally (lines 559-562), while the sibling catch path was changed in this same PR to pass `ownedBy: leaseClaimed ? this.instanceId : undefined` for exactly the reason documented at lines 475-483. WHY: when the PR-busy error is raised before the lease was claimed, the guarded write `leaseOwner = instanceId` matches zero rows against the PENDING/no-leaseOwner row and returns `false`; the new `if (!recorded) return;` gate (lines 564-576) then skips `notifyCommandReviewRefused`, so the drop is silently swallowed and the user who asked for the review is never told — the #1700 symptom this path exists to prevent. HOW: thread `leaseClaimed` into `abandonBusyReview` and pass `ownedBy: leaseClaimed ? this.instanceId : undefined` (mirroring line 484), or give it a `requireNoLiveOwner` fallback so the unguarded write still stamps FAILED and the notice is sent when no lease was ever held.",
+          "keep": true,
+          "rationale": "Confirmed: `abandonBusyReview` (line 559-562) calls `handleFailure` with `ownedBy: this.instanceId` unconditionally, unlike the sibling catch path which passes `ownedBy: leaseClaimed ? this.instanceId : undefined` (line 484) for the exact reason documented at lines 474-483. When the PR-busy error is raised before the lease is claimed (e.g. via the rate-limit/payload path before line 272 where `leaseClaimed = true`), `handleFailure` runs the guarded update with `{ leaseOwner: options.ownedBy }` (lines 686-690), which matches zero rows against a PENDING row with no leaseOwner and returns false. The `if (!recorded) return;` gate (lines 564-576) then skips `notifyCommandReviewRefused`, silently swallowing the drop and never telling the user — the #1700 symptom. This is a distinct operation from PreviousDecision kodus-1902-round-a, which addressed the swallow in the general failure catch path (lines 457-497), not the `abandonBusyReview` refusal-notice path. `requireNoLiveOwner` already exists in `handleFailure` (lines 619, 642-671) and is used elsewhere (line 192), confirming the fix the finding proposes is viable. Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 440,
+                "endLine": 600
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "abandonBusyReview|leaseClaimed|requireNoLiveOwner",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 410,
+                "endLine": 440
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 600,
+                "endLine": 680
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 680,
+                "endLine": 740
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 180,
+                "endLine": 280
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 40,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 559,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "When the PR-busy error is raised before the lease was claimed, `abandonBusyReview` calls `handleFailure` with `ownedBy: this.instanceId` unconditionally (lines 559-562), so the guarded `leaseOwner = instanceId` write matches zero rows against the PENDING/no-leaseOwner row, returns `false`, and the `if (!recorded) return;` gate (lines 564-576) skips `notifyCommandReviewRefused`, silently swallowing the drop and leaving the requester uninformed of the #1700 symptom this path exists to prevent. Thread `leaseClaimed` into `abandonBusyReview` and pass `ownedBy: leaseClaimed ? this.instanceId : undefined` (mirroring line 484), or give it a `requireNoLiveOwner` fallback so the unguarded write still stamps FAILED and the notice is sent when no lease was ever held."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 76146,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 46,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 66221,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock now calls stockService.list(filter) instead of stockService.low(filter), so the low-stock predicate is never applied. WHY: list() runs 'select sku, qty from stock where warehouse=$1 and sku like $2' (src/inventory/stock.service.ts:6) while low() adds 'and qty < reorder_at' (line 9); the endpoint returns every matching stock row instead of only rows below the reorder threshold, silently breaking the low-stock report. HOW: call stockService.low(filter) in lowStock.",
+          "keep": true,
+          "rationale": "Confirmed: lowStock at src/inventory/stock.controller.ts:13 calls stockService.list(filter), and stock.service.ts defines a separate low() method (lines 8-9) that adds the 'and qty < reorder_at' predicate. list() (lines 6-7) omits it, so the endpoint returns every matching stock row instead of only below-threshold rows — silently breaking the low-stock report. This is a distinct failure (wrong result) from PreviousDecision index 1, which concerned the req.query.filter shape causing a TypeError/500 — different root cause and consequence.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock now calls stockService.list(filter) instead of stockService.low(filter), dropping the `qty < reorder_at` predicate. WHY: the low-stock endpoint returns every stock row for the warehouse/sku instead of only the rows below the reorder threshold, so callers see overstocked items reported as low stock. HOW: call stockService.low(filter), matching the pre-refactor behavior (stockService.low still exists at src/inventory/stock.service.ts:8-9 and now has no callers).",
+          "keep": true,
+          "rationale": "Confirmed: lowStock at stock.controller.ts:11-15 calls stockService.list (line 13), which queries '... and sku like $2' with no qty < reorder_at predicate, whereas stockService.low (stock.service.ts:8-9) includes 'and qty < reorder_at'. grep shows stockService.low has no remaining callers, so the low-stock endpoint now returns every row for the warehouse/sku rather than only rows below the reorder threshold — a concrete wrong-result regression. This is distinct from the earlier filter-shape decision (which concerned the filter being a non-object causing a TypeError/500), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stockService\\.low|\\.low\\(",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 13,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `lowStock` now calls `stockService.list(filter)`, the `qty < reorder_at` predicate is never applied and the endpoint returns every matching stock row instead of only those below the reorder threshold, silently breaking the low-stock report. Call `stockService.low(filter)` so the query uses the low-stock filter (`list()` at `src/inventory/stock.service.ts:6` lacks the predicate that `low()` adds at line 9)."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 13,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `lowStock` calls `stockService.list(filter)` instead of `stockService.low(filter)`, the `qty < reorder_at` predicate is dropped and the endpoint returns every stock row for the warehouse/sku rather than only rows below the reorder threshold, so callers see overstocked items reported as low stock. Call `stockService.low(filter)` to match the pre-refactor behavior; `stockService.low` still exists at `src/inventory/stock.service.ts:8-9` and now has no callers."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 72184,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock now calls stockService.list(filter) instead of stockService.low(filter), dropping the `qty < reorder_at` predicate. WHY: the low-stock endpoint returns every stock row for the warehouse/sku instead of only the rows below their reorder point, producing wrong results for callers. HOW: call stockService.low(filter).",
+          "keep": true,
+          "rationale": "Confirmed: stock.controller.ts:13 lowStock calls stockService.list(filter), whose SQL (stock.service.ts:7) has no `qty < reorder_at` predicate, while the dedicated stockService.low (line 9) does. The low-stock endpoint therefore returns all rows instead of only below-reorder-point rows — a real wrong-result bug. This differs from PreviousDecision #1 (filter shape/TypeError), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "low\\(|list\\(|reorder_at",
+                "path": "src/inventory"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: exportStock reads `raw.warehouse.trim()` from the unvalidated `req.query.filter` cast before readStockFilter runs, so when the filter param is missing entirely (`raw` is `undefined`) or is a string/array, `raw.warehouse` is undefined and `.trim()` throws a TypeError. WHY: the throw happens before the intended HttpError(400) validation, so errorHandler converts it into a 500 instead of the 400 the helper was added to produce; exportStock is the one handler that still bypasses the guard. HOW: validate first and derive the filename from the validated filter, e.g. `const filter = readStockFilter(req.query.filter); const fileName = \\`stock_${filter.warehouse}.csv\\`;`.",
+          "keep": false,
+          "rationale": "The claim is technically accurate: exportStock (lines 18-20) reads `raw.warehouse.trim()` before readStockFilter, and readStockFilter (filter.ts:8-15) only throws HttpError(400) after the throw has already occurred, so the TypeError becomes a 500. However, this is the exact same failure already raised by PreviousReviewDecisions index 1: it explicitly describes exportStock (and listStock/lowStock) destructuring req.query.filter, string/array shapes causing `warehouse.trim()` to throw a TypeError that errorHandler turns into a 500 instead of 400. Same file, same lines, same crash, same operation, same consequence. The helper was the applied (partially_implemented) fix, and this finding merely reports that exportStock still bypasses it — i.e., the incomplete fix of the already-posted suggestion, which the instructions say must not be raised again. DROP.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "readStockFilter"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 30,
+                "path": "src/inventory/filter.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 13,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The low-stock endpoint now returns every stock row for the warehouse/sku instead of only rows where `qty < reorder_at`, producing wrong results for callers. Call `stockService.low(filter)` in `lowStock` instead of `stockService.list(filter)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 70692,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: the raw, unvalidated req.query.filter.warehouse string is interpolated directly into the Content-Disposition header via res.attachment() before readStockFilter has validated it. WHY: an attacker can send ?filter[warehouse]=%22%0d%0aX-Injected:%20v (or a value with quotes/newlines) and control part of the response header, enabling response-header injection / Content-Disposition manipulation and reflected content on the download. HOW: build the filename only from the value returned by readStockFilter and sanitize it (strip CR/LF and quotes, allow only [A-Za-z0-9_-]), e.g. `stock_${filter.warehouse.replace(/[^\\w-]/g, '_')}.csv`.",
+          "keep": true,
+          "rationale": "The cited code confirms the raw value is used before validation: line 18-19 reads `req.query.filter` as a Record and interpolates `raw.warehouse.trim()` into the filename, while `readStockFilter` (which validates types and trims) is only called afterward on line 20. `readStockFilter` merely checks that warehouse is a string; it does NOT strip CR/LF, quotes, or header-breaking characters, so the finding's premise that the filename is built from an unvalidated/sanitized value holds. An attacker-controlled warehouse value flows into res.attachment(fileName), enabling Content-Disposition header manipulation. Note this is a DIFFERENT problem from PreviousDecision index 1, which concerns a TypeError/500 from non-object filter shapes — this finding concerns header injection from the string value's content, not the crash path. Not refutable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "readStockFilter",
+                "path": "src/inventory/filter.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/filter.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: the download filename is built from the untrimmed raw.warehouse while the filter actually applied uses the trimmed value returned by readStockFilter. WHY: for a request like ?filter[warehouse]=%20north%20&filter[sku]=x the response header becomes 'stock_ north .csv' (extra whitespace, possibly slashes) while the query runs warehouse='north', so the filename no longer describes the exported data and can contain path/whitespace characters. HOW: derive the filename from the validated filter: const filter = readStockFilter(req.query.filter); res.attachment(`stock_${filter.warehouse}.csv`)...",
+          "keep": false,
+          "rationale": "The finding claims the filename is built from the untrimmed raw.warehouse while the applied filter is trimmed, so `?filter[warehouse]=%20north%20` yields 'stock_ north .csv'. But line 19 literally does `raw.warehouse.trim()`, and readStockFilter (filter.ts:15) also applies `.trim()` to warehouse. Both produce the identical value \"north\", so the filename does describe the exported data and no extra whitespace is introduced. The described root cause and failure path are refuted by the code.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "readStockFilter",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/filter.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 18,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `req.query.filter.warehouse` is interpolated raw into the `Content-Disposition` header through `res.attachment()` before `readStockFilter` validates it, an attacker can send `?filter[warehouse]=%22%0d%0aX-Injected:%20v` (or quotes/newlines) to inject headers or manipulate the download and reflect content. Build the filename only from the validated `filter.warehouse` returned by `readStockFilter` and sanitize it by stripping CR/LF and quotes and allowing only `[A-Za-z0-9_-]`, e.g. `stock_${filter.warehouse.replace(/[^\\w-]/g, '_')}.csv`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 53628,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock now calls stockService.list(filter) instead of stockService.low(filter), dropping the `qty < reorder_at` predicate. WHY: the low-stock endpoint returns every stock row for the warehouse/sku, so low-stock consumers get non-low items and the dedicated `low` query becomes dead code. HOW: restore the low() call: `const rows = await stockService.low(filter);`.",
+          "keep": true,
+          "rationale": "Confirmed: stock.controller.ts:13 calls stockService.list(filter) in lowStock, whereas stock.service.ts:8-9 defines a dedicated low() query adding the `qty < reorder_at` predicate. list() (line 6-7) omits that predicate, so the low-stock endpoint now returns all stock rows for the warehouse/sku, and low() has no callers (grep shows low only at its definition). The claim is factually accurate and describes a real wrong-result bug.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "(low|list)\\s*\\(",
+                "path": "src/inventory"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "src/inventory",
+                "pattern": "low"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: exportStock reads raw.warehouse.trim() from the unvalidated req.query.filter before readStockFilter validates it. WHY: when the query is `?filter=north` Express yields a string and `?filter=a&filter=b` yields an array, so raw.warehouse is undefined and `.trim()` throws a TypeError that errorHandler turns into a 500 instead of the intended 400. HOW: validate first, then build the filename from the validated filter: `const filter = readStockFilter(req.query.filter); const fileName = `stock_${filter.warehouse}.csv`;`.",
+          "keep": false,
+          "rationale": "The candidate finding raises the identical failure already posted on this PR as PreviousDecision index 1 (round-a-P23-param-shape-read-before-helper): exportStock destructures req.query.filter and calls raw.warehouse.trim(), which throws a TypeError (500 instead of 400) for string/array query shapes. Same file, same lines (16-19 vs 18-20), same root cause, same consequence. The decision's outcome is \"partially_implemented\", and the current diff shows no rework of this area — the exact lines the finding cites are still present unchanged. Per the rules, re-raising the problem a PreviousReviewDecisions entry already raised (whatever its outcome, however worded) must be dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `lowStock` now calls `stockService.list(filter)` instead of `stockService.low(filter)`, the `qty < reorder_at` predicate is dropped, so the endpoint returns every stock row for the warehouse/sku, consumers receive non-low items, and the dedicated `low` query becomes dead code. Restore the `low()` call with `const rows = await stockService.low(filter);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 59821,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock now calls stockService.list(filter) instead of stockService.low(filter). WHY: the low-stock endpoint returns every stock row for the warehouse/sku filter rather than only the rows with qty < reorder_at, so callers silently get a wrong (much larger) result set. HOW: restore the correct delegate: `const rows = await stockService.low(filter);`.",
+          "keep": true,
+          "rationale": "Confirmed: stock.controller.ts line 13 calls stockService.list(filter) in lowStock, while stock.service.ts defines a distinct low() method (line 8-9) that adds 'and qty < reorder_at'. list() lacks that predicate, so the low-stock endpoint returns all rows for the warehouse/sku filter instead of only rows below reorder threshold — a real wrong-result bug. The claim's root cause and failure path are accurate. This is also a different problem from PreviousDecision index 1 (which concerned req.query.filter shape causing a TypeError/500); it does not repeat that crash. The finding is valid.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "low\\(|list\\(",
+                "path": "src/inventory"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "src/inventory/stock.service.ts",
+                "pattern": "low|list|exportCsv|reorder"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts",
+                "startLine": 1,
+                "endLine": 15
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock calls stockService.list(filter) instead of stockService.low(filter). WHY: the low-stock endpoint now returns every row matching warehouse/sku regardless of quantity, so callers get items that are not below the reorder threshold (stock.service.ts `list` omits the `and qty < reorder_at` predicate that `low` has) — the endpoint silently returns wrong results. HOW: call `stockService.low(filter)`.",
+          "keep": true,
+          "rationale": "Confirmed: src/inventory/stock.controller.ts:13 calls stockService.list(filter), while stock.service.ts:8-9 defines a distinct `low` query that adds `and qty < reorder_at`. `list` (line 6-7) omits that predicate, so the lowStock endpoint returns every row matching warehouse/sku regardless of quantity — silently wrong results. The previous review decisions concern filter-shape validation and CSV escaping, not this wrong-query issue, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "low|reorder_at|list\\(",
+                "path": "src/inventory/stock.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The low-stock endpoint now returns every row matching the warehouse/sku filter instead of only items below the reorder threshold, because `list` in `stock.service.ts` omits the `qty < reorder_at` predicate that `low` has, so callers silently receive wrong results. Call `stockService.low(filter)` in `lowStock`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The low-stock endpoint returns every stock row for the warehouse/sku filter rather than only rows with `qty < reorder_at`, so callers silently get a much larger, incorrect result set. Restore the delegate to `stockService.low(filter)` in `lowStock`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 67627,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 38184,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 45890,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 46183,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 47918,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 46293,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/models.py",
+          "claim": "WHAT: `expires_at: datetime` is appended as a required field on the frozen dataclass `Promo`, changing its positional constructor signature. WHY: any existing construction site still calling `Promo(code, percent_off, max_discount_cents)` now raises TypeError at import/run time (broken contract), and I found no construction site in this tree to confirm they were all updated. HOW: if some callers cannot supply an expiry, give the field a default (e.g. `expires_at: datetime | None = None`) and treat None as non-expiring in apply_promo.",
+          "keep": false,
+          "rationale": "REFUTED. The claim asserts a broken contract: existing construction sites calling Promo(code, percent_off, max_discount_cents) would now raise TypeError. But grep for 'Promo(' across the entire repo returns zero matches, and the only files referencing Promo at all are apply.py (imports only PromoExpired/PromoNotFound) and models.py (the definition). There is no construction site anywhere in the tree, so no caller can break. The proposed 'fix' (default None + treat None as non-expiring) is speculative: apply.py compares promo.expires_at > now, and the repo abstraction that would populate expires_at is external (shop.promos.repo is not present in this tree), so the finder has no evidence any caller exists that cannot supply an expiry. The described failure path cannot occur with the code as it exists.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "Promo\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "Promo",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "shop/promos"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "def find|return",
+                "path": "shop/promos"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "repo.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "PromoRepo|class .*Repo"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: the expiry guard is inverted — `if promo.expires_at > datetime.now(timezone.utc)` raises PromoExpired whenever the promo is still valid and lets already-expired promos through. WHY: models.py documents expires_at as \"UTC; the promo can be used until this instant\", so the correct test is `now > expires_at`; as written, every valid code is rejected and every expired code grants a discount (wrong output plus lost revenue/abuse). HOW: invert the comparison to `if promo.expires_at < datetime.now(timezone.utc):` (or `<=` if the instant itself is exclusive).",
+          "keep": true,
+          "rationale": "Confirmed by reading apply.py:12-13 and models.py:18. expires_at is documented as \"the promo can be used until this instant\". The guard `if promo.expires_at > datetime.now(timezone.utc): raise PromoExpired` fires exactly when the promo is still valid (expiry in the future) and lets already-expired promos (expiry in the past) through to grant a discount. The comparison is inverted, producing wrong output both ways. The prior promo-related decision (round-a-P39) concerned code case normalization, a different problem, so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at",
+                "path": "shop/promos/models.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `models.py` documents `expires_at` as the UTC instant until which the promo is usable, the inverted guard rejects every valid code and lets every expired code grant a discount, causing wrong output plus lost revenue and abuse. Invert the comparison to `if promo.expires_at < datetime.now(timezone.utc):` (or `<=` if the instant itself is exclusive) so only expired codes raise `PromoExpired`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 53033,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: the expiry check is inverted — it raises PromoExpired when expires_at is in the future. WHY: models.py:18 documents expires_at as the instant until which the promo is usable, so `expires_at > now` means the promo is still valid; as written, every valid (unexpired) promo is rejected with PromoExpired while already-expired promos are accepted and their discount applied. HOW: compare with `<`.",
+          "keep": true,
+          "rationale": "models.py:18 documents expires_at as 'the promo can be used until this instant', so a future expires_at (> now) means the promo is still valid. apply.py:12-13 raises PromoExpired in exactly that case, rejecting every valid promo while accepting already-expired ones — the comparison is inverted as claimed. This is a real behavior bug not covered by any previous decision (the prior promo decision concerned code normalization, a different issue).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: comparing promo.expires_at (possibly a naive datetime) against the timezone-aware datetime.now(timezone.utc). WHY: if any Promo.expires_at is naive (the model only documents UTC in a comment with no enforcement/normalization), the comparison raises TypeError: can't compare offset-naive and offset-aware datetimes, crashing apply_promo for every order. HOW: normalize at construction (e.g. enforce tzinfo=timezone.utc in the Promo model) or coerce before comparing.",
+          "keep": true,
+          "rationale": "The Promo dataclass (models.py:18) declares expires_at: datetime with only a comment 'UTC' — no enforcement, no default tzinfo, no normalization at construction. Nothing in the model, apply.py, or the (absent) repo guarantees tzinfo is set. So a naive expires_at is constructible, and comparing it to datetime.now(timezone.utc) (apply.py:12) raises TypeError, crashing apply_promo for every order. The claim is technically sound; the trigger (naive datetime from a data source/DB) is a realistic edge condition, not a refuted impossibility. No previous decision addresses this specific naive/aware comparison issue (the promo-expiry decision only concerned case normalization of the lookup code), so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/repo.py"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `models.py:18` documents `expires_at` as the instant until which the promo is usable, the inverted check rejects every still-valid promo with `PromoExpired` while already-expired promos are accepted and their discount applied. Compare with `<` so that an `expires_at` before now raises `PromoExpired`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Since `Promo.expires_at` is only documented as UTC in a comment with no enforcement, a naive value makes the comparison against `datetime.now(timezone.utc)` raise `TypeError: can't compare offset-naive and offset-aware datetimes` and crash `apply_promo` for every order. Normalize at construction (e.g. enforce `tzinfo=timezone.utc` in the `Promo` model) or coerce `expires_at` before comparing."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 54165,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: the expiry check is inverted — `if promo.expires_at > datetime.now(timezone.utc): raise PromoExpired(code)` raises for promos that are still valid. WHY: per the contract comment in models.py:18, `expires_at` is the instant the promo can be used *until*, so `expires_at > now` is true precisely while the promo is still valid; every active promo now fails with PromoExpired and every expired promo is silently accepted, breaking all callers of apply_promo. HOW: invert the comparison to `if promo.expires_at < datetime.now(timezone.utc):` (or `<=` if expiry is inclusive) so only past-expiry promos are rejected.",
+          "keep": true,
+          "rationale": "Confirmed at shop/promos/apply.py:12: `if promo.expires_at > datetime.now(timezone.utc): raise PromoExpired(code)` rejects promos that are still valid. models.py:18 documents `expires_at` as 'the instant the promo can be used until', so validity holds while expires_at > now — the comparison is inverted. No prior decision addresses this expiry logic.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "The expiry check is inverted relative to the documented field contract on models.py:18 (\"UTC; the promo can be used until this instant\"). The current branch raises PromoExpired when `expires_at` is in the FUTURE (a still-valid promo) and lets a promo whose `expires_at` is in the PAST (truly expired) fall through and be applied. Flip the operator to `<` so an expired promo is rejected.",
+          "keep": true,
+          "rationale": "Confirmed by direct read of shop/promos/apply.py:12 and models.py:18. The field contract states expires_at is the instant until which the promo is valid, yet the branch raises PromoExpired when expires_at is in the future (a still-valid promo) and lets a past expires_at (truly expired) fall through to be applied. The operator should be `<`. The logic is genuinely inverted; no prior review decision addresses this expiry check.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The check is inverted against the contract in `models.py:18` that `expires_at` is the instant a promo can be used until, so every active promo raises `PromoExpired` while every expired promo is silently accepted, breaking all callers of `apply_promo`. Invert the comparison to `if promo.expires_at < datetime.now(timezone.utc):` (or `<=` if expiry is inclusive) so only past-expiry promos are rejected."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the branch raises `PromoExpired` when `expires_at` is in the future, still-valid promos are rejected while truly expired ones fall through and get applied, contradicting the documented contract on `models.py:18`. Flip the operator to `<` so an expired promo is rejected."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 61605,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: the expiry check is inverted — it raises PromoExpired when promo.expires_at is in the FUTURE and applies the discount when it is in the PAST. WHY: an already-expired promo still grants a discount while a still-valid promo is rejected with PromoExpired, producing wrong discounts and broken customer behavior. HOW: flip the comparison to detect expiry, e.g. `if promo.expires_at < datetime.now(timezone.utc):`.",
+          "keep": true,
+          "rationale": "Confirmed at shop/promos/apply.py:12-13. `expires_at` is documented in models.py:18 as \"UTC; the promo can be used until this instant\", so a still-valid promo has expires_at in the future and `expires_at > now` is True, raising PromoExpired for valid codes; an already-expired promo has expires_at in the past, the condition is False, and the discount is applied. The check is genuinely inverted. This is a different problem from the earlier round's case-normalization suggestion (which was about the lookup), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at|PromoExpired"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "An already-expired promo still grants a discount while a still-valid promo is rejected with `PromoExpired`, producing wrong discounts and broken customer behavior. Flip the comparison so expiry is detected with `if promo.expires_at < datetime.now(timezone.utc):`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 54741,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: the expiry check is inverted — it raises PromoExpired when promo.expires_at is in the future and grants the discount when it is in the past. WHY: models.py documents expires_at as 'the promo can be used until this instant', so the comparison must reject only past timestamps; as written, every still-valid promo is rejected with PromoExpired while expired promos silently apply a discount. HOW: flip the operator to `if promo.expires_at <= datetime.now(timezone.utc):`.",
+          "keep": true,
+          "rationale": "Confirmed inverted expiry check. models.py:18 documents expires_at as \"the promo can be used until this instant\", so valid promos have expires_at in the future. Line 12 raises PromoExpired when expires_at > now (rejecting all still-valid promos) and applies the discount when expires_at <= now (expired promos). This is a real wrong-result bug not covered by any prior decision.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: The expiry check is inverted — it raises PromoExpired when promo.expires_at is in the future and grants the discount when it is in the past. WHY: Every still-valid promo is rejected with PromoExpired, while every expired promo is accepted and its discount applied, so valid customers lose their discount and expired promos keep working. HOW: Invert the comparison to `if promo.expires_at <= datetime.now(timezone.utc): raise PromoExpired(code)`.",
+          "keep": true,
+          "rationale": "Confirmed by reading shop/promos/apply.py lines 12-13: `if promo.expires_at > datetime.now(timezone.utc): raise PromoExpired(code)`. Since a future expires_at means the promo is still valid, this inverts the logic — valid promos raise PromoExpired and expired promos fall through to grant the discount (line 14). The finding's root cause and failure path are factually correct. Not covered by any previous decision (those concern code normalization at line 7, unrelated files, and different rules).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Every still-valid promo is rejected with `PromoExpired` while expired promos are accepted and their discounts applied, so valid customers lose their discount and expired promos keep working. Invert the comparison to `if promo.expires_at <= datetime.now(timezone.utc): raise PromoExpired(code)`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Since `models.py` documents `expires_at` as \"the promo can be used until this instant\", the comparison must reject only past timestamps, yet as written every still-valid promo is rejected with `PromoExpired` while expired promos silently apply a discount. Flip the operator to `if promo.expires_at <= datetime.now(timezone.utc):`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

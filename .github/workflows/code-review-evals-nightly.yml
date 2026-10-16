@@ -374,6 +374,8 @@ jobs:
               id: run
               env:
                   BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
+                  # The judge an eval pins with --judge (review-rounds: Gemini).
+                  BYOK_GOOGLE_API_KEY: ${{ secrets.BYOK_GOOGLE_API_KEY }}
               run: |
                   read -r -a cmd <<< "$(node -e 'console.log(require("./evals/nightly-evals").byId(process.env.EVAL).run.join(" "))')"
                   measure() { node "${cmd[@]}" --model="$MODEL" --gate --output="$1"; }

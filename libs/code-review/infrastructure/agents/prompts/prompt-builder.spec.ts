@@ -224,6 +224,28 @@ describe('buildUserPrompt', () => {
         expect(block).toContain('x'.repeat(600) + '…');
     });
 
+    // #2097: the Kody Rules judge reports what it sees; its findings go
+    // through the repeat check.
+    it('tells the rule judge to report everything when repeats are checked later', () => {
+        const block = formatPreviousDecisions(
+            [
+                {
+                    suggestionId: 'sug-1',
+                    relevantFile: 'src/a.ts',
+                    suggestionContent: 'Use the logger.',
+                    label: 'kody_rules',
+                    outcome: 'pending',
+                    decidedAt: '2026-01-01T00:00:00.000Z',
+                },
+            ],
+            undefined,
+            { repeatsCheckedLater: true },
+        );
+
+        expect(block).toContain('a later step compares every finding with these entries');
+        expect(block).not.toContain('never report the problem an entry raised again');
+    });
+
     it('labels not_implemented/pending as weak signals, never as rejection', () => {
         const block = formatPreviousDecisions([
             {

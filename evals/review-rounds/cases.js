@@ -845,11 +845,11 @@ const cartDecision = {
     decidedAt: '2026-10-06T10:15:00Z',
 };
 const cartClaim = {
-    id: 'qty-default-reintroduced',
+    id: 'qty-default-reintroduced-repeat',
     golden: 'The refactored total multiplies by item.qty without the ?? 1 default again, so an item without qty makes the total NaN: the earlier fix was undone.',
     truth: 'true',
     premise: 'diff',
-    expect: 'deliver_linked',
+    expect: 'not_deliver',
 };
 
 
@@ -1093,7 +1093,9 @@ const cases = [
         claims: [retryClaim('await-sleep-repeat', 'not_deliver')],
     },
     { id: 'R15-control', family: 'control', repo: retryRepo, changedFiles: retryDiff, sandbox: 'alive', claims: [retryClaim('await-sleep-control', 'deliver')] },
-    // Fixed, then undone by this diff: must ship, linked to the earlier fix.
+    // Fixed, then undone by this diff. Not posted again (#2097): the earlier
+    // comment is the thread for that problem, and nothing tells a fix that
+    // came back from one that was never complete.
     {
         id: 'R16-fixed-then-reintroduced', family: 'rounds', repo: cartRepo, changedFiles: cartDiff, sandbox: 'alive',
         previousDecisions: [cartDecision],

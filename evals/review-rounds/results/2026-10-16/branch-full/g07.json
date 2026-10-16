@@ -1,0 +1,2171 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "ef8ace6e81c2ad04800d9543336439a8767fa987",
+    "sourceDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "startedAt": "2026-10-15T22:56:31.302Z",
+  "updatedAt": "2026-10-15T23:12:09.351Z",
+  "complete": true,
+  "selectedCases": [
+    "R6-incomplete-fix",
+    "R14-repeat-of-rule-by-finder",
+    "K12-rule-repost-attempted-fix",
+    "P10-rule-manifest-hand-edited-again",
+    "P20-rule-double-cast-out-of-40",
+    "P30-probe-retries-timeouts-only",
+    "P40-rule-pii-on-structured-log-lines"
+  ],
+  "casesSourceDigest": "d825cd5cec1358f9f3dc60db3ffa6108071d541b589151a7ab19b252fb7130a7",
+  "summary": {
+    "measured": 35,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 30,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 15,
+        "violations": 1,
+        "rate": 0.067
+      },
+      "index-reference (#2039)": {
+        "n": 17,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R6-incomplete-fix · credit-negative-repeat [not_deliver, proposed]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "R14-repeat-of-rule-by-finder · resubmit-repeat-of-rule [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K12-rule-repost-attempted-fix · rangeLabel-attempt-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K12-rule-repost-attempted-fix · dayKey-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P10-rule-manifest-hand-edited-again · manifest-hand-edit-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P20-rule-double-cast-out-of-40 · usage-double-cast-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P20-rule-double-cast-out-of-40 · invoice-double-cast-new-site [deliver]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 4
+      },
+      "P30-probe-retries-timeouts-only · probe-reset-not-retried-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P40-rule-pii-on-structured-log-lines · pii-log-field-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "eval": "review-rounds",
+  "question": "When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, revisions linked, nothing already sent posted again?",
+  "metric": {
+    "name": "of claims handled right",
+    "value": 0.9777777777777777,
+    "floor": 0.8,
+    "baseline": 0.903
+  },
+  "runs": 5,
+  "tokens": {
+    "in": 1699565,
+    "out": 73106,
+    "cacheRead": 1455406,
+    "cacheWrite": 0
+  },
+  "infra": {
+    "errored": 0,
+    "total": 35
+  },
+  "cases": [
+    {
+      "id": "R6-incomplete-fix",
+      "checks": "credit-negative-repeat: not posted",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "credit-negative-repeat",
+          "ok": true
+        },
+        {
+          "what": "credit-negative-repeat",
+          "ok": true
+        },
+        {
+          "what": "credit-negative-repeat",
+          "ok": true
+        },
+        {
+          "what": "credit-negative-repeat",
+          "ok": true
+        },
+        {
+          "what": "credit-negative-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "R14-repeat-of-rule-by-finder",
+      "checks": "resubmit-repeat-of-rule: not posted",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "resubmit-repeat-of-rule",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat-of-rule",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat-of-rule",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat-of-rule",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat-of-rule",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "K12-rule-repost-attempted-fix",
+      "checks": "rangeLabel-attempt-repeat: not posted; dayKey-new-site: posted",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "rangeLabel-attempt-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-attempt-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-attempt-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-attempt-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-attempt-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P10-rule-manifest-hand-edited-again",
+      "checks": "Kody Rule \"regenerate, do not hand-edit\" on a generated JSON manifest; the developer hand-edited another line of the same entry instead of rerunning the script; stored not_implemented; 2 earlier comments",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "manifest-hand-edit-repeat",
+          "ok": true
+        },
+        {
+          "what": "manifest-hand-edit-repeat",
+          "ok": true
+        },
+        {
+          "what": "manifest-hand-edit-repeat",
+          "ok": true
+        },
+        {
+          "what": "manifest-hand-edit-repeat",
+          "ok": true
+        },
+        {
+          "what": "manifest-hand-edit-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P20-rule-double-cast-out-of-40",
+      "checks": "Kody Rule (no double casts without a justification) on a file new in the PR; stored implemented, but the as-unknown-as cast is still there with no comment; more than 40 later comments push the earlier one out of the history",
+      "hits": 9,
+      "total": 10,
+      "detail": [
+        {
+          "what": "usage-double-cast-repeat",
+          "ok": true
+        },
+        {
+          "what": "invoice-double-cast-new-site",
+          "ok": true
+        },
+        {
+          "what": "usage-double-cast-repeat",
+          "ok": true
+        },
+        {
+          "what": "invoice-double-cast-new-site",
+          "ok": false
+        },
+        {
+          "what": "usage-double-cast-repeat",
+          "ok": true
+        },
+        {
+          "what": "invoice-double-cast-new-site",
+          "ok": true
+        },
+        {
+          "what": "usage-double-cast-repeat",
+          "ok": true
+        },
+        {
+          "what": "invoice-double-cast-new-site",
+          "ok": true
+        },
+        {
+          "what": "usage-double-cast-repeat",
+          "ok": true
+        },
+        {
+          "what": "invoice-double-cast-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P30-probe-retries-timeouts-only",
+      "checks": "Bug finder; a transient health-probe failure fails closed; the retry added for the earlier comment covers timeouts only, not connection resets; stored partially_implemented, earlier label security; 10 earlier comments",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "probe-reset-not-retried-repeat",
+          "ok": true
+        },
+        {
+          "what": "probe-reset-not-retried-repeat",
+          "ok": true
+        },
+        {
+          "what": "probe-reset-not-retried-repeat",
+          "ok": true
+        },
+        {
+          "what": "probe-reset-not-retried-repeat",
+          "ok": true
+        },
+        {
+          "what": "probe-reset-not-retried-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P40-rule-pii-on-structured-log-lines",
+      "checks": "Kody Rule: a different rule (\"No personal data in logs\") broken on the very lines an earlier, implemented comment about another rule (\"Structured log fields\") covered; 4 earlier comments",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "pii-log-field-new-site",
+          "ok": true
+        },
+        {
+          "what": "pii-log-field-new-site",
+          "ok": true
+        },
+        {
+          "what": "pii-log-field-new-site",
+          "ok": true
+        },
+        {
+          "what": "pii-log-field-new-site",
+          "ok": true
+        },
+        {
+          "what": "pii-log-field-new-site",
+          "ok": true
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 44903,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26315,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 35520,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 37554,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26545,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R14-repeat-of-rule-by-finder",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 29569,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-of-rule",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R14-repeat-of-rule-by-finder",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 27006,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-of-rule",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R14-repeat-of-rule-by-finder",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 22589,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 6,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-of-rule",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R14-repeat-of-rule-by-finder",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28695,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-of-rule",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R14-repeat-of-rule-by-finder",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 24708,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-of-rule",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K12-rule-repost-attempted-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20784,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "For users west of UTC, `dayKey` returns the previous day because `toISOString().slice(0, 10)` violates the local calendar time rule. Use `formatLocalDate` from `src/reports/dates.ts` and add the corresponding import."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-attempt-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K12-rule-repost-attempted-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20197,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        },
+        {
+          "file": "src/reports/range.ts",
+          "line": 6,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "`dayKey` returns the UTC day via `toISOString().slice(0, 10)`, which is the previous day for users west of UTC. Return `formatLocalDate(at)` from `src/reports/dates.ts` instead and import it."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-attempt-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K12-rule-repost-attempted-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21321,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        },
+        {
+          "file": "src/reports/range.ts",
+          "line": 6,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "For users west of UTC, `dayKey` produces the previous calendar day because `at.toISOString().slice(0, 10)` formats a date-only value in UTC. Use `formatLocalDate` from `src/reports/dates.ts` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-attempt-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K12-rule-repost-attempted-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18341,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "`dayKey` uses `toISOString().slice(0, 10)`, which yields the previous day for users west of UTC. Replace it with `formatLocalDate` from `src/reports/dates.ts` so the key reflects the local calendar day."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-attempt-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K12-rule-repost-attempted-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18269,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "`dayKey` builds a date-only key with `toISOString().slice(0, 10)`, which yields the previous day for users west of UTC. Replace it with `formatLocalDate` from `src/reports/dates.ts`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-attempt-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 5120,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P10-rule-manifest-hand-edited-again",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-P10-rule-manifest-hand-edited-again",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 3872,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P10-rule-manifest-hand-edited-again",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-P10-rule-manifest-hand-edited-again",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 4619,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P10-rule-manifest-hand-edited-again",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 4069,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P10-rule-manifest-hand-edited-again",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 4897,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P10-rule-manifest-hand-edited-again",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P20-rule-double-cast-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 35896,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P20-rule-double-cast-out-of-40",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "text": "Casting `req.body` straight to `InvoicePaidEvent` lets malformed payloads with a missing `invoiceId` or a non-numeric `amountCents` reach `markPaid`. Parse the body with `InvoicePaidEventSchema` before use so invalid payloads are rejected instead."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "text": "The `req.body as unknown as InvoicePaidEvent` double cast suppresses type checking with no stated justification. Replace it with `InvoicePaidEventSchema.parse(req.body)`, or add a comment on the line above explaining why the value really has that type."
+        }
+      ],
+      "claims": [
+        {
+          "id": "usage-double-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P20-rule-double-cast-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 5066,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P20-rule-double-cast-out-of-40",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "usage-double-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P20-rule-double-cast-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 51278,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P20-rule-double-cast-out-of-40",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "text": "Casting `req.body` through `unknown` to `InvoicePaidEvent` with no justification comment violates the \"No double casts without a justification\" rule and hides that the type is not verified at runtime. If the body genuinely has that shape, use a validation step such as a `zod` parse to make the type real; otherwise add a comment on the line above explaining why the value really has that type."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "text": "Because the handler reads `req.body` and uses its fields without validation, violating the \"Validate request bodies\" rule, the `as unknown as InvoicePaidEvent` cast is only a compile-time promise; at runtime `event.invoiceId` can be undefined and `event.amountCents` a string. Parse the body with a `zod` schema such as `invoicePaidEventSchema` before calling `markPaid`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "usage-double-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P20-rule-double-cast-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 64581,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P20-rule-double-cast-out-of-40",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "text": "The double cast through `unknown` asserts a shape that nothing verifies, so `req.body` reaches `InvoicePaidEvent` without any validation or justification comment. Parse the body with a zod schema and let its inferred type flow instead."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "text": "Casting `req.body` to `InvoicePaidEvent` asserts a shape the payload may not have, so `event.invoiceId` and `event.amountCents` can be missing or wrong at runtime. Define a zod schema for the event and parse the body with it before calling `invoices.markPaid`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "usage-double-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P20-rule-double-cast-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23650,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P20-rule-double-cast-out-of-40",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "text": "`req.body` comes straight off the wire with no validation, so forcing it into `InvoicePaidEvent` via a double cast is unsound and violates Rule 21, which forbids double casts without a justification comment on the line above. On line 12, either add that justification comment or parse and validate the body into `InvoicePaidEvent` so no cast is needed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "usage-double-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 29557,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 56039,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 44831,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 61317,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 48818,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/gateway/health.ts",
+          "claim": "WHAT: `isTimeout` only treats `DOMException` named `TimeoutError` as retryable, so a connection reset (ECONNRESET) is not retried and the probe reports the upstream down on the first reset. WHY: Node/undici surfaces a reset keep-alive socket as a generic `TypeError: fetch failed` (with `err.cause`), not a `DOMException`, so `isTimeout` returns false, `probeUpstream` returns false immediately, and `router.ts:8` fails closed with a 503 for every request until the next 30 s refresh — the exact lockout the retry was added to prevent. HOW: also retry when the error (or its `cause`) indicates a transient network failure, e.g. check `err?.cause?.code === 'ECONNRESET'`/`'ECONNREFUSED'`/`'ETIMEDOUT'` alongside the TimeoutError check.",
+          "keep": false,
+          "rationale": "The finding re-raises the exact problem already posted in PreviousReviewDecisions entry round-a-P30-probe-retries-timeouts-only: a single transient network error (timeout or ECONNRESET) marks the auth upstream unhealthy and router.ts fails closed with a 503 for every request until the next 30s refresh. That entry explicitly names ECONNRESET from a recycled keep-alive socket, and its outcome is \"partially_implemented\" — the developer added a retry loop but only gated it on `isTimeout`. This candidate finding blames the incomplete fix (isTimeout covering only TimeoutError, not ECONNRESET) and describes the identical failure in the identical operation (probe marks upstream down → 503 lockout). Per the repeat rule, that same crash/wrong-result in the same operation is that entry again, so it must be dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/health.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/router.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17962,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "text": "The `logger.info` call writes the customer's email to logs, violating the \"No personal data in logs\" rule. Remove the `customerEmail` field and keep only non-personal identifiers such as `orderId`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17039,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P40-rule-pii-on-structured-log-lines",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "text": "**Revises an earlier Kody suggestion** on `src/orders/receipts.ts:11` (2026-10-06 12:00 UTC).\n\nLogging `customerEmail` violates the \"No personal data in logs\" rule and exposes PII, even though the previous structured-fields fix passed the whole context object. Drop the email field and log only `orderId` so receipts can still be traced."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14841,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "text": "Because emails must never be written to logs, passing `customerEmail` into the structured fields violates the 'No personal data in logs' rule. Drop the `customerEmail` field and keep only the non-personal `orderId`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 11998,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "text": "Passing `customerEmail` as a structured field violates the \"No personal data in logs\" rule, since emails are personal data and must never be written to logs regardless of whether they appear in the message or the fields object. Drop the email field and keep only non-personal identifiers such as the order id."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 12067,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "text": "Logging `customer.email` violates the \"No personal data in logs\" rule, since logs are broadly readable and often shipped to third-party sinks. Drop the email from the log fields and keep only the non-personal `orderId`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

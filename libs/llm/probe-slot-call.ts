@@ -17,6 +17,7 @@
  * impossible.
  */
 import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
+import { asServedSlot } from '@libs/llm/served-slot';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { resolveModelConfig } from '@libs/llm/model-invocation';
 import {
@@ -149,9 +150,11 @@ export interface ProbeSlotResult {
  * Throws the SDK's error untouched — the caller owns classification.
  */
 export async function probeSlotCall(
-    slot: NormalizedModel,
+    stored: NormalizedModel,
     opts: { runName?: string; timeoutMs?: number } = {},
 ): Promise<ProbeSlotResult> {
+    // The transport a review would use for this slot, so the test exercises it.
+    const slot = asServedSlot(stored);
     const inv = resolveModelConfig(slotForProbe(slot), {
         runName: opts.runName ?? 'byok-connection-probe',
         // Providers whose endpoint comes from the user honor this transport;
