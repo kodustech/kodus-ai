@@ -70,9 +70,9 @@ const NIGHTLY_EVALS = [
         stage: 'pr-summary',
         run: ['evals/pr-summary/run.js'],
         files: ['evals/pr-summary/targets.json'],
-        // Every case (one call each), gated: the routing and posting contract
-        // is what died for one model in prod.
-        friday: ['--limit=11', '--gate'],
+        // Every case (one call each where a summary is asked for), gated: the
+        // routing and posting contract is what died for one model in prod.
+        friday: ['--limit=15', '--gate'],
     },
     {
         id: 'conversation',
