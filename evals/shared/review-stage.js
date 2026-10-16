@@ -27,7 +27,7 @@
 // without changing its result.
 const path = require('path');
 const { AsyncLocalStorage } = require('async_hooks');
-const { mirrorFor, inlineMirror, contentAt } = require('./repo-mirror');
+const { mirrorFor, inlineMirror, contentAt, pullRequestFiles } = require('./repo-mirror');
 const { EVAL_ORG } = require('./model-route');
 
 const LIBS = path.join(__dirname, '../../libs');
@@ -137,6 +137,22 @@ function observeTheReview() {
         return r;
     };
     reviewObserved = true;
+}
+
+// What the Kody Rules agent returned on each review (its warnings say whether
+// every rule was judged), observed on the provider without changing it.
+const observedRuleReviews = new AsyncLocalStorage();
+let rulesObserved = false;
+function observeTheRuleAgent() {
+    if (rulesObserved) return;
+    const { KodyRulesAgentProvider } = lib('code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts');
+    const execute = KodyRulesAgentProvider.prototype.execute;
+    KodyRulesAgentProvider.prototype.execute = async function observedExecute(...args) {
+        const out = await execute.apply(this, args);
+        observedRuleReviews.getStore()?.push(out);
+        return out;
+    };
+    rulesObserved = true;
 }
 
 // ── The data production reads, held in memory ───────────────────────────────
@@ -299,6 +315,40 @@ function buildAgentReviewStage({ permissionService, codeManagement, previousDeci
     );
 }
 
+/**
+ * The PR's decision store (PrDecisionStore) holding the suggestions Kody posted
+ * in earlier rounds, as records production loads them: BuildPreviousReviewDecisionsUseCase
+ * reads it for the prompts (LoadExternalContextStage) and for the repeat check
+ * (AgentReviewStage), each with its own cap.
+ */
+function decisionStore(decisions = []) {
+    const { BuildPreviousReviewDecisionsUseCase } = lib(
+        'code-review/application/use-cases/previousReviewDecisions/build-previous-review-decisions.use-case.ts',
+    );
+    return new BuildPreviousReviewDecisionsUseCase({ load: async () => decisions });
+}
+
+// LoadExternalContextStage over the team's data: no external prompt references
+// stored, the Trace context off (no release track), the PR's earlier decisions
+// from its decision store.
+async function externalContextThroughStage(context, previousDecisionsUseCase) {
+    const { LoadExternalContextStage } = lib('code-review/pipeline/stages/load-external-context.stage.ts');
+    const { PromptExternalReferenceManagerService } = lib(
+        'ai-engine/infrastructure/adapters/services/prompt/promptExternalReferenceManager.service.ts',
+    );
+    const stage = new LoadExternalContextStage(
+        // No context reference stored for the team: every revision read is empty.
+        new PromptExternalReferenceManagerService({ getLatestRevision: async () => null, findById: async () => null }),
+        undefined, // promptContextLoader: read only for stored references
+        undefined, // contextPackService: read only with a contextReferenceId
+        undefined, // buildTraceContextPackUseCase: read only with the Trace gate on
+        { isEnabled: async () => false }, // featureGate: on no release track
+        { getReleaseTrack: async () => null }, // organizationService
+        previousDecisionsUseCase,
+    );
+    return stage.execute(context);
+}
+
 async function changedFilesThroughStage(context, codeManagement) {
     const { FetchChangedFilesStage } = lib('code-review/pipeline/stages/fetch-changed-files.stage.ts');
     const { PullRequestHandlerService } = lib('code-review/infrastructure/adapters/services/pullRequestManager.service.ts');
@@ -310,9 +360,9 @@ async function changedFilesThroughStage(context, codeManagement) {
 
 // The repository the review reads: a mirror of the platform's refs for the PR,
 // or a repository written for the eval. `head` is the ref content is read at.
-async function repositoryFor({ repo, prNumber, headRef, headSha, baseRef, baseSha, repoFiles, repoBase }) {
+async function repositoryFor({ repo, prNumber, headRef, headSha, baseRef, baseSha, repoFiles, repoBase, baseFiles }) {
     if (repoFiles) {
-        const inline = await inlineMirror(repoFiles, { base: repoBase });
+        const inline = await inlineMirror(repoFiles, baseFiles ? { baseFiles } : { base: repoBase });
         return { cloneUrl: inline.cloneUrl, branch: inline.branch, baseBranch: inline.base, head: inline.branch, prNumber: undefined, commit: false, cleanup: inline.cleanup };
     }
     const cloneUrl = await mirrorFor({ repo, prNumber, headSha, baseRef, baseSha });
@@ -383,7 +433,7 @@ async function teamContext({ team = {}, route, permissionService }) {
  * Returns the context, the repository to check out, the platform, and the
  * cleanup of a repository written for the eval.
  */
-async function prepareReview({ pr, team = {}, route, permissionService, previousDecisions }) {
+async function prepareReview({ pr, team = {}, route, permissionService, previousDecisions, previousDecisionsUseCase }) {
     const repository = {
         id: `eval-${(pr.repo || 'inline/repo').replace('/', '-')}`,
         name: (pr.repo || 'inline/repo').split('/')[1],
@@ -399,11 +449,14 @@ async function prepareReview({ pr, team = {}, route, permissionService, previous
         baseSha: pr.baseSha,
         repoFiles: pr.repoFiles,
         repoBase: pr.repoBase,
+        baseFiles: pr.baseFiles,
     });
     try {
+        // `baseFiles`: the platform's file list between the two trees, read from the mirror.
+        const prFiles = pr.files || (pr.repoFiles && pr.baseFiles ? await pullRequestFiles(repo.cloneUrl, repo.baseBranch, repo.branch) : pr.files);
         const codeManagement = platform({
             baseRef: pr.baseRef || repo.baseBranch || 'main',
-            prFiles: pr.files,
+            prFiles,
             prCommits: pr.commits || [],
             content: (file) => contentAt(repo.cloneUrl, repo.head, file),
         });
@@ -413,7 +466,7 @@ async function prepareReview({ pr, team = {}, route, permissionService, previous
             permissionService,
             codeManagement,
             repository: { id: repository.id, name: repository.name },
-            preliminaryFiles: pr.files,
+            preliminaryFiles: prFiles,
         });
 
         let context = {
@@ -436,6 +489,11 @@ async function prepareReview({ pr, team = {}, route, permissionService, previous
             pipelineMetadata: {},
         };
         context = await changedFilesThroughStage(context, codeManagement);
+        // LoadExternalContextStage, as every review runs it after the files: the
+        // PR's earlier decisions reach the prompts from the decision store.
+        if (context.changedFiles?.length && previousDecisionsUseCase) {
+            context = await externalContextThroughStage(context, previousDecisionsUseCase);
+        }
         return { context, repo, codeManagement, cleanup: repo.cleanup };
     } catch (error) {
         await repo.cleanup();
@@ -451,30 +509,44 @@ async function prepareReview({ pr, team = {}, route, permissionService, previous
  * agentLoop: (params, secrets) => output, run in place of each agent loop.
  * observeSteps: record what each post-agent step received (observeTheReview).
  */
-async function reviewPullRequest({ pr, team = {}, route, permissionService, previousDecisions, previousDecisionsUseCase, agentLoop, observeSteps }) {
+async function reviewPullRequest({ pr, team = {}, route, permissionService, previousDecisions, previousDecisionsUseCase, decisions, agentLoop, observeSteps, sandbox: sandboxMode = 'alive', wrapSandbox }) {
     observeTheLoop();
+    observeTheRuleAgent();
     if (observeSteps) observeTheReview();
-    const { context, repo, codeManagement } = await prepareReview({ pr, team, route, permissionService, previousDecisions });
+    // `decisions`: the PR's decision store, the suggestions earlier rounds posted
+    // (PrDecisionRecord), read by LoadExternalContextStage and the repeat check.
+    const decisionsUseCase = previousDecisionsUseCase || (decisions ? decisionStore(decisions) : undefined);
+    const { context, repo, codeManagement } = await prepareReview({ pr, team, route, permissionService, previousDecisions, previousDecisionsUseCase: decisionsUseCase });
     if (!context.changedFiles?.length) {
         await repo.cleanup();
-        return { shipped: [], discarded: [], loops: [], context, skipped: context.statusInfo?.message || 'no files to review' };
+        return { shipped: [], discarded: [], loops: [], ruleReviews: [], context, skipped: context.statusInfo?.message || 'no files to review' };
     }
 
-    const sandbox = await checkout(repo);
+    // `sandbox`: 'none' runs the review with no sandbox, as production does when
+    // none could be created; `wrapSandbox(handle)` makes it fail the way a dead
+    // one does (its tools throw), around production's own.
+    const sandbox = sandboxMode === 'none' ? null : await checkout(repo);
     try {
-        const stage = buildAgentReviewStage({ permissionService, codeManagement, previousDecisionsUseCase });
+        const stage = buildAgentReviewStage({ permissionService, codeManagement, previousDecisionsUseCase: decisionsUseCase });
         const store = { loops: [], agentLoop, steps: observeSteps ? {} : undefined };
-        const out = await observedLoops.run(store, () => stage.execute({ ...context, sandboxHandle: sandbox }));
+        const ruleReviews = [];
+        const reviewed = sandbox ? { ...context, sandboxHandle: wrapSandbox ? wrapSandbox(sandbox) : sandbox } : context;
+        const out = await observedRuleReviews.run(ruleReviews, () => observedLoops.run(store, () => stage.execute(reviewed)));
         return {
             shipped: [...(out.validSuggestions || []), ...(out.validSuggestionsByPR || [])],
+            // The same, split as posting takes them: comments on files, and on the PR.
+            shippedOnFiles: out.validSuggestions || [],
+            shippedOnPR: out.validSuggestionsByPR || [],
             discarded: out.discardedSuggestions || [],
             loops: store.loops,
+            ruleReviews,
             steps: store.steps,
             context: out,
             errors: out.errors || [],
         };
     } finally {
-        await sandbox.cleanup();
+        if (sandbox) await sandbox.cleanup();
+        else await repo.cleanup();
     }
 }
 

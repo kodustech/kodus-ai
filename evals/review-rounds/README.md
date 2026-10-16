@@ -14,17 +14,25 @@ developer declined or fixed them.
 
 ## What it drives
 
-The chain the worker runs once the sandbox is up: `runAgentLoopViaCore` (finder,
-verifier, evidence gate) — or, for `agent: 'kody-rules'` cases, the production
-`KodyRulesAgentProvider` — → the repeat check (`engine/repeat-check.ts`, against
-the whole history, as `agent-review.stage.ts` runs it) → `classifySeverity` →
-`formatSuggestionContent` → the revision link (`engine/revision-link.ts`). What
-the repeat check keeps off the PR is in each row's `alreadyPosted`. Tools
-go through the production registry. Only `RemoteCommands` — the sandbox — is
-replaced. The agents get what `build-orchestrator-input.ts` gives them in
-production: the PR's commits (`commits` in a case), and the history through
-`capDecisions` (most recent first, capped at `MAX_PR_DECISIONS`). Modes, each a
-shape seen in production:
+Each round is one pull request through production's review
+(`evals/shared/review-stage.js` `reviewPullRequest`): the team's config
+(`CodeBaseConfigService.getConfig`), the routed model, `FetchChangedFilesStage`,
+`LoadExternalContextStage`, the sandbox (`LocalSandboxService`) and
+`AgentReviewStage`, which runs the orchestrator's agents (the generalist, and
+the Kody Rules agent when the team has rules) and then the anchoring, the
+repeat check against the whole history, dedup, severity, the formatter and the
+revision links. What is scored is what the stage ships (`validSuggestions`,
+`validSuggestionsByPR`); what the repeat check kept off the PR is each row's
+`alreadyPosted`.
+
+A case supplies data only. `pr-of-case.js` turns it into what production reads:
+a repository with the base before the PR and the head after it (the agents
+read the diff production renders from the platform's patches), the team's Kody
+Rules as stored, the PR's commits (`commits` in a case), and the decision store
+holding the earlier suggestions in the record shape production writes
+(`PrDecisionStoreService` `toRecord`). Sandbox faults wrap the production
+sandbox's remote commands; `alive` only counts the calls. Modes, each a shape
+seen in production:
 
 - `alive` answers from the case's repository;
 - `dead` throws what the E2B SDK throws once the sandbox is gone
@@ -103,7 +111,8 @@ control.
 them; the two concurrent reviews and the one review whose history failed to
 load are out: one review per case cannot reproduce them), plus guards. A spec
 gives the files before and at the reviewed head, the comment already on the PR
-and the claims; `prod-shapes/build.js` derives the diff in the engine's format,
+and the claims; `prod-shapes/build.js` derives each file's patch as the platform
+returns it,
 a history of the production size (`'out-of-40'` puts the comment behind 45
 newer ones, which `capDecisions` drops), the rule set and commits, and the
 `-control` twin. `prod-shapes/check.js` (and `prod-shapes.spec.ts` in CI) refuse

@@ -15,13 +15,16 @@
 // handled right out of all its claims × reps; --gate compares that ratio with
 // the model's floor in targets.json.
 //
-// Drives the chain production runs after the sandbox is up:
-//   runAgentLoopViaCore (finder + verifier + evidence gate)
-//   → classifySeverity → formatSuggestionContent
-// Tools go through the production registry; only RemoteCommands (the sandbox)
-// is swapped: `alive` answers from the case repository, `dead` throws what the
-// E2B SDK throws once the sandbox is gone, `dies-in-verify` is alive for the
-// finder and dead from the first verifier run on.
+// Runs the review production runs (evals/shared/review-stage.js): the case's
+// repository before and after the PR (evals/review-rounds/pr-of-case.js), the
+// changed files as FetchChangedFilesStage renders them, the PR's earlier
+// decisions as LoadExternalContextStage loads them from its decision store,
+// then AgentReviewStage — both agents (the finder with its verifier and
+// evidence gate, the Kody Rules agent), the anchoring, the repeat drop, dedup,
+// severity and the formatter — and scores what it hands to posting. The tools
+// are production's sandbox over a checkout of the case's repository; a case
+// whose sandbox dies (`dead`, `dies-in-verify`, …) has those tools throw what
+// the E2B SDK throws once the sandbox is gone, around production's own.
 //
 // Each delivered finding is matched to the case's claims by the recall judge
 // (evals/investigation/recall-judge.js; JUDGE_MODEL, default gpt-5.6-luna low,
@@ -158,15 +161,17 @@ const reviewPhase = new AsyncLocalStorage();
 const fallbackPhase = { verify: false, verdicts: [] };
 const currentPhase = () => reviewPhase.getStore() || fallbackPhase;
 
-function sandbox(mode, repo, counter) {
+// A sandbox that dies, around production's own (the checkout LocalSandboxService
+// makes at the PR's head): its tools answer as production's until the case's
+// mode says the sandbox is gone, then throw what the E2B SDK throws once it is.
+// Modes (README → What it drives): alive | dead | dies-in-verify |
+// dies-after-reading:<path> | dead-for:<path> | flaky:<K>. `none` (no sandbox
+// at all, the self-contained review) never reaches here.
+function dyingSandbox(mode, counter) {
     const norm = (p) =>
         String(p || '.')
             .replace(/^\.?\/+/, '')
             .replace(/\/+$/, '');
-    const files = Object.keys(repo);
-    // Modes (README → What it drives): alive | dead | dies-in-verify |
-    // dies-after-reading:<path> | dead-for:<path> | flaky:<K>. `none` (no
-    // sandbox at all, self-contained prompts) never reaches here.
     const [kind, arg] = String(mode).split(/:(.*)/s);
     const state = { premiseRead: false };
     const dead = (target) => {
@@ -186,59 +191,53 @@ function sandbox(mode, repo, counter) {
             );
         }
     };
-    return {
-        async read(p, start, end) {
-            guard(p);
-            if (kind === 'dies-after-reading' && norm(p) === norm(arg))
-                state.premiseRead = true;
-            const content = repo[norm(p)];
-            if (content === undefined)
-                throw new Error(`cat: ${p}: No such file or directory`);
-            if (!start && !end) return content;
-            return content
-                .split('\n')
-                .slice((start || 1) - 1, end || undefined)
-                .join('\n');
-        },
-        async grep(pattern, searchPath) {
-            guard();
-            let re;
-            try {
-                re = new RegExp(pattern);
-            } catch {
-                re = new RegExp(
-                    String(pattern).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
-                );
-            }
-            const scope = norm(searchPath);
-            const out = [];
-            for (const f of files) {
-                if (kind === 'dead-for' && norm(f) === norm(arg)) continue; // its content is unreachable
-                if (
-                    scope &&
-                    scope !== '.' &&
-                    !(f === scope || f.startsWith(`${scope}/`))
-                )
-                    continue;
-                repo[f].split('\n').forEach((line, i) => {
-                    if (re.test(line)) out.push(`${f}:${i + 1}:${line}`);
-                });
-            }
-            return out.join('\n');
-        },
-        async listDir(dirPath) {
-            guard();
-            const scope = norm(dirPath);
-            const names = new Set();
-            for (const f of files) {
-                if (scope && scope !== '.' && !f.startsWith(`${scope}/`))
-                    continue;
-                const rest =
-                    scope && scope !== '.' ? f.slice(scope.length + 1) : f;
-                names.add(rest.split('/')[0] + (rest.includes('/') ? '/' : ''));
-            }
-            return [...names].sort().join('\n');
-        },
+    // dead-for: the file's content is unreachable, whichever tool asks for it.
+    const mentions = (command) =>
+        kind === 'dead-for' && String(command || '').includes(norm(arg))
+            ? arg
+            : undefined;
+    const withoutUnreachable = (out) =>
+        kind !== 'dead-for'
+            ? out
+            : String(out || '')
+                  .split('\n')
+                  .filter((line) => norm(line.split(':')[0]) !== norm(arg))
+                  .join('\n');
+    return (handle) => {
+        const rc = handle.remoteCommands;
+        const remoteCommands = {
+            ...rc,
+            read: async (p, ...rest) => {
+                guard(p);
+                const out = await rc.read(p, ...rest);
+                if (kind === 'dies-after-reading' && norm(p) === norm(arg))
+                    state.premiseRead = true;
+                return out;
+            },
+            grep: async (...a) => {
+                guard();
+                return withoutUnreachable(await rc.grep(...a));
+            },
+            listDir: async (...a) => {
+                guard();
+                return rc.listDir(...a);
+            },
+            exec: async (command, ...rest) => {
+                guard(mentions(command));
+                return rc.exec(command, ...rest);
+            },
+        };
+        // A sandbox gone before the review fails the stage's own commands too
+        // (the call-graph build); one that dies later ran them while alive.
+        const run =
+            kind === 'dead'
+                ? async () => {
+                      throw new SandboxNotFoundError(
+                          'Sandbox is probably not running anymore',
+                      );
+                  }
+                : handle.run;
+        return { ...handle, remoteCommands, run };
     };
 }
 
@@ -269,38 +268,19 @@ function instrumentVerifier() {
     };
 }
 
-// ---------------------------------------------------------------- one review
-function buildPrompts(c) {
-    const {
-        GeneralistAgentProvider,
-    } = require('../../libs/code-review/infrastructure/agents/providers/generalist-agent.provider.ts');
-    const provider = new GeneralistAgentProvider({}, {}, {});
-    const input = {
-        organizationAndTeamData: {
-            organizationId: 'eval-org',
-            teamId: 'eval-team',
-        },
-        changedFiles: c.changedFiles,
-        // undefined selects the self-contained prompts (prompt-builder.ts buildSystemPrompt)
-        remoteCommands: c.sandbox === 'none' ? undefined : {},
-        prNumber: 1,
-        repositoryFullName: 'eval/repo',
-        languageResultPrompt: '',
-        memoryRules: [],
-        prTitle: c.prTitle || 'Review round',
-        prBody: c.prBody || '',
-        reviewMode: 'normal',
-        maxSteps: 16,
-        requestedCategories: ['bug', 'security', 'performance'],
-        baseBranch: 'main',
-        previousDecisions: c.previousDecisions,
-        // Production always passes the PR's commits (review-orchestrator).
-        commits: c.commits,
-    };
-    return {
-        input,
-        systemPrompt: provider.buildSystemPrompt(input),
-        userPrompt: provider.buildUserPrompt(input),
+// The repeat check's own verdict, read where the stage calls it: a check whose
+// model call failed posts what it had to judge (fail-open), which is not a
+// measurement of the repeat drop.
+let repeatChecks;
+function observeRepeatCheck() {
+    if (repeatChecks) return;
+    repeatChecks = new AsyncLocalStorage();
+    const mod = require('../../libs/code-review/infrastructure/agents/engine/repeat-check.ts');
+    const real = mod.checkRepeats;
+    mod.checkRepeats = async (...a) => {
+        const out = await real(...a);
+        repeatChecks.getStore()?.push(out);
+        return out;
     };
 }
 
@@ -315,240 +295,95 @@ const isMarkedUnverified = (f) =>
     f?.evidence?.status === 'unverified' ||
     f?.verification === 'unverified';
 
-// What base-code-review-agent.provider.ts hands the finder from the routed
-// slot (model-factory.ts): its reasoning effort and, on OpenRouter, the pinned
-// upstream. Without them the finder ran on the model's default reasoning,
-// whatever --byok-reasoning said.
-function finderModelParams() {
-    const s = byokSlot();
-    if (!s) return {};
-    const { getModelName } = require('../../libs/llm/byok-to-vercel.ts');
-    return {
-        reasoningEffort: s.reasoningEffort,
-        byokProvider: s.provider,
-        modelName: getModelName(s),
-        openrouterProviderOrder: s.openrouterProviderOrder,
-        openrouterAllowFallbacks: s.openrouterAllowFallbacks,
-    };
+// The org's model: the managed route, or with --byok-reasoning a stored BYOK
+// config carrying that effort, routed by production (evals/shared/model-route.js).
+let routeCache;
+function orgRoute() {
+    if (routeCache) return routeCache;
+    const { resolveRoute, evalPermissionService } = require('../shared/model-route');
+    const saved = process.env.RECALL_REASONING_EFFORT;
+    if (BYOK_REASONING) process.env.RECALL_REASONING_EFFORT = BYOK_REASONING;
+    else delete process.env.RECALL_REASONING_EFFORT;
+    try {
+        const route = resolveRoute({ provider: 'tier0', model: MODEL });
+        routeCache = { route, permissionService: evalPermissionService(route.storedConfig) };
+    } finally {
+        if (saved === undefined) delete process.env.RECALL_REASONING_EFFORT;
+        else process.env.RECALL_REASONING_EFFORT = saved;
+    }
+    return routeCache;
 }
 
-// The generalist finder + verifier, as the agent-review stage runs it.
-async function runFinder(c, counter, runAgentLoopViaCore, buildEvalModel) {
-    const { input, systemPrompt, userPrompt } = buildPrompts(c);
-    const out = await runAgentLoopViaCore(
-        {
-            ...finderModelParams(),
-            model: buildEvalModel({}),
-            systemPrompt,
-            userPrompt,
-            changedFiles: input.changedFiles,
-            prNumber: 1,
-            repositoryFullName: 'eval/repo',
-            baseBranch: 'main',
-            reviewMode: 'normal',
-            maxSteps: 16,
-            previousDecisions: c.previousDecisions,
-            agentName: `review-rounds:${c.id}`,
-        },
-        {
-            remoteCommands:
-                c.sandbox === 'none'
-                    ? undefined
-                    : sandbox(c.sandbox, c.repo, counter),
-            byokConfig: byokSlot() ?? undefined,
-            byokErrorReporter: undefined,
-        },
-    );
-    return {
-        steps: out.usage?.outputTokens > 0 ? out.steps : 0,
-        finishReason: out.finishReason,
-        suggestions: out.findings?.suggestions || [],
-        out,
-    };
-}
-
-let slot;
-function byokSlot() {
-    if (!BYOK_REASONING) return null;
-    if (slot) return slot;
-    const { TIER0 } = require('../shared/tier0-models');
-    const spec = TIER0[MODEL];
-    const key = spec?.keyEnvs.map((n) => process.env[n]).find(Boolean);
-    if (!key) throw new Error(`INFRA: --byok-reasoning needs a key for ${MODEL}`);
-    const { encrypt } = require('../../libs/common/utils/crypto.ts');
-    // A stored BYOK model: the key encrypted as the config keeps it.
-    slot = {
-        // A pinned OpenRouter route is a customer's OpenRouter slot.
-        provider: spec.openrouterProviderOrder ? 'open_router' : spec.provider,
-        apiKey: encrypt(key),
-        model: spec.doModel || MODEL,
-        baseURL: spec.baseURL,
-        reasoningEffort: BYOK_REASONING,
-        // An OpenRouter route stays on its pinned upstream.
-        ...(spec.openrouterProviderOrder
-            ? {
-                  openrouterProviderOrder: spec.openrouterProviderOrder,
-                  openrouterAllowFallbacks: false,
-              }
-            : {}),
-    };
-    return slot;
-}
-
-// The production Kody Rules agent (sharded rule judge), same entry point as
-// evals/kody-rules/real-agent.js, over this case's sandbox.
-async function runKodyRules(c, counter) {
-    const {
-        KodyRulesAgentProvider,
-    } = require('../../libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts');
-    const {
-        buildRepoLookup,
-    } = require('../../libs/code-review/infrastructure/agents/collaborators/repo-lookup.ts');
-    const provider = new KodyRulesAgentProvider(
-        { resolveTaskSlot: async () => byokSlot(), getBYOKConfig: async () => null },
-        {
-            runInSpan: async (_n, fn) =>
-                typeof fn === 'function' ? fn() : undefined,
-            runLLMInSpan: async ({ exec }) => exec([]),
-            startSpan: () => ({ end() {}, update() {} }),
-            recordAgentRunUsage: async () => {},
-        },
-    );
-    const remoteCommands = sandbox(c.sandbox, c.repo, counter);
-    const out = await provider.execute({
-        organizationAndTeamData: {
-            organizationId: 'eval-org',
-            teamId: 'eval-team',
-        },
-        changedFiles: c.changedFiles,
-        remoteCommands,
-        repoLookup: buildRepoLookup({ type: 'eval-replay', remoteCommands }),
-        prNumber: 1,
-        repositoryId: 'eval-repo',
-        repositoryFullName: 'eval/repo',
-        baseBranch: 'main',
-        reviewMode: 'normal',
-        maxSteps: 20,
-        prTitle: c.prTitle || 'Review round',
-        prBody: c.prBody || '',
-        previousDecisions: c.previousDecisions,
-        commits: c.commits,
-        kodyRules: c.kodyRules.map((r) => ({
-            ...r,
-            type: 'standard',
-            status: 'active',
-            scope: r.scope || 'file',
-        })),
-    });
-    assertCompleteRuleReview(out.warnings);
-    return {
-        steps: out.turnsUsed ?? 0,
-        finishReason: out.finishReason,
-        suggestions: out.suggestions || [],
-        out,
-    };
-}
+// A loop that produced nothing ran nothing (agent-provider.js agentRunFailure).
+const loopRan = (result) =>
+    !!result && (Number(result.steps) > 0 || Number(result.usage?.outputTokens) > 0);
 
 async function once(c, judgeKey) {
-    // The history reaches the agents the way production builds it: most
-    // recent first, capped at MAX_PR_DECISIONS (capDecisions). The repeat
-    // check reads the whole history, as agent-review.stage does (#2097).
-    let wholeHistory;
-    if (c.previousDecisions?.length) {
-        const {
-            capDecisions,
-        } = require('../../libs/code-review/application/use-cases/previousReviewDecisions/build-previous-review-decisions.use-case.ts');
-        const {
-            MAX_REPEAT_CHECK_DECISIONS,
-        } = require('../../libs/code-review/domain/contracts/pr-decision-store.contract.ts');
-        wholeHistory = capDecisions(c.previousDecisions, MAX_REPEAT_CHECK_DECISIONS);
-        c = { ...c, previousDecisions: capDecisions(c.previousDecisions) };
-    }
-    const {
-        runAgentLoopViaCore,
-    } = require('../../libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.ts');
-    const {
-        classifySeverity,
-    } = require('../../libs/code-review/infrastructure/agents/engine/classify-severity.ts');
-    const {
-        formatSuggestionContent,
-    } = require('../../libs/code-review/infrastructure/agents/engine/format-suggestion-content.ts');
-    const {
-        applyRevisionLinks,
-    } = require('../../libs/code-review/infrastructure/agents/engine/revision-link.ts');
-    const { buildEvalModel } = require('../shared/build-model');
+    const { reviewPullRequest } = require('../shared/review-stage');
+    const { prOf, teamOf, decisionsOf } = require('./pr-of-case');
+    observeRepeatCheck();
 
     const phase = currentPhase();
     phase.verify = false;
     phase.verdicts = [];
     const counter = { calls: 0, failed: 0 };
     const t0 = Date.now();
-    const out =
-        c.agent === 'kody-rules'
-            ? await runKodyRules(c, counter)
-            : await runFinder(c, counter, runAgentLoopViaCore, buildEvalModel);
+    const { route, permissionService } = orgRoute();
+    const checks = [];
+    // The PR through production's review (evals/shared/review-stage.js):
+    // the changed files, the earlier decisions loaded from the PR's decision
+    // store, both agents, the anchoring, the repeat drop, dedup, severity, the
+    // formatter, and what the stage hands to posting.
+    const review = await repeatChecks.run(checks, () =>
+        reviewPullRequest({
+            pr: prOf(c),
+            team: teamOf(c),
+            route,
+            permissionService,
+            decisions: decisionsOf(c),
+            sandbox: c.sandbox === 'none' ? 'none' : 'alive',
+            // `alive` only counts the calls: every command reaches the sandbox.
+            wrapSandbox:
+                c.sandbox === 'none'
+                    ? undefined
+                    : dyingSandbox(c.sandbox || 'alive', counter),
+        }),
+    );
+    if (review.skipped) {
+        throw new Error(`INFRA: production skipped the review: ${review.skipped}`);
+    }
     // A provider failure degrades to "no findings" inside the engine — not a measurement.
-    if (!(out.steps > 0)) {
+    if (!review.loops.length || !review.loops.some((l) => loopRan(l.result))) {
+        const r = review.loops[0]?.result;
         throw new Error(
-            `INFRA: agent did not run (finishReason=${out.finishReason}, steps=${out.steps})`,
+            `INFRA: the finder did not run (finishReason=${r?.finishReason}, steps=${r?.steps ?? 0})`,
         );
     }
-    // Same step as agent-review.stage after dedup: what an earlier comment
-    // already raised is not posted (#2097).
-    const {
-        checkRepeats,
-    } = require('../../libs/code-review/infrastructure/agents/engine/repeat-check.ts');
-    const repeatCheck = await checkRepeats(out.suggestions, wholeHistory, {
-        organizationId: 'eval-org',
-        byokConfig: byokSlot() ?? undefined,
-        ruleTitleByUuid: new Map(
-            (c.kodyRules || []).map((r) => [r.uuid, r.title]),
-        ),
-    });
-    // A failed check posts what it had to judge (fail-open) — not a measurement.
-    if (repeatCheck.model === 'failed') {
+    if ((c.kodyRules || []).length) {
+        if (!review.ruleReviews.length) {
+            throw new Error('INFRA: the Kody Rules agent did not run');
+        }
+        for (const out of review.ruleReviews) assertCompleteRuleReview(out.warnings);
+    }
+    if (checks.some((r) => r.model === 'failed')) {
         throw new Error('INFRA: the repeat check call failed');
     }
-    // Then the stage's per-rule merge (engine/kody-rules-merge.ts): the
-    // occurrences of one rule that survive become one comment, the others
-    // listed under "Also found in".
-    const {
-        mergeKodyRuleFindings,
-    } = require('../../libs/code-review/infrastructure/agents/engine/kody-rules-merge.ts');
-    const kept = mergeKodyRuleFindings(repeatCheck.kept);
-    const severity = await classifySeverity(kept);
-    const formatted = await formatSuggestionContent(
-        kept.map((s) => ({
-            suggestionContent: s.suggestionContent,
-            existingCode: s.existingCode,
-            improvedCode: s.improvedCode,
-            relevantFile: s.relevantFile,
-            language: s.language,
-        })),
-    );
-    // Same post-formatter step as agent-review.stage: the revision link line.
-    const posted = kept.map((s, i) => ({
-        revisesSuggestionId: s.revisesSuggestionId,
-        suggestionContent:
-            formatted.get(i)?.suggestionContent || s.suggestionContent,
-    }));
-    applyRevisionLinks(posted, wholeHistory);
-    // A location under "Also found in" is posted too, with the same text: it
-    // can answer a claim at that location, and a repeat listed there is a
-    // repeat posted.
-    const delivered = kept.flatMap((s, i) => {
-        const others = s.kodyRuleOtherLocations || [];
-        const text = others.length
-            ? `${posted[i].suggestionContent}\n\n**Also found in:**\n${others.map((loc) => `- \`${loc}\``).join('\n')}`
-            : posted[i].suggestionContent;
+
+    // What reaches the PR: each comment the stage hands to posting, at its
+    // place and at every place listed under "Also found in" (same text: it can
+    // answer a claim there, and a repeat listed there is a repeat posted).
+    const delivered = review.shipped.flatMap((s, i) => {
+        const others = [...new Set([...(s.alsoFoundIn || []), ...(s.kodyRuleOtherLocations || [])])];
         const base = {
             sourceIndex: i,
-            severity: severity.get(i) ?? s.severity,
-            text,
-            linkedById: !!posted[i].revisesSuggestionId,
-            revisesSuggestionId: posted[i].revisesSuggestionId,
+            severity: s.severity,
+            text: s.suggestionContent,
+            linkedById: !!s.revisesSuggestionId,
+            revisesSuggestionId: s.revisesSuggestionId,
             label: s.label,
             brokenKodyRulesIds: s.brokenKodyRulesIds,
+            existingCode: s.existingCode,
+            lineEnd: s.relevantLinesEnd,
             marked: isMarkedUnverified(s),
         };
         return [
@@ -573,14 +408,23 @@ async function once(c, judgeKey) {
         let match = null;
         for (const d of delivered) {
             if (taken.has(d)) continue;
-            // `at` pins a claim to a region when two claims read alike.
+            // `at` pins a claim to a region when two claims read alike. The
+            // two lines of slack around it never reach into another claim's
+            // region: a comment on the next function answers that one.
+            const inside = (cl) =>
+                cl.at &&
+                d.file === cl.at.file &&
+                d.line >= cl.at.lines[0] &&
+                d.line <= cl.at.lines[1];
             if (
                 claim.at &&
                 (d.file !== claim.at.file ||
                     !(
                         d.line >= claim.at.lines[0] - 2 &&
                         d.line <= claim.at.lines[1] + 2
-                    ))
+                    ) ||
+                    (!inside(claim) &&
+                        c.claims.some((other) => other !== claim && inside(other))))
             )
                 continue;
             if (await matchComment(judgeKey, claim.golden, d.text)) {
@@ -612,6 +456,9 @@ async function once(c, judgeKey) {
             pass,
         });
     }
+    const { PriorityStatus } = require('../../libs/platformData/domain/pullRequests/enums/priorityStatus.enum.ts');
+    const repeats = review.discarded.filter((s) => s.priorityStatus === PriorityStatus.DISCARDED_BY_REPEAT);
+    const loop = review.loops[0]?.result;
     return {
         case: c.id,
         family: c.family,
@@ -623,33 +470,45 @@ async function once(c, judgeKey) {
             (d) => !d.alsoFoundIn && INDEX_REF.test(d.text),
         ).length,
         verificationEvidence: phase.verdicts,
-        // What the repeat check kept off the PR, and the bugs it linked.
-        alreadyPosted: repeatCheck.repeats.map((r) => ({
-            file: r.finding.relevantFile,
-            line: r.finding.relevantLinesStart,
-            label: r.finding.label,
-            earlierId: r.earlier.suggestionId,
-            earlierOutcome: r.earlier.outcome,
-            // The finder's own claim that it revises that comment, if any.
-            revisesSuggestionId: r.finding.revisesSuggestionId ?? null,
-            by: r.by,
+        // What the repeat drop kept off the PR.
+        alreadyPosted: repeats.map((r) => ({
+            file: r.relevantFile,
+            line: r.relevantLinesStart,
+            label: r.label,
+            revisesSuggestionId: r.revisesSuggestionId ?? null,
         })),
-        repeatCheck: { model: repeatCheck.model },
+        repeatCheck: { model: checks.map((r) => r.model).join(',') || null },
+        discarded: review.discarded.length,
         sandboxCalls: counter.calls,
         sandboxFailed: counter.failed,
-        anomalies: out.out.anomalies,
-        warnings: (out.out.warnings || []).length,
-        verification: out.out.verification && {
-            before: out.out.verification.beforeCount,
-            after: out.out.verification.afterCount,
+        anomalies: loop?.anomalies,
+        warnings: (loop?.warnings || []).length,
+        verification: loop?.verification && {
+            before: loop.verification.beforeCount,
+            after: loop.verification.afterCount,
         },
-        delivered: delivered.map(({ text, ...rest }) => ({
-            ...rest,
-            text,
-        })),
+        delivered,
+        // What posting saves, for a later round's decision store (lifecycle.js).
+        posted: {
+            onFiles: review.shippedOnFiles.map(postedFields),
+            onPR: review.shippedOnPR.map(postedFields),
+        },
         claims,
     };
 }
+
+// The fields of a posted suggestion its decision record is read from
+// (pr-decision-store.service.ts toRecord / toRecordFromPrLevel).
+const postedFields = (s) => ({
+    relevantFile: s.relevantFile,
+    relevantLinesStart: s.relevantLinesStart,
+    relevantLinesEnd: s.relevantLinesEnd,
+    suggestionContent: s.suggestionContent,
+    fullExplanation: s.fullExplanation,
+    label: s.label,
+    brokenKodyRulesIds: s.brokenKodyRulesIds,
+    existingCode: s.existingCode,
+});
 
 // ---------------------------------------------------------------- scoring
 // One rate per problem, over every (rep × claim) with that expectation.

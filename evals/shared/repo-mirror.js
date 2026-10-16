@@ -99,9 +99,19 @@ async function mirrorFor({ repo, prNumber, headSha, baseRef, baseSha }) {
 /**
  * A repository written for an eval, as a mirror: `base` committed on the base
  * branch, `head` on the PR's branch on top of it (a file `head` maps to null is
- * deleted there). Returns the URL, the branches and a cleanup.
+ * deleted there). With `baseFiles` instead of `base`, `head` is the whole tree
+ * at the PR's head and `baseFiles` the whole tree before it: a file only the
+ * base holds is deleted on the PR's branch. Returns the URL, the branches and a
+ * cleanup.
  */
-async function inlineMirror(head, { base = {}, branch = 'feature', baseBranch = 'main' } = {}) {
+async function inlineMirror(fullOrOverlay, { base, baseFiles, branch = 'feature', baseBranch = 'main' } = {}) {
+    let head = fullOrOverlay;
+    if (baseFiles) {
+        head = { ...fullOrOverlay };
+        for (const file of Object.keys(baseFiles)) if (!(file in head)) head[file] = null;
+        base = baseFiles;
+    }
+    base = base || {};
     const work = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-inline-mirror-'));
     const author = { GIT_AUTHOR_NAME: 'dev', GIT_AUTHOR_EMAIL: 'dev@example.com', GIT_COMMITTER_NAME: 'dev', GIT_COMMITTER_EMAIL: 'dev@example.com' };
     const write = (files) => {
@@ -186,4 +196,37 @@ async function contentAt(cloneUrl, ref, filePath) {
     }
 }
 
-module.exports = { mirrorFor, inlineMirror, filesBetween, contentAt, MIRROR_ROOT: ROOT };
+/**
+ * The pull request's changed files as the platform's API lists them for a
+ * repository written for an eval (the GitHub adapter's shape: filename, status,
+ * additions, deletions, changes, and `patch`, the unified diff of the file
+ * without its header lines), read from the mirror between `base` and `head`.
+ */
+async function pullRequestFiles(cloneUrl, base, head) {
+    const dir = cloneUrl.replace(/^file:\/\//, '');
+    const STATUS = { A: 'added', M: 'modified', D: 'removed', R: 'renamed' };
+    const { stdout: names } = await git(dir, ['diff', '--name-status', '--no-renames', `${base}..${head}`]);
+    const { stdout: counts } = await git(dir, ['diff', '--numstat', '--no-renames', `${base}..${head}`]);
+    const numstat = new Map(
+        counts
+            .split('\n')
+            .filter(Boolean)
+            .map((l) => {
+                const [add, del, file] = l.split('\t');
+                return [file, { additions: Number(add) || 0, deletions: Number(del) || 0 }];
+            }),
+    );
+    const files = [];
+    for (const line of names.split('\n').filter(Boolean)) {
+        const [code, filename] = line.split('\t');
+        // eslint-disable-next-line no-await-in-loop
+        const { stdout: diff } = await git(dir, ['diff', '-U3', '--no-renames', `${base}..${head}`, '--', filename]);
+        const at = diff.indexOf('\n@@');
+        const patch = at >= 0 ? diff.slice(at + 1).replace(/\n$/, '') : '';
+        const n = numstat.get(filename) || { additions: 0, deletions: 0 };
+        files.push({ filename, status: STATUS[code[0]] || 'modified', additions: n.additions, deletions: n.deletions, changes: n.additions + n.deletions, patch });
+    }
+    return files;
+}
+
+module.exports = { mirrorFor, inlineMirror, filesBetween, pullRequestFiles, contentAt, MIRROR_ROOT: ROOT };
