@@ -4,10 +4,10 @@
 // by harvest-github-cases.js and materialize-cases.js so both read the same
 // truth.
 const PATTERNS = {
-    'no-direct-process-env': { rx: /\bprocess\.env\./, title: 'No direct process.env access', rule: 'Application code must not read process.env directly. Resolve configuration through the typed config/env module so values are validated and mockable.', path: '**/*.{ts,tsx}' },
-    'no-console': { rx: /\bconsole\.(log|warn|error|debug)\s*\(/, title: 'No console.* in app code', rule: 'Never use console.log/console.error/console.warn/console.debug in application code; use the structured logger.', path: '**/*.{ts,tsx}' },
-    'no-generic-error': { rx: /\bthrow new Error\(/, title: 'No generic Error — throw a typed error', rule: 'Do not `throw new Error(...)` with the generic Error class. Throw a domain-specific error type so callers can discriminate.', path: '**/*.{ts,tsx}' },
-    'no-any-type': { rx: /(:\s*any\b|\bas any\b)/, title: 'No `any` type', rule: 'Do not use the TypeScript `any` type (annotation or `as any` cast). Use a concrete type or `unknown` with narrowing.', path: '**/*.{ts,tsx}' },
+    'no-direct-process-env': { rx: /\bprocess\.env\./, title: 'No direct process.env access', rule: 'Application code must not read process.env directly. Resolve configuration through the typed config/env module so values are validated and mockable.', path: '**/*.{ts,tsx}', examples: [{ snippet: 'const url = process.env.DATABASE_URL;', isCorrect: false }, { snippet: "const url = config.get('databaseUrl');", isCorrect: true }] },
+    'no-console': { rx: /\bconsole\.(log|warn|error|debug)\s*\(/, title: 'No console.* in app code', rule: 'Never use console.log/console.error/console.warn/console.debug in application code; use the structured logger.', path: '**/*.{ts,tsx}', examples: [{ snippet: "console.log('processing', item.id);", isCorrect: false }, { snippet: "logger.info('processing', { id: item.id });", isCorrect: true }] },
+    'no-generic-error': { rx: /\bthrow new Error\(/, title: 'No generic Error — throw a typed error', rule: 'Do not `throw new Error(...)` with the generic Error class. Throw a domain-specific error type so callers can discriminate.', path: '**/*.{ts,tsx}', examples: [{ snippet: "throw new Error('invalid state');", isCorrect: false }, { snippet: "throw new InvalidStateError('invalid state');", isCorrect: true }] },
+    'no-any-type': { rx: /(:\s*any\b|\bas any\b)/, title: 'No `any` type', rule: 'Do not use the TypeScript `any` type (annotation or `as any` cast). Use a concrete type or `unknown` with narrowing.', path: '**/*.{ts,tsx}', examples: [{ snippet: 'const data: any = await load();', isCorrect: false }, { snippet: 'const data: unknown = await load();', isCorrect: true }] },
 };
 
 // The files a case's ground truth covers: TS/TSX source with a patch, not tests

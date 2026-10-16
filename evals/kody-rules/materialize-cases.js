@@ -59,9 +59,15 @@ function fetchPr(repositoryFullName, number) {
     };
 }
 
+// A case whose rule has no pattern here is a negative control: the rule must
+// not fire anywhere in the PR (polyglot-cases: a Ruby rule over JS, CSS and
+// templates), so every file of the PR is clean.
 function groundTruth(pr, ruleUuid) {
     const spec = PATTERNS[ruleUuid];
-    if (!spec) throw new Error(`no pattern for rule ${ruleUuid}`);
+    // A Ruby rule does apply to Ruby sources, whose hits take a judgment this
+    // corpus has no answer for: they are not scored. Templates (.erb) are: the
+    // incident's hits there were JavaScript.
+    if (!spec) return { gt: {}, scoped: pr.files.filter((f) => f.patch && !/\.(rb|rake|gemspec|ru)$/.test(f.filename)).map((f) => f.filename) };
     const scoped = pr.files.filter(inScope);
     const gt = {};
     for (const f of scoped) {
