@@ -552,11 +552,18 @@ function sandboxCommands(repoDir) {
 // handle shape as prepareRepo's; there is no commit to name.
 function writeInlineRepo(files) {
     const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'eval-inline-repo-'));
-    for (const [file, content] of Object.entries(files || {})) {
-        const target = path.join(dir, file);
-        if (!target.startsWith(dir + path.sep)) throw new Error(`repoFiles path escapes the repository: ${file}`);
-        fs.mkdirSync(path.dirname(target), { recursive: true });
-        fs.writeFileSync(target, String(content));
+    // The caller only cleans a handle it got back: a throw here removes the
+    // directory itself.
+    try {
+        for (const [file, content] of Object.entries(files || {})) {
+            const target = path.join(dir, file);
+            if (!target.startsWith(dir + path.sep)) throw new Error(`repoFiles path escapes the repository: ${file}`);
+            fs.mkdirSync(path.dirname(target), { recursive: true });
+            fs.writeFileSync(target, String(content));
+        }
+    } catch (error) {
+        fs.rmSync(dir, { recursive: true, force: true });
+        throw error;
     }
     return { dir, sha: null, cleanup: async () => fs.rmSync(dir, { recursive: true, force: true }) };
 }
