@@ -15,6 +15,8 @@
 // Writes evals/parse/payloads/<model>/<caseId>.json as { ends: [{ submitResult?,
 // text }] }. Spends real tokens: one full finder run per case. CAPTURE_DEBUG=1
 // prints the tools each response called.
+//
+// Exit: 0 every case recorded, 2 one or more not (the rest are still written).
 const fs = require('fs');
 const path = require('path');
 
@@ -92,13 +94,13 @@ async function main() {
     const provider = new Provider({ config: { label: `parse-capture-${model}`, provider: 'tier0', model } });
     const outDir = path.join(__dirname, 'payloads', model.replace(/[^\w.@-]+/g, '-'));
     fs.mkdirSync(outDir, { recursive: true });
-    let failed = 0;
+    const failed = [];
     for (const caseId of cases) {
         ends = [];
         const vars = loadCase(caseId);
         const result = await provider.callApi(JSON.stringify(vars), { vars }, {});
         if (!ends.length) {
-            failed += 1;
+            failed.push(caseId);
             console.error(`${caseId}: no finder run ended${result.error ? ` (${String(result.error).slice(0, 160)})` : ''}`);
             continue;
         }
@@ -108,7 +110,13 @@ async function main() {
         );
         console.log(`${caseId}: recorded ${ends.length} run end(s) (${ends.map((e) => (e.submitResult === undefined ? 'text' : typeof e.submitResult)).join(', ')})`);
     }
-    return failed === cases.length ? 2 : 0;
+    // build-cases.js reads whatever payloads exist, so a case left unrecorded
+    // would silently drop out of the eval: any one fails the capture.
+    if (failed.length) {
+        console.error(`not captured: ${failed.length} of ${cases.length} cases (the others are written); rerun with --cases=${failed.join(',')}`);
+        return 2;
+    }
+    return 0;
 }
 
 main().then((code) => process.exit(code)).catch((error) => {
