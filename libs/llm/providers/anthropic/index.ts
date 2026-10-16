@@ -142,7 +142,11 @@ export const anthropicModule: ProviderModule = {
             // Kody-Rules failure). But the ALWAYS-thinking ones (Kimi k2.7-code/k3,
             // GLM-5.3) expose NO disable and would REJECT the field — for those,
             // omitting IS the only "off". Decide per model via the shared traits.
-            if ((cfg.provider as string) === 'anthropic_compatible') {
+            // A real Claude id proxied here keeps its own rule (below).
+            if (
+                (cfg.provider as string) === 'anthropic_compatible' &&
+                !isClaudeId(cfg.model)
+            ) {
                 return resolveCompatibleReasoningTraits(cfg.model)
                     .canDisableThinking
                     ? { anthropic: { thinking: { type: 'disabled' } } }

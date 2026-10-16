@@ -237,6 +237,21 @@ describe('anthropicModule — a Claude id proxied over anthropic_compatible (#21
         ).toEqual({ kind: 'adjustable' });
     });
 
+    it('turns reasoning off the way native Claude does', () => {
+        for (const model of [
+            'claude-opus-5-5',
+            'claude-fable-5',
+            'claude-sonnet-4-5',
+            'claude-opus-5',
+        ]) {
+            expect(
+                anthropicModule.reasoning!(cfg(model), 'none'),
+            ).toEqual(
+                anthropicModule.reasoning!(cfg(model, 'anthropic'), 'none'),
+            );
+        }
+    });
+
     it('leaves non-Claude compatible ids on the compatible table', () => {
         expect(anthropicModule.reasoningTraits!(cfg('kimi-k2.6'))).toEqual(
             resolveCompatibleReasoningTraits('kimi-k2.6'),
