@@ -7,7 +7,8 @@ rodadas de discussao nas divergencias.
 Saidas (nesta pasta):
   golden.json            TPs (o gabarito): o que um revisor deveria apontar; subclass "nit" marca os triviais
   fps-conhecidos.json    FPs conhecidos (subclass "hallucination" quando o fato alegado e falso)
-  revisao-humana.json    sem consenso depois das tres rodadas; decidir na pagina de revisao
+  revisao-humana.json    sem consenso depois das tres rodadas e ainda sem decisao humana
+                         (as decisoes de Junior e Gabriel ficam em trabalho/revisao-humana-decisoes.json)
   sugestoes.json         cada sugestao do finder (modelo, PR, id) -> problema
 
   python3 evals/dedup/gold-v3/montar.py [<dir de trabalho>]   (padrao: trabalho/, os insumos desta rodada)
@@ -22,6 +23,7 @@ A = json.load(open(f'{W}/agrupamento.json'))
 O = json.load(open(f'{W}/opus.json'))
 AS = json.load(open(f'{W}/astra_all.json'))
 D = json.load(open(f'{W}/debate/estado.json'))
+HUM = json.load(open(f'{W}/revisao-humana-decisoes.json')) if os.path.exists(f'{W}/revisao-humana-decisoes.json') else {}
 G = {(c, g['gid']): g for c, p in P.items() for g in p['grupos']}
 # Goldens anexados ao PR errado no gabarito da Martian: descrevem codigo que o PR nao toca.
 GOLDEN_DE_OUTRO_PR = {'optimize-spans-buffer-insertion-with-eviction-during-insert-sentry'}
@@ -41,6 +43,12 @@ for cid, L in A.items():
             if d.get('fechado'):
                 cls, sc, status = ou['class'], sub(ou['subclass']), 'agreed_after_debate'
                 sevo, seva = sub(ou['severity']), sub(au['severity'])
+            elif k in HUM:
+                # Sem consenso entre os modelos; decidido por Junior e Gabriel.
+                cls, sc, status = HUM[k]['class'], HUM[k]['subclass'], 'human_decided'
+                sevo, seva = sub(ou['severity']), sub(au['severity'])
+                reg['humanos'] = {p: HUM[k].get(p) for p in ('junior', 'gabriel')}
+                if HUM[k].get('nota'): reg['humanos']['nota'] = HUM[k]['nota']
             else:
                 cls, sc, status = None, None, 'human_review'
                 sevo, seva = sub(ou['severity']), sub(au['severity'])

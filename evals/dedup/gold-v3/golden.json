@@ -107,6 +107,99 @@
     "subclass_astra_inicial": null
    },
    {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#07",
+    "humanos": {
+     "junior": {
+      "voto": "TP-nit",
+      "em": "2026-10-16T00:37:53.966Z"
+     },
+     "gabriel": {
+      "voto": "TP-nit",
+      "em": "2026-10-16T11:58:26.294Z"
+     }
+    },
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": null,
+      "texto": "concatenatedRSToASN1DER (AuthzClientCryptoProvider.java:103-122) mirrors BCECDSACryptoProvider.java:28-37, and its caller ECDSASignatureVerifierContext.verify catches Exception and throws VerificationException, so a malformed length is still rejected as a failed verification."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:104-110 copies exactly signLength bytes without checking the actual input length, causing short inputs to throw and oversized inputs to lose their suffix silently. core/src/main/java/org/keycloak/crypto/ECDSASignatureVerifierContext.java:29-31 passes signatures directly into this conversion, so oversized malformed signatures are normalized instead of rejected."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": null,
+      "texto": "AuthzClientCryptoProvider.java:104-110 is byte-for-byte the conversion every existing provider uses: BCECDSACryptoProvider.java:28-33 and ElytronECDSACryptoProvider.java:37-42 both do `System.arraycopy(signature, 0, r, 1, len); System.arraycopy(signature, len, s, 1, len);` without a length check. Short input throws inside ECDSASignatureVerifierContext.verify's `catch (Exception e) { throw new VerificationException(...) }`. Truncation of oversized input is the established cross-provider contract, not something this PR introduces."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "Retain TP (bug) for oversized inputs. AuthzClientCryptoProvider.java:109-110 discards any suffix beyond signLength, so appending bytes to a valid signature produces identical DER and can still pass ECDSASignatureVerifierContext.verify. Its exception handler only addresses inputs that throw; oversized inputs do not. Existing providers sharing this defect does not exempt this newly added implementation: the PR adds executable code rather than merely moving or reindenting existing code."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "Partly agree: this is new code, not moved, so it is the PR's code. But it reproduces the established provider contract exactly (BCECDSACryptoProvider.java:28-33, ElytronECDSACryptoProvider.java:37-42 `System.arraycopy(signature, len, s, 1, len)` with no length check), and short input is turned into VerificationException by ECDSASignatureVerifierContext's catch. Trailing-byte malleability needs an already-valid signature and grants nothing; consistency gap with no exploit -> TP nit, moving off FP."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "Retain TP (bug): AuthzClientCryptoProvider.java:109-110 silently discards bytes beyond signLength, producing identical DER for a valid signature and that signature with an appended suffix. ECDSASignatureVerifierContext.verify therefore can accept the oversized malformed signature; its exception handler only rejects inputs that throw. Short inputs are safely wrapped, and the interface does not explicitly promise IOException for every malformed input, so those arguments do not establish a defect. However, accepting malformed signatures is observable verification behavior, not a nit, and matching older providers does not exempt this newly added implementation."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "Keep TP nit, the position I already moved to. The code is new, but it copies the conversion every existing provider uses: BCECDSACryptoProvider.java:28-33 and ElytronECDSACryptoProvider.java:37-42 both do `System.arraycopy(signature, len, s, 1, len)` with no length check. Short input becomes VerificationException in ECDSASignatureVerifierContext's catch. Trailing-byte acceptance needs an already-valid signature over the same content and grants no access or forgery. It is a strictness gap consistent with the codebase, not an exploitable verification defect: nit."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "Retain TP (bug): AuthzClientCryptoProvider.java:109–110 ignores bytes beyond signLength, so a valid signature with an appended suffix produces identical DER and can pass ECDSASignatureVerifierContext.verify. Short inputs are wrapped in VerificationException, and the interface does not explicitly guarantee IOException for every malformed input. Nevertheless, accepting an oversized malformed signature changes verification behavior; a demonstrated access bypass is not required for this to be a reportable correctness defect. The diff adds this implementation, so matching defects in existing providers does not make it pre-existing or a nit."
+     }
+    ],
+    "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+    "comment": "Claims a wrong-length JOSE signature causes an unchecked exception in concatenatedRSToASN1DER; verifiers catch it and report verification failure, as with the existing providers.",
+    "commentOpus": "Claims a wrong-length JOSE signature causes an unchecked exception in concatenatedRSToASN1DER; verifiers catch it and report verification failure, as with the existing providers.",
+    "class": "TP",
+    "subclass": "nit",
+    "status": "human_decided",
+    "severity": "medium",
+    "category": null,
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "muse-spark-1.3": [
+      "S4",
+      "S9"
+     ]
+    },
+    "reason_opus": "concatenatedRSToASN1DER (AuthzClientCryptoProvider.java:103-122) mirrors BCECDSACryptoProvider.java:28-37, and its caller ECDSASignatureVerifierContext.verify catches Exception and throws VerificationException, so a malformed length is still rejected as a failed verification.",
+    "reason_astra": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:104-110 copies exactly signLength bytes without checking the actual input length, causing short inputs to throw and oversized inputs to lose their suffix silently. core/src/main/java/org/keycloak/crypto/ECDSASignatureVerifierContext.java:29-31 passes signatures directly into this conversion, so oversized malformed signatures are normalized instead of rejected.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null
+   },
+   {
     "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#10",
     "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
     "comment": "The ES384 and ES512 tests sign with the same default P-256 key, so the converter is never tested with real P-384 or P-521 signatures.",
@@ -1404,6 +1497,98 @@
     },
     "reason_opus": "updateCalendarAttendees -> updateAllCalendarEvents wraps its work in try/catch and CalendarManager.updateEvent catches calendar errors and returns success:false (CalendarManager.ts ~336), so calendar failures do not propagate to the handler as claimed.",
     "reason_astra": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:92 commits attendees before the unguarded calendar call at line 165. Calendar initialization can reject through packages/core/CalendarManager.ts:310, and EventManager.ts:920 returns Promise.all without awaiting it inside its catch, allowing rejection to escape, skip emails, and leave retries rejected by addGuests.handler.ts:80.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#10",
+    "humanos": {
+     "junior": {
+      "voto": "TP",
+      "em": "2026-10-16T00:39:59.325Z"
+     },
+     "gabriel": {
+      "voto": "TP",
+      "em": "2026-10-16T10:58:25.384Z"
+     }
+    },
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": null,
+      "texto": "addGuests.handler.ts:52-56 explicitly authorizes isAttendee alongside organizer and team admins; letting attendees add guests is the intended feature behaviour, not a defect."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:52 grants attendee permission solely through an email match, without checking emailVerified. packages/trpc/server/middlewares/sessionMiddleware.ts:209 requires only a user and session, and packages/features/auth/lib/next-auth-options.ts:669 permits credentials sign-in without email verification, leaving the reported identity-verification gap reachable."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": null,
+      "texto": "Attendee access is the feature: `const isAttendee = !!booking.attendees.find((attendee) => attendee.email === user.email);` and `if (!isTeamAdminOrOwner && !isOrganizer && !isAttendee) throw FORBIDDEN` (addGuests.handler.ts:52-56). The comment's complaint is that attendees can add guests at all, which is intended. The unverified-email angle is a property of the auth system (sessions for unverified accounts), pre-existing and applying to every email-keyed check, not something this PR introduces."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "I retain TP: the new addGuests.handler.ts:52–56 authorizes an attendee solely by email equality, without checking emailVerified. Signup can create unverified accounts, credentials authentication accepts them, and authedProcedure requires only an authenticated session. This lets someone register an otherwise unregistered attendee address and gain permission to modify that attendee’s bookings. Although the authentication behavior predates this PR, the vulnerable authorization check and guest-adding operation are newly introduced; intended attendee access does not resolve the identity-verification gap."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": null,
+      "texto": "An email-equality identity model for attendees is the established rule in this codebase, not something this PR adds. The bookings list already grants attendees access by `attendees: { some: { email: user.email } }` (bookings/get.handler.ts:261-263). The new check `booking.attendees.find((attendee) => attendee.email === user.email)` (addGuests.handler.ts:52) follows that same pattern. Registering an unverified account under someone else's email affects every attendee-keyed path, and the weakness lives in the pre-existing auth and verification policy. The comment's main ask, that attendees should not add guests at all, contradicts the feature's explicit design (:52-56)."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The verification gap remains real: the newly added addGuests.handler.ts:52–56 grants mutation access through email equality without checking emailVerified. Signup permits unverified accounts, and credentials authentication plus authedProcedure allow their sessions. Someone registering an unclaimed attendee address can therefore modify that attendee’s bookings and trigger guest emails. The existing bookings-list check demonstrates the same weakness elsewhere; it does not make this newly introduced mutation pre-existing. Intended attendee access does not establish that the caller owns the attendee’s email address."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": null,
+      "texto": "Keeping FP. The comment's ask, that attendees should not add guests, contradicts the explicit design: `if (!isTeamAdminOrOwner && !isOrganizer && !isAttendee) throw FORBIDDEN` (addGuests.handler.ts:52-56). Email-equality attendee identity is the codebase's established rule (`attendees: { some: { email: user.email } }`, bookings/get.handler.ts:261-263). Sessions for unverified accounts come from pre-existing auth policy, not this PR. Leaving it to human review."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "I retain TP for the email-verification gap. The newly introduced addGuests.handler.ts:52–56 authorizes mutations solely through attendee-email equality, while selfHostedHandler.ts permits creating an unverified account and credentials authentication plus authedProcedure allow it access. Someone registering an unregistered attendee address can therefore add guests to that attendee’s bookings and trigger invitation emails without proving ownership of the address. Intended attendee access and similar pre-existing checks elsewhere do not make this new vulnerable mutation pre-existing."
+     }
+    ],
+    "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+    "comment": "Claims any attendee can add guests and trigger invites; this is the deliberate permission model of the new feature.",
+    "commentOpus": "Claims any attendee can add guests and trigger invites; this is the deliberate permission model of the new feature.",
+    "class": "TP",
+    "subclass": null,
+    "status": "human_decided",
+    "severity": "high",
+    "category": null,
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5": [
+      "S2"
+     ]
+    },
+    "reason_opus": "addGuests.handler.ts:52-56 explicitly authorizes isAttendee alongside organizer and team admins; letting attendees add guests is the intended feature behaviour, not a defect.",
+    "reason_astra": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:52 grants attendee permission solely through an email match, without checking emailVerified. packages/trpc/server/middlewares/sessionMiddleware.ts:209 requires only a user and session, and packages/features/auth/lib/next-auth-options.ts:669 permits credentials sign-in without email verification, leaving the reported identity-verification gap reachable.",
     "class_opus_inicial": "FP",
     "subclass_opus_inicial": null,
     "class_astra_inicial": "TP",
@@ -2796,6 +2981,101 @@
     "reason_astra": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:225-232 only records cancellation locally, while scheduleEmailReminders.ts:44-64 attempts cancellation without enforcing SendGrid's deadline. The fifteen-minute schedule at .github/workflows/cron-scheduleEmailReminders.yml:8 can delay an otherwise timely cancellation past the provider's [ten-minute cutoff](https://www.twilio.com/docs/sendgrid/api-reference/cancel-scheduled-sends/cancel-or-pause-a-scheduled-send).",
     "class_opus_inicial": "TP",
     "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#06",
+    "humanos": {
+     "junior": {
+      "voto": "TP-nit",
+      "em": "2026-10-16T00:55:35.491Z"
+     },
+     "gabriel": {
+      "voto": "TP-nit",
+      "em": "2026-10-16T11:07:00.080Z"
+     }
+    },
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "scheduleEmailReminders.ts:55-63 awaits client.request serially per reminder in an hourly cron over an unbounded findMany; real but only a cron latency micro-optimisation."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:44-51 fetches all eligible cancellations without a batch limit, and lines 56-64 await each network request serially. Bulk cancellations therefore accumulate network latency before the worker reaches email scheduling at line 80, creating a meaningful backlog and timeout risk."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "The query is not unbounded in practice: scheduleEmailReminders.ts:44-50 selects only `cancelled: true` rows with `scheduledDate: { lte: dayjs().add(1, \"hour\") }`, i.e. cancellations due within the next hour, and the cron runs every 15 minutes (.github/workflows/cron-scheduleEmailReminders.yml:8). Serial `await client.request(...)` (:56-64) over that small window is latency tidying in a background job, not a meaningful performance defect."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The 15-minute cron frequency and one-hour eligibility window do not bound the number of matching reminders. The new loop awaits every SendGrid cancellation serially before reaching email scheduling, so bulk cancellations can materially delay both operations. This remains a meaningful performance issue, not merely a micro-optimisation."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "scheduleEmailReminders.ts:44-50 limits the set to `cancelled: true` with `scheduledDate lte now+1h`, and the cron runs every 15 minutes, so each run processes only cancellations falling due in that window. Serial `await client.request(...)` (:56-64) adds latency to a background job with no user waiting; parallelising is an optimisation, not a defect: nit."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The PR adds an uncapped cancellation query and serially awaits every SendGrid request before reaching email scheduling. The cron runs every 15 minutes, but neither that frequency nor the scheduledDate filter bounds the number of matching reminders. Cancellation is time-sensitive: a sufficiently large batch can delay later cancellations past their scheduled sends and hold up new reminder scheduling. This is a meaningful performance defect under bulk cancellation load, not merely background-job tidying."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "Keeping nit. Each run selects only `cancelled: true` rows with `scheduledDate lte now+1h` (scheduleEmailReminders.ts:44-50), and the cron runs every 15 minutes. The serial `await client.request(...)` (:56-64) therefore covers about one hour's cancellations. Bulk-cancellation volume large enough to miss SendGrid send times is asserted, not shown. Parallelising is an optimisation."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The time filter and 15-minute cron frequency do not bound the number of cancellations across all users. Bulk cancellation is supported explicitly: workflows.tsx:350–378 queues reminders for all bookings of disabled event types. The newly added loop serially awaits every SendGrid cancellation before scheduling other reminders, making processing time proportional to accumulated network latency. Under a large batch, this can delay time-sensitive cancellations and scheduling, so it is a meaningful performance defect rather than a micro-optimisation."
+     }
+    ],
+    "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+    "comment": "The cron cancels SendGrid scheduled sends one at a time with sequential awaits, which is slower than batching.",
+    "commentOpus": "The cron cancels SendGrid scheduled sends one at a time with sequential awaits, which is slower than batching.",
+    "class": "TP",
+    "subclass": "nit",
+    "status": "human_decided",
+    "severity": "medium",
+    "category": "perf",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash": [
+      "S3"
+     ],
+     "muse-spark-1.3": [
+      "S6"
+     ]
+    },
+    "reason_opus": "scheduleEmailReminders.ts:55-63 awaits client.request serially per reminder in an hourly cron over an unbounded findMany; real but only a cron latency micro-optimisation.",
+    "reason_astra": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:44-51 fetches all eligible cancellations without a batch limit, and lines 56-64 await each network request serially. Bulk cancellations therefore accumulate network latency before the worker reaches email scheduling at line 80, creating a meaningful backlog and timeout risk.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": null
    },
@@ -4635,6 +4915,101 @@
     "subclass_opus_inicial": "nit",
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#17",
+    "humanos": {
+     "junior": {
+      "voto": "TP-nit",
+      "em": "2026-10-16T00:57:02.550Z"
+     },
+     "gabriel": {
+      "voto": "TP-nit",
+      "em": "2026-10-16T11:08:20.164Z"
+     }
+    },
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "setup.ts generates codes with randomBytes(5).toString('hex') (lowercase) and next-auth-options.ts:144 / disable.ts:60 match with case-sensitive indexOf after only stripping dashes, while the input placeholder is 'XXXXX-XXXXX'; a code typed in uppercase is rejected."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "apps/web/pages/api/auth/two-factor/totp/setup.ts:61 generates lowercase codes, and apps/web/components/settings/EnableTwoFactorModal.tsx:163 preserves that case when formatting them. Matching at packages/features/auth/lib/next-auth-options.ts:144 is case-sensitive, but no contract promises case-insensitive acceptance; accepting uppercase variants is a usability enhancement rather than an established defect."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Codes are lowercase hex (setup.ts:61 `crypto.randomBytes(5).toString(\"hex\")`), matched case-sensitively (next-auth-options.ts:144 `backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\"))`), while the input the PR adds shows `placeholder=\"XXXXX-XXXXX\"` (BackupCode.tsx:21) in uppercase. Backup codes are typed from paper/printouts at the moment the user has lost their authenticator; the PR's own UI suggests uppercase and then rejects it, locking the user out of recovery. That is wrong behaviour for realistic input, not a cosmetic preference."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Still FP. Generated codes are lowercase, and display, copying, and downloading preserve that case. The XXXXX-XXXXX placeholder indicates the input's shape; it neither transforms input nor establishes case-insensitive acceptance. Rejecting an altered-case credential does not demonstrate a recovery defect without a requirement to accept that variant."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Accepting only one case of a credential is not a neutral choice when the PR's own input shows the other case: BackupCode.tsx:21 `placeholder=\"XXXXX-XXXXX\"`. The codes are hex (`crypto.randomBytes(5).toString(\"hex\")`, setup.ts:61), an alphabet with no case meaning, and the check is a case-sensitive `indexOf` after stripping dashes (next-auth-options.ts:144, disable.ts:61). The same file already normalizes the other credential, `email: credentials.email.toLowerCase()` (next-auth-options.ts:75). A user typing a printed code at the moment they have lost their authenticator and following the uppercase placeholder gets locked out of recovery. That is wrong behaviour on realistic input."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Still FP. The code generates and displays lowercase backup codes, and validation accepts those strings after removing dashes. The XXXXX-XXXXX placeholder specifies a shape, not a requirement to uppercase the supplied code; email normalization does not establish backup-code semantics. Case-insensitive acceptance would improve usability, but the cited evidence does not establish incorrect behavior or a broken recovery contract."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Keeping TP. The PR's input shows `placeholder=\"XXXXX-XXXXX\"` (BackupCode.tsx:21) for lowercase hex codes (`crypto.randomBytes(5).toString(\"hex\")`, setup.ts:61). Validation is a case-sensitive `backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\"))` (next-auth-options.ts:144). Hex has no case meaning, so typing a printed code in uppercase locks the user out of recovery. Leaving it to human review."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Still FP. The PR generates lowercase codes and preserves their case when displaying, copying, and downloading them; both validation paths accept those codes after stripping dashes. The uppercase XXXXX-XXXXX placeholder indicates format, but neither requires uppercase input nor promises case-insensitive matching. Case-insensitive acceptance would improve usability, but the cited code does not establish a broken recovery contract."
+     }
+    ],
+    "caseId": "feat-2fa-backup-codes-cal-com",
+    "comment": "Backup code validation is case-sensitive due to the use of indexOf(). This causes validation to fail if a user enters uppercase hex characters, as backup codes should be case-insensitive for a better user experience.",
+    "commentOpus": "Backup codes are matched case-sensitively against lowercase hex, so a user typing the code in uppercase is rejected.",
+    "class": "TP",
+    "subclass": "nit",
+    "status": "human_decided",
+    "severity": "medium",
+    "category": "bug",
+    "source": "martian",
+    "martianRef": [
+     {
+      "caseId": "feat-2fa-backup-codes-cal-com",
+      "index": 2,
+      "severity": "Medium",
+      "category": "bug"
+     }
+    ],
+    "foundBy": {},
+    "reason_opus": "setup.ts generates codes with randomBytes(5).toString('hex') (lowercase) and next-auth-options.ts:144 / disable.ts:60 match with case-sensitive indexOf after only stripping dashes, while the input placeholder is 'XXXXX-XXXXX'; a code typed in uppercase is rejected.",
+    "reason_astra": "apps/web/pages/api/auth/two-factor/totp/setup.ts:61 generates lowercase codes, and apps/web/components/settings/EnableTwoFactorModal.tsx:163 preserves that case when formatting them. Matching at packages/features/auth/lib/next-auth-options.ts:144 is case-sensitive, but no contract promises case-insensitive acceptance; accepting uppercase variants is a usability enhancement rather than an established defect.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null
    }
   ],
   "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
@@ -4804,6 +5179,101 @@
     "subclass_opus_inicial": "nit",
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": "nit"
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#06",
+    "humanos": {
+     "junior": {
+      "voto": "TP-nit",
+      "em": "2026-10-16T01:02:37.868Z"
+     },
+     "gabriel": {
+      "voto": "TP-nit",
+      "em": "2026-10-16T11:12:47.908Z"
+     }
+    },
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "scripts/test-gcal-webhooks.sh:11-18 cleanup always ends with exit 0 and is called on the rate-limit and URL-extraction failure paths (:46-50, :56-59), so a developer helper script reports success on failure."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "scripts/test-gcal-webhooks.sh:17 unconditionally exits successfully from cleanup. Both the rate-limit branch at line 49 and missing-URL branch at line 58 invoke it, reporting success when tunnel setup failed."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "scripts/test-gcal-webhooks.sh is an interactive developer helper: it ends by `wait \"$TMOLE_PID\"` until Ctrl+C (:77-78) and `git grep test-gcal-webhooks` at head finds no caller (no package.json script, no CI). Both failure paths print an explicit error first (`echo \"❌ Failed to extract Tunnelmole URL.\"` :57) before `cleanup` exits 0 (:17). Wrong exit status in a manual dev script with no automation: nit."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The PR adds this script, and both failure branches call cleanup(), whose unconditional exit 0 reports successful execution before GOOGLE_WEBHOOK_URL is updated. Printing an error does not correct the process exit status. The absence of repository callers limits the demonstrated impact, but this remains an observable error-reporting defect, not a style or tidying nit."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "The exit status only matters to a caller, and this script has none. `git grep test-gcal-webhooks` at head finds no package.json script and no CI step. The script is interactive by design: on success it blocks in `wait \"$TMOLE_PID\"` until Ctrl+C (scripts/test-gcal-webhooks.sh:77-78), so no automation could use it to test anything. On both failure paths the developer sees an explicit error (e.g. `echo \"❌ Failed to extract Tunnelmole URL.\"`, :57) before `cleanup` runs `exit 0` (:17). A wrong exit code in a manual dev helper, with no user-facing effect and no consumer of that code, is a tidying fix: nit."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The PR introduces this script, whose failure branches at lines 49 and 58 invoke cleanup(), which unconditionally exits 0 before GOOGLE_WEBHOOK_URL is updated. This is an incorrect process result; printing an error and having no repository callers do not make it cosmetic. The claimed automation impossibility is also unsupported: waiting is conditional on starting a new tunnel, and the reuse path can finish immediately."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "I correct one point: the reuse path (`OWNED_PID=false`, scripts/test-gcal-webhooks.sh:31) skips `wait` (:77-78) and can finish immediately, so the script is not strictly interactive-only. The classification still stands. Nothing consumes the exit code: `git grep test-gcal-webhooks` at head finds no package.json script, CI step or other caller. Both failure branches print an explicit error before `exit 0` (:17), e.g. `echo \"❌ Failed to extract Tunnelmole URL.\"` (:57). A wrong exit status in a manual developer helper, read by a human who sees the error, is tidying: nit."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The PR adds this script, and both failure branches (lines 49 and 58) call cleanup(), whose unconditional exit 0 reports success before GOOGLE_WEBHOOK_URL is updated. Printing an error does not correct the process result. No repository caller was found, which limits demonstrated downstream impact, but returning success for failed setup is a behavioral error-reporting bug, not a tidying nit."
+     }
+    ],
+    "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+    "comment": "The test-gcal-webhooks.sh cleanup function always exits 0, including when called from the failure paths, so the script reports success when the tunnel could not be set up.",
+    "commentOpus": "The test-gcal-webhooks.sh cleanup function always exits 0, including when called from the failure paths, so the script reports success when the tunnel could not be set up.",
+    "class": "TP",
+    "subclass": "nit",
+    "status": "human_decided",
+    "severity": "low",
+    "category": "bug",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5": [
+      "S4"
+     ],
+     "deepseek-v4.1-flash": [
+      "S4"
+     ]
+    },
+    "reason_opus": "scripts/test-gcal-webhooks.sh:11-18 cleanup always ends with exit 0 and is called on the rate-limit and URL-extraction failure paths (:46-50, :56-59), so a developer helper script reports success on failure.",
+    "reason_astra": "scripts/test-gcal-webhooks.sh:17 unconditionally exits successfully from cleanup. Both the rate-limit branch at line 49 and missing-URL branch at line 58 invoke it, reporting success when tunnel setup failed.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null
    },
    {
     "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
@@ -5263,6 +5733,98 @@
     "subclass_opus_inicial": "nit",
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": "nit"
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14",
+    "humanos": {
+     "junior": {
+      "voto": "TP",
+      "em": "2026-10-16T01:06:55.984Z"
+     },
+     "gabriel": {
+      "voto": "TP",
+      "em": "2026-10-16T11:20:18.308Z"
+     }
+    },
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": null,
+      "texto": "transform_query_columns_for_error_upsampling (error_upsampling.py:54-64) intentionally rewrites only count(); its docstring scopes the feature to replacing count() with sum(sample_weight). Other aggregates being unchanged is the designed scope, not a defect introduced here."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "src/sentry/api/helpers/error_upsampling.py:58-63 rewrites only bare count(), leaving equivalent aliased counts and count-based rates unweighted. Aliases are supported at src/sentry/search/events/fields.py:680-686, and eps/epm explicitly use raw count at src/sentry/search/events/datasets/function_aliases.py:379-393, producing inconsistent results for eligible sampled-error queries."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": null,
+      "texto": "Facts agree, but this is the feature's designed scope, not a regression: error_upsampling.py:58-60 `if column_lower == \"count()\": transformed_columns.append(\"upsampled_count() as count\")`, in a PR named 'support upsampled error count'. eps/epm/count_unique/aliases were raw before the PR and stay raw; nothing previously correct breaks. Extending upsampling to other aggregates is a feature request -> FP (none)."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "Retained TP (bug), specifically for aliased count(). get_query_columns preserves aliases and the query builder supports them, yet the new transformation weights count() while leaving count() as foo unweighted. At a 0.1 sampling rate, merely naming the result changes a one-event bucket from 10 to 1; this is inconsistent implementation of the supported count aggregation, regardless of whether other aggregates are outside scope."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The alias case is narrow and not produced by the supported inputs: legacy aliases are normalized first (organization_events.py:56-59 `\"event_count\": \"count()\"`), and error_upsampling.py:56-58 `if column_lower == \"count()\": ... \"upsampled_count() as count\"` covers what the UI sends. The function's own docstring scopes it to replacing count(); eps/epm/count_unique/aliases were raw before and remain raw, nothing that worked breaks. Extending coverage is a feature request -> FP (none)."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "Retained TP (bug), specifically for aliased count(). organization_events.py:506 accepts yAxis directly, and get_query_columns only maps legacy names; it preserves `count() as foo`. The query builder explicitly supports aliases at builder/base.py:1508–1515, so this is reachable regardless of what the UI sends. The new transformation therefore makes adding an alias change the count from weighted to raw, an inconsistency in the count support introduced by this PR."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": null,
+      "texto": "Agreed that `count() as foo` is reachable through the API yAxis. The comment's claim is broader, though: eps, epm, count_unique, count_if and aliases. All of these were raw before the PR and stay raw. The function scopes itself to bare count(): `if column_lower == \"count()\": transformed_columns.append(\"upsampled_count() as count\")` (error_upsampling.py:58-60), with a docstring that says it replaces count(). Its only caller is organization_events_stats.py:223. Nothing that worked breaks. Extending the feature to other aggregates or hand-aliased count is a feature request. Leaving it to human review."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "Retained TP (bug), specifically for aliased count(). organization_events.py accepts yAxis directly and preserves aliases; the query builder and get_function_alias both support explicit aliases. The newly added transformation therefore returns 10 for count() but 1 for count() as foo when a bucket contains one event with sample_weight=10. This PR introduces that semantic inconsistency between equivalent count expressions; the broader claims about other aggregates are unnecessary to establish the defect."
+     }
+    ],
+    "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+    "comment": "Claims only bare count() is rewritten, so aliased count, eps(), epm(), count_unique() etc. stay un-upsampled.",
+    "commentOpus": "Claims only bare count() is rewritten, so aliased count, eps(), epm(), count_unique() etc. stay un-upsampled.",
+    "class": "TP",
+    "subclass": null,
+    "status": "human_decided",
+    "severity": "high",
+    "category": null,
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "muse-spark-1.3": [
+      "S1"
+     ]
+    },
+    "reason_opus": "transform_query_columns_for_error_upsampling (error_upsampling.py:54-64) intentionally rewrites only count(); its docstring scopes the feature to replacing count() with sum(sample_weight). Other aggregates being unchanged is the designed scope, not a defect introduced here.",
+    "reason_astra": "src/sentry/api/helpers/error_upsampling.py:58-63 rewrites only bare count(), leaving equivalent aliased counts and count-based rates unweighted. Aliases are supported at src/sentry/search/events/fields.py:680-686, and eps/epm explicitly use raw count at src/sentry/search/events/datasets/function_aliases.py:379-393, producing inconsistent results for eligible sampled-error queries.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null
    },
    {
     "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#15",
@@ -6131,6 +6693,101 @@
     "subclass_opus_inicial": "nit",
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": "nit"
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#06",
+    "humanos": {
+     "junior": {
+      "voto": "TP-nit",
+      "em": "2026-10-16T01:17:15.559Z"
+     },
+     "gabriel": {
+      "voto": "TP-nit",
+      "em": "2026-10-16T11:21:36.439Z"
+     }
+    },
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "The loop at uploads_controller.rb:66-69 ignores OptimizedImage.downsize's return (convert_with returns false on failure), so a failing conversion is repeated up to 5 times; the upload then fails size validation as it would anyway. Only wasted work."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "app/models/optimized_image.rb:162 returns false on conversion failure, but app/controllers/uploads_controller.rb:67 ignores that result. An unchanged oversized input therefore triggers up to five identical external conversions before validation, unnecessarily multiplying potentially expensive failed processing."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "The loop is bounded (`attempt = 5` ... `attempt -= 1`, uploads_controller.rb:65-68) and a failed conversion leaves the file oversized, so `Upload.create_for` (:72) rejects it exactly as without the retries. It runs inside `Scheduler::Defer.later` (:19-22), not on the request path. The only effect of ignoring `convert_with`'s false (optimized_image.rb:162) is up to four repeated failing convert runs on a bad upload: redundant work, nit."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "I retain TP: the new loop ignores conversion failure and can execute the same failing external conversion five times. This can multiply expensive image processing without making progress, delaying upload completion and other deferred work. Under Unicorn, deferred work also occupies the request-serving worker, so unchanged validation results do not make the repeated processing a nit."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "I accept that deferred work occupies the Unicorn worker (99-unicorn.rb, defer.rb process_client -> Defer.do_all_work). But this issue is only about ignoring `convert_with`'s false. That changes nothing on the success path: a successful downsize shrinks the file, and the `while ... tempfile.size > SiteSetting.max_image_size_kb.kilobytes` condition (uploads_controller.rb:66) ends the loop. On the failure path the upload is rejected by `Upload.create_for` (:72), the same outcome as with a break. The only cost is up to four extra failing `convert` runs on a corrupt or unsupported image: redundant work with no user-visible effect, so nit. The worker-occupancy cost of the loop as a whole is issue #08."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "I retain TP: the new loop ignores conversion failure and can repeat the same failed external conversion four additional times. Synchronous API uploads call create_upload directly (uploads_controller.rb:15–17), and asynchronous uploads publish their result only after it finishes (:19–21). These retries delay completion and occupy the Unicorn worker; expensive conversion failures therefore have a meaningful performance effect despite unchanged validation results. This finding concerns avoidable retries after failure, independently of the cost of successful downsizing."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "Keep nit. The scope is only ignoring `convert_with`'s false return (optimized_image.rb:162). On success the loop condition `tempfile.size > SiteSetting.max_image_size_kb.kilobytes` (uploads_controller.rb:66) ends it, so the success path is unaffected. On failure the upload is rejected by `Upload.create_for` (:72) with or without a break. The only difference is up to four extra failing convert runs on a corrupt or unsupported oversized image, an edge case for an upload that fails anyway. Redundant work with no change in outcome: nit. The cost of the loop as a whole belongs to the other issue (#08)."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The newly added loop ignores downsize’s false result and can repeat an unchanged, failing external conversion four additional times. These subprocess calls block completion: synchronous uploads await create_upload, asynchronous uploads publish afterward, and Unicorn drains deferred work before serving another request. Expensive conversion failures therefore multiply upload latency and worker occupancy even though validation ultimately rejects the file. This is a meaningful performance defect specifically in failure handling, independent of the cost of successful downsizing."
+     }
+    ],
+    "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+    "comment": "The downsize retry loop ignores the false return of a failed conversion and repeats the same failing ImageMagick call up to five times.",
+    "commentOpus": "The downsize retry loop ignores the false return of a failed conversion and repeats the same failing ImageMagick call up to five times.",
+    "class": "TP",
+    "subclass": "nit",
+    "status": "human_decided",
+    "severity": "medium",
+    "category": "perf",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "gpt-6.1-sol": [
+      "S4"
+     ],
+     "muse-spark-1.3": [
+      "S2"
+     ]
+    },
+    "reason_opus": "The loop at uploads_controller.rb:66-69 ignores OptimizedImage.downsize's return (convert_with returns false on failure), so a failing conversion is repeated up to 5 times; the upload then fails size validation as it would anyway. Only wasted work.",
+    "reason_astra": "app/models/optimized_image.rb:162 returns false on conversion failure, but app/controllers/uploads_controller.rb:67 ignores that result. An unchanged oversized input therefore triggers up to five identical external conversions before validation, unnecessarily multiplying potentially expensive failed processing.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null
    },
    {
     "issueId": "feature-automatically-downsize-large-images-discourse-cursor#08",
@@ -7128,6 +7785,103 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#03",
+    "humanos": {
+     "junior": {
+      "voto": "TP",
+      "em": "2026-10-16T01:18:14.555Z"
+     },
+     "gabriel": {
+      "voto": "TP",
+      "em": "2026-10-16T11:23:59.844Z"
+     }
+    },
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "GroupTest.java:152-155 sets deletedAll only after all removes succeed, with no finally; if a remove throws, the non-daemon reader thread loops forever. Only affects the test when it already fails."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:153 performs deletion before the stop flag is set at line 155, with no finally block. If deletion throws, the reader loop at line 140 remains active and catches request failures at lines 144–146 without exiting, leaking the thread and potentially preventing JVM termination."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "GroupTest.java:152-155 sets `deletedAll.set(true)` only after the delete loop, so a leaked reader thread happens only when `group(groupUuid).remove()` already threw, i.e. the test is already failing. It does not make a passing test pass wrongly or a correct build fail; it worsens teardown of an already-failing test. Test robustness, nit."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The PR adds a reader thread whose only stop signal occurs after all deletions succeed. If remove() throws, that signal is skipped, and the reader continues issuing requests and collecting exceptions without cleanup. Although the test has already failed, leaking an active thread can disrupt subsequent tests, exhaust resources, and potentially prevent JVM termination. This is a behavioral error-handling defect worth reporting, not a nit."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "GroupTest.java:152-155 skips `deletedAll.set(true)` only when a `remove()` already threw, i.e. the test is already red. The leaked reader degrades teardown of a failing run but never changes a pass/fail verdict or production behaviour. Test-robustness tidying: nit."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The PR introduces this thread and its missing cleanup: if remove() at line 153 throws, the stop signal at line 155 is skipped. The reader continues issuing requests and retaining caught exceptions without a termination path. An already-failing test does not make an active thread leak harmless; it can disrupt subsequent tests, exhaust resources, and potentially prevent JVM termination. This is a behavioral error-handling defect worth reporting, not a nit."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "Keep nit. `deletedAll.set(true)` (GroupTest.java:155) is skipped only when `group(groupUuid).remove()` (:153) has already thrown, so the test is already red. The leaked reader makes teardown of an already-failing run worse, but it never changes a pass/fail verdict and never touches production code. Test-robustness tidying: nit."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The diff confirms the PR introduces this thread and its missing cleanup. If remove() at line 153 throws, the stop signal at line 155 is skipped, leaving the reader issuing requests and retaining caught exceptions indefinitely. An already-failing test does not make an unbounded thread leak harmless: it can consume resources, interfere with subsequent tests, and prevent normal JVM termination. This is a behavioral error-handling defect, not a nit."
+     }
+    ],
+    "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+    "comment": "The reader thread's stop flag is set only after all deletions succeed, so a failing delete leaves a non-daemon thread polling indefinitely.",
+    "commentOpus": "The reader thread's stop flag is set only after all deletions succeed, so a failing delete leaves a non-daemon thread polling indefinitely.",
+    "class": "TP",
+    "subclass": null,
+    "status": "human_decided",
+    "severity": "low",
+    "category": "test_gap",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash": [
+      "S2",
+      "S6"
+     ],
+     "gpt-6.1-sol": [
+      "S2",
+      "S5"
+     ]
+    },
+    "reason_opus": "GroupTest.java:152-155 sets deletedAll only after all removes succeed, with no finally; if a remove throws, the non-daemon reader thread loops forever. Only affects the test when it already fails.",
+    "reason_astra": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:153 performs deletion before the stop flag is set at line 155, with no finally block. If deletion throws, the reader loop at line 140 remains active and catches request failures at lines 144–146 without exiting, leaking the thread and potentially preventing JVM termination.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null
    }
   ],
   "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
@@ -8032,6 +8786,104 @@
    }
   ],
   "github-oauth-security-enhancement-sentry": [
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#01",
+    "humanos": {
+     "junior": {
+      "voto": "TP-nit",
+      "em": "2026-10-16T01:19:47.962Z"
+     },
+     "gabriel": {
+      "voto": "TP-nit",
+      "em": "2026-10-16T11:25:35.769Z"
+     }
+    },
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "integration.py:141 wraps the variable error_short in _() while callers pass plain literals (:132, :471, :488); base code had _(\"GitHub installation pending deletion.\") literals. makemessages can no longer extract these short messages, an i18n-only regression with no functional effect."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "src/sentry/integrations/github/integration.py:132,471,488 defines the short messages as unmarked literals, while line 141 translates only the variable error_short. The refactor removes the existing literal extraction sites and leaves the new default unextractable, breaking localization of these user-facing messages."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "Runtime behaviour is unchanged: `\"data\": {\"error\": _(error_short)}` (integration.py:141) still calls gettext at render time, so any string already in the catalog is still translated; the regression is only that makemessages will no longer extract the literals at :132, :471, :488. That affects translation catalog maintenance for a short error string shown next to the translated long message (`\"error\": error_long`, :138). i18n housekeeping: nit."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The PR removes literal gettext markers from both existing short messages and introduces an unmarked default at integration.py:132; line 141 translates only the variable. Existing catalog entries still work today, but extraction cannot discover the new default or retain the old messages on catalog regeneration. This breaks localization of user-facing errors, making it a behavioral defect rather than translation housekeeping."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "Astra concedes 'existing catalog entries still work today'. integration.py:141 `\"error\": _(error_short)` still translates at runtime; only makemessages extraction of the literals (:132, :471, :488) is lost, and the long message beside it (:138 `\"error\": error_long`) is unaffected. Catalog-maintenance regression for a short label, no runtime behaviour change: nit (doc/wording class)."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The PR removes literal gettext extraction sites and introduces an unmarked default; translating error_short dynamically cannot expose those strings to extraction. Existing catalog entries still translate, but the new default cannot enter catalogs through the normal extraction workflow. This affects visible errors: github-integration-failed.html posts the payload to the opener, and addIntegration.tsx:119 displays data.error. Broken localization of that user-facing message is a behavioral defect, not a wording or maintenance nit."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "Keep nit. Astra agrees that existing catalog entries still translate at runtime: `\"data\": {\"error\": _(error_short)}` (integration.py:141) still calls gettext. The loss is limited to makemessages extraction of the literals at :132, :471 and :488, which affects translation catalog upkeep for a short label shown beside the separately translated long message (`\"error\": error_long`, :138). An i18n extraction regression with no runtime behaviour change belongs with the wording/docs class: nit."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The PR removes literal translation markers from the existing messages and introduces an unmarked default; _(error_short) cannot expose these literals to extraction. Existing catalog entries still translate, but the new default cannot enter catalogs through normal extraction. github-integration-failed.html posts this short message to the opener, where addIntegration.tsx displays it using addErrorMessage; the translated long message does not replace it there. This breaks localization of a user-visible error and is a behavioral defect, not a wording nit."
+     }
+    ],
+    "caseId": "github-oauth-security-enhancement-sentry",
+    "comment": "error() calls _(error_short) on a variable and callers pass plain literals, so the short error strings are no longer extractable for translation.",
+    "commentOpus": "error() calls _(error_short) on a variable and callers pass plain literals, so the short error strings are no longer extractable for translation.",
+    "class": "TP",
+    "subclass": "nit",
+    "status": "human_decided",
+    "severity": "low",
+    "category": "style",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5": [
+      "S5"
+     ],
+     "muse-spark-1.3": [
+      "S6"
+     ],
+     "gpt-6.1-sol": [
+      "S8"
+     ]
+    },
+    "reason_opus": "integration.py:141 wraps the variable error_short in _() while callers pass plain literals (:132, :471, :488); base code had _(\"GitHub installation pending deletion.\") literals. makemessages can no longer extract these short messages, an i18n-only regression with no functional effect.",
+    "reason_astra": "src/sentry/integrations/github/integration.py:132,471,488 defines the short messages as unmarked literals, while line 141 translates only the variable error_short. The refactor removes the existing literal extraction sites and leaves the new default unextractable, breaking localization of these user-facing messages.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null
+   },
    {
     "issueId": "github-oauth-security-enhancement-sentry#02",
     "caseId": "github-oauth-security-enhancement-sentry",
@@ -9768,6 +10620,101 @@
     "subclass_opus_inicial": "nit",
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#08",
+    "humanos": {
+     "junior": {
+      "voto": "TP-nit",
+      "em": "2026-10-16T01:25:27.883Z"
+     },
+     "gabriel": {
+      "voto": "TP-nit",
+      "em": "2026-10-16T11:31:18.894Z"
+     }
+    },
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "All test spans use end_timestamp_precise=1700000000.0 (tests/sentry/spans/test_buffer.py:126-500) and no test exceeds 1000 spans, so the new ZSET ordering and the zpopmin eviction in add-buffer.lua:62-64, the main behaviour of the PR, are never exercised."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": null,
+      "texto": "tests/sentry/spans/test_buffer.py:120–175 exercises assembly and flushing of four spans, and line 45 explicitly normalizes output order for those assertions. These tests still verify their intended behavior; requesting an additional eviction test identifies missing coverage rather than a defective existing test or demonstrated implementation failure."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The PR's headline behaviour is ordering by end timestamp and the 1000-span `zpopmin` eviction (add-buffer.lua:58-64). The diff to tests/sentry/spans/test_buffer.py only adds `end_timestamp_precise=1700000000.0` to every existing fixture (22 identical values) and no test inserts more than 1000 spans, so the eviction path and score ordering are never executed by any test. A new behaviour with zero coverage that a reviewer must ask for is a test_gap worth reporting, unlike missing coverage of one branch of otherwise-tested logic."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": null,
+      "texto": "I retain FP: the missing eviction coverage is real, but these existing tests verify assembly, flushing, and rebalance behavior, which their assertions still exercise. Their identical timestamps do not invalidate those purposes, and output ordering is explicitly normalized. Requesting a new trimming test does not establish a defective existing test or implementation behavior under the supplied classification rules."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The rubric lists test_gap as a TP category. This is the PR's own test change: the only edit to tests/sentry/spans/test_buffer.py adds `end_timestamp_precise=1700000000.0` to every fixture (22 identical values), and that is the field the new ZSET scoring needs (buffer.py `p.zadd(set_key, {span.payload: span.end_timestamp_precise ...})`). Because every score is identical, the updated tests cannot catch wrong ordering, and no test reaches `if span_count > 1000 then zpopmin` (add-buffer.lua:62-63). This trim replaces the old drop-at-flush behaviour and is the PR's headline change. The tests were updated for the new scoring but do not verify it. That is a test that does not check what it was changed for, not a generic request for more coverage."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": null,
+      "texto": "I retain FP: the tests still verify their intended assembly, flushing, and rebalance behavior, with output order explicitly normalized. Adding the newly required timestamp field does not make these tests eviction or score-ordering tests. Missing trimming coverage is real, but this request does not identify an existing test that fails to verify its intended behavior or establish an implementation defect."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "Keeping TP (test_gap), and I agree the facts are not in dispute. The only disagreement is the rubric reading: test_gap is a TP category. The PR changed every fixture to `end_timestamp_precise=1700000000.0` for the new ZSET scoring. No test reaches its headline trim, `if span_count > 1000 then redis.call(\"zpopmin\", ...)` (add-buffer.lua:62-63). Identical scores mean a reversed ordering would also pass. Missing coverage of the PR's central new behaviour is worth reporting. Leaving it to human review."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": null,
+      "texto": "I retain FP: the existing tests verify assembly, flushing, and rebalance, and their assertions still exercise those behaviors. Adding a required timestamp field does not turn them into eviction tests; output order is explicitly normalized. Missing eviction coverage is real, but the comments establish neither a defective existing test nor an implementation failure under the supplied rules."
+     }
+    ],
+    "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+    "comment": "Tests give every span the same end timestamp and never exceed 1000 spans, so the new score ordering and oldest-first eviction are not tested.",
+    "commentOpus": "Tests give every span the same end timestamp and never exceed 1000 spans, so the new score ordering and oldest-first eviction are not tested.",
+    "class": "TP",
+    "subclass": "nit",
+    "status": "human_decided",
+    "severity": "medium",
+    "category": "test_gap",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "muse-spark-1.3": [
+      "S7"
+     ],
+     "deepseek-v4.1-flash": [
+      "S5"
+     ]
+    },
+    "reason_opus": "All test spans use end_timestamp_precise=1700000000.0 (tests/sentry/spans/test_buffer.py:126-500) and no test exceeds 1000 spans, so the new ZSET ordering and the zpopmin eviction in add-buffer.lua:62-64, the main behaviour of the PR, are never exercised.",
+    "reason_astra": "tests/sentry/spans/test_buffer.py:120–175 exercises assembly and flushing of four spans, and line 45 explicitly normalizes output order for those assertions. These tests still verify their intended behavior; requesting an additional eviction test identifies missing coverage rather than a defective existing test or demonstrated implementation failure.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null
    }
   ],
   "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
@@ -10746,6 +11693,96 @@
     "subclass_astra_inicial": null
    },
    {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
+    "humanos": {
+     "junior": {
+      "voto": "TP-nit",
+      "em": "2026-10-16T01:26:15.170Z"
+     },
+     "gabriel": null,
+     "nota": "voto do Gabriel nao ficou gravado na pagina; consenso dos dois informado pelo Junior"
+    },
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "The deleteMany OR (scheduleSMSReminders.ts:31-43) adds retryCount > 1, and WorkflowReminder has no index on retryCount (schema.prisma indexes: bookingUid, workflowStepId, seatReferenceId, [method,scheduled,scheduledDate], [cancelled,scheduledDate]), so that arm cannot use an index. Minor performance concern for a periodic cron."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "packages/prisma/schema.prisma:1002-1006 defines no retryCount index, while packages/features/ee/workflows/api/scheduleSMSReminders.ts:31 adds an unrestricted OR branch on that column. The existing method-based index cannot restrict candidates for the whole predicate, requiring table-wide examination on each invocation and creating a scaling regression."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "Facts agree (no retryCount index, OR arm at scheduleSMSReminders.ts:31-43). But this is a periodic cron DELETE over WorkflowReminder, a table bounded by live reminders since past-dated rows are deleted every run; there is no evidence of a user-visible slowdown. A missing index on a background cleanup query is a speculative micro-optimisation -> nit, not a meaningful performance defect."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The new unrestricted retryCount > 1 branch requires examining the entire reminder table because retryCount has no index. Deleting expired reminders does not bound the number of future reminders across all methods; emailReminderManager.ts:349-370 explicitly persists reminders beyond the provider scheduling window. This introduces table-wide work before every SMS scheduling run, a scaling regression worth reporting."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "Even granting the table holds future reminders, this is a background cron DELETE (scheduleSMSReminders.ts:31-43) with no request path waiting on it, and the comment gives no measured plan or row count. A possibly-unindexed OR arm in a periodic cleanup is a speculative micro-optimisation, not a demonstrated user-visible performance defect: nit."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The new OR branch filters on retryCount, which has no index in either the schema or migration, requiring table-wide examination instead of allowing restriction to SMS rows. Cleanup does not bound this workload: emailReminderManager.ts also persists future email reminders in the same table. The cleanup is awaited before SMS scheduling, so its cost directly delays that work and consumes shared database resources. Actual latency depends on table size, but introducing an unrestricted scan across all reminders is a reportable scaling regression, not a micro-optimisation."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "Keep nit. The facts are agreed: there is no retryCount index (schema.prisma) and the `retryCount > 1` OR arm is in the cleanup deleteMany (scheduleSMSReminders.ts:31-43). But the issue states no row count, query plan or latency. The query is a background cron DELETE with no user request waiting on it, so the cost is a possible extra scan on a scheduled job. That is a speculative micro-optimisation, not a demonstrated performance defect. Category: speculative/perf."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "I retain TP. The PR adds an unrestricted retryCount > 1 OR branch without an index, preventing the existing method index from limiting the cleanup to SMS reminders. emailReminderManager.ts also stores future email reminders in this table, so deleting expired reminders does not bound the scanned backlog. This table-wide examination is awaited before SMS scheduling; its latency depends on volume, but the structural scaling regression is worth reporting even in a background job."
+     }
+    ],
+    "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+    "comment": "The new OR arm on retryCount has no supporting index, so the cleanup delete can no longer be fully served by the existing index and may scan the table.",
+    "commentOpus": "The new OR arm on retryCount has no supporting index, so the cleanup delete can no longer be fully served by the existing index and may scan the table.",
+    "class": "TP",
+    "subclass": "nit",
+    "status": "human_decided",
+    "severity": "medium",
+    "category": "perf",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash": [
+      "S3"
+     ]
+    },
+    "reason_opus": "The deleteMany OR (scheduleSMSReminders.ts:31-43) adds retryCount > 1, and WorkflowReminder has no index on retryCount (schema.prisma indexes: bookingUid, workflowStepId, seatReferenceId, [method,scheduled,scheduledDate], [cancelled,scheduledDate]), so that arm cannot use an index. Minor performance concern for a periodic cron.",
+    "reason_astra": "packages/prisma/schema.prisma:1002-1006 defines no retryCount index, while packages/features/ee/workflows/api/scheduleSMSReminders.ts:31 adds an unrestricted OR branch on that column. The existing method-based index cannot restrict candidates for the whole predicate, requiring table-wide examination on each invocation and creating a scaling regression.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null
+   },
+   {
     "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#09",
     "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
     "comment": "The retryCount increment update is duplicated in the else branch and the catch block.",
@@ -11075,6 +12112,101 @@
     "subclass_astra_inicial": null
    },
    {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#07",
+    "humanos": {
+     "junior": {
+      "voto": "TP-nit",
+      "em": "2026-10-16T01:26:48.666Z"
+     },
+     "gabriel": {
+      "voto": "TP-nit",
+      "em": "2026-10-16T11:33:37.481Z"
+     }
+    },
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "A negative --flusher-processes passes the `or` at flusher.py:51, num_processes becomes negative (60), the map is empty and i % num_processes == 0 raises KeyError at 66. Only an invalid configuration, which fails loudly at startup."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "src/sentry/spans/consumers/process/flusher.py:51 preserves negative values, and lines 60-66 create an empty mapping before indexing it with zero for the first assigned shard, raising KeyError. The CLI accepts negative integers at src/sentry/consumers/__init__.py:435; although later negative remainders need not equal zero, the first iteration already fails."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "Agreed on the mechanics (flusher.py:51,60-66; first iteration `0 % -2 == 0` -> KeyError). But this is an invalid operator setting (--flusher-processes -1) that fails immediately and loudly at consumer construction; no data or runtime behaviour is affected. Missing input validation for a nonsensical config = nit."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "Still TP. The new integer CLI option accepts negative values and forwards them unchanged; flusher.py creates an empty process mapping and raises KeyError on the first assigned shard. Invalid input limits the trigger, but missing validation causes an actual consumer-construction failure rather than merely a cosmetic problem. Category: bug."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "Mechanics agreed (flusher.py:51,60-66). The trigger is only a negative --flusher-processes, and the effect is an immediate, loud KeyError at consumer construction, i.e. the misconfiguration is surfaced at startup, before any span is processed. Failing fast on invalid config is the outcome validation would give anyway, just with a worse message: nit."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "Still TP (bug). A negative value accepted by the new CLI produces an empty process mapping, then raises KeyError on the first assigned shard because 0 % self.num_processes is zero. This is an unhandled consumer-construction failure introduced by the PR, which meets the stated defect criteria even though invalid configuration triggers it. The comment overstates subsequent remainder behavior, but the first iteration already proves the failure."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "Keep nit, and note the contrast with #06, which I conceded: there the bad input silently changes behaviour; here it fails immediately and loudly. A negative --flusher-processes makes `self.num_processes = min(self.max_processes, ...)` negative (flusher.py:60), the map stays empty and `process_to_shards_map[process_index]` raises KeyError on the first shard (flusher.py:66), at consumer construction, before any span is processed. A nonsensical operator setting that fails fast at startup is the same outcome validation would give, only with a worse message: missing input validation, nit."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The new CLI option accepts negative integers, and the factory forwards them unchanged to SpanFlusher. With assigned shards, the negative process count creates an empty mapping, and the first shard assignment raises an unhandled KeyError. Although invalid configuration triggers it, this is missing input validation that causes consumer construction to fail, meeting the stated defect criteria rather than being merely a wording nit. Category: bug."
+     }
+    ],
+    "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "comment": "A negative --flusher-processes value is not validated and makes SpanFlusher construction fail with KeyError.",
+    "commentOpus": "A negative --flusher-processes value is not validated and makes SpanFlusher construction fail with KeyError.",
+    "class": "TP",
+    "subclass": "nit",
+    "status": "human_decided",
+    "severity": "medium",
+    "category": "bug",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash": [
+      "S9"
+     ],
+     "muse-spark-1.3": [
+      "S2"
+     ]
+    },
+    "reason_opus": "A negative --flusher-processes passes the `or` at flusher.py:51, num_processes becomes negative (60), the map is empty and i % num_processes == 0 raises KeyError at 66. Only an invalid configuration, which fails loudly at startup.",
+    "reason_astra": "src/sentry/spans/consumers/process/flusher.py:51 preserves negative values, and lines 60-66 create an empty mapping before indexing it with zero for the first assigned shard, raising KeyError. The CLI accepts negative integers at src/sentry/consumers/__init__.py:435; although later negative remainders need not equal zero, the first iteration already fails.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null
+   },
+   {
     "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
     "debate": [
      {
@@ -11280,6 +12412,101 @@
     "reason_astra": "pkg/storage/unified/resource/search.go:207-216 starts event processing before the new TotalDocs call; event handling can create an index through getOrCreateIndex at line 237. TotalDocs iterates the cache without locking at pkg/storage/unified/search/bleve.go:146, concurrently with the cache assignment at line 138.",
     "class_opus_inicial": "TP",
     "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#03",
+    "humanos": {
+     "junior": {
+      "voto": "TP-nit",
+      "em": "2026-10-16T01:26:53.939Z"
+     },
+     "gabriel": {
+      "voto": "TP-nit",
+      "em": "2026-10-16T11:34:53.590Z"
+     }
+    },
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "server.go:258-262 returns nil, err when Init fails without calling the cancel created at :229. Init failing aborts server construction and startup, so the leaked context has no practical effect."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "pkg/storage/unified/resource/server.go:258-261 discards the server on initialization failure without cancellation or lifecycle cleanup. Search initialization already starts a background consumer at pkg/storage/unified/resource/search.go:202-213 before initWatcher can fail at server.go:755-757, leaving that consumer and its backend poller running after constructor failure."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "True that server.go:258-261 returns without cancel(), but calling cancel would not stop the goroutine astra cites: search.go:202 `watchctx := context.Background() // new context?` is not derived from s.ctx. Leaving that aside, a constructor failure aborts storage-server startup, so the uncancelled s.ctx has no practical effect. Real but cleanup-level."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The missing lifecycle cleanup has a concrete effect beyond the uncancelled context. Search initialization starts a SQL poller before initWatcher makes another WatchWriteEvents call, whose database query can fail. The constructor then discards the server without calling lifecycle.Stop, which cancels the backend’s pollers (sql/backend.go:119,558-585). Calling s.cancel alone is insufficient, as the reviewer notes, but that does not make the leaked background work a nit."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "Agreed lifecycle.Stop is also skipped, so the SQL poller started by search init survives. But every caller propagates the error and aborts startup: sql/server.go:77 `rs, err := resource.NewResourceServer(opts)` -> sql/service.go:113 and unified/client.go:101 return err. Leaked work only exists in a process that is failing to start (server.go:258-261 `s.log.Error(\"error initializing resource server\"...); return nil, err`). Cleanup on a fatal path: nit."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "I retain TP: this is a resource-lifecycle bug. Search initialization starts a background consumer and SQL poller before initWatcher performs another fallible database query. The new constructor error path discards the server without stopping that work; the poller requires backend.Stop to cancel b.done. Propagating a startup error does not itself terminate the process or release those resources, although prompt process exit limits the impact."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": null,
+      "texto": "Agreed on the facts: server.go:258-261 returns nil, err without s.cancel() or lifecycle.Stop, so the search poller survives. You also note that a prompt process exit limits the impact. Every caller propagates the error and aborts startup (sql/server.go:77 -> sql/service.go:113, unified/client.go:101), so the leak only exists in a process that is failing to start. Cleanup on a fatal path: nit."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": null,
+      "texto": "The new constructor error path discards a partially initialized server without lifecycle cleanup. Search initialization starts a SQL poller before initWatcher performs another fallible query; if that query fails, the poller continues querying because backend.Stop never cancels b.done. The cited callers propagate the error but do not stop this background work. Eventual process termination limits the impact, but the surviving database activity makes this a resource-lifecycle defect worth reporting."
+     }
+    ],
+    "caseId": "unified-storage-performance-optimizations-grafana-codex",
+    "comment": "NewResourceServer returns an error when Init fails without cancelling the server context created earlier.",
+    "commentOpus": "NewResourceServer returns an error when Init fails without cancelling the server context created earlier.",
+    "class": "TP",
+    "subclass": "nit",
+    "status": "human_decided",
+    "severity": "low",
+    "category": "bug",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash": [
+      "S2"
+     ],
+     "muse-spark-1.3": [
+      "S2"
+     ]
+    },
+    "reason_opus": "server.go:258-262 returns nil, err when Init fails without calling the cancel created at :229. Init failing aborts server construction and startup, so the leaked context has no practical effect.",
+    "reason_astra": "pkg/storage/unified/resource/server.go:258-261 discards the server on initialization failure without cancellation or lifecycle cleanup. Search initialization already starts a background consumer at pkg/storage/unified/resource/search.go:202-213 before initWatcher can fail at server.go:755-757, leaving that consumer and its backend poller running after constructor failure.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": null
    }
