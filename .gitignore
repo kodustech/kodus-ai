@@ -43,6 +43,8 @@ packages/**/*.js
 .env
 .env.qa
 .env.prod
+# billing env for runo (scripts/env/pull-billing-env.sh): holds a Stripe key
+.env.billing
 .env.local
 .env.reconciled
 .env.bak.*

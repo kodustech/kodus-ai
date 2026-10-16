@@ -16,7 +16,8 @@
 # request which shapes it needs (labels or scripts/preview/decide-profiles.cjs).
 #
 # runo substitutes ${RUNO_PUBLIC_URL} / ${RUNO_PUBLIC_HOST} at up time, after
-# the tunnel exists and before the stack boots.
+# the tunnel exists and before the stack boots. Billing is not here: it lives
+# in docker-compose.billing.yml, which the dev recipe layers on as well.
 services:
     worker:
         environment:
