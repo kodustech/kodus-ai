@@ -309,7 +309,7 @@ const STAGES = [
         nightly: 'shared',
         friday: 'pr_summary',
         metric: 'of PR-summary checks passed',
-        set: 'eleven pull requests under each behaviour for an existing description and a new commit, three with a title that says nothing',
+        set: 'summary cases: pull requests under each behaviour for an existing description and a new commit, three with a title that says nothing',
         caveat: 'Whether the summary speaks of the diff is read from its words, not judged.',
         note: 'every PR against the scripted model (the contract); nightly on the real model when the summary path or its cases change',
     },

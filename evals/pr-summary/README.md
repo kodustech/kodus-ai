@@ -53,10 +53,11 @@ behaviour contract.
 6. **About the diff** (real models only) — the summary uses at least one word
    only the diff holds: parts of the changed files' and code names that the
    title and the existing description do not carry, minus words any summary
-   uses ("update", "user"). Three cases have a title that says nothing (`fix`,
-   `wip`, `address review comments`), so their summary can only come from the
-   diff. With the diff removed from the prompt, DeepSeek failed this on 6 of 11
-   cases, those three among them.
+   uses ("update", "user"). It runs only where the diff has three such words:
+   with one, a good summary can miss it. Three cases have a title that says
+   nothing (`fix`, `wip`, `address review comments`), so their summary can only
+   come from the diff. With the diff removed from the prompt, DeepSeek failed
+   this on 4 of the 10 cases it runs on, those three among them.
 
 ## Run it
 

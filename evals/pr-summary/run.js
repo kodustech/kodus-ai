@@ -65,7 +65,8 @@ const BEHAVIOUR_FILTER = args.behaviour ? String(args.behaviour) : null;
 const LIMIT = args.limit ? Number(args.limit) : undefined;
 const REAL_MODEL = !MOCK && MODEL !== 'eval-fake';
 // The contract is binary: with no floor set for a model, any failed check fails the gate.
-const FLOOR = ((require('./targets.json').models || {})[MODEL] || {}).floor ?? 1;
+const TARGET = (require('./targets.json').models || {})[MODEL] || {};
+const FLOOR = TARGET.floor ?? 1;
 
 const START = '<!-- kody-pr-summary:start -->';
 const END = '<!-- kody-pr-summary:end -->';
@@ -282,12 +283,14 @@ async function runCase(c) {
     // one word only the diff holds (parts of the changed files' and code names
     // that the title and the existing description do not carry). A summary
     // written from the title alone has none. The scripted and mock texts name
-    // nothing, so the check runs on real models only.
+    // nothing, so the check runs on real models only. With fewer than three such
+    // words a good summary can miss them all (a tax-rounding fix whose only one
+    // is `rate`), so the check needs three.
     if (REAL_MODEL) {
         const known = new Set(diffWords([{ filename: '', patch: `+${c.pr?.title || ''} ${c.existingBody || ''}` }]));
         const only = diffWords(c.changedFiles).filter((w) => !known.has(w));
         const said = only.filter((w) => content.toLowerCase().includes(w));
-        if (only.length) check(`says what the diff does (uses ${said.length ? said.slice(0, 4).join(', ') : 'none'} of: ${only.slice(0, 6).join(', ')})`, said.length >= 1);
+        if (only.length >= 3) check(`says what the diff does (uses ${said.length ? said.slice(0, 4).join(', ') : 'none'} of: ${only.slice(0, 6).join(', ')})`, said.length >= 1);
     }
 
     return done(content.length);
@@ -508,7 +511,7 @@ async function main() {
         question: evalQuestion('evals/pr-summary'),
         model: MODEL,
         runs: 1,
-        metric: { name: 'of PR-summary checks passed', value: total ? hits / total : null, floor: FLOOR, baseline: null },
+        metric: { name: 'of PR-summary checks passed', value: total ? hits / total : null, floor: FLOOR, baseline: TARGET.observed ?? null },
         cases: evalCases,
         tokens: tokensUsed(),
         infra: { errored: infraCases.length + results.filter((r) => r.errored && !r.infra).length, total: cases.length },
