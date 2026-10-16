@@ -132,9 +132,11 @@ export const useCodeReviewSettingsMutation = (params: {
         const prepared = await (options?.prepare ?? defaultPrepare)(formData);
 
         const { language: _language, ...formattedConfig } = formData;
+        // `formState.defaultValues` is the snapshot of the last render and
+        // lags behind a reset; the control holds the live defaults.
         const changedConfig = pickChangedConfig(
             prepared.codeReviewConfig,
-            getChangedConfigMask(formattedConfig, form.formState.defaultValues),
+            getChangedConfigMask(formattedConfig, form.control._defaultValues),
         );
 
         // Nothing in the code-review config changed (e.g. only the language,
