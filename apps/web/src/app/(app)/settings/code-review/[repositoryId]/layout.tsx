@@ -73,6 +73,7 @@ export default function Layout(props: React.PropsWithChildren) {
         [language, scopeKey],
     );
     const hydratedStateKeyRef = useRef(hydrationKey);
+    const appliedFormValuesRef = useRef(initialFormValues);
 
     const canEdit = usePermission(
         Action.Update,
@@ -101,6 +102,8 @@ export default function Layout(props: React.PropsWithChildren) {
                 hydrationKey,
             )
         ) {
+            if (appliedFormValuesRef.current === initialFormValues) return;
+
             // Same scope, refetched config (e.g. a Kody Rules toggle saved on
             // its own): take the server values for every field the user has
             // not edited, so the form never holds a value that is gone. The
@@ -111,11 +114,13 @@ export default function Layout(props: React.PropsWithChildren) {
                 keepErrors: true,
                 keepTouched: true,
             });
+            appliedFormValuesRef.current = initialFormValues;
             return;
         }
 
         form.reset(initialFormValues);
         hydratedStateKeyRef.current = hydrationKey;
+        appliedFormValuesRef.current = initialFormValues;
     }, [form, hydrationKey, initialFormValues]);
 
     const scrollToDirtyField = useCallback(() => {
