@@ -21,12 +21,16 @@ const firstDropped = (s, i) => (i === 0 ? 'drop' : 'keep');
 const asProse = (s, i) =>
     `${i + 1}. In \`${s.relevantFile}\`, lines ${s.relevantLinesStart ?? '?'}-${s.relevantLinesEnd ?? s.relevantLinesStart ?? '?'} (${s.severity || 'medium'}): ${s.suggestionContent}`;
 
-// The JSON a model writes when it does not escape a quote inside code: the
-// second finding's improvedCode carries a raw `"`, so the string breaks there.
+// The JSON a model writes when it does not escape a quote inside code: a raw
+// `"` in the second finding's code (or, without code, its description), so the
+// string breaks there. Throws when nothing broke: a case that still parses
+// would pass without measuring the break.
 function brokenAtSecond(suggestions) {
     const json = JSON.stringify(suggestions);
     const second = JSON.stringify(suggestions[1]);
-    const broken = second.replace(/("improvedCode":")/, '$1x = "y" + ');
+    const field = ['improvedCode', 'existingCode', 'suggestionContent'].find((k) => typeof suggestions[1]?.[k] === 'string');
+    const broken = field ? second.replace(`"${field}":"`, `"${field}":"x = "y" + `) : second;
+    if (broken === second) throw new Error('suggestions-broken-json: the second finding has no string field to break');
     return json.replace(second, broken);
 }
 
