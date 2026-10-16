@@ -105,14 +105,27 @@ describe('finder input data', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { internals } = require('./agent-provider');
 
-    it("stores the case's memories as global Kody Rules of type memory, and its overrides as the team's config", () => {
+    it("hands over the case's memories as a member writes them, and its overrides as the team's config", () => {
         delete process.env.RECALL_CATEGORIES;
         delete process.env.RECALL_HEAVY;
-        const team = internals.teamOf({ languageResultPrompt: 'pt-BR', memoryRules: [{ title: 't', rule: 'r' }], v2PromptOverrides: { generation: { main: 'x' } } });
+        const team = internals.teamOf({ languageResultPrompt: 'pt-BR', memoryRules: [{ title: 't', rule: 'r', type: 'memory' }], v2PromptOverrides: { generation: { main: 'x' } } });
         expect(team.language).toBe('pt-BR');
-        expect(team.rules).toMatchObject([{ title: 't', rule: 'r', type: 'memory', status: 'active', repositoryId: 'global' }]);
+        expect(team.memories).toEqual([{ title: 't', rule: 'r', path: null }]);
         expect(team.codeReviewConfig.configs.v2PromptOverrides).toEqual({ generation: { main: 'x' } });
         expect(internals.teamOf({}).codeReviewConfig).toBeNull();
+    });
+
+    it("stores a memory through production's write, and the review reads it back as an active global memory", async () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { teamStore } = require('../shared/review-stage');
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { evalPermissionService, EVAL_ORG } = require('../shared/model-route');
+        const store = await teamStore({ memories: [{ title: 't', rule: 'r' }, { title: 'u', rule: 's' }] }, evalPermissionService(null));
+        const entity = await store.kodyRulesService.findByOrganizationId(EVAL_ORG.organizationId);
+        expect(entity.toObject().rules).toMatchObject([
+            { title: 't', rule: 'r', type: 'memory', status: 'active', repositoryId: 'global', origin: 'manual' },
+            { title: 'u', rule: 's', type: 'memory', status: 'active', repositoryId: 'global', origin: 'manual' },
+        ]);
     });
 
     it('refuses a mode production gates behind a release the eval has no org for', () => {
@@ -125,6 +138,17 @@ describe('finder input data', () => {
         const files = [{ filename: 'a.ts', patch: '@@ -1 +1 @@\n+x', status: 'modified' }];
         const pr = internals.prOf({ caseId: 'c', repositoryFullName: 'o/r', prNumber: 3, prHead: { ref: 'h', sha: 's' }, prBase: { ref: 'main' }, prFiles: files });
         expect(pr).toMatchObject({ repo: 'o/r', number: 3, headRef: 'h', headSha: 's', baseRef: 'main', files });
+    });
+
+    it('computes the files of a repository written for the eval as the platform lists them', () => {
+        const pr = internals.prOf({ caseId: 'c', repoBase: { 'a.ts': 'x\n', 'gone.ts': 'y\n', 'same.ts': 'z\n' }, repoFiles: { 'a.ts': 'x2\n', 'new.ts': 'n\n', 'gone.ts': null } });
+        expect(pr.repo).toBeUndefined();
+        expect(pr.files.map((f) => [f.filename, f.status, f.additions, f.deletions])).toEqual([
+            ['a.ts', 'modified', 1, 1],
+            ['gone.ts', 'removed', 0, 1],
+            ['new.ts', 'added', 1, 0],
+        ]);
+        expect(pr.files[0].patch).toBe('@@ -1,1 +1,1 @@\n-x\n+x2');
     });
 
     it('sets the team category toggles only when RECALL_CATEGORIES asks', () => {

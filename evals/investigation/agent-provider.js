@@ -60,15 +60,9 @@ function summarizeInput(value) {
     return { type: typeof value };
 }
 
-// The PR's changed files as the dataset recorded them: the whole diff
-// (changedFilesFull, rendered by production's chain in materialize-full-diff.js)
-// or the corpus's first, partial field. Passed through: filename, status,
-// additions and deletions are the platform's, never recomputed. The datasets
-// carry no raw patch; production's only reader of `patch` on this path (the
-// coverage ledger's changed ranges) reads the hunk headers, which the rendered
-// patchWithLinesStr keeps, so it stands in for the patch a file does not carry.
 const { resolveRoute, evalPermissionService, NotAProductionRoute } = require('../shared/model-route');
 const { reviewPullRequest } = require('../shared/review-stage');
+const { filesBetween } = require('../shared/repo-mirror');
 
 // RECALL_CATEGORIES=bug,security: the team's category toggles (reviewOptions),
 // for an experiment. Without it the team set none, so production runs all three.
@@ -79,12 +73,10 @@ function reviewOptionsFromEnv() {
     return { bug: on.has('bug'), security: on.has('security'), performance: on.has('performance') };
 }
 
-// What the team stored, from the case's data: its language, its memories as
-// Kody Rules of type memory (read back by production's loader), and the review
-// options and prompt overrides it set.
+// What the team set, from the case's data: its language, its memories as a
+// member writes them (stored by production's write, shared/review-stage.js
+// teamStore), and the review options and prompt overrides it saved.
 function teamOf(caseData) {
-    const { KodyRulesStatus } = require('../../libs/kodyRules/domain/interfaces/kodyRules.interface.ts');
-    const { KodyRulesType } = require('../../libs/kodyRules/domain/interfaces/kodyRules.interface.ts');
     if (process.env.RECALL_HEAVY === '1') {
         throw new NotAProductionRoute('RECALL_HEAVY asks for a mode the review enables behind a release gate the eval has no org for');
     }
@@ -98,34 +90,32 @@ function teamOf(caseData) {
     };
     return {
         language: caseData.languageResultPrompt || undefined,
-        rules: memories.map((m, i) => ({
-            uuid: m.uuid || `eval-memory-${i}`,
-            repositoryId: 'global',
-            status: KodyRulesStatus.ACTIVE,
-            createdAt: new Date(2026, 0, 1, 0, i).toISOString(),
-            ...m,
-            type: KodyRulesType.MEMORY,
-        })),
+        memories: memories.map((m) => ({ title: m.title, rule: m.rule, path: m.path ?? null })),
         codeReviewConfig: Object.keys(configs).length ? { configs, repositories: [] } : null,
     };
 }
 
-// The PR as the platform returns it: the recorded adapter output when the case
-// has it (evals/investigation/fetch-pr-data.js), else the case's own files.
+// The PR as the platform returns it: the adapter output recorded for a real PR
+// (evals/investigation/fetch-pr-data.js), or, for a repository written for the
+// eval (repoFiles over repoBase), what the platform computes between the two.
 function prOf(caseData) {
-    const files = parseMaybeJson(caseData.prFiles);
+    const repoFiles = parseMaybeJson(caseData.repoFiles);
+    const repoBase = parseMaybeJson(caseData.repoBase) || {};
+    const files = repoFiles ? filesBetween(repoBase, repoFiles) : parseMaybeJson(caseData.prFiles);
     if (!files) throw new Error(`case ${caseData.caseId} has no prFiles: run evals/investigation/fetch-pr-data.js`);
     return {
-        repo: caseData.repoFiles ? undefined : caseData.repositoryFullName,
+        repo: repoFiles ? undefined : caseData.repositoryFullName,
         number: caseData.prNumber ?? undefined,
         title: caseData.prTitle,
         body: caseData.prBody,
         headRef: caseData.prHead?.ref,
         headSha: caseData.prHead?.sha,
         baseRef: caseData.prBase?.ref || caseData.baseBranch || 'main',
+        baseSha: caseData.prBase?.sha,
         files,
         commits: parseMaybeJson(caseData.prCommits) || [],
-        repoFiles: caseData.repoFiles ? parseMaybeJson(caseData.repoFiles) : undefined,
+        repoFiles,
+        repoBase: repoFiles ? repoBase : undefined,
     };
 }
 

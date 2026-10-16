@@ -13,6 +13,11 @@ const fs = require('fs');
 const path = require('path');
 
 const DATASETS_DIR = path.join(__dirname, 'datasets');
+// A repository written for the scripted model of evals/wiring-smoke.js: its one
+// finding (every string "fake", every number 1) points at line 1 of a file named
+// fake, which this PR adds, so it anchors and reaches scoring.
+const WIRING_CASE_FILE = path.join(__dirname, 'wiring-case.json');
+const WIRING_CASE_ID = 'wiring-scripted-finding';
 
 // One high-signal case per repo (cal.com / sentry / grafana-codex / keycloak /
 // discourse-cursor). 5 cases / 25 goldens, useful for quick local checks.
@@ -84,7 +89,10 @@ module.exports = async () => {
 
     const files = fs
         .readdirSync(DATASETS_DIR)
-        .filter((f) => f.endsWith('.json') && f !== 'smoke.json');
+        .filter((f) => f.endsWith('.json') && f !== 'smoke.json')
+        .map((f) => path.join(DATASETS_DIR, f));
+    // The wiring smoke's case runs only when named: it measures nothing.
+    if (only.includes(WIRING_CASE_ID)) files.push(WIRING_CASE_FILE);
 
     const tests = [];
     for (const file of files) {
@@ -94,15 +102,13 @@ module.exports = async () => {
         // unselected one) skips instead of aborting the whole run.
         let raw;
         try {
-            raw = JSON.parse(
-                fs.readFileSync(path.join(DATASETS_DIR, file), 'utf8'),
-            );
+            raw = JSON.parse(fs.readFileSync(file, 'utf8'));
         } catch (err) {
-            console.warn(`[recall-tests] skipping unreadable dataset ${file}: ${err.message}`);
+            console.warn(`[recall-tests] skipping unreadable dataset ${path.basename(file)}: ${err.message}`);
             continue;
         }
         const c = Array.isArray(raw) ? raw[0] : raw;
-        const caseId = c?.vars?.caseId || file.replace(/\.json$/, '');
+        const caseId = c?.vars?.caseId || path.basename(file, '.json');
         const include = all
             ? true
             : only.length

@@ -53,13 +53,40 @@ function observeTheLoop() {
 
 // ── The data production reads, held in memory ───────────────────────────────
 
+// The Kody Rules collection of one org, held in memory: the repository
+// KodyRulesService writes to and reads from (KODY_RULES_REPOSITORY_TOKEN).
+function kodyRulesRepository() {
+    const { KodyRulesEntity } = lib('kodyRules/domain/entities/kodyRules.entity.ts');
+    let doc = null;
+    return {
+        findByOrganizationId: async (organizationId) => (doc && doc.organizationId === organizationId ? KodyRulesEntity.create(doc) : null),
+        create: async (kodyRules) => {
+            doc = { uuid: `eval-kody-rules-${kodyRules.organizationId}`, ...kodyRules };
+            return KodyRulesEntity.create(doc);
+        },
+        addRule: async (_uuid, rule) => {
+            doc = { ...doc, rules: [...(doc.rules || []), rule] };
+            return KodyRulesEntity.create(doc);
+        },
+    };
+}
+
 /**
  * The team's stored data, where CodeBaseConfigService reads it: its
  * code_review_config parameter (none: a team that kept the defaults), its
- * language_config, and its Kody Rules (memories are rules of type memory).
+ * language_config, and its Kody Rules. Memories are stored as a team member's
+ * memory is, through the API's write (KodyRulesService.createOrUpdate, as the
+ * create-or-update use case calls it for a memory without centralized config),
+ * and read back by the review through the same service.
+ *
+ * `memories`: [{ title, rule, path? }] as the member wrote them, for every
+ * repository ('global').
  */
-function teamStore({ language, rules = [], codeReviewConfig = null }) {
+async function teamStore({ language, memories = [], codeReviewConfig = null }, permissionService) {
     const { ParametersKey } = lib('core/domain/enums/parameters-key.enum.ts');
+    const { KodyRulesService } = lib('ee/kodyRules/service/kodyRules.service.ts');
+    const { KodyRulesValidationService } = lib('ee/kodyRules/service/kody-rules-validation.service.ts');
+    const { KodyRulesType } = lib('kodyRules/domain/interfaces/kodyRules.interface.ts');
     let stored = codeReviewConfig;
     const parametersService = {
         findOne: async ({ configKey }) =>
@@ -71,12 +98,27 @@ function teamStore({ language, rules = [], codeReviewConfig = null }) {
             return { configValue: stored };
         },
     };
-    const entity = rules.length ? { toObject: () => ({ rules }) } : null;
-    const kodyRulesService = {
-        findByOrganizationId: async () => entity,
-        // The rules' lock state already matches the plan: nothing to reconcile.
-        syncRulesWithPlanLimit: async (_org, { entity: e }) => e,
-    };
+    const kodyRulesService = new KodyRulesService(
+        kodyRulesRepository(),
+        // The audit log's event bus.
+        { emit: () => true },
+        undefined,
+        undefined,
+        new KodyRulesValidationService(permissionService),
+        undefined,
+        undefined,
+        permissionService,
+        undefined,
+        undefined,
+    );
+    for (const memory of memories) {
+        // eslint-disable-next-line no-await-in-loop
+        await kodyRulesService.createOrUpdate(
+            EVAL_ORG,
+            { type: KodyRulesType.MEMORY, title: memory.title, rule: memory.rule, path: memory.path ?? null, repositoryId: 'global' },
+            { userId: 'eval-member', userEmail: 'member@example.com' },
+        );
+    }
     return { parametersService, kodyRulesService };
 }
 
@@ -180,12 +222,12 @@ async function changedFilesThroughStage(context, codeManagement) {
 
 // The repository the review reads: a mirror of the platform's refs for the PR,
 // or a repository written for the eval. `head` is the ref content is read at.
-async function repositoryFor({ repo, prNumber, headRef, headSha, baseRef, repoFiles }) {
+async function repositoryFor({ repo, prNumber, headRef, headSha, baseRef, baseSha, repoFiles, repoBase }) {
     if (repoFiles) {
-        const inline = await inlineMirror(repoFiles);
+        const inline = await inlineMirror(repoFiles, { base: repoBase });
         return { cloneUrl: inline.cloneUrl, branch: inline.branch, baseBranch: inline.base, head: inline.branch, prNumber: undefined, commit: false, cleanup: inline.cleanup };
     }
-    const cloneUrl = await mirrorFor({ repo, prNumber, headSha, baseRef });
+    const cloneUrl = await mirrorFor({ repo, prNumber, headSha, baseRef, baseSha });
     return { cloneUrl, branch: headRef, baseBranch: baseRef, head: prNumber ? `refs/pull/${prNumber}/head` : `refs/eval/${headSha}`, prNumber: prNumber || undefined, commit: !prNumber && !!headSha, headSha, cleanup: async () => undefined };
 }
 
@@ -213,9 +255,10 @@ async function checkout(repository) {
 
 /**
  * Reviews one PR as production does. `pr` is the platform's data:
- *   { repo, number, title, body, headRef, headSha, baseRef, files, commits,
- *     repoFiles? (a repository written for the eval, instead of `repo`) }
- * `team`: { language, rules, codeReviewConfig } as the team stored them.
+ *   { repo, number, title, body, headRef, headSha, baseRef, baseSha, files, commits,
+ *     repoFiles?, repoBase? (a repository written for the eval, its head and
+ *     base trees, instead of `repo`; `files` then come from filesBetween) }
+ * `team`: { language, memories, codeReviewConfig } as the team set them.
  * Returns what the stage hands to posting, what it discarded, the agent loops
  * it ran, and the context.
  */
@@ -234,7 +277,9 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
         headRef: pr.headRef,
         headSha: pr.headSha,
         baseRef: pr.baseRef,
+        baseSha: pr.baseSha,
         repoFiles: pr.repoFiles,
+        repoBase: pr.repoBase,
     });
     const codeManagement = platform({
         baseRef: pr.baseRef || repo.baseBranch || 'main',
@@ -242,7 +287,7 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
         prCommits: pr.commits || [],
         content: (file) => contentAt(repo.cloneUrl, repo.head, file),
     });
-    const store = teamStore(team);
+    const store = await teamStore(team, permissionService);
 
     const codeReviewConfig = await resolveTeamConfig({
         permissionService,

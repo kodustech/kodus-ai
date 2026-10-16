@@ -118,6 +118,7 @@ jobs:
             # night's budget measuring nothing. Also records the files finder-recall
             # loads — the only changes this night can measure — and those the
             # kody-rules eval loads.
+            - uses: ./.github/actions/eval-sandbox
             - name: Wiring smoke + files finder-recall loads
               run: node evals/wiring-smoke.js --engine-files=engine-files.txt --kody-rules-files=kody-rules-files.txt --eval-files-dir=eval-files --results=wiring-results.json
             # One row per review stage (evals/stages.js) from tonight's wiring
@@ -350,8 +351,10 @@ jobs:
                   cache: "pnpm"
             - name: Install deps
               run: pnpm install --frozen-lockfile
-            - name: Install ripgrep (the local sandbox's grep, for cases that bring their repository)
-              run: command -v rg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep)
+            # The funnel's stages review real PRs' repositories (verify reads them).
+            - uses: ./.github/actions/eval-sandbox
+              with:
+                  repositories: ${{ startsWith(matrix.eval, 'funnel') }}
             - name: Create environment.ts (gitignored EE config)
               run: |
                   cat <<'EOF' > libs/ee/configs/environment/environment.ts
@@ -454,6 +457,9 @@ jobs:
                   cache: "pnpm"
             - name: Install deps
               run: pnpm install --frozen-lockfile
+            - uses: ./.github/actions/eval-sandbox
+              with:
+                  repositories: "true"
             - name: Create environment.ts (gitignored EE config)
               run: |
                   cat <<'EOF' > libs/ee/configs/environment/environment.ts

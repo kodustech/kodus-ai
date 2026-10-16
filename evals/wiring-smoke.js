@@ -36,7 +36,9 @@ const { readTrace, uncovered } = require('./shared/engine-files');
 
 const ROOT = path.join(__dirname, '..');
 const PR_WORKFLOW = '.github/workflows/code-review-evals-pr.yml';
-const FINDER_CASE = 'add-guest-management-functionality-to-existing-bookings-cal-com';
+// A repository written for the scripted model (evals/investigation/wiring-case.json):
+// production's stage reviews it on a local clone, with no GitHub fetch.
+const FINDER_CASE = 'wiring-scripted-finding';
 // Each step takes seconds against the scripted model. Minutes means it hangs
 // (a finished eval that never exits), which is a break in its own right.
 const STEP_TIMEOUT_MS = 3 * 60 * 1000;
