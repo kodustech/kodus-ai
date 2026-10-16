@@ -10,11 +10,12 @@ The review stage hands the findings of a review to `formatSuggestionContent`
 (`libs/code-review/infrastructure/agents/engine/format-suggestion-content.ts`),
 which rewrites the finder's WHAT/WHY/HOW text into the comment a developer
 reads, and falls back to stripping the labels locally when the model call
-fails. The eval calls it as the stage does (`agent-review.stage.ts`) and scores
-what ships: the formatted text, or the finder's own when nothing came back,
-after the stage's deterministic shaping (the impact-and-action fallback, the
-scaffolding strip, and no code block, no title repeat, two sentences unless the
-team wrote its own guideline).
+fails. The stage runs it inside `formatAndShapeSuggestions`
+(`format-and-shape-suggestions.ts`), which then gives each comment its shape
+(the impact-and-action fallback, the scaffolding strip, and no code block, no
+title repeat, two sentences unless the team wrote its own guideline). The eval
+calls that same function and scores what it leaves in each finding; it supplies
+only the findings and the team's settings.
 
 - `batches.json`: the findings of 31 reviews, as nine models wrote them on public
   PRs (the run ends recorded for `evals/parse`, the one with the most findings

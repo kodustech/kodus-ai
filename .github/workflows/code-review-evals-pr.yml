@@ -32,6 +32,9 @@ on:
             - "package.json"
             - "pnpm-lock.yaml"
             - "tsconfig*.json"
+            # The shipped defaults (writing guidelines): read by production's
+            # resolveWritingGuidelines, which evals/format runs.
+            - "default-kodus-config.yml"
             - ".github/workflows/code-review-evals-*.yml"
     workflow_dispatch:
 

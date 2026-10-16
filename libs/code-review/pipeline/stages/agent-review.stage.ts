@@ -20,12 +20,9 @@ import {
 } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
 import { buildPlatformEmbedder } from '@libs/common/utils/document';
 import { resolveSuggestionTitle } from '@libs/common/utils/codeManagement/suggestion-title';
-import {
-    impactAndActionFallback,
-    stripReviewScaffolding,
-} from '@libs/code-review/infrastructure/agents/engine/strip-review-scaffolding';
+import { stripReviewScaffolding } from '@libs/code-review/infrastructure/agents/engine/strip-review-scaffolding';
 import { resolveWritingGuidelines } from '@libs/common/utils/writing-guidelines';
-import { shapeSuggestionBodyWithReport } from '@libs/common/utils/codeManagement/suggestion-body-shape';
+import { formatAndShapeSuggestions } from '@libs/code-review/infrastructure/agents/engine/format-and-shape-suggestions';
 import {
     dedupReviewWarnings,
     buildBadFixDowngradedWarning,
@@ -61,10 +58,7 @@ import {
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { AgentProgressEvent } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
-import {
-    analyzerFindingsToSuggestions,
-    isAnalyzerSuggestion,
-} from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
+import { analyzerFindingsToSuggestions } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
 import { preferAnalyzerKeep } from '@libs/code-review/infrastructure/agents/engine/prefer-analyzer-keep';
 import {
     bothFromAnalyzers,
@@ -1375,95 +1369,28 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const writingGuidelines =
                 resolveWritingGuidelines(savedGenerationMain);
 
-            const formattedTargets = new Set<(typeof deduped)[number]>();
-            // Clean up suggestion text: remove WHAT/WHY/HOW labels, merge into natural prose
-            try {
-                const {
-                    formatSuggestionContent,
-                } = require('@libs/code-review/infrastructure/agents/engine/format-suggestion-content');
-                // Deterministic findings skip the pass. Their body is already
-                // the structured list the builder produced, and a polish pass
-                // reflowed it into one paragraph — losing the per-package
-                // lines and appending remediation advice the scanner never
-                // said. There is no WHAT/WHY/HOW scaffolding here to strip.
-                const formatTargets = deduped
-                    .map((s, i) => (isAnalyzerSuggestion(s) ? -1 : i))
-                    .filter((i) => i >= 0);
-                const formatted = await formatSuggestionContent(
-                    formatTargets.map((i) => ({
-                        title: deduped[i].oneSentenceSummary || '',
-                        suggestionContent: deduped[i].suggestionContent || '',
-                        existingCode: deduped[i].existingCode || '',
-                        improvedCode: deduped[i].improvedCode || '',
-                        relevantFile: deduped[i].relevantFile || '',
-                        language: deduped[i].language || '',
-                    })),
-                    {
-                        // A saved copy of a shipped default is not the team's
-                        // own text; only a real edit outranks the formatter's rules.
-                        customWritingGuidelines: writingGuidelines.isCustom
-                            ? writingGuidelines.text
-                            : undefined,
-                        byokConfig: context.codeReviewConfig?.byokConfig,
-                        languageResultPrompt:
-                            context.codeReviewConfig?.languageResultPrompt,
-                        organizationId:
-                            context.organizationAndTeamData?.organizationId,
-                    },
-                );
-                for (const [i, fmt] of formatted) {
-                    const target = formatTargets[i];
-                    if (
-                        target !== undefined &&
-                        deduped[target] &&
-                        fmt.suggestionContent?.trim()
-                    ) {
-                        formattedTargets.add(deduped[target]);
-                        deduped[target].suggestionContent =
-                            fmt.suggestionContent;
-                    }
-                }
-                this.logger.log({
-                    message: `[AGENT] Formatted ${formatted.size}/${formatTargets.length} suggestion contents`,
-                    context: this.stageName,
+            // Clean up suggestion text: remove WHAT/WHY/HOW labels, merge into
+            // natural prose, then give each comment the shape it needs
+            // (format-and-shape-suggestions.ts, also run by evals/format).
+            const { formatted, formatTargets, formatError, shapeCounts } =
+                await formatAndShapeSuggestions(deduped, {
+                    writingGuidelines,
+                    byokConfig: context.codeReviewConfig?.byokConfig,
+                    languageResultPrompt:
+                        context.codeReviewConfig?.languageResultPrompt,
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
                 });
-            } catch (err) {
+            if (formatError !== undefined) {
                 this.logger.warn({
-                    message: `[AGENT] Content formatting failed, keeping original text: ${err instanceof Error ? err.message : String(err)}`,
+                    message: `[AGENT] Content formatting failed, keeping original text: ${formatError instanceof Error ? formatError.message : String(formatError)}`,
                     context: this.stageName,
                 });
-            }
-
-            // The shape the comment needs does not depend on the model
-            // complying: no code blocks, no opening sentence that restates the
-            // title, and two sentences unless the team set its own length.
-            // Deterministic findings keep their structured list.
-            const shapeCounts = {
-                shaped: 0,
-                removedFences: 0,
-                droppedTitleRepeat: 0,
-                capped: 0,
-                impactActionFallback: 0,
-            };
-            for (const s of deduped) {
-                if (isAnalyzerSuggestion(s)) continue;
-                const fallback =
-                    !writingGuidelines.isCustom && !formattedTargets.has(s)
-                        ? impactAndActionFallback(s.suggestionContent || '')
-                        : undefined;
-                if (fallback) shapeCounts.impactActionFallback++;
-                const shaped = shapeSuggestionBodyWithReport({
-                    body: stripReviewScaffolding(
-                        fallback || s.suggestionContent || '',
-                    ),
-                    title: s.oneSentenceSummary,
-                    capSentences: !writingGuidelines.isCustom,
+            } else {
+                this.logger.log({
+                    message: `[AGENT] Formatted ${formatted}/${formatTargets} suggestion contents`,
+                    context: this.stageName,
                 });
-                s.suggestionContent = shaped.body;
-                shapeCounts.shaped++;
-                if (shaped.removedFences) shapeCounts.removedFences++;
-                if (shaped.droppedTitleRepeat) shapeCounts.droppedTitleRepeat++;
-                if (shaped.capped) shapeCounts.capped++;
             }
             this.logger.log({
                 message: `[AGENT] Shaped ${shapeCounts.shaped} suggestion bodies (fences removed ${shapeCounts.removedFences}, title repeat dropped ${shapeCounts.droppedTitleRepeat}, capped ${shapeCounts.capped})`,
