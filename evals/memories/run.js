@@ -134,8 +134,8 @@ async function main() {
         return 2;
     }
     if (args.gate && result.metric.floor === null) {
-        console.error(`GATE NOT EVALUATED: no floor for ${MODEL} in evals/memories/targets.json`);
-        return 0;
+        console.error(`not measured: no floor for ${MODEL} in evals/memories/targets.json, so --gate cannot judge it`);
+        return 2;
     }
     if (args.gate && result.metric.value < result.metric.floor) {
         console.error(`GATE FAILED: ${(result.metric.value * 100).toFixed(1)}% below the floor in evals/memories/targets.json`);
