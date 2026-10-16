@@ -12,6 +12,7 @@ require('tsconfig-paths/register');
  */
 const fs = require('fs');
 const path = require('path');
+const { grupos, carregaFinal } = require('../grupos-producao');
 const { generateText, tool, jsonSchema } = require('ai');
 const INV = path.join(__dirname, '..', '..', '..', 'investigation');
 const { buildModel, descreveModelo } = require(path.join(INV, 'eval-model'));
@@ -84,21 +85,6 @@ function normaliza(d) {
     return { nit: d.verdict === 'refutation_holds', verdict: d.verdict, evidence: d.evidence || '', reason: d.reason || '' };
 }
 
-function grupos(sugs, final, entrada) {
-    const chegou = new Set(entrada);
-    const porGrupo = {};
-    const out = [];
-    for (const s of sugs) {
-        if (!chegou.has(s.id)) continue;
-        const g = final[s.id]?.grupo;
-        if (g) (porGrupo[g] = porGrupo[g] || []).push(s); else out.push([s]);
-    }
-    out.push(...Object.values(porGrupo));
-    return out.map((m) => {
-        const rep = m.reduce((a, b) => (String(b.suggestionContent).length > String(a.suggestionContent).length ? b : a));
-        return { rep: rep.id, membros: m.map((x) => x.id), s: rep };
-    });
-}
 
 function ferramentas(cmd) {
     return {
@@ -142,7 +128,7 @@ async function julga(model, cmd, s, refs) {
     const model = buildModel(MODELO);
     console.log(`[verify-alucinacao-defesa] ${VERSAO} · ${descreveModelo(MODELO)} · ${GOLD}`);
     const sug = JSON.parse(fs.readFileSync(path.join(__dirname, '..', `09.10.26_${GOLD}.json`), 'utf8')).prs;
-    const fin = JSON.parse(fs.readFileSync(path.join(__dirname, '..', `09.10.26_${GOLD}.final.json`), 'utf8')).prs;
+    const fin = carregaFinal('09.10.26', GOLD);
     const real = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'dedup-real', DEDUP, `${GOLD}.json`), 'utf8')).prs;
     const vars = {};
     for (const f of fs.readdirSync(path.join(INV, 'datasets')).filter((x) => x.endsWith('.json'))) {

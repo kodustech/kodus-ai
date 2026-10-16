@@ -15,6 +15,7 @@ require('tsconfig-paths/register');
  */
 const fs = require('fs');
 const path = require('path');
+const { grupos, carregaFinal } = require('../grupos-producao');
 const { tool, jsonSchema } = require('ai');
 const INV = path.join(__dirname, '..', '..', '..', 'investigation');
 const { buildModel, descreveModelo } = require(path.join(INV, 'eval-model'));
@@ -153,28 +154,12 @@ Give exactly ten developers per candidate. Instead of a single score, the devs a
 
 ` : ''}Call pontuar exactly once, with ${MODO ? 'the ten developers' : 'a score'} for every candidate index.`;
 
-/** Grupos do gold restritos ao que chega ao dedup; representante = texto mais longo. */
-function grupos(cid, sugs, final, entrada) {
-    const chegou = new Set(entrada);
-    const porGrupo = {};
-    const out = [];
-    for (const s of sugs) {
-        if (!chegou.has(s.id)) continue;
-        const g = final[s.id]?.grupo;
-        if (g) (porGrupo[g] = porGrupo[g] || []).push(s); else out.push([s]);
-    }
-    out.push(...Object.values(porGrupo));
-    return out.map((m) => {
-        const rep = m.reduce((a, b) => (String(b.suggestionContent).length > String(a.suggestionContent).length ? b : a));
-        return { rep: rep.id, membros: m.map((x) => x.id), agentes: [...new Set(m.map((x) => x.producedBy))], s: rep };
-    });
-}
 
 (async () => {
     const model = buildModel(MODELO);
     console.log(`[avaliador-nota] ${descreveModelo(MODELO)} · ${GOLD} · ${VERSAO}`);
     const sug = JSON.parse(fs.readFileSync(path.join(__dirname, '..', `09.10.26_${GOLD}.json`), 'utf8')).prs;
-    const fin = JSON.parse(fs.readFileSync(path.join(__dirname, '..', `09.10.26_${GOLD}.final.json`), 'utf8')).prs;
+    const fin = carregaFinal('09.10.26', GOLD);
     const real = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'dedup-real', VERSAO, `${GOLD}.json`), 'utf8')).prs;
     const diffs = {};
     for (const f of fs.readdirSync(path.join(INV, 'datasets')).filter((x) => x.endsWith('.json'))) {
@@ -194,7 +179,7 @@ function grupos(cid, sugs, final, entrada) {
     let i = 0;
     const um = async (cid) => {
         try {
-            const gs = grupos(cid, sug[cid].suggestions, fin[cid], real[cid].idsEntradaDedup || []).filter((g) => !removidos.has(`${cid}|${g.rep}`));
+            const gs = grupos(sug[cid].suggestions, fin[cid], real[cid].idsEntradaDedup || []).filter((g) => !removidos.has(`${cid}|${g.rep}`));
             let notas = [];
             if (gs.length) {
                 const r = await retry(() => chamadaEstruturada({ model, modelId: MODELO, nome: 'pontuar', schema: SCHEMA, toolDef: pontuarTool, prompt: prompt(gs.map((g) => g.s), diffs[cid]) }));

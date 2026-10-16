@@ -18,6 +18,7 @@ require('tsconfig-paths/register');
  */
 const fs = require('fs');
 const path = require('path');
+const { grupos, carregaFinal } = require('../grupos-producao');
 const { generateText, tool, jsonSchema } = require('ai');
 const INV = path.join(__dirname, '..', '..', '..', 'investigation');
 const { buildModel, descreveModelo } = require(path.join(INV, 'eval-model'));
@@ -171,21 +172,6 @@ Do not judge whether the comment is correct. Judge only this: if what it describ
 
 You can check the repository at this pull request's commit with grep, readFile and listDir, for example to see whether any caller can actually produce the case the comment worries about. You have at most ${TETO} steps in total. Answer with submit.`;
 
-function grupos(sugs, final, entrada) {
-    const chegou = new Set(entrada);
-    const porGrupo = {};
-    const out = [];
-    for (const s of sugs) {
-        if (!chegou.has(s.id)) continue;
-        const g = final[s.id]?.grupo;
-        if (g) (porGrupo[g] = porGrupo[g] || []).push(s); else out.push([s]);
-    }
-    out.push(...Object.values(porGrupo));
-    return out.map((m) => {
-        const rep = m.reduce((a, b) => (String(b.suggestionContent).length > String(a.suggestionContent).length ? b : a));
-        return { rep: rep.id, membros: m.map((x) => x.id), s: rep };
-    });
-}
 
 function ferramentas(cmd) {
     return {
@@ -273,7 +259,7 @@ async function julga(model, cmd, s, diff) {
     const model = buildModel(MODELO);
     console.log(`[verify-nit] ${VERSAO} · ${descreveModelo(MODELO)} · ${GOLD}`);
     const sug = JSON.parse(fs.readFileSync(path.join(__dirname, '..', `${PREFIXO}_${GOLD}.json`), 'utf8')).prs;
-    const fin = JSON.parse(fs.readFileSync(path.join(__dirname, '..', `${PREFIXO}_${GOLD}.final.json`), 'utf8')).prs;
+    const fin = carregaFinal(PREFIXO, GOLD);
     const real = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'dedup-real', DEDUP, `${GOLD}.json`), 'utf8')).prs;
     const vars = {};
     for (const f of fs.readdirSync(path.join(INV, 'datasets')).filter((x) => x.endsWith('.json'))) {
