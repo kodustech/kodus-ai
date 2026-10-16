@@ -226,6 +226,8 @@ const READERS = {
         floor: r.metric?.floor ?? null,
         baseline: r.metric?.baseline ?? null,
         extra: {
+            // A number measured beside the gated one, never gated (evals/thread-actions).
+            ...(r.reported ? { reported: { name: r.reported.name, value: r.reported.value ?? null } } : {}),
             model: r.model || null,
             cases: Array.isArray(r.cases) ? r.cases.length : null,
             runs: r.runs ?? null,

@@ -20,6 +20,22 @@ const org = (n: number) => ({
     organizationId: `00000000-0000-4000-8000-0000000000a${n}`,
     teamId: `00000000-0000-4000-8000-0000000000b${n}`,
 });
+const RULE = {
+    uuid: '00000000-0000-4000-8000-0000000000c3',
+    type: 'standard',
+    title: 'Exported functions have a JSDoc comment',
+    rule: 'Every exported function must have a JSDoc comment.',
+    path: '**/*.ts',
+    scope: 'file',
+    severity: 'medium',
+    status: 'active',
+    origin: 'manual',
+    repositoryId: REPOSITORY.id,
+    examples: [],
+    inheritance: { inheritable: true, exclude: [], include: [] },
+    createdAt: new Date('2026-10-01T12:00:00Z'),
+    updatedAt: new Date('2026-10-01T12:00:00Z'),
+};
 const FILES = {
     'src/a.ts': 'export const a = 1;\n',
     'src/b.ts': 'export const b = 2;\n',
@@ -43,13 +59,14 @@ describe('kodus mcp — the org stack the conversation eval runs', () => {
         pr = writePullRequestRemote({ files: FILES, changed: ['src/b.ts'] });
         github = await startGithubRest({ pr, owner: OWNER, repository: REPOSITORY });
         kodus = await startKodusMcp();
-        for (const n of [1, 2]) {
+        for (const n of [1, 2, 3]) {
             kodus.addOrganization({
                 organizationAndTeamData: org(n),
                 language: 'en-US',
                 github: { host: github.host, owner: OWNER },
                 repository: REPOSITORY,
                 pullRequest: { number: pr.number, title: pr.message, status: 'open', repository: REPOSITORY, user: { id: 1, username: 'dev' }, files: [] },
+                rules: n === 3 ? [RULE] : [],
             });
         }
     }, 60_000);
@@ -83,11 +100,20 @@ describe('kodus mcp — the org stack the conversation eval runs', () => {
         const { mcp } = await connect(org(1));
         await call(mcp, 'KODUS_CREATE_MEMORY', { ...org(1), kodyRule: { title: 'Constants', rule: 'Exported constants stay numeric.', repositoryId: REPOSITORY.id } });
 
-        expect(kodus.writtenBy(org(1).organizationId).rules).toEqual([expect.objectContaining({ type: 'memory', title: 'Constants', status: 'active' })]);
+        expect(kodus.writtenBy(org(1).organizationId)).toMatchObject({ count: 1, created: [expect.objectContaining({ type: 'memory', title: 'Constants', status: 'active' })] });
         expect((await call(mcp, 'KODUS_FIND_MEMORIES', org(1))).count).toBe(1);
 
         const other = await connect(org(2));
-        expect(kodus.writtenBy(org(2).organizationId).rules).toEqual([]);
+        expect(kodus.writtenBy(org(2).organizationId).count).toBe(0);
         expect((await call(other.mcp, 'KODUS_FIND_MEMORIES', org(2))).count).toBe(0);
+    }, 30_000);
+
+    it("counts a change to the org's existing rule as a write, and the rule it had as none", async () => {
+        expect(kodus.writtenBy(org(3).organizationId).count).toBe(0);
+
+        const { mcp } = await connect(org(3));
+        await call(mcp, 'KODUS_UPDATE_KODY_RULE', { organizationId: org(3).organizationId, ruleId: RULE.uuid, kodyRule: { teamId: org(3).teamId, path: 'src/**/*.ts' } });
+
+        expect(kodus.writtenBy(org(3).organizationId)).toMatchObject({ count: 1, created: [], updated: [expect.objectContaining({ uuid: RULE.uuid, path: 'src/**/*.ts' })] });
     }, 30_000);
 });

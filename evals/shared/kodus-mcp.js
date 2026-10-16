@@ -317,10 +317,11 @@ async function startKodusMcp() {
     /**
      * An organization with a GitHub integration (a token on a GitHub host),
      * the repository selected, its team's language, the pull request as Kodus
-     * stored it after the review, and the Kodus MCP connection the mcp-manager
-     * creates for it.
+     * stored it after the review, the Kody Rules and memories it already has,
+     * and the Kodus MCP connection the mcp-manager creates for it.
      */
-    function addOrganization({ organizationAndTeamData, language, github, repository, pullRequest }) {
+    const seeded = new Map();
+    function addOrganization({ organizationAndTeamData, language, github, repository, pullRequest, rules = [] }) {
         const { organizationId, teamId } = organizationAndTeamData;
         const { encrypt } = lib('common/utils/crypto.ts');
         const integrationId = crypto.randomUUID();
@@ -343,6 +344,8 @@ async function startKodusMcp() {
         });
         db.parameters.push(doc({ configKey: 'language_config', configValue: language, team: { uuid: teamId }, active: true, version: 1 }));
         db.pullRequests.push(doc({ organizationId, ...copy(pullRequest) }));
+        if (rules.length) db.kodyRules.push(doc({ organizationId, rules: copy(rules) }));
+        seeded.set(organizationId, copy(rules));
         const tools = new KodusMCPClient().getTools();
         db.mcpConnections.push({
             id: crypto.randomUUID(),
@@ -361,13 +364,18 @@ async function startKodusMcp() {
         });
     }
 
-    // What the org's stores hold that the agent wrote: rules and memories,
-    // and issues.
+    // What the agent wrote to the org's stores: each rule or memory created or
+    // changed since addOrganization, and each issue. `count` is how many.
+    const RULE_FIELDS = ['title', 'rule', 'path', 'scope', 'severity', 'status', 'type', 'repositoryId', 'directoryId', 'inheritance', 'examples'];
+    const sameRule = (a, b) => RULE_FIELDS.every((f) => JSON.stringify(a[f] ?? null) === JSON.stringify(b[f] ?? null));
+    const ruleView = (r) => ({ uuid: r.uuid, type: r.type, title: r.title, rule: r.rule, path: r.path, status: r.status });
     function writtenBy(organizationId) {
-        return {
-            rules: (db.kodyRules.find((d) => d.organizationId === organizationId)?.rules || []).map((r) => ({ type: r.type, title: r.title, status: r.status })),
-            issues: db.issues.filter((i) => i.organizationId === organizationId).map((i) => ({ title: i.title, status: i.status })),
-        };
+        const before = new Map((seeded.get(organizationId) || []).map((r) => [r.uuid, r]));
+        const now = db.kodyRules.find((d) => d.organizationId === organizationId)?.rules || [];
+        const created = now.filter((r) => !before.has(r.uuid)).map(ruleView);
+        const updated = now.filter((r) => before.has(r.uuid) && !sameRule(r, before.get(r.uuid))).map(ruleView);
+        const issues = db.issues.filter((i) => i.organizationId === organizationId).map((i) => ({ title: i.title, status: i.status }));
+        return { created, updated, issues, count: created.length + updated.length + issues.length };
     }
 
     return {

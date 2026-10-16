@@ -81,6 +81,15 @@ const NIGHTLY_EVALS = [
         files: ['evals/conversation/targets.json'],
         friday: ['--limit=4'],
     },
+    // Offers are reported beside the number, not gated (evals/thread-actions).
+    ...['rule', 'memory'].map((kind) => ({
+        id: `thread-${kind}`,
+        stage: `thread-${kind}`,
+        run: ['evals/thread-actions/run.js', `--kind=${kind}`],
+        files: ['evals/thread-actions/targets.json'],
+        // A pair asking for nothing but offers, and a pair asking Kody to act.
+        friday: ['--limit=4'],
+    })),
     // The stages after the finder, on its frozen candidates (evals/funnel):
     // ungated until the relabeled dataset lands (#2114).
     ...['anchoring', 'dedup', 'severity', 'verify'].map((stage) => ({

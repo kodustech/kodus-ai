@@ -24,14 +24,11 @@
 // Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/AGENTS.md).
 const fs = require('fs');
 const path = require('path');
-const { AsyncLocalStorage } = require('async_hooks');
 const { applyModelEnv } = require('../shared/tier0-models');
 const { countTokens, tokensUsed } = require('../shared/eval-kit');
 const { evalQuestion, resultProblems } = require('../shared/eval-result');
 const { languageOf } = require('../format/checks');
 const { assertsClaim, loadJudgeKey, JUDGE_MODEL } = require('../investigation/recall-judge');
-const { writePullRequestRemote } = require('../shared/pr-remote');
-const { startGithubRest } = require('../shared/github-rest');
 const { startKodusMcp } = require('../shared/kodus-mcp');
 const { CASES } = require('./cases');
 
@@ -49,122 +46,22 @@ const cases = CASES.slice(0, args.limit ? Number(args.limit) : undefined);
 if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
 applyModelEnv(MODEL);
 countTokens();
-const { ConversationAgentProvider } = require('../../libs/agents/infrastructure/services/agents/conversation/conversationAgent.ts');
-const { readDecision } = require('../../libs/agents/infrastructure/services/agents/conversation/conversation-decision.ts');
-const { LocalSandboxService } = require('../../libs/sandbox/infrastructure/providers/local-sandbox.service.ts');
-const { AiSdkAgentRunner } = require('../../libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner.ts');
-
-// The run state of each case, to read the decision the agent declared (the
-// provider returns only the reply text), and the prompt it was given. Observed,
-// not changed.
-const runs = new AsyncLocalStorage();
-const runOriginal = AiSdkAgentRunner.prototype.run;
-AiSdkAgentRunner.prototype.run = async function observedRun(spec, input, ...rest) {
-    const state = await runOriginal.call(this, spec, input, ...rest);
-    runs.getStore()?.push({ state, prompt: input?.prompt, mcp: Boolean(spec.tools.get('KODUS_FIND_MEMORIES')) });
-    return state;
-};
-
-// One organization per case, so the stores answer per case as production's do.
-const orgOf = (i) => ({
-    organizationId: `00000000-0000-4000-8000-${(0xe7a10000 + i).toString(16).padStart(12, '0')}`,
-    teamId: `00000000-0000-4000-8000-${(0xe7a20000 + i).toString(16).padStart(12, '0')}`,
-});
-
-// The thread as GitHub returns it, and the context the use case builds from it
-// (reply-thread.ts: getOriginalKodyComment, getOthersReplies, prepareContext).
-// Kody's comment carries the body GitHub's adapter posts for a finding
-// (formatBodyForGitHub, run on the case's finding as production gives it); the
-// developer's reply, and any other humans', are comments pointing at it.
-const { GithubService } = require('../../libs/platform/infrastructure/adapters/services/github/github.service.ts');
-const { getTranslationsForLanguageByCategory, TranslationsCategory } = require('../../libs/common/utils/translations/translations.ts');
-const { getOriginalKodyComment, getOthersReplies, prepareContext } = require('../../libs/platform/application/use-cases/codeManagement/reply-thread.ts');
-const { PlatformType } = require('../../libs/core/domain/enums/platform-type.enum.ts');
-const github = Object.create(GithubService.prototype);
-const OWNER = 'acme';
-const REPOSITORY = { id: '41000001', name: 'service', fullName: `${OWNER}/service` };
-
-function threadContext(c) {
-    const finding = { oneSentenceSummary: c.kodyComment.title || '', label: 'bug', severity: 'high', language: 'typescript' };
-    const translations = getTranslationsForLanguageByCategory(c.language, TranslationsCategory.ReviewComment);
-    const body = github.formatBodyForGitHub(
-        { suggestion: finding, body: { suggestionContent: c.kodyComment.text }, path: c.kodyComment.file, start_line: 1, line: 1 },
-        REPOSITORY,
-        translations,
-        false,
-    );
-    const at = (n) => new Date(Date.UTC(2026, 9, 16, 10, n)).toISOString();
-    const comments = [
-        { id: 1, body, path: c.kodyComment.file, diff_hunk: c.kodyComment.diffHunk, user: { login: 'kody-ai[bot]', type: 'Bot' }, created_at: at(0) },
-        ...(c.otherReplies || []).map((r, i) => ({ id: 10 + i, body: r.text, path: c.kodyComment.file, in_reply_to_id: 1, user: { login: r.author, type: 'User' }, created_at: at(1 + i) })),
-        { id: 99, body: c.reply, path: c.kodyComment.file, in_reply_to_id: 1, user: { login: 'dev', type: 'User' }, created_at: at(9) },
-    ];
-    const reply = comments[comments.length - 1];
-    return prepareContext({
-        comment: reply,
-        originalKodyComment: getOriginalKodyComment(reply, comments, PlatformType.GITHUB),
-        originalSuggestion: { suggestionId: `s-${c.id}`, label: 'bug', brokenKodyRulesIds: [] },
-        gitUser: { id: 1, username: 'dev' },
-        othersReplies: getOthersReplies(reply, comments, PlatformType.GITHUB),
-        pullRequestNumber: 7,
-        repository: REPOSITORY,
-        pullRequestDescription: '',
-        platformType: PlatformType.GITHUB,
-        headRef: 'feature',
-        baseRef: 'main',
-        defaultBranch: 'main',
-    });
-}
-
-// The pull request as Kodus stored it after the review: the comment Kody
-// posted is a sent suggestion on the file.
-const pullRequestRecord = (c, pr) => ({
-    number: pr.number,
-    title: pr.message,
-    status: 'open',
-    repository: { ...REPOSITORY, language: 'TypeScript' },
-    user: { id: 1, username: 'dev' },
-    files: [{ path: c.kodyComment.file, filename: c.kodyComment.file, suggestions: [{ id: `s-${c.id}`, label: 'bug', severity: 'high', relevantFile: c.kodyComment.file, deliveryStatus: 'sent', comment: { id: 1 } }] }],
-    prLevelSuggestions: [],
-});
+const { runThread } = require('../shared/pr-thread');
 
 async function runCase(c, i, judgeKey, kodus) {
-    const org = orgOf(i);
-    const pr = writePullRequestRemote({ files: c.repo, changed: [c.kodyComment.file] });
-    const github = await startGithubRest({ pr, owner: OWNER, repository: REPOSITORY });
-    let sandbox;
-    try {
-        kodus.addOrganization({ organizationAndTeamData: org, language: c.language, github: { host: github.host, owner: OWNER }, repository: REPOSITORY, pullRequest: pullRequestRecord(c, pr) });
-        // The clone params the chat use case builds (buildSandboxCloneParams),
-        // with the PR's remote as the clone URL and no token.
-        sandbox = await new LocalSandboxService(undefined).createSandboxWithRepo({ cloneUrl: pr.remote, branch: pr.head, baseBranch: pr.base, prNumber: pr.number, platform: PlatformType.GITHUB });
-        const agent = new ConversationAgentProvider(kodus.parametersService, kodus.permissionValidationService, kodus.mcpManagerService);
-        const seen = [];
-        const reply = await runs.run(seen, () => agent.execute(c.reply, { organizationAndTeamData: org, prepareContext: threadContext(c), thread: { id: `eval-${c.id}` }, sandbox }));
-        if (!String(reply || '').trim()) throw new Error('the agent returned no reply');
-        // The agent proceeds without MCP when it cannot connect: that is not
-        // the run this eval measures.
-        if (!seen.length || !seen.every((r) => r.mcp)) throw new Error('the agent ran without the Kodus MCP tools');
-        if (args.show === 'prompt') console.log(`\n── ${c.id} prompt\n${seen[0].prompt}\n`);
-        if (args.show) console.log(`\n── ${c.id} — ${c.reply}\n${reply}\n`);
-        const decision = readDecision(seen[seen.length - 1].state.steps);
-        const written = kodus.writtenBy(org.organizationId);
-        const writes = written.rules.length + written.issues.length;
-        const right = await assertsClaim(judgeKey, c.golden, reply);
-        const want = c.language === 'pt-BR' ? 'pt' : 'en';
-        const lang = languageOf(reply);
-        const detail = [
-            { what: `says: ${c.golden.slice(0, 120)}${right ? '' : ` — replied: ${String(reply).replace(/\s+/g, ' ').slice(0, 160)}`}`, ok: right },
-            { what: `acts on nothing nobody asked for (intent: ${decision?.intent ?? 'none'}, writes: ${writes})`, ok: decision?.intent !== 'act' && writes === 0 },
-            { what: `replies in ${c.language} (read as ${lang})`, ok: ['unknown', want].includes(lang) },
-        ];
-        // The whole reply, for whoever reads the verdict after the judge.
-        return { hits: detail.filter((d) => d.ok).length, total: detail.length, detail, reply: String(reply).slice(0, 4000) };
-    } finally {
-        await sandbox?.cleanup();
-        await github.close();
-        pr.cleanup();
-    }
+    const { reply, decision, prompt, written } = await runThread(c, { index: i, kodus, id: c.id });
+    if (args.show === 'prompt') console.log(`\n── ${c.id} prompt\n${prompt}\n`);
+    if (args.show) console.log(`\n── ${c.id} — ${c.reply}\n${reply}\n`);
+    const right = await assertsClaim(judgeKey, c.golden, reply);
+    const want = c.language === 'pt-BR' ? 'pt' : 'en';
+    const lang = languageOf(reply);
+    const detail = [
+        { what: `says: ${c.golden.slice(0, 120)}${right ? '' : ` — replied: ${String(reply).replace(/\s+/g, ' ').slice(0, 160)}`}`, ok: right },
+        { what: `acts on nothing nobody asked for (intent: ${decision?.intent ?? 'none'}, writes: ${written.count})`, ok: decision?.intent !== 'act' && written.count === 0 },
+        { what: `replies in ${c.language} (read as ${lang})`, ok: ['unknown', want].includes(lang) },
+    ];
+    // The whole reply, for whoever reads the verdict after the judge.
+    return { hits: detail.filter((d) => d.ok).length, total: detail.length, detail, reply: reply.slice(0, 4000) };
 }
 
 async function main() {
