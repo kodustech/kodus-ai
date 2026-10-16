@@ -26,7 +26,7 @@ export const REPO_INSTRUCTIONS_LIMITS = {
     maxFiles: 8,
     maxBytesPerFile: 24_000,
     maxTotalBytes: 64_000,
-    /** With less than this left of the total, no further file is read. */
+    /** Below this, a file that would overflow the total is dropped, not cut. */
     minUsefulBytes: 1_000,
     /** Paths listed (not inlined) so the agent knows what else exists. */
     maxOtherFiles: 30,
@@ -44,7 +44,8 @@ export interface RepoInstructionsContext {
     files: RepoInstructionFile[];
     /** Instruction files that exist but do not govern this change. */
     otherFiles: string[];
-    /** Candidates left out, unread, once the file or byte budget was spent. */
+    /** Candidates left out by the file or byte budget; once it is spent they
+     *  are not read. */
     dropped: string[];
     /** Candidates whose read failed, as `path: reason`. */
     unreadable?: string[];
@@ -219,7 +220,8 @@ const errorMessage = (error: unknown): string =>
  * Reads the coding-agent instruction files that govern `changedFiles`, within
  * `REPO_INSTRUCTIONS_LIMITS`. Never throws: a git host failure yields an empty
  * result with `error` set, and a file that cannot be read is skipped and
- * listed in `unreadable`. Nothing is read once the budget is spent.
+ * listed in `unreadable`. Nothing is read once the file or byte budget is
+ * fully spent.
  */
 export async function collectRepoInstructions(params: {
     listFiles: () => Promise<string[]>;
@@ -246,10 +248,7 @@ export async function collectRepoInstructions(params: {
     let truncated = false;
 
     for (const path of candidates) {
-        if (
-            files.length >= limits.maxFiles ||
-            limits.maxTotalBytes - total < limits.minUsefulBytes
-        ) {
+        if (files.length >= limits.maxFiles || total >= limits.maxTotalBytes) {
             dropped.push(path);
             continue;
         }
@@ -275,6 +274,10 @@ export async function collectRepoInstructions(params: {
         let cut = text.length < content.trim().length;
         const remaining = limits.maxTotalBytes - total;
         if (Buffer.byteLength(text) > remaining) {
+            if (remaining < limits.minUsefulBytes) {
+                dropped.push(path);
+                continue;
+            }
             text = truncateToBytes(text, remaining);
             cut = true;
         }

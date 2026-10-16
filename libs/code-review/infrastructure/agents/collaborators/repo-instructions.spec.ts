@@ -293,6 +293,36 @@ describe('collectRepoInstructions', () => {
         );
     });
 
+    it('still includes a file that fits whole when less than minUsefulBytes is left', async () => {
+        const { maxBytesPerFile, maxTotalBytes, minUsefulBytes } =
+            REPO_INSTRUCTIONS_LIMITS;
+        const left = minUsefulBytes / 2;
+        const map: Record<string, string> = {
+            'a/AGENTS.md': 'y'.repeat(maxBytesPerFile),
+            'b/AGENTS.md': 'y'.repeat(maxBytesPerFile),
+            'c/AGENTS.md': 'y'.repeat(
+                maxTotalBytes - 2 * maxBytesPerFile - left,
+            ),
+            'd/AGENTS.md': 'Use the logger.',
+            'e/AGENTS.md': 'z'.repeat(minUsefulBytes * 2),
+        };
+        const repo = files(map);
+
+        const result = await collectRepoInstructions({
+            ...repo,
+            changedFiles: ['a/x.ts', 'b/x.ts', 'c/x.ts', 'd/x.ts', 'e/x.ts'],
+        });
+
+        expect(result.files.map((f) => f.path)).toEqual([
+            'a/AGENTS.md',
+            'b/AGENTS.md',
+            'c/AGENTS.md',
+            'd/AGENTS.md',
+        ]);
+        expect(result.files[3].truncated).toBe(false);
+        expect(result.dropped).toEqual(['e/AGENTS.md']);
+    });
+
     it('stops reading once the byte budget is spent', async () => {
         const map: Record<string, string> = {};
         for (let i = 0; i < 4; i++) {
