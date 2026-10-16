@@ -281,6 +281,8 @@ function traceSummaryFromOutput(output) {
         // false: no exec, so checkTypes, findNearestProjectFile and findFile's
         // fd/find path were not registered (replay, and RECALL_REAL_REPO=1).
         sandboxExec: trace.sandboxExec ?? null,
+        // RECALL_SANDBOX=e2b: create+clone time and tool-call latency in the sandbox.
+        sandbox: trace.sandbox ?? null,
     };
 }
 

@@ -1016,6 +1016,8 @@ function serializeResult(caseId, agentResult, remoteCommands, input, modelStats,
             headSha: pipeline?.headSha ?? null,
             // false: the exec-gated tools were not registered for this case.
             sandboxExec: typeof remoteCommands.exec === 'function',
+            // RECALL_SANDBOX=e2b: create+clone time and tool-call latency in the sandbox.
+            sandbox: typeof remoteCommands.sandboxStats === 'function' ? remoteCommands.sandboxStats() : null,
         },
     };
 }
@@ -1078,6 +1080,7 @@ class InvestigationAgentProvider {
         let stage = 'parse-prompt';
         // Declared outside the try so the finally below can always release it.
         let repoHandle = null;
+        let e2b = null;
         try {
             const rawPrompt =
                 typeof prompt === 'string'
@@ -1121,7 +1124,15 @@ class InvestigationAgentProvider {
             if (process.env.RECALL_REAL_REPO === '1') {
                 const { prepareRepo } = require('./prepare-repo');
                 repoHandle = await prepareRepo(caseData, caseData.caseId);
-                if (repoHandle) remoteCommands = sandboxCommands(repoHandle.dir);
+                // RECALL_SANDBOX=e2b: the tools run in production's E2B sandbox
+                // (production template, with exec) at the PR's head commit. The
+                // local worktree stays for the call graph the eval builds.
+                if (repoHandle && process.env.RECALL_SANDBOX === 'e2b') {
+                    const { abreSandboxE2B } = require('../shared/e2b-sandbox');
+                    e2b = await abreSandboxE2B(caseData, 'finder');
+                    remoteCommands = e2b.commands;
+                    remoteCommands.sandboxStats = e2b.stats;
+                } else if (repoHandle) remoteCommands = sandboxCommands(repoHandle.dir);
             }
             if (!remoteCommands) {
                 remoteCommands = new ReplayRemoteCommands(
@@ -2260,6 +2271,11 @@ Call provar exactly once.`;
             if (repoHandle) {
                 try {
                     await repoHandle.cleanup();
+                } catch {}
+            }
+            if (e2b) {
+                try {
+                    await e2b.cleanup();
                 } catch {}
             }
         }

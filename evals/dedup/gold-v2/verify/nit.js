@@ -24,6 +24,8 @@ const INV = path.join(__dirname, '..', '..', '..', 'investigation');
 const { buildModel, descreveModelo } = require(path.join(INV, 'eval-model'));
 const { extraiJson, chamadaEstruturada } = require(path.join(INV, 'eval-structured'));
 const { prepareRepo } = require(path.join(INV, 'prepare-repo'));
+const { abreSandboxE2B } = require(path.join(INV, '..', 'shared', 'e2b-sandbox'));
+const E2B = process.env.RECALL_SANDBOX === 'e2b';
 const { LocalRepoCommands } = require(path.join(INV, 'local-repo-commands'));
 const { medir, registra } = require(path.join(INV, '..', 'shared', 'usage-meter'));
 
@@ -173,7 +175,14 @@ Do not judge whether the comment is correct. Judge only this: if what it describ
 You can check the repository at this pull request's commit with grep, readFile and listDir, for example to see whether any caller can actually produce the case the comment worries about. You have at most ${TETO} steps in total. Answer with submit.`;
 
 
+// RECALL_SANDBOX=e2b: as ferramentas que o verificador de producao recebe do
+// finder (buildAgentTools sobre o sandbox E2B), no lugar das do eval.
 function ferramentas(cmd) {
+    if (cmd.ferramentasProducao) return cmd.ferramentasProducao;
+    return ferramentasEval(cmd);
+}
+
+function ferramentasEval(cmd) {
     return {
         grep: tool({
             description: 'Search the repository for a regex pattern.',
@@ -232,6 +241,8 @@ async function julgaSdk(s, diff, dir, schema) {
 
 async function julga(model, cmd, s, diff) {
     const schema = MESA ? SCHEMA_MESA : SCHEMA;
+    // Pelo SDK as ferramentas sao as nativas do Claude Code, nao as de producao.
+    if (PELO_SDK && E2B) throw new Error('RECALL_SANDBOX=e2b ainda nao suportado pelo Agent SDK');
     if (PELO_SDK && LOOP) return julgaSdk(s, diff, cmd.repoRoot, schema);
     if (!LOOP) {
         const r = await chamadaEstruturada({ model, modelId: MODELO, nome: 'submit', schema, prompt: textoDe(s, diff) });
@@ -270,14 +281,18 @@ async function julga(model, cmd, s, diff) {
     const fila = Object.keys(sug).filter((c) => !res.prs[c] || res.prs[c].erro);
     let i = 0;
     const um = async (cid) => {
-        let h, usoPr = null;
+        let h, sb, usoPr = null;
         try {
             const caiu = new Set(SO1 ? (SOBRE[cid]?.grupos || []).filter((g) => g.nit).map((g) => g.rep) : []);
             const gs = grupos(sug[cid].suggestions, fin[cid], real[cid].idsEntradaDedup || []).filter((g) => !SO1 || (g.membros.length === 1 && !caiu.has(g.rep)));
             const out = [];
             if (gs.length) {
                 let cmd = null;
-                if (LOOP) {
+                if (LOOP && E2B) {
+                    sb = await abreSandboxE2B(vars[cid], 'nit');
+                    const { buildAgentTools } = require('@libs/code-review/infrastructure/agents/engine/agent-tools.factory');
+                    cmd = { ferramentasProducao: buildAgentTools(sb.commands, undefined, vars[cid].repositoryFullName) };
+                } else if (LOOP) {
                     h = await prepareRepo(vars[cid], `${cid}-nit-${process.pid}`);
                     if (!h) throw new Error('sem repo');
                     cmd = new LocalRepoCommands(h.dir);
@@ -293,13 +308,14 @@ async function julga(model, cmd, s, diff) {
                     }
                 })))).uso;
             }
-            res.prs[cid] = { grupos: out, uso: usoPr };
+            res.prs[cid] = { grupos: out, uso: usoPr, ...(sb ? { sandbox: sb.stats() } : {}) };
             console.log(`  ${cid.slice(0, 46).padEnd(48)} ${gs.length} comentarios, ${out.filter((x) => x.nit).length} nit`);
         } catch (e) {
             res.prs[cid] = { erro: String(e?.message || e).slice(0, 300) };
             console.log(`  ${cid.slice(0, 46).padEnd(48)} FALHOU: ${res.prs[cid].erro}`);
         } finally {
             if (h) await h.cleanup();
+            if (sb) await sb.cleanup().catch(() => {});
             fs.writeFileSync(OUT, JSON.stringify(res, null, 1));
         }
     };
