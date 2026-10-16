@@ -59,9 +59,10 @@ AiSdkAgentRunner.prototype.run = async function observedRun(...a) {
     return state;
 };
 
-// The org: no BYOK config (getBYOKConfig returns null for an id that is not a
-// UUID, before reading anything), its language from language_config, no MCP.
-const ORG = { organizationId: 'conversation-eval', teamId: 'conversation-eval-team' };
+// The org: no stored BYOK config (production's PermissionValidationService
+// routes the conversation task to the env/managed model), its language from
+// language_config, no MCP.
+const { EVAL_ORG: ORG, evalPermissionService } = require('../shared/org-route');
 
 // The PR's head as a git checkout, like the production sandbox's clone.
 function writeRepo(files) {
@@ -79,28 +80,48 @@ function writeRepo(files) {
     return dir;
 }
 
-// The thread context the use case builds (chatWithKodyFromGit.use-case.ts prepareContext).
+// The thread as GitHub returns it, and the context the use case builds from it
+// (reply-thread.ts: getOriginalKodyComment, getOthersReplies, prepareContext).
+// Kody's comment carries the body GitHub's adapter posts for a finding
+// (formatBodyForGitHub, run on the case's finding as production gives it); the
+// developer's reply, and any other humans', are comments pointing at it.
+const { GithubService } = require('../../libs/platform/infrastructure/adapters/services/github/github.service.ts');
+const { getTranslationsForLanguageByCategory, TranslationsCategory } = require('../../libs/common/utils/translations/translations.ts');
+const { getOriginalKodyComment, getOthersReplies, prepareContext } = require('../../libs/platform/application/use-cases/codeManagement/reply-thread.ts');
+const { PlatformType } = require('../../libs/core/domain/enums/platform-type.enum.ts');
+const github = Object.create(GithubService.prototype);
+const REPOSITORY = { id: 'repo-1', name: 'service', fullName: 'acme/service' };
+
 function threadContext(c) {
-    return {
+    const finding = { oneSentenceSummary: c.kodyComment.title || '', label: 'bug', severity: 'high', language: 'typescript' };
+    const translations = getTranslationsForLanguageByCategory(c.language, TranslationsCategory.ReviewComment);
+    const body = github.formatBodyForGitHub(
+        { suggestion: finding, body: { suggestionContent: c.kodyComment.text }, path: c.kodyComment.file, start_line: 1, line: 1 },
+        REPOSITORY,
+        translations,
+        false,
+    );
+    const at = (n) => new Date(Date.UTC(2026, 9, 16, 10, n)).toISOString();
+    const comments = [
+        { id: 1, body, path: c.kodyComment.file, diff_hunk: c.kodyComment.diffHunk, user: { login: 'kody-ai[bot]', type: 'Bot' }, created_at: at(0) },
+        ...(c.otherReplies || []).map((r, i) => ({ id: 10 + i, body: r.text, path: c.kodyComment.file, in_reply_to_id: 1, user: { login: r.author, type: 'User' }, created_at: at(1 + i) })),
+        { id: 99, body: c.reply, path: c.kodyComment.file, in_reply_to_id: 1, user: { login: 'dev', type: 'User' }, created_at: at(9) },
+    ];
+    const reply = comments[comments.length - 1];
+    return prepareContext({
+        comment: reply,
+        originalKodyComment: getOriginalKodyComment(reply, comments, PlatformType.GITHUB),
+        originalSuggestion: { suggestionId: `s-${c.id}`, label: 'bug', brokenKodyRulesIds: [] },
         gitUser: { id: 1, username: 'dev' },
-        userQuestion: c.reply,
-        repository: { id: 'repo-1', name: 'service', fullName: 'acme/service', defaultBranch: 'main' },
+        othersReplies: getOthersReplies(reply, comments, PlatformType.GITHUB),
+        pullRequestNumber: 7,
+        repository: REPOSITORY,
         pullRequestDescription: '',
-        platformType: 'github',
-        pullRequest: { pullRequestNumber: 7, headRef: 'feature', baseRef: 'main' },
-        codeManagementContext: {
-            originalComment: {
-                suggestionCommentId: 1,
-                suggestionFilePath: c.kodyComment.file,
-                suggestionText: c.kodyComment.text,
-                diffHunk: c.kodyComment.diffHunk,
-                suggestionId: `s-${c.id}`,
-                label: 'bug',
-                brokenKodyRulesIds: [],
-            },
-            othersReplies: [],
-        },
-    };
+        platformType: PlatformType.GITHUB,
+        headRef: 'feature',
+        baseRef: 'main',
+        defaultBranch: 'main',
+    });
 }
 
 async function runCase(c, judgeKey) {
@@ -117,7 +138,7 @@ async function runCase(c, judgeKey) {
     // team's language_config: the service's own lookup runs, only the storage
     // is in memory.
     const parametersRepository = { findByKey: async (key) => (key === 'language_config' ? { configKey: key, configValue: c.language, active: true } : null) };
-    const agent = new ConversationAgentProvider(new ParametersService(parametersRepository), new PermissionValidationService(undefined, undefined));
+    const agent = new ConversationAgentProvider(new ParametersService(parametersRepository), evalPermissionService(null));
     const states = [];
     try {
         const reply = await runs.run(states, () => agent.execute(c.reply, { organizationAndTeamData: ORG, prepareContext: threadContext(c), thread: { id: `eval-${c.id}` }, sandbox }));

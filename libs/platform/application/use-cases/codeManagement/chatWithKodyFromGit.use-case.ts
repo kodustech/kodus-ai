@@ -50,6 +50,9 @@ import {
 import {
     buildReplyThread,
     classifyImplicitReply,
+    getOriginalKodyComment,
+    getOthersReplies,
+    prepareContext,
     CONVERSATION_PLAN_GATE_MESSAGE,
     isKodyComment,
     KODY_ACKNOWLEDGMENT_MESSAGE,
@@ -1932,47 +1935,7 @@ export class ChatWithKodyFromGitUseCase {
         allComments: Comment[],
         platformType: PlatformType,
     ): Comment | undefined {
-        switch (platformType) {
-            case PlatformType.GITHUB:
-                if (
-                    !comment?.id &&
-                    !comment?.in_reply_to_id &&
-                    !comment?.subject_type
-                ) {
-                    return undefined;
-                }
-
-                return allComments.find(
-                    (originalComment) =>
-                        originalComment.id ===
-                        (comment?.in_reply_to_id ?? comment?.id),
-                );
-            case PlatformType.GITLAB:
-                return comment?.originalCommit;
-            case PlatformType.BITBUCKET: {
-                if (!comment?.parent?.id) {
-                    return undefined;
-                }
-
-                const originalComment = allComments.find(
-                    (c) => c.id === comment.parent.id,
-                );
-
-                return originalComment;
-            }
-            case PlatformType.AZURE_REPOS:
-                if (comment.threadId && comment.id !== comment.threadId) {
-                    const originalComment = comment.thread;
-                    return originalComment;
-                }
-                return undefined;
-            default:
-                this.logger.warn({
-                    message: `Unsupported platform type: ${platformType}`,
-                    context: ChatWithKodyFromGitUseCase.name,
-                });
-                return undefined;
-        }
+        return getOriginalKodyComment(comment, allComments, platformType);
     }
 
     private getOthersReplies(
@@ -1980,109 +1943,7 @@ export class ChatWithKodyFromGitUseCase {
         allComments: Comment[],
         platformType: PlatformType,
     ): Comment[] {
-        switch (platformType) {
-            case PlatformType.GITHUB:
-                return allComments.filter(
-                    (reply) =>
-                        reply.in_reply_to_id === comment.in_reply_to_id &&
-                        !this.isKodyComment(reply, platformType),
-                );
-            case PlatformType.BITBUCKET:
-                if (comment.parent?.id) {
-                    const originalComment = allComments.find(
-                        (c) => c.id === comment.parent.id,
-                    );
-
-                    if (!originalComment) {
-                        return [];
-                    }
-
-                    if (
-                        originalComment.replies &&
-                        Array.isArray(originalComment.replies)
-                    ) {
-                        const validReplies = [];
-
-                        for (const reply of originalComment.replies) {
-                            if (
-                                reply.content?.raw === '' ||
-                                reply.deleted === true
-                            ) {
-                                continue;
-                            }
-
-                            if (reply.id === comment.id) {
-                                continue;
-                            }
-                            if (
-                                this.isKodyComment(
-                                    {
-                                        body: reply.content?.raw,
-                                        id: reply.id,
-                                        author: {
-                                            name: reply.user?.display_name,
-                                        },
-                                    },
-                                    platformType,
-                                )
-                            ) {
-                                continue;
-                            }
-
-                            if (reply.content?.raw) {
-                                validReplies.push({
-                                    ...reply,
-                                    body: reply.content.raw,
-                                });
-                            } else {
-                                validReplies.push(reply);
-                            }
-                        }
-
-                        return validReplies;
-                    }
-                }
-                return [];
-            case PlatformType.AZURE_REPOS:
-                if (comment.threadId) {
-                    const thread = allComments.find(
-                        (c) => c.threadId === comment.threadId,
-                    );
-
-                    if (
-                        thread &&
-                        thread.replies &&
-                        Array.isArray(thread.replies)
-                    ) {
-                        return thread.replies.filter(
-                            (reply) =>
-                                reply.id !== comment.id &&
-                                !this.isKodyComment(reply, platformType),
-                        );
-                    }
-                    return [];
-                }
-
-                return allComments.filter(
-                    (reply) =>
-                        reply.in_reply_to_id === comment.in_reply_to_id &&
-                        !this.isKodyComment(reply, platformType),
-                );
-            case PlatformType.GITLAB:
-                return allComments.filter(
-                    (reply) =>
-                        ((reply.in_reply_to_id !== undefined &&
-                            reply.in_reply_to_id === comment.in_reply_to_id) ||
-                            reply.discussionId === comment.discussionId) &&
-                        !this.isKodyComment(reply, platformType),
-                );
-            default:
-                this.logger.warn({
-                    message: `Plataforma nu00e3o suportada: ${platformType}`,
-                    context: ChatWithKodyFromGitUseCase.name,
-                });
-                return [];
-        }
+        return getOthersReplies(comment, allComments, platformType);
     }
 
     private getSender(params: WebhookParams): Sender {
@@ -2189,70 +2050,8 @@ export class ChatWithKodyFromGitUseCase {
         }
     }
 
-    private prepareContext({
-        comment,
-        originalKodyComment,
-        originalSuggestion,
-        gitUser,
-        othersReplies,
-        pullRequestNumber,
-        repository,
-        pullRequestDescription,
-        platformType,
-        headRef,
-        baseRef,
-        defaultBranch,
-        customInstructions,
-    }: {
-        comment?: Comment;
-        originalKodyComment?: Comment;
-        originalSuggestion?: OriginatingSuggestion;
-        gitUser?: { id: number; username: string };
-        othersReplies?: Comment[];
-        repository?: Repository;
-        platformType?: PlatformType;
-        pullRequestNumber?: number;
-        pullRequestDescription?: string;
-        headRef?: string;
-        baseRef?: string;
-        defaultBranch?: string;
-        customInstructions?: string;
-    }): any {
-        const userQuestion =
-            comment.body.trim() === '@kody'
-                ? 'The user did not ask any questions. Ask them what they would like to know about the codebase or suggestions for code changes.'
-                : comment.body;
-
-        return {
-            gitUser,
-            userQuestion,
-            repository: {
-                ...repository,
-                defaultBranch: defaultBranch ?? baseRef,
-            },
-            pullRequestDescription,
-            platformType,
-            customInstructions,
-            pullRequest: {
-                pullRequestNumber,
-                headRef: headRef,
-                baseRef: baseRef,
-            },
-            codeManagementContext: {
-                originalComment: {
-                    suggestionCommentId: originalKodyComment?.id,
-                    suggestionFilePath: comment?.path,
-                    suggestionText: originalKodyComment?.body,
-                    diffHunk: originalKodyComment?.diff_hunk,
-                    suggestionId: originalSuggestion?.suggestionId,
-                    label: originalSuggestion?.label,
-                    brokenKodyRulesIds: originalSuggestion?.brokenKodyRulesIds,
-                },
-                othersReplies: othersReplies.map((reply) => ({
-                    historyConversationText: reply.body,
-                })),
-            },
-        };
+    private prepareContext(params: Parameters<typeof prepareContext>[0]): any {
+        return prepareContext(params);
     }
 
     private mentionsKody(comment: Comment): boolean {

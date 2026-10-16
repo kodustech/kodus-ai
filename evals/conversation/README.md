@@ -12,7 +12,7 @@ through `chatWithKodyFromGit.use-case.ts`, with the PR's head checked out in a
 sandbox. The eval builds the same thread context, gives the agent the case's
 repository as a git checkout through the production `LocalSandboxService`
 (`rg` on the PATH), and runs the class itself: the org has no BYOK config
-(`PermissionValidationService` resolves the eval's model) and no MCP servers,
+(`PermissionValidationService` resolves the eval's model) and no MCP servers (the Kodus MCP server needs its tool services booted; not covered),
 so writes (memories, rules) are not covered.
 
 `cases.js` holds the cases, written for the eval with invented code after the
