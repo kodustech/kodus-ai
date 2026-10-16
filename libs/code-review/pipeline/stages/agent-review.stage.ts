@@ -39,7 +39,10 @@ import { type LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
-import { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    CodeSuggestion,
+    FileChange,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { ReviewOrchestratorService } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
 import { buildOrchestratorInput } from './build-orchestrator-input';
@@ -961,97 +964,28 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
             }
 
-            // Snap suggestion line numbers to valid diff ranges before passing downstream.
-            // GitHub rejects inline comments on lines that aren't part of the diff.
-            // A finding whose cited lines don't overlap ANY changed hunk is dropped
-            // (snapLinesToDiff returns null) rather than clamped onto an unrelated
-            // changed line — clamping was re-anchoring comments about UNCHANGED code
-            // onto the diff and shipping them as false positives.
             const changedFilesByName = new Map(
                 changedFiles.map((f) => [f.filename, f]),
             );
-            const isFileAnchored = fileAnchoredFindingPredicate(
+            const validatedSuggestions = this.anchorSuggestionsToDiff(
+                result.suggestions,
+                changedFiles,
                 context.codeReviewConfig?.kodyRules ?? [],
+                allDiscarded,
             );
-            const validatedSuggestions = result.suggestions
-                .map((s) => {
-                    const file = changedFilesByName.get(s.relevantFile);
-                    if (!file) return s;
-                    const validRanges = extractValidDiffLines(file.patch);
-                    const snapped = snapLinesToDiff(s, validRanges);
-                    if (snapped === null) {
-                        if (isFileAnchored(s)) {
-                            this.logger.log({
-                                message: `[AGENT] File-anchored finding for ${s.relevantFile}: lines ${s.relevantLinesStart}-${s.relevantLinesEnd} sit outside every hunk, but the rule declared it needs context beyond the diff — delivering it as a PR-level comment`,
-                                context: this.stageName,
-                            });
-                            return { ...s, fileAnchored: true };
-                        }
-                        this.logger.log({
-                            message: `[AGENT] Dropped out-of-diff suggestion for ${s.relevantFile}: lines ${s.relevantLinesStart}-${s.relevantLinesEnd} do not overlap any changed hunk`,
-                            context: this.stageName,
-                        });
-                        allDiscarded.push({
-                            ...s,
-                            priorityStatus:
-                                PriorityStatus.DISCARDED_BY_CODE_DIFF,
-                            deliveryStatus: DeliveryStatus.NOT_SENT,
-                        });
-                        return null;
-                    }
-                    if (
-                        snapped.relevantLinesStart !== s.relevantLinesStart ||
-                        snapped.relevantLinesEnd !== s.relevantLinesEnd
-                    ) {
-                        this.logger.log({
-                            message: `[AGENT] Snapped lines for ${s.relevantFile}: ${s.relevantLinesStart}-${s.relevantLinesEnd} → ${snapped.relevantLinesStart}-${snapped.relevantLinesEnd}`,
-                            context: this.stageName,
-                        });
-                    }
-                    return snapped;
-                })
-                .filter((s): s is Partial<CodeSuggestion> => s !== null);
 
             // Verify/Discover removed — was hurting recall across all models.
             // Benchmark showed F1 drops of -5.7pp to -18.3pp with verify enabled.
             const reflectedSuggestions = validatedSuggestions;
 
-            const kodyRulesSuggestions = reflectedSuggestions.filter(
-                (s) => s.label === 'kody_rules',
+            const {
+                kodyRulesById,
+                kodyRulesWithSeverity,
+                severityNormalizedNonRules,
+            } = this.normalizeSuggestionSeverities(
+                reflectedSuggestions,
+                context.codeReviewConfig?.kodyRules ?? [],
             );
-            const nonKodyRulesSuggestions = reflectedSuggestions.filter(
-                (s) => s.label !== 'kody_rules',
-            );
-
-            // Normalize Kody Rules legacy severity (critical/issue/warning) into the
-            // v2 severity scale (critical/high/medium/low). The agent returns the rule
-            // UUID in brokenKodyRulesIds — use it for exact matching.
-            const kodyRulesById = new Map(
-                (context.codeReviewConfig?.kodyRules ?? [])
-                    .filter((r) => r.uuid)
-                    .map((r) => [r.uuid!, r]),
-            );
-            const kodyRulesWithSeverity: Partial<CodeSuggestion>[] =
-                kodyRulesSuggestions.map((s) => {
-                    const ruleUuid = s.brokenKodyRulesIds?.[0];
-                    const matchedRule = ruleUuid
-                        ? kodyRulesById.get(ruleUuid)
-                        : undefined;
-                    const legacySeverity = matchedRule
-                        ? resolveKodyRuleSeverityLevel(matchedRule)
-                        : SeverityLevel.HIGH;
-
-                    return {
-                        ...s,
-                        severity: this.normalizeSeverity(legacySeverity),
-                    };
-                });
-
-            const severityNormalizedNonRules: Partial<CodeSuggestion>[] =
-                nonKodyRulesSuggestions.map((suggestion) => ({
-                    ...suggestion,
-                    severity: this.normalizeSeverity(suggestion.severity),
-                }));
 
             // Rule-pack findings join the non-rule stream so they dedupe
             // against the model's findings instead of arriving as a parallel
@@ -1087,206 +1021,25 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const severityNormalized: Partial<CodeSuggestion>[] =
                 repeatCheck.kept;
 
-            // Deduplicate Kody Rules deterministically by ruleUuid.
-            // No LLM call needed — the ruleUuid unambiguously identifies
-            // which rule each finding belongs to, so same-rule findings
-            // can be merged without asking a model to decide.
-            //
-            // Merge strategy per rule group:
-            //   - PR-level (no relevantFile): keep 1 finding only. A PR-
-            //     level rule can only be violated once per PR (e.g. "PR
-            //     description required" — either the body is weak or it
-            //     isn't). Drop the rest.
-            //   - File-level: keep the most detailed finding as the
-            //     representative and append "Also found in: <file>:<line>"
-            //     for the other occurrences, same pattern used by the
-            //     LLM-based dedup on non-kody suggestions. One comment
-            //     covers every occurrence of the same rule.
-            const allKodyRules = severityNormalized.filter(
-                (s) => s.label === 'kody_rules',
-            );
-            const kodyRulesForDedup = this.dedupKodyRulesByRuleUuid(
-                allKodyRules,
+            const dedup = await this.dedupSuggestionStreams(
+                severityNormalized,
                 prNumber,
+                context,
+                telemetryMeta,
             );
-            const nonKodyRulesForDedup = severityNormalized.filter(
-                (s) => s.label !== 'kody_rules',
-            );
-
-            let dedupedNonRules = nonKodyRulesForDedup;
-            let dedupTrace: DedupTraceSummary = {
-                status:
-                    nonKodyRulesForDedup.length <= 1 ? 'skipped' : 'success',
-                totalClassifiedCount: severityNormalized.length,
-                kodyRulesSkippedCount: kodyRulesForDedup.length,
-                nonKodyInputCount: nonKodyRulesForDedup.length,
-                nonKodyOutputCount: nonKodyRulesForDedup.length,
-                finalOutputCount: severityNormalized.length,
-                uniqueCount: nonKodyRulesForDedup.length,
-                groupsCount: 0,
-                removedCount: 0,
-                unique: nonKodyRulesForDedup.map((suggestion) =>
-                    this.summarizeDedupSuggestion(suggestion),
-                ),
-            };
-            try {
-                const dedupResult = await this.deduplicateSuggestions(
-                    nonKodyRulesForDedup,
-                    prNumber,
-                    context.codeReviewConfig?.resolvedModelSlot,
-                    telemetryMeta,
-                );
-                dedupedNonRules = dedupResult.suggestions;
-                dedupTrace = {
-                    ...dedupResult.trace,
-                    totalClassifiedCount: severityNormalized.length,
-                    kodyRulesSkippedCount: kodyRulesForDedup.length,
-                    nonKodyInputCount: nonKodyRulesForDedup.length,
-                    nonKodyOutputCount: dedupResult.suggestions.length,
-                    finalOutputCount:
-                        dedupResult.suggestions.length +
-                        kodyRulesForDedup.length,
-                };
-            } catch (dedupError) {
-                this.logger.warn({
-                    message: `[DEDUP] Failed for PR#${prNumber}, keeping all suggestions`,
-                    context: this.stageName,
-                    error: dedupError,
-                });
-                dedupTrace = {
-                    ...dedupTrace,
-                    status: 'failed-keep-all',
-                    errorMessage:
-                        dedupError instanceof Error
-                            ? dedupError.message
-                            : String(dedupError),
-                };
-            }
-
-            // Cross-stream dedup (PR #1527 follow-up): a file-scope Kody Rule and
-            // an AI suggestion can flag the same issue on the same file. They are
-            // deduped in separate streams above, so both survive. Absorb the
-            // suggestion into the Kody Rule when they describe the same bug (the
-            // rule wins — it's user-configured and carries the violation link).
-            try {
-                dedupedNonRules =
-                    await this.crossDedupSuggestionsAgainstKodyRules(
-                        dedupedNonRules,
-                        kodyRulesForDedup,
-                        prNumber,
-                        context.codeReviewConfig?.byokConfig,
-                        telemetryMeta,
-                    );
-            } catch (crossErr) {
-                this.logger.warn({
-                    message: `[DEDUP-CROSS] PR#${prNumber}: cross-stream dedup failed, keeping all`,
-                    context: this.stageName,
-                    error: crossErr,
-                });
-            }
-
-            let deduped = [...dedupedNonRules, ...kodyRulesForDedup];
+            let deduped = dedup.deduped;
+            const dedupTrace = dedup.dedupTrace;
 
             // NOTE: Kody Rule link enrichment happens AFTER the content
             // formatter (see block further below). Doing it before would
             // let the formatter LLM strip or reword the link when it
             // collapses WHAT/WHY/HOW into natural prose.
 
-            // Reclassify severity using dedicated criteria (Gemini Flash)
-            // The agent assigns rough severity during investigation; this step
-            // applies the definitive criteria (default or client-custom) without
-            // biasing the agent's bug-finding behavior.
-            try {
-                const {
-                    classifySeverity,
-                } = require('@libs/code-review/infrastructure/agents/engine/classify-severity');
-                const severityMap = await classifySeverity(
-                    deduped.map((s) => ({
-                        relevantFile: s.relevantFile || '',
-                        suggestionContent: s.suggestionContent || '',
-                        oneSentenceSummary: s.oneSentenceSummary || '',
-                        existingCode: s.existingCode || '',
-                        improvedCode: s.improvedCode || '',
-                    })),
-                    context.codeReviewConfig?.v2PromptOverrides,
-                    context.codeReviewConfig?.byokConfig,
-                    context.organizationAndTeamData?.organizationId,
-                );
-                for (let i = 0; i < deduped.length; i++) {
-                    const classified = severityMap.get(i);
-                    if (!classified) {
-                        continue;
-                    }
-                    const hasKodyRuleSeverity =
-                        deduped[i].brokenKodyRulesIds?.length > 0;
-                    if (hasKodyRuleSeverity) {
-                        continue;
-                    }
-                    deduped[i].severity = classified;
-                }
-                this.logger.log({
-                    message: `[AGENT] Reclassified severity for ${deduped.length} suggestions`,
-                    context: this.stageName,
-                });
-            } catch (err) {
-                this.logger.warn({
-                    message: `[AGENT] Severity classification failed, keeping agent-assigned severity: ${err instanceof Error ? err.message : String(err)}`,
-                    context: this.stageName,
-                });
-            }
-
-            // Re-apply severity filter AFTER reclassification.
-            // The agent loop already filters once (to save verify tokens),
-            // but the SeverityClassifier can change the final severity.
-            // Without this second pass, a finding the LLM initially tagged
-            // as HIGH would pass the early filter, get reclassified to LOW,
-            // and appear on the PR below the user's configured threshold.
-            //
-            // Kody Rules are exempt by default (team-defined rules always
-            // surface regardless of severity). Teams can opt in to filter
-            // them too via suggestionControl.applyFiltersToKodyRules=true.
-            const severityFilter =
-                context.codeReviewConfig?.suggestionControl
-                    ?.severityLevelFilter;
-            const applyFiltersToKodyRules =
-                context.codeReviewConfig?.suggestionControl
-                    ?.applyFiltersToKodyRules === true;
-            if (
-                severityFilter &&
-                severityFilter !== 'low' &&
-                deduped.length > 0
-            ) {
-                const acceptedLevels: Record<string, string[]> = {
-                    critical: ['critical'],
-                    high: ['critical', 'high'],
-                    medium: ['critical', 'high', 'medium'],
-                    low: ['critical', 'high', 'medium', 'low'],
-                };
-                const accepted =
-                    acceptedLevels[severityFilter] || acceptedLevels.low;
-                const before = deduped.length;
-                const keeps = (s: Partial<CodeSuggestion>) =>
-                    survivesSeverityFilter(
-                        s,
-                        accepted,
-                        applyFiltersToKodyRules,
-                    );
-                const droppedBySeverity = deduped.filter((s) => !keeps(s));
-                deduped = deduped.filter(keeps);
-                for (const s of droppedBySeverity) {
-                    allDiscarded.push({
-                        ...s,
-                        priorityStatus: PriorityStatus.DISCARDED_BY_SEVERITY,
-                        deliveryStatus: DeliveryStatus.NOT_SENT,
-                    });
-                }
-                if (deduped.length < before) {
-                    this.logger.log({
-                        message: `[AGENT] Post-classification severity filter: ${before - deduped.length} suggestions below ${severityFilter} threshold removed (applyFiltersToKodyRules=${applyFiltersToKodyRules})`,
-                        context: this.stageName,
-                    });
-                }
-            }
+            deduped = await this.reclassifyAndFilterSeverity(
+                deduped,
+                context,
+                allDiscarded,
+            );
 
             // The formatter shortens the body for people reading the PR; the
             // whole explanation is kept for the agent prompt and agent surfaces.
@@ -1815,6 +1568,351 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
      * should have been filtered earlier by the base agent guard, but we
      * stay defensive).
      */
+    /**
+     * The agents' findings placed on the diff: lines snapped to a changed hunk,
+     * a file-anchored Kody Rule finding outside every hunk kept for a PR-level
+     * comment, any other finding outside every hunk dropped into `allDiscarded`.
+     * Called by executeStage; the anchoring evals call it too.
+     */
+    private anchorSuggestionsToDiff(
+        suggestions: Partial<CodeSuggestion>[],
+        changedFiles: FileChange[],
+        kodyRules: Partial<IKodyRule>[],
+        allDiscarded: Partial<CodeSuggestion>[],
+    ): Partial<CodeSuggestion>[] {
+        // Snap suggestion line numbers to valid diff ranges before passing downstream.
+        // GitHub rejects inline comments on lines that aren't part of the diff.
+        // A finding whose cited lines don't overlap ANY changed hunk is dropped
+        // (snapLinesToDiff returns null) rather than clamped onto an unrelated
+        // changed line — clamping was re-anchoring comments about UNCHANGED code
+        // onto the diff and shipping them as false positives.
+        const changedFilesByName = new Map(
+            changedFiles.map((f) => [f.filename, f]),
+        );
+        const isFileAnchored = fileAnchoredFindingPredicate(kodyRules);
+        const validatedSuggestions = suggestions
+            .map((s) => {
+                const file = changedFilesByName.get(s.relevantFile);
+                if (!file) return s;
+                const validRanges = extractValidDiffLines(file.patch);
+                const snapped = snapLinesToDiff(s, validRanges);
+                if (snapped === null) {
+                    if (isFileAnchored(s)) {
+                        this.logger.log({
+                            message: `[AGENT] File-anchored finding for ${s.relevantFile}: lines ${s.relevantLinesStart}-${s.relevantLinesEnd} sit outside every hunk, but the rule declared it needs context beyond the diff — delivering it as a PR-level comment`,
+                            context: this.stageName,
+                        });
+                        return { ...s, fileAnchored: true };
+                    }
+                    this.logger.log({
+                        message: `[AGENT] Dropped out-of-diff suggestion for ${s.relevantFile}: lines ${s.relevantLinesStart}-${s.relevantLinesEnd} do not overlap any changed hunk`,
+                        context: this.stageName,
+                    });
+                    allDiscarded.push({
+                        ...s,
+                        priorityStatus:
+                            PriorityStatus.DISCARDED_BY_CODE_DIFF,
+                        deliveryStatus: DeliveryStatus.NOT_SENT,
+                    });
+                    return null;
+                }
+                if (
+                    snapped.relevantLinesStart !== s.relevantLinesStart ||
+                    snapped.relevantLinesEnd !== s.relevantLinesEnd
+                ) {
+                    this.logger.log({
+                        message: `[AGENT] Snapped lines for ${s.relevantFile}: ${s.relevantLinesStart}-${s.relevantLinesEnd} → ${snapped.relevantLinesStart}-${snapped.relevantLinesEnd}`,
+                        context: this.stageName,
+                    });
+                }
+                return snapped;
+            })
+            .filter((s): s is Partial<CodeSuggestion> => s !== null);
+        return validatedSuggestions;
+    }
+
+    /**
+     * Severities on the v2 scale: a Kody Rule finding takes its rule's severity
+     * (the rule matched by the UUID the agent returned), any other finding its
+     * own, normalized. Called by executeStage; the funnel evals call it too.
+     */
+    private normalizeSuggestionSeverities(
+        suggestions: Partial<CodeSuggestion>[],
+        kodyRules: Partial<IKodyRule>[],
+    ) {
+        const kodyRulesSuggestions = suggestions.filter(
+            (s) => s.label === 'kody_rules',
+        );
+        const nonKodyRulesSuggestions = suggestions.filter(
+            (s) => s.label !== 'kody_rules',
+        );
+
+        // Normalize Kody Rules legacy severity (critical/issue/warning) into the
+        // v2 severity scale (critical/high/medium/low). The agent returns the rule
+        // UUID in brokenKodyRulesIds — use it for exact matching.
+        const kodyRulesById = new Map(
+            kodyRules
+                .filter((r) => r.uuid)
+                .map((r) => [r.uuid!, r]),
+        );
+        const kodyRulesWithSeverity: Partial<CodeSuggestion>[] =
+            kodyRulesSuggestions.map((s) => {
+                const ruleUuid = s.brokenKodyRulesIds?.[0];
+                const matchedRule = ruleUuid
+                    ? kodyRulesById.get(ruleUuid)
+                    : undefined;
+                const legacySeverity = matchedRule
+                    ? resolveKodyRuleSeverityLevel(matchedRule)
+                    : SeverityLevel.HIGH;
+
+                return {
+                    ...s,
+                    severity: this.normalizeSeverity(legacySeverity),
+                };
+            });
+
+        const severityNormalizedNonRules: Partial<CodeSuggestion>[] =
+            nonKodyRulesSuggestions.map((suggestion) => ({
+                ...suggestion,
+                severity: this.normalizeSeverity(suggestion.severity),
+            }));
+        return {
+            kodyRulesById,
+            kodyRulesWithSeverity,
+            severityNormalizedNonRules,
+        };
+    }
+
+    /**
+     * One comment per issue: Kody Rule findings merged by rule, the other
+     * findings by the dedup model (behind its merge guard), then a finding
+     * absorbed into a Kody Rule finding that describes the same issue. A
+     * failed pass keeps every finding. Called by executeStage; the dedup evals
+     * call it too.
+     */
+    private async dedupSuggestionStreams(
+        severityNormalized: Partial<CodeSuggestion>[],
+        prNumber: number,
+        context: CodeReviewPipelineContext,
+        telemetryMeta: LangfuseTelemetryMetadata | undefined,
+    ): Promise<{
+        deduped: Partial<CodeSuggestion>[];
+        dedupTrace: DedupTraceSummary;
+    }> {
+        // Deduplicate Kody Rules deterministically by ruleUuid.
+        // No LLM call needed — the ruleUuid unambiguously identifies
+        // which rule each finding belongs to, so same-rule findings
+        // can be merged without asking a model to decide.
+        //
+        // Merge strategy per rule group:
+        //   - PR-level (no relevantFile): keep 1 finding only. A PR-
+        //     level rule can only be violated once per PR (e.g. "PR
+        //     description required" — either the body is weak or it
+        //     isn't). Drop the rest.
+        //   - File-level: keep the most detailed finding as the
+        //     representative and append "Also found in: <file>:<line>"
+        //     for the other occurrences, same pattern used by the
+        //     LLM-based dedup on non-kody suggestions. One comment
+        //     covers every occurrence of the same rule.
+        const allKodyRules = severityNormalized.filter(
+            (s) => s.label === 'kody_rules',
+        );
+        const kodyRulesForDedup = this.dedupKodyRulesByRuleUuid(
+            allKodyRules,
+            prNumber,
+        );
+        const nonKodyRulesForDedup = severityNormalized.filter(
+            (s) => s.label !== 'kody_rules',
+        );
+
+        let dedupedNonRules = nonKodyRulesForDedup;
+        let dedupTrace: DedupTraceSummary = {
+            status:
+                nonKodyRulesForDedup.length <= 1 ? 'skipped' : 'success',
+            totalClassifiedCount: severityNormalized.length,
+            kodyRulesSkippedCount: kodyRulesForDedup.length,
+            nonKodyInputCount: nonKodyRulesForDedup.length,
+            nonKodyOutputCount: nonKodyRulesForDedup.length,
+            finalOutputCount: severityNormalized.length,
+            uniqueCount: nonKodyRulesForDedup.length,
+            groupsCount: 0,
+            removedCount: 0,
+            unique: nonKodyRulesForDedup.map((suggestion) =>
+                this.summarizeDedupSuggestion(suggestion),
+            ),
+        };
+        try {
+            const dedupResult = await this.deduplicateSuggestions(
+                nonKodyRulesForDedup,
+                prNumber,
+                context.codeReviewConfig?.resolvedModelSlot,
+                telemetryMeta,
+            );
+            dedupedNonRules = dedupResult.suggestions;
+            dedupTrace = {
+                ...dedupResult.trace,
+                totalClassifiedCount: severityNormalized.length,
+                kodyRulesSkippedCount: kodyRulesForDedup.length,
+                nonKodyInputCount: nonKodyRulesForDedup.length,
+                nonKodyOutputCount: dedupResult.suggestions.length,
+                finalOutputCount:
+                    dedupResult.suggestions.length +
+                    kodyRulesForDedup.length,
+            };
+        } catch (dedupError) {
+            this.logger.warn({
+                message: `[DEDUP] Failed for PR#${prNumber}, keeping all suggestions`,
+                context: this.stageName,
+                error: dedupError,
+            });
+            dedupTrace = {
+                ...dedupTrace,
+                status: 'failed-keep-all',
+                errorMessage:
+                    dedupError instanceof Error
+                        ? dedupError.message
+                        : String(dedupError),
+            };
+        }
+
+        // Cross-stream dedup (PR #1527 follow-up): a file-scope Kody Rule and
+        // an AI suggestion can flag the same issue on the same file. They are
+        // deduped in separate streams above, so both survive. Absorb the
+        // suggestion into the Kody Rule when they describe the same bug (the
+        // rule wins — it's user-configured and carries the violation link).
+        try {
+            dedupedNonRules =
+                await this.crossDedupSuggestionsAgainstKodyRules(
+                    dedupedNonRules,
+                    kodyRulesForDedup,
+                    prNumber,
+                    context.codeReviewConfig?.byokConfig,
+                    telemetryMeta,
+                );
+        } catch (crossErr) {
+            this.logger.warn({
+                message: `[DEDUP-CROSS] PR#${prNumber}: cross-stream dedup failed, keeping all`,
+                context: this.stageName,
+                error: crossErr,
+            });
+        }
+
+        return {
+            deduped: [...dedupedNonRules, ...kodyRulesForDedup],
+            dedupTrace,
+        };
+    }
+
+    /**
+     * The definitive severity of each finding (the severity classifier; a Kody
+     * Rule finding keeps its rule's), then the team's severity threshold, the
+     * findings below it moved to `allDiscarded`. Returns the findings that stay.
+     * Called by executeStage; the severity evals call it too.
+     */
+    private async reclassifyAndFilterSeverity(
+        suggestions: Partial<CodeSuggestion>[],
+        context: CodeReviewPipelineContext,
+        allDiscarded: Partial<CodeSuggestion>[],
+    ): Promise<Partial<CodeSuggestion>[]> {
+        let deduped = suggestions;
+        // Reclassify severity using dedicated criteria (Gemini Flash)
+        // The agent assigns rough severity during investigation; this step
+        // applies the definitive criteria (default or client-custom) without
+        // biasing the agent's bug-finding behavior.
+        try {
+            const {
+                classifySeverity,
+            } = require('@libs/code-review/infrastructure/agents/engine/classify-severity');
+            const severityMap = await classifySeverity(
+                deduped.map((s) => ({
+                    relevantFile: s.relevantFile || '',
+                    suggestionContent: s.suggestionContent || '',
+                    oneSentenceSummary: s.oneSentenceSummary || '',
+                    existingCode: s.existingCode || '',
+                    improvedCode: s.improvedCode || '',
+                })),
+                context.codeReviewConfig?.v2PromptOverrides,
+                context.codeReviewConfig?.byokConfig,
+                context.organizationAndTeamData?.organizationId,
+            );
+            for (let i = 0; i < deduped.length; i++) {
+                const classified = severityMap.get(i);
+                if (!classified) {
+                    continue;
+                }
+                const hasKodyRuleSeverity =
+                    deduped[i].brokenKodyRulesIds?.length > 0;
+                if (hasKodyRuleSeverity) {
+                    continue;
+                }
+                deduped[i].severity = classified;
+            }
+            this.logger.log({
+                message: `[AGENT] Reclassified severity for ${deduped.length} suggestions`,
+                context: this.stageName,
+            });
+        } catch (err) {
+            this.logger.warn({
+                message: `[AGENT] Severity classification failed, keeping agent-assigned severity: ${err instanceof Error ? err.message : String(err)}`,
+                context: this.stageName,
+            });
+        }
+
+        // Re-apply severity filter AFTER reclassification.
+        // The agent loop already filters once (to save verify tokens),
+        // but the SeverityClassifier can change the final severity.
+        // Without this second pass, a finding the LLM initially tagged
+        // as HIGH would pass the early filter, get reclassified to LOW,
+        // and appear on the PR below the user's configured threshold.
+        //
+        // Kody Rules are exempt by default (team-defined rules always
+        // surface regardless of severity). Teams can opt in to filter
+        // them too via suggestionControl.applyFiltersToKodyRules=true.
+        const severityFilter =
+            context.codeReviewConfig?.suggestionControl
+                ?.severityLevelFilter;
+        const applyFiltersToKodyRules =
+            context.codeReviewConfig?.suggestionControl
+                ?.applyFiltersToKodyRules === true;
+        if (
+            severityFilter &&
+            severityFilter !== 'low' &&
+            deduped.length > 0
+        ) {
+            const acceptedLevels: Record<string, string[]> = {
+                critical: ['critical'],
+                high: ['critical', 'high'],
+                medium: ['critical', 'high', 'medium'],
+                low: ['critical', 'high', 'medium', 'low'],
+            };
+            const accepted =
+                acceptedLevels[severityFilter] || acceptedLevels.low;
+            const before = deduped.length;
+            const keeps = (s: Partial<CodeSuggestion>) =>
+                survivesSeverityFilter(
+                    s,
+                    accepted,
+                    applyFiltersToKodyRules,
+                );
+            const droppedBySeverity = deduped.filter((s) => !keeps(s));
+            deduped = deduped.filter(keeps);
+            for (const s of droppedBySeverity) {
+                allDiscarded.push({
+                    ...s,
+                    priorityStatus: PriorityStatus.DISCARDED_BY_SEVERITY,
+                    deliveryStatus: DeliveryStatus.NOT_SENT,
+                });
+            }
+            if (deduped.length < before) {
+                this.logger.log({
+                    message: `[AGENT] Post-classification severity filter: ${before - deduped.length} suggestions below ${severityFilter} threshold removed (applyFiltersToKodyRules=${applyFiltersToKodyRules})`,
+                    context: this.stageName,
+                });
+            }
+        }
+        return deduped;
+    }
+
     private dedupKodyRulesByRuleUuid(
         suggestions: Partial<CodeSuggestion>[],
         prNumber: number,
