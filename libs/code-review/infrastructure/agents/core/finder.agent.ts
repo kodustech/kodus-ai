@@ -38,7 +38,10 @@ import { buildToolEvidenceSummary } from '@libs/code-review/infrastructure/agent
 import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import type { ToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
-import type { RepoInstructionsContext } from '@libs/code-review/infrastructure/agents/collaborators/repo-instructions';
+import {
+    quotesRepoInstruction,
+    type RepoInstructionsContext,
+} from '@libs/code-review/infrastructure/agents/collaborators/repo-instructions';
 import { formatPreviousDecisions } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import type {
     Verdict,
@@ -746,6 +749,45 @@ export async function runFinderWithVerify(
         kept = kept.filter((f) => !stillDropped.has(f));
         dropped = [...dropped, ...gate.dropped];
         gateUsage = { ...fullVerifier.usage };
+    }
+
+    // A repo_instruction finding must quote the instructions merged on the
+    // target branch. The verifier is told so but does not always hold to it
+    // (it kept quotes of a rule the PR itself adds to CLAUDE.md), so the quote
+    // is checked here.
+    const unquoted = kept.filter(
+        (f) =>
+            f.label === 'repo_instruction' &&
+            !quotesRepoInstruction(
+                f.suggestionContent,
+                params.repoInstructions,
+            ),
+    );
+    if (unquoted.length > 0) {
+        const unquotedSet = new Set(unquoted);
+        kept = kept.filter((f) => !unquotedSet.has(f));
+        dropped = [
+            ...dropped,
+            ...unquoted.map((candidate) => {
+                const verdict: Verdict = {
+                    ...verdictByFinding.get(candidate),
+                    keep: false,
+                    rationale:
+                        'The quoted instruction is not in the target-branch instruction files.',
+                };
+                verdictByFinding.set(candidate, verdict);
+                return { candidate, verdict };
+            }),
+        ];
+        finderLogger.log({
+            message: `Dropped ${unquoted.length} repo_instruction finding(s) whose quote is not in the target-branch instructions`,
+            context: 'finder.repo-instruction-quote',
+            metadata: {
+                ...params.telemetryMetadata,
+                agentName: params.agentName,
+                files: unquoted.map((f) => f.relevantFile),
+            },
+        });
     }
 
     // Map the generic verdict.toolCalls (name/args/result) into the review

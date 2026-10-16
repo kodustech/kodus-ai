@@ -304,3 +304,56 @@ export async function collectRepoInstructions(params: {
         indexedCount: prose.length,
     };
 }
+
+/** Shorter quotes could match by chance, so they never count as a citation. */
+const MIN_QUOTE_CHARS = 12;
+
+const straightenQuotes = (text: string): string =>
+    text.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+
+/**
+ * Lowercased text without markdown (heading, quote and list markers, links,
+ * emphasis, code ticks) and with whitespace collapsed, so a finding that
+ * quotes an instruction without its formatting still matches.
+ */
+function normalizeInstructionText(text: string): string {
+    return straightenQuotes(text)
+        .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+        .replace(/^[ \t]{0,3}(#{1,6}|>|[-*+]|\d+[.)])[ \t]+/gm, '')
+        .replace(/[*_`~]/g, '')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+const trimPunctuation = (text: string): string =>
+    text.replace(/^[\s.,;:!?]+|[\s.,;:!?]+$/g, '');
+
+/**
+ * Whether `text` (a finding's content) quotes one of the collected
+ * instruction files: some double-quoted span of it, normalized, appears in a
+ * file's normalized text. A quote cut with an ellipsis matches when every part
+ * appears in the same file.
+ */
+export function quotesRepoInstruction(
+    text: string,
+    context: RepoInstructionsContext | undefined,
+): boolean {
+    const corpus = (context?.files ?? []).map((f) =>
+        normalizeInstructionText(f.content),
+    );
+    if (!corpus.length) return false;
+
+    const quotes = [...straightenQuotes(text).matchAll(/"([^"]+)"/g)].map(
+        (m) => m[1],
+    );
+    return quotes.some((quote) => {
+        const parts = quote
+            .split(/\.{3}|…/)
+            .map((p) => trimPunctuation(normalizeInstructionText(p)))
+            .filter(Boolean);
+        const length = parts.reduce((sum, p) => sum + p.length, 0);
+        if (length < MIN_QUOTE_CHARS) return false;
+        return corpus.some((file) => parts.every((p) => file.includes(p)));
+    });
+}

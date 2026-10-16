@@ -1,5 +1,6 @@
 import {
     collectRepoInstructions,
+    quotesRepoInstruction,
     REPO_INSTRUCTIONS_LIMITS,
     selectGoverningFiles,
     shouldCollectRepoInstructions,
@@ -342,5 +343,76 @@ describe('collectRepoInstructions', () => {
         expect(result.files).toHaveLength(3);
         expect(result.dropped).toEqual(['pkg3/AGENTS.md']);
         expect(repo.readFile).toHaveBeenCalledTimes(3);
+    });
+});
+
+describe('quotesRepoInstruction', () => {
+    const context = {
+        files: [
+            {
+                path: 'CLAUDE.md',
+                content: [
+                    '## Backend',
+                    '',
+                    '- **Never** import a model directly in API helpers; use the `services` layer.',
+                    '- Amounts are integer cents.',
+                ].join('\n'),
+                appliesTo: '**',
+                truncated: false,
+            },
+        ],
+        otherFiles: [],
+        dropped: [],
+        truncated: false,
+        indexedCount: 1,
+    };
+
+    it.each([
+        ['the exact sentence', 'CLAUDE.md says "Amounts are integer cents."'],
+        [
+            'different case and spacing',
+            'CLAUDE.md says "amounts  are INTEGER cents"',
+        ],
+        [
+            'the text without its markdown',
+            'CLAUDE.md says "Never import a model directly in API helpers; use the services layer."',
+        ],
+        [
+            'a trimmed part of it',
+            'CLAUDE.md says "import a model directly in API helpers"',
+        ],
+        [
+            'typographic quotes',
+            'CLAUDE.md says \u201cAmounts are integer cents.\u201d',
+        ],
+        [
+            'an ellipsis between two parts',
+            'CLAUDE.md says "Never import a model directly ... use the services layer"',
+        ],
+    ])('accepts a quote of %s', (_name, content) => {
+        expect(quotesRepoInstruction(content, context)).toBe(true);
+    });
+
+    it.each([
+        [
+            'a rule the files do not state',
+            'CLAUDE.md says "Use isinstance() checks instead of getattr on unions."',
+        ],
+        ['no quote at all', 'This breaks the team convention on amounts.'],
+        [
+            'a quote too short to identify an instruction',
+            'CLAUDE.md says "cents"',
+        ],
+    ])('rejects %s', (_name, content) => {
+        expect(quotesRepoInstruction(content, context)).toBe(false);
+    });
+
+    it('rejects every quote when no instructions were collected', () => {
+        expect(
+            quotesRepoInstruction(
+                'CLAUDE.md says "Amounts are integer cents."',
+                undefined,
+            ),
+        ).toBe(false);
     });
 });

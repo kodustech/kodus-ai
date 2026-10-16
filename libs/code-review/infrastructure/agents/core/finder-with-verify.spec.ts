@@ -164,4 +164,79 @@ describe('runFinderWithVerify — repo_instruction findings', () => {
         expect(verifierPrompts.length).toBeGreaterThan(0);
         expect(verifierPrompts.every((p) => p.includes('<RepositoryInstructions>'))).toBe(true);
     });
+
+    // The verifier is told to drop a quote it cannot find, and did not always:
+    // a PR that adds an instruction to CLAUDE.md is not checked against it.
+    it('drops a kept finding whose quote is not in the target-branch instructions', async () => {
+        const findings = {
+            reasoning: 'two convention breaks',
+            suggestions: [
+                {
+                    relevantFile: 'a.ts',
+                    label: 'repo_instruction',
+                    suggestionContent: 'CLAUDE.md says "Amounts are integer cents."',
+                    existingCode: 'x',
+                    improvedCode: 'y',
+                    severity: 'medium',
+                },
+                {
+                    relevantFile: 'b.ts',
+                    label: 'repo_instruction',
+                    suggestionContent: 'CLAUDE.md says "Use isinstance() instead of getattr on unions."',
+                    existingCode: 'p',
+                    improvedCode: 'q',
+                    severity: 'medium',
+                },
+            ],
+        };
+        mockResolve.mockImplementation(() => ({
+            model: new MockLanguageModelV3({
+                doGenerate: (async (opts: any) => {
+                    const sys = JSON.stringify(opts?.prompt ?? '');
+                    const tc = sys.includes('REFUTE')
+                        ? { id: 'v', name: 'submitVerdict', input: { keep: true, rationale: 'ok' } }
+                        : { id: 'f', name: 'submitResult', input: findings };
+                    return {
+                        content: [{ type: 'tool-call', toolCallId: tc.id, toolName: tc.name, input: JSON.stringify(tc.input) }],
+                        finishReason: 'tool-calls',
+                        usage: { inputTokens: 5, outputTokens: 5 },
+                        warnings: [],
+                    };
+                }) as any,
+            }),
+            callOptions: {},
+            providerOptions: {},
+            modelName: 'mock',
+            usageIdentity: {},
+        }));
+        const tools = new InMemoryToolRegistry([]);
+        const finderSpec = buildFinderAgentSpec({
+            systemPrompt: 'find bugs',
+            modelId: 'mock',
+            tools,
+            coverageLedger: noCriticalLedger,
+        });
+
+        const r = await runFinderWithVerify(
+            {
+                runner: new AiSdkAgentRunner(undefined),
+                finderSpec,
+                modelId: 'mock',
+                tools,
+                repoInstructions: {
+                    files: [{ path: 'CLAUDE.md', content: 'Amounts are integer cents.', appliesTo: '**', truncated: false }],
+                    otherFiles: [],
+                    dropped: [],
+                    truncated: false,
+                    indexedCount: 1,
+                },
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        expect(r.kept.map((f) => f.relevantFile)).toEqual(['a.ts']);
+        expect(r.droppedByVerify.map((d) => d.finding.relevantFile)).toEqual(['b.ts']);
+        expect(r.droppedByVerify[0].evidence).toMatch(/not in the target-branch/);
+    });
 });

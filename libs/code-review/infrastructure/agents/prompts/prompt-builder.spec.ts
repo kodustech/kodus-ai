@@ -515,6 +515,17 @@ describe('repository instructions block', () => {
         expect(sys).toContain('readRepoInstruction');
     });
 
+    it('tells the generalist to read every listed file, not only when it needs one', () => {
+        const sys = buildSystemPrompt(
+            baseInput({ repoInstructions }),
+            generalistMeta,
+        );
+        expect(sys).toMatch(
+            /Before you finish, read each file listed here with readRepoInstruction/,
+        );
+        expect(sys).not.toContain('when you need what it says');
+    });
+
     it('says readRepoInstruction works without the other tools', () => {
         const sys = buildSystemPrompt(
             baseInput({ remoteCommands: undefined, repoInstructions }),
