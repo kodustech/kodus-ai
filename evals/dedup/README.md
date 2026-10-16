@@ -6,7 +6,7 @@
 > - **Gate:** goldens lost must be 0 (`evals/dedup/run.js`).
 > - **Cost:** mock: none. Live: the dedup model plus the judge.
 
-Measures the review pipeline's **deduplication** step (`agent-review.stage.ts#deduplicateSuggestions`) — the LLM pass (`gpt-5.4-mini`) that groups "same bug" suggestions and keeps one representative per group. The `evals/investigation` recall eval explicitly does **not** cover this downstream step; this fills that gap.
+Measures the review pipeline's **deduplication** step: `AgentReviewStage.dedupSuggestionStreams` (`agent-review.stage.ts`), which merges Kody Rule findings by rule, groups the other "same bug" findings with the dedup model on the org's routed model (behind its merge guard), and absorbs a finding into a Kody Rule finding about the same issue. `evals/funnel/dedup` measures the same step on the input a production review gave it; this eval keeps its labelled datasets and its over/under-merge counts.
 
 ## What it answers
 
@@ -14,23 +14,25 @@ The dangerous failure of dedup is **over-merge**: collapsing two findings that d
 
 ## Ground truth — golden-anchored (no new labeling, not circular)
 
-Each finding is judge-matched (Sonnet, via `../investigation/recall-judge`) to the PR's golden bugs → every finding gets a `goldenId` (or `-1` = noise). Findings sharing a `goldenId` are true duplicates; findings on different goldens are distinct. Then we run the **real** dedup and check whether its merges respect that grouping. It's non-circular because the labeler (Sonnet) is a different model than the dedup (`gpt-5.4-mini`).
+Each finding is judge-matched (Sonnet, via `../investigation/recall-judge`) to the PR's golden bugs → every finding gets a `goldenId` (or `-1` = noise). Findings sharing a `goldenId` are true duplicates; findings on different goldens are distinct. Then we run the **real** dedup and check whether its merges respect that grouping. It's non-circular as long as the labeler is a different model than the dedup's.
 
 Headline metric: **goldens lost** = goldens covered by some finding *before* dedup but by no kept finding *after*. Should be **0**.
 
 ## Files
 
 - `build-dataset.js` — extract `{prId, findings, goldenComments}` per PR from a finder-recall result JSON (default `/tmp/recall-new-g3.json`) → `datasets/`. Reuses real finder output, no finder re-run.
-- `dedup-runner.js` — invokes the **real** dedup decision: the live prompt+schema from `libs/code-review/infrastructure/agents/engine/dedup-prompt.ts` through `LLM.run`, the same entry point the stage calls, so the executor's structured-output recovery is measured too. The model routes through `evals/shared/tier0-models.js`. Derives `kept`/`dropped` from the model's `groups`/`unique`.
+- `dedup-runner.js` — runs production's step, `AgentReviewStage.dedupSuggestionStreams`, on a stage built as the review builds it, over the team's default config with the model routed as an org's (`evals/shared/review-stage.js` `teamContext`). `kept`/`dropped` are the findings that come out and the ones that do not.
 - `dedup-eval.js` — `matchFindingsToGoldens` (the Sonnet labeling) + `computeMetrics` (over/under-merge, goldens lost).
 - `run.js` — driver: label (cached) → dedup → score → aggregate.
 
 ## Run
 
 ```bash
-# real dedup (needs OpenAI key + Anthropic judge key, from ~/.kodus-dev/config)
+# production's dedup on the managed default, or --model=<tier-0 id> as an org's
+# BYOK model (the model's key, the Anthropic judge key, and the platform's
+# OpenAI key in API_OPEN_AI_API_KEY for the embedder)
 node evals/dedup/build-dataset.js /tmp/recall-new-g3.json   # once, to build datasets
-node evals/dedup/run.js --model=gpt-5.4-mini --guard=content --contentthresh=0.3 --limit=39
+node evals/dedup/run.js --limit=39
 
 # no-dedup-model sanity baselines (judge-only):
 node evals/dedup/run.js --mock=identity   # keep-all → goldens lost must be 0
@@ -38,7 +40,7 @@ node evals/dedup/run.js --mock=overmerge  # merge-all → shows the harm ceiling
 node evals/dedup/run.js --pr=<caseId>     # single PR
 ```
 
-Golden labels are cached in `.cache-goldenlabels/` (judging is dedup-independent), so iterating on the dedup costs only gemini calls.
+Golden labels are cached in `.cache-goldenlabels/` (judging is dedup-independent), so iterating on the dedup costs only the dedup model's calls.
 
 ## Status
 

@@ -1,20 +1,22 @@
 // Dedup-eval driver. For each PR dataset (>=2 findings): judge-label findings →
-// goldens (claude-haiku-4-5, cached), run the REAL dedup (gpt-5.4-mini) or a
-// mock, score the over-merge / under-merge metrics, and print an aggregate.
+// goldens (claude-haiku-4-5, cached), run production's dedup
+// (dedup-runner.js: AgentReviewStage.dedupSuggestionStreams on the routed
+// model, the managed default unless --model) or a mock, score the over-merge /
+// under-merge metrics, and print an aggregate.
 //
-//   node run.js                 # live dedup (needs OpenAI key)
-//   node run.js --mock=identity # keep-all baseline (no Google; sanity/CI)
+//   node run.js                 # production's dedup (the model's key, the judge's)
+//   node run.js --mock=identity # keep-all baseline (no key; sanity/CI)
 //   node run.js --limit=5       # first 5 dedup-relevant PRs
 //   node run.js --pr=<caseId>   # one PR
 //
-// Keys: ANTHROPIC_API_KEY/BYOK_ANTHROPIC_API_KEY (judge) +
-// BYOK_OPENAI_API_KEY/API_OPEN_AI_API_KEY (dedup default).
+// Keys: the model's (evals/shared/tier0-models.js), the judge's
+// (ANTHROPIC_API_KEY/BYOK_ANTHROPIC_API_KEY), and the platform's OpenAI key in
+// API_OPEN_AI_API_KEY for the embedder (without it the guard falls back to its
+// lexical veto, as production does).
 //
 // The judge must stay a DIFFERENT model than the dedup (else the label→goldens
-// step correlates with the merge decision). The dedup model is gpt-5.4-mini, so
-// pin the judge to claude-haiku-4-5 (also the global default) BEFORE requiring
-// recall-judge, which captures JUDGE_MODEL at load time — this stays correct
-// even if the global default judge is later pointed at gpt-5.4-mini.
+// step correlates with the merge decision): pin it to claude-haiku-4-5 BEFORE
+// requiring recall-judge, which captures JUDGE_MODEL at load time.
 process.env.JUDGE_MODEL = process.env.JUDGE_MODEL || 'claude-haiku-4-5';
 if (process.env.JUDGE_MODEL === 'gpt-5.4-mini') process.env.JUDGE_MODEL = 'claude-haiku-4-5';
 const fs = require('fs');
@@ -73,11 +75,15 @@ async function main() {
     }
 
     const mock = args.mock;
-    const dedupModel = args.model || 'gpt-5.4-mini'; // production default
+    let runDedup = null;
+    let dedupModel = null;
+    if (!mock) {
+        const runner = require('./dedup-runner');
+        runDedup = runner.runDedup;
+        dedupModel = args.model || runner.DEFAULT_MODEL;
+    }
     const gate = !!args.gate;
     const goldensLostMax = args['goldens-lost-max'] != null ? Number(args['goldens-lost-max']) : 0;
-    let runDedup = null;
-    if (!mock) ({ runDedup } = require('./dedup-runner'));
     // Mock modes use heuristic labels so CI needs no judge key.
     const judgeKey = mock ? null : loadJudgeKey();
     fs.mkdirSync(CACHE, { recursive: true });
@@ -106,7 +112,7 @@ async function main() {
 
         let dedup;
         try {
-            dedup = mock ? mockDedup(mock, ds.findings) : await runDedup(ds.findings, dedupModel, { temperature: args.temp != null ? Number(args.temp) : undefined, guard: args.guard || undefined, tightRatio: args.tightratio != null ? Number(args.tightratio) : undefined, contentThresh: args.contentthresh != null ? Number(args.contentthresh) : undefined });
+            dedup = mock ? mockDedup(mock, ds.findings) : await runDedup(ds.findings, dedupModel);
         } catch (e) {
             console.error(`  ${ds.prId.slice(0, 40)}: dedup ERROR ${e.message.slice(0, 60)}`);
             continue;

@@ -235,7 +235,8 @@ async function main() {
     } else {
         const output = JSON.parse(result.output);
         summary.findings = Array.isArray(output.findings) ? output.findings.length : 0;
-        summary.toolCalls = output.trace?.replayCalls ?? 0;
+        // The tool calls the agent loops made on the sandbox (agent-provider trace).
+        summary.toolCalls = Array.isArray(output.trace?.toolCalls) ? output.trace.toolCalls.length : 0;
         if (summary.toolCalls < MIN_TOOL_CALLS) {
             summary.status = 'broken';
             summary.reason = `only ${summary.toolCalls} tool call(s) — the loop is not using its tools`;

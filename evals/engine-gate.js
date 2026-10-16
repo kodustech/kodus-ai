@@ -141,7 +141,6 @@ function preflight({ strictCoverage }) {
         'evals/promotion/run-eval.js',
         'evals/kody-rules/real-agent.js',
         'evals/kody-rules/github-cases.json',
-        'evals/anchoring/anchor-eval.js',
         'evals/pr-summary/run.js',
         'evals/pr-summary/datasets/cases.json',
         'evals/dedup/run.js',

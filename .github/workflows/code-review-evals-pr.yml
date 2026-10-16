@@ -36,6 +36,10 @@ on:
             # resolveWritingGuidelines, which evals/format runs.
             - "default-kodus-config.yml"
             - ".github/workflows/code-review-evals-*.yml"
+            # What the review's sandbox finds on the runner, at the worker
+            # image's versions (bun, kodus-graph).
+            - ".github/actions/eval-sandbox/**"
+            - "docker/Dockerfile"
     workflow_dispatch:
 
 concurrency:
@@ -56,6 +60,9 @@ jobs:
                   cache: "pnpm"
             - name: Install deps
               run: pnpm install --frozen-lockfile
+            # The finder and memories steps review a repository written for the
+            # eval on production's sandbox: no GitHub clone, no mirror cache.
+            - uses: ./.github/actions/eval-sandbox
             - name: Create environment.ts (gitignored EE config)
               run: |
                   cat <<'EOF' > libs/ee/configs/environment/environment.ts

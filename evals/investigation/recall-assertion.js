@@ -72,6 +72,27 @@ function codeInCorpus(goldenText, corpus) {
     return { present: hits.length > 0, hits };
 }
 
+// Each known bug's best match among `candidates`: the finding the judge is
+// surest of (at our confidence floor). See the comment at the call.
+async function bestMatches(apiKey, goldens, candidates) {
+    const best = new Array(goldens.length).fill(-1);
+    const bestConfidence = new Array(goldens.length).fill(0);
+    for (let gi = 0; gi < goldens.length; gi++) {
+        const goldenText = typeof goldens[gi] === 'string' ? goldens[gi] : goldens[gi].comment;
+        for (let fi = 0; fi < candidates.length; fi++) {
+            // Nothing outranks a certain match: stop judging this known bug.
+            if (bestConfidence[gi] >= 1) break;
+            // eslint-disable-next-line no-await-in-loop
+            const { match, confidence } = await matchCommentDetailed(apiKey, goldenText, candidates[fi]);
+            if (match && confidence > bestConfidence[gi]) {
+                bestConfidence[gi] = confidence;
+                best[gi] = fi;
+            }
+        }
+    }
+    return best;
+}
+
 module.exports = async (output, context) => {
     const parsed = parseOutput(output);
     if (!parsed) {
@@ -115,22 +136,14 @@ module.exports = async (output, context) => {
     // as hits and a repeated finding raised precision. Every pair is judged,
     // since the best match is only known after all of them. The match floor is
     // ours (MATCH_CONFIDENCE in recall-judge.js).
-    const best = new Array(goldens.length).fill(-1);
-    const bestConfidence = new Array(goldens.length).fill(0);
-    for (let gi = 0; gi < goldens.length; gi++) {
-        const goldenText = typeof goldens[gi] === 'string' ? goldens[gi] : goldens[gi].comment;
-        for (let fi = 0; fi < candidates.length; fi++) {
-            // Nothing outranks a certain match: stop judging this known bug.
-            if (bestConfidence[gi] >= 1) break;
-            // eslint-disable-next-line no-await-in-loop
-            const { match, confidence } = await matchCommentDetailed(apiKey, goldenText, candidates[fi]);
-            if (match && confidence > bestConfidence[gi]) {
-                bestConfidence[gi] = confidence;
-                best[gi] = fi;
-            }
-        }
-    }
+    const best = await bestMatches(apiKey, goldens, candidates);
     const goldenHit = best.map((fi) => fi >= 0);
+    // Reported next to the gated number: the same known bugs against what the
+    // finder's loops returned, before the stage's later steps.
+    const loopFindings = Array.isArray(parsed.loopFindings) ? parsed.loopFindings : null;
+    const loopMatched = loopFindings
+        ? (await bestMatches(apiKey, goldens, loopFindings.map(findingText))).filter((fi) => fi >= 0).length
+        : null;
     const findingHit = candidates.map((_, fi) => best.includes(fi));
 
     const matched = goldenHit.filter(Boolean).length; // goldens covered (recall TP)
@@ -174,7 +187,7 @@ module.exports = async (output, context) => {
         score: recall,
         reason,
         metadata: {
-            recall, precision, f1, fairRecall, hitRate, totalCalls, unserved, matched, goldens: goldens.length, tpFindings, fpFindings, findings: candidates.length, realMiss, artifact, untestable,
+            recall, loopRecall: loopMatched === null ? null : loopMatched / goldens.length, loopFindings: loopFindings ? loopFindings.length : null, precision, f1, fairRecall, hitRate, totalCalls, unserved, matched, goldens: goldens.length, tpFindings, fpFindings, findings: candidates.length, realMiss, artifact, untestable,
             // Which known bugs were found, by text: lets the nightly name the bugs
             // it found last green night and missed tonight, not just a number.
             goldenResults: goldens.map((g, gi) => ({ golden: String(typeof g === 'string' ? g : g.comment), found: goldenHit[gi] })),

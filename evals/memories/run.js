@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// memories: runs the real finder (evals/investigation/agent-provider.js: the
-// production prompt, finder and verify) on small pull requests whose team has a
-// memory (cases.js), and checks that the review follows it: quiet where the
-// memory says the code is intended, a finding where it says the code is wrong
-// or where a real bug falls outside what it covers.
+// memories: production's review stage (evals/investigation/agent-provider.js →
+// shared/review-stage.js: config, changed files, sandbox, agents, verify and the
+// post-agent steps) on small pull requests whose team has a memory (cases.js),
+// and checks that what the review ships follows it: quiet where the memory says
+// the code is intended, a finding where it says the code is wrong or where a
+// real bug falls outside what it covers.
 //
 //   node evals/memories/run.js [--model=<id>] [--gate] [--output=<result.json>] [--limit=N] [--concurrency=N] [--no-memories]
 //
@@ -12,8 +13,6 @@
 // Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/AGENTS.md).
 const fs = require('fs');
 const path = require('path');
-const { createPatch } = require('diff');
-const { registerTs } = require('../shared/eval-kit');
 const { evalQuestion, resultProblems } = require('../shared/eval-result');
 const { CASES } = require('./cases');
 
@@ -30,31 +29,31 @@ const cases = CASES.slice(0, args.limit ? Number(args.limit) : undefined);
 // libs/common/utils/crypto.ts reads API_CRYPTO_KEY at import time; CI has no .env.
 if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
 process.env.RECALL_MODEL = MODEL;
-registerTs();
-const { convertToUnifiedDiffWithLineNumbers } = require('../../libs/common/utils/patch.ts');
 const Provider = require('../investigation/agent-provider');
 
 const norm = (f) => String(f || '').replace(/\\/g, '/').replace(/^\.?\/+/, '');
 
-// The PR's changed files as the review stage renders them.
-function changedFiles(c) {
-    return Object.entries(c.before).map(([filename, before]) => {
-        const patch = createPatch(filename, before ?? '', c.repo[filename] ?? '').split('\n').slice(4).join('\n');
-        return { filename, patchWithLinesStr: convertToUnifiedDiffWithLineNumbers(patch, { filename }) };
-    });
-}
-
+// The PR as the platform holds it: the repository at its base (the head with
+// the changed files as they were) and at its head. Production's stage reads the
+// diff between the two (shared/repo-mirror.js filesBetween) and the team's
+// memories as production stored them (shared/review-stage.js teamStore).
 function caseVars(c) {
+    const repoBase = { ...c.repo };
+    const repoFiles = { ...c.repo };
+    for (const [file, before] of Object.entries(c.before)) {
+        if (before === null) delete repoBase[file];
+        else repoBase[file] = before;
+        if (!(file in c.repo)) repoFiles[file] = null;
+    }
     return {
         caseId: `memories-${c.id}`,
         prTitle: c.prTitle,
         prBody: c.prBody,
         repositoryFullName: 'eval/memories',
         reviewMode: 'normal',
-        maxSteps: 12,
-        changedFiles: changedFiles(c),
-        repoFiles: c.repo,
-        memoryRules: args['no-memories'] ? [] : c.memories.map((m) => ({ ...m, type: 'memory' })),
+        repoBase,
+        repoFiles,
+        memoryRules: args['no-memories'] ? [] : c.memories,
     };
 }
 

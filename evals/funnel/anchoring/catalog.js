@@ -1,4 +1,4 @@
-// The nightly PRs of the frozen snapshot, each with the known bugs that reach anchoring.
+// The nightly PRs of the frozen snapshot, each with the known bugs that reach anchoring, and its control pair.
 const { catalogFor } = require('../catalog');
 
 function catalog() {

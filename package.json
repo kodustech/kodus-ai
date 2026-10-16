@@ -123,8 +123,6 @@
         "eval:verifier-verdict:capture": "node evals/verifier-verdict/capture.js --days 10 --limit 200",
         "byok:live:check": "jest --config jest.config.ts libs/llm/byok-reasoning.live.spec.ts -t 'reports which brands' --no-coverage --forceExit",
         "byok:live": "jest --config jest.config.ts libs/llm/byok-reasoning.live.spec.ts --no-coverage --forceExit",
-        "eval:anchoring": "node evals/anchoring/anchor-eval.js --limit=25",
-        "eval:anchoring:gate": "node evals/anchoring/anchor-eval.js --limit=25 --gate",
         "eval:pr-summary": "node evals/pr-summary/run.js --model=gpt-5.4-mini --gate",
         "eval:pr-summary:mock": "node evals/pr-summary/run.js --mock --gate",
         "eval:reply-addressing": "node evals/reply-addressing/run.js --model=gemini-3-flash-preview --repeats=3",

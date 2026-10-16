@@ -1,8 +1,8 @@
-// The nightly PRs of the frozen snapshot, each with the known bugs that reach verify.
+// The nightly PRs of the frozen snapshot, each with the known bugs that reach verify, and its control pair.
 const { catalogFor } = require('../catalog');
 
 function catalog() {
-    return catalogFor('verify', () => true);
+    return catalogFor('verify');
 }
 
 module.exports = { catalog };

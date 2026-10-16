@@ -36,7 +36,9 @@ const { readTrace, uncovered } = require('./shared/engine-files');
 
 const ROOT = path.join(__dirname, '..');
 const PR_WORKFLOW = '.github/workflows/code-review-evals-pr.yml';
-const FINDER_CASE = 'add-guest-management-functionality-to-existing-bookings-cal-com';
+// A repository written for the scripted model (evals/investigation/wiring-case.json):
+// production's stage reviews it on a local clone, with no GitHub fetch.
+const FINDER_CASE = 'wiring-scripted-finding';
 // Each step takes seconds against the scripted model. Minutes means it hangs
 // (a finished eval that never exits), which is a break in its own right.
 const STEP_TIMEOUT_MS = 3 * 60 * 1000;
@@ -77,9 +79,6 @@ function readJson(file) {
         return null;
     }
 }
-
-// A PR of the frozen snapshot with several findings, one of them a known bug.
-const FUNNEL_CASE = 'add-guest-management-functionality-to-existing-bookings-cal-com';
 
 async function main() {
     const engineFilesOut = (process.argv.find((a) => a.startsWith('--engine-files=')) || '').split('=')[1];
@@ -124,13 +123,14 @@ async function main() {
         { name: 'format', model: true, args: ['evals/format/run.js', '--model=eval-fake', '--gate'] },
         // The cases bring their repository: the scripted model reads it through the local sandbox.
         { name: 'memories', model: true, args: ['evals/memories/run.js', '--model=eval-fake', '--gate'] },
-        // The stages after the finder on its frozen candidates (evals/funnel), on
-        // one PR whose findings reach every stage (dedup needs two or more).
-        // Anchoring calls no model. Each name is written out: the specs read them.
-        { name: 'funnel-anchoring', args: ['evals/funnel/anchoring/run.js', '--gate', `--cases=${FUNNEL_CASE}`] },
-        { name: 'funnel-dedup', model: true, args: ['evals/funnel/dedup/run.js', '--model=eval-fake', '--gate', `--cases=${FUNNEL_CASE}`] },
-        { name: 'funnel-severity', model: true, args: ['evals/funnel/severity/run.js', '--model=eval-fake', '--gate', `--cases=${FUNNEL_CASE}`] },
-        { name: 'funnel-verify', model: true, args: ['evals/funnel/verify/run.js', '--model=eval-fake', '--gate', `--cases=${FUNNEL_CASE}`] },
+        // The steps after the agents (evals/funnel), each through its production
+        // method on its control pair: a repository written for it, so no GitHub
+        // fetch. Anchoring calls no model. Each name is written out: the specs
+        // read them.
+        { name: 'funnel-anchoring', args: ['evals/funnel/anchoring/run.js', '--gate', '--controls'] },
+        { name: 'funnel-dedup', model: true, args: ['evals/funnel/dedup/run.js', '--model=eval-fake', '--gate', '--controls'] },
+        { name: 'funnel-severity', model: true, args: ['evals/funnel/severity/run.js', '--model=eval-fake', '--gate', '--controls'] },
+        { name: 'funnel-verify', model: true, args: ['evals/funnel/verify/run.js', '--model=eval-fake', '--gate', '--controls'] },
         {
             name: 'finder-recall',
             model: true,
@@ -143,7 +143,6 @@ async function main() {
             },
         },
         { name: 'kody-rules', model: true, args: ['evals/kody-rules/real-agent.js', '--dataset=github-cases', '--model=eval-fake', '--runs=1', '--limit=1'] },
-        { name: 'anchoring', model: true, args: ['evals/anchoring/anchor-eval.js', '--model=eval-fake', '--limit=1'] },
         { name: 'pr-summary', model: true, args: ['evals/pr-summary/run.js', '--model=eval-fake', '--gate'] },
         { name: 'reply-addressing', model: true, args: ['evals/reply-addressing/run.js', '--model=eval-fake', '--limit=2'] },
         { name: 'conversation', model: true, args: ['evals/conversation/run.js', '--model=eval-fake', '--gate'] },

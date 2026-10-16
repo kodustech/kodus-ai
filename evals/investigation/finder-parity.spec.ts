@@ -1,7 +1,9 @@
 /**
  * The finder eval runs production's route and scores one finding per known bug.
- * Routing: the env/managed route by default, a stored BYOK config when an effort
- * is asked for, and no run at all for a model production cannot reach. Scoring:
+ * Routing: as a cloud org, the managed default with no stored config for the
+ * trial's model, a stored BYOK config for any other model or an asked effort,
+ * the platform's own OpenAI key left to the embedder, and no run at all for a
+ * model production cannot reach. Scoring:
  * each known bug keeps the one finding the judge is surest of, so a repeated
  * finding is a false positive, not a second hit.
  */
@@ -55,12 +57,32 @@ describe('finder model route', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { internals } = require('./agent-provider');
 
-    it('runs the env/managed route with no stored config by default', () => {
-        process.env.EVAL_FAKE_LLM_URL = 'http://127.0.0.1:1/v1';
-        process.env.EVAL_FAKE_LLM_KEY = 'fake';
+    it("runs the trial's model on the managed default, with the platform's keys and no self-hosted env model", () => {
+        process.env.BYOK_FIREWORKS_API_KEY = 'fw';
+        process.env.BYOK_OPENAI_API_KEY = 'platform-openai';
+        process.env.API_LLM_PROVIDER_MODEL = 'some-self-hosted-model';
+        delete process.env.API_FIREWORKS_API_KEY;
+        delete process.env.FIREWORKS_API_KEY;
+        delete process.env.API_OPEN_AI_API_KEY;
         delete process.env.RECALL_REASONING_EFFORT;
         delete process.env.RECALL_MODEL;
-        expect(internals.resolveRoute({ provider: 'tier0', model: 'eval-fake' })).toMatchObject({ storedConfig: null, route: 'managed', modelId: 'eval-fake' });
+        expect(internals.resolveRoute({ provider: 'tier0', model: 'deepseek-v4-flash@fireworks' })).toMatchObject({ storedConfig: null, route: 'managed' });
+        expect(process.env.API_FIREWORKS_API_KEY).toBe('fw');
+        expect(process.env.API_OPEN_AI_API_KEY).toBe('platform-openai');
+        expect(process.env.API_LLM_PROVIDER_MODEL).toBeUndefined();
+    });
+
+    it("stores any other model as the org's BYOK config, and never puts its key where the embedder reads", () => {
+        process.env.EVAL_FAKE_LLM_URL = 'http://127.0.0.1:1/v1';
+        process.env.EVAL_FAKE_LLM_KEY = 'fake';
+        delete process.env.API_OPEN_AI_API_KEY;
+        delete process.env.BYOK_OPENAI_API_KEY;
+        delete process.env.RECALL_REASONING_EFFORT;
+        delete process.env.RECALL_MODEL;
+        const route = internals.resolveRoute({ provider: 'tier0', model: 'eval-fake' });
+        expect(route).toMatchObject({ route: 'byok', modelId: 'eval-fake', reasoningEffort: null });
+        expect(route.storedConfig.models).toEqual([{ id: 'eval-model', credentialId: 'eval-credential', model: 'eval-fake' }]);
+        expect(process.env.API_OPEN_AI_API_KEY).toBeUndefined();
     });
 
     it('stores a BYOK config carrying the asked effort, routed to the codeReview task', () => {
@@ -84,7 +106,7 @@ describe('finder model route', () => {
         process.env.EVAL_FAKE_LLM_KEY = 'fake';
         process.env.RECALL_MODEL = 'eval-fake';
         delete process.env.RECALL_REASONING_EFFORT;
-        expect(internals.resolveRoute({ provider: 'tier0', model: 'gpt-5.6-luna@sub' })).toMatchObject({ route: 'managed', modelId: 'eval-fake' });
+        expect(internals.resolveRoute({ provider: 'tier0', model: 'gpt-5.6-luna@sub' })).toMatchObject({ route: 'byok', modelId: 'eval-fake' });
         process.env.RECALL_REASONING_EFFORT = 'low';
         expect(internals.resolveRoute({ provider: 'tier0', model: 'gpt-5.6-luna@sub' }).storedConfig).toMatchObject({ models: [{ model: 'eval-fake' }] });
         process.env.RECALL_MODEL = 'gpt-5.6-luna@sub';
@@ -105,14 +127,50 @@ describe('finder input data', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { internals } = require('./agent-provider');
 
-    it("passes the dataset's changed files through, the rendered patch standing in for a missing raw one", () => {
-        const row = { filename: 'src/a.ts', patchWithLinesStr: '@@ -1 +1,2 @@\n  1 +x', status: 'modified', additions: 7, deletions: 2 };
-        const raw = { filename: 'src/b.ts', patch: '@@ -1 +1 @@\n+y', patchWithLinesStr: 'rendered', additions: 1, deletions: 0 };
-        expect(internals.changedFilesOf({ changedFilesFull: JSON.stringify([row, raw]), changedFiles: '[]' })).toEqual([
-            { ...row, patch: row.patchWithLinesStr },
-            raw,
+    it("hands over the case's memories as a member writes them, and its overrides as the team's config", () => {
+        delete process.env.RECALL_CATEGORIES;
+        delete process.env.RECALL_HEAVY;
+        const team = internals.teamOf({ languageResultPrompt: 'pt-BR', memoryRules: [{ title: 't', rule: 'r', type: 'memory' }], v2PromptOverrides: { generation: { main: 'x' } } });
+        expect(team.language).toBe('pt-BR');
+        expect(team.memories).toEqual([{ title: 't', rule: 'r', path: null }]);
+        expect(team.codeReviewConfig.configs.v2PromptOverrides).toEqual({ generation: { main: 'x' } });
+        expect(internals.teamOf({}).codeReviewConfig).toBeNull();
+    });
+
+    it("stores a memory through production's write, and the review reads it back as an active global memory", async () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { teamStore } = require('../shared/review-stage');
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { evalPermissionService, EVAL_ORG } = require('../shared/model-route');
+        const store = await teamStore({ memories: [{ title: 't', rule: 'r' }, { title: 'u', rule: 's' }] }, evalPermissionService(null));
+        const entity = await store.kodyRulesService.findByOrganizationId(EVAL_ORG.organizationId);
+        expect(entity.toObject().rules).toMatchObject([
+            { title: 't', rule: 'r', type: 'memory', status: 'active', repositoryId: 'global', origin: 'manual' },
+            { title: 'u', rule: 's', type: 'memory', status: 'active', repositoryId: 'global', origin: 'manual' },
         ]);
-        expect(internals.changedFilesOf({ changedFiles: JSON.stringify([raw]) })).toEqual([raw]);
+    });
+
+    it('refuses a mode production gates behind a release the eval has no org for', () => {
+        process.env.RECALL_HEAVY = '1';
+        expect(() => internals.teamOf({})).toThrow(internals.NotAProductionRoute);
+    });
+
+    it("needs the platform's recorded files for a case, and hands them over as they are", () => {
+        expect(() => internals.prOf({ caseId: 'c' })).toThrow(/fetch-pr-data/);
+        const files = [{ filename: 'a.ts', patch: '@@ -1 +1 @@\n+x', status: 'modified' }];
+        const pr = internals.prOf({ caseId: 'c', repositoryFullName: 'o/r', prNumber: 3, prHead: { ref: 'h', sha: 's' }, prBase: { ref: 'main' }, prFiles: files });
+        expect(pr).toMatchObject({ repo: 'o/r', number: 3, headRef: 'h', headSha: 's', baseRef: 'main', files });
+    });
+
+    it('computes the files of a repository written for the eval as the platform lists them', () => {
+        const pr = internals.prOf({ caseId: 'c', repoBase: { 'a.ts': 'x\n', 'gone.ts': 'y\n', 'same.ts': 'z\n' }, repoFiles: { 'a.ts': 'x2\n', 'new.ts': 'n\n', 'gone.ts': null } });
+        expect(pr.repo).toBeUndefined();
+        expect(pr.files.map((f) => [f.filename, f.status, f.additions, f.deletions])).toEqual([
+            ['a.ts', 'modified', 1, 1],
+            ['gone.ts', 'removed', 0, 1],
+            ['new.ts', 'added', 1, 0],
+        ]);
+        expect(pr.files[0].patch).toBe('@@ -1,1 +1,1 @@\n-x\n+x2');
     });
 
     it('sets the team category toggles only when RECALL_CATEGORIES asks', () => {
@@ -132,4 +190,15 @@ describe('finder input data', () => {
             usage: { inputTokens: 11 },
         });
     });
+});
+
+describe('the observed review (funnel snapshot)', () => {
+    it('ships what the same review ships unobserved, and records every step after the agents', () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { spawnSync } = require('child_process');
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const path = require('path');
+        const r = spawnSync(process.execPath, [path.join(__dirname, '../funnel/observe-check.js')], { encoding: 'utf8', env: { PATH: process.env.PATH, HOME: process.env.HOME } });
+        expect({ status: r.status, out: r.stdout.split('\n').filter((l: string) => l.startsWith('{"shipped')).pop() }).toMatchObject({ status: 0 });
+    }, 120_000);
 });

@@ -118,6 +118,7 @@ jobs:
             # night's budget measuring nothing. Also records the files finder-recall
             # loads — the only changes this night can measure — and those the
             # kody-rules eval loads.
+            - uses: ./.github/actions/eval-sandbox
             - name: Wiring smoke + files finder-recall loads
               run: node evals/wiring-smoke.js --engine-files=engine-files.txt --kody-rules-files=kody-rules-files.txt --eval-files-dir=eval-files --results=wiring-results.json
             # One row per review stage (evals/stages.js) from tonight's wiring
@@ -350,8 +351,10 @@ jobs:
                   cache: "pnpm"
             - name: Install deps
               run: pnpm install --frozen-lockfile
-            - name: Install ripgrep (the local sandbox's grep, for cases that bring their repository)
-              run: command -v rg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep)
+            # The funnel's stages review real PRs' repositories (verify reads them).
+            - uses: ./.github/actions/eval-sandbox
+              with:
+                  repositories: ${{ startsWith(matrix.eval, 'funnel') }}
             - name: Create environment.ts (gitignored EE config)
               run: |
                   cat <<'EOF' > libs/ee/configs/environment/environment.ts
@@ -380,6 +383,9 @@ jobs:
                   BYOK_GOOGLE_API_KEY: ${{ secrets.BYOK_GOOGLE_API_KEY }}
                   # The judge, for the evals that read replies (evals/conversation).
                   JUDGE_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  # The platform's OpenAI key, under production's name: the
+                  # review's embedder (the dedup's semantic tier) reads it.
+                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
               run: |
                   read -r -a cmd <<< "$(node -e 'console.log(require("./evals/nightly-evals").byId(process.env.EVAL).run.join(" "))')"
                   measure() { node "${cmd[@]}" --model="$MODEL" --gate --output="$1"; }
@@ -454,6 +460,9 @@ jobs:
                   cache: "pnpm"
             - name: Install deps
               run: pnpm install --frozen-lockfile
+            - uses: ./.github/actions/eval-sandbox
+              with:
+                  repositories: "true"
             - name: Create environment.ts (gitignored EE config)
               run: |
                   cat <<'EOF' > libs/ee/configs/environment/environment.ts
@@ -465,6 +474,9 @@ jobs:
               env:
                   BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
                   JUDGE_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  # The platform's OpenAI key, under production's name: the
+                  # review's embedder (the dedup's semantic tier) reads it.
+                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
               # exit 1 = confirmed below the floor, 2 = infra or gate not evaluated
               # (wrong judge, no floor). Both fail the job;
               # the report says which. A first run below the floor that the second

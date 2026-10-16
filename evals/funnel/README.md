@@ -4,20 +4,29 @@
 > - **Runs:** each stage nightly (`evals/nightly-evals.js`, `funnel-<stage>`), ungated until the relabeled dataset lands; `snapshot.js` by hand.
 > - **Run it:** `node evals/funnel/<anchoring|dedup|severity|verify>/run.js --model=<id>`
 > - **Gate:** none yet: every stage's `targets.json` is empty, so the nightly reports `ungated`.
-> - **Cost:** see each stage; `snapshot.js` is one finder run per nightly PR plus judge calls.
+> - **Cost:** see each stage; `snapshot.js` is one production review per nightly PR plus judge calls.
 
-The stages after the finder (verify, anchoring, dedup, severity) are measured
-on one frozen input, so a stage's number moves only when that stage does:
+The steps after the agents' finders (verify, anchoring, dedup, severity) are
+measured on one frozen input, so a step's number moves only when that step
+does:
 
-- `snapshot.js` runs the real finder (`evals/investigation/agent-provider.js`)
-  on the nightly's PRs and records every candidate the verifier judged: the
-  finding, its verdicts, whether it survived, and the known bug it matches (the
-  recall judge, the nightly's prompt). `snapshot/<model>.json` is committed.
+- `snapshot.js` runs one production review per nightly PR
+  (`evals/investigation/agent-provider.js` → `evals/shared/review-stage.js`) and
+  records, without changing it, what each step received: per agent loop the
+  candidates verify judged and the files the finder investigated, each agent's
+  verified findings before the path check, and what dedup and the severity
+  pass got. Each finding carries the known bug it matches (the recall judge,
+  the nightly's prompt). `snapshot/<model>.json` is committed.
 - `known-bugs.js` is the one place the known bugs come from. Today it reads the
   datasets' `goldenComments`; the relabeled dataset (#2114) is a change there,
   then a new snapshot and two calibration runs per stage set the floors.
-- `stage-run.js` hands each stage the candidates that reach it (verify: all of
-  them; the others: those verify kept), runs the stage's production code, and
-  counts the known bugs that reach the stage and survive it.
+- `stage-run.js` hands each step its frozen input through the step's
+  production function, with what the step reads besides (changed files,
+  config, routed model, the agent's runner and tools) rebuilt by production's
+  code from the PR's data, and counts the known bugs that reach it and survive.
+- `controls.js` holds each step's control pair, on a repository written for
+  them: what the step must keep and what it must remove. `--controls` runs
+  only those (the wiring smoke does, with no GitHub fetch).
 
-Each stage runs alone on the same input, not chained, so a loss is the stage's.
+Each step runs alone on its own frozen input, not chained, so a loss is the
+step's.
