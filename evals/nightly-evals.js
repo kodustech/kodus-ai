@@ -75,6 +75,13 @@ const NIGHTLY_EVALS = [
         friday: ['--limit=11', '--gate'],
     },
     {
+        id: 'conversation',
+        stage: 'conversation',
+        run: ['evals/conversation/run.js'],
+        files: ['evals/conversation/targets.json'],
+        friday: ['--limit=4'],
+    },
+    {
         id: 'memories',
         stage: 'memories',
         run: ['evals/memories/run.js'],

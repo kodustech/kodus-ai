@@ -107,6 +107,10 @@ jobs:
                   BYOK_ZHIPU_API_KEY: ${{ secrets.BYOK_ZHIPU_API_KEY }}
                   BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
                   BYOK_OPENROUTER_API_KEY: ${{ secrets.BYOK_OPENROUTER_API_KEY }}
+                  # The nightly's judge, for the stages that read replies (evals/conversation).
+                  JUDGE_MODEL: gpt-5.6-luna
+                  JUDGE_REASONING_EFFORT: low
+                  JUDGE_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
               run: node evals/tier0-smoke.js --model="${{ matrix.model }}"
             - name: Tier-0 result (for the quality signal)
               id: t0
