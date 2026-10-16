@@ -279,7 +279,9 @@ function parseMatch(text) {
 // measures on our judge.
 function parseMatchDetailed(text) {
     const p = parseJudgeJson(text);
-    const confidence = Number(p?.confidence ?? 0) || 0;
+    // Kept in [0, 1]: a match at 1 is certain, so the one-finding-per-bug pass
+    // stops there (recall-assertion.js), and nothing may outrank it.
+    const confidence = Math.min(1, Math.max(0, Number(p?.confidence ?? 0) || 0));
     return { match: !!p?.match && confidence >= MATCH_CONFIDENCE, confidence };
 }
 
