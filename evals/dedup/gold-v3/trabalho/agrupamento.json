@@ -1,0 +1,8025 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "gids": [
+    "ds:S1",
+    "muse:S1"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "getBouncyCastleProvider returns default keystore provider instead of BC",
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#01",
+   "sevMembros": {
+    "high": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S4",
+    "gpt:S9",
+    "son:S1",
+    "muse:S6"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "Discarded ASN1Encoder writes are dead code",
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+   "sevMembros": {
+    "low": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S3",
+    "ds:S8"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "Indefinite-length -1 from readLength is not handled by callers",
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#03",
+   "sevMembros": {
+    "medium": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S9"
+   ],
+   "goldens": [
+    3
+   ],
+   "note": "Abstract order() on CryptoProvider breaks existing implementations",
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#04",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S2",
+    "gpt:S4",
+    "ds:S2",
+    "ds:S10"
+   ],
+   "goldens": [],
+   "note": "Tied provider order silently picks one instead of failing on multiple providers",
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+   "sevMembros": {
+    "high": 6
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S5",
+    "gpt:S3"
+   ],
+   "goldens": [],
+   "note": "readSequence does not enforce declared length against children/trailing bytes",
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+   "sevMembros": {
+    "medium": 5
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S4"
+   ],
+   "goldens": [],
+   "note": "concatenatedRSToASN1DER does not validate signature length",
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#07",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S11"
+   ],
+   "goldens": [],
+   "note": "Oversized INTEGER magnitude bytes silently truncated",
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#08",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S2"
+   ],
+   "goldens": [],
+   "note": "createECParams/getKeyFactory unsupported breaks EC JWK parsing",
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#09",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S8",
+    "gpt:S6",
+    "son:S2"
+   ],
+   "goldens": [],
+   "note": "ES384/ES512 tests use default P-256 key",
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#10",
+   "sevMembros": {
+    "medium": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S7",
+    "ds:S7",
+    "gpt:S5",
+    "son:S3"
+   ],
+   "goldens": [],
+   "note": "Round-trip test is tautological and never verifies the signature",
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#11",
+   "sevMembros": {
+    "medium": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "gids": [],
+   "goldens": [
+    0
+   ],
+   "note": "getForLogin calls session.identityProviders().getById re-entering cache layer.",
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#01",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [
+    "son:S2",
+    "ds:S8",
+    "gpt:S2",
+    "son:S1"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "Test cleanup uses literal 'alias' instead of created IDP alias.",
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "sevMembros": {
+    "low": 6
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S6",
+    "ds:S5"
+   ],
+   "goldens": [],
+   "note": "Cache-hit path of getForLogin skips organization-aware wrapping.",
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#03",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S1",
+    "muse:S1"
+   ],
+   "goldens": [],
+   "note": "Login cache not invalidated on org link/unlink of IDP.",
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#04",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S4"
+   ],
+   "goldens": [],
+   "note": "Stale query merged into newly revisioned cache entry.",
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#05",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S4"
+   ],
+   "goldens": [],
+   "note": "Cached getForLogin does per-ID lookups.",
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#06",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S3"
+   ],
+   "goldens": [],
+   "note": "HashSet loses delegate ordering in getForLogin.",
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#07",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S1"
+   ],
+   "goldens": [],
+   "note": "Update invalidation compares org-aware enabled state.",
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S3"
+   ],
+   "goldens": [],
+   "note": "remove() dereferences null storedIdp.",
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#09",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "getLoginPredicate dereferences null config.",
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#10",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S2"
+   ],
+   "goldens": [],
+   "note": "LoginFilter javadoc omits org-link/BROKER_PUBLIC condition.",
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#11",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S6"
+   ],
+   "goldens": [],
+   "note": "Login predicate gating invalidation skips non-public org IDPs.",
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#12",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S5"
+   ],
+   "goldens": [],
+   "note": "Test never covers non-public org-linked IDP.",
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#13",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S3"
+   ],
+   "goldens": [],
+   "note": "Test does not assert getForLogin results.",
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#14",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "gids": [
+    "ds:S7"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "Removal-cleanup listener gated by wrong feature flag leaves orphaned permissions",
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    1
+   ],
+   "note": "Per-client resource lookup uses wrong owner id",
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [],
+   "goldens": [
+    2
+   ],
+   "note": "getClientsWithPermission returns type resource name not client ids",
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [],
+   "goldens": [
+    3
+   ],
+   "note": "getResourceTypeResource may return null",
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S10"
+   ],
+   "goldens": [
+    4
+   ],
+   "note": "Unused getEvaluationContext",
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#05",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S1",
+    "son:S5",
+    "muse:S1"
+   ],
+   "goldens": [],
+   "note": "Listener calls V2 setPermissionsEnabled which throws",
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "sevMembros": {
+    "high": 9
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S2",
+    "son:S1"
+   ],
+   "goldens": [],
+   "note": "All-clients resource lookup in hasPermission(scope) can miss",
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#07",
+   "sevMembros": {
+    "high": 1,
+    "medium": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S11",
+    "gpt:S3",
+    "son:S3",
+    "muse:S5"
+   ],
+   "goldens": [],
+   "note": "require* Javadoc says returns true on void methods",
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+   "sevMembros": {
+    "low": 9
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "gpt:S2"
+   ],
+   "goldens": [],
+   "note": "canView() ignores global MANAGE",
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S5"
+   ],
+   "goldens": [],
+   "note": "Global VIEW short-circuits client-specific denial",
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S6"
+   ],
+   "goldens": [],
+   "note": "Forbidden may come from getDefaultClientScopes in test",
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#11",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S4"
+   ],
+   "goldens": [],
+   "note": "ClientResource calls V2 methods that throw",
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#12",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "hasPermission does not filter permissions by resource id",
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#13",
+   "sevMembros": {
+    "critical": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "critical"
+  },
+  {
+   "gids": [
+    "muse:S3"
+   ],
+   "goldens": [],
+   "note": "Per-resource permission evaluation in getClientsWithPermission",
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#14",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "gids": [
+    "muse:S5"
+   ],
+   "goldens": [],
+   "note": "Rejected email memory stores server value but compares raw input",
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#01",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S7"
+   ],
+   "goldens": [],
+   "note": "Blocked email shown as generic invalid message",
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#02",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S4"
+   ],
+   "goldens": [],
+   "note": "rejectedEmails.@each dependent key does not observe pushes",
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#03",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S4",
+    "muse:S6",
+    "ds:S4"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "Case-sensitive blocked email lookup allows bypass",
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "sevMembros": {
+    "high": 5,
+    "medium": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "muse:S3",
+    "ds:S1",
+    "son:S4",
+    "gpt:S1",
+    "ds:S6",
+    "son:S2",
+    "gpt:S2"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "should_block? mutates match stats during validation with racy read-modify-write",
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "sevMembros": {
+    "medium": 4,
+    "low": 6,
+    "high": 2
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S9"
+   ],
+   "goldens": [],
+   "note": "should_block? returns nil instead of false",
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#06",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S8"
+   ],
+   "goldens": [],
+   "note": "be_false test cannot distinguish nil from false",
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#07",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S2"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "Unanchored/unescaped domain regex allows whitelist bypass",
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S1"
+   ],
+   "goldens": [],
+   "note": "EmailValidator lost email format check",
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#09",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "gids": [
+    "ds:S2",
+    "muse:S1",
+    "son:S7",
+    "gpt:S10"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "GroupPermissionsV2.canManage() accepts VIEW scope.",
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "sevMembros": {
+    "critical": 8
+   },
+   "sevStatus": "unanime",
+   "severity": "critical"
+  },
+  {
+   "gids": [
+    "muse:S2",
+    "ds:S1",
+    "gpt:S7",
+    "son:S5"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "getGroupIdsWithViewPermission uses resource id instead of name/group id.",
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "sevMembros": {
+    "high": 11
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S2"
+   ],
+   "goldens": [],
+   "note": "findByType misses specific group resources created without type.",
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S4"
+   ],
+   "goldens": [],
+   "note": "JPA group filter still requires legacy group.resource name.",
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "son:S8",
+    "ds:S5"
+   ],
+   "goldens": [],
+   "note": "searchForUser dropped per-user canView filter.",
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#05",
+   "sevMembros": {
+    "critical": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "critical"
+  },
+  {
+   "gids": [
+    "ds:S3",
+    "son:S3",
+    "muse:S4",
+    "gpt:S5"
+   ],
+   "goldens": [],
+   "note": "requireManageMembers javadoc references canManageMembership.",
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "sevMembros": {
+    "low": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "son:S2",
+    "muse:S5",
+    "gpt:S6"
+   ],
+   "goldens": [],
+   "note": "Javadoc says Stream of IDs but returns Set.",
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#07",
+   "sevMembros": {
+    "low": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S3"
+   ],
+   "goldens": [],
+   "note": "getGroupIdsWithViewPermission scans all group resources per request.",
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S8"
+   ],
+   "goldens": [],
+   "note": "GroupPermissionsV2.setPermissionsEnabled throws on group removal listener.",
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S7"
+   ],
+   "goldens": [],
+   "note": "testManageGroupMembership does not exercise group-level permission.",
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "gids": [
+    "ds:S1",
+    "gpt:S1",
+    "son:S8",
+    "muse:S1"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "isTeamAdminOrOwner uses && instead of ||.",
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "sevMembros": {
+    "high": 10,
+    "medium": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S4",
+    "muse:S7",
+    "gpt:S6"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "Blacklist check compares un-lowercased guest against lowercased blacklist.",
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "sevMembros": {
+    "high": 8
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S9",
+    "gpt:S8",
+    "ds:S14",
+    "son:S12"
+   ],
+   "goldens": [
+    3
+   ],
+   "note": "Guests input not deduplicated within itself before createMany.",
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+   "sevMembros": {
+    "medium": 6,
+    "high": 3
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "muse:S10",
+    "ds:S15"
+   ],
+   "goldens": [],
+   "note": "Check-then-insert race allows concurrent duplicate attendees.",
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#04",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S5"
+   ],
+   "goldens": [],
+   "note": "Case-sensitive attendee email comparisons for auth and existing-attendee dedup.",
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#05",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S12",
+    "ds:S13",
+    "gpt:S9",
+    "son:S4"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "sendAddGuestsEmails receives raw guests instead of uniqueGuests.",
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "sevMembros": {
+    "medium": 13,
+    "high": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S6"
+   ],
+   "goldens": [],
+   "note": "Case-sensitive newGuests.includes in email-manager misroutes emails.",
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#07",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S4"
+   ],
+   "goldens": [],
+   "note": "EventManager uses caller's credentials instead of organizer's.",
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "son:S13"
+   ],
+   "goldens": [],
+   "note": "Calendar update outside try/catch after DB write leaves inconsistent state.",
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#09",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "son:S2"
+   ],
+   "goldens": [],
+   "note": "Any attendee can add arbitrary guests and trigger invites.",
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#10",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S6",
+    "gpt:S5"
+   ],
+   "goldens": [],
+   "note": "Unbounded guests array in schema.",
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#11",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S8",
+    "ds:S10",
+    "gpt:S7",
+    "son:S9"
+   ],
+   "goldens": [],
+   "note": "Hard-coded 'Remove email' tooltip bypasses i18n.",
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#12",
+   "sevMembros": {
+    "low": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S14",
+    "ds:S11",
+    "son:S10"
+   ],
+   "goldens": [],
+   "note": "Error message template always truthy so fallback is unreachable.",
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#13",
+   "sevMembros": {
+    "low": 1,
+    "medium": 2
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "muse:S5"
+   ],
+   "goldens": [],
+   "note": "isInvalidEmail not reset on success.",
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#14",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    4
+   ],
+   "note": "MultiEmail initial state with empty string.",
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#15",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [],
+   "goldens": [
+    5
+   ],
+   "note": "sendAddGuestsEmails ignores disableStandardEmails.",
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#16",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "gids": [
+    "gpt:S5",
+    "son:S8",
+    "ds:S1",
+    "muse:S5"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "Lithuanian TOTP step replaced with Italian text",
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "sevMembros": {
+    "medium": 11
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S5",
+    "son:S5"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "zh_CN totpStep1 uses Traditional Chinese",
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "sevMembros": {
+    "low": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    2
+   ],
+   "note": "anchor sanitization consumes English matcher groups without validation",
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#03",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [],
+   "goldens": [
+    3
+   ],
+   "note": "santizeAnchors typo",
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#04",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [],
+   "goldens": [
+    4
+   ],
+   "note": "HTML_TAGS should be private static final",
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#05",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [
+    "son:S2",
+    "muse:S3",
+    "ds:S12",
+    "gpt:S8"
+   ],
+   "goldens": [],
+   "note": "common prefix/suffix overlap causes substring exception",
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "sevMembros": {
+    "medium": 12
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S4",
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "choice normalization blanks branch text so HTML in choice bypasses check",
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#07",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S14"
+   ],
+   "goldens": [],
+   "note": "choice blanking hides wrong argument index",
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#08",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S7",
+    "son:S10"
+   ],
+   "goldens": [],
+   "note": "English counterpart path derived by fragile regex and missing file throws",
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#09",
+   "sevMembros": {
+    "medium": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S10",
+    "gpt:S2"
+   ],
+   "goldens": [],
+   "note": "i18next bundles changed to Java MessageFormat placeholders",
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+   "sevMembros": {
+    "medium": 5
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S13"
+   ],
+   "goldens": [],
+   "note": "illegal HTML test does not cover allowed-tag policy",
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#11",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "gids": [
+    "ds:S2"
+   ],
+   "goldens": [],
+   "note": "Rolling-updates feature not enabled for null update strategy in test",
+   "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#01",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S1"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "Exit code 4 reassigned without stable contract/documentation",
+   "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#02",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "son:S1",
+    "muse:S1"
+   ],
+   "goldens": [],
+   "note": "Feature-disabled test never runs the check subcommand",
+   "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#03",
+   "sevMembros": {
+    "medium": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S1"
+   ],
+   "goldens": [],
+   "note": "Feature-disabled test does not assert exit code",
+   "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#04",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    0
+   ],
+   "note": "picocli.exit() calls System.exit directly",
+   "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#05",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "gids": [
+    "ds:S1",
+    "gpt:S9",
+    "son:S1",
+    "muse:S2"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "Working-hours end computed from slotStartTime",
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "sevMembros": {
+    "high": 14
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S7",
+    "gpt:S11",
+    "son:S2",
+    "muse:S1"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "dayjs objects compared with ===",
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "sevMembros": {
+    "high": 7,
+    "medium": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S2",
+    "gpt:S7"
+   ],
+   "goldens": [],
+   "note": "Date override early return skips busy check",
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "sevMembros": {
+    "high": 6
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S3",
+    "muse:S3"
+   ],
+   "goldens": [],
+   "note": "Split working hours reject valid slots",
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "sevMembros": {
+    "high": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S2",
+    "son:S7"
+   ],
+   "goldens": [],
+   "note": "Slot need not fit entirely inside override",
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S5",
+    "muse:S4"
+   ],
+   "goldens": [],
+   "note": "Override timezone shift not handled across midnight",
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#06",
+   "sevMembros": {
+    "medium": 1,
+    "high": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "gpt:S4"
+   ],
+   "goldens": [],
+   "note": "Weekday without working hours treated as available",
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#07",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S9"
+   ],
+   "goldens": [],
+   "note": "checkIfIsAvailable ignores per-override timeZone",
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#08",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "gids": [
+    "ds:S1",
+    "gpt:S1",
+    "son:S1",
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "targets are interpolated (applyTemplateVariables/ad hoc filters) twice",
+   "issueId": "advanced-query-processing-architecture-grafana-codex#01",
+   "sevMembros": {
+    "medium": 2,
+    "high": 3
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S2"
+   ],
+   "goldens": [],
+   "note": "interpolating before split partition defeats $__range guard",
+   "issueId": "advanced-query-processing-architecture-grafana-codex#02",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S3"
+   ],
+   "goldens": [],
+   "note": "querySplitting interpolation covered by test",
+   "issueId": "advanced-query-processing-architecture-grafana-codex#03",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S4"
+   ],
+   "goldens": [],
+   "note": "shard interpolation covered by test",
+   "issueId": "advanced-query-processing-architecture-grafana-codex#04",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S5"
+   ],
+   "goldens": [],
+   "note": "expr/hide filtering now runs before interpolation",
+   "issueId": "advanced-query-processing-architecture-grafana-codex#05",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S2"
+   ],
+   "goldens": [],
+   "note": "toHaveBeenCalledTimes(5) assertion brittle",
+   "issueId": "advanced-query-processing-architecture-grafana-codex#06",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    0
+   ],
+   "note": "applyTemplateVariables filters param not used in test setup",
+   "issueId": "advanced-query-processing-architecture-grafana-codex#07",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "gids": [
+    "ds:S1",
+    "gpt:S2",
+    "son:S1",
+    "muse:S1"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "enableSqlExpressions always returns false",
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#01",
+   "sevMembros": {
+    "high": 14
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S13",
+    "gpt:S1",
+    "son:S7",
+    "son:S6",
+    "muse:S3"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "in-memory DB stub methods always return not implemented",
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#02",
+   "sevMembros": {
+    "high": 9
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S6"
+   ],
+   "goldens": [],
+   "note": "rejection message says not implemented instead of disabled",
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#03",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S11"
+   ],
+   "goldens": [],
+   "note": "vague request to update db.go",
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#04",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S12"
+   ],
+   "goldens": [],
+   "note": "vague request to update sql_command lines",
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#05",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "duckDB variable name stale",
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#06",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "gids": [
+    "son:S9",
+    "muse:S1",
+    "ds:S2",
+    "gpt:S8"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "Non-atomic count-then-insert lets concurrent devices exceed limit",
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "sevMembros": {
+    "medium": 8
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S3"
+   ],
+   "goldens": [],
+   "note": "Client-controlled device IDs allow filling the limit (DoS)",
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#02",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "son:S6"
+   ],
+   "goldens": [],
+   "note": "wire.go still registers ProvideAnonDBStore with unprovidable int64",
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#03",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S5"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "rowsAffected==0 reported as ErrDeviceLimitReached",
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#04",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S7",
+    "son:S5"
+   ],
+   "goldens": [],
+   "note": "Limit test never exercises updating an existing device at the limit",
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#05",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S2"
+   ],
+   "goldens": [],
+   "note": "Omitting device header bypasses the limit",
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#06",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S1",
+    "gpt:S7",
+    "son:S8",
+    "muse:S2"
+   ],
+   "goldens": [
+    4
+   ],
+   "note": "Cache set before CreateOrUpdateDevice lets rejected device bypass limit",
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "sevMembros": {
+    "high": 8
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S4",
+    "son:S7"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "Synchronous tagging makes anonymous auth fail when limit reached",
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#08",
+   "sevMembros": {
+    "high": 1,
+    "medium": 2
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "muse:S4"
+   ],
+   "goldens": [],
+   "note": "Synchronous tagging adds DB round-trips to auth hot path",
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S3"
+   ],
+   "goldens": [],
+   "note": "All tagDeviceUI errors now propagate, not only limit error",
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#10",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S4"
+   ],
+   "goldens": [],
+   "note": "device_limit missing from defaults.ini so env override ignored",
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#11",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    3
+   ],
+   "note": "Time window uses device.UpdatedAt instead of now",
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#12",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "gids": [],
+   "goldens": [
+    0
+   ],
+   "note": "add try-catch around awaited import",
+   "issueId": "async-import-of-the-appstore-packages-cal-com#01",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [
+    "gpt:S2",
+    "muse:S4",
+    "son:S4",
+    "ds:S1",
+    "muse:S1"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "forEach with async callbacks leaves deletions unawaited",
+   "issueId": "async-import-of-the-appstore-packages-cal-com#02",
+   "sevMembros": {
+    "medium": 27,
+    "high": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "muse:S5",
+    "son:S6",
+    "ds:S7"
+   ],
+   "goldens": [],
+   "note": "getCalendarCredentials stores unawaited Promise from async getCalendar",
+   "issueId": "async-import-of-the-appstore-packages-cal-com#03",
+   "sevMembros": {
+    "high": 6
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "son:S1"
+   ],
+   "goldens": [],
+   "note": "appStore object literal imports eagerly",
+   "issueId": "async-import-of-the-appstore-packages-cal-com#04",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S4"
+   ],
+   "goldens": [],
+   "note": "example comment path wrong",
+   "issueId": "async-import-of-the-appstore-packages-cal-com#05",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S6"
+   ],
+   "goldens": [],
+   "note": "video adapters imported sequentially",
+   "issueId": "async-import-of-the-appstore-packages-cal-com#06",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "gids": [
+    "gpt:S6",
+    "son:S5",
+    "muse:S1"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "Denial cache key underscore concatenation collides.",
+   "issueId": "authzservice-improve-authz-caching-grafana-codex#01",
+   "sevMembros": {
+    "medium": 7
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S1",
+    "son:S1",
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "Cached denial short-circuits before requery, stale deny for new grants.",
+   "issueId": "authzservice-improve-authz-caching-grafana-codex#02",
+   "sevMembros": {
+    "high": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    0
+   ],
+   "note": "Cached grants trusted while cached denials trigger DB lookup.",
+   "issueId": "authzservice-improve-authz-caching-grafana-codex#03",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S3",
+    "son:S3",
+    "muse:S5",
+    "gpt:S7"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "Denial-cache test seeds false while comment says allow.",
+   "issueId": "authzservice-improve-authz-caching-grafana-codex#04",
+   "sevMembros": {
+    "medium": 7
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S2"
+   ],
+   "goldens": [],
+   "note": "Each denied resource reloads full user permission set.",
+   "issueId": "authzservice-improve-authz-caching-grafana-codex#05",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S4"
+   ],
+   "goldens": [],
+   "note": "Per-resource denial entries blow up cache cardinality.",
+   "issueId": "authzservice-improve-authz-caching-grafana-codex#06",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S3"
+   ],
+   "goldens": [],
+   "note": "List serves cached permissions without requery.",
+   "issueId": "authzservice-improve-authz-caching-grafana-codex#07",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S2"
+   ],
+   "goldens": [],
+   "note": "Struct cache comment omits permDenialCache.",
+   "issueId": "authzservice-improve-authz-caching-grafana-codex#08",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "gids": [
+    "muse:S4",
+    "gpt:S7",
+    "ds:S8"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "Reminder delete helpers called without await in forEach.",
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "sevMembros": {
+    "high": 7
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S13"
+   ],
+   "goldens": [],
+   "note": "handleNewBooking reschedule passes immediateDelete=true unlike bookings.tsx.",
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#02",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S4"
+   ],
+   "goldens": [],
+   "note": "Comment says next hour but query has no lower bound.",
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#03",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S1",
+    "gpt:S6",
+    "son:S1"
+   ],
+   "goldens": [],
+   "note": "One SendGrid failure aborts whole cancel loop and skips deletes.",
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "sevMembros": {
+    "high": 5
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S1"
+   ],
+   "goldens": [],
+   "note": "Cancellations within SendGrid 10-minute cutoff still delivered.",
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#05",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S3",
+    "muse:S6"
+   ],
+   "goldens": [],
+   "note": "SendGrid cancel requests awaited sequentially in cron loop.",
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#06",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S11"
+   ],
+   "goldens": [],
+   "note": "SendGrid client not defined in scheduleEmailReminders.",
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#07",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "Unscheduled reminders query does not exclude cancelled reminders.",
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#08",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S7"
+   ],
+   "goldens": [],
+   "note": "Hard-coded 'Verification code' placeholder bypasses i18n.",
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#09",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S8"
+   ],
+   "goldens": [],
+   "note": "Hard-coded 'Verify' label bypasses i18n.",
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#10",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "son:S3"
+   ],
+   "goldens": [],
+   "note": "deleteScheduledEmailReminder/immediateDelete names no longer match behavior.",
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S2",
+    "son:S4",
+    "muse:S9"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "immediateDelete branch cancels SendGrid but leaves WorkflowReminder row.",
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+   "sevMembros": {
+    "medium": 9,
+    "low": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "son:S2"
+   ],
+   "goldens": [],
+   "note": "Twilio cancel failure skips SMS reminder row delete.",
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#13",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S1"
+   ],
+   "goldens": [],
+   "note": "Unused Prisma import in workflows.tsx.",
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#14",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S5"
+   ],
+   "goldens": [],
+   "note": "Edited workflow path only marks email reminders cancelled instead of deleting.",
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#15",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S7"
+   ],
+   "goldens": [],
+   "note": "isSenderIdNeeded branch removal out of scope note.",
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#16",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    2
+   ],
+   "note": "Nullable cancelled column without default.",
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#17",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  }
+ ],
+ "database-performance-optimizations-grafana-codex": [
+  {
+   "gids": [
+    "ds:S9"
+   ],
+   "goldens": [],
+   "note": "empty comment",
+   "issueId": "database-performance-optimizations-grafana-codex#01",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S10"
+   ],
+   "goldens": [],
+   "note": "garbled comment at cleanup ticker line",
+   "issueId": "database-performance-optimizations-grafana-codex#02",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "gpt:S4"
+   ],
+   "goldens": [],
+   "note": "SQLite-limit test never exceeds parameter limit per type",
+   "issueId": "database-performance-optimizations-grafana-codex#03",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S1",
+    "ds:S1",
+    "son:S3"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "debug info logged at Error level on every cleanup batch",
+   "issueId": "database-performance-optimizations-grafana-codex#04",
+   "sevMembros": {
+    "medium": 8
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S3"
+   ],
+   "goldens": [],
+   "note": "comment states SQLite limit is 999",
+   "issueId": "database-performance-optimizations-grafana-codex#05",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S6",
+    "son:S6"
+   ],
+   "goldens": [],
+   "note": "non-SQLite placeholder path has no bind-parameter cap",
+   "issueId": "database-performance-optimizations-grafana-codex#06",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S2",
+    "gpt:S1"
+   ],
+   "goldens": [],
+   "note": "quadratic string building of SQLite IN list",
+   "issueId": "database-performance-optimizations-grafana-codex#07",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S3",
+    "ds:S5",
+    "gpt:S2",
+    "son:S2"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "cleanup ticker changed from 10 minutes to 1 minute",
+   "issueId": "database-performance-optimizations-grafana-codex#08",
+   "sevMembros": {
+    "medium": 7
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "gids": [
+    "ds:S17",
+    "son:S3",
+    "son:S13",
+    "muse:S5"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "Delete installs d.Log instead of enriched log into context",
+   "issueId": "dual-storage-architecture-grafana-codex#01",
+   "sevMembros": {
+    "low": 5
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "gpt:S4",
+    "son:S16",
+    "muse:S3"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "Legacy DeleteCollection goroutine records via recordStorageDuration",
+   "issueId": "dual-storage-architecture-grafana-codex#02",
+   "sevMembros": {
+    "medium": 7
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S8",
+    "gpt:S13",
+    "son:S4",
+    "muse:S4"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "Delete success metric passes name instead of options.Kind",
+   "issueId": "dual-storage-architecture-grafana-codex#03",
+   "sevMembros": {
+    "medium": 10
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S18",
+    "gpt:S10",
+    "son:S6",
+    "muse:S1"
+   ],
+   "goldens": [],
+   "note": "Storage Create/Update failure recorded with recordLegacyDuration",
+   "issueId": "dual-storage-architecture-grafana-codex#04",
+   "sevMembros": {
+    "medium": 22
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S16",
+    "gpt:S8",
+    "son:S1",
+    "muse:S6"
+   ],
+   "goldens": [],
+   "note": "Async legacy write context derived from request ctx gets cancelled",
+   "issueId": "dual-storage-architecture-grafana-codex#05",
+   "sevMembros": {
+    "high": 11
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S9",
+    "son:S14",
+    "muse:S7"
+   ],
+   "goldens": [],
+   "note": "Legacy Update gets raw objInfo instead of updateWrapper with storage result",
+   "issueId": "dual-storage-architecture-grafana-codex#06",
+   "sevMembros": {
+    "high": 7
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S15",
+    "gpt:S7",
+    "son:S21",
+    "muse:S8"
+   ],
+   "goldens": [],
+   "note": "Mode3 tests never verify the async legacy write",
+   "issueId": "dual-storage-architecture-grafana-codex#07",
+   "sevMembros": {
+    "medium": 5
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S14"
+   ],
+   "goldens": [],
+   "note": "Delete test assertions are tautological",
+   "issueId": "dual-storage-architecture-grafana-codex#08",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S21"
+   ],
+   "goldens": [],
+   "note": "Stale List test-case name",
+   "issueId": "dual-storage-architecture-grafana-codex#09",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "gpt:S5"
+   ],
+   "goldens": [],
+   "note": "Create test name says unified store only",
+   "issueId": "dual-storage-architecture-grafana-codex#10",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "gpt:S15"
+   ],
+   "goldens": [],
+   "note": "Independent goroutines lose legacy write ordering",
+   "issueId": "dual-storage-architecture-grafana-codex#11",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S15"
+   ],
+   "goldens": [],
+   "note": "Goroutine captures mutable obj without DeepCopy",
+   "issueId": "dual-storage-architecture-grafana-codex#12",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S20"
+   ],
+   "goldens": [],
+   "note": "Storage-failure Create test registers expectation via legacy setup",
+   "issueId": "dual-storage-architecture-grafana-codex#13",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S22"
+   ],
+   "goldens": [],
+   "note": "Empty comment",
+   "issueId": "dual-storage-architecture-grafana-codex#14",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "gids": [
+    "ds:S5",
+    "muse:S3",
+    "gpt:S8",
+    "son:S5",
+    "ds:S19"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "embed.js postMessage origin check uses indexOf substring instead of exact origin equality",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+   "sevMembros": {
+    "medium": 5,
+    "low": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "muse:S8"
+   ],
+   "goldens": [],
+   "note": "embed.js uses discourse-comments element without null guard",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#02",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S20",
+    "muse:S21",
+    "gpt:S10"
+   ],
+   "goldens": [],
+   "note": "embed controller spec expects synchronous TopicRetriever but controller enqueues retrieve_topic job",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#03",
+   "sevMembros": {
+    "medium": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S6",
+    "son:S15",
+    "son:S16"
+   ],
+   "goldens": [],
+   "note": "embeddable host comparison is case-sensitive in controller and topic_retriever",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#04",
+   "sevMembros": {
+    "medium": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S10"
+   ],
+   "goldens": [],
+   "note": "poll_feed re-downloads and re-imports full feed hourly; feed_key unused",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#05",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S11",
+    "son:S10",
+    "muse:S4",
+    "gpt:S2"
+   ],
+   "goldens": [
+    6
+   ],
+   "note": "poll_feed calls i.content.scrub without fallback when feed item has no content",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "sevMembros": {
+    "high": 7
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S17"
+   ],
+   "goldens": [],
+   "note": "poll_feed url fallback judged correct",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#07",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S2",
+    "muse:S2",
+    "gpt:S3",
+    "son:S3"
+   ],
+   "goldens": [],
+   "note": "raw_html cook method stores and renders imported feed/remote HTML unsanitized (stored XSS)",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+   "sevMembros": {
+    "critical": 5
+   },
+   "sevStatus": "unanime",
+   "severity": "critical"
+  },
+  {
+   "gids": [
+    "muse:S1",
+    "son:S8"
+   ],
+   "goldens": [
+    4
+   ],
+   "note": "TopicEmbed.import interpolates url unescaped into href/link HTML",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "sevMembros": {
+    "critical": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "critical"
+  },
+  {
+   "gids": [
+    "ds:S12"
+   ],
+   "goldens": [],
+   "note": "cook_method enum comparison judged safe",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#10",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S13"
+   ],
+   "goldens": [],
+   "note": "post_creator present? check judged safe",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#11",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S14"
+   ],
+   "goldens": [],
+   "note": "embed controller topic_id truthiness judged safe",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#12",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S15"
+   ],
+   "goldens": [],
+   "note": "embed controller blank?/!= note",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#13",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S16"
+   ],
+   "goldens": [],
+   "note": "topic_embed content_sha1/absolutize_urls judged correct",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#14",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S18"
+   ],
+   "goldens": [],
+   "note": "topic_retriever setnx throttle judged correct",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#15",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "son:S4"
+   ],
+   "goldens": [],
+   "note": "contents << mutates caller's string in TopicEmbed.import",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#16",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S10",
+    "gpt:S13",
+    "muse:S11"
+   ],
+   "goldens": [],
+   "note": "TopicEmbed.import check-then-create race on unique embed_url",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#17",
+   "sevMembros": {
+    "medium": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S11",
+    "muse:S13"
+   ],
+   "goldens": [],
+   "note": "TopicEmbed.import update path crashes when embed.post is nil",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
+   "sevMembros": {
+    "medium": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S5"
+   ],
+   "goldens": [],
+   "note": "import_remote passes nil content / unhandled open errors into import",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#19",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "son:S2"
+   ],
+   "goldens": [],
+   "note": "TopicEmbed.import_remote open(url) without scheme validation (open-uri command/file read)",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#20",
+   "sevMembros": {
+    "critical": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "critical"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    0
+   ],
+   "note": "PollFeed opens feed_polling_url without validation (SSRF)",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#21",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [
+    "gpt:S14",
+    "son:S9"
+   ],
+   "goldens": [],
+   "note": "absolutize_urls mangles protocol-relative and relative URLs",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "sevMembros": {
+    "medium": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S1",
+    "gpt:S11"
+   ],
+   "goldens": [
+    5
+   ],
+   "note": "best.html.erb closes block with invalid 'end if'",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#23",
+   "sevMembros": {
+    "high": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S4",
+    "gpt:S7",
+    "muse:S15"
+   ],
+   "goldens": [],
+   "note": "embed post date uses non-localized strftime format",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#24",
+   "sevMembros": {
+    "low": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "son:S1"
+   ],
+   "goldens": [
+    7
+   ],
+   "note": "request.referer interpolated unescaped into inline script in embed layout (XSS)",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#25",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S7"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "postMessage targetOrigin uses full referer URL instead of origin",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#26",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    3
+   ],
+   "note": "X-Frame-Options ALLOWALL disables clickjacking protection",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#27",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [
+    "muse:S17"
+   ],
+   "goldens": [],
+   "note": "cook_method migration default 1 maps to raw_html",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#28",
+   "sevMembros": {
+    "critical": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "critical"
+  },
+  {
+   "gids": [
+    "muse:S9",
+    "gpt:S9",
+    "son:S7"
+   ],
+   "goldens": [],
+   "note": "Disqus import via import_remote drops category/created_at and fetches live",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#29",
+   "sevMembros": {
+    "high": 2,
+    "medium": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "gpt:S5"
+   ],
+   "goldens": [],
+   "note": "topic retrieval synchronously downloads full feed per uncached article",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S14"
+   ],
+   "goldens": [],
+   "note": "topic_retriever 'not a url' spec passes regardless due to blank embeddable_host",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#31",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S8",
+    "gpt:S16",
+    "son:S13"
+   ],
+   "goldens": [],
+   "note": "embed controller '404 without embed_url' spec passes for wrong reason (no embeddable_host)",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#32",
+   "sevMembros": {
+    "medium": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S16",
+    "ds:S7",
+    "gpt:S17",
+    "son:S12"
+   ],
+   "goldens": [],
+   "note": "poll_feed prerequisite specs don't isolate the guard they name",
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+   "sevMembros": {
+    "medium": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "gids": [
+    "gpt:S5",
+    "muse:S9",
+    "ds:S9",
+    "son:S10",
+    "muse:S2"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "OptimizedCursorPaginator slices queryset with negative offset",
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "sevMembros": {
+    "medium": 22,
+    "low": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S3",
+    "son:S12",
+    "muse:S8",
+    "muse:S7"
+   ],
+   "goldens": [],
+   "note": "BasePaginator negative-offset change: false comment and raw offset for prev cursors",
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02",
+   "sevMembros": {
+    "low": 4,
+    "medium": 5
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "muse:S3"
+   ],
+   "goldens": [],
+   "note": "prev-trim length check uses raw offset instead of start_offset",
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#03",
+   "sevMembros": {
+    "medium": 1,
+    "low": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "muse:S10"
+   ],
+   "goldens": [],
+   "note": "OptimizedCursorPaginator docstring claims nonexistent optimizations",
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#04",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S6"
+   ],
+   "goldens": [],
+   "note": "get_item_key relies on self.key/_is_asc supposedly missing",
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#05",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S11",
+    "gpt:S4",
+    "ds:S1",
+    "muse:S1"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "numeric get_item_key used with datetime ordering",
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "sevMembros": {
+    "high": 9
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S2"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "organization_context.member may be None",
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "son:S13"
+   ],
+   "goldens": [],
+   "note": "enable_advanced naming/comments hide negative-offset behavior",
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#08",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "son:S3"
+   ],
+   "goldens": [],
+   "note": "user-controlled optimized_pagination flag available to any global-access user",
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#09",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    3
+   ],
+   "note": "import of non-existent OptimizedCursorPaginator",
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#10",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "gids": [
+    "ds:S2",
+    "gpt:S1",
+    "muse:S1"
+   ],
+   "goldens": [],
+   "note": "Backup-code login branch skips password verification when a dummy totpCode is sent.",
+   "issueId": "feat-2fa-backup-codes-cal-com#01",
+   "sevMembros": {
+    "critical": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "critical"
+  },
+  {
+   "gids": [
+    "ds:S1",
+    "gpt:S3",
+    "son:S2"
+   ],
+   "goldens": [],
+   "note": "onEnable only called from Close button; dismissing dialog skips parent refresh.",
+   "issueId": "feat-2fa-backup-codes-cal-com#02",
+   "sevMembros": {
+    "medium": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S4"
+   ],
+   "goldens": [],
+   "note": "DisableTwoFactorModal caller not updated for new backupCode parameter.",
+   "issueId": "feat-2fa-backup-codes-cal-com#03",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S5",
+    "son:S3",
+    "muse:S5"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "BackupCode.tsx default export misnamed TwoFactor.",
+   "issueId": "feat-2fa-backup-codes-cal-com#04",
+   "sevMembros": {
+    "low": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S9",
+    "gpt:S9",
+    "muse:S8"
+   ],
+   "goldens": [],
+   "note": "Copy e2e test only waits for toast, never checks clipboard content.",
+   "issueId": "feat-2fa-backup-codes-cal-com#05",
+   "sevMembros": {
+    "medium": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S10",
+    "muse:S6"
+   ],
+   "goldens": [],
+   "note": "expect(isChecked()) on a Promise always passes.",
+   "issueId": "feat-2fa-backup-codes-cal-com#06",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S8",
+    "gpt:S8",
+    "son:S1",
+    "muse:S2"
+   ],
+   "goldens": [
+    3
+   ],
+   "note": "Non-atomic backup-code consumption lets one code be used twice concurrently.",
+   "issueId": "feat-2fa-backup-codes-cal-com#07",
+   "sevMembros": {
+    "high": 9
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S6",
+    "gpt:S6",
+    "son:S5"
+   ],
+   "goldens": [],
+   "note": "Backup code compared with non-constant-time indexOf.",
+   "issueId": "feat-2fa-backup-codes-cal-com#08",
+   "sevMembros": {
+    "high": 5
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S11"
+   ],
+   "goldens": [],
+   "note": "Generic suggestion about post-2FA user journey.",
+   "issueId": "feat-2fa-backup-codes-cal-com#09",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S12"
+   ],
+   "goldens": [],
+   "note": "Polling interval not cleared on failure/unmount in 2fa page.",
+   "issueId": "feat-2fa-backup-codes-cal-com#10",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S13"
+   ],
+   "goldens": [],
+   "note": "No-defect statement.",
+   "issueId": "feat-2fa-backup-codes-cal-com#11",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "gpt:S4"
+   ],
+   "goldens": [],
+   "note": "Copy handler shows success toast without awaiting clipboard write.",
+   "issueId": "feat-2fa-backup-codes-cal-com#12",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S10",
+    "muse:S7"
+   ],
+   "goldens": [],
+   "note": "Download e2e test only checks filename, not file content.",
+   "issueId": "feat-2fa-backup-codes-cal-com#13",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S4"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "Disable endpoint error message says backup code login.",
+   "issueId": "feat-2fa-backup-codes-cal-com#14",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S3"
+   ],
+   "goldens": [
+    4
+   ],
+   "note": "resetState does not clear codes/secret nor revoke backup codes object URL.",
+   "issueId": "feat-2fa-backup-codes-cal-com#15",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S4"
+   ],
+   "goldens": [],
+   "note": "disable endpoint calls replaceAll on unvalidated backupCode type.",
+   "issueId": "feat-2fa-backup-codes-cal-com#16",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    2
+   ],
+   "note": "Backup code validation is case-sensitive.",
+   "issueId": "feat-2fa-backup-codes-cal-com#17",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "gids": [
+    "muse:S7",
+    "ds:S1",
+    "gpt:S6",
+    "son:S1"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "Empty data in updateManyByCredentialId does not bump updatedAt",
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "sevMembros": {
+    "high": 5,
+    "medium": 9
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S8"
+   ],
+   "goldens": [],
+   "note": "Timestamp written to SelectedCalendar but UI reads CalendarCache.updatedAt",
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#02",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S2",
+    "muse:S2",
+    "gpt:S1"
+   ],
+   "goldens": [],
+   "note": "Cache delete does not invalidate connectedCalendars query",
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+   "sevMembros": {
+    "medium": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S5",
+    "muse:S4",
+    "gpt:S7",
+    "son:S3"
+   ],
+   "goldens": [
+    3
+   ],
+   "note": "Date formatted with hard-coded en-US locale",
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#04",
+   "sevMembros": {
+    "low": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "gpt:S8"
+   ],
+   "goldens": [],
+   "note": "Migration warning contradicts DEFAULT NOW()",
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#05",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "son:S4",
+    "ds:S4"
+   ],
+   "goldens": [],
+   "note": "cleanup always exits 0 on failure paths",
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#06",
+   "sevMembros": {
+    "low": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S3",
+    "gpt:S3",
+    "son:S2",
+    "muse:S3"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "BSD-only sed -i '' fails on Linux",
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+   "sevMembros": {
+    "low": 5
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    2
+   ],
+   "note": "Generic Error instead of TRPCError for auth failure",
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#08",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+  {
+   "gids": [
+    "son:S1",
+    "muse:S1",
+    "ds:S2"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "getBaseConditions has unreachable branches since auth is always truthy",
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#01",
+   "sevMembros": {
+    "low": 3,
+    "medium": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [],
+   "goldens": [
+    1
+   ],
+   "note": "userIdsFromOrg only fetched when org has child teams",
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#02",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S6"
+   ],
+   "goldens": [],
+   "note": "Combine auth+filter test cannot fail",
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#03",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S5"
+   ],
+   "goldens": [],
+   "note": "Public findMany removed / return type changed",
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#04",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S3"
+   ],
+   "goldens": [],
+   "note": "No finding",
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#05",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "toEqual on nested Prisma.Sql in test",
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#06",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "gids": [
+    "muse:S1",
+    "ds:S1",
+    "gpt:S4",
+    "son:S3",
+    "son:S6"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "queued default timezone.now() evaluated at import",
+   "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "sevMembros": {
+    "medium": 13
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S7"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "test name typo inalid",
+   "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#02",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S3",
+    "gpt:S2",
+    "son:S5",
+    "muse:S6"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "empty_array test passes an empty dict",
+   "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#03",
+   "sevMembros": {
+    "low": 5
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S7",
+    "muse:S2"
+   ],
+   "goldens": [
+    3
+   ],
+   "note": "to_dict leaves datetime in task kwargs",
+   "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#04",
+   "sevMembros": {
+    "high": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S4"
+   ],
+   "goldens": [],
+   "note": "assignment_source added to sync_status_outbound instead of sync_assignee_outbound",
+   "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#05",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S8"
+   ],
+   "goldens": [],
+   "note": "should_sync overrides with old signature break on new arg",
+   "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#06",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S3"
+   ],
+   "goldens": [],
+   "note": "from_dict parse failure fails open",
+   "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#07",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S4"
+   ],
+   "goldens": [],
+   "note": "test_to_dict queued assertion cannot fail",
+   "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#08",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "gids": [
+    "muse:S5"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "truthiness check drops sample rate 0.0",
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#01",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    1
+   ],
+   "note": "hash() cache keys nondeterministic across processes",
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#02",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S2"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "upsampling decision uses outer dataset instead of scoped_dataset",
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S1",
+    "gpt:S6",
+    "son:S1",
+    "muse:S3"
+   ],
+   "goldens": [],
+   "note": "substring match on event.type:error misclassifies negated/OR queries",
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "sevMembros": {
+    "medium": 7
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S2",
+    "muse:S4",
+    "ds:S8"
+   ],
+   "goldens": [],
+   "note": "transaction-events test cannot detect wrongful upsampling",
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#05",
+   "sevMembros": {
+    "medium": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S2",
+    "gpt:S5"
+   ],
+   "goldens": [],
+   "note": "fixture sample-rate helper lacks type/range validation",
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#06",
+   "sevMembros": {
+    "low": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S10"
+   ],
+   "goldens": [],
+   "note": "topEvents error message changed without updating consumers",
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#07",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S2"
+   ],
+   "goldens": [],
+   "note": "top-N selection uses raw count while timeseries upsampled",
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#08",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S12"
+   ],
+   "goldens": [],
+   "note": "organization parameter unused in allowlist check",
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#09",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S4"
+   ],
+   "goldens": [],
+   "note": "no defect",
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#10",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S5"
+   ],
+   "goldens": [],
+   "note": "no defect",
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#11",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S7"
+   ],
+   "goldens": [],
+   "note": "no defect",
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#12",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S6"
+   ],
+   "goldens": [],
+   "note": "dismissed",
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#13",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S1"
+   ],
+   "goldens": [],
+   "note": "only bare count() is rewritten; aliased/other count aggregates not upsampled",
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S3"
+   ],
+   "goldens": [],
+   "note": "count alias rewrite breaks transformAliasToInputFormat",
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#15",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S3"
+   ],
+   "goldens": [],
+   "note": "toInt64 truncates upsampled sum",
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#16",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S11"
+   ],
+   "goldens": [],
+   "note": "fixture sets sample_rate but query reads sample_weight",
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#17",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S9"
+   ],
+   "goldens": [],
+   "note": "empty project_ids test passes via empty allowlist branch",
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#18",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "gids": [
+    "son:S2",
+    "gpt:S14"
+   ],
+   "goldens": [],
+   "note": "Commit scan requires consecutive offsets so offset gaps block or mis-advance commits",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+   "sevMembros": {
+    "high": 1,
+    "medium": 2
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "son:S3"
+   ],
+   "goldens": [],
+   "note": "queue.ShutDown / Queue.shutdown need Python 3.13+",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#02",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S11",
+    "son:S9",
+    "muse:S12",
+    "gpt:S8"
+   ],
+   "goldens": [],
+   "note": "Worker completes offset in finally even when processing failed, contradicting success-only commit guarantee",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "sevMembros": {
+    "high": 8,
+    "low": 3,
+    "medium": 2
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S5",
+    "muse:S5"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "Error-handling test docstring contradicts its no-commit assertion",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#04",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S15"
+   ],
+   "goldens": [],
+   "note": "Error-handling test asserts before commit loop runs, so it cannot catch unsafe commits",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#05",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S2",
+    "gpt:S3",
+    "muse:S4",
+    "son:S4"
+   ],
+   "goldens": [],
+   "note": "Unbounded worker queues give no backpressure despite docstring claim",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "sevMembros": {
+    "medium": 5,
+    "low": 3
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "son:S1"
+   ],
+   "goldens": [],
+   "note": "Built-in hash() for queue selection is randomized per process",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#07",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S9"
+   ],
+   "goldens": [],
+   "note": "add_offset before put leaks outstanding offset if put raises",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#08",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S11"
+   ],
+   "goldens": [],
+   "note": "get_stats/wait_until_empty ignore in-flight items",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#09",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S2",
+    "gpt:S2"
+   ],
+   "goldens": [],
+   "note": "Shutdown flag makes workers exit without draining queued items",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "sevMembros": {
+    "medium": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S1",
+    "muse:S1",
+    "son:S11",
+    "gpt:S7"
+   ],
+   "goldens": [],
+   "note": "Strategy close shuts down factory-shared queue pool reused after rebalance",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "sevMembros": {
+    "critical": 9
+   },
+   "sevStatus": "unanime",
+   "severity": "critical"
+  },
+  {
+   "gids": [
+    "son:S5"
+   ],
+   "goldens": [],
+   "note": "Commit function called from background thread, not consumer thread",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#12",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S10"
+   ],
+   "goldens": [],
+   "note": "metrics.incr passes count as positional instance arg",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#13",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S10"
+   ],
+   "goldens": [],
+   "note": "offsets_committed metric counts partitions, not offsets",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#14",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S4"
+   ],
+   "goldens": [],
+   "note": "WorkItem.message docstring claims it is used for offset tracking",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#15",
+   "sevMembros": {
+    "low": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S6",
+    "muse:S6",
+    "gpt:S18",
+    "muse:S7"
+   ],
+   "goldens": [],
+   "note": "Concurrency tests never verify overlapping execution",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#16",
+   "sevMembros": {
+    "medium": 5
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S17"
+   ],
+   "goldens": [],
+   "note": "Ordering test uses identical items so order is not checked",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#17",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S16"
+   ],
+   "goldens": [],
+   "note": "Graceful-shutdown test does not verify work drained",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#18",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S3"
+   ],
+   "goldens": [],
+   "note": "Factory shutdown never stops strategies' commit threads",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#19",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    0
+   ],
+   "note": "Magic number 50 for max_wait repeated in tests",
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#20",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  }
+ ],
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+  {
+   "gids": [
+    "son:S3",
+    "gpt:S5"
+   ],
+   "goldens": [],
+   "note": "Stale TODO about stateful detector.",
+   "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#01",
+   "sevMembros": {
+    "low": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S4",
+    "gpt:S7",
+    "son:S1",
+    "muse:S1"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "MetricAlertDetectorHandler leaves abstract methods unimplemented.",
+   "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "sevMembros": {
+    "high": 16
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S4",
+    "muse:S4",
+    "son:S2",
+    "ds:S2"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "evaluate docstring says list but returns dict.",
+   "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03",
+   "sevMembros": {
+    "low": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "gpt:S6",
+    "ds:S5",
+    "muse:S3"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "Test helper ignores value; wrong value 6 used for group_2.",
+   "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#04",
+   "sevMembros": {
+    "medium": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "gids": [
+    "ds:S9",
+    "gpt:S6",
+    "gpt:S8",
+    "son:S4",
+    "muse:S1"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "downsize defined twice; new definition overrides width/height version",
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "sevMembros": {
+    "high": 20
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S8",
+    "gpt:S3",
+    "muse:S3"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "client upload limit hardcoded to 10MB instead of per-type site setting",
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "sevMembros": {
+    "medium": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S10",
+    "muse:S9"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "'80%' passed as dimensions where WxH geometry is expected",
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#03",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S2",
+    "gpt:S2"
+   ],
+   "goldens": [],
+   "note": "tempfile path lacks .gif extension so animated GIFs get flattened",
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#04",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S6"
+   ],
+   "goldens": [],
+   "note": "comment promises reduction to allowed size the loop doesn't guarantee",
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#05",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "gpt:S4",
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "downsize retry loop ignores false return value",
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#06",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S4"
+   ],
+   "goldens": [],
+   "note": "API URL download limit hardcoded to 10MB",
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#07",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S5"
+   ],
+   "goldens": [],
+   "note": "synchronous downsize runs in request cycle (DoS)",
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#08",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    3
+   ],
+   "note": "loop checks possibly stale tempfile.size",
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#09",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "gids": [
+    "gpt:S9",
+    "ds:S2",
+    "son:S11",
+    "muse:S1"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "before_validation calls host.sub! on nil host",
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "sevMembros": {
+    "medium": 7
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S9",
+    "gpt:S5",
+    "muse:S2",
+    "ds:S11",
+    "son:S3"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "controller update/destroy dereference nil record",
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "sevMembros": {
+    "medium": 8
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S6",
+    "son:S7",
+    "ds:S6",
+    "muse:S6"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "record_for_host does not downcase the looked-up host",
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "sevMembros": {
+    "medium": 6
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S14",
+    "gpt:S10",
+    "ds:S14"
+   ],
+   "goldens": [
+    3
+   ],
+   "note": "migration inserts hosts without scheme/path normalization",
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "sevMembros": {
+    "high": 7
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S13",
+    "son:S6"
+   ],
+   "goldens": [
+    4
+   ],
+   "note": "fabricator file contents swapped",
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+   "sevMembros": {
+    "low": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S8",
+    "muse:S3"
+   ],
+   "goldens": [
+    5
+   ],
+   "note": "migration interpolates host into SQL INSERT",
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S4",
+    "gpt:S8",
+    "ds:S1",
+    "son:S10"
+   ],
+   "goldens": [
+    6
+   ],
+   "note": "migration indexes [0] of empty query result",
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "sevMembros": {
+    "high": 12
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S3",
+    "son:S15",
+    "muse:S17"
+   ],
+   "goldens": [],
+   "note": "expandable_first_post? dropped the embeddable host presence guard",
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#08",
+   "sevMembros": {
+    "medium": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S15",
+    "gpt:S11",
+    "ds:S13",
+    "son:S9"
+   ],
+   "goldens": [],
+   "note": "blank-host topic test passes without exercising host condition",
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+   "sevMembros": {
+    "medium": 5
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S16",
+    "gpt:S12"
+   ],
+   "goldens": [],
+   "note": "store test requests fruit 2 but handler always returns fruit 1",
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#10",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S17"
+   ],
+   "goldens": [],
+   "note": "save callback overwrites category with findById(null)",
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11",
+   "sevMembros": {
+    "medium": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S8"
+   ],
+   "goldens": [],
+   "note": "store plural hydration does not guard non-array/missing ids",
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#12",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S4"
+   ],
+   "goldens": [],
+   "note": "embedding update action persists nothing",
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#13",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S3"
+   ],
+   "goldens": [],
+   "note": "stored host with port never matches URI.host",
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S10"
+   ],
+   "goldens": [],
+   "note": "serializer embeds only ids without sideloading hosts",
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#15",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "gids": [
+    "gpt:S2",
+    "ds:S3",
+    "son:S1",
+    "muse:S4"
+   ],
+   "goldens": [],
+   "note": "Fallback locales loaded only in controller, not at translate.",
+   "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "sevMembros": {
+    "high": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S2"
+   ],
+   "goldens": [],
+   "note": "Accelerator cache not invalidated when fallback locales load.",
+   "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#02",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S1"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "String vs Symbol locale causes double loading in fallback chain.",
+   "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#03",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S1"
+   ],
+   "goldens": [],
+   "note": "nil default_locale raises in FallbackLocaleList.",
+   "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#04",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "SiteSetting.default_locale queried on every fallback lookup.",
+   "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#05",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S1"
+   ],
+   "goldens": [],
+   "note": "Translation cache key ignores site/default locale.",
+   "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#06",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S3"
+   ],
+   "goldens": [],
+   "note": "Unescaped locale in load_locale regex.",
+   "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#07",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    0
+   ],
+   "note": "@loaded_locales accessed concurrently without synchronization.",
+   "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#08",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "gids": [
+    "ds:S2",
+    "gpt:S4",
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "Unsubscribe mutates state on GET without CSRF protection.",
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "sevMembros": {
+    "medium": 1,
+    "high": 2
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S1",
+    "gpt:S1",
+    "son:S3",
+    "muse:S1"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "TopicUser.find_by may return nil and tu is dereferenced.",
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "sevMembros": {
+    "high": 10
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S5",
+    "son:S4"
+   ],
+   "goldens": [],
+   "note": "Spec never asserts the new unsubscribe_url.",
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#03",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S10",
+    "son:S5",
+    "muse:S5"
+   ],
+   "goldens": [],
+   "note": "unsubscribe_link now requires %{unsubscribe_url} that other callers don't pass.",
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#04",
+   "sevMembros": {
+    "high": 7
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S6",
+    "muse:S8"
+   ],
+   "goldens": [],
+   "note": "Topic title rendered unescaped via triple-stache.",
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#05",
+   "sevMembros": {
+    "critical": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "critical"
+  },
+  {
+   "gids": [
+    "gpt:S6",
+    "muse:S3"
+   ],
+   "goldens": [],
+   "note": "unsubscribe_url is relative, broken in emails.",
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#06",
+   "sevMembros": {
+    "high": 5
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S11"
+   ],
+   "goldens": [],
+   "note": "topicUnsubscribe route name does not match template path.",
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#07",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S5"
+   ],
+   "goldens": [],
+   "note": "Confirmation text overstates effect (regular, not muted).",
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#08",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S2"
+   ],
+   "goldens": [],
+   "note": "Saving level directly skips notifications_reason_id, auto-tracking undoes it.",
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#09",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S3"
+   ],
+   "goldens": [],
+   "note": "Client route never performs the unsubscribe on in-app transitions.",
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#10",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    1
+   ],
+   "note": "Typo stopNotificiationsText.",
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#11",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "gids": [
+    "ds:S7",
+    "muse:S1"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "getSubGroupsCount returns null violating contract",
+   "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+   "sevMembros": {
+    "medium": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S1",
+    "ds:S4",
+    "muse:S2",
+    "gpt:S6"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "reader thread not joined before asserting exceptions",
+   "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "sevMembros": {
+    "medium": 11
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S2",
+    "gpt:S2"
+   ],
+   "goldens": [],
+   "note": "deletedAll not set in finally so reader thread can loop forever",
+   "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#03",
+   "sevMembros": {
+    "low": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  }
+ ],
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "gids": [],
+   "goldens": [
+    0
+   ],
+   "note": "Google CalendarService mainHostDestinationCalendar undefined",
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#01",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [],
+   "goldens": [
+    1
+   ],
+   "note": "Redundant optional chaining on mainHostDestinationCalendar in Google service",
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#02",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S2",
+    "gpt:S4",
+    "son:S7",
+    "muse:S14",
+    "muse:S15"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "Google update/delete fallback finds calendar by the falsy externalCalendarId",
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "sevMembros": {
+    "high": 18
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S8",
+    "muse:S5"
+   ],
+   "goldens": [
+    3
+   ],
+   "note": "Org creation slug condition inverted for team billing",
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S16",
+    "muse:S17"
+   ],
+   "goldens": [
+    4
+   ],
+   "note": "Office365/Lark createEvent ignores credentialId and uses first destination",
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "sevMembros": {
+    "high": 8,
+    "medium": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [],
+   "goldens": [
+    5
+   ],
+   "note": "Undefined credential passed to updateEvent",
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#06",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S7",
+    "gpt:S17",
+    "son:S10",
+    "muse:S13"
+   ],
+   "goldens": [],
+   "note": "EventManager dereferences mainHostDestinationCalendar.integration without guard",
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "sevMembros": {
+    "high": 23
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S3",
+    "gpt:S12",
+    "muse:S4"
+   ],
+   "goldens": [],
+   "note": "Optional push onto null destinationCalendar drops team calendars",
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "sevMembros": {
+    "high": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S4",
+    "gpt:S13"
+   ],
+   "goldens": [],
+   "note": "Video references lose credentialId",
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+   "sevMembros": {
+    "high": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S5"
+   ],
+   "goldens": [],
+   "note": "Per-destination credential DB lookups in loop",
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#10",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S15"
+   ],
+   "goldens": [],
+   "note": "Null vs [] inconsistency",
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#11",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "gpt:S6"
+   ],
+   "goldens": [],
+   "note": "updateLocation reads externalId/credentialId absent from updateEvent result",
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S20"
+   ],
+   "goldens": [],
+   "note": "Recurring cancel deletes only first host events",
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "son:S12"
+   ],
+   "goldens": [],
+   "note": "Google createEvent ignores destinations without credentialId",
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#14",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "son:S14"
+   ],
+   "goldens": [],
+   "note": "createEvent without externalId leaves externalCalendarId undefined",
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#15",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "gids": [
+    "ds:S7",
+    "gpt:S5",
+    "son:S1",
+    "muse:S5"
+   ],
+   "goldens": [
+    3,
+    1
+   ],
+   "note": "totalPages off-by-one lets next navigate to an empty last page",
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "sevMembros": {
+    "medium": 14
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    0
+   ],
+   "note": "findMembers async call unhandled in setupController",
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#02",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [],
+   "goldens": [
+    4
+   ],
+   "note": "function missing return value on some code paths",
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#03",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [
+    "gpt:S6"
+   ],
+   "goldens": [],
+   "note": "stale member-fetch responses overwrite newer page",
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#04",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S9"
+   ],
+   "goldens": [],
+   "note": "template iterates members but controller model is now the Group",
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#05",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S10",
+    "ds:S6",
+    "son:S7"
+   ],
+   "goldens": [],
+   "note": "public members page limited to 50 with no pagination",
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "sevMembros": {
+    "high": 7
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S8"
+   ],
+   "goldens": [],
+   "note": "create ignores alias_level",
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#07",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S6",
+    "ds:S1"
+   ],
+   "goldens": [
+    5
+   ],
+   "note": "add/remove member read params[:group_id] but route supplies :id",
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "sevMembros": {
+    "high": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S3"
+   ],
+   "goldens": [],
+   "note": "usernames not stripped when splitting on comma",
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#09",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S2",
+    "gpt:S3"
+   ],
+   "goldens": [],
+   "note": "remove_member bypasses primary_group_id cleanup",
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S4",
+    "son:S2"
+   ],
+   "goldens": [],
+   "note": "members limit unbounded / not clamped",
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#11",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S8",
+    "son:S6"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "remove_member spec uses PUT instead of DELETE",
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#12",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [
+  {
+   "gids": [
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "PasswordForm uses null-user-true passkey gate though it requires a user.",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#01",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S1"
+   ],
+   "goldens": [],
+   "note": "configuredFor accepts passkey-only users, stranding them on password form.",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#02",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S1"
+   ],
+   "goldens": [],
+   "note": "Base login-password.ftl lacks passkeys UI for passkey-only users.",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#03",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S7"
+   ],
+   "goldens": [],
+   "note": "Comment misdescribes isConditionalPasskeysEnabled condition.",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#04",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S1"
+   ],
+   "goldens": [],
+   "note": "action() does not check re-auth user owns the passkey.",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#05",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "son:S1"
+   ],
+   "goldens": [],
+   "note": "Stale test comment about passwordless policy.",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#06",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "son:S2"
+   ],
+   "goldens": [],
+   "note": "passkeys.ftl discloses credential IDs before authentication.",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#07",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S20"
+   ],
+   "goldens": [],
+   "note": "Unrelated Kotlin state management suggestion.",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#08",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    0
+   ],
+   "note": "UsernameForm calls isConditionalPasskeysEnabled without UserModel.",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#09",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [],
+   "goldens": [
+    1
+   ],
+   "note": "Conditional passkey UI not set up when user is null.",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#10",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S2"
+   ],
+   "goldens": [],
+   "note": "Non-finding (no issue found / no line).",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#11",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S3"
+   ],
+   "goldens": [],
+   "note": "Non-finding (no issue found / no line).",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#12",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S4"
+   ],
+   "goldens": [],
+   "note": "Non-finding (no issue found / no line).",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#13",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S5"
+   ],
+   "goldens": [],
+   "note": "Non-finding (no issue found / no line).",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#14",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S6"
+   ],
+   "goldens": [],
+   "note": "Non-finding (no issue found / no line).",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#15",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S8"
+   ],
+   "goldens": [],
+   "note": "Non-finding (no issue found / no line).",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#16",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S9"
+   ],
+   "goldens": [],
+   "note": "Non-finding (no issue found / no line).",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#17",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S10"
+   ],
+   "goldens": [],
+   "note": "Non-finding (no issue found / no line).",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#18",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S11"
+   ],
+   "goldens": [],
+   "note": "Non-finding (no issue found / no line).",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#19",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S12"
+   ],
+   "goldens": [],
+   "note": "Non-finding (no issue found / no line).",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#20",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S13"
+   ],
+   "goldens": [],
+   "note": "Non-finding (no issue found / no line).",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#21",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S14"
+   ],
+   "goldens": [],
+   "note": "Non-finding (no issue found / no line).",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#22",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S15"
+   ],
+   "goldens": [],
+   "note": "Non-finding (no issue found / no line).",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#23",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S16"
+   ],
+   "goldens": [],
+   "note": "Non-finding (no issue found / no line).",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#24",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S17"
+   ],
+   "goldens": [],
+   "note": "Non-finding (no issue found / no line).",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#25",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S18"
+   ],
+   "goldens": [],
+   "note": "Non-finding (no issue found / no line).",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#26",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S19"
+   ],
+   "goldens": [],
+   "note": "Non-finding (no issue found / no line).",
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#27",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "gids": [
+    "ds:S1",
+    "gpt:S1",
+    "son:S1",
+    "muse:S1"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "Cache not re-checked after acquiring write lock",
+   "issueId": "frontend-asset-optimization-grafana-codex#01",
+   "sevMembros": {
+    "low": 6,
+    "medium": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "son:S2"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "Cache assigned unconditionally, nil overwrites on error",
+   "issueId": "frontend-asset-optimization-grafana-codex#02",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "Exclusive lock held across file/CDN load",
+   "issueId": "frontend-asset-optimization-grafana-codex#03",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "gids": [
+    "son:S5",
+    "muse:S6",
+    "gpt:S8"
+   ],
+   "goldens": [],
+   "note": "_(error_short) on a variable breaks translation extraction.",
+   "issueId": "github-oauth-security-enhancement-sentry#01",
+   "sevMembros": {
+    "low": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S3"
+   ],
+   "goldens": [],
+   "note": "Parameter named org is actually active organization context.",
+   "issueId": "github-oauth-security-enhancement-sentry#02",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "gpt:S9"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "OAuth state uses static pipeline.signature instead of random nonce.",
+   "issueId": "github-oauth-security-enhancement-sentry#03",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S4",
+    "son:S4"
+   ],
+   "goldens": [],
+   "note": "State comparison not constant-time.",
+   "issueId": "github-oauth-security-enhancement-sentry#04",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S5",
+    "muse:S2",
+    "son:S3"
+   ],
+   "goldens": [],
+   "note": "Token exchange / get_user_info not wrapped in error handling.",
+   "issueId": "github-oauth-security-enhancement-sentry#05",
+   "sevMembros": {
+    "medium": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S2",
+    "son:S1",
+    "muse:S3"
+   ],
+   "goldens": [],
+   "note": "Missing Integration branch advances without ownership check.",
+   "issueId": "github-oauth-security-enhancement-sentry#06",
+   "sevMembros": {
+    "high": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S6"
+   ],
+   "goldens": [],
+   "note": "Missing github_authenticated_user state always fails installation for flows without OAuth view.",
+   "issueId": "github-oauth-security-enhancement-sentry#07",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    0
+   ],
+   "note": "Null reference if github_authenticated_user state missing.",
+   "issueId": "github-oauth-security-enhancement-sentry#08",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S1",
+    "gpt:S6",
+    "muse:S1",
+    "son:S6"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "metadata['sender']['login'] indexed without guard.",
+   "issueId": "github-oauth-security-enhancement-sentry#09",
+   "sevMembros": {
+    "medium": 9
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S7",
+    "ds:S5",
+    "gpt:S7"
+   ],
+   "goldens": [],
+   "note": "Installation-not-found test now fails on state mismatch instead.",
+   "issueId": "github-oauth-security-enhancement-sentry#10",
+   "sevMembros": {
+    "medium": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S7"
+   ],
+   "goldens": [],
+   "note": "User mismatch test asserts only generic error message.",
+   "issueId": "github-oauth-security-enhancement-sentry#11",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "gids": [
+    "ds:S1",
+    "gpt:S4",
+    "son:S11",
+    "muse:S1"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "requireNonNull checks grantType twice instead of rawTokenId.",
+   "issueId": "implement-access-token-context-encoding-framework-keycloak#01",
+   "sevMembros": {
+    "low": 16
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S8",
+    "gpt:S5",
+    "son:S9",
+    "son:S12",
+    "muse:S5",
+    "muse:S6",
+    "muse:S15",
+    "muse:S2"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "isAccessTokenId matcher reads wrong substring and inverts the grant comparison.",
+   "issueId": "implement-access-token-context-encoding-framework-keycloak#02",
+   "sevMembros": {
+    "medium": 34
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S6",
+    "gpt:S19",
+    "muse:S14"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "getShortcut Javadoc says 3-letter shortcut but format requires 2 chars.",
+   "issueId": "implement-access-token-context-encoding-framework-keycloak#03",
+   "sevMembros": {
+    "low": 2,
+    "medium": 5
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "gpt:S9"
+   ],
+   "goldens": [
+    3
+   ],
+   "note": "Negative test catches broad RuntimeException instead of IllegalArgumentException.",
+   "issueId": "implement-access-token-context-encoding-framework-keycloak#04",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S1"
+   ],
+   "goldens": [],
+   "note": "Client-credentials and UMA paths never set GRANT_TYPE, encoding 'na'.",
+   "issueId": "implement-access-token-context-encoding-framework-keycloak#05",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S16"
+   ],
+   "goldens": [],
+   "note": "Lazy shortcut registration overwrites existing shortcut mapping without collision check.",
+   "issueId": "implement-access-token-context-encoding-framework-keycloak#06",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S3"
+   ],
+   "goldens": [],
+   "note": "Context grantType not refreshed by setFormParams.",
+   "issueId": "implement-access-token-context-encoding-framework-keycloak#07",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S4"
+   ],
+   "goldens": [],
+   "note": "getShortcut added without default breaks existing custom factories.",
+   "issueId": "implement-access-token-context-encoding-framework-keycloak#08",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "gids": [
+    "ds:S1",
+    "gpt:S5",
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "Federated recovery-code validation never consumes the used code.",
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+   "sevMembros": {
+    "medium": 6
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S3",
+    "gpt:S3",
+    "son:S1",
+    "muse:S1"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "Rebuilt recovery-codes model lacks stored credential id.",
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#02",
+   "sevMembros": {
+    "medium": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S4",
+    "gpt:S6"
+   ],
+   "goldens": [],
+   "note": "Recovery codes compared with non-constant-time equals.",
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#03",
+   "sevMembros": {
+    "low": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S5"
+   ],
+   "goldens": [],
+   "note": "Raw unhashed recovery codes sent to user storage.",
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#04",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S1"
+   ],
+   "goldens": [],
+   "note": "Old local recovery-code credential stays active after external creation.",
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "son:S3"
+   ],
+   "goldens": [],
+   "note": "removeStoredCredentialById cannot remove federated exhausted credential.",
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+   "sevMembros": {
+    "medium": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S3"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "Unchecked Optional.get() in RecoveryAuthnCodeInputLoginBean.",
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#07",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "gids": [
+    "gpt:S1"
+   ],
+   "goldens": [],
+   "note": "pause menu item still requires ruler rule so it disappears for list-view rules",
+   "issueId": "notification-rule-processing-engine-grafana-codex#01",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S2"
+   ],
+   "goldens": [],
+   "note": "delete menu item still gated on rulerRule so it disappears for list-view rules",
+   "issueId": "notification-rule-processing-engine-grafana-codex#02",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S3",
+    "son:S1",
+    "ds:S6",
+    "gpt:S6"
+   ],
+   "goldens": [],
+   "note": "skipToken/undefined rule yields supported Duplicate ability ORed into cloud rules",
+   "issueId": "notification-rule-processing-engine-grafana-codex#03",
+   "sevMembros": {
+    "medium": 6
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S5",
+    "gpt:S7",
+    "muse:S2",
+    "ds:S4"
+   ],
+   "goldens": [],
+   "note": "federated rule check dropped, isFederated hardcoded false",
+   "issueId": "notification-rule-processing-engine-grafana-codex#04",
+   "sevMembros": {
+    "medium": 8
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S2",
+    "son:S6"
+   ],
+   "goldens": [],
+   "note": "alertingRule check vs comment claiming all Grafana prom rules: recording rules lose abilities",
+   "issueId": "notification-rule-processing-engine-grafana-codex#05",
+   "sevMembros": {
+    "low": 1,
+    "medium": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "son:S3"
+   ],
+   "goldens": [],
+   "note": "comment says no loading state but code depends on loading",
+   "issueId": "notification-rule-processing-engine-grafana-codex#06",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S1",
+    "muse:S1"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "GrafanaRuleListItem rendered without key prop",
+   "issueId": "notification-rule-processing-engine-grafana-codex#07",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S4",
+    "ds:S7",
+    "muse:S6",
+    "gpt:S5"
+   ],
+   "goldens": [],
+   "note": "More button test never asserts menu options",
+   "issueId": "notification-rule-processing-engine-grafana-codex#08",
+   "sevMembros": {
+    "medium": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S3"
+   ],
+   "goldens": [],
+   "note": "GrafanaGroupLoader JSDoc still mentions Ruler endpoint",
+   "issueId": "notification-rule-processing-engine-grafana-codex#09",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S5"
+   ],
+   "goldens": [],
+   "note": "isProvisioned derived from optional promRule.provenance",
+   "issueId": "notification-rule-processing-engine-grafana-codex#10",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S3",
+    "muse:S4"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "silence drawer never renders for prom-only Grafana rules",
+   "issueId": "notification-rule-processing-engine-grafana-codex#11",
+   "sevMembros": {
+    "high": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S8"
+   ],
+   "goldens": [],
+   "note": "promRule prop typed as Rule but consumed as GrafanaPromRuleDTO",
+   "issueId": "notification-rule-processing-engine-grafana-codex#12",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "gids": [
+    "muse:S9",
+    "gpt:S9",
+    "ds:S5",
+    "son:S6"
+   ],
+   "goldens": [],
+   "note": "Webhook secret compared with non-constant-time !==.",
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "sevMembros": {
+    "high": 5
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S8"
+   ],
+   "goldens": [
+    8
+   ],
+   "note": "Webhook schema parse/decrypt throws unhandled, 500 instead of 400.",
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S8"
+   ],
+   "goldens": [],
+   "note": "Non-atomic findFirst+create in webhook can create duplicate credentials.",
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#03",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S10",
+    "ds:S15"
+   ],
+   "goldens": [],
+   "note": "JSDoc describes appData.type as the app slug.",
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#04",
+   "sevMembros": {
+    "low": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S6"
+   ],
+   "goldens": [],
+   "note": "Team branch of createOAuthAppCredential lacks admin check.",
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#05",
+   "sevMembros": {
+    "critical": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "critical"
+  },
+  {
+   "gids": [
+    "muse:S4"
+   ],
+   "goldens": [],
+   "note": "Unguarded JSON.parse of OAuth state query param.",
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#06",
+   "sevMembros": {
+    "medium": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S10",
+    "muse:S3"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "Missing refresh_token replaced by literal 'refresh_token'.",
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "sevMembros": {
+    "high": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "son:S12",
+    "muse:S2",
+    "gpt:S11"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "Computed Zod keys in minimumTokenResponseSchema are not wildcards.",
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "sevMembros": {
+    "high": 8,
+    "medium": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S3",
+    "gpt:S24",
+    "son:S21",
+    "muse:S1",
+    "muse:S21"
+   ],
+   "goldens": [
+    3,
+    4
+   ],
+   "note": "refreshOAuthTokens sync branch returns raw fetch Response callers cannot consume.",
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "sevMembros": {
+    "high": 13
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S17",
+    "gpt:S15",
+    "son:S8",
+    "ds:S2"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "Google stores safeParse wrapper as credential key.",
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "sevMembros": {
+    "critical": 18
+   },
+   "sevStatus": "unanime",
+   "severity": "critical"
+  },
+  {
+   "gids": [
+    "son:S5"
+   ],
+   "goldens": [],
+   "note": "Office365 tokenResponse.success check dead since parser throws.",
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#11",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S16"
+   ],
+   "goldens": [],
+   "note": "office365video passes wrong app slug msteams.",
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#12",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S7"
+   ],
+   "goldens": [],
+   "note": "Salesforce getClient refreshes token on every construction.",
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S6"
+   ],
+   "goldens": [],
+   "note": "Salesforce CalendarService uses prisma without import.",
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#14",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S1",
+    "son:S1",
+    "gpt:S14",
+    "muse:S16"
+   ],
+   "goldens": [
+    5
+   ],
+   "note": "zoho-bigin passes credentialId instead of userId to refreshOAuthTokens.",
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "sevMembros": {
+    "high": 19
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S7"
+   ],
+   "goldens": [
+    6
+   ],
+   "note": "Salesforce refresh checks response.statusText instead of response.ok.",
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S4"
+   ],
+   "goldens": [
+    7
+   ],
+   "note": "Salesforce jsforce.Connection built with stale access_token/instance_url after refresh.",
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "gids": [
+    "gpt:S1"
+   ],
+   "goldens": [],
+   "note": "flex styling targets inner wrapper not component root, no min-width 0",
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#01",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S2"
+   ],
+   "goldens": [],
+   "note": "align-items mixin lacks -moz-box-align",
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#02",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S2"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "-ms-align-items is not a valid property",
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#03",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S1",
+    "muse:S1"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "box-ordinal-group is 1-based but receives 0-based order value",
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#04",
+   "sevMembros": {
+    "medium": 7
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    0
+   ],
+   "note": "float mixed with flexbox / removed panel float breaks noscript header",
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#05",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "gids": [
+    "ds:S4",
+    "son:S2",
+    "muse:S5"
+   ],
+   "goldens": [],
+   "note": "Redirect loop limit cut from 10000 to 1000.",
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#01",
+   "sevMembros": {
+    "low": 1,
+    "medium": 2
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "gpt:S5"
+   ],
+   "goldens": [],
+   "note": "span_key == set_key merge unlinks the segment.",
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#02",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S1",
+    "gpt:S8",
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "ZUNIONSTORE default SUM aggregation doubles scores.",
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "sevMembros": {
+    "medium": 5
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S1",
+    "ds:S9",
+    "gpt:S4"
+   ],
+   "goldens": [],
+   "note": "SET to ZSET change without key migration causes WRONGTYPE.",
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "sevMembros": {
+    "high": 6
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S4"
+   ],
+   "goldens": [],
+   "note": "zpopmin eviction can evict the root span.",
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S2",
+    "ds:S6",
+    "gpt:S3"
+   ],
+   "goldens": [],
+   "note": "Removed max_segment_spans flush guard; configured limit no longer enforced.",
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "sevMembros": {
+    "medium": 6
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S3",
+    "son:S3",
+    "muse:S3"
+   ],
+   "goldens": [],
+   "note": "Hard key lookup of end_timestamp_precise crashes batch.",
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#07",
+   "sevMembros": {
+    "high": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S7",
+    "ds:S5"
+   ],
+   "goldens": [],
+   "note": "No test for timestamp-ordered >1000-span eviction.",
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#08",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    0
+   ],
+   "note": "OptimizedCursorPaginator negative offset slicing.",
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#09",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [],
+   "goldens": [
+    1
+   ],
+   "note": "BasePaginator prev cursor negative offset.",
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#10",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [],
+   "goldens": [
+    2
+   ],
+   "note": "get_item_key floor/ceil on datetime.",
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#11",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [],
+   "goldens": [
+    3
+   ],
+   "note": "organization_context.member may be None.",
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#12",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "gids": [
+    "muse:S5"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "ContextualLoggerMiddleware dereferences nil req",
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#01",
+   "sevMembros": {
+    "low": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S8",
+    "son:S2"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "traceID dropped from plugin request logs",
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#02",
+   "sevMembros": {
+    "medium": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S4"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "TestLogger.FromContext returns new instance",
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S1",
+    "muse:S1"
+   ],
+   "goldens": [],
+   "note": "Shared MetricsMiddleware next mutated per chain (race)",
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#04",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S3",
+    "gpt:S1"
+   ],
+   "goldens": [],
+   "note": "Request size HELP text says returned",
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#05",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S4",
+    "muse:S8"
+   ],
+   "goldens": [],
+   "note": "Test still named TestInstrumentationMiddleware",
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#06",
+   "sevMembros": {
+    "low": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S7",
+    "son:S1",
+    "muse:S9"
+   ],
+   "goldens": [],
+   "note": "No negative assertion for request size when not instrumented",
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#07",
+   "sevMembros": {
+    "medium": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S6"
+   ],
+   "goldens": [],
+   "note": "checkHistogram foundLabels not reset per metric",
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#08",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S2",
+    "muse:S11"
+   ],
+   "goldens": [],
+   "note": "Millisecond duration truncated by integer division",
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#09",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S3"
+   ],
+   "goldens": [],
+   "note": "Request-size test uses empty payloads",
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#10",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S4"
+   ],
+   "goldens": [],
+   "note": "Duration metrics values not asserted",
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#11",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S10"
+   ],
+   "goldens": [],
+   "note": "Duration histogram check omits status/source labels",
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#12",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S3"
+   ],
+   "goldens": [],
+   "note": "Logger middleware hidden ordering dependency on contextual middleware",
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#13",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S12"
+   ],
+   "goldens": [],
+   "note": "Plugin registry miss fails the request in metrics middleware",
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#14",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": [
+  {
+   "gids": [
+    "ds:S3",
+    "son:S2"
+   ],
+   "goldens": [],
+   "note": "get_failure_reason docstring examples do not match output",
+   "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#01",
+   "sevMembros": {
+    "low": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S1",
+    "ds:S1",
+    "son:S1"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "Modified config computed but original monitor.config returned",
+   "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "sevMembros": {
+    "medium": 4,
+    "low": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "previous_checkins[0] without empty guard",
+   "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#03",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S4"
+   ],
+   "goldens": [],
+   "note": "SimpleCheckIn moved, old import path breaks",
+   "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#04",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    1
+   ],
+   "note": "Redundant MonitorCheckIn fetch when data in previous_checkins",
+   "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#05",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "gids": [
+    "gpt:S10",
+    "ds:S4",
+    "son:S5",
+    "muse:S13"
+   ],
+   "goldens": [
+    4
+   ],
+   "note": "age/timestamp mutual-exclusion check uses truthiness so 0 values bypass it",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#01",
+   "sevMembros": {
+    "medium": 9
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S6",
+    "gpt:S18"
+   ],
+   "goldens": [],
+   "note": "validation-failure warning logs the full raw attacker-controlled report",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#02",
+   "sevMembros": {
+    "high": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S11"
+   ],
+   "goldens": [],
+   "note": "unbounded number of reports per request on unauthenticated endpoint",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#03",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [],
+   "goldens": [
+    0
+   ],
+   "note": "endpoint returns HttpResponse instead of DRF Response",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#04",
+   "sevMembros": {},
+   "sevStatus": "sem",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S7",
+    "muse:S8"
+   ],
+   "goldens": [
+    5
+   ],
+   "note": "analytics recorded before the feature-flag check",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#05",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S14",
+    "ds:S1",
+    "son:S1",
+    "gpt:S2"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "zip(error_ids, events.values()) misaligns ids with nodestore results",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#06",
+   "sevMembros": {
+    "medium": 11
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S6"
+   ],
+   "goldens": [],
+   "note": "Snuba replay lookup runs even when error context is disabled",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#07",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S3"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "detector update reads detector_type instead of type",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#08",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "muse:S6"
+   ],
+   "goldens": [],
+   "note": "dcg_to_slow_conditions indexed directly can KeyError",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#09",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S7"
+   ],
+   "goldens": [],
+   "note": "delayed workflow log now includes full event payload",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#10",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S12"
+   ],
+   "goldens": [],
+   "note": "useFeedbackSummary dereferences undefined data",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#11",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S8",
+    "son:S2",
+    "muse:S4",
+    "gpt:S19"
+   ],
+   "goldens": [
+    3
+   ],
+   "note": "TableWidgetVisualization rendered with hardcoded empty columns/data",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#12",
+   "sevMembros": {
+    "high": 6
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S8"
+   ],
+   "goldens": [],
+   "note": "custom cell renderer fallback uses truthiness instead of undefined",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#13",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S5"
+   ],
+   "goldens": [],
+   "note": "tableData.meta.fields accessed without guarding meta",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#14",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S13"
+   ],
+   "goldens": [],
+   "note": "consumers still read removed Visualize.yAxes",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#15",
+   "sevMembros": {
+    "high": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "son:S9"
+   ],
+   "goldens": [],
+   "note": "callers may pass Visualize instances to updateLocationWithAggregateFields",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#16",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S10",
+    "son:S6",
+    "gpt:S7"
+   ],
+   "goldens": [],
+   "note": "number-type test mock matches query instead of substringMatch so assertion is vacuous",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#17",
+   "sevMembros": {
+    "medium": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S9"
+   ],
+   "goldens": [],
+   "note": "attributeKey interpolated into URL without encoding",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#18",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S12"
+   ],
+   "goldens": [],
+   "note": "attribute keys query key omits organization",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#19",
+   "sevMembros": {
+    "medium": 5
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S9"
+   ],
+   "goldens": [],
+   "note": "doc comment says only LOGS supported though SPANS is used",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#20",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "muse:S10"
+   ],
+   "goldens": [],
+   "note": "get_recommended_event called per issue in PR comment loop",
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#21",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
+  {
+   "gids": [
+    "ds:S1",
+    "gpt:S2",
+    "son:S10",
+    "muse:S1"
+   ],
+   "goldens": [
+    0,
+    3
+   ],
+   "note": "desktop topic-post .topic-meta-data h5 a light-theme lightness inverted 30%->70%",
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "sevMembros": {
+    "medium": 10
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S2",
+    "gpt:S3",
+    "son:S7",
+    "muse:S2"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "mobile modal .custom-message-length light-theme lightness inverted 70%->30%",
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "sevMembros": {
+    "medium": 10
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S9",
+    "muse:S3"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "desktop user.scss .name light-theme lightness changed 30%->50%",
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "sevMembros": {
+    "medium": 5
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S4",
+    "son:S5"
+   ],
+   "goldens": [
+    4
+   ],
+   "note": "mobile user.scss .name light-theme lightness changed 30%->50%",
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "sevMembros": {
+    "medium": 5
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S15",
+    "gpt:S4",
+    "son:S4",
+    "muse:S4"
+   ],
+   "goldens": [],
+   "note": "mobile topic-post .topic-map h3 light-theme lightness changed 20%->50%",
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "sevMembros": {
+    "medium": 11
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S9"
+   ],
+   "goldens": [],
+   "note": "common/base/user.scss .name claimed changed 30%->50% (original was 50%)",
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#06",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S6"
+   ],
+   "goldens": [],
+   "note": "stale comment naming single $primary default in discourse.scss",
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#07",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "gpt:S1"
+   ],
+   "goldens": [],
+   "note": "dark-theme badge background vs text contrast",
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#08",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "gids": [
+    "ds:S1",
+    "gpt:S2"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "retryCount increment uses stale read instead of atomic increment",
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#01",
+   "sevMembros": {
+    "medium": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S12",
+    "son:S3",
+    "muse:S1",
+    "gpt:S5"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "retryCount>1 deletion arm lacks SMS method filter",
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "sevMembros": {
+    "low": 1,
+    "high": 13
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "gpt:S4",
+    "muse:S4"
+   ],
+   "goldens": [],
+   "note": "deleteMany comment no longer describes retry-count branch",
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#03",
+   "sevMembros": {
+    "low": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S7",
+    "gpt:S1",
+    "son:S1"
+   ],
+   "goldens": [],
+   "note": "unguarded retryCount update inside catch can abort the cron loop",
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "sevMembros": {
+    "medium": 6
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "son:S2",
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "retryCount not incremented when message or sendTo missing",
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#05",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S3"
+   ],
+   "goldens": [],
+   "note": "catch increments retryCount on transient errors, wiping queue",
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#06",
+   "sevMembros": {
+    "critical": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "critical"
+  },
+  {
+   "gids": [
+    "ds:S3"
+   ],
+   "goldens": [],
+   "note": "OR on unindexed retryCount causes full table scan",
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S6"
+   ],
+   "goldens": [],
+   "note": "failed-send branch increment note",
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#08",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S11"
+   ],
+   "goldens": [],
+   "note": "retryCount increment duplicated in else and catch",
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#09",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "gids": [
+    "ds:S10",
+    "son:S4",
+    "muse:S5"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "wait_produce metric tagged 'shards' instead of 'shard'.",
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+   "sevMembros": {
+    "medium": 5
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S2",
+    "son:S2",
+    "muse:S7"
+   ],
+   "goldens": [
+    1,
+    3
+   ],
+   "note": "time.sleep(0.1) in test is no-op because time.sleep is monkeypatched.",
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+   "sevMembros": {
+    "medium": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S7",
+    "son:S7",
+    "muse:S1"
+   ],
+   "goldens": [
+    2
+   ],
+   "note": "isinstance(multiprocessing.Process) false for SpawnProcess, so hung workers never killed.",
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "sevMembros": {
+    "high": 7
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "gpt:S8",
+    "muse:S3"
+   ],
+   "goldens": [
+    4
+   ],
+   "note": "join() breaks on deadline without terminating remaining processes.",
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "sevMembros": {
+    "medium": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S5",
+    "gpt:S4",
+    "son:S3",
+    "muse:S6"
+   ],
+   "goldens": [],
+   "note": "Docstring says one process per shard but processes are capped/shared.",
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+   "sevMembros": {
+    "low": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S8",
+    "gpt:S5",
+    "son:S1"
+   ],
+   "goldens": [],
+   "note": "max_processes=0 treated as unset by 'or'.",
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#06",
+   "sevMembros": {
+    "medium": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S9",
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "Negative max_processes yields empty map and KeyError.",
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#07",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S3",
+    "muse:S4"
+   ],
+   "goldens": [],
+   "note": "get_memory_info called per flusher buffer, repeating cluster-wide INFO.",
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "sevMembros": {
+    "medium": 1,
+    "low": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S1"
+   ],
+   "goldens": [],
+   "note": "Per-process buffers break global max-flush-segments cap.",
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#09",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S3"
+   ],
+   "goldens": [],
+   "note": "_create_process_for_shard is dead code.",
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#10",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S7"
+   ],
+   "goldens": [],
+   "note": "CLI default=1 disables per-shard auto parallelism.",
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#11",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "gpt:S9"
+   ],
+   "goldens": [],
+   "note": "Test counts shard entries instead of verifying assignment.",
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#12",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "gids": [
+    "ds:S1",
+    "gpt:S1",
+    "son:S1",
+    "muse:S1"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "BuildIndex lock narrowed, so concurrent builds of same key race.",
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#01",
+   "sevMembros": {
+    "high": 5,
+    "medium": 1
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  },
+  {
+   "gids": [
+    "ds:S6",
+    "gpt:S2",
+    "son:S2"
+   ],
+   "goldens": [
+    1
+   ],
+   "note": "TotalDocs iterates cache without lock while BuildIndex writes it.",
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#02",
+   "sevMembros": {
+    "high": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S2",
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "NewResourceServer returns on Init error without cancel/cleanup.",
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#03",
+   "sevMembros": {
+    "low": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S3",
+    "gpt:S3"
+   ],
+   "goldens": [],
+   "note": "Postgres t.Skip disables module server test.",
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#04",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S5"
+   ],
+   "goldens": [],
+   "note": "Constructor now blocks on full index build and fails server creation.",
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#05",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "son:S3"
+   ],
+   "goldens": [],
+   "note": "Watcher started after index build misses intervening events.",
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#06",
+   "sevMembros": {
+    "high": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "gids": [
+    "ds:S5",
+    "gpt:S1"
+   ],
+   "goldens": [],
+   "note": "Case-sensitive hostname comparison.",
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#01",
+   "sevMembros": {
+    "medium": 2
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S7"
+   ],
+   "goldens": [],
+   "note": "Branch www vs forum not tested.",
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#02",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S8"
+   ],
+   "goldens": [],
+   "note": "Scheme-less website case not tested.",
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#03",
+   "sevMembros": {
+    "low": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "low"
+  },
+  {
+   "gids": [
+    "ds:S3",
+    "gpt:S2",
+    "son:S1"
+   ],
+   "goldens": [],
+   "note": "Same-label-count heuristic mismatches public suffixes.",
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04",
+   "sevMembros": {
+    "medium": 3
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "muse:S2"
+   ],
+   "goldens": [],
+   "note": "Website subdomain of instance not handled.",
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#05",
+   "sevMembros": {
+    "medium": 1
+   },
+   "sevStatus": "unanime",
+   "severity": "medium"
+  },
+  {
+   "gids": [
+    "ds:S1",
+    "gpt:S3"
+   ],
+   "goldens": [],
+   "note": "website_name not subject to untrusted_attributes restriction.",
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "sevMembros": {
+    "high": 4
+   },
+   "sevStatus": "unanime",
+   "severity": "high"
+  },
+  {
+   "gids": [
+    "ds:S9",
+    "muse:S1"
+   ],
+   "goldens": [
+    0
+   ],
+   "note": "include_website_name missing ? suffix.",
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+   "sevMembros": {
+    "low": 3,
+    "high": 2
+   },
+   "sevStatus": "divergente",
+   "severity": null
+  }
+ ]
+}
