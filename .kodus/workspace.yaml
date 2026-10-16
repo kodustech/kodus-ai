@@ -17,10 +17,14 @@ setup:
   # Best effort: a missing rg fails one spec, a failed setup fails the env.
   - command -v rg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep) || true
 files:
-  copy: [.env]
+  # .env.billing: run scripts/env/pull-billing-env.sh once (1Password, Stripe
+  # test mode). runo reads it from this worktree or the main checkout.
+  copy: [.env, .env.billing]
 services:
   compose:
-    file: docker-compose.dev.yml
+    # the billing production runs, with a Stripe webhook forwarder, instead of
+    # none — the same overlay PR previews use
+    files: [docker-compose.dev.yml, docker-compose.billing.yml]
     public: kodus-api
     health: /health/simple
     health_timeout: 1200

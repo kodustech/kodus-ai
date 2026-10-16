@@ -194,7 +194,7 @@ describe('confirmation of a run below the floor', () => {
 });
 
 describe('gate refuses a judge it was not calibrated with', () => {
-    const run = { metrics: { recall_mean: 0.4 }, rows: [{ caseId: 'a', status: 'pass', metadata: { recall: 0.4, tpFindings: 2, fpFindings: 1, totalCalls: 40 } }] };
+    const run = { metrics: { recall_mean: 0.6 }, rows: [{ caseId: 'a', status: 'pass', metadata: { recall: 0.6, tpFindings: 2, fpFindings: 1, totalCalls: 90 } }] };
     const gateUnder = (env: Record<string, string | undefined>) => {
         const saved = { JUDGE_MODEL: process.env.JUDGE_MODEL, JUDGE_REASONING_EFFORT: process.env.JUDGE_REASONING_EFFORT };
         Object.assign(process.env, env);
