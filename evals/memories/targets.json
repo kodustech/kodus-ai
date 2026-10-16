@@ -1,12 +1,18 @@
 {
     "__doc": [
         "Floors per model for the share of memory cases the review got right (run.js --gate), as ratios.",
-        "eval-fake (the wiring smoke, every PR): the scripted model's one finding names no file of the case, so every quiet case is right and every flag case wrong. Deterministic: two runs gave the same answer on every case. floor = observed.",
-        "deepseek-v4-flash@fireworks (the nightly model): calibrated 2026-10-15 from 2 local runs on the branch's base (main 4b5c881cd's finder), 10 and 9 of 10 (mean 95%). floor = mean - 2 binomial SE over the 10 cases (0.812), rounded down to a whole case: 8 of 10 still pass. The same cases with --no-memories scored 7 of 10: the three cases where a memory says the code is intended went wrong, so those three are decided by the memory.",
+        "eval-fake (the wiring smoke, every PR): the scripted model's one finding names no file of the case, so every quiet case is right and every flag case wrong. Deterministic: two runs on production's review stage gave the same answer on every case (5 of 10). floor = observed.",
+        "deepseek-v4-flash@fireworks (the nightly model): calibrated 2026-10-16 from 2 local runs on parity/a-review-path 03bf13ba8, the review through production's stage (evals/shared/review-stage.js) with the memories written by KodyRulesService.createOrUpdate, the managed route: 9 and 9 of 10 (mean 90%), the same case wrong in both (config-read-through-config), so the paired per-case difference was 0 on every case. floor = mean - 2 binomial SE over the 10 cases (0.710), rounded down to a whole case: 7 of 10 still pass. Deliberate break (memories filtered out in KodyRulesValidationService, memoryRules=0 in all 10 prompts): 6 of 10, GATE FAILED, exit 1.",
         "RATCHET: a PR that adds cases or moves the value on purpose recalibrates here in the same PR, with its runs as evidence."
     ],
     "models": {
-        "eval-fake": { "floor": 0.5, "observed": 0.5 },
-        "deepseek-v4-flash@fireworks": { "floor": 0.8, "observed": 0.95 }
+        "eval-fake": {
+            "floor": 0.5,
+            "observed": 0.5
+        },
+        "deepseek-v4-flash@fireworks": {
+            "floor": 0.7,
+            "observed": 0.9
+        }
     }
 }
