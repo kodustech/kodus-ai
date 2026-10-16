@@ -218,17 +218,21 @@ function normaliza(d) {
 // Claude por assinatura: sessao do Agent SDK com Read/Grep/Glob no worktree, JSON no fim.
 const TIER0 = require(path.join(INV, '..', 'shared', 'tier0-models')).TIER0;
 const PELO_SDK = TIER0[MODELO]?.provider === 'claude_agent_sdk';
-async function julgaSdk(s, diff, dir, schema) {
+async function julgaSdk(s, diff, dir, schema, cmd) {
     const { carregaSdk, envDoProcesso } = require(path.join(INV, 'claude-sdk-runner'));
     const sdk = await carregaSdk();
-    const texto = textoDe(s, diff).replace(/grep, readFile and listDir/g, 'Grep, Read and Glob')
+    const repo = require('./sdk-ferramentas').servidorRepo(sdk, ferramentasEval(cmd));
+    const texto = textoDe(s, diff)
         .replace('Answer with submit.', `End your answer with ONLY a JSON object matching this schema, no code fence:\n${JSON.stringify(schema)}`);
     let saida = '';
     try {
         for await (const msg of sdk.query({ prompt: texto, options: {
             model: TIER0[MODELO].sdkModel,
-            systemPrompt: 'You can read the repository with the Read, Grep and Glob tools; your working directory is the repository at the pull request head.',
-            tools: ['Read', 'Grep', 'Glob'], allowedTools: ['Read', 'Grep', 'Glob'],
+            // RECALL_CLAUDE_SDK_PRESET=1: o preset do Claude Code com o nosso texto no fim, como no finder.
+            systemPrompt: process.env.RECALL_CLAUDE_SDK_PRESET === '1'
+                ? { type: 'preset', preset: 'claude_code', append: 'You can read the repository at the pull request head with the grep, readFile and listDir tools.' }
+                : 'You can read the repository at the pull request head with the grep, readFile and listDir tools.',
+            tools: [], allowedTools: repo.allowedTools, mcpServers: repo.mcpServers,
             disallowedTools: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task'],
             settingSources: [], cwd: dir, maxTurns: TETO + 2, env: envDoProcesso() } })) {
             if (msg.type === 'assistant') for (const b of msg.message.content || []) if (b.type === 'text') saida += b.text + '\n';
@@ -241,9 +245,8 @@ async function julgaSdk(s, diff, dir, schema) {
 
 async function julga(model, cmd, s, diff) {
     const schema = MESA ? SCHEMA_MESA : SCHEMA;
-    // Pelo SDK as ferramentas sao as nativas do Claude Code, nao as de producao.
     if (PELO_SDK && E2B) throw new Error('RECALL_SANDBOX=e2b ainda nao suportado pelo Agent SDK');
-    if (PELO_SDK && LOOP) return julgaSdk(s, diff, cmd.repoRoot, schema);
+    if (PELO_SDK && LOOP) return julgaSdk(s, diff, cmd.repoRoot, schema, cmd);
     if (!LOOP) {
         const r = await chamadaEstruturada({ model, modelId: MODELO, nome: 'submit', schema, prompt: textoDe(s, diff) });
         registra(r.usage);

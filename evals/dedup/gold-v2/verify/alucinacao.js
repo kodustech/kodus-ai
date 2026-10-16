@@ -290,8 +290,8 @@ const PELO_SDK = require(path.join(INV, '..', 'shared', 'tier0-models')).TIER0[M
 async function julgaSdk(s, dir, cmd) {
     const { carregaSdk, envDoProcesso } = require(path.join(INV, 'claude-sdk-runner'));
     const sdk = await carregaSdk();
+    const repo = require('./sdk-ferramentas').servidorRepo(sdk, ferramentasEval(cmd));
     const texto = comExtra(PROMPTS[arg('prompt', VERSAO)](s))
-        .replace(/grep, readFile and listDir/g, 'Grep, Read and Glob')
         .replace('Answer with submit.', `End your answer with ONLY this JSON object, no code fence: {"verdict": ${JSON.stringify(VEREDITOS.join('|'))}, "evidence": "...", "reason": "..."}`);
     const z = sdk.z;
     const txt = (t) => ({ content: [{ type: 'text', text: String(t) }] });
@@ -311,9 +311,12 @@ async function julgaSdk(s, dir, cmd) {
             prompt: texto,
             options: {
                 model: require(path.join(INV, '..', 'shared', 'tier0-models')).TIER0[MODELO].sdkModel,
-                systemPrompt: 'You can read the repository with the Read, Grep and Glob tools; your working directory is the repository at the pull request head.',
-                tools: ['Read', 'Grep', 'Glob'], allowedTools: ['Read', 'Grep', 'Glob', ...extras.map((t) => `mcp__extra__${t.name}`)],
-                ...(extras.length ? { mcpServers: { extra: sdk.createSdkMcpServer({ name: 'extra', version: '1', tools: extras }) } } : {}),
+                // RECALL_CLAUDE_SDK_PRESET=1: o preset do Claude Code com o nosso texto no fim, como no finder.
+                systemPrompt: process.env.RECALL_CLAUDE_SDK_PRESET === '1'
+                    ? { type: 'preset', preset: 'claude_code', append: 'You can read the repository at the pull request head with the grep, readFile and listDir tools.' }
+                    : 'You can read the repository at the pull request head with the grep, readFile and listDir tools.',
+                tools: [], allowedTools: [...repo.allowedTools, ...extras.map((t) => `mcp__extra__${t.name}`)],
+                mcpServers: { ...repo.mcpServers, ...(extras.length ? { extra: sdk.createSdkMcpServer({ name: 'extra', version: '1', tools: extras }) } : {}) },
                 disallowedTools: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task'],
                 settingSources: [], cwd: dir, maxTurns: TETO, env: envDoProcesso(), ...(ESFORCO ? { effort: ESFORCO } : {}),
             },
@@ -331,7 +334,6 @@ async function julgaSdk(s, dir, cmd) {
 }
 
 async function julga(model, cmd, s, diff) {
-    // Pelo SDK as ferramentas sao as nativas do Claude Code, nao as de producao.
     if (PELO_SDK && E2B) throw new Error('RECALL_SANDBOX=e2b ainda nao suportado pelo Agent SDK');
     if (PELO_SDK) return julgaSdk(s, cmd.repoRoot, cmd);
     const schema = SCHEMA;
