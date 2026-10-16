@@ -19,7 +19,10 @@ import {
     Action,
     ResourceType,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
-import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
+import {
+    AUTHORIZATION_SERVICE_TOKEN,
+    IAuthorizationService,
+} from '@libs/identity/domain/permissions/contracts/authorization.service.contract';
 import { FormattedCustomMessagesConfig } from './find-by-repo-or-directory.use-case';
 
 type CustomMessagesConfig = ReturnType<
@@ -40,7 +43,8 @@ export class FindOverrideCountsByRepositoryPullRequestMessagesUseCase {
     constructor(
         @Inject(PULL_REQUEST_MESSAGES_SERVICE_TOKEN)
         private readonly pullRequestMessagesService: IPullRequestMessagesService,
-        private readonly authorizationService: AuthorizationService,
+        @Inject(AUTHORIZATION_SERVICE_TOKEN)
+        private readonly authorizationService: IAuthorizationService,
     ) {}
 
     async execute(organizationId: string, repositoryId: string) {
