@@ -112,9 +112,9 @@ export class FindOverrideCountsByRepositoryPullRequestMessagesUseCase {
 
         // Read the organization's messages once, including the shared parent.
         // Repositories without message documents have no message overrides.
-        const entities = await this.pullRequestMessagesService.find({
-            organizationId,
-        });
+        const entities =
+            (await this.pullRequestMessagesService.find({ organizationId })) ??
+            [];
         const globalEntity = entities.find(
             (entity) => entity.configLevel === ConfigLevel.GLOBAL,
         );

@@ -170,6 +170,13 @@ describe('custom message override counts for all repositories', () => {
         ).toEqual([]);
     });
 
+    it('handles the repository mapper returning null when no message documents exist', async () => {
+        const { useCase, service } = build();
+        service.find.mockResolvedValue(null);
+        expect(await useCase.executeAll(user)).toEqual([]);
+        expect(service.find).toHaveBeenCalledTimes(1);
+    });
+
     it('propagates permission lookup failures without querying messages', async () => {
         const { useCase, service, authorization } = build();
         authorization.getRepositoryScope.mockRejectedValue(
