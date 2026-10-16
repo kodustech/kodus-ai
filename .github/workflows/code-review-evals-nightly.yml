@@ -52,6 +52,9 @@ name: "Evals: nightly quality (DeepSeek, 30 PRs)"
 # does. Its result is the evals.stage.kody-rules row. A night where it did not
 # measure fails the run, so it is not a baseline.
 #
+# Quality signals are reported from main only: a run dispatched on a branch is
+# a proof, and would otherwise replace the number the panel shows.
+#
 # Secrets (repo-level): BYOK_FIREWORKS_API_KEY (model), BYOK_OPENAI_API_KEY
 # (judge), CLAUDE_CODE_OAUTH_TOKEN (investigation, subscription auth),
 # DISCORD_WEBHOOK_TESTS (falls back to DISCORD_WEBHOOK_INTERNAL / DISCORD_WEBHOOK).
@@ -124,7 +127,7 @@ jobs:
               if: always()
               run: node evals/stage-signals.js --wiring=wiring-results.json --out=stage-rows.json
             - name: Report stage signals (wiring)
-              if: always()
+              if: always() && github.ref == 'refs/heads/main'
               uses: ./.github/actions/report-signal
               with:
                   rows: stage-rows.json
@@ -288,7 +291,7 @@ jobs:
                   VERDICT: ${{ steps.run.outputs.verdict }}
               run: node evals/stage-signals.js --nightly=kody-rules-report/final.json --stage=kody-rules --verdict="${VERDICT:-infra}" --out=stage-rows-kody-rules.json
             - name: Report stage signal (kody-rules)
-              if: always()
+              if: always() && github.ref == 'refs/heads/main'
               uses: ./.github/actions/report-signal
               with:
                   rows: stage-rows-kody-rules.json
@@ -392,7 +395,7 @@ jobs:
                   stage=$(node -e 'console.log(require("./evals/nightly-evals").byId(process.env.EVAL).stage)')
                   node evals/stage-signals.js --nightly=report/final.json --stage="$stage" --verdict="${VERDICT:-infra}" --out=stage-rows.json
             - name: Report stage signal
-              if: always()
+              if: always() && github.ref == 'refs/heads/main'
               uses: ./.github/actions/report-signal
               with:
                   rows: stage-rows.json
@@ -665,7 +668,7 @@ jobs:
                   "
 
             - name: Report quality signal
-              if: always()
+              if: always() && github.ref == 'refs/heads/main'
               uses: ./.github/actions/report-signal
               with:
                   name: evals.nightly.recall
@@ -678,7 +681,7 @@ jobs:
                   gcp_project: ${{ vars.GCP_PROJECT }}
 
             - name: Report quality signal
-              if: always()
+              if: always() && github.ref == 'refs/heads/main'
               uses: ./.github/actions/report-signal
               with:
                   name: evals.nightly.precision
@@ -697,7 +700,7 @@ jobs:
                   VERDICT: ${{ steps.report.outputs.verdict }}
               run: node evals/stage-signals.js --nightly=nightly-report/nightly.json --verdict="$VERDICT" --out=stage-rows-nightly.json
             - name: Report stage signals (finder)
-              if: always()
+              if: always() && github.ref == 'refs/heads/main'
               uses: ./.github/actions/report-signal
               with:
                   rows: stage-rows-nightly.json

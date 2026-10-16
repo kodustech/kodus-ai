@@ -9,6 +9,8 @@
  * defeats the point of the BYOK/env split.
  */
 
+import { servedByOpenAi } from './providers/openai/endpoint';
+
 export type EnvLLMProviderId =
     | 'openai'
     | 'openai_compatible'
@@ -185,6 +187,20 @@ export function describeEnvLLMConfig(
                 vertexLocation: vertexLocation || 'global',
             });
         }
+    }
+
+    // Mirrors managed-slot.ts: an OpenAI reasoning model on OpenAI's own
+    // endpoint is built on the native SDK.
+    if (
+        openaiKey &&
+        servedByOpenAi(envMode, openaiBaseURL || 'https://api.openai.com/v1')
+    ) {
+        return baseDescriptor({
+            configured: true,
+            model: envMode,
+            providerId: 'openai',
+            baseUrl: openaiBaseURL || 'https://api.openai.com/v1',
+        });
     }
 
     if (openaiKey) {

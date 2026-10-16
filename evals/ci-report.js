@@ -432,10 +432,15 @@ function nightlyCompact({ result, verdict, comparison, commits, investigation, p
 
 const T0_ICON = { pass: '✅', broken: '❌', infra: '⚠️', skipped: '➖', missing: '❓' };
 
+// The parts after the review, in the order the check runs them: the PR summary,
+// then each stage the nightly measures, on a few cases (evals/tier0-smoke.js).
+const t0Parts = (r) => [{ label: 'summary', ...(r.prSummary || {}) }, ...(r.evals || []).map((e) => ({ label: e.stage, ...e }))];
+
 function sameFailure(now, before) {
     if (!before) return false;
-    const key = (r) => `${r.status}|${clip(r.reason, 120)}|${r.prSummary?.status}|${clip(r.prSummary?.reason, 120)}`;
-    return now.status !== 'pass' && key(now) === key(before);
+    const key = (r) => [`${r.status}|${clip(r.reason, 120)}`, ...t0Parts(r).map((p) => `${p.status}|${clip(p.reason, 120)}`)].join('|');
+    const failed = [now.status, ...t0Parts(now).map((p) => p.status)].some((s) => s && s !== 'pass' && s !== 'skipped');
+    return failed && key(now) === key(before);
 }
 
 function tier0Line(r, previous) {
@@ -445,15 +450,17 @@ function tier0Line(r, previous) {
         infra: `not reached: ${clip(r.reason, 160)}`,
         missing: 'no result (the job crashed or timed out)',
     }[r.status] || r.status;
-    const summaryStatus = r.prSummary?.status;
-    const summary =
-        summaryStatus === 'pass'
-            ? 'summary ok'
-            : summaryStatus && summaryStatus !== 'skipped' && r.status !== 'missing'
-              ? `summary ${summaryStatus === 'infra' ? 'not reached' : summaryStatus === 'missing' ? 'missing' : 'broken'}`
+    const part = (p) =>
+        p.status === 'pass'
+            ? `${p.label} ok`
+            : p.status && p.status !== 'skipped' && r.status !== 'missing'
+              ? `${p.label} ${p.status === 'infra' ? 'not reached' : p.status === 'missing' ? 'missing' : 'broken'}`
               : null;
     const repeat = sameFailure(r, previous) ? ' _(same as last week)_' : '';
-    return `${T0_ICON[r.status] || '❓'} **${r.model}**: ${[review, summary].filter(Boolean).join(' · ')}${repeat}`;
+    // The model's icon is its worst part, not only the review's.
+    const all = [r.status, ...t0Parts(r).map((p) => p.status)];
+    const worst = r.status === 'missing' ? 'missing' : ['broken', 'infra'].find((s) => all.includes(s)) || r.status;
+    return `${T0_ICON[worst] || '❓'} **${r.model}**: ${[review, ...t0Parts(r).map(part)].filter(Boolean).join(' · ')}${repeat}`;
 }
 
 function tier0Report(models, readResult, env = {}, readPrevious = () => null) {
@@ -462,7 +469,7 @@ function tier0Report(models, readResult, env = {}, readPrevious = () => null) {
         (model) => readResult(model) || { model, status: 'missing', reason: 'no result', prSummary: { status: 'missing' } },
     );
 
-    const outcomes = (r) => [r.status, r.prSummary?.status];
+    const outcomes = (r) => [r.status, ...t0Parts(r).map((p) => p.status)];
     const missing = results.filter((r) => r.status === 'missing');
     const broken = results.filter((r) => !missing.includes(r) && outcomes(r).includes('broken'));
     const unreachable = results.filter((r) => !missing.includes(r) && !broken.includes(r) && outcomes(r).includes('infra'));
@@ -472,7 +479,7 @@ function tier0Report(models, readResult, env = {}, readPrevious = () => null) {
     let status = 'success';
     let verdict = 'pass';
     const parts = [];
-    if (broken.length) parts.push(`${names(broken)} ${broken.length === 1 ? 'no longer reviews' : 'no longer review'}`);
+    if (broken.length) parts.push(`${names(broken)} ${broken.length === 1 ? 'is' : 'are'} broken`);
     if (missing.length) parts.push(`${names(missing)} left no result`);
     if (unreachable.length) parts.push(`could not reach ${names(unreachable)}`);
     if (broken.length || missing.length) {
@@ -485,8 +492,8 @@ function tier0Report(models, readResult, env = {}, readPrevious = () => null) {
     const headline = parts.length
         ? `${ok}/${results.length} ok · ${parts.join(' · ')}`
         : results.length === 1
-          ? `${results[0].model} reviews`
-          : `all ${results.length} models review`;
+          ? `${results[0].model} runs every stage`
+          : `all ${results.length} models run every stage`;
     const title = `${verdict === 'pass' ? '✅' : verdict === 'infra' ? '⚠️' : '❌'} Tier-0: ${headline}`;
 
     const detailedLines = results.map((r) => tier0Line(r, readPrevious(r.model)));
@@ -505,17 +512,20 @@ function tier0Report(models, readResult, env = {}, readPrevious = () => null) {
     const okModels = results.filter((r) => !missing.includes(r) && !broken.includes(r) && !unreachable.includes(r));
     const icon = verdict === 'pass' ? '✅' : verdict === 'infra' ? '⚠️' : '❌';
     const secretFor = (model) =>
-        /^claude/.test(model) ? 'BYOK_ANTHROPIC_API_KEY' : /^gpt/.test(model) ? 'BYOK_OPENAI_API_KEY' : /^gemini/.test(model) ? 'BYOK_GOOGLE_API_KEY' : /^kimi/.test(model) ? 'BYOK_MOONSHOT_API_KEY' : /^glm/.test(model) ? 'BYOK_ZHIPU_API_KEY' : null;
+        /@openrouter$/.test(model) ? 'BYOK_OPENROUTER_API_KEY' : /^claude/.test(model) ? 'BYOK_ANTHROPIC_API_KEY' : /^gpt/.test(model) ? 'BYOK_OPENAI_API_KEY' : /^gemini/.test(model) ? 'BYOK_GOOGLE_API_KEY' : /^kimi/.test(model) ? 'BYOK_MOONSHOT_API_KEY' : /^glm/.test(model) ? 'BYOK_ZHIPU_API_KEY' : null;
     const compactLines = [];
     if (okModels.length) compactLines.push(`✅ ${okModels.map((r) => r.model).join(' · ')}`);
     for (const r of [...broken, ...missing, ...unreachable]) {
-        const reviewBroken = r.status !== 'pass';
-        const raw = r.status === 'missing' ? null : reviewBroken ? r.reason : r.prSummary?.reason;
-        const why = r.status === 'missing' ? 'no result, the job crashed' : `${reviewBroken ? 'review' : 'summary'}: ${shortReason(raw)}`;
+        // The part to name: the first broken one, else the first not reached.
+        const failing = [{ label: 'review', status: r.status, reason: r.reason }, ...t0Parts(r)];
+        const first = failing.find((p) => p.status === 'broken') || failing.find((p) => p.status !== 'pass' && p.status !== 'skipped') || failing[0];
+        const raw = r.status === 'missing' ? null : first.reason;
+        const why = r.status === 'missing' ? 'no result, the job crashed' : `${first.label}: ${shortReason(raw)}`;
         const repeat = sameFailure(r, readPrevious(r.model)) ? ' (same as last week)' : '';
         compactLines.push(`${r.status === 'missing' ? '❓' : broken.includes(r) ? '❌' : '⚠️'} **${r.model}** · ${why}${repeat}`);
         const detail = [];
-        if (raw) detail.push(`\`${clip(raw, 90)}\``);
+        // The raw error only when the short reason above did not already say it.
+        if (raw && shortReason(raw) !== clip(raw, 60)) detail.push(`\`${clip(raw, 90)}\``);
         if (unreachable.includes(r) && secretFor(r.model)) detail.push(`fix \`${secretFor(r.model)}\``);
         if (broken.includes(r)) detail.push('customers on this model are affected');
         if (detail.length) compactLines.push(`   ${detail.join(' → ')}`);
