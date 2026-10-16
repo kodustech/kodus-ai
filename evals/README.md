@@ -35,7 +35,6 @@ Neither trigger is a hand-kept folder list. The wiring smoke records every repo 
 |---|---|---|
 | [finder-recall](investigation/README.md) | Does the finder find a PR's known bugs? | nightly (gated) · PR (scripted model) |
 | [kody-rules](kody-rules/README.md) | Does the Kody Rules agent flag every place a rule is broken? | nightly (gated) · PR (scripted model) · Friday (every tier-0 model, a few cases) |
-| [anchoring](anchoring/README.md) | How many findings are lost because their lines miss the diff? | PR (scripted model) |
 | [pr-summary](pr-summary/README.md) | Is the summary generated, posted, and sent to the configured model? | PR (scripted model) · Friday (every tier-0 model) |
 | [reply-addressing](reply-addressing/README.md) | Does Kody answer unmentioned replies meant for it, and stay out of the rest? | nightly (gated) · PR (scripted model) · Friday (every tier-0 model, a few cases) |
 | [review-rounds](review-rounds/README.md) | Across rounds and sandbox failures, does what reaches the PR match a correct review? | nightly (gated) · PR (scripted model) · Friday (every tier-0 model, a few cases) |
@@ -47,7 +46,7 @@ Neither trigger is a hand-kept folder list. The wiring smoke records every repo 
 | [trace-context](trace-context/README.md) | Do recorded Trace decisions help without talking the reviewer out of real bugs? | on demand |
 | [structured-outputs](structured-outputs/README.md) | Does each provider get structured output only where it works? | on demand |
 | [scorer](scorer/README.md) | Re-score a saved submission without re-running the model | tool |
-| [secondary](secondary/README.md) | Shared datasets and model registry for dedup/severity/format | data |
+| [secondary](secondary/README.md) | Shared datasets for dedup/severity/format | data |
 | [results](results/README.md) | What past runs measured, per model and config (hand-recorded ledger) | data |
 
 Which review stage each eval covers, and the stages no eval covers, is in `evals/stages.js`. Every night each stage reaches the quality panel as `evals.stage.<stage>` (`evals/stage-signals.js`): the finder with its recall against the floor, the others with whether their eval still runs.
