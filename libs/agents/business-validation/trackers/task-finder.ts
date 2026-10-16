@@ -196,7 +196,9 @@ export function aiSdkAgentRun(
 ): AgentRun {
     return async (spec, prompt) => {
         const { ctx, cleanup } = createAgentRunContext({
-            runId: 'business-rules:task-finder',
+            // The finder, the picked-tool reader and the gap check share this
+            // runner: each run is named after its own phase in the trace.
+            runId: `business-rules:${spec.phase ?? 'task-finder'}`,
             timeoutMs: TIMEOUT_MS,
         });
         try {
