@@ -38,7 +38,13 @@ import { normalizeSdkResult, normalizeSdkUsage } from '../kernel/usage';
 import { isOpenCodeGoBaseUrl, openCodeSessionId } from '@libs/llm/opencode-go';
 import { effortFromOutputConfig } from '../kernel/override-wire-spelling';
 
-
+/** A real Claude id proxied over `anthropic_compatible` is still a Claude, so
+ *  its reasoning traits and temperature come from the native resolver — the
+ *  same check `reasoning()` makes. Kimi/GLM/DeepSeek ids resolve to `unknown`
+ *  (the resolver is anchored on `^claude-`) and keep the compatible table. */
+function isClaudeId(model?: string): boolean {
+    return resolveAnthropicModelTraits(model).generation !== 'unknown';
+}
 
 /** Claude families that support the newer adaptive thinking (type:'adaptive'
  *  + effort); older families use enabled + budgetTokens. Delegates to the
@@ -261,7 +267,10 @@ export const anthropicModule: ProviderModule = {
     // Per-model reasoning facts — native Claude from its own trait resolver;
     // anthropic_compatible (Kimi/GLM/DeepSeek/unknown) from the shared table.
     reasoningTraits(cfg: ProviderBuildConfig): ModelReasoningTraits {
-        if ((cfg.provider as string) === 'anthropic_compatible') {
+        if (
+            (cfg.provider as string) === 'anthropic_compatible' &&
+            !isClaudeId(cfg.model)
+        ) {
             return resolveCompatibleReasoningTraits(cfg.model);
         }
         const t = resolveAnthropicModelTraits(cfg.model);
@@ -309,7 +318,10 @@ export const anthropicModule: ProviderModule = {
         // k2.7-code/k3, GLM-5.3) reason UNCONDITIONALLY, and the Anthropic protocol
         // pins temperature to 1 while thinking, so 1 is their only sound value.
         // Disable-able ones (Kimi k2.6, DeepSeek) keep a free temperature.
-        if ((cfg.provider as string) === 'anthropic_compatible') {
+        if (
+            (cfg.provider as string) === 'anthropic_compatible' &&
+            !isClaudeId(cfg.model)
+        ) {
             return compatibleTemperaturePolicy(cfg.model, cfg.reasoningEffort);
         }
         // Real Anthropic: 4.7+ REJECT temperature (a 400); older accept it. Native
