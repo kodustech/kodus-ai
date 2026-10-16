@@ -16,6 +16,7 @@ const path = require('path');
 const INV = path.join(__dirname, '..', '..', '..', 'investigation');
 const { buildModel } = require(path.join(INV, 'eval-model'));
 const { chamadaEstruturada } = require(path.join(INV, 'eval-structured'));
+const { medir, registra } = require(path.join(INV, '..', 'shared', 'usage-meter'));
 
 const arg = (n, d) => { const h = process.argv.slice(2).find((a) => a.startsWith(`--${n}=`)); return h ? h.split('=').slice(1).join('=') : d; };
 const PREFIXO = arg('prefixo', '09.10.26');
@@ -207,7 +208,12 @@ When unsure, answer "keep".`,
         while (i < tarefas.length) {
             const t = tarefas[i++];
             try {
-                const r = await retry(async () => { const x = await chamadaEstruturada({ model, modelId: MODELO, nome: 'submit', schema: SCHEMA, prompt: PROMPTS[PROMPT](t.s, t.g) }); if (!(PROMPT === 'f1' ? ['remove', 'keep'] : ['contradicts', 'argues']).includes(x.dados?.kind)) throw new Error('sem resposta'); return x; });
+                // Tokens e tempo de cada chamada; por PR, os tokens somam e o tempo e o da mais lenta
+                // (as chamadas de um PR sao independentes e podem correr em paralelo).
+                const { valor: r, uso } = await medir(() => retry(async () => { const x = await chamadaEstruturada({ model, modelId: MODELO, nome: 'submit', schema: SCHEMA, prompt: PROMPTS[PROMPT](t.s, t.g) }); registra(x.usage); if (!(PROMPT === 'f1' ? ['remove', 'keep'] : ['contradicts', 'argues']).includes(x.dados?.kind)) throw new Error('sem resposta'); return x; }));
+                const up = res.prs[t.cid].uso || (res.prs[t.cid].uso = { chamadas: 0, input: 0, cacheRead: 0, output: 0, reasoning: 0, ms: 0 });
+                for (const k of ['chamadas', 'input', 'cacheRead', 'output', 'reasoning']) up[k] += uso[k];
+                up.ms = Math.max(up.ms, uso.ms);
                 t.g.etapa2 = r.dados; t.g.nit = r.dados.kind === (PROMPT === 'f1' ? 'remove' : 'contradicts');
             } catch (e) { erros++; t.g.etapa2 = { erro: String(e?.message || e) }; }
         }

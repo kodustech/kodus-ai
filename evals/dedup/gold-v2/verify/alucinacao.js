@@ -20,6 +20,7 @@ const { buildModel, descreveModelo } = require(path.join(INV, 'eval-model'));
 const { extraiJson, chamadaEstruturada } = require(path.join(INV, 'eval-structured'));
 const { prepareRepo } = require(path.join(INV, 'prepare-repo'));
 const { LocalRepoCommands } = require(path.join(INV, 'local-repo-commands'));
+const { medir, registra } = require(path.join(INV, '..', 'shared', 'usage-meter'));
 
 const arg = (n, d) => { const h = process.argv.slice(2).find((a) => a.startsWith(`--${n}=`)); return h ? h.split('=').slice(1).join('=') : d; };
 // --prefixo: outro conjunto de PRs (ex.: holdout) no lugar do light de 09/10.
@@ -324,6 +325,7 @@ async function julgaSdk(s, dir, cmd) {
         })) {
             if (msg.type === 'assistant') { turnos++; for (const b of msg.message.content || []) if (b.type === 'text') saida += b.text + '\n'; }
             if (msg.type === 'result' && msg.result) saida += '\n' + msg.result;
+            if (msg.type === 'result') registra(msg.usage);
         }
     } catch (e) {
         if (!saida) throw e;
@@ -350,6 +352,7 @@ async function julga(model, cmd, s, diff) {
                 messages: [...messages, { role: 'user', content: 'This is your final step. Call submit now, from what you already know.' }] }
             : undefined,
     });
+    registra(r.totalUsage || r.usage);
     return { ...normaliza(resp || extraiJson(r.text || ''), s), passos: r.steps?.length ?? 0 };
 }
 
@@ -368,7 +371,7 @@ async function julga(model, cmd, s, diff) {
     const fila = Object.keys(sug).filter((c) => (!SO_PRS || SO_PRS.has(c)) && (!res.prs[c] || res.prs[c].erro));
     let i = 0;
     const um = async (cid) => {
-        let h, cmdPr;
+        let h, cmdPr, usoPr = null;
         try {
             const caiu = new Set(APOS ? (APOS[cid]?.grupos || []).filter((g) => g.nit).map((g) => g.rep) : []);
             const gs = grupos(sug[cid].suggestions, fin[cid], real[cid].idsEntradaDedup || []).filter((g) => !caiu.has(g.rep));
@@ -386,15 +389,16 @@ async function julga(model, cmd, s, diff) {
                 }
                 const diff = '';
                 let j = 0;
-                await Promise.all(Array.from({ length: 4 }, async () => {
+                // Tokens e tempo do julgamento do PR (sem a preparacao do repo).
+                usoPr = (await medir(() => Promise.all(Array.from({ length: 4 }, async () => {
                     while (j < gs.length) {
                         const k = j++;
                         const v = await retry(() => julga(model, cmd, gs[k].s, diff));
                         out[k] = { rep: gs[k].rep, membros: gs[k].membros, ...v };
                     }
-                }));
+                })))).uso;
             }
-            res.prs[cid] = { grupos: out };
+            res.prs[cid] = { grupos: out, uso: usoPr };
             console.log(`  ${cid.slice(0, 46).padEnd(48)} ${gs.length} comentarios, ${out.filter((x) => x.nit).length} nit`);
         } catch (e) {
             res.prs[cid] = { erro: String(e?.message || e).slice(0, 300) };

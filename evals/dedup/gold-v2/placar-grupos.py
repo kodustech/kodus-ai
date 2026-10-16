@@ -43,10 +43,14 @@ if 'nit' in o:
 total = gold = fp = n = 0
 for cid, x in m.items():
     gs = x['goldens']
+    if cid not in sug:
+        continue  # PR fora da rodada (ex.: --prs com um subconjunto)
     total += sum(1 for g in gs if g.get('category') in CORE)
     if cid not in sug or cid not in real or real[cid].get('erro'):
         continue
-    col = {f'S{i + 1}': j for i, j in enumerate(k for k, c in enumerate(x['candidatos']) if tec(c.get('producedBy')))}
+    # coluna da matriz = indice do candidato no finder (finderIndex); sem ele, a ordem G/M3 do build.
+    col = ({s['id']: s['finderIndex'] for s in sug[cid]['suggestions']} if cid in sug and all('finderIndex' in s for s in sug[cid]['suggestions'])
+           else {f'S{i + 1}': j for i, j in enumerate(k for k, c in enumerate(x['candidatos']) if tec(c.get('producedBy')))})
     S = {s['id']: s for s in sug[cid]['suggestions']}
     chegou = set(real[cid].get('idsEntradaDedup') or [])
     por, grupos = {}, []

@@ -22,6 +22,7 @@ require('tsconfig-paths/register');
 const fs = require('fs');
 const path = require('path');
 const { runDedup } = require('../dedup-runner');
+const { medir, instalaNoLLM } = require('../../shared/usage-meter');
 const { buildModel } = require('../../investigation/eval-model');
 const { TIER0 } = require('../../shared/tier0-models');
 const { mapAgentFindings } = require('@libs/code-review/infrastructure/agents/collaborators/finding-mapper');
@@ -75,6 +76,7 @@ const LABEL_POLICY = { categoryLabel: 'generalist', allowedLabels: ['bug', 'secu
 const conta = (lista) => lista.reduce((m, s) => { for (const k of Object.keys(s)) m[k] = (m[k] || 0) + 1; return m; }, {});
 
 (async () => {
+    instalaNoLLM();
     const assinatura = !SO_ANCHORING && ['codex_subscription', 'claude_agent_sdk'].includes(TIER0[MODELO]?.provider);
     const prebuilt = assinatura ? buildModel(MODELO) : undefined;
     // --prs: lista de PRs (json) no lugar do light-30.
@@ -122,7 +124,10 @@ const conta = (lista) => lista.reduce((m, s) => { for (const k of Object.keys(s)
                 idEntrada.push(idParse[j]);
             });
             const op = { guard: 'record', prebuiltModel: prebuilt };
-            const r = SO_ANCHORING || !entrada.length ? { groups: [], unique: [], unmentioned: [] } : await runDedup(entrada, MODELO, op);
+            // Tokens e tempo do dedup (as duas chamadas: principal e follow-up).
+            const { valor: r, uso } = SO_ANCHORING || !entrada.length
+                ? { valor: { groups: [], unique: [], unmentioned: [] }, uso: null }
+                : await medir(() => runDedup(entrada, MODELO, op));
             const id = (k) => idEntrada[k];
             const promptDedup = buildDedupPrompt(entrada);
             res.prs[cid] = {
@@ -144,6 +149,7 @@ const conta = (lista) => lista.reduce((m, s) => { for (const k of Object.keys(s)
                 followup: r.followup ? { leftOut: r.followup.leftOut.map(id), stillLeftOut: (r.followup.stillLeftOut || []).map(id), ...(r.followup.erro ? { erro: r.followup.erro } : {}) } : null,
                 pares: (op.pairs || []).map((p) => ({ dup: id(p.idx), keep: id(p.keptInto), lex: p.lex, cos: p.cos, tb: p.tb })),
                 campos5: LEAN_FINDER_FIELDS,
+                uso,
             };
         } catch (e) {
             res.prs[cid] = { erro: String(e?.message || e).slice(0, 300) };

@@ -5,7 +5,9 @@
  * por modelo, com ids S1..Sn por PR na ordem do finder.
  *
  *   node evals/dedup/gold-v2/build.js
- *   node evals/dedup/gold-v2/build.js --prefixo=<rotulo> --prs=<lista.json> --pools=<model>:<pool>,...
+ *   node evals/dedup/gold-v2/build.js --prefixo=<rotulo> --prs=<lista.json> --pools=<model>:<pool>,... [--tec=G|M3|G,M3]
+ *
+ * --tec: so as sugestoes dessas tecnicas (light mode = G, so o generalista).
  */
 const fs = require('fs');
 const path = require('path');
@@ -21,6 +23,7 @@ const MODELOS_LIGHT = {
 };
 const MODELOS = arg('pools') ? Object.fromEntries(arg('pools').split(',').map((x) => x.split(':'))) : MODELOS_LIGHT;
 const tecnica = (pb) => (pb === 'generalist-base' ? 'G' : String(pb || '').startsWith('micro-exp-p3-') ? 'M3' : null);
+const TEC = arg('tec', 'G,M3').split(',');
 const L30 = JSON.parse(fs.readFileSync(arg('prs', path.join(INV, 'light-30.json')), 'utf8'));
 
 for (const [model, pool] of Object.entries(MODELOS)) {
@@ -30,7 +33,7 @@ for (const [model, pool] of Object.entries(MODELOS)) {
         const raw = JSON.parse(fs.readFileSync(path.join(INV, 'pools', pool, `${caseId}.raw.txt`), 'utf8'));
         const cs = (raw.trace.preFilterCandidates || [])
             .map((c, k) => ({ c, k }))
-            .filter(({ c }) => tecnica(c.producedBy));
+            .filter(({ c }) => TEC.includes(tecnica(c.producedBy)));
         prs[caseId] = {
             suggestions: cs.map(({ c, k }, i) => ({
                 id: `S${i + 1}`,
