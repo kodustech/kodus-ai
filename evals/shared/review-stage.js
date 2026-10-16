@@ -159,9 +159,10 @@ function observeTheRuleAgent() {
 
 // The Kody Rules collection of one org, held in memory: the repository
 // KodyRulesService writes to and reads from (KODY_RULES_REPOSITORY_TOKEN).
-function kodyRulesRepository() {
+function kodyRulesRepository(rules = []) {
     const { KodyRulesEntity } = lib('kodyRules/domain/entities/kodyRules.entity.ts');
-    let doc = null;
+    // The team's stored Kody Rules, as the save path leaves them (`rules`).
+    let doc = rules.length ? { uuid: `eval-kody-rules-${EVAL_ORG.organizationId}`, organizationId: EVAL_ORG.organizationId, rules } : null;
     return {
         findByOrganizationId: async (organizationId) => (doc && doc.organizationId === organizationId ? KodyRulesEntity.create(doc) : null),
         create: async (kodyRules) => {
@@ -186,7 +187,7 @@ function kodyRulesRepository() {
  * `memories`: [{ title, rule, path? }] as the member wrote them, for every
  * repository ('global').
  */
-async function teamStore({ language, memories = [], codeReviewConfig = null }, permissionService) {
+async function teamStore({ language, memories = [], rules = [], codeReviewConfig = null }, permissionService) {
     const { ParametersKey } = lib('core/domain/enums/parameters-key.enum.ts');
     const { KodyRulesService } = lib('ee/kodyRules/service/kodyRules.service.ts');
     const { KodyRulesValidationService } = lib('ee/kodyRules/service/kody-rules-validation.service.ts');
@@ -203,7 +204,7 @@ async function teamStore({ language, memories = [], codeReviewConfig = null }, p
         },
     };
     const kodyRulesService = new KodyRulesService(
-        kodyRulesRepository(),
+        kodyRulesRepository(rules),
         // The audit log's event bus.
         { emit: () => true },
         undefined,
@@ -429,7 +430,7 @@ async function teamContext({ team = {}, route, permissionService }) {
  *   { repo, number, title, body, headRef, headSha, baseRef, baseSha, files, commits,
  *     repoFiles?, repoBase? (a repository written for the eval, its head and
  *     base trees, instead of `repo`; `files` then come from filesBetween) }
- * `team`: { language, memories, codeReviewConfig } as the team set them.
+ * `team`: { language, memories, rules, codeReviewConfig } as the team set them (rules as the save path stores them).
  * Returns the context, the repository to check out, the platform, and the
  * cleanup of a repository written for the eval.
  */
