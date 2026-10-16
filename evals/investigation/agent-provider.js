@@ -886,3 +886,5 @@ class InvestigationAgentProvider {
 module.exports = InvestigationAgentProvider;
 // For the specs: how a case reaches production's loop.
 module.exports.internals = { resolveRoute, evalPermissionService, changedFilesOf, reviewOptionsFromEnv, combineLoops, NotAProductionRoute };
+// The dataset's recorded tools, for evals that run a part of the finder on the same PR (evals/funnel/verify).
+module.exports.ReplayRemoteCommands = ReplayRemoteCommands;

@@ -81,6 +81,15 @@ const NIGHTLY_EVALS = [
         files: ['evals/conversation/targets.json'],
         friday: ['--limit=4'],
     },
+    // The stages after the finder, on its frozen candidates (evals/funnel):
+    // ungated until the relabeled dataset lands (#2114).
+    ...['anchoring', 'dedup', 'severity', 'verify'].map((stage) => ({
+        id: `funnel-${stage}`,
+        stage,
+        run: [`evals/funnel/${stage}/run.js`],
+        files: [`evals/funnel/${stage}/targets.json`, 'evals/funnel/known-bugs.js'],
+        friday: ['--limit=4'],
+    })),
     {
         id: 'memories',
         stage: 'memories',

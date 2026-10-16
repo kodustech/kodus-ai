@@ -78,6 +78,9 @@ function readJson(file) {
     }
 }
 
+// A PR of the frozen snapshot with several findings, one of them a known bug.
+const FUNNEL_CASE = 'add-guest-management-functionality-to-existing-bookings-cal-com';
+
 async function main() {
     const engineFilesOut = (process.argv.find((a) => a.startsWith('--engine-files=')) || '').split('=')[1];
     const kodyRulesFilesOut = (process.argv.find((a) => a.startsWith('--kody-rules-files=')) || '').split('=')[1];
@@ -121,6 +124,13 @@ async function main() {
         { name: 'format', model: true, args: ['evals/format/run.js', '--model=eval-fake', '--gate'] },
         // The cases bring their repository: the scripted model reads it through the local sandbox.
         { name: 'memories', model: true, args: ['evals/memories/run.js', '--model=eval-fake', '--gate'] },
+        // The stages after the finder on its frozen candidates (evals/funnel), on
+        // one PR whose findings reach every stage (dedup needs two or more).
+        // Anchoring calls no model. Each name is written out: the specs read them.
+        { name: 'funnel-anchoring', args: ['evals/funnel/anchoring/run.js', '--gate', `--cases=${FUNNEL_CASE}`] },
+        { name: 'funnel-dedup', model: true, args: ['evals/funnel/dedup/run.js', '--model=eval-fake', '--gate', `--cases=${FUNNEL_CASE}`] },
+        { name: 'funnel-severity', model: true, args: ['evals/funnel/severity/run.js', '--model=eval-fake', '--gate', `--cases=${FUNNEL_CASE}`] },
+        { name: 'funnel-verify', model: true, args: ['evals/funnel/verify/run.js', '--model=eval-fake', '--gate', `--cases=${FUNNEL_CASE}`] },
         {
             name: 'finder-recall',
             model: true,
