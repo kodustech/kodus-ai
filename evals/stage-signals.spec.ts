@@ -128,38 +128,42 @@ describe('stage-signals', () => {
         expect(posting?.meta).toMatchObject({ name: 'Posting', group: 'On the PR' });
     });
 
-    // review-rounds is the stage the smoke alone reports: every other one with a
-    // scheduled eval has its row from the nightly.
+    // Every stage with a scheduled eval reports from the nightly today, so the
+    // smoke's own rows are checked on a stage of their own, next to a real one
+    // the smoke does not run.
+    const wired = { id: 'wired', name: 'Wired', group: 'Finding issues', label: 'A stage only the wiring smoke reports', pipeline: null, eval: null, model: 'scripted', wiring: ['wired-a', 'wired-b'] };
+    const stages = [wired, ...(STAGES as Stage[]).filter((s) => s.id === 'posting')];
+    const steps = ['wired-a', 'wired-b'];
+
     it('turns a failed step red and a step that did not run into infra', () => {
-        const failed = allOk(wiringSteps).map((r) => (r.step === 'review-lifecycle' ? { ...r, ok: false, problem: 'exit 1' } : r));
-        const rounds = wiringRows(failed).find((r: Row) => r.name === 'evals.stage.review-rounds');
-        expect(rounds?.status).toBe('red');
-        expect(rounds?.meta.reason).toBe('review-lifecycle: exit 1');
-        const missing = allOk(wiringSteps.filter((step) => !['review-rounds', 'review-lifecycle'].includes(step)));
-        expect(wiringRows(missing).find((r: Row) => r.name === 'evals.stage.review-rounds')?.status).toBe('infra');
-        expect(wiringRows(null).find((r: Row) => r.name === 'evals.stage.review-rounds')?.status).toBe('infra');
+        const failed = allOk(steps).map((r) => (r.step === 'wired-b' ? { ...r, ok: false, problem: 'exit 1' } : r));
+        const row = wiringRows(failed, stages).find((r: Row) => r.name === 'evals.stage.wired');
+        expect(row?.status).toBe('red');
+        expect(row?.meta.reason).toBe('wired-b: exit 1');
+        expect(wiringRows(allOk(['wired-a']), stages).find((r: Row) => r.name === 'evals.stage.wired')?.status).toBe('infra');
+        expect(wiringRows(null, stages).find((r: Row) => r.name === 'evals.stage.wired')?.status).toBe('infra');
+        expect(wiringRows(allOk(steps), stages).find((r: Row) => r.name === 'evals.stage.wired')?.status).toBe('green');
     });
 
     it('turns every wired stage into infra when the smoke fails a check no stage owns', () => {
-        const results = [...allOk(wiringSteps), { step: 'pr-paths-filter', ok: false, problem: 'incomplete trace', ms: 0, calls: 0 }];
-        const rows: Row[] = wiringRows(results);
-        for (const stage of scheduled) expect(rows.find((r) => r.name === `evals.stage.${stage.id}`)?.status).toBe('infra');
-        expect(rows.find((r) => r.name === 'evals.stage.review-rounds')?.meta).toMatchObject({
-            reason: 'wiring smoke failed: pr-paths-filter: incomplete trace',
-            harness: 'wiring smoke failed: pr-paths-filter: incomplete trace',
+        const results = [...allOk(steps), { step: 'pr-paths-filter', ok: false, problem: 'incomplete trace', ms: 0, calls: 0 }];
+        const rows: Row[] = wiringRows(results, stages);
+        expect(rows.find((r) => r.name === 'evals.stage.wired')).toMatchObject({
+            status: 'infra',
+            meta: { reason: 'wiring smoke failed: pr-paths-filter: incomplete trace', harness: 'wiring smoke failed: pr-paths-filter: incomplete trace' },
         });
         expect(rows.find((r) => r.name === 'evals.stage.posting')?.status).toBe('skipped');
-        expect(wiringRows([...allOk(wiringSteps), { step: 'pr-paths-filter', ok: true, problem: null }]).find((r: Row) => r.name === 'evals.stage.review-rounds')?.status).toBe('green');
+        expect(wiringRows([...allOk(steps), { step: 'pr-paths-filter', ok: true, problem: null }], stages).find((r: Row) => r.name === 'evals.stage.wired')?.status).toBe('green');
     });
 
     it("keeps a stage's own failure red on a night the smoke also failed its own check", () => {
         const results = [
-            ...allOk(wiringSteps).map((r) => (r.step === 'review-lifecycle' ? { ...r, ok: false, problem: 'exit 1' } : r)),
+            ...allOk(steps).map((r) => (r.step === 'wired-b' ? { ...r, ok: false, problem: 'exit 1' } : r)),
             { step: 'pr-paths-filter', ok: false, problem: 'incomplete trace', ms: 0, calls: 0 },
         ];
-        const rounds = wiringRows(results).find((r: Row) => r.name === 'evals.stage.review-rounds');
-        expect(rounds?.status).toBe('red');
-        expect(rounds?.meta).toMatchObject({ reason: 'review-lifecycle: exit 1', failed: ['review-lifecycle'], harness: 'wiring smoke failed: pr-paths-filter: incomplete trace' });
+        const row = wiringRows(results, stages).find((r: Row) => r.name === 'evals.stage.wired');
+        expect(row?.status).toBe('red');
+        expect(row?.meta).toMatchObject({ reason: 'wired-b: exit 1', failed: ['wired-b'], harness: 'wiring smoke failed: pr-paths-filter: incomplete trace' });
     });
 
     it('reports the finder from the nightly: recall against the floor, status from the verdict', () => {
