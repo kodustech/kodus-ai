@@ -46,7 +46,7 @@ const { ConversationAgentProvider } = require('../../libs/agents/infrastructure/
 const { readDecision } = require('../../libs/agents/infrastructure/services/agents/conversation/conversation-decision.ts');
 const { PermissionValidationService } = require('../../libs/ee/shared/services/permissionValidation.service.ts');
 const { ParametersService } = require('../../libs/organization/infrastructure/adapters/services/parameters.service.ts');
-const { LocalSandboxService } = require('../../libs/sandbox/infrastructure/providers/local-sandbox.service.ts');
+const { LocalSandboxService, sandboxEnv } = require('../../libs/sandbox/infrastructure/providers/local-sandbox.service.ts');
 const { AiSdkAgentRunner } = require('../../libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner.ts');
 
 // The run state of each case, to read the decision the agent declared: the
@@ -70,7 +70,9 @@ function writeRepo(files) {
         fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
         fs.writeFileSync(path.join(dir, file), content);
     }
-    const git = (...a) => execFileSync('git', ['-C', dir, ...a], { stdio: 'ignore', env: { ...process.env, GIT_AUTHOR_NAME: 'dev', GIT_AUTHOR_EMAIL: 'dev@example.com', GIT_COMMITTER_NAME: 'dev', GIT_COMMITTER_EMAIL: 'dev@example.com' } });
+    // sandboxEnv drops GIT_DIR and the other variables that outrank -C: run from
+    // a git hook, git would otherwise work on the caller's repository.
+    const git = (...a) => execFileSync('git', ['-C', dir, ...a], { stdio: 'ignore', env: sandboxEnv({ GIT_AUTHOR_NAME: 'dev', GIT_AUTHOR_EMAIL: 'dev@example.com', GIT_COMMITTER_NAME: 'dev', GIT_COMMITTER_EMAIL: 'dev@example.com' }) });
     git('init', '-q', '-b', 'feature');
     git('add', '-A');
     git('commit', '-q', '-m', 'head of the pull request');
