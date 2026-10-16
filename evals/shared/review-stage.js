@@ -516,7 +516,9 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
     if (observeSteps) observeTheReview();
     // `decisions`: the PR's decision store, the suggestions earlier rounds posted
     // (PrDecisionRecord), read by LoadExternalContextStage and the repeat check.
-    const decisionsUseCase = previousDecisionsUseCase || (decisions ? decisionStore(decisions) : undefined);
+    // Every review loads it, as LoadExternalContextStage does in production; an
+    // empty store changes nothing in the prompts (checked on the finder's case).
+    const decisionsUseCase = previousDecisionsUseCase || decisionStore(decisions || []);
     const { context, repo, codeManagement } = await prepareReview({ pr, team, route, permissionService, previousDecisions, previousDecisionsUseCase: decisionsUseCase });
     if (!context.changedFiles?.length) {
         await repo.cleanup();
