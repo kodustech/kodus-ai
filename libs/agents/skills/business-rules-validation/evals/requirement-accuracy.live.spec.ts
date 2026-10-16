@@ -52,6 +52,8 @@ type Case = {
     };
     diff: string;
     gold: Gold[];
+    /** The task states only the gold: any other requirement is invented (#1725). */
+    onlyGold?: boolean;
     /** The diff changes something the task doesn't ask for. */
     expectsOutOfScope?: boolean;
 };
@@ -105,6 +107,30 @@ const badgeDiff = (condition: string[]) =>
 
 const CASES: Case[] = [
     {
+        // #1725: the comment listed requirements the ticket never stated.
+        name: 'thin task: judges only what it says, invents nothing',
+        language: 'en-US',
+        task: {
+            id: 'OPS-31',
+            title: 'Add a retry to the export job',
+            description:
+                'The nightly export fails on a flaky network. Retry it.',
+            acceptanceCriteria: [
+                'The export job retries a failed upload up to 3 times',
+            ],
+        },
+        diff: file('src/jobs/export.ts', [
+            "+import { upload } from './upload';",
+            '+export async function runExport(rows: string[]) {',
+            '+  for (let attempt = 1; attempt <= 3; attempt++) {',
+            '+    try { return await upload(rows); } catch (e) { if (attempt === 3) throw e; }',
+            '+  }',
+            '+}',
+        ]),
+        gold: [{ match: 'retries', accept: ['met'] }],
+        onlyGold: true,
+    },
+    {
         name: 'density: one missing, one visual, one change not in the task',
         language: 'en-US',
         task: DENSITY_TASK,
@@ -131,6 +157,7 @@ const CASES: Case[] = [
         expectsOutOfScope: true,
     },
     {
+        // #2019: a compliant PR was recorded as a gap.
         name: 'badge: every criterion met',
         language: 'pt-BR',
         task: BADGE_TASK,
@@ -295,16 +322,37 @@ async function judge(c: Case): Promise<ValidationResult> {
 
 function score(c: Case, result: ValidationResult) {
     const requirements = result.requirements ?? [];
-    return c.gold.map((gold) => {
-        const found = requirements.find((r) =>
-            r.requirement.toLowerCase().includes(gold.match.toLowerCase()),
-        );
-        return {
-            match: gold.match,
-            state: found?.state ?? 'not listed',
-            right: found ? gold.accept.includes(found.state) : !!gold.absentOk,
-        };
-    });
+    const invented = c.onlyGold
+        ? requirements
+              .filter(
+                  (r) =>
+                      !c.gold.some((g) =>
+                          r.requirement
+                              .toLowerCase()
+                              .includes(g.match.toLowerCase()),
+                      ),
+              )
+              .map((r) => ({
+                  match: `invented: ${r.requirement}`,
+                  state: r.state,
+                  right: false,
+              }))
+        : [];
+    return [
+        ...invented,
+        ...c.gold.map((gold) => {
+            const found = requirements.find((r) =>
+                r.requirement.toLowerCase().includes(gold.match.toLowerCase()),
+            );
+            return {
+                match: gold.match,
+                state: found?.state ?? 'not listed',
+                right: found
+                    ? gold.accept.includes(found.state)
+                    : !!gold.absentOk,
+            };
+        }),
+    ];
 }
 
 (RUN ? describe : describe.skip)(
