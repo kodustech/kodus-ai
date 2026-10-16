@@ -4,16 +4,17 @@
         "eval-fake (the wiring smoke, every PR): deterministic, since prose recovery returns a finding on no changed file and the rest replays recorded output. Two runs of main 4b5c881cd gave the same count on every case. floor = observed rounded down to 3 decimals, so a PR that loses one more finding fails.",
         "Under it, main loses every finding in 10 of the 12 #2112 shapes that need no model call (shapes.js), which is why the value is low; the fix for #2112 raises it.",
         "deepseek-v4-flash@fireworks (the nightly model; prose recovery is the only part that varies): calibrated 2026-10-15 from 2 local runs on 4b5c881cd, 377 and 369 of 830 (mean 44.9%). floor = mean - 2 binomial SE over the 830 findings, rounded down, like evals/reply-addressing/targets.json.",
+        "2026-10-16: a run end with no call and no text (3 of them) now counts as a check that nothing comes out. Recovery skips an empty end without a model call (looksLikeFindings, libs/code-review/infrastructure/agents/core/finder.agent.ts:442), so each passes on every model. eval-fake: two runs, 334 of 833 each. deepseek: the runs above become 380 and 372 of 833 (mean 45.1%); the floor stays.",
         "RATCHET: a PR that moves the value on purpose (a parse fix, payloads recorded again, new labels) recalibrates here in the same PR, with its runs as evidence."
     ],
     "models": {
         "eval-fake": {
-            "floor": 0.398,
-            "observed": 0.3988
+            "floor": 0.4,
+            "observed": 0.401
         },
         "deepseek-v4-flash@fireworks": {
             "floor": 0.41,
-            "observed": 0.449
+            "observed": 0.451
         }
     }
 }

@@ -192,7 +192,9 @@ async function runCase(c) {
             const payload = end.submitResult === undefined ? undefined : asArtifact(end.submitResult);
             const label = LABELS[`${c.payload}#${i}`];
             const list = payloadOf(end)?.suggestions;
-            const wroteNone = label ? !label.findings.length : Array.isArray(list) && !list.length;
+            // An end with no call and no text wrote nothing either.
+            const empty = end.submitResult === undefined && !String(end.text || '').trim();
+            const wroteNone = label ? !label.findings.length : (Array.isArray(list) && !list.length) || empty;
             // The run end in each item: the nightly pools two runs item by item.
             const items = await replay(payload, end.text, label ? label.findings : written(payloadOf(end)), SHAPES['as-sent'], files, wroteNone);
             detail.push(...items.map((d) => ({ ...d, what: `run end ${i}: ${d.what}` })));

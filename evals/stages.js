@@ -36,7 +36,8 @@
 //              (stage-signals.js READERS); its row then comes only from the
 //              nightly, never from the wiring smoke
 //   metric   — what the measured number counts, shown under it
-//   set      — what the model reviews to produce it
+//   set      — what the model reviews to produce it. The panel reads it after
+//              "<model> reviews <cases>", so it starts with a plural noun
 //   caveat   — what a green number does not prove
 //   friday   — when the Friday check (evals/tier0-smoke.js) runs it on every
 //              tier-0 model: the key of its outcome in that check's
@@ -115,7 +116,7 @@ const STAGES = [
         nightly: 'shared',
         friday: 'parse',
         metric: 'of written findings handled right by the parse',
-        set: 'how nine production models ended their finder runs on public PRs, and the shapes production lost (#2112)',
+        set: 'recorded finder outputs from nine production models on public PRs, with the shapes production lost (#2112)',
         caveat: 'Replays recorded model output: a model that changes how it writes its findings shows here once its runs are recorded again (evals/parse/capture.js).',
         byHand: ['evals/parser', 'evals/structured-outputs'],
         note: 'every PR against the scripted model (the deterministic part); nightly on the real model when the parse or its payloads change',

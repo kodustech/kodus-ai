@@ -14,7 +14,7 @@ function catalog() {
     return [...groups].map(([id, g]) => {
         const checks =
             g.shape === 'as-sent'
-                ? `Keeps every postable finding ${g.model} wrote on ${g.count} PR${g.count === 1 ? '' : 's'} as it sent them, and adds none to a run that wrote none`
+                ? `Keeps every postable finding ${g.model} wrote on ${g.count} PR${g.count === 1 ? '' : 's'}, and invents none`
                 : `${SHAPES[g.shape].checks()}, on ${g.count} model${g.count === 1 ? '' : 's'}' output`;
         return { id, group: g.shape === 'as-sent' ? 'as sent' : 'shape', count: g.count, checks: checks.length > 160 ? `${checks.slice(0, 159)}…` : checks };
     });

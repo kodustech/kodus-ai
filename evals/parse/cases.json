@@ -1,7 +1,7 @@
 [
     {
         "id": "minimax-m3@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
-        "checks": "Keeps every postable finding minimax-m3@openrouter wrote on anonymous-add-configurable-device-limit-grafana-codex as it sent them, and adds none to a run that w",
+        "checks": "Keeps every postable finding minimax-m3@openrouter wrote on anonymous-add-configurable-device-limit-grafana-codex, and invents none",
         "payload": "payloads/minimax-m3@openrouter/anonymous-add-configurable-device-limit-grafana-codex.json",
         "shape": "as-sent",
         "prose": true
@@ -80,193 +80,193 @@
     },
     {
         "id": "claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com",
-        "checks": "Keeps every postable finding claude-sonnet-4-6 wrote on add-guest-management-functionality-to-existing-bookings-cal-com as it sent them, and adds none to a run ",
+        "checks": "Keeps every postable finding claude-sonnet-4-6 wrote on add-guest-management-functionality-to-existing-bookings-cal-com, and invents none",
         "payload": "payloads/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com.json",
         "shape": "as-sent"
     },
     {
         "id": "claude-sonnet-4-6/anonymous-add-configurable-device-limit-grafana-codex",
-        "checks": "Keeps every postable finding claude-sonnet-4-6 wrote on anonymous-add-configurable-device-limit-grafana-codex as it sent them, and adds none to a run that wrote",
+        "checks": "Keeps every postable finding claude-sonnet-4-6 wrote on anonymous-add-configurable-device-limit-grafana-codex, and invents none",
         "payload": "payloads/claude-sonnet-4-6/anonymous-add-configurable-device-limit-grafana-codex.json",
         "shape": "as-sent"
     },
     {
         "id": "claude-sonnet-4-6/enhance-embed-url-handling-and-validation-system-discourse-cursor",
-        "checks": "Keeps every postable finding claude-sonnet-4-6 wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor as it sent them, and adds none to a ru",
+        "checks": "Keeps every postable finding claude-sonnet-4-6 wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor, and invents none",
         "payload": "payloads/claude-sonnet-4-6/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
         "shape": "as-sent"
     },
     {
         "id": "claude-sonnet-4-6/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
-        "checks": "Keeps every postable finding claude-sonnet-4-6 wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry as it sent them, and adds none to a r",
+        "checks": "Keeps every postable finding claude-sonnet-4-6 wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry, and invents none",
         "payload": "payloads/claude-sonnet-4-6/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json",
         "shape": "as-sent"
     },
     {
         "id": "claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com",
-        "checks": "Keeps every postable finding claude-sonnet-5-5 wrote on add-guest-management-functionality-to-existing-bookings-cal-com as it sent them, and adds none to a run ",
+        "checks": "Keeps every postable finding claude-sonnet-5-5 wrote on add-guest-management-functionality-to-existing-bookings-cal-com, and invents none",
         "payload": "payloads/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com.json",
         "shape": "as-sent"
     },
     {
         "id": "claude-sonnet-5-5/anonymous-add-configurable-device-limit-grafana-codex",
-        "checks": "Keeps every postable finding claude-sonnet-5-5 wrote on anonymous-add-configurable-device-limit-grafana-codex as it sent them, and adds none to a run that wrote",
+        "checks": "Keeps every postable finding claude-sonnet-5-5 wrote on anonymous-add-configurable-device-limit-grafana-codex, and invents none",
         "payload": "payloads/claude-sonnet-5-5/anonymous-add-configurable-device-limit-grafana-codex.json",
         "shape": "as-sent"
     },
     {
         "id": "claude-sonnet-5-5/enhance-embed-url-handling-and-validation-system-discourse-cursor",
-        "checks": "Keeps every postable finding claude-sonnet-5-5 wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor as it sent them, and adds none to a ru",
+        "checks": "Keeps every postable finding claude-sonnet-5-5 wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor, and invents none",
         "payload": "payloads/claude-sonnet-5-5/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
         "shape": "as-sent"
     },
     {
         "id": "claude-sonnet-5-5/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
-        "checks": "Keeps every postable finding claude-sonnet-5-5 wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry as it sent them, and adds none to a r",
+        "checks": "Keeps every postable finding claude-sonnet-5-5 wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry, and invents none",
         "payload": "payloads/claude-sonnet-5-5/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json",
         "shape": "as-sent"
     },
     {
         "id": "deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com",
-        "checks": "Keeps every postable finding deepseek-v4-flash@fireworks wrote on add-guest-management-functionality-to-existing-bookings-cal-com as it sent them, and adds none",
+        "checks": "Keeps every postable finding deepseek-v4-flash@fireworks wrote on add-guest-management-functionality-to-existing-bookings-cal-com, and invents none",
         "payload": "payloads/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com.json",
         "shape": "as-sent"
     },
     {
         "id": "deepseek-v4-flash@fireworks/anonymous-add-configurable-device-limit-grafana-codex",
-        "checks": "Keeps every postable finding deepseek-v4-flash@fireworks wrote on anonymous-add-configurable-device-limit-grafana-codex as it sent them, and adds none to a run ",
+        "checks": "Keeps every postable finding deepseek-v4-flash@fireworks wrote on anonymous-add-configurable-device-limit-grafana-codex, and invents none",
         "payload": "payloads/deepseek-v4-flash@fireworks/anonymous-add-configurable-device-limit-grafana-codex.json",
         "shape": "as-sent"
     },
     {
         "id": "deepseek-v4-flash@fireworks/enhance-embed-url-handling-and-validation-system-discourse-cursor",
-        "checks": "Keeps every postable finding deepseek-v4-flash@fireworks wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor as it sent them, and adds no",
+        "checks": "Keeps every postable finding deepseek-v4-flash@fireworks wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor, and invents none",
         "payload": "payloads/deepseek-v4-flash@fireworks/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
         "shape": "as-sent"
     },
     {
         "id": "deepseek-v4-flash@fireworks/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
-        "checks": "Keeps every postable finding deepseek-v4-flash@fireworks wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry as it sent them, and adds n",
+        "checks": "Keeps every postable finding deepseek-v4-flash@fireworks wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry, and invents none",
         "payload": "payloads/deepseek-v4-flash@fireworks/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json",
         "shape": "as-sent"
     },
     {
         "id": "gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
-        "checks": "Keeps every postable finding gemini-3.1-pro@openrouter wrote on add-guest-management-functionality-to-existing-bookings-cal-com as it sent them, and adds none t",
+        "checks": "Keeps every postable finding gemini-3.1-pro@openrouter wrote on add-guest-management-functionality-to-existing-bookings-cal-com, and invents none",
         "payload": "payloads/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
         "shape": "as-sent"
     },
     {
         "id": "gemini-3.1-pro@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
-        "checks": "Keeps every postable finding gemini-3.1-pro@openrouter wrote on anonymous-add-configurable-device-limit-grafana-codex as it sent them, and adds none to a run th",
+        "checks": "Keeps every postable finding gemini-3.1-pro@openrouter wrote on anonymous-add-configurable-device-limit-grafana-codex, and invents none",
         "payload": "payloads/gemini-3.1-pro@openrouter/anonymous-add-configurable-device-limit-grafana-codex.json",
         "shape": "as-sent"
     },
     {
         "id": "gemini-3.1-pro@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
-        "checks": "Keeps every postable finding gemini-3.1-pro@openrouter wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor as it sent them, and adds none",
+        "checks": "Keeps every postable finding gemini-3.1-pro@openrouter wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor, and invents none",
         "payload": "payloads/gemini-3.1-pro@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
         "shape": "as-sent"
     },
     {
         "id": "gemini-3.1-pro@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
-        "checks": "Keeps every postable finding gemini-3.1-pro@openrouter wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry as it sent them, and adds non",
+        "checks": "Keeps every postable finding gemini-3.1-pro@openrouter wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry, and invents none",
         "payload": "payloads/gemini-3.1-pro@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json",
         "shape": "as-sent"
     },
     {
         "id": "gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
-        "checks": "Keeps every postable finding gemini-3.8-flash@openrouter wrote on add-guest-management-functionality-to-existing-bookings-cal-com as it sent them, and adds none",
+        "checks": "Keeps every postable finding gemini-3.8-flash@openrouter wrote on add-guest-management-functionality-to-existing-bookings-cal-com, and invents none",
         "payload": "payloads/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
         "shape": "as-sent"
     },
     {
         "id": "gemini-3.8-flash@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
-        "checks": "Keeps every postable finding gemini-3.8-flash@openrouter wrote on anonymous-add-configurable-device-limit-grafana-codex as it sent them, and adds none to a run ",
+        "checks": "Keeps every postable finding gemini-3.8-flash@openrouter wrote on anonymous-add-configurable-device-limit-grafana-codex, and invents none",
         "payload": "payloads/gemini-3.8-flash@openrouter/anonymous-add-configurable-device-limit-grafana-codex.json",
         "shape": "as-sent"
     },
     {
         "id": "gemini-3.8-flash@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
-        "checks": "Keeps every postable finding gemini-3.8-flash@openrouter wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor as it sent them, and adds no",
+        "checks": "Keeps every postable finding gemini-3.8-flash@openrouter wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor, and invents none",
         "payload": "payloads/gemini-3.8-flash@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
         "shape": "as-sent"
     },
     {
         "id": "gemini-3.8-flash@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
-        "checks": "Keeps every postable finding gemini-3.8-flash@openrouter wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry as it sent them, and adds n",
+        "checks": "Keeps every postable finding gemini-3.8-flash@openrouter wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry, and invents none",
         "payload": "payloads/gemini-3.8-flash@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json",
         "shape": "as-sent"
     },
     {
         "id": "glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
-        "checks": "Keeps every postable finding glm-5.3@openrouter wrote on add-guest-management-functionality-to-existing-bookings-cal-com as it sent them, and adds none to a run",
+        "checks": "Keeps every postable finding glm-5.3@openrouter wrote on add-guest-management-functionality-to-existing-bookings-cal-com, and invents none",
         "payload": "payloads/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
         "shape": "as-sent"
     },
     {
         "id": "gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com",
-        "checks": "Keeps every postable finding gpt-6-sol wrote on add-guest-management-functionality-to-existing-bookings-cal-com as it sent them, and adds none to a run that wro",
+        "checks": "Keeps every postable finding gpt-6-sol wrote on add-guest-management-functionality-to-existing-bookings-cal-com, and invents none",
         "payload": "payloads/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com.json",
         "shape": "as-sent"
     },
     {
         "id": "gpt-6-sol/anonymous-add-configurable-device-limit-grafana-codex",
-        "checks": "Keeps every postable finding gpt-6-sol wrote on anonymous-add-configurable-device-limit-grafana-codex as it sent them, and adds none to a run that wrote none",
+        "checks": "Keeps every postable finding gpt-6-sol wrote on anonymous-add-configurable-device-limit-grafana-codex, and invents none",
         "payload": "payloads/gpt-6-sol/anonymous-add-configurable-device-limit-grafana-codex.json",
         "shape": "as-sent"
     },
     {
         "id": "gpt-6-sol/enhance-embed-url-handling-and-validation-system-discourse-cursor",
-        "checks": "Keeps every postable finding gpt-6-sol wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor as it sent them, and adds none to a run that w",
+        "checks": "Keeps every postable finding gpt-6-sol wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor, and invents none",
         "payload": "payloads/gpt-6-sol/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
         "shape": "as-sent"
     },
     {
         "id": "gpt-6-sol/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
-        "checks": "Keeps every postable finding gpt-6-sol wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry as it sent them, and adds none to a run that ",
+        "checks": "Keeps every postable finding gpt-6-sol wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry, and invents none",
         "payload": "payloads/gpt-6-sol/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json",
         "shape": "as-sent"
     },
     {
         "id": "kimi-k2.7-code@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
-        "checks": "Keeps every postable finding kimi-k2.7-code@openrouter wrote on add-guest-management-functionality-to-existing-bookings-cal-com as it sent them, and adds none t",
+        "checks": "Keeps every postable finding kimi-k2.7-code@openrouter wrote on add-guest-management-functionality-to-existing-bookings-cal-com, and invents none",
         "payload": "payloads/kimi-k2.7-code@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
         "shape": "as-sent"
     },
     {
         "id": "kimi-k2.7-code@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
-        "checks": "Keeps every postable finding kimi-k2.7-code@openrouter wrote on anonymous-add-configurable-device-limit-grafana-codex as it sent them, and adds none to a run th",
+        "checks": "Keeps every postable finding kimi-k2.7-code@openrouter wrote on anonymous-add-configurable-device-limit-grafana-codex, and invents none",
         "payload": "payloads/kimi-k2.7-code@openrouter/anonymous-add-configurable-device-limit-grafana-codex.json",
         "shape": "as-sent"
     },
     {
         "id": "kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
-        "checks": "Keeps every postable finding kimi-k2.7-code@openrouter wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor as it sent them, and adds none",
+        "checks": "Keeps every postable finding kimi-k2.7-code@openrouter wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor, and invents none",
         "payload": "payloads/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
         "shape": "as-sent"
     },
     {
         "id": "kimi-k2.7-code@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
-        "checks": "Keeps every postable finding kimi-k2.7-code@openrouter wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry as it sent them, and adds non",
+        "checks": "Keeps every postable finding kimi-k2.7-code@openrouter wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry, and invents none",
         "payload": "payloads/kimi-k2.7-code@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json",
         "shape": "as-sent"
     },
     {
         "id": "minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
-        "checks": "Keeps every postable finding minimax-m3@openrouter wrote on add-guest-management-functionality-to-existing-bookings-cal-com as it sent them, and adds none to a ",
+        "checks": "Keeps every postable finding minimax-m3@openrouter wrote on add-guest-management-functionality-to-existing-bookings-cal-com, and invents none",
         "payload": "payloads/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
         "shape": "as-sent"
     },
     {
         "id": "minimax-m3@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
-        "checks": "Keeps every postable finding minimax-m3@openrouter wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor as it sent them, and adds none to ",
+        "checks": "Keeps every postable finding minimax-m3@openrouter wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor, and invents none",
         "payload": "payloads/minimax-m3@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
         "shape": "as-sent"
     },
     {
         "id": "minimax-m3@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
-        "checks": "Keeps every postable finding minimax-m3@openrouter wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry as it sent them, and adds none to",
+        "checks": "Keeps every postable finding minimax-m3@openrouter wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry, and invents none",
         "payload": "payloads/minimax-m3@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json",
         "shape": "as-sent"
     },

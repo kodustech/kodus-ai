@@ -36,7 +36,7 @@ function brokenAtSecond(suggestions) {
 
 const SHAPES = {
     'as-sent': {
-        checks: (model, caseId) => `Keeps every postable finding ${model} wrote on ${caseId} as it sent them, and adds none to a run that wrote none`,
+        checks: (model, caseId) => `Keeps every postable finding ${model} wrote on ${caseId}, and invents none`,
         apply: (p) => p,
         expect: keep,
     },

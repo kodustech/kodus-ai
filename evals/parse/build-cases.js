@@ -53,6 +53,13 @@ function count(end) {
     return Array.isArray(s) ? s.filter((x) => x && typeof x === 'object').length : 0;
 }
 
+// The quality panel shows each case's sentence whole, up to 160 characters
+// (evals/shared/eval-result.js): a longer one would be cut mid-word.
+function sentence(text) {
+    if (text.length > 160) throw new Error(`a case sentence is over 160 characters, shorten it in shapes.js: ${text}`);
+    return text;
+}
+
 function main() {
     const asSent = [];
     const shaped = [];
@@ -66,7 +73,7 @@ function main() {
             // by hand, and its case reaches prose recovery.
             const prose = ends.map((end, i) => ({ end, i })).filter(({ end }) => !Array.isArray(listOf(end)) && String(asObject(end)?.reasoning || end.text || '').length >= 80);
             for (const { i } of prose) if (!LABELS[`${payload}#${i}`]) console.warn(`${payload}#${i}: findings only in prose; label them in labels.json`);
-            asSent.push({ id: `${model}/${caseId}`, checks: SHAPES['as-sent'].checks(model, caseId).slice(0, 160), payload, shape: 'as-sent', ...(prose.length ? { prose: true } : {}) });
+            asSent.push({ id: `${model}/${caseId}`, checks: sentence(SHAPES['as-sent'].checks(model, caseId)), payload, shape: 'as-sent', ...(prose.length ? { prose: true } : {}) });
             ends.forEach((end, i) => {
                 const n = count(end);
                 if (n < 2 || (best && n <= best.n)) return;
@@ -80,7 +87,7 @@ function main() {
         }
         for (const [shape, { checks, prose }] of Object.entries(SHAPES)) {
             if (shape === 'as-sent') continue;
-            shaped.push({ id: `${shape}/${model}`, checks: `${checks()} — on ${model}`.slice(0, 160), payload: best.payload, end: best.end, shape, ...(prose ? { prose: true } : {}) });
+            shaped.push({ id: `${shape}/${model}`, checks: sentence(`${checks()} — on ${model}`), payload: best.payload, end: best.end, shape, ...(prose ? { prose: true } : {}) });
         }
     }
     // Prose cases first: the Friday cut (--prose --limit) takes the first few.
