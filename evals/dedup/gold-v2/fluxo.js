@@ -131,9 +131,10 @@ const OUT = path.join(AQUI, 'resultados', 'fluxo', `${ROTULO}_${GOLD}.json`);
 fs.mkdirSync(path.dirname(OUT), { recursive: true });
 fs.writeFileSync(OUT, JSON.stringify(out, null, 1));
 console.log(`\n[fluxo] ${MODO} · ${MODELO} · ${CASOS.length} PRs · media por PR`);
-console.log('| Etapa | Chamadas | Input sem cache | Cache read | Output | Tempo |');
-console.log('|---|---|---|---|---|---|');
-for (const [k, e] of Object.entries(out.porEtapaMediaPorPr)) console.log(`| ${k} | ${e.chamadas} | ${e.input - e.cacheRead} | ${e.cacheRead} | ${e.output} | ${(e.ms / 1000).toFixed(1)} s |`);
+// Output ja inclui o raciocinio (os provedores cobram os dois pelo mesmo preco); a coluna so mostra quanto dele e raciocinio.
+console.log('| Etapa | Chamadas | Input sem cache | Cache read | Output | dos quais raciocinio | Tempo |');
+console.log('|---|---|---|---|---|---|---|');
+for (const [k, e] of Object.entries(out.porEtapaMediaPorPr)) console.log(`| ${k} | ${e.chamadas} | ${e.input - e.cacheRead} | ${e.cacheRead} | ${e.output} | ${e.reasoning} | ${(e.ms / 1000).toFixed(1)} s |`);
 console.log('\n| Depois de | Comentarios | Goldens | Recall | Precisao | F1 |\n|---|---|---|---|---|---|');
 for (const [k, m] of Object.entries(martian)) console.log(m.erro ? `| ${k} | erro: ${m.erro} |` : `| ${k} | ${m.comentarios} | ${m.goldens}/${m.total} | ${m.recall} | ${m.precisao} | ${m.f1} |`);
 console.log(`\n-> ${rel(OUT)}`);
