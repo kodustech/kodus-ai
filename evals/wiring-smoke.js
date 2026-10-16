@@ -157,6 +157,7 @@ async function main() {
         { name: 'anchoring', model: true, args: ['evals/anchoring/anchor-eval.js', '--model=eval-fake', '--limit=1'] },
         { name: 'pr-summary', model: true, args: ['evals/pr-summary/run.js', '--model=eval-fake', '--gate'] },
         { name: 'reply-addressing', model: true, args: ['evals/reply-addressing/run.js', '--model=eval-fake', '--limit=2'] },
+        { name: 'conversation', model: true, args: ['evals/conversation/run.js', '--model=eval-fake', '--gate'] },
         { name: 'review-rounds', model: true, args: ['evals/review-rounds/run.js', '--model=eval-fake', `--cases-file=${reviewCasesFile}`, '--case=R2,K1', '--reps=1', `--output=${path.join(scratch, 'review-rounds.json')}`] },
         { name: 'review-lifecycle', model: true, args: ['evals/review-rounds/lifecycle.js', '--model=eval-fake', '--reps=1', '--wiring-smoke', `--output=${path.join(scratch, 'review-lifecycle.json')}`] },
     ];

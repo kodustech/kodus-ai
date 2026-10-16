@@ -107,7 +107,7 @@
     },
     {
         "caseId": "complement-existing",
-        "description": "First-open, COMPLEMENT, an author-written description exists → the existing body is injected into the model prompt so the summary complements (rather than repeats) it.",
+        "description": "On first open with COMPLEMENT and an author-written description, the model sees that description, so the summary complements it instead of repeating it",
         "behaviour": "complement",
         "existingBody": "This adds retry logic to the webhook dispatcher. It does not change the payload format.",
         "pr": {
@@ -132,7 +132,7 @@
     },
     {
         "caseId": "commit-replace-inplace",
-        "description": "New commit on an open PR, behaviourForNewCommits=REPLACE, body has an author note + a prior Kody block → the block is regenerated IN PLACE, author note kept, stale block content gone, still one block.",
+        "description": "On a new commit with REPLACE, the Kody block is regenerated in place: the author's note stays, the stale summary goes, still one block",
         "mode": "commit",
         "behaviour": "replace",
         "existingBody": "Author note: part of the Q3 billing epic.\n\n<!-- kody-pr-summary:start -->\nOLD_COMMIT_SUMMARY_FROM_LAST_PUSH\n<!-- kody-pr-summary:end -->",
@@ -158,7 +158,7 @@
     },
     {
         "caseId": "commit-concatenate-accumulate",
-        "description": "New commit on an open PR, behaviourForNewCommits=CONCATENATE, body has an author note + a prior Kody block → the new summary is appended INSIDE the block, keeping the prior summary, author note kept, still one block.",
+        "description": "On a new commit with CONCATENATE, the new summary is appended inside the Kody block: the prior summary and the author's note stay, still one block",
         "mode": "commit",
         "behaviour": "concatenate",
         "existingBody": "Author note: incremental delivery, review per commit.\n\n<!-- kody-pr-summary:start -->\nOLD_COMMIT_SUMMARY_FROM_LAST_PUSH\n<!-- kody-pr-summary:end -->",
@@ -184,7 +184,7 @@
     },
     {
         "caseId": "commit-replace-no-prior-block",
-        "description": "New commit on an open PR, behaviourForNewCommits=REPLACE, body has an author note but NO prior Kody block → a fresh block is appended, author note kept, one block.",
+        "description": "On a new commit with REPLACE and no Kody block yet, a fresh block is appended after the author's note, and there is one block",
         "mode": "commit",
         "behaviour": "replace",
         "existingBody": "Author note: first push had no summary yet.",
@@ -205,6 +205,102 @@
             "postsSummary": true,
             "exactlyOneBlock": true,
             "bodyPreserved": true
+        }
+    },
+    {
+        "caseId": "vague-title-fix",
+        "description": "Title says only \"fix\": the summary must come from the diff (retry backoff in the queue consumer).",
+        "behaviour": "replace",
+        "existingBody": "",
+        "pr": {
+            "number": 201,
+            "title": "fix",
+            "head": {
+                "ref": "patch-1",
+                "repo": {
+                    "fullName": "acme/sample-service"
+                }
+            },
+            "base": {
+                "ref": "main"
+            }
+        },
+        "changedFiles": [
+            {
+                "filename": "src/queue/consumer.ts",
+                "status": "modified",
+                "patch": "@@ -10,8 +10,12 @@ export async function consume(message: Message) {\n-    for (let attempt = 0; attempt < 3; attempt++) {\n-        try { return await handler(message); } catch { await sleep(100); }\n-    }\n+    const maxAttempts = 5;\n+    for (let attempt = 0; attempt < maxAttempts; attempt++) {\n+        try {\n+            return await handler(message);\n+        } catch {\n+            await sleep(BACKOFF_BASE_MS * 2 ** attempt);\n+        }\n+    }\n+    await deadLetter.publish(message);\n }"
+            }
+        ],
+        "expect": {
+            "postsSummary": true,
+            "exactlyOneBlock": true,
+            "bodyPreserved": false,
+            "promptContainsExistingBody": false
+        }
+    },
+    {
+        "caseId": "vague-title-wip",
+        "description": "Title says only \"wip\": the summary must come from the diff (session token rotation and revocation).",
+        "behaviour": "replace",
+        "existingBody": "",
+        "pr": {
+            "number": 202,
+            "title": "wip",
+            "head": {
+                "ref": "patch-2",
+                "repo": {
+                    "fullName": "acme/sample-service"
+                }
+            },
+            "base": {
+                "ref": "main"
+            }
+        },
+        "changedFiles": [
+            {
+                "filename": "src/auth/session.ts",
+                "status": "modified",
+                "patch": "@@ -22,3 +22,18 @@ export class SessionService {\n+    async rotateSessionToken(sessionId: string): Promise<string> {\n+        const token = randomToken();\n+        await this.store.update(sessionId, { tokenHash: sha256(token), rotatedAt: new Date() });\n+        return token;\n+    }\n+\n+    async revokeAllSessions(userId: string): Promise<number> {\n+        const sessions = await this.store.findByUser(userId);\n+        for (const s of sessions) await this.store.delete(s.id);\n+        return sessions.length;\n+    }\n }"
+            }
+        ],
+        "expect": {
+            "postsSummary": true,
+            "exactlyOneBlock": true,
+            "bodyPreserved": false,
+            "promptContainsExistingBody": false
+        }
+    },
+    {
+        "caseId": "vague-title-review",
+        "description": "Title says only \"address review comments\": the summary must come from the diff (discount rounding in cents).",
+        "behaviour": "replace",
+        "existingBody": "",
+        "pr": {
+            "number": 203,
+            "title": "address review comments",
+            "head": {
+                "ref": "patch-3",
+                "repo": {
+                    "fullName": "acme/sample-service"
+                }
+            },
+            "base": {
+                "ref": "main"
+            }
+        },
+        "changedFiles": [
+            {
+                "filename": "src/cart/pricing.ts",
+                "status": "modified",
+                "patch": "@@ -31,6 +31,7 @@ export function applyDiscount(totalCents: number, percent: number): number {\n-    const discount = (totalCents * percent) / 100;\n-    return totalCents - Math.round(discount);\n+    const discountCents = Math.floor((totalCents * percent) / 100);\n+    if (discountCents > totalCents) throw new RangeError('discount exceeds total');\n+    return totalCents - discountCents;\n }"
+            }
+        ],
+        "expect": {
+            "postsSummary": true,
+            "exactlyOneBlock": true,
+            "bodyPreserved": false,
+            "promptContainsExistingBody": false
         }
     }
 ]

@@ -62,12 +62,19 @@ const MOCK = !!args.mock;
 const GATE = !!args.gate;
 const DATASET = String(args.dataset || 'cases').replace(/\.json$/, '');
 const BEHAVIOUR_FILTER = args.behaviour ? String(args.behaviour) : null;
+const LIMIT = args.limit ? Number(args.limit) : undefined;
+const REAL_MODEL = !MOCK && MODEL !== 'eval-fake';
+// The contract is binary: with no floor set for a model, any failed check fails the gate.
+const TARGET = (require('./targets.json').models || {})[MODEL] || {};
+const FLOOR = TARGET.floor ?? 1;
 
 const START = '<!-- kody-pr-summary:start -->';
 const END = '<!-- kody-pr-summary:end -->';
 const MOCK_SUMMARY = 'MOCK_GENERATED_SUMMARY_BODY';
 
 const { applyModelEnv, TIER0 } = require('../shared/tier0-models');
+const { evalQuestion, resultProblems } = require('../shared/eval-result');
+const { countTokens, tokensUsed } = require('../shared/eval-kit');
 const { buildEvalModel } = require('../shared/build-model');
 
 // exit-2 helper — infra errors ALWAYS fail (a broken model must never look green).
@@ -85,6 +92,7 @@ if (!MOCK) {
         infra(`cannot route model '${MODEL}': ${e.message}`);
     }
 }
+countTokens();
 
 // Prompt seen by the model + the last model-call error, captured via the
 // service's own runSummaryPromptV5 seam (see buildService). generateSummaryPR
@@ -221,7 +229,10 @@ async function runCase(c) {
     );
 
     const exp = c.expect || {};
-    const failures = [];
+    const checks = [];
+    // `quality`: a check on the model's prose, not on the contract (see the gate).
+    const check = (what, ok, quality = false) => checks.push({ what, ok: !!ok, ...(quality ? { quality: true } : {}) });
+    const done = (contentLen, extra = {}) => ({ caseId: c.caseId, behaviour: c.behaviour, contentLen, checks, failures: checks.filter((x) => !x.ok).map((x) => x.what), ...extra });
 
     // 1) generated + non-empty. Empty ⇒ return NOW — every later assertion
     // dereferences finalDescription, which is null here.
@@ -232,57 +243,87 @@ async function runCase(c) {
         // don't turn eval-env noise into a red gate. A genuine empty result (no
         // model error, or a non-infra crash) stays a real failure.
         if (!MOCK && lastModelError && isInfraErr(lastModelError)) {
-            return { caseId: c.caseId, behaviour: c.behaviour, contentLen: 0, failures: [`infra: ${String(lastModelError.message).slice(0, 120)}`], infra: true };
+            return { caseId: c.caseId, behaviour: c.behaviour, contentLen: 0, checks: [], failures: [`infra: ${String(lastModelError.message).slice(0, 120)}`], infra: true };
         }
-        failures.push(`summary block empty / not generated${lastModelError ? ` (model error: ${String(lastModelError.message).slice(0, 120)})` : ''}`);
-        return { caseId: c.caseId, behaviour: c.behaviour, contentLen: 0, failures };
+        check(`summary generated${lastModelError ? ` (model error: ${String(lastModelError.message).slice(0, 120)})` : ''}`, false);
+        return done(0);
     }
+    check('summary generated', true);
 
     // 2) posted to the PR (adapter received a non-empty body)
     if (exp.postsSummary) {
-        if (posted.calls < 1) failures.push('summary was NOT posted (updateDescriptionInPullRequest never called)');
-        else if (!posted.body || !posted.body.includes(START)) failures.push('posted body missing the summary block');
+        check('summary posted to the PR (updateDescriptionInPullRequest called)', posted.calls >= 1);
+        check('posted body carries the summary block', posted.calls >= 1 && posted.body && posted.body.includes(START));
     }
 
     // 3) composition per behaviour
-    if (exp.exactlyOneBlock && countBlocks(finalDescription) !== 1) {
-        failures.push(`expected exactly 1 summary block, got ${countBlocks(finalDescription)}`);
-    }
+    if (exp.exactlyOneBlock) check(`exactly 1 summary block (got ${countBlocks(finalDescription)})`, countBlocks(finalDescription) === 1);
     if (exp.bodyPreserved === true) {
         const author = (c.existingBody || '').split('\n').find((l) => l.trim() && !l.includes('kody-pr-summary'));
-        if (author && !finalDescription.includes(author.trim())) {
-            failures.push(`${c.behaviour} dropped the author-written description (expected it kept)`);
-        }
+        if (author) check(`${c.behaviour} keeps the author-written description`, finalDescription.includes(author.trim()));
     }
     if (exp.bodyPreserved === false && c.existingBody) {
         const author = c.existingBody.split('\n').find((l) => l.trim() && !l.includes('kody-pr-summary'));
-        if (author && finalDescription.includes(author.trim())) {
-            failures.push('REPLACE did not drop the existing author description');
-        }
+        if (author) check('REPLACE drops the existing author description', !finalDescription.includes(author.trim()));
     }
-    if (exp.staleContentGone && finalDescription.includes(exp.staleContentGone)) {
-        failures.push('stale prior summary block was not stripped on re-run');
-    }
+    if (exp.staleContentGone) check('stale prior summary block stripped on re-run', !finalDescription.includes(exp.staleContentGone));
     // commit-run CONCATENATE accumulates INSIDE the block: the prior summary
     // content is kept and the new one appended within the same markers.
     if (exp.blockAccumulates) {
-        if (!content.includes(exp.blockAccumulates)) {
-            failures.push('CONCATENATE (new commit) dropped the prior summary content instead of accumulating it');
-        }
-        if (content === exp.blockAccumulates) {
-            failures.push('CONCATENATE (new commit) did not append the new summary to the block');
-        }
+        check('CONCATENATE (new commit) keeps the prior summary content', content.includes(exp.blockAccumulates));
+        check('CONCATENATE (new commit) appends the new summary to the block', content !== exp.blockAccumulates);
     }
 
     // 4) COMPLEMENT must feed the existing description into the model prompt
     if (exp.promptContainsExistingBody) {
         const seen = `${lastPromptSeen?.system || ''}\n${lastPromptSeen?.prompt || ''}`;
-        if (!seen.includes((c.existingBody || '').slice(0, 30))) {
-            failures.push('COMPLEMENT did not inject the existing description into the prompt');
-        }
+        check('COMPLEMENT injects the existing description into the prompt', seen.includes((c.existingBody || '').slice(0, 30)));
     }
 
-    return { caseId: c.caseId, behaviour: c.behaviour, contentLen: content.length, failures };
+    // 5) On a real model, the summary says what the diff does: it uses at least
+    // one word only the diff holds (parts of the changed files' and code names
+    // that the title and the existing description do not carry). A summary
+    // written from the title alone has none. The scripted and mock texts name
+    // nothing, so the check runs on real models only. With fewer than three such
+    // words a good summary can miss them all (a tax-rounding fix whose only one
+    // is `rate`), so the check needs three.
+    if (REAL_MODEL) {
+        // Every line of the title and the description, each as an added line:
+        // diffWords reads only those.
+        const saidBefore = `${c.pr?.title || ''}\n${c.existingBody || ''}`.split('\n').map((l) => `+${l}`).join('\n');
+        const known = new Set(diffWords([{ filename: '', patch: saidBefore }]));
+        const only = diffWords(c.changedFiles).filter((w) => !known.has(w));
+        const said = only.filter((w) => content.toLowerCase().includes(w));
+        if (only.length >= 3) check(`says what the diff does (uses ${said.length ? said.slice(0, 4).join(', ') : 'none'} of: ${only.slice(0, 6).join(', ')})`, said.length >= 1, true);
+    }
+
+    return done(content.length);
+}
+
+// The words of a diff a summary of it would use: the parts of the changed
+// files' names and of the code names on added lines (camelCase and snake_case
+// split), lowercase, four letters or more, minus words of any code.
+// Words any summary of any change may use: code keywords and the generic
+// vocabulary of change (a summary written without the diff still says "update").
+const CODE_WORDS = new Set([
+    'this', 'that', 'with', 'from', 'const', 'return', 'async', 'await', 'function', 'export', 'import', 'string', 'number', 'value', 'true', 'false', 'null', 'undefined', 'void', 'type', 'interface', 'class', 'else', 'promise', 'catch', 'throw', 'error', 'errors',
+    'create', 'update', 'delete', 'remove', 'find', 'list', 'item', 'items', 'data', 'result', 'results', 'message', 'handler', 'store', 'total', 'amount', 'limit', 'round', 'math', 'date', 'time', 'second', 'seconds', 'user', 'users', 'option', 'options', 'opts', 'existing', 'change', 'changes', 'check', 'logic', 'method', 'service', 'file', 'files', 'code', 'test', 'tests',
+]);
+function diffWords(files) {
+    const words = new Set();
+    const add = (name) => {
+        for (const part of String(name).split(/(?=[A-Z])|[_\W\d]+/)) {
+            const w = part.toLowerCase();
+            if (w.length >= 4 && !CODE_WORDS.has(w)) words.add(w);
+        }
+    };
+    for (const f of files || []) {
+        add(String(f.filename || '').split('/').pop().replace(/\.[^.]+$/, ''));
+        for (const line of String(f.patch || '').split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++'))) {
+            for (const m of line.matchAll(/[A-Za-z_][\w]*/g)) add(m[0]);
+        }
+    }
+    return [...words];
 }
 
 // ── Deterministic routing guard — the incident's root cause. Runs in every
@@ -405,9 +446,9 @@ async function commitGateChecks() {
 }
 
 async function main() {
-    const cases = require(`./datasets/${DATASET}.json`).filter(
-        (c) => !BEHAVIOUR_FILTER || c.behaviour === BEHAVIOUR_FILTER,
-    );
+    const cases = require(`./datasets/${DATASET}.json`)
+        .filter((c) => !BEHAVIOUR_FILTER || c.behaviour === BEHAVIOUR_FILTER)
+        .slice(0, LIMIT);
     if (!cases.length) infra(`no cases in dataset '${DATASET}'${BEHAVIOUR_FILTER ? ` for behaviour '${BEHAVIOUR_FILTER}'` : ''}`);
 
     console.log(`════ PR-summary eval · model=${MODEL} · ${MOCK ? 'MOCK' : 'LIVE'} · ${cases.length} cases ════\n`);
@@ -436,7 +477,7 @@ async function main() {
             const msg = String(e && e.message ? e.message : e);
             const isInfra = isInfraErr(e);
             console.log(`${isInfra ? '⚠️ ' : '❌'} ${c.caseId.padEnd(26)} [${c.behaviour}] ${isInfra ? 'INFRA' : 'ERROR'}: ${msg.slice(0, 160)}`);
-            results.push({ caseId: c.caseId, behaviour: c.behaviour, failures: [msg], infra: isInfra });
+            results.push({ caseId: c.caseId, behaviour: c.behaviour, checks: [], failures: [msg], infra: isInfra, errored: true });
         }
     }
 
@@ -455,16 +496,65 @@ async function main() {
         infra(`all ${cases.length} cases hit infra errors (key/quota/network) — nothing measured`);
     }
 
-    const hardFail = routeFailures.length > 0 || gateFailures.length > 0 || caseFailures.length > 0;
-    if (hardFail) {
+    // The shared result (evals/shared/eval-result.js): every dataset case with
+    // its checks, plus the routing guard and the commit-run gate as one case each.
+    const asCase = (id, checks, what) => ({ id, checks: what, hits: checks.filter((x) => x.ok).length, total: checks.length, detail: checks });
+    const evalCases = [
+        asCase('routing', [{ what: routeFailures.join('; ') || 'summary routes to the model it should', ok: !routeFailures.length }], 'Routes the summary to the configured model, never a silent swap to one nobody chose'),
+        asCase('commit-run-gate', [{ what: gateFailures.join('; ') || 'generate/post decision right for every behaviour', ok: !gateFailures.length }], 'Regenerates and posts on a new commit only when the behaviour says so'),
+        ...results.map((r) => {
+            const c = cases.find((x) => x.caseId === r.caseId) || {};
+            const what = String(c.description || `${r.behaviour} summary`).slice(0, 160);
+            return r.infra || r.errored ? { id: r.caseId, checks: what, hits: 0, total: 0, unmeasured: true } : asCase(r.caseId, r.checks, what);
+        }),
+    ];
+    const hits = evalCases.reduce((n, x) => n + x.hits, 0);
+    const total = evalCases.reduce((n, x) => n + x.total, 0);
+    // A model with a floor of its own was calibrated with the diff check in the
+    // number. One without is gated on the contract alone (routing, posting,
+    // composition): the diff check reads the model's prose and is reported only,
+    // and the result publishes the number the gate read, so whoever reads the
+    // result (evals/shared/nightly-verdict.js) judges what the exit code did.
+    const calibrated = TARGET.floor !== undefined;
+    const gated = evalCases.flatMap((x) => x.detail || []).filter((d) => calibrated || !d.quality);
+    const gatedHits = gated.filter((d) => d.ok).length;
+    const result = {
+        eval: 'pr-summary',
+        question: evalQuestion('evals/pr-summary'),
+        model: MODEL,
+        runs: 1,
+        metric: calibrated
+            ? { name: 'of PR-summary checks passed', value: total ? hits / total : null, floor: FLOOR, baseline: TARGET.observed ?? null }
+            : { name: 'of PR-summary contract checks passed (the diff check reported only)', value: gated.length ? gatedHits / gated.length : null, floor: FLOOR, baseline: null },
+        cases: evalCases,
+        tokens: tokensUsed(),
+        infra: { errored: infraCases.length + results.filter((r) => r.errored && !r.infra).length, total: cases.length },
+    };
+    if (args.output) {
+        fs.mkdirSync(path.dirname(path.resolve(args.output)), { recursive: true });
+        fs.writeFileSync(args.output, `${JSON.stringify(result, null, 2)}\n`);
+    }
+    const problems = resultProblems(result);
+    if (problems.length) infra(`the result breaks the shared shape — ${problems.join('; ')}`);
+    // A case that crashed is out of the number: past the 5% budget the run did
+    // not measure (evals/AGENTS.md), engine break or not.
+    if (result.infra.errored > cases.length * 0.05) {
+        infra(`${result.infra.errored} of ${cases.length} cases did not run (see above)`);
+    }
+
+    if (!calibrated && gated.length < total) {
+        console.log(`  diff check: ${hits - gatedHits}/${total - gated.length} passed — reported, not gated (no floor for ${MODEL} in targets.json)`);
+    }
+
+    if (result.metric.value < FLOOR) {
         if (GATE) {
-            console.error(`\n❌ GATE FAILED (${MODEL}): ${routeFailures.length} routing + ${gateFailures.length} commit-gate + ${caseFailures.length} case failure(s)`);
+            console.error(`\n❌ GATE FAILED (${MODEL}): ${gatedHits}/${gated.length} gated checks, below the floor — ${routeFailures.length} routing + ${gateFailures.length} commit-gate + ${caseFailures.length} case failure(s)`);
             process.exit(1);
         }
-        console.log(`\n⚠️  ${MODEL}: ${routeFailures.length + gateFailures.length + caseFailures.length} failure(s) — advisory (no --gate)`);
+        console.log(`\n⚠️  ${MODEL}: ${total - hits} failed check(s) — advisory (no --gate)`);
         return;
     }
-    console.log(`\n✅ PASS (${MODEL})${infraCases.length ? ` — ${infraCases.length} case(s) skipped on infra` : ''}`);
+    console.log(`\n✅ PASS (${MODEL}): ${hits}/${total} checks${infraCases.length ? ` — ${infraCases.length} case(s) skipped on infra` : ''}`);
 }
 
 // Exit explicitly: the engine services it loads can leave a handle open, and a
