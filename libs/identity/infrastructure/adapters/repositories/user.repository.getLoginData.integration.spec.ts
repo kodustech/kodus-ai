@@ -8,8 +8,9 @@
  * still wins over a case-variant so distinct accounts never merge.
  *
  * Runs inside a transaction that is rolled back, so it never pollutes the DB.
- * Skips automatically when Postgres is unreachable, like the other
- * *.integration.spec.ts in the repo.
+ * It does not silently pass when Postgres is down: set SKIP_INTEGRATION=true to
+ * skip it explicitly, otherwise an unreachable DB fails the suite instead of
+ * reporting the tests as passed without reaching their assertions.
  */
 require('dotenv').config();
 
@@ -27,7 +28,11 @@ import { UserDatabaseRepository } from './user.repository';
 
 const dataSource = new DataSource({
     type: 'postgres',
-    host: process.env.TEST_PG_HOST ?? process.env.API_PG_DB_HOST ?? 'localhost',
+    // Default to localhost (the mapped port): API_PG_DB_HOST from .env is the
+    // in-docker service name and does not resolve from a host/CI runner — using
+    // it is exactly what let this suite "pass" without ever connecting. CI
+    // overrides with TEST_PG_HOST when the DB is elsewhere.
+    host: process.env.TEST_PG_HOST ?? 'localhost',
     port: parseInt(
         process.env.TEST_PG_PORT ?? process.env.API_PG_DB_PORT ?? '5432',
         10,
@@ -58,7 +63,6 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
 (skipIntegration ? describe.skip : describe)(
     'UserRepository.getLoginData (integration, real Postgres)',
     () => {
-        let reachable = true;
         let queryRunner: QueryRunner;
         let repo: UserDatabaseRepository;
         const sfx = randomUUID().slice(0, 8);
@@ -69,8 +73,13 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
                 await dataSource.initialize();
             } catch (e: any) {
                 if (UNREACHABLE.has(e?.code)) {
-                    reachable = false;
-                    return;
+                    // Fail loudly rather than let the tests report "passed"
+                    // without reaching their assertions. An environment with no
+                    // Postgres opts out explicitly with SKIP_INTEGRATION=true.
+                    throw new Error(
+                        `Postgres is required for this integration suite but was unreachable (${e.code}). ` +
+                            `Start the DB, or set SKIP_INTEGRATION=true to skip it explicitly.`,
+                    );
                 }
                 throw e;
             }
@@ -81,7 +90,6 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
         });
 
         beforeEach(async () => {
-            if (!reachable) return;
             queryRunner = dataSource.createQueryRunner();
             await queryRunner.connect();
             await queryRunner.startTransaction();
@@ -92,7 +100,6 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
         });
 
         afterEach(async () => {
-            if (!reachable) return;
             await queryRunner.rollbackTransaction();
             await queryRunner.release();
         });
@@ -112,7 +119,6 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
         };
 
         it('finds a mixed-case account queried with a different case', async () => {
-            if (!reachable) return;
             await seedUser(`Mixed@${domain}`);
 
             const found = await repo.getLoginData(`mixed@${domain}`);
@@ -121,7 +127,6 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
         });
 
         it('prefers an exact-case match over a case-variant (no merge)', async () => {
-            if (!reachable) return;
             const upperOrg = await seedUser(`User@${domain}`);
             const lowerOrg = await seedUser(`user@${domain}`);
 
@@ -133,7 +138,6 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
         });
 
         it('returns undefined when no account matches, even case-insensitively', async () => {
-            if (!reachable) return;
             const found = await repo.getLoginData(`ghost@${domain}`);
             expect(found).toBeUndefined();
         });
