@@ -107,4 +107,20 @@ async function inlineMirror(files, { branch = 'feature', base = 'main' } = {}) {
     return { cloneUrl: `file://${work}`, branch, base, cleanup: async () => fs.rmSync(work, { recursive: true, force: true }) };
 }
 
-module.exports = { mirrorFor, inlineMirror, MIRROR_ROOT: ROOT };
+// A file as the platform's content API returns it for a ref (base64), read
+// from the mirror holding that ref; null where the repository has no such file.
+async function contentAt(cloneUrl, ref, filePath) {
+    const dir = cloneUrl.replace(/^file:\/\//, '');
+    try {
+        const { stdout } = await execFileAsync('git', ['-C', dir, 'show', `${ref}:${filePath}`], {
+            encoding: 'buffer',
+            maxBuffer: 64 * 1024 * 1024,
+            env: gitEnv(),
+        });
+        return { data: { content: Buffer.from(stdout).toString('base64'), encoding: 'base64' } };
+    } catch {
+        return null;
+    }
+}
+
+module.exports = { mirrorFor, inlineMirror, contentAt, MIRROR_ROOT: ROOT };

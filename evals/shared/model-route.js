@@ -182,7 +182,12 @@ function evalPermissionService(storedConfig) {
     const { OrganizationParametersKey } = require(
         path.join(__dirname, '../../libs/core/domain/enums/organization-parameters-key.enum.ts'),
     );
-    return new PermissionValidationService(undefined, {
+    // The org's licence, as the licence service answers for a paid org: valid,
+    // so its resources are not limited (shouldLimitResources).
+    const licenseService = {
+        validateOrganizationLicense: async () => ({ valid: true, subscriptionStatus: 'licensed-self-hosted', planType: 'teams' }),
+    };
+    return new PermissionValidationService(licenseService, {
         findByKey: async (key) =>
             key === OrganizationParametersKey.BYOK_CONFIG && storedConfig ? { configValue: storedConfig } : null,
     });

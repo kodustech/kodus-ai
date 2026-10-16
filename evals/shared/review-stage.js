@@ -27,7 +27,7 @@
 // without changing its result.
 const path = require('path');
 const { AsyncLocalStorage } = require('async_hooks');
-const { mirrorFor, inlineMirror } = require('./repo-mirror');
+const { mirrorFor, inlineMirror, contentAt } = require('./repo-mirror');
 const { EVAL_ORG } = require('./model-route');
 
 const LIBS = path.join(__dirname, '../../libs');
@@ -85,12 +85,16 @@ function teamStore({ language, rules = [], codeReviewConfig = null }) {
  * GitHub repository: connected, its default branch, no Kodus config file in the
  * repository, the PR's files and commits as the GitHub adapter maps them.
  */
-function platform({ baseRef, prFiles, prCommits }) {
+function platform({ baseRef, prFiles, prCommits, content }) {
     return {
+        // The file at the PR's head (the finder's context reads it); the
+        // repository holds no Kodus config file.
+        getRepositoryContentFile: async ({ file }) =>
+            /(^|\/)\.?kodus-config\.ya?ml$/.test(String(file?.filename || file?.path || '')) ? null : content(file?.filename || file?.path),
+        getRepositoryContentBatch: async () => null,
         verifyConnection: async () => ({ hasConnection: true, isSetupComplete: true }),
         getTypeIntegration: async () => 'GITHUB',
         getDefaultBranch: async () => baseRef,
-        getRepositoryContentFile: async () => null,
         getFilesByPullRequestId: async () => prFiles,
         getCommitsForPullRequestForCodeReview: async () => prCommits,
     };
@@ -110,7 +114,7 @@ const sinks = {
 // ── Production's services over that data ────────────────────────────────────
 
 async function resolveTeamConfig({ permissionService, store, codeManagement, repository, preliminaryFiles }) {
-    const { CodeBaseConfigService } = lib('ee/codeBase/codeBaseConfig.service.ts');
+    const CodeBaseConfigService = lib('ee/codeBase/codeBaseConfig.service.ts').default;
     const { KodyRulesValidationService } = lib('ee/kodyRules/service/kody-rules-validation.service.ts');
     const service = new CodeBaseConfigService(
         undefined, // integrationService: not read by getConfig
@@ -167,41 +171,42 @@ function buildAgentReviewStage({ permissionService, codeManagement, previousDeci
 
 async function changedFilesThroughStage(context, codeManagement) {
     const { FetchChangedFilesStage } = lib('code-review/pipeline/stages/fetch-changed-files.stage.ts');
-    const pullRequestManager = {
-        getChangedFilesMetadata: async (org, repository, pullRequest) =>
-            codeManagement.getFilesByPullRequestId({ organizationAndTeamData: org, repository, prNumber: pullRequest?.number }),
-    };
+    const { PullRequestHandlerService } = lib('code-review/infrastructure/adapters/services/pullRequestManager.service.ts');
+    // Production's service over the platform data: the metadata call, then the
+    // content of each changed file.
+    const pullRequestManager = new PullRequestHandlerService(codeManagement, sinks.cacheService);
     return new FetchChangedFilesStage(pullRequestManager).execute(context);
 }
 
-async function checkout({ repo, prNumber, headRef, headSha, baseRef, repoFiles }) {
-    const { LocalSandboxService } = lib('sandbox/infrastructure/providers/local-sandbox.service.ts');
-    let cloneUrl;
-    let inline;
+// The repository the review reads: a mirror of the platform's refs for the PR,
+// or a repository written for the eval. `head` is the ref content is read at.
+async function repositoryFor({ repo, prNumber, headRef, headSha, baseRef, repoFiles }) {
     if (repoFiles) {
-        inline = await inlineMirror(repoFiles);
-        cloneUrl = inline.cloneUrl;
-    } else {
-        cloneUrl = await mirrorFor({ repo, prNumber, headSha, baseRef });
+        const inline = await inlineMirror(repoFiles);
+        return { cloneUrl: inline.cloneUrl, branch: inline.branch, baseBranch: inline.base, head: inline.branch, prNumber: undefined, commit: false, cleanup: inline.cleanup };
     }
-    const branch = inline ? inline.branch : headRef;
-    const baseBranch = inline ? inline.base : baseRef;
+    const cloneUrl = await mirrorFor({ repo, prNumber, headSha, baseRef });
+    return { cloneUrl, branch: headRef, baseBranch: baseRef, head: prNumber ? `refs/pull/${prNumber}/head` : `refs/eval/${headSha}`, prNumber: prNumber || undefined, commit: !prNumber && !!headSha, headSha, cleanup: async () => undefined };
+}
+
+async function checkout(repository) {
+    const { LocalSandboxService } = lib('sandbox/infrastructure/providers/local-sandbox.service.ts');
     const sandbox = await new LocalSandboxService(undefined).createSandboxWithRepo({
-        cloneUrl,
-        branch,
-        baseBranch,
-        prNumber: inline ? undefined : prNumber || undefined,
+        cloneUrl: repository.cloneUrl,
+        branch: repository.branch,
+        baseBranch: repository.baseBranch,
+        prNumber: repository.prNumber,
         platform: 'github',
         // A change reviewed from a commit (no PR): the CLI path checks out the SHA.
-        ...(!inline && !prNumber ? { checkoutSha: headSha } : {}),
+        ...(repository.commit ? { checkoutSha: repository.headSha } : {}),
     });
     // The lease manager carries the base branch on the instance it hands the
     // pipeline (sandbox-lease-manager.service.ts buildSandboxInstance).
-    sandbox.baseBranch = baseBranch;
+    sandbox.baseBranch = repository.baseBranch;
     const cleanup = sandbox.cleanup;
     sandbox.cleanup = async () => {
         await cleanup();
-        await inline?.cleanup();
+        await repository.cleanup();
     };
     return sandbox;
 }
@@ -223,7 +228,20 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
         fullName: pr.repo || 'inline/repo',
         defaultBranch: pr.baseRef || 'main',
     };
-    const codeManagement = platform({ baseRef: pr.baseRef || 'main', prFiles: pr.files, prCommits: pr.commits || [] });
+    const repo = await repositoryFor({
+        repo: pr.repo,
+        prNumber: pr.number,
+        headRef: pr.headRef,
+        headSha: pr.headSha,
+        baseRef: pr.baseRef,
+        repoFiles: pr.repoFiles,
+    });
+    const codeManagement = platform({
+        baseRef: pr.baseRef || repo.baseBranch || 'main',
+        prFiles: pr.files,
+        prCommits: pr.commits || [],
+        content: (file) => contentAt(repo.cloneUrl, repo.head, file),
+    });
     const store = teamStore(team);
 
     const codeReviewConfig = await resolveTeamConfig({
@@ -259,17 +277,11 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
     };
     context = await changedFilesThroughStage(context, codeManagement);
     if (!context.changedFiles?.length) {
+        await repo.cleanup();
         return { shipped: [], discarded: [], loops: [], context, skipped: context.statusInfo?.message || 'no files to review' };
     }
 
-    const sandbox = await checkout({
-        repo: pr.repo,
-        prNumber: pr.number,
-        headRef: pr.headRef,
-        headSha: pr.headSha,
-        baseRef: pr.baseRef,
-        repoFiles: pr.repoFiles,
-    });
+    const sandbox = await checkout(repo);
     try {
         context = { ...context, sandboxHandle: sandbox };
         const stage = buildAgentReviewStage({ permissionService, codeManagement, previousDecisionsUseCase });
