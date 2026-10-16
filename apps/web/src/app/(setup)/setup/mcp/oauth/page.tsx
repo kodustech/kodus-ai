@@ -119,13 +119,16 @@ export default function MCPOauthPage() {
             }
         }
 
+        // The cleanup cancels the delayed finalize: React runs this effect
+        // twice in development, and an authorization code redeems only once,
+        // so a second finalize reports a failure for a flow that succeeded.
         if (status && integrationId) {
-            standardPlugin(status, integrationId);
-        } else if (code && state) {
-            customPlugin(code, state);
-        } else {
-            setInstallationStatus("error");
+            return standardPlugin(status, integrationId);
         }
+        if (code && state) {
+            return customPlugin(code, state);
+        }
+        setInstallationStatus("error");
     });
 
     const Component = componentsMap[installationStatus];
