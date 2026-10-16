@@ -510,12 +510,22 @@ async function main() {
     ];
     const hits = evalCases.reduce((n, x) => n + x.hits, 0);
     const total = evalCases.reduce((n, x) => n + x.total, 0);
+    // A model with a floor of its own was calibrated with the diff check in the
+    // number. One without is gated on the contract alone (routing, posting,
+    // composition): the diff check reads the model's prose and is reported only,
+    // and the result publishes the number the gate read, so whoever reads the
+    // result (evals/shared/nightly-verdict.js) judges what the exit code did.
+    const calibrated = TARGET.floor !== undefined;
+    const gated = evalCases.flatMap((x) => x.detail || []).filter((d) => calibrated || !d.quality);
+    const gatedHits = gated.filter((d) => d.ok).length;
     const result = {
         eval: 'pr-summary',
         question: evalQuestion('evals/pr-summary'),
         model: MODEL,
         runs: 1,
-        metric: { name: 'of PR-summary checks passed', value: total ? hits / total : null, floor: FLOOR, baseline: TARGET.observed ?? null },
+        metric: calibrated
+            ? { name: 'of PR-summary checks passed', value: total ? hits / total : null, floor: FLOOR, baseline: TARGET.observed ?? null }
+            : { name: 'of PR-summary contract checks passed (the diff check reported only)', value: gated.length ? gatedHits / gated.length : null, floor: FLOOR, baseline: null },
         cases: evalCases,
         tokens: tokensUsed(),
         infra: { errored: infraCases.length + results.filter((r) => r.errored && !r.infra).length, total: cases.length },
@@ -532,17 +542,11 @@ async function main() {
         infra(`${result.infra.errored} of ${cases.length} cases did not run (see above)`);
     }
 
-    // A model with a floor of its own was calibrated with the diff check in the
-    // number. One without is gated on the contract alone (routing, posting,
-    // composition): the diff check reads the model's prose and is reported only.
-    const calibrated = TARGET.floor !== undefined;
-    const gated = evalCases.flatMap((x) => x.detail || []).filter((d) => calibrated || !d.quality);
-    const gatedHits = gated.filter((d) => d.ok).length;
     if (!calibrated && gated.length < total) {
         console.log(`  diff check: ${hits - gatedHits}/${total - gated.length} passed — reported, not gated (no floor for ${MODEL} in targets.json)`);
     }
 
-    if ((gated.length ? gatedHits / gated.length : 1) < FLOOR) {
+    if (result.metric.value < FLOOR) {
         if (GATE) {
             console.error(`\n❌ GATE FAILED (${MODEL}): ${gatedHits}/${gated.length} gated checks, below the floor — ${routeFailures.length} routing + ${gateFailures.length} commit-gate + ${caseFailures.length} case failure(s)`);
             process.exit(1);
