@@ -1,0 +1,13 @@
+{
+    "__doc": [
+        "Floors per model for the share of PR-summary checks passed (run.js --gate), as ratios. With no floor for a model, the gate reads the contract alone (routing, posting, composition), where any failed check fails it; the diff check reads the model's prose and is reported, not gated, until the model has a floor calibrated from runs.",
+        "eval-fake (the wiring smoke, every PR): the contract only (the scripted text speaks of no diff, so that check runs on real models). Deterministic: every check passes.",
+        "deepseek-v4-flash@fireworks (the nightly model): calibrated 2026-10-15 from 2 local runs on the branch's base (main 4b5c881cd's summary path), 69 and 69 of 69. A binomial SE is 0 at 100%, so the floor leaves room for 2 failed checks of 69; below it the nightly confirms with a second run. The same run with the diff removed from the summary prompt scored 63 of 69: the three cases whose title says nothing (fix, wip, address review comments) went wrong.",
+        "2026-10-16: the diff check runs only where at least three words are the diff's own. On the Friday check, kimi-k2.7-code failed it on the tax-rounding case, whose only such word is `rate`; a good summary can miss a single word. The case keeps its other checks, so a run now has 68. deepseek on that change: 68 of 68; with the diff removed from the summary prompt, 64 of 68 (below the floor): the three vague-title cases and the CSV-export one. The floor still leaves room for 2 failed checks.",
+        "RATCHET: a PR that adds cases or moves the value on purpose recalibrates here in the same PR, with its runs as evidence."
+    ],
+    "models": {
+        "eval-fake": { "floor": 1, "observed": 1 },
+        "deepseek-v4-flash@fireworks": { "floor": 0.97, "observed": 1 }
+    }
+}

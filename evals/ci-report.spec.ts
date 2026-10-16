@@ -133,7 +133,7 @@ describe('Discord messages stay scannable', () => {
 });
 
 describe('tier-0 report', () => {
-    const pass = (model: string) => ({ model, status: 'pass', toolCalls: 30, findings: 5, seconds: 100, prSummary: { status: 'pass' } });
+    const pass = (model: string) => ({ model, status: 'pass', toolCalls: 30, findings: 5, seconds: 100, evals: [{ stage: 'pr-summary', key: 'pr_summary', status: 'pass' }] });
     const read = (results: Record<string, unknown>) => (model: string) => results[model] || null;
 
     it('is green when every requested model reviews and summarises', () => {
@@ -152,6 +152,7 @@ describe('tier-0 report', () => {
 
     it('names a stage that no longer runs on the model, after a review that passed', () => {
         const stages = [
+            { key: 'pr_summary', stage: 'pr-summary', status: 'pass', reason: null },
             { key: 'kody_rules', stage: 'kody-rules', status: 'broken', reason: 'measured 4 cases and got nothing right' },
             { key: 'reply_addressing', stage: 'reply-addressing', status: 'pass', reason: null },
         ];
@@ -159,11 +160,11 @@ describe('tier-0 report', () => {
         expect(report.status).toBe('failure');
         expect(report.description).toContain('❌ **a** · kody-rules: measured 4 cases and got nothing right');
         expect(report.description).toContain('measured 4 cases and got nothing right\n   customers on this model are affected');
-        expect(report.markdown).toContain('❌ **a**: review ok (30 tool calls, 5 findings, 100s) · summary ok · kody-rules broken · reply-addressing ok');
+        expect(report.markdown).toContain('❌ **a**: review ok (30 tool calls, 5 findings, 100s) · pr-summary ok · kody-rules broken · reply-addressing ok');
     });
 
     it('treats a broken PR summary as a broken model', () => {
-        expect(tier0Report(['a'], read({ a: { ...pass('a'), prSummary: { status: 'broken', reason: 'GATE FAILED' } } })).status).toBe('failure');
+        expect(tier0Report(['a'], read({ a: { ...pass('a'), evals: [{ stage: 'pr-summary', key: 'pr_summary', status: 'broken', reason: 'GATE FAILED' }] } })).status).toBe('failure');
     });
 
     it('tells key/quota problems apart and marks a failure that repeats last week', () => {
@@ -246,16 +247,16 @@ describe('tier-0 stages on a few cases', () => {
 });
 
 describe('tier-0 signal', () => {
-    const result = (review: string, summary: string, ...parts: string[]) => ({ status: review, seconds: 12, prSummary: { status: summary }, evals: parts.map((status, i) => ({ key: `p${i}`, status })) });
+    const result = (review: string, ...parts: string[]) => ({ status: review, seconds: 12, evals: parts.map((status, i) => ({ key: `p${i}`, status })) });
 
     // The panel's row for the model: the worst part decides, the review included.
     it('is red when any part is broken, infra when one was not reached, green only when all ran', () => {
-        expect(tier0Signal(result('pass', 'pass', 'pass', 'pass'))).toMatchObject({ status: 'green', value: '12000', meta: { review: 'pass', pr_summary: 'pass', p0: 'pass', p1: 'pass' } });
+        expect(tier0Signal(result('pass', 'pass', 'pass', 'pass'))).toMatchObject({ status: 'green', value: '12000', meta: { review: 'pass', p0: 'pass', p1: 'pass', p2: 'pass' } });
         expect(tier0Signal(result('broken', 'pass', 'infra', 'pass')).status).toBe('red');
         expect(tier0Signal(result('pass', 'pass', 'broken', 'infra')).status).toBe('red');
         expect(tier0Signal(result('pass', 'infra', 'pass', 'pass')).status).toBe('infra');
         expect(tier0Signal(result('infra', 'pass', 'pass', 'pass')).status).toBe('infra');
-        expect(tier0Signal(result('pass', 'skipped')).status).toBe('green');
+        expect(tier0Signal(result('pass')).status).toBe('green');
     });
 });
 

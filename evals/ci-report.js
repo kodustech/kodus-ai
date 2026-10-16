@@ -432,9 +432,10 @@ function nightlyCompact({ result, verdict, comparison, commits, investigation, p
 
 const T0_ICON = { pass: '✅', broken: '❌', infra: '⚠️', skipped: '➖', missing: '❓' };
 
-// The parts after the review, in the order the check runs them: the PR summary,
-// then each stage the nightly measures, on a few cases (evals/tier0-smoke.js).
-const t0Parts = (r) => [{ label: 'summary', ...(r.prSummary || {}) }, ...(r.evals || []).map((e) => ({ label: e.stage, ...e }))];
+// The parts after the review, in the order the check runs them: each stage the
+// nightly measures, on a few cases (evals/tier0-smoke.js). A result from before
+// the PR summary became one of them carries it as `prSummary`.
+const t0Parts = (r) => [...(r.prSummary ? [{ label: 'summary', ...r.prSummary }] : []), ...(r.evals || []).map((e) => ({ label: e.stage, ...e }))];
 
 function sameFailure(now, before) {
     if (!before) return false;
@@ -466,7 +467,7 @@ function tier0Line(r, previous) {
 function tier0Report(models, readResult, env = {}, readPrevious = () => null) {
     const url = runUrl(env);
     const results = models.map(
-        (model) => readResult(model) || { model, status: 'missing', reason: 'no result', prSummary: { status: 'missing' } },
+        (model) => readResult(model) || { model, status: 'missing', reason: 'no result' },
     );
 
     const outcomes = (r) => [r.status, ...t0Parts(r).map((p) => p.status)];

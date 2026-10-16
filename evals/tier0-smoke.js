@@ -12,14 +12,14 @@
 //   node evals/tier0-smoke.js --model=gpt-5.4 [--case=<caseId>]
 //
 // Passes when the loop finishes, engages the tools and returns at least one
-// parsed finding. It does not ask whether the findings are right. It also runs
-// the PR-summary eval on the model (one call per case): summaries died in prod
-// once for a single model while reviews kept working.
+// parsed finding. It does not ask whether the findings are right.
 //
 // Then every other stage the nightly measures, each on a few of its cases
 // (FEW_CASES): the nightly asks whether a change broke it on one model, this
 // asks whether it still runs on each. Its outcome goes under the stage's
-// `friday` key (evals/stages.js).
+// `friday` key (evals/stages.js). The PR summary is one of them, gated on its
+// whole contract: summaries died in prod once for a single model while reviews
+// kept working.
 //
 // Exit: 0 pass / 1 the model no longer runs one of them / 2 infra (key, quota,
 // rate limit, network — the provider refused, not the engine).
@@ -46,7 +46,7 @@ const FEW_CASES = [
 ].map((e) => ({ ...e, key: (STAGES.find((s) => s.id === e.stage) || {}).friday }));
 
 // The keys this check writes, one per stage it covers.
-const fridayKeys = () => ['review', 'pr_summary', ...FEW_CASES.map((e) => e.key)];
+const fridayKeys = () => ['review', ...FEW_CASES.map((e) => e.key)];
 
 function parseArgs(argv) {
     return Object.fromEntries(
@@ -88,21 +88,6 @@ function knownBugs(vars) {
 // engine could not run the review on this model → broken.
 function classifyFailure(reason) {
     return INFRA.test(String(reason || '')) ? 'infra' : 'broken';
-}
-
-// pr-summary/run.js already separates its outcomes: 0 pass / 1 gate / 2 infra.
-function runPrSummary(model) {
-    const r = spawnSync(process.execPath, [path.join(__dirname, 'pr-summary', 'run.js'), `--model=${model}`, '--gate'], {
-        cwd: path.join(__dirname, '..'),
-        env: process.env,
-        encoding: 'utf8',
-        timeout: 15 * 60 * 1000,
-        maxBuffer: 64 * 1024 * 1024,
-    });
-    const out = `${r.stdout || ''}${r.stderr || ''}`;
-    const status = r.status === 0 ? 'pass' : r.status === 2 ? 'infra' : 'broken';
-    const detail = out.split('\n').filter((l) => /cases:|GATE FAILED|infra/i.test(l)).map((l) => l.trim()).slice(-2).join(' · ');
-    return { status, reason: status === 'pass' ? null : detail || `exit ${r.status}` };
 }
 
 // The error a failed eval run stands for: among the lines its calls printed
@@ -152,14 +137,13 @@ function providerRefusals(stdout) {
 // Its meta carries each part's outcome under its `friday` key, which the panel
 // reads per stage.
 function tier0Signal(r) {
-    const summary = (r.prSummary && r.prSummary.status) || 'skipped';
     const parts = Object.fromEntries((r.evals || []).map((e) => [e.key, e.status]));
-    const all = [r.status, summary, ...Object.values(parts)];
+    const all = [r.status, ...Object.values(parts)];
     const status = all.includes('broken') ? 'red' : all.includes('infra') || r.status !== 'pass' ? 'infra' : 'green';
     return {
         status,
         value: r.seconds == null ? '' : String(Math.round(r.seconds * 1000)),
-        meta: { review: r.status, pr_summary: summary, ...parts, reason: r.reason || null, findings: r.findings, tool_calls: r.toolCalls, retried: !!r.retried },
+        meta: { review: r.status, ...parts, reason: r.reason || null, findings: r.findings, tool_calls: r.toolCalls, retried: !!r.retried },
     };
 }
 
@@ -266,11 +250,6 @@ async function main() {
         `${icon[summary.status]} ${model} review: ${summary.status} in ${seconds}s · tool calls=${summary.toolCalls ?? 'n/a'} · findings=${summary.findings ?? 'n/a'}${summary.reason ? ` — ${summary.reason}` : ''}`,
     );
 
-    summary.prSummary = args['no-pr-summary'] ? { status: 'skipped', reason: null } : runPrSummary(model);
-    if (summary.prSummary.status !== 'skipped') {
-        console.log(`${icon[summary.prSummary.status]} ${model} pr-summary: ${summary.prSummary.status}${summary.prSummary.reason ? ` — ${summary.prSummary.reason}` : ''}`);
-    }
-
     summary.evals = [];
     for (const part of FEW_CASES) {
         let outcome = runFewCases(model, part);
@@ -289,7 +268,7 @@ async function main() {
     fs.writeFileSync(path.join(outDir, `tier0-smoke-${model.replace(/[^\w.-]+/g, '-')}.json`), JSON.stringify(summary, null, 2));
 
     // A model that cannot review is worse news than one we could not reach.
-    const outcomes = [summary.status, summary.prSummary.status, ...summary.evals.map((e) => e.status)];
+    const outcomes = [summary.status, ...summary.evals.map((e) => e.status)];
     if (outcomes.includes('broken')) return 1;
     if (outcomes.includes('infra')) return 2;
     return 0;
