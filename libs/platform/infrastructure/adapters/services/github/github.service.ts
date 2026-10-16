@@ -567,8 +567,8 @@ export class GithubService
                     ? 'user'
                     : 'organization';
 
-            // @ts-expect-error property not found in type
             const installationToken: string | undefined =
+                // @ts-expect-error property not found in type
                 installationAuthentication?.token;
 
             const authDetails = {
@@ -3514,8 +3514,8 @@ export class GithubService
                 platform: PlatformType.GITHUB,
             });
 
-            // @ts-expect-error property not found in type
             const installationToken: string | undefined =
+                // @ts-expect-error property not found in type
                 installationAuthentication?.token;
 
             const authDetails = {
