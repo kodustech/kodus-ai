@@ -548,6 +548,19 @@ function sandboxCommands(repoDir) {
     return commands;
 }
 
+// The files of an inline repository, written to a fresh directory. Same
+// handle shape as prepareRepo's; there is no commit to name.
+function writeInlineRepo(files) {
+    const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'eval-inline-repo-'));
+    for (const [file, content] of Object.entries(files || {})) {
+        const target = path.join(dir, file);
+        if (!target.startsWith(dir + path.sep)) throw new Error(`repoFiles path escapes the repository: ${file}`);
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, String(content));
+    }
+    return { dir, sha: null, cleanup: async () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
+
 function serializeResult(caseId, agentResult, remoteCommands, repoHandle) {
     return {
         caseId,
@@ -680,7 +693,13 @@ class InvestigationAgentProvider {
             // Falls back to replay when the commit can't be fetched;
             // `repoPrepared` in the trace says which one ran.
             let remoteCommands;
-            if (process.env.RECALL_REAL_REPO === '1') {
+            // A case written for an eval can carry its repository inline
+            // (`repoFiles`: every file at the PR's head): the tools then answer
+            // from it through the same local sandbox, never from a replay.
+            if (caseData.repoFiles) {
+                repoHandle = writeInlineRepo(parseMaybeJson(caseData.repoFiles));
+                remoteCommands = sandboxCommands(repoHandle.dir);
+            } else if (process.env.RECALL_REAL_REPO === '1') {
                 const { prepareRepo } = require('./prepare-repo');
                 repoHandle = await prepareRepo(caseData, caseData.caseId);
                 if (repoHandle) remoteCommands = sandboxCommands(repoHandle.dir);

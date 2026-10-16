@@ -65,6 +65,13 @@ const NIGHTLY_EVALS = [
         // One case of each configuration (five).
         friday: ['--limit=5'],
     },
+    {
+        id: 'memories',
+        stage: 'memories',
+        run: ['evals/memories/run.js'],
+        files: ['evals/memories/targets.json'],
+        friday: ['--limit=4'],
+    },
 ];
 
 const byId = (id) => NIGHTLY_EVALS.find((e) => e.id === id) || null;

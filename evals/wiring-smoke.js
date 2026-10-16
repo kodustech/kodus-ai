@@ -119,6 +119,8 @@ async function main() {
         { name: 'severity', args: ['evals/severity/run.js', '--mock=heuristic', '--gate'] },
         // The scripted model answers nothing usable: this measures the local fallback.
         { name: 'format', model: true, args: ['evals/format/run.js', '--model=eval-fake', '--gate'] },
+        // The cases bring their repository: the scripted model reads it through the local sandbox.
+        { name: 'memories', model: true, args: ['evals/memories/run.js', '--model=eval-fake', '--gate'] },
         {
             name: 'finder-recall',
             model: true,
