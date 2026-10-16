@@ -307,6 +307,8 @@ export async function collectRepoInstructions(params: {
 
 /** Shorter quotes could match by chance, so they never count as a citation. */
 const MIN_QUOTE_CHARS = 12;
+/** Quote marks an instruction may itself contain and still match whole. */
+const MAX_INNER_QUOTE_MARKS = 6;
 
 const straightenQuotes = (text: string): string =>
     text.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
@@ -331,8 +333,8 @@ const trimPunctuation = (text: string): string =>
 
 /**
  * Whether `text` (a finding's content) quotes one of the collected
- * instruction files: some span of it between two double quotes, normalized,
- * appears in a file's normalized text. A quote cut with an ellipsis matches when every part
+ * instruction files: some span of it between two double quotes (see
+ * MAX_INNER_QUOTE_MARKS), normalized, appears in a file's normalized text. A quote cut with an ellipsis matches when every part
  * appears in the same file.
  */
 export function quotesRepoInstruction(
@@ -344,21 +346,28 @@ export function quotesRepoInstruction(
     );
     if (!corpus.length) return false;
 
-    // The span between every pair of quote marks is a candidate, so an
-    // instruction that itself contains quotes (`Use "strict" mode.`) is
-    // compared whole instead of as the short pieces between its quotes.
+    // A span between two quote marks with up to MAX_INNER_QUOTE_MARKS between
+    // them is a candidate, so an instruction that itself contains quotes
+    // (`Use "strict" mode.`) is compared whole instead of as the short pieces
+    // between its quotes. Bounding the gap keeps the work linear in the
+    // number of quotes; the first match returns.
+    const longest = Math.max(...corpus.map((file) => file.length));
     const straight = straightenQuotes(text);
-    const marks = [...straight.matchAll(/"/g)].map((m) => m.index);
-    const quotes = marks.flatMap((start, i) =>
-        marks.slice(i + 1).map((end) => straight.slice(start + 1, end)),
-    );
-    return quotes.some((quote) => {
-        const parts = quote
-            .split(/\.{3}|…/)
-            .map((p) => trimPunctuation(normalizeInstructionText(p)))
-            .filter(Boolean);
-        const length = parts.reduce((sum, p) => sum + p.length, 0);
-        if (length < MIN_QUOTE_CHARS) return false;
-        return corpus.some((file) => parts.every((p) => file.includes(p)));
-    });
+    const marks = [...straight.matchAll(/"/g)].map((m) => m.index ?? 0);
+    for (let i = 0; i < marks.length; i++) {
+        const last = Math.min(marks.length - 1, i + 1 + MAX_INNER_QUOTE_MARKS);
+        for (let j = i + 1; j <= last; j++) {
+            const parts = straight
+                .slice(marks[i] + 1, marks[j])
+                .split(/\.{3}|\u2026/)
+                .map((p) => trimPunctuation(normalizeInstructionText(p)))
+                .filter(Boolean);
+            const length = parts.reduce((sum, p) => sum + p.length, 0);
+            if (length < MIN_QUOTE_CHARS || length > longest) continue;
+            if (corpus.some((file) => parts.every((p) => file.includes(p)))) {
+                return true;
+            }
+        }
+    }
+    return false;
 }

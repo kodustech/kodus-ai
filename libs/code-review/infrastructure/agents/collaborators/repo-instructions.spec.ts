@@ -416,6 +416,23 @@ describe('quotesRepoInstruction', () => {
         expect(quotesRepoInstruction(content, context)).toBe(false);
     });
 
+    // Content is LLM output with no length bound; trying every pair of quote
+    // marks against a full 64 KB budget took seconds with 200 of them.
+    it('stays fast on a finding full of quotes that match nothing', () => {
+        const big = {
+            ...context,
+            files: [{ ...context.files[0], content: 'x'.repeat(64_000) }],
+        };
+        const text = Array.from(
+            { length: 400 },
+            (_, i) => `"quoted thing number ${i}"`,
+        ).join(' and ');
+
+        const started = Date.now();
+        expect(quotesRepoInstruction(text, big)).toBe(false);
+        expect(Date.now() - started).toBeLessThan(500);
+    });
+
     it('rejects every quote when no instructions were collected', () => {
         expect(
             quotesRepoInstruction(
