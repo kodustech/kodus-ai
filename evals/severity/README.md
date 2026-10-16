@@ -39,8 +39,10 @@ node evals/severity/run.js --mock=heuristic --gate
 node evals/severity/run.js --mock=all-medium --gate   # expect false_drop if goldens are high
 node evals/severity/run.js --mock=agent
 
-# Live (needs model key from secondary-models.js)
-node evals/severity/run.js --model=gpt-5.4-mini --gate
+# Production's pass (severity-runner.js: AgentReviewStage.reclassifyAndFilterSeverity),
+# on the managed default, or any tier-0 model routed as an org's BYOK model
+node evals/severity/run.js --gate
+node evals/severity/run.js --model=<tier-0 id> --gate
 ```
 
 Datasets: `evals/secondary/datasets/` (shared with format/dedup smoke).

@@ -6,7 +6,8 @@
 //   verify     per agent loop, the candidates its first verification pass
 //              judged and the files the finder investigated (the evidence
 //              gate's input)
-//   anchoring  what AgentReviewStage.anchorSuggestionsToDiff received
+//   anchoring  each agent's verified findings, before the path check
+//              (mapAgentFindings) and anchorSuggestionsToDiff
 //   dedup      what dedupSuggestionStreams received
 //   severity   what reclassifyAndFilterSeverity received
 // Each finding is labelled with the known bug it matches (known-bugs.js), read
@@ -91,20 +92,26 @@ async function snapshotCase(caseId, route, judgeKey) {
         // eslint-disable-next-line no-await-in-loop
         verify.loops.push({ loop: loop.loop, investigated: loop.investigated, candidates: await labelled(loop.candidates) });
     }
-    const step = async (name) =>
-        steps[name] ? { ...(steps[name].kodyRules ? { kodyRules: steps[name].kodyRules } : {}), candidates: await labelled(steps[name].suggestions) } : { candidates: [] };
+    const step = async (name) => (steps[name] ? { candidates: await labelled(steps[name].suggestions) } : { candidates: [] });
+    // Anchoring starts at the path check: each agent's verified findings, then
+    // the stage's line snap with the Kody Rules it was given.
+    const anchoring = { kodyRules: steps.anchorSuggestionsToDiff?.kodyRules || [], agents: [] };
+    for (const call of steps.mapper || []) {
+        // eslint-disable-next-line no-await-in-loop
+        anchoring.agents.push({ params: call.params, candidates: await labelled(call.suggestions) });
+    }
     return {
         caseId,
         knownBugs: bugs.length,
         verify,
-        anchoring: await step('anchorSuggestionsToDiff'),
+        anchoring,
         dedup: await step('dedupSuggestionStreams'),
         severity: await step('reclassifyAndFilterSeverity'),
         shipped: review.shipped.length,
     };
 }
 
-const found = (c) => new Set([...c.verify.loops.flatMap((l) => l.candidates), ...c.anchoring.candidates].filter((x) => x.bug !== null).map((x) => x.bug)).size;
+const found = (c) => new Set(c.verify.loops.flatMap((l) => l.candidates).filter((x) => x.bug !== null).map((x) => x.bug)).size;
 
 async function main() {
     const judgeKey = loadJudgeKey();
@@ -135,7 +142,7 @@ async function main() {
                 fs.writeFileSync(done, JSON.stringify(cases[i]));
                 const c = cases[i];
                 console.log(
-                    `${caseIds[i]}: verify ${c.verify.loops.reduce((n, l) => n + l.candidates.length, 0)} · anchoring ${c.anchoring.candidates.length} · dedup ${c.dedup.candidates.length} · severity ${c.severity.candidates.length} · shipped ${c.shipped} · ${found(c)}/${c.knownBugs} known bugs found`,
+                    `${caseIds[i]}: verify ${c.verify.loops.reduce((n, l) => n + l.candidates.length, 0)} · anchoring ${c.anchoring.agents.reduce((n, a) => n + a.candidates.length, 0)} · dedup ${c.dedup.candidates.length} · severity ${c.severity.candidates.length} · shipped ${c.shipped} · ${found(c)}/${c.knownBugs} known bugs found`,
                 );
             } catch (error) {
                 failed.push(caseIds[i]);

@@ -14,8 +14,9 @@ function caseSentence(caseId, stage, reaching, known) {
     return `Keeps the known bugs of "${title.length > room ? `${title.slice(0, room - 1)}…` : title}${rest}`;
 }
 
-// The findings a stage gets in a snapshot case (verify: every loop's).
-const inputOf = (stage, c) => (stage === 'verify' ? c.verify.loops.flatMap((l) => l.candidates) : c[stage].candidates);
+// The findings a stage gets in a snapshot case (verify: every loop's; anchoring: every agent's).
+const inputOf = (stage, c) =>
+    stage === 'verify' ? c.verify.loops.flatMap((l) => l.candidates) : stage === 'anchoring' ? c.anchoring.agents.flatMap((a) => a.candidates) : c[stage].candidates;
 
 function catalogFor(stage, snapshot = 'deepseek-v4-flash@fireworks') {
     // eslint-disable-next-line global-require, import/no-dynamic-require

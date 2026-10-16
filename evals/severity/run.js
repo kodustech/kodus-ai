@@ -3,7 +3,7 @@
 //   node evals/severity/run.js --mock=heuristic     # CI: no LLM keys
 //   node evals/severity/run.js --mock=all-medium
 //   node evals/severity/run.js --mock=agent
-//   node evals/severity/run.js --model=gpt-5.4-mini  # live (needs keys)
+//   node evals/severity/run.js [--model=<tier-0 id>] # production's pass (the managed default without --model)
 //   node evals/severity/run.js --gate --mock=heuristic
 //
 // Exit: 0 pass / 1 quality gate / 2 infra
@@ -14,7 +14,6 @@ const {
     heuristicJudgeSeverity,
     normalizeSeverity,
 } = require('./severity-eval');
-const { SECONDARY_BASELINE } = require('../shared/secondary-models');
 
 const DATA =
     process.env.SECONDARY_DATASETS ||
@@ -75,17 +74,19 @@ function mockClassify(mode, findings) {
 async function main() {
     const datasets = loadDatasets();
     const mock = args.mock;
-    const modelKey = args.model || SECONDARY_BASELINE;
+    let runSeverity = null;
+    let modelKey = null;
+    if (!mock) {
+        const runner = require('./severity-runner');
+        runSeverity = runner.runSeverity;
+        modelKey = args.model || runner.DEFAULT_MODEL;
+    }
     const gate = !!args.gate;
     const falseDropMax =
         args['false-drop-max'] != null ? Number(args['false-drop-max']) : 0;
     const parseFailMax =
         args['parse-fail-max'] != null ? Number(args['parse-fail-max']) : 0;
 
-    let runSeverity = null;
-    if (!mock) {
-        ({ runSeverity } = require('./severity-runner'));
-    }
 
     const rows = [];
     for (const ds of datasets) {

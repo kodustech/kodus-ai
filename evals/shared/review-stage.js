@@ -66,10 +66,11 @@ const clone = (value) => (value === undefined ? undefined : JSON.parse(JSON.stri
 
 /**
  * Records, into the review's store `steps`, what each post-agent step of
- * AgentReviewStage received and returned, and for each agent loop what its
+ * AgentReviewStage received and returned, what each agent's findings were
+ * before the path check (mapAgentFindings), and for each agent loop what its
  * verify step got: the candidates it judged first and the files the finder
- * investigated (the evidence gate's input). Wraps each method without changing
- * its arguments or result.
+ * investigated (the evidence gate's input). Wraps each function without
+ * changing its arguments or result.
  */
 let reviewObserved = false;
 function observeTheReview() {
@@ -87,6 +88,18 @@ function observeTheReview() {
         };
     };
     wrap('anchorSuggestionsToDiff', ([suggestions, , kodyRules], out) => ({ suggestions, kodyRules, out }));
+
+    // The path check before it: each agent's verified findings through
+    // mapAgentFindings (finding-mapper.ts), as the agent provider calls it.
+    const mapper = lib('code-review/infrastructure/agents/collaborators/finding-mapper.ts');
+    const mapFindings = mapper.mapAgentFindings;
+    mapper.mapAgentFindings = (agentResult, ctx) => {
+        if (steps()) {
+            const { changedFiles, logger, ...params } = ctx;
+            (steps().mapper = steps().mapper || []).push({ suggestions: clone(agentResult.findings?.suggestions || []), params: clone(params) });
+        }
+        return mapFindings(agentResult, ctx);
+    };
     wrap('dedupSuggestionStreams', ([suggestions], out) => ({ suggestions, out: out.deduped }));
     wrap('reclassifyAndFilterSeverity', ([suggestions], out) => ({ suggestions, out }));
 
@@ -318,6 +331,37 @@ async function checkout(repository) {
     return sandbox;
 }
 
+// The team's config as getConfig resolves it, with the codeReview task's model
+// routed as ValidateConfigStage routes it.
+async function routedTeamConfig({ team, route, permissionService, codeManagement, repository, preliminaryFiles }) {
+    const { routeCodeReviewModel } = lib('code-review/pipeline/stages/route-code-review-model.ts');
+    const store = await teamStore(team, permissionService);
+    const codeReviewConfig = await resolveTeamConfig({ permissionService, store, codeManagement, repository, preliminaryFiles });
+    const routed = routeCodeReviewModel(route.storedConfig, codeReviewConfig);
+    codeReviewConfig.resolvedModelSlot = routed.resolvedModelSlot;
+    codeReviewConfig.byokConfig = routed.resolvedModelSlot;
+    return codeReviewConfig;
+}
+
+/**
+ * What the steps after the agents read for findings that come with no PR (a
+ * dataset of findings): the team's config and routed model as above, over a
+ * repository with no Kodus config file, on PR 1. Returns the context and the
+ * platform, for buildAgentReviewStage.
+ */
+async function teamContext({ team = {}, route, permissionService }) {
+    const codeManagement = platform({ baseRef: 'main', prFiles: [], prCommits: [], content: async () => null });
+    const codeReviewConfig = await routedTeamConfig({
+        team,
+        route,
+        permissionService,
+        codeManagement,
+        repository: { id: 'eval-findings', name: 'findings' },
+        preliminaryFiles: [],
+    });
+    return { context: { organizationAndTeamData: EVAL_ORG, codeReviewConfig, pullRequest: { number: 1 } }, codeManagement };
+}
+
 /**
  * One PR up to the agents, as production prepares it: the team's config, the
  * routed model, the context ValidateConfigStage and FetchChangedFilesStage
@@ -330,7 +374,6 @@ async function checkout(repository) {
  * cleanup of a repository written for the eval.
  */
 async function prepareReview({ pr, team = {}, route, permissionService, previousDecisions }) {
-    const { routeCodeReviewModel } = lib('code-review/pipeline/stages/route-code-review-model.ts');
     const repository = {
         id: `eval-${(pr.repo || 'inline/repo').replace('/', '-')}`,
         name: (pr.repo || 'inline/repo').split('/')[1],
@@ -354,19 +397,14 @@ async function prepareReview({ pr, team = {}, route, permissionService, previous
             prCommits: pr.commits || [],
             content: (file) => contentAt(repo.cloneUrl, repo.head, file),
         });
-        const store = await teamStore(team, permissionService);
-
-        const codeReviewConfig = await resolveTeamConfig({
+        const codeReviewConfig = await routedTeamConfig({
+            team,
+            route,
             permissionService,
-            store,
             codeManagement,
             repository: { id: repository.id, name: repository.name },
             preliminaryFiles: pr.files,
         });
-        // ValidateConfigStage: the codeReview task's routed model.
-        const routed = routeCodeReviewModel(route.storedConfig, codeReviewConfig);
-        codeReviewConfig.resolvedModelSlot = routed.resolvedModelSlot;
-        codeReviewConfig.byokConfig = routed.resolvedModelSlot;
 
         let context = {
             organizationAndTeamData: EVAL_ORG,
@@ -430,4 +468,4 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
     }
 }
 
-module.exports = { reviewPullRequest, prepareReview, buildAgentReviewStage, observeTheLoop, observeTheReview, observedLoops, loopKey, teamStore, platform, checkout };
+module.exports = { reviewPullRequest, prepareReview, teamContext, buildAgentReviewStage, observeTheLoop, observeTheReview, observedLoops, loopKey, teamStore, platform, checkout };

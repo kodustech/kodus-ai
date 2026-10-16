@@ -1,13 +1,14 @@
 # Secondary-pass eval harness
 
-> - **Answers:** Shared datasets and model registry for the dedup and severity evals.
+> - **Answers:** Shared datasets for the dedup and severity evals.
 > - **Runs:** through those evals.
 > - **Run it:** `node evals/secondary/build-findings-dataset.js <recall-result.json>`
 > - **Gate:** none.
 > - **Cost:** none.
 
-Shared datasets + model registry for the three review **secondary** passes that
-today run on platform `gpt-5.4-mini` and we want to certify for **client BYOK**.
+Shared datasets for the review's **secondary** passes, which run on the org's
+routed model (its BYOK model, else the managed default) and we want to certify
+for **client BYOK**. The models route through `evals/shared/tier0-models.js`.
 
 | Pass | Directory | Status |
 |---|---|---|
@@ -21,7 +22,6 @@ See [BYOK-READINESS.md](./BYOK-READINESS.md) for the migration decision matrix.
 
 - `datasets/` — smoke PRs committed for CI (mock gates)
 - `build-findings-dataset.js` — build full set from finder-recall JSON
-- `evals/shared/secondary-models.js` — model registry for A/B
 
 ```bash
 # rebuild full datasets from a recall run

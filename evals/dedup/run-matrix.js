@@ -1,4 +1,4 @@
-// Run the dedup eval across secondary-model candidates (BYOK readiness matrix).
+// Run the dedup eval across the tier-0 models (BYOK readiness matrix).
 //
 //   node evals/dedup/run-matrix.js
 //   node evals/dedup/run-matrix.js --models=gpt-5.4-mini,kimi-k2.7-code --limit=5
@@ -6,10 +6,8 @@
 // Requires live keys. For CI without keys use run.js --mock=identity --gate.
 const { spawnSync } = require('child_process');
 const path = require('path');
-const {
-    SECONDARY_MATRIX,
-    SECONDARY_BASELINE,
-} = require('../shared/secondary-models');
+const { tier0 } = require('../shared/tier0-models');
+const { DEFAULT_MODEL } = require('./dedup-runner');
 
 const args = Object.fromEntries(
     process.argv.slice(2).map((a) => {
@@ -20,13 +18,11 @@ const args = Object.fromEntries(
 
 const models = args.models
     ? String(args.models).split(',').map((s) => s.trim()).filter(Boolean)
-    : SECONDARY_MATRIX;
+    : tier0();
 
 const extra = [];
 if (args.limit) extra.push(`--limit=${args.limit}`);
 if (args.pr) extra.push(`--pr=${args.pr}`);
-// Production shipped config
-extra.push('--guard=content', '--contentthresh=0.3');
 if (args.gate) extra.push('--gate');
 
 const ROOT = path.join(__dirname, '../..');
@@ -66,5 +62,5 @@ const gate = results.filter((r) => r.status === 'gate');
 if (infra.length) process.exit(2);
 if (gate.length && args.gate) process.exit(1);
 console.log(
-    `\nBaseline prod secondary: ${SECONDARY_BASELINE}. Compare each BYOK candidate against it.`,
+    `\nBaseline: ${DEFAULT_MODEL} (the managed default). Compare each BYOK model against it.`,
 );
