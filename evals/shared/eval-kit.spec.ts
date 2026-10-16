@@ -17,7 +17,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await port.runAiSdkLLMInSpan({ spanName: 'b', exec: async () => { throw billed; } }).catch(() => {});
     // Never answered: not counted.
     await port.runAiSdkLLMInSpan({ spanName: 'c', exec: async () => { throw new Error('ETIMEDOUT'); } }).catch(() => {});
-    process.stdout.write(JSON.stringify(tokensUsed()));
+    // Exit once the JSON is flushed: the engine can leave handles open.
+    process.stdout.write(JSON.stringify(tokensUsed()), () => process.exit(0));
 })();
 `;
 
