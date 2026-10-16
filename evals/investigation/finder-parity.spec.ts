@@ -105,14 +105,26 @@ describe('finder input data', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { internals } = require('./agent-provider');
 
-    it("passes the dataset's changed files through, the rendered patch standing in for a missing raw one", () => {
-        const row = { filename: 'src/a.ts', patchWithLinesStr: '@@ -1 +1,2 @@\n  1 +x', status: 'modified', additions: 7, deletions: 2 };
-        const raw = { filename: 'src/b.ts', patch: '@@ -1 +1 @@\n+y', patchWithLinesStr: 'rendered', additions: 1, deletions: 0 };
-        expect(internals.changedFilesOf({ changedFilesFull: JSON.stringify([row, raw]), changedFiles: '[]' })).toEqual([
-            { ...row, patch: row.patchWithLinesStr },
-            raw,
-        ]);
-        expect(internals.changedFilesOf({ changedFiles: JSON.stringify([raw]) })).toEqual([raw]);
+    it("stores the case's memories as global Kody Rules of type memory, and its overrides as the team's config", () => {
+        delete process.env.RECALL_CATEGORIES;
+        delete process.env.RECALL_HEAVY;
+        const team = internals.teamOf({ languageResultPrompt: 'pt-BR', memoryRules: [{ title: 't', rule: 'r' }], v2PromptOverrides: { generation: { main: 'x' } } });
+        expect(team.language).toBe('pt-BR');
+        expect(team.rules).toMatchObject([{ title: 't', rule: 'r', type: 'memory', status: 'active', repositoryId: 'global' }]);
+        expect(team.codeReviewConfig.configs.v2PromptOverrides).toEqual({ generation: { main: 'x' } });
+        expect(internals.teamOf({}).codeReviewConfig).toBeNull();
+    });
+
+    it('refuses a mode production gates behind a release the eval has no org for', () => {
+        process.env.RECALL_HEAVY = '1';
+        expect(() => internals.teamOf({})).toThrow(internals.NotAProductionRoute);
+    });
+
+    it("needs the platform's recorded files for a case, and hands them over as they are", () => {
+        expect(() => internals.prOf({ caseId: 'c' })).toThrow(/fetch-pr-data/);
+        const files = [{ filename: 'a.ts', patch: '@@ -1 +1 @@\n+x', status: 'modified' }];
+        const pr = internals.prOf({ caseId: 'c', repositoryFullName: 'o/r', prNumber: 3, prHead: { ref: 'h', sha: 's' }, prBase: { ref: 'main' }, prFiles: files });
+        expect(pr).toMatchObject({ repo: 'o/r', number: 3, headRef: 'h', headSha: 's', baseRef: 'main', files });
     });
 
     it('sets the team category toggles only when RECALL_CATEGORIES asks', () => {
