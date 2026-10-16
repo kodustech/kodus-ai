@@ -1,0 +1,2052 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "0a23223ef4a5acb6fde41fe88aec59c301ae9aa21604bb9d3ce843ac289feeb2"
+  },
+  "startedAt": "2026-10-15T12:56:42.285Z",
+  "updatedAt": "2026-10-15T13:26:16.872Z",
+  "complete": true,
+  "selectedCases": [
+    "R4a-kodus2011-status-implemented",
+    "R10-kodus2044-reversal",
+    "R17-repost-prod-profile",
+    "P29-hold-leak-on-create",
+    "P38-unreachable-retry-reintroduced"
+  ],
+  "casesSourceDigest": "794e0f5c8afcfc1fe0fcc692edb795d56c70f3ec93286f26d408472890c87358",
+  "summary": {
+    "measured": 25,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 15,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "index-reference (#2039)": {
+        "n": 12,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R4a-kodus2011-status-implemented · entity-not-neutralized [if_delivered_linked, proposed]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "R10-kodus2044-reversal · unresolved-team-bypass [if_delivered_linked, proposed]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "R17-repost-prod-profile · await-sleep-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P29-hold-leak-on-create · book-hold-leak-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P38-unreachable-retry-reintroduced · retry-unreachable-reintroduced-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 79756,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 84084,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 70049,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 28,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 64361,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 37987,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 127265,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: The new createMemoryRule early-return omits the required output fields `uuid`, `rule`, and `status`, returning `data: { title, action, requiresApproval, message, link }` while the tool's `outputSchema` declares `data: z.looseObject({ uuid: z.string(), title, rule: z.string(), status: z.enum(KodyRulesStatus), action, requiresApproval, link })` with `uuid`, `rule`, and `status` required. WHY: The declared output contract for KODUS_CREATE_MEMORY is violated on the cross-org refusal path — clients (or SDK output validation) that require those fields will reject/fail on the refusal response, and this path is reachable whenever the supplied teamId belongs to another organization. HOW: Return the required fields (e.g. `uuid: ''`, `rule: args.kodyRule.rule`, `status: KodyRulesStatus.ACTIVE`) or make `uuid`/`rule`/`status` optional in the outputSchema so the refusal shape matches the contract, mirroring how createKodyRule's `data` fields are all optional.",
+          "keep": true,
+          "rationale": "The outputSchema at lines 1070-1087 declares `data: z.looseObject({ uuid: z.string(), title: z.string(), rule: z.string(), status: z.enum(KodyRulesStatus), ... })` with uuid, rule, and status as REQUIRED (non-optional). The refusal early-return at lines 1116-1127 returns `data: { title, action, requiresApproval, message, link }` — omitting uuid, rule, and status. This is a genuine contract mismatch: the sibling createKodyRule tool (lines 515-520) correctly makes all those fields `.optional()`, confirming the asymmetry is a real defect, not intended. The path is reachable via teamBelongsToAnotherOrganization (line 1112) whenever the teamId resolves to another org. Not refuted and not a repeat of the earlier suggestion (which concerned refusing non-resolving teams, a different failure).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1040,
+                "endLine": 1180
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "KODUS_CREATE_MEMORY|outputSchema|looseObject",
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "pattern": "teamBelongsToAnotherOrganization"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/mcp-server",
+                "pattern": "outputSchema"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/mcp-server",
+                "pattern": "outputSchema",
+                "glob": "!**/kodyRules.tools.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 505,
+                "endLine": 560
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: The new createMemoryRule refusal payload (lines 1116-1127) returns `data` with only {title, action, requiresApproval, message, link}, but the tool's outputSchema (lines 1070-1084) declares `uuid: z.string()`, `rule: z.string()`, and `status: z.enum(KodyRulesStatus)` as REQUIRED inside `z.looseObject` (looseObject only permits extra keys, it still enforces declared required ones). WHY: When the gate refuses a cross-org team, the returned object omits three required fields, so the MCP output-schema validation fails and the caller gets a schema error instead of the intended `{success:false, message:'Team not found.'}` result. HOW: either add the missing required fields to the refusal payload, e.g. `uuid: '', rule: '', status: KodyRulesStatus.ACTIVE`, or mark uuid/rule/status optional in the memory outputSchema to match the createKodyRule schema.",
+          "keep": true,
+          "rationale": "The refusal payload at lines 1116-1127 omits uuid, rule, and status, while the outputSchema at lines 1073-1084 declares those three fields as required (non-optional) inside z.looseObject. looseObject only permits extra keys; it still enforces declared required ones. Thus a schema-validating MCP output layer would reject this refusal response. This is a distinct failure from the PreviousDecision entry (which concerned the gate refusing too broadly), so it is not a repeat. No evidence refutes the claim; the code matches the finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1040,
+                "endLine": 1135
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "outputSchema|outputSchemaValidator|structuredContent|validateOutput|parseAsync|safeParse",
+                "path": "libs/mcp-server",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "wrapToolHandler",
+                "path": "libs/mcp-server",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/mcp-server",
+                "pattern": "wrapToolHandler|outputSchema",
+                "glob": "*.ts",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "*mcp*server*.ts",
+                "path": "libs"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 46,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1116,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In `libs/mcp-server/tools/kodyRules.tools.ts`, the `createMemoryRule` early return omits required `uuid`, `rule`, and `status`, so the `KODUS_CREATE_MEMORY` `outputSchema` is violated on the cross-org refusal path and clients or SDK output validation will reject the response whenever `teamId` belongs to another organization. Return those fields (e.g. `uuid: ''`, `rule: args.kodyRule.rule`, `status: KodyRulesStatus.ACTIVE`) or make them optional in the `outputSchema` so the refusal shape matches the contract, mirroring `createKodyRule`'s optional `data` fields."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1116,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In `createMemoryRule` at lines 1116-1127, the refusal `data` omits `uuid`, `rule`, and `status`, which the `outputSchema` at lines 1070-1084 declares required inside `z.looseObject`, so MCP output-schema validation fails and the caller receives a schema error instead of the intended `{success:false, message:'Team not found.'}` result when a cross-org team is refused. Add the missing fields (e.g. `uuid: ''`, `rule: ''`, `status: KodyRulesStatus.ACTIVE`) or mark `uuid`, `rule`, and `status` optional in the memory `outputSchema` to match the `createKodyRule` schema."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 140431,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: the new createMemoryRule team refusal returns `data` without `uuid`, `rule` or `status`, but this tool's outputSchema declares those three keys as required (z.looseObject with `uuid: z.string()`, `rule: z.string()`, `status: z.enum(KodyRulesStatus)` at lines 1070-1084). WHY: whenever a caller passes a teamId belonging to another organization, the returned structured content does not satisfy the tool's own declared output schema, so the MCP client receives an invalid payload (or wrapToolHandler throws a Zod validation error) instead of a clean success:false. Note the sibling createKodyRule tool marks uuid/title/rule/status as `.optional()` in its data schema precisely so its analogous refusal path (lines 542-548) stays valid; the memory tool's schema does not. HOW: make the required memory fields optional in the schema, or populate them in the refusal object, e.g. return `data: { uuid: '', title: args.kodyRule.title, rule: args.kodyRule.rule, status: KodyRulesStatus.ACTIVE, action: 'skipped', requiresApproval: false, message: 'Team not found.', link: '' }` — or mirror createKodyRule by making uuid/rule/status `.optional()` in the outputSchema.",
+          "keep": true,
+          "rationale": "no parseable verdict — kept by default",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1055,
+                "endLine": 1145
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 520,
+                "endLine": 560
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 520,
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 495
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "wrapToolHandler",
+                "path": "libs/mcp-server",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "wrapToolHandler",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "wrapToolHandler",
+                "path": "libs/mcp-server",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/utils/mcp-protocol.utils.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1111,
+          "label": "bug",
+          "earlierId": "kodus-2044-round-a",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 44,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 163488,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: The new early-return branch in `createMemoryRule` returns `data` without `uuid`, `rule`, and `status`, but the tool's `outputSchema` (line 1073-1084) declares `uuid: z.string()`, `rule: z.string()`, and `status: z.enum(KodyRulesStatus)` as required fields. WHY: When this branch is taken (team confirmed to belong to another organization), the returned object does not match the declared output schema; `wrapToolHandler` validates/consumes the result against `outputSchema`, so the response is either rejected as a schema error or serialized with missing required fields — the caller gets a malformed/errored result instead of the intended `{ success: false, message: 'Team not found.' }`. HOW: Include the required fields (or make them optional in `outputSchema`, as the sibling `createKodyRule` schema does) so the early return satisfies the schema, e.g. `data: { uuid: '', title: args.kodyRule.title, rule: args.kodyRule.rule, status: KodyRulesStatus.ACTIVE, action: 'skipped', requiresApproval: false, message: 'Team not found.', link: '' }`.",
+          "keep": true,
+          "rationale": "no parseable verdict — kept by default",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1050,
+                "endLine": 1140
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "function wrapToolHandler|wrapToolHandler",
+                "path": "libs/mcp-server"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/mcp-server/utils/mcp-protocol.utils.ts",
+                "pattern": "wrapToolHandler|outputSchema|parse|safeParse"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "mcp-protocol.utils.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "wrapToolHandler|outputSchema|safeParse|parse\\(",
+                "glob": "**/mcp-protocol.utils.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/utils/mcp-protocol.utils.ts",
+                "startLine": 1,
+                "endLine": 120
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "wrapToolHandler",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 44,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1116,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The early-return branch in `createMemoryRule` returns `data` without `uuid`, `rule`, and `status`, but the tool's `outputSchema` at line 1073-1084 declares those as required, so `wrapToolHandler` validation either rejects the response or serializes it with missing required fields and the caller receives a schema error instead of the intended `{ success: false, message: 'Team not found.' }`. Include the required fields in that return (or make them optional in `outputSchema` as the sibling `createKodyRule` schema does), for example `uuid: ''`, `title: args.kodyRule.title`, `rule: args.kodyRule.rule`, `status: KodyRulesStatus.ACTIVE`, `action: 'skipped'`, `requiresApproval: false`, `message: 'Team not found.'`, and `link: ''`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 67024,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 41,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 91608,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: the new early return in createMemoryRule (lines 1116-1128) builds `data` without `uuid`, `rule` and `status`, but this tool's outputSchema declares `data` as `z.looseObject({ uuid: z.string(), title: z.string(), rule: z.string(), status: z.enum(KodyRulesStatus), action, requiresApproval, link })` (lines 1073-1084), where those three fields are required. WHY: `looseObject` only relaxes *unknown* keys, not required ones, so on a cross-organization team the structured output fails schema validation — the caller gets a validation error / missing structuredContent instead of the intended `success: false` refusal, breaking the tool's output contract on the exact path this PR adds. HOW: make the refusal `data` satisfy the schema, e.g. return `uuid: '', rule: '', status: KodyRulesStatus.ACTIVE` alongside the existing fields (or relax the schema's required keys), mirroring how createKodyRule's refusal stays within its optional-field schema.",
+          "keep": true,
+          "rationale": "The claim is technically accurate. The outputSchema at lines 1073-1084 declares `data` as `z.looseObject({ uuid: z.string(), title: z.string(), rule: z.string(), status: z.enum(KodyRulesStatus), action, requiresApproval, link })` — uuid, title, rule, and status are required (non-optional) fields. `z.looseObject` only permits additional/unknown keys; it does not relax required ones. The new early return at lines 1116-1128 builds `data` with only title, action, requiresApproval, message, and link — omitting the required uuid, rule, and status. On the cross-organization refusal path added by this PR, the returned structured output cannot satisfy the declared schema, so MCP output validation would fail / structuredContent would be rejected rather than delivering the intended success:false refusal. Note that createKodyRule's analogous refusal (line 545) stays valid only because its data fields are `.optional()` — the memory tool's schema does not, confirming the inconsistency the finding describes. The previous review decision (kodus-2044-round-a) addresses a different problem (the gate's over-broad refusal condition for non-resolving teams), not this schema-satisfaction defect, so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1040,
+                "endLine": 1140
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "outputSchema|structuredContent|looseObject",
+                "path": "libs/mcp-server"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 500,
+                "endLine": 620
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 850,
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 770
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/mcp-server",
+                "pattern": "wrapToolHandler|safeParse|outputSchema",
+                "glob": "*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: the new refusal branch in createMemoryRule returns a `data` object without `uuid`, `rule`, and `status`, although outputSchema.data declares all three as required (lines 1073-1079, no `.optional()`). WHY: the KODUS_CREATE_MEMORY response for a team of another organization does not conform to the tool's declared output schema — wrapToolHandler/schema validation will either reject the response or emit a structured result missing fields the contract promises, breaking callers that read `data.status`/`data.uuid` (the sibling createKodyRule path makes these optional for exactly this reason). HOW: either mark `uuid`, `rule`, and `status` optional in outputSchema.data like createKodyRule does, or populate them in the refusal branch (e.g. `status: KodyRulesStatus.ACTIVE`, empty strings for uuid/rule).",
+          "keep": true,
+          "rationale": "no parseable verdict — kept by default",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1060,
+                "endLine": 1140
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "wrapToolHandler",
+                "path": "libs/mcp-server",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "wrapToolHandler",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 500,
+                "endLine": 560
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "wrapToolHandler",
+                "path": "libs/mcp-server"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/utils/mcp-protocol.utils.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "export function wrapToolHandler|export const wrapToolHandler",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 39,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1116,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "On a cross-organization team the refusal response fails the outputSchema validation, so the caller receives a validation error or missing structuredContent instead of the intended `success: false` refusal, breaking the tool's output contract on the exact path this PR adds. Make the refusal `data` satisfy the schema, e.g. return `uuid: ''`, `rule: ''`, and `status: KodyRulesStatus.ACTIVE` alongside the existing fields, or relax the schema's required keys as createKodyRule's optional-field schema does."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1116,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The KODUS_CREATE_MEMORY response for a team in another organization does not conform to the declared output schema, so wrapToolHandler validation either rejects it or emits a structured result missing fields the contract promises, breaking callers that read `data.status` or `data.uuid`. Either mark `uuid`, `rule`, and `status` optional in outputSchema.data like createKodyRule does, or populate them in the refusal branch with `status: KodyRulesStatus.ACTIVE` and empty strings for `uuid` and `rule`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R17-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 51192,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: sleep(200 * attempt) is called without await inside the catch block of the async withRetry, so the returned promise is not awaited and the loop retries fn() immediately. WHY: the exponential backoff never happens — a failing dependency is hit all three times back-to-back with no delay, defeating the retry feature this PR adds. HOW: await the sleep call so the loop pauses between attempts.",
+          "keep": false,
+          "rationale": "The candidate describes the identical failure already raised by PreviousReviewDecision round-a-await-sleep (src/sync/retry.ts): sleep called without await, so retries fire immediately and backoff never happens. Same file, same function, same operation and consequence. Per the rules, a finding raising the problem a PreviousReviewDecisions entry already raised on this PR must be dropped — whatever its Outcome and even if the fix still looks unsolved. This is a repeat, not a different problem.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R17-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 63089,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: `log.warn('retrying', { attempt })` is emitted inside the catch block on every iteration, including the final one where `attempt === attempts` and no retry will occur. WHY: the last failure logs a \"retrying\" message for a retry that never happens, so retry logs over-count attempts by one and misreport exhausted operations as still retrying. HOW: only log when another attempt remains, e.g. `if (attempt < attempts) { log.warn('retrying', { attempt }); sleep(200 * attempt); }`.",
+          "keep": true,
+          "rationale": "The code confirms the claim: in the loop, the catch block on the final iteration (attempt === attempts) still executes `log.warn('retrying', { attempt })` before the loop exits and `throw lastError`, so a \"retrying\" message is logged even though no further retry will occur. The failure path is real and reachable (any failing call that exhausts all attempts). The finding describes a different problem from the earlier decision (which was about missing await on sleep), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/sync/retry.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `log.warn('retrying', { attempt })` is emitted inside the catch block on every iteration, including the final one where `attempt === attempts`, the last failure logs a retrying message for a retry that never happens, so retry logs over-count attempts by one and misreport exhausted operations as still retrying. Only log when another attempt remains by guarding `log.warn('retrying', { attempt })` and `sleep(200 * attempt)` with `if (attempt < attempts)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R17-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 56817,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: `log.warn('retrying', { attempt })` fires on every caught error, including the final attempt (attempt === attempts) where the loop then exits and `throw lastError` runs without any retry. WHY: the last log line claims a retry is happening when the operation is actually being abandoned, producing a misleading signal in logs/alerting that masks real terminal failures. HOW: only log when a retry will actually follow, e.g. `if (attempt < attempts) { log.warn('retrying', { attempt }); await sleep(200 * attempt); }`.",
+          "keep": true,
+          "rationale": "The code confirms the claim: on the final iteration (attempt === attempts) the catch block logs 'retrying' and calls sleep even though the loop then exits and `throw lastError` runs with no further retry. The log line is emitted unconditionally, so it does misreport a retry on the terminal failure. This is a real (low-severity) misleading-log behavior, not code style. It is also a different problem from the previous decision round-a-await-sleep (missing `await`), which addressed a separate defect at line 10; the current finding concerns the unconditional logging on the last attempt, a distinct issue in the same location. Not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/sync/retry.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`log.warn('retrying', { attempt })` also fires on the final attempt, including when `attempt === attempts`, so logs and alerting claim a retry is happening when `throw lastError` actually abandons the operation and masks terminal failures. Only log and `await sleep(200 * attempt)` when `attempt < attempts` so the warning is emitted only when a retry will follow."
+        }
+      ],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R17-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 37589,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: sleep(200 * attempt) is still called without await in the catch block, so the promise returned by sleep is discarded and the loop continues immediately. WHY: every retry fires back-to-back with no actual backoff (and withRetry can reject before any timer fires), so a failing downstream service is hit attempts times in a row; the fire-and-forget timer also keeps the event loop alive after withRetry settles, hanging short-lived processes. HOW: `await sleep(200 * attempt);`. This revises the earlier suggestion on this line: the fix that changed 200 to 200 * attempt did not address the missing await, so the reported failure still occurs.",
+          "keep": false,
+          "rationale": "The finding re-raises the exact issue already posted as PreviousDecision round-a-await-sleep (src/sync/retry.ts:10): sleep() called without await so backoff never happens and the service is hit back-to-back. The outcome is 'implemented', but the rule says to drop regardless of Outcome — including when the finding argues the applied fix is incomplete (here, only the argument changed from 200 to 200*attempt). The failure (no backoff, immediate retries) is the same operation and same consequence the earlier entry described, so this is a repeat, not a new problem.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R17-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 49297,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: `sleep(200 * attempt)` is called without `await` inside the async `withRetry` loop, so the returned promise is never awaited. WHY: control falls through to the next iteration immediately, the backoff delay never actually occurs (a failing service is hit three times back-to-back), and on the final failure a dangling timer/floating promise is left behind. HOW: await the call: `await sleep(200 * attempt);`.",
+          "keep": false,
+          "rationale": "This finding duplicates PreviousDecision round-a-await-sleep, which already raised the exact same problem at the same location: `sleep(...)` called without `await` in withRetry, so the backoff never occurs and a failing service is hit three times back-to-back. Same failure, same operation. Per the rules, a finding raising the same problem as an existing PreviousReviewDecisions entry must be dropped regardless of that entry's Outcome (here \"implemented\", even though the current diff shows the fix was not actually applied). The finding blames no new consequence and reverses nothing.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 93941,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In changeSeat, `await this.holds.free(booking.seatId)` (line 27) runs after `await this.holds.commit(hold)` (line 26) inside the same try, so if free() throws the catch calls `await this.holds.release(hold)` on a hold that was already committed. WHY: release() is documented (seat-holds.ts:5) as the operation that ends a hold, so releasing the already-committed hold can free the NEW seat that repo.update just assigned to the booking, leaving the seat bookable by another user while the booking still references it (double-booking / inconsistent state). HOW: only release the hold if it has not yet been committed — move commit and free after the try, or track a `committed` flag and skip release when it is true: `let committed = false; try { const updated = await this.repo.update(...); await this.holds.commit(hold); committed = true; await this.holds.free(booking.seatId); return updated; } catch (err) { if (!committed) await this.holds.release(hold); throw err; }`.",
+          "keep": true,
+          "rationale": "The code matches the claim: changeSeat runs commit(hold) at line 26 then free(booking.seatId) at line 27 inside the same try, and the catch unconditionally calls release(hold) at line 30. If free() throws after commit(), the catch releases a hold that was already committed. The interface doc (seat-holds.ts:5) states holds are ended by commit() or release(), and acquire() throws if a hold or booking already has the seat, so releasing the committed hold can free the newly assigned seat while the booking still references it (repo.update already set seatId=newSeatId at line 25) — a genuine double-booking/inconsistent-state path. This is not the same failure as the earlier hold-leak finding (P29), which concerned a hold never being released; here the failure is an over-release of a committed hold corrupting seat state. No upstream guard prevents it, and free() is an awaited async call that can reject. Cannot refute.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "free\\(|release\\(|commit\\(",
+                "path": "src/bookings"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "*seat-holds*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class.*SeatHolds|free\\(seatId"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P29-hold-leak-on-create",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/bookings/bookings.service.ts:13` (2026-10-06 12:00 UTC).\n\nIn `changeSeat`, because `await this.holds.free(booking.seatId)` (line 27) runs after `await this.holds.commit(hold)` (line 26) inside the same `try`, a `free()` failure triggers the `catch` to call `await this.holds.release(hold)` on an already-committed hold; since `release()` is documented in `seat-holds.ts:5` as ending a hold, this can free the new seat that `repo.update` just assigned, leaving it bookable by another user while the booking still references it. Only release the hold when it has not been committed by moving `commit` and `free` after the `try`, or by tracking a `committed` flag and skipping `release` when it is true."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 85919,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In changeSeat, `free(booking.seatId)` runs inside the try AFTER `commit(hold)`; if free throws, the catch calls `release(hold)` on an already-committed hold and the old seat is never freed. WHY: holds never expire and free() is the only way to unblock the old seat, so the previous seat stays locked for every user forever while the booking already points at the new seat (partial-success leak). HOW: move the old-seat free outside the rollback scope so a failure there cannot trigger release(hold) on a committed hold, e.g. commit then free with its own handling, or free the old seat after the try block.",
+          "keep": true,
+          "rationale": "The claim is technically accurate. In changeSeat (lines 26-31), commit(hold) executes before free(booking.seatId), both inside the try. If free throws, the catch runs release(hold) on an already-committed hold, and the old seat is never freed. Per seat-holds.ts, holds never expire and free() is the only path that unblocks the old seat, so the previous seat stays locked while the booking already points at the new seat — a partial-success leak. This is a DIFFERENT problem from PreviousDecision index 3 (round-a-P29-hold-leak-on-create), which addressed the leak where acquire succeeds but a later step fails before commit. Here the failure is after commit, producing a distinct failure mode (freed old seat vs. uncommitted hold leak). The root cause, failure path, and code evidence all hold, so it cannot be refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "free|commit|release",
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: book still acquires a seat hold (line 15) and then charges the card and inserts the booking without wrapping the post-acquire steps in try/catch, even though the new comment on line 12 claims the hold is released on decline/insert failure. WHY: if payments.charge throws CardDeclinedError (payments.ts:2) or repo.insert rejects, holds.release(hold) is never called and holds never expire (seat-holds.ts:5), so the seat stays permanently blocked for every other user. HOW: wrap lines 15-19's post-acquire work in try/catch and call await this.holds.release(hold) before rethrowing, mirroring changeSeat/addGuest.",
+          "keep": false,
+          "rationale": "This is a verbatim repeat of PreviousDecision round-a-P29-hold-leak-on-create (src/bookings/bookings.service.ts:13-16), which already raised the identical failure: book acquires a hold, then charges/inserts, and on charge decline or insert failure the hold is never released, permanently blocking the seat. Same operation, same consequence, same fix proposed (wrap in try/catch, call holds.release, rethrow). The rule explicitly requires dropping a finding that raises again the problem a PreviousReviewDecisions entry already raised on this pull request, regardless of Outcome — the decision's \"implemented\" outcome notwithstanding, the current diff shows no try/catch in book (lines 15-18), which is exactly what that entry already flagged. No new/different problem is being described.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|acquire|commit",
+                "path": "src/bookings"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: in changeSeat, holds.free(booking.seatId) on line 27 runs inside the try after holds.commit(hold) on line 26, so a failure in free() triggers the catch that calls holds.release(hold) on an already-committed hold. WHY: the seat change has already been persisted and the new hold committed, yet the caller receives a thrown error and the code attempts to release a hold that commit() already ended — an invalid state transition (seat-holds.ts:5: only commit() or release() ends a hold) that can mask a successful operation as a failure. HOW: keep only the repo.update + commit in the guarded block (or move free() after the try/catch) so release is only attempted on the not-yet-committed hold.",
+          "keep": true,
+          "rationale": "The code at lines 24-32 confirms the claim: repo.update and holds.commit(hold) run before holds.free(booking.seatId), all inside the try. If free() throws, the catch calls holds.release(hold) on a hold that commit() already ended. seat-holds.ts:5 documents that only commit() or release() ends a hold, so release-after-commit is an invalid state transition, and the caller sees a thrown error even though the seat change was persisted and the new hold committed. This is a distinct problem from the earlier 'hold leak on create' decision (index 3), which concerned failing to release on failures before commit — here the issue is releasing an already-committed hold, the opposite failure mode. Not refutable from the code.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "commit|release|free",
+                "glob": "**/seat-holds*"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts",
+                "startLine": 1,
+                "endLine": 15
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 29,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 26,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `free(booking.seatId)` runs inside the try after `commit(hold)`, a failure there calls `release(hold)` on an already-committed hold and never frees the old seat, so that seat stays locked forever for every user while the booking already points at the new seat. Move the old-seat free outside the rollback scope—commit then free with its own handling, or free after the try block—so a failure there cannot trigger `release(hold)` on a committed hold."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 22,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A failure in `holds.free(booking.seatId)` on line 27, after `holds.commit(hold)` on line 26, enters the catch and calls `holds.release(hold)` on an already-committed hold, so the caller gets a thrown error even though the seat change was persisted, and the invalid state transition (seat-holds.ts:5, where only `commit()` or `release()` ends a hold) masks a successful operation as a failure. Keep only `repo.update` and `commit` in the guarded block, or move `free()` after the try/catch, so `release` is only attempted on a not-yet-committed hold."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 54034,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In changeSeat, holds.free(booking.seatId) is called inside the try block after holds.commit(hold), so if free throws the catch runs holds.release(hold) on an already-committed hold and the old seat (booking.seatId) is never freed. WHY: the booking row was already updated to newSeatId at line 25, so a failing free leaves the previous seat permanently blocked (holds never expire) while the committed hold is also released/undone, corrupting seat-hold state. HOW: commit and free the old seat outside the compensation scope, or only release the hold when commit has not yet succeeded, e.g. move free after the try/catch (or track a committed flag and skip release once committed).",
+          "keep": true,
+          "rationale": "The claim is technically accurate. In changeSeat, the booking row is updated to newSeatId (line 25), then holds.commit(hold) is called (line 26), then holds.free(booking.seatId) (line 27) — all inside the same try. If free throws, the catch calls holds.release(hold) on the already-committed hold (line 30), so the old seat (booking.seatId) is never freed and the committed hold is released/undone, corrupting hold state. This is a distinct failure from the previously-raised round-a-P29-hold-leak-on-create finding, which concerned holds leaking when pre-commit steps fail; here the bug is compensation after commit succeeds, the opposite ordering problem, and it is a real state-corruption path.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class.*[Hh]old|commit\\(|free\\(|release\\(",
+                "path": "src",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "free|commit|release",
+                "path": "src/bookings"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "line": 24,
+          "label": "bug",
+          "earlierId": "round-a-P29-hold-leak-on-create",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 26,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 108226,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In changeSeat, if holds.free(booking.seatId) throws after holds.commit(hold) has already succeeded, the catch block calls holds.release(hold) on a hold that commit() already ended, ending the same hold twice. WHY: the SeatHolds contract (src/bookings/seat-holds.ts:5) states commit() and release() are the two ways a hold ends, so releasing a committed hold either throws and masks the original free() error, or un-reserves the just-committed new seat and re-opens it for double-booking. HOW: track whether the hold was committed and only release it while it is still open, e.g. `let committed = false; try { ...; await this.holds.commit(hold); committed = true; await this.holds.free(booking.seatId); return updated; } catch (err) { if (!committed) await this.holds.release(hold); throw err; }`.",
+          "keep": true,
+          "rationale": "Confirmed by code: changeSeat calls holds.commit(hold) at line 26, then holds.free(booking.seatId) at line 27. If free() throws, the catch block (line 30) calls holds.release(hold) on a hold that commit() already ended. The SeatHolds contract (seat-holds.ts:5) states holds never expire and only commit() or release() ends one, so releasing a committed hold ends it twice — throwing and masking the original error, or un-reserving the newly committed seat and re-opening it for double-booking. Root cause, path, and failure are all real. This is a distinct failure from PreviousDecision index 3 (which concerned leaking a hold when a step BEFORE commit fails); this concerns double-ending a hold AFTER commit, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "commit|release|class.*SeatHolds|implements SeatHolds",
+                "glob": "*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 24,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In `changeSeat`, when `holds.free(booking.seatId)` throws after `holds.commit(hold)` has already succeeded, the catch block calls `holds.release(hold)` on a hold that commit() already ended, which per the `SeatHolds` contract (src/bookings/seat-holds.ts:5) either throws and masks the original `free()` error or un-reserves the just-committed new seat and re-opens it for double-booking. Track whether the hold was committed and only release it while it is still open."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 60960,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: book() acquires a seat hold on line 15 but, when payments.charge (declined card) or repo.insert throws, the hold is never released — the new comment on line 12 claims 'book releases the hold when the card is declined or the insert fails' but no try/catch/release was added, unlike changeSeat and addGuest. WHY: per the SeatHolds interface ('Holds never expire: only commit() or release() ends one'), the seat stays blocked for every user permanently after a single failed payment or insert. HOW: wrap the post-acquire work in try/catch exactly like the sibling methods, releasing the hold on failure and rethrowing.",
+          "keep": false,
+          "rationale": "The candidate finding is exactly the problem already raised in PreviousReviewDecisions entry round-a-P29-hold-leak-on-create (src/bookings/bookings.service.ts:13-16, \"book acquires a seat hold and then charges... if payments.charge throws or repo.insert fails, the hold is never released... wrap the rest in try/catch, call holds.release(hold) and rethrow\", Outcome: implemented). The current diff still shows book() without the try/catch (lines 13-19), while changeSeat/addGuest do have it — this is the same failure (unreleased hold in book()) as the earlier entry, merely reworded and noting the comment. Per the rules, a finding that raises again the problem a PreviousReviewDecisions entry already raised is dropped, regardless of outcome or whether it claims the fix is incomplete. No separate/other bug is being surfaced.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: the catch in changeSeat calls holds.release(hold) even when the failure happened at holds.free(booking.seatId) (line 27), which runs after holds.commit(hold) (line 26) has already ended the hold. WHY: per the SeatHolds contract (seat-holds.ts:5 'only commit() or release() ends one') releasing an already-committed hold is a double-end that can corrupt hold state, and the catch swallows the real failure — the old seat (booking.seatId) is never freed and stays leaked, while the caller gets an error implying the seat change did not happen. HOW: only release the hold if it has not been committed yet; e.g. track a committed flag or scope the try to just the update, and handle free separately.",
+          "keep": true,
+          "rationale": "Confirmed: in changeSeat the try block calls holds.commit(hold) (line 26) then holds.free(booking.seatId) (line 27); the catch (line 29-31) unconditionally calls holds.release(hold). If free() throws, commit() has already ended the hold per the SeatHolds contract (seat-holds.ts:5 'only commit() or release() ends one'), so release() is a double-end, and the real failure (old seat not freed → leak) is swallowed while an error is thrown to the caller. No committed flag or scoped try exists. This is not a repeat of the earlier hold-leak entry (round-a-P29-hold-leak-on-create), which was about NOT releasing a hold after a failure; this finding is the opposite problem (releasing an already-committed hold), a distinct failure in the same operation.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|commit|free|committed",
+                "glob": "*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 24,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "When `holds.free(booking.seatId)` fails after `holds.commit(hold)` has already ended the hold, the catch's `holds.release(hold)` double-ends it and can corrupt hold state, while the old seat stays leaked and the caller gets an error implying the seat change did not happen. Only release the hold when it has not been committed, for example by tracking a `committed` flag and handling `free` separately."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P38-unreachable-retry-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 44550,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P38-unreachable-retry-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 24190,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P38-unreachable-retry-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 35824,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/webhooks/outcome.ts",
+          "claim": "WHAT: This reverses the earlier applied fix by re-adding `if (status >= 400) return { kind: 'drop', ... }` before the 429/5xx checks, which again makes the 429 and 5xx retry branches (lines 13-14) unreachable dead code. WHY: 429 and every 5xx are dead-lettered instead of being requeued, so transient rate limits and server errors permanently drop deliveries, directly contradicting the comment on line 9. HOW: delete the `>= 400` drop branch; the final `return { kind: 'drop', reason: \\`unexpected status ${status}\\` }` already drops all other statuses, so 429 and 5xx reach their retry branches.",
+          "keep": false,
+          "rationale": "The technical claim is factually accurate: line 12 `if (status >= 400) return drop` precedes the 429/5xx retry branches on lines 13-14, making them unreachable dead code, so 429 and 5xx are dead-lettered instead of retried. However, this is exactly the problem already raised by PreviousReviewDecisions entry round-a-P38-unreachable-retry-reintroduced (same location src/webhooks/outcome.ts, same failure: 429/5xx dead-lettered and never retried because the `>= 400` drop check runs first, same proposed fix: delete the `>= 400` check). The candidate only adds a new cause attribution (\"the diff re-added the line\"), but the failure, operation, and consequence are identical to the entry already on this PR. Per the repeat rule, it must be dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/webhooks/outcome.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P38-unreachable-retry-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 36837,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P38-unreachable-retry-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 30593,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

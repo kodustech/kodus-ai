@@ -110,6 +110,8 @@ async function main() {
     // that exits 0 without calling it proves nothing about the engine path.
     const steps = [
         { name: 'preflight', args: ['evals/engine-gate.js', '--profile=harness'] },
+        // Replays recorded model output; only prose recovery reaches the model.
+        { name: 'parse', model: true, args: ['evals/parse/run.js', '--model=eval-fake', '--gate'] },
         { name: 'review-chain', args: ['evals/review-chain/run.js', '--gate'] },
         { name: 'shape-invariance', args: ['evals/review-chain/shape-invariance.js', '--gate'] },
         { name: 'verifier-verdict', args: ['evals/verifier-verdict/run.js', '--gate'] },
@@ -117,7 +119,10 @@ async function main() {
         // The live dedup runner goes through LLM.run like the stage does.
         { name: 'dedup-engine', model: true, args: ['evals/dedup/run.js', '--model=eval-fake'] },
         { name: 'severity', args: ['evals/severity/run.js', '--mock=heuristic', '--gate'] },
-        { name: 'format', args: ['evals/format/run.js', '--mock=perfect', '--gate'] },
+        // The scripted model answers nothing usable: this measures the local fallback.
+        { name: 'format', model: true, args: ['evals/format/run.js', '--model=eval-fake', '--gate'] },
+        // The cases bring their repository: the scripted model reads it through the local sandbox.
+        { name: 'memories', model: true, args: ['evals/memories/run.js', '--model=eval-fake', '--gate'] },
         {
             name: 'finder-recall',
             model: true,

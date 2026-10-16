@@ -1,5 +1,5 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { evalQuestion, resultProblems, poolCases, signalCases, MAX_DETAIL } = require('./eval-result');
+const { evalQuestion, resultProblems, poolCases, poolTokens, signalCases, MAX_DETAIL } = require('./eval-result');
 
 const ok = {
     eval: 'kody-rules',
@@ -30,6 +30,11 @@ describe('evals/shared/eval-result', () => {
         expect(poolCases(a, b)).toEqual([{ id: 'a', checks: 'c', hits: 3, total: 4, detail: [{ what: 'x', ok: true }, { what: 'y', ok: false }] }]);
         // a case only one run has is not pooled from a single run
         expect(poolCases([...a, { id: 'only-a', checks: 'c', hits: 1, total: 1 }], [...b, { id: 'only-b', checks: 'c', hits: 1, total: 1 }]).map((c: { id: string }) => c.id)).toEqual(['a']);
+    });
+
+    it('pools token totals from either run: numbers add up, per-call times join', () => {
+        expect(poolTokens({ in: 5, calls: 1, callMs: [40] }, { in: 7, out: 1, calls: 2, callMs: [10, 20] })).toEqual({ in: 12, calls: 3, callMs: [40, 10, 20], out: 1 });
+        expect(poolTokens(undefined, { in: 1 })).toEqual({ in: 1 });
     });
 
     it('keeps every case in the signal but caps its detail and long text', () => {

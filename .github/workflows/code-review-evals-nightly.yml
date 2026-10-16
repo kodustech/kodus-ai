@@ -350,6 +350,8 @@ jobs:
                   cache: "pnpm"
             - name: Install deps
               run: pnpm install --frozen-lockfile
+            - name: Install ripgrep (the local sandbox's grep, for cases that bring their repository)
+              run: command -v rg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep)
             - name: Create environment.ts (gitignored EE config)
               run: |
                   cat <<'EOF' > libs/ee/configs/environment/environment.ts
@@ -374,6 +376,8 @@ jobs:
               id: run
               env:
                   BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
+                  # The judge an eval pins with --judge (review-rounds: Gemini).
+                  BYOK_GOOGLE_API_KEY: ${{ secrets.BYOK_GOOGLE_API_KEY }}
               run: |
                   read -r -a cmd <<< "$(node -e 'console.log(require("./evals/nightly-evals").byId(process.env.EVAL).run.join(" "))')"
                   measure() { node "${cmd[@]}" --model="$MODEL" --gate --output="$1"; }

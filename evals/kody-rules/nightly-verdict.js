@@ -19,7 +19,7 @@
 // with, and, under GitHub Actions, outputs for the message. Exit 0 always: the
 // verdict travels in the outputs and the quality signal, not the exit code.
 const fs = require('fs');
-const { poolCases } = require('../shared/eval-result');
+const { poolCases, poolTokens } = require('../shared/eval-result');
 
 // A drop already alerted pings again only when the pooled recall falls this
 // much further: about one binomial SE over the set's 43 sites.
@@ -48,7 +48,7 @@ function pool(a, b) {
         linePrecision: counts.flagged ? (counts.flagged - counts.offSite) / counts.flagged : null,
         counts,
         cases: poolCases(a.cases, b.cases),
-        tokens: Object.fromEntries(Object.keys(a.tokens || {}).map((k) => [k, (a.tokens[k] || 0) + ((b.tokens || {})[k] || 0)])),
+        tokens: poolTokens(a.tokens, b.tokens),
         infra: { errored: (a.infra?.errored || 0) + (b.infra?.errored || 0), total: (a.infra?.total || 0) + (b.infra?.total || 0) },
         pooled: true,
     };

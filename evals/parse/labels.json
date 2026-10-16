@@ -1,0 +1,39 @@
+{
+    "__doc": [
+        "The findings a model wrote only as prose in a recorded run end, read by hand: the run end (payload path#index) and each finding as the prose states it, with the file as written.",
+        "alsoAt: another place the same finding is tied to in the prose; a finding coming out at either counts.",
+        "Label every run end whose findings are only in prose when payloads are recorded again (build-cases.js lists them)."
+    ],
+    "payloads/minimax-m3@openrouter/anonymous-add-configurable-device-limit-grafana-codex.json#0": {
+        "findings": [
+            {
+                "relevantFile": "database.go",
+                "relevantLinesStart": 115,
+                "relevantLinesEnd": 116,
+                "alsoAt": [
+                    {
+                        "relevantFile": "client.go",
+                        "relevantLinesStart": 44
+                    }
+                ],
+                "suggestionContent": "DoS via ErrDeviceLimitReached: once the device limit is reached, Authenticate returns the error and anonymous authentication is blocked"
+            },
+            {
+                "relevantFile": "client.go",
+                "relevantLinesStart": 41,
+                "relevantLinesEnd": 53,
+                "suggestionContent": "Lost panic recovery: TagDevice now runs synchronously in the auth path without the deferred recover"
+            },
+            {
+                "relevantFile": "database.go",
+                "relevantLinesStart": 109,
+                "relevantLinesEnd": 118,
+                "suggestionContent": "TOCTOU race in the device limit check between CountDevices and updateDevice"
+            }
+        ]
+    },
+    "payloads/minimax-m3@openrouter/anonymous-add-configurable-device-limit-grafana-codex.json#1": {
+        "findings": [],
+        "note": "re-confirms the three findings of #0 and finds nothing new"
+    }
+}

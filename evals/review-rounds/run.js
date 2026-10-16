@@ -4,6 +4,16 @@
 //   node evals/review-rounds/run.js --model=deepseek-v4-flash@fireworks --byok-reasoning=none --reps=5
 //   node evals/review-rounds/run.js --model=gpt-5.4 --case=R2 --reps=1
 //   node evals/review-rounds/run.js --model=eval-fake          # wiring smoke
+//   node evals/review-rounds/run.js --model=deepseek-v4-flash@fireworks --set=nightly --reps=2 \
+//       --byok-reasoning=none --judge=gemini-3-flash-preview --concurrency=6 --output=<file> --gate
+//
+// --set=<name> runs targets.json `sets.<name>` (--case narrows it further,
+// --limit=<n> keeps its first n);
+// --judge pins the judge a floor was calibrated with; --concurrency runs that
+// many reviews at once. --output also carries the shared result
+// (evals/shared/eval-result.js): one case per review-rounds case, its claims
+// handled right out of all its claims × reps; --gate compares that ratio with
+// the model's floor in targets.json.
 //
 // Drives the chain production runs after the sandbox is up:
 //   runAgentLoopViaCore (finder + verifier + evidence gate)
@@ -31,6 +41,9 @@ for (const p of [
         break;
     }
 }
+// --judge, read before the judge module reads JUDGE_MODEL.
+const judgeArg = process.argv.find((a) => a.startsWith('--judge='));
+if (judgeArg) process.env.JUDGE_MODEL = judgeArg.slice('--judge='.length);
 if (!process.env.JUDGE_MODEL) {
     process.env.JUDGE_MODEL = 'gpt-5.6-luna';
     process.env.JUDGE_REASONING_EFFORT =
@@ -65,6 +78,8 @@ try {
 const { selectCases } = require('./case-selection');
 const { assertCompleteRuleReview } = require('./measurement');
 const { applyModelEnv } = require('../shared/tier0-models');
+const { evalQuestion } = require('../shared/eval-result');
+const { countTokens, tokensUsed } = require('../shared/eval-kit');
 const {
     matchComment,
     loadJudgeKey,
@@ -83,6 +98,10 @@ const ONLY = arg('case');
 // they configured — instead of the env/managed default (family effort).
 const BYOK_REASONING = arg('byok-reasoning');
 const GATE = process.argv.includes('--gate');
+const SET = arg('set');
+const LIMIT = Number(arg('limit', 0)) || 0;
+const CONCURRENCY = Math.max(1, Number(arg('concurrency', 1)) || 1);
+const TARGETS = require('./targets.json');
 const STARTED_AT = new Date().toISOString();
 const OUT = arg(
     'output',
@@ -127,7 +146,12 @@ function engineSnapshot() {
 
 // ---------------------------------------------------------------- sandbox
 class SandboxNotFoundError extends Error {}
-const phase = { verify: false };
+// Per review: whether the verifier has started (dies-in-verify) and what it
+// decided. Reviews run concurrently (--concurrency), so each gets its own.
+const { AsyncLocalStorage } = require('async_hooks');
+const reviewPhase = new AsyncLocalStorage();
+const fallbackPhase = { verify: false, verdicts: [] };
+const currentPhase = () => reviewPhase.getStore() || fallbackPhase;
 
 function sandbox(mode, repo, counter) {
     const norm = (p) =>
@@ -142,7 +166,7 @@ function sandbox(mode, repo, counter) {
     const state = { premiseRead: false };
     const dead = (target) => {
         if (kind === 'dead') return true;
-        if (kind === 'dies-in-verify') return phase.verify;
+        if (kind === 'dies-in-verify') return currentPhase().verify;
         if (kind === 'dies-after-reading') return state.premiseRead;
         if (kind === 'dead-for') return !!target && norm(target) === norm(arg);
         if (kind === 'flaky') return counter.calls <= Number(arg);
@@ -221,6 +245,7 @@ function instrumentVerifier() {
     } = require('../../libs/code-review/infrastructure/agents/core/verifier.agent.ts');
     const original = LlmVerifier.prototype.verify;
     LlmVerifier.prototype.verify = async function (...args) {
+        const phase = currentPhase();
         phase.verify = true;
         const verdict = await original.apply(this, args);
         (phase.verdicts ||= []).push({
@@ -285,11 +310,29 @@ const isMarkedUnverified = (f) =>
     f?.evidence?.status === 'unverified' ||
     f?.verification === 'unverified';
 
+// What base-code-review-agent.provider.ts hands the finder from the routed
+// slot (model-factory.ts): its reasoning effort and, on OpenRouter, the pinned
+// upstream. Without them the finder ran on the model's default reasoning,
+// whatever --byok-reasoning said.
+function finderModelParams() {
+    const s = byokSlot();
+    if (!s) return {};
+    const { getModelName } = require('../../libs/llm/byok-to-vercel.ts');
+    return {
+        reasoningEffort: s.reasoningEffort,
+        byokProvider: s.provider,
+        modelName: getModelName(s),
+        openrouterProviderOrder: s.openrouterProviderOrder,
+        openrouterAllowFallbacks: s.openrouterAllowFallbacks,
+    };
+}
+
 // The generalist finder + verifier, as the agent-review stage runs it.
 async function runFinder(c, counter, runAgentLoopViaCore, buildEvalModel) {
     const { input, systemPrompt, userPrompt } = buildPrompts(c);
     const out = await runAgentLoopViaCore(
         {
+            ...finderModelParams(),
             model: buildEvalModel({}),
             systemPrompt,
             userPrompt,
@@ -330,11 +373,19 @@ function byokSlot() {
     const { encrypt } = require('../../libs/common/utils/crypto.ts');
     // A stored BYOK model: the key encrypted as the config keeps it.
     slot = {
-        provider: spec.provider,
+        // A pinned OpenRouter route is a customer's OpenRouter slot.
+        provider: spec.openrouterProviderOrder ? 'open_router' : spec.provider,
         apiKey: encrypt(key),
         model: spec.doModel || MODEL,
         baseURL: spec.baseURL,
         reasoningEffort: BYOK_REASONING,
+        // An OpenRouter route stays on its pinned upstream.
+        ...(spec.openrouterProviderOrder
+            ? {
+                  openrouterProviderOrder: spec.openrouterProviderOrder,
+                  openrouterAllowFallbacks: false,
+              }
+            : {}),
     };
     return slot;
 }
@@ -395,11 +446,17 @@ async function runKodyRules(c, counter) {
 
 async function once(c, judgeKey) {
     // The history reaches the agents the way production builds it: most
-    // recent first, capped at MAX_PR_DECISIONS (capDecisions).
+    // recent first, capped at MAX_PR_DECISIONS (capDecisions). The repeat
+    // check reads the whole history, as agent-review.stage does (#2097).
+    let wholeHistory;
     if (c.previousDecisions?.length) {
         const {
             capDecisions,
         } = require('../../libs/code-review/application/use-cases/previousReviewDecisions/build-previous-review-decisions.use-case.ts');
+        const {
+            MAX_REPEAT_CHECK_DECISIONS,
+        } = require('../../libs/code-review/domain/contracts/pr-decision-store.contract.ts');
+        wholeHistory = capDecisions(c.previousDecisions, MAX_REPEAT_CHECK_DECISIONS);
         c = { ...c, previousDecisions: capDecisions(c.previousDecisions) };
     }
     const {
@@ -416,6 +473,7 @@ async function once(c, judgeKey) {
     } = require('../../libs/code-review/infrastructure/agents/engine/revision-link.ts');
     const { buildEvalModel } = require('../shared/build-model');
 
+    const phase = currentPhase();
     phase.verify = false;
     phase.verdicts = [];
     const counter = { calls: 0, failed: 0 };
@@ -430,7 +488,29 @@ async function once(c, judgeKey) {
             `INFRA: agent did not run (finishReason=${out.finishReason}, steps=${out.steps})`,
         );
     }
-    const kept = out.suggestions;
+    // Same step as agent-review.stage after dedup: what an earlier comment
+    // already raised is not posted (#2097).
+    const {
+        checkRepeats,
+    } = require('../../libs/code-review/infrastructure/agents/engine/repeat-check.ts');
+    const repeatCheck = await checkRepeats(out.suggestions, wholeHistory, {
+        organizationId: 'eval-org',
+        byokConfig: byokSlot() ?? undefined,
+        ruleTitleByUuid: new Map(
+            (c.kodyRules || []).map((r) => [r.uuid, r.title]),
+        ),
+    });
+    // A failed check posts what it had to judge (fail-open) — not a measurement.
+    if (repeatCheck.model === 'failed') {
+        throw new Error('INFRA: the repeat check call failed');
+    }
+    // Then the stage's per-rule merge (engine/kody-rules-merge.ts): the
+    // occurrences of one rule that survive become one comment, the others
+    // listed under "Also found in".
+    const {
+        mergeKodyRuleFindings,
+    } = require('../../libs/code-review/infrastructure/agents/engine/kody-rules-merge.ts');
+    const kept = mergeKodyRuleFindings(repeatCheck.kept);
     const severity = await classifySeverity(kept);
     const formatted = await formatSuggestionContent(
         kept.map((s) => ({
@@ -447,19 +527,38 @@ async function once(c, judgeKey) {
         suggestionContent:
             formatted.get(i)?.suggestionContent || s.suggestionContent,
     }));
-    applyRevisionLinks(posted, c.previousDecisions);
-    const delivered = kept.map((s, i) => ({
-        sourceIndex: i,
-        file: s.relevantFile,
-        line: s.relevantLinesStart,
-        severity: severity.get(i) ?? s.severity,
-        text: posted[i].suggestionContent,
-        linkedById: !!posted[i].revisesSuggestionId,
-        revisesSuggestionId: posted[i].revisesSuggestionId,
-        label: s.label,
-        brokenKodyRulesIds: s.brokenKodyRulesIds,
-        marked: isMarkedUnverified(s),
-    }));
+    applyRevisionLinks(posted, wholeHistory);
+    // A location under "Also found in" is posted too, with the same text: it
+    // can answer a claim at that location, and a repeat listed there is a
+    // repeat posted.
+    const delivered = kept.flatMap((s, i) => {
+        const others = s.kodyRuleOtherLocations || [];
+        const text = others.length
+            ? `${posted[i].suggestionContent}\n\n**Also found in:**\n${others.map((loc) => `- \`${loc}\``).join('\n')}`
+            : posted[i].suggestionContent;
+        const base = {
+            sourceIndex: i,
+            severity: severity.get(i) ?? s.severity,
+            text,
+            linkedById: !!posted[i].revisesSuggestionId,
+            revisesSuggestionId: posted[i].revisesSuggestionId,
+            label: s.label,
+            brokenKodyRulesIds: s.brokenKodyRulesIds,
+            marked: isMarkedUnverified(s),
+        };
+        return [
+            { ...base, file: s.relevantFile, line: s.relevantLinesStart },
+            ...others.map((loc) => {
+                const at = loc.lastIndexOf(':');
+                return {
+                    ...base,
+                    file: loc.slice(0, at),
+                    line: Number(loc.slice(at + 1).split('-')[0]) || null,
+                    alsoFoundIn: true,
+                };
+            }),
+        ];
+    });
 
     const claims = [];
     // A delivered comment answers one claim at most: two claims on the same
@@ -515,9 +614,22 @@ async function once(c, judgeKey) {
         ms: Date.now() - t0,
         // #2039: a delivered finding pointed at an earlier one by its prompt index
         // ("previous decision #3"), which means nothing to the reader.
-        indexRefs: delivered.filter((d) => INDEX_REF.test(d.text)).length,
+        indexRefs: delivered.filter(
+            (d) => !d.alsoFoundIn && INDEX_REF.test(d.text),
+        ).length,
         verificationEvidence: phase.verdicts,
-        alreadyPosted: [], // No additional delivery LLM; suppression happens in existing agents.
+        // What the repeat check kept off the PR, and the bugs it linked.
+        alreadyPosted: repeatCheck.repeats.map((r) => ({
+            file: r.finding.relevantFile,
+            line: r.finding.relevantLinesStart,
+            label: r.finding.label,
+            earlierId: r.earlier.suggestionId,
+            earlierOutcome: r.earlier.outcome,
+            // The finder's own claim that it revises that comment, if any.
+            revisesSuggestionId: r.finding.revisesSuggestionId ?? null,
+            by: r.by,
+        })),
+        repeatCheck: { model: repeatCheck.model },
         sandboxCalls: counter.calls,
         sandboxFailed: counter.failed,
         anomalies: out.out.anomalies,
@@ -657,8 +769,18 @@ async function main() {
         process.exit(2);
     }
     instrumentVerifier();
+    countTokens();
     const rows = [];
-    const selected = selectCases(cases, ONLY);
+    let selected;
+    let narrowed = false;
+    try {
+        selected = selectCases(setCases(SET), ONLY);
+        narrowed = LIMIT > 0 && LIMIT < selected.length;
+        if (narrowed) selected = selected.slice(0, LIMIT);
+    } catch (e) {
+        console.error(`INFRA: ${e.message}`);
+        process.exit(2);
+    }
     const engine = engineSnapshot();
     const checkpoint = (complete) => {
         fs.mkdirSync(path.dirname(OUT), { recursive: true });
@@ -679,6 +801,7 @@ async function main() {
                     selectedCases: selected.map((c) => c.id),
                     casesSourceDigest,
                     summary: summarize(rows),
+                    ...sharedResult(rows, selected),
                     rows,
                 },
                 null,
@@ -687,26 +810,29 @@ async function main() {
         );
     };
     checkpoint(false);
-    for (const c of selected) {
-        for (let r = 0; r < REPS; r++) {
+    const jobs = selected.flatMap((c) =>
+        Array.from({ length: REPS }, (_, r) => ({ c, rep: r + 1 })),
+    );
+    const worker = async () => {
+        for (let job = jobs.shift(); job; job = jobs.shift()) {
+            const { c, rep } = job;
             try {
-                const row = await once(c, judgeKey);
-                rows.push({ model: MODEL, rep: r + 1, ...row });
+                const row = await reviewPhase.run(
+                    { verify: false, verdicts: [] },
+                    () => once(c, judgeKey),
+                );
+                rows.push({ model: MODEL, rep, ...row });
                 console.log(
-                    `[${MODEL}] ${c.id} #${r + 1} sandbox=${row.sandboxCalls}/${row.sandboxFailed} delivered=${row.delivered.length} :: ${row.claims.map((cl) => `${cl.id}:${cl.pass ? 'PASS' : 'FAIL'}(delivered=${cl.delivered}${cl.expect === 'deliver_linked' ? ` linked=${cl.linked}` : ''})`).join(' ')}`,
+                    `[${MODEL}] ${c.id} #${rep} sandbox=${row.sandboxCalls}/${row.sandboxFailed} delivered=${row.delivered.length} :: ${row.claims.map((cl) => `${cl.id}:${cl.pass ? 'PASS' : 'FAIL'}(delivered=${cl.delivered}${cl.expect === 'deliver_linked' ? ` linked=${cl.linked}` : ''})`).join(' ')}`,
                 );
             } catch (e) {
-                rows.push({
-                    model: MODEL,
-                    rep: r + 1,
-                    case: c.id,
-                    error: e.message,
-                });
-                console.log(`[${MODEL}] ${c.id} #${r + 1}: ${e.message}`);
+                rows.push({ model: MODEL, rep, case: c.id, error: e.message });
+                console.log(`[${MODEL}] ${c.id} #${rep}: ${e.message}`);
             }
             checkpoint(false);
         }
-    }
+    };
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
     const summary = summarize(rows);
     checkpoint(true);
     console.log('\n' + JSON.stringify(summary.problems, null, 2));
@@ -719,11 +845,101 @@ async function main() {
         process.exit(2);
     }
     if (GATE) {
-        // Floors are set after the fix lands (README.md → Gate). Until then the
-        // gate only proves the eval still drives the engine end to end.
-        process.exit(0);
+        const target = TARGETS.models?.[MODEL];
+        const { metric } = sharedResult(rows, selected);
+        // A floor holds only for the set, the judge and the reasoning effort it
+        // was calibrated with (evals/AGENTS.md).
+        const mismatch = !target?.floor
+            ? `no floor for ${MODEL} in evals/review-rounds/targets.json`
+            : narrowed
+              ? `--limit=${LIMIT} measures part of the set the floor was calibrated on`
+              : target.set !== SET
+              ? `the floor is for --set=${target.set}, this run used ${SET || 'every case'}`
+              : target.judge !== JUDGE_MODEL
+                ? `the floor was calibrated with judge ${target.judge}, this run used ${JUDGE_MODEL}`
+                : (target.byokReasoning ?? null) !== (BYOK_REASONING ?? null)
+                  ? `the floor is for --byok-reasoning=${target.byokReasoning}, this run used ${BYOK_REASONING}`
+                  : null;
+        if (mismatch) {
+            console.error(`\n⚠️ GATE NOT EVALUATED: ${mismatch}`);
+            process.exit(2);
+        }
+        if (metric.value < target.floor) {
+            console.error(
+                `\n❌ GATE FAILED: ${(metric.value * 100).toFixed(1)}% of claims handled right < floor ${(target.floor * 100).toFixed(1)}%`,
+            );
+            process.exit(1);
+        }
     }
     process.exit(0);
+}
+
+// The cases of --set (targets.json `sets`), or every case.
+function setCases(name) {
+    if (!name) return cases;
+    const ids = TARGETS.sets?.[name];
+    if (!ids) throw new Error(`unknown --set=${name} (targets.json sets)`);
+    // A set measures the cases themselves, in its own order (--limit takes
+    // the first ones); their -control twins were shown to post on the full
+    // runs (results/).
+    const picked = selectCases(cases, ids.join(',')).filter(
+        (c) => c.family !== 'control',
+    );
+    const at = (c) => ids.findIndex((id) => c.id === id || c.id.startsWith(`${id}-`));
+    return picked.sort((a, b) => at(a) - at(b));
+}
+
+// What a case checks, in one sentence: the shape for a production one,
+// otherwise what each claim must do.
+const EXPECT_WORDS = {
+    deliver: 'posted',
+    not_deliver: 'not posted',
+    deliver_linked: 'posted and linked',
+    if_delivered_linked: 'linked if posted',
+    not_deliver_normal: 'marked if posted',
+    observe: 'observed',
+};
+const caseChecks = (c) =>
+    c.shape ||
+    c.claims
+        .map((cl) => `${cl.id}: ${EXPECT_WORDS[cl.expect] || cl.expect}`)
+        .join('; ');
+
+// The shared result (evals/shared/eval-result.js): per case, its claims
+// handled right out of all its claims over the measured reps.
+function sharedResult(rows, selected) {
+    const measured = rows.filter((r) => !r.error);
+    const perCase = selected
+        .map((c) => {
+            const claims = measured
+                .filter((r) => r.case === c.id)
+                .flatMap((r) => r.claims);
+            return {
+                id: c.id,
+                checks: caseChecks(c),
+                hits: claims.filter((cl) => cl.pass).length,
+                total: claims.length,
+                detail: claims.map((cl) => ({ what: cl.id, ok: !!cl.pass })),
+            };
+        })
+        .filter((c) => c.total > 0);
+    const hits = perCase.reduce((n, c) => n + c.hits, 0);
+    const total = perCase.reduce((n, c) => n + c.total, 0);
+    const target = TARGETS.models?.[MODEL] || {};
+    return {
+        eval: 'review-rounds',
+        question: evalQuestion('evals/review-rounds'),
+        metric: {
+            name: 'of claims handled right',
+            value: total ? hits / total : null,
+            floor: target.floor ?? null,
+            baseline: target.observed ?? null,
+        },
+        runs: REPS,
+        tokens: tokensUsed(),
+        infra: { errored: rows.length - measured.length, total: rows.length },
+        cases: perCase,
+    };
 }
 
 module.exports = { once, instrumentVerifier, engineSnapshot };

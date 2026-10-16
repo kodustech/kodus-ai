@@ -47,7 +47,7 @@ const SUITE = [
     { name: 'severity', kind: 'gate',
       cmd: ['node', 'evals/severity/run.js', '--mock=heuristic', '--gate'] },
     { name: 'format', kind: 'gate',
-      cmd: ['node', 'evals/format/run.js', '--mock=perfect', '--gate'] },
+      cmd: ['node', 'evals/format/run.js', `--model=${MODEL}`, '--gate'] },
     { name: 'kody-rules', kind: 'gate',
       cmd: ['node', 'evals/kody-rules/real-agent.js', '--dataset=github-cases', '--gate', `--model=${MODEL}`, `--runs=${RUNS}`, `--limit=${PRS}`] },
     { name: 'anchoring', kind: 'gate',

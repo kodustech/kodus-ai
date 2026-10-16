@@ -28,6 +28,50 @@ const NIGHTLY_EVALS = [
         files: ['evals/reply-addressing/targets.json'],
         friday: ['--limit=16'],
     },
+    {
+        id: 'review-rounds',
+        stage: 'review-rounds',
+        // The BYOK route with reasoning off, where the reposts were measured
+        // (#2097), judged by the model the floor was calibrated with.
+        run: [
+            'evals/review-rounds/run.js',
+            '--set=nightly',
+            '--reps=2',
+            '--byok-reasoning=none',
+            '--judge=gemini-3-flash-preview',
+            '--concurrency=6',
+        ],
+        files: [
+            'evals/review-rounds/targets.json',
+            'evals/review-rounds/cases.js',
+            'evals/review-rounds/prod-shapes/build.js',
+        ],
+        // A Kody Rules repost with a new site, a bug repost and a revision.
+        friday: ['--limit=3'],
+    },
+    {
+        id: 'parse',
+        stage: 'parse',
+        run: ['evals/parse/run.js'],
+        files: ['evals/parse/targets.json'],
+        // The cases that call the model: findings written as prose.
+        friday: ['--limit=4', '--prose'],
+    },
+    {
+        id: 'format',
+        stage: 'format',
+        run: ['evals/format/run.js'],
+        files: ['evals/format/targets.json'],
+        // One case of each configuration (five).
+        friday: ['--limit=5'],
+    },
+    {
+        id: 'memories',
+        stage: 'memories',
+        run: ['evals/memories/run.js'],
+        files: ['evals/memories/targets.json'],
+        friday: ['--limit=4'],
+    },
 ];
 
 const byId = (id) => NIGHTLY_EVALS.find((e) => e.id === id) || null;

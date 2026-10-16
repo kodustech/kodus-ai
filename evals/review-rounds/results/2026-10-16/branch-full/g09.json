@@ -1,0 +1,2763 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "ef8ace6e81c2ad04800d9543336439a8767fa987",
+    "sourceDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "startedAt": "2026-10-15T22:56:31.336Z",
+  "updatedAt": "2026-10-15T23:14:01.031Z",
+  "complete": true,
+  "selectedCases": [
+    "R8-consequence-kody-rule-prior",
+    "K5-rule-repost-stored-implemented",
+    "P02-rule-screenshot-mask-still-missing",
+    "P12-rule-soft-asserts-moved-down",
+    "P22-rule-forward-parsed-pingpong",
+    "P32-install-failure-only-logged",
+    "P42-rule-tenant-scope-after-decline"
+  ],
+  "casesSourceDigest": "0ed9527c05731f5349f717633dc3e9657c5214a15bf62ff0a0adc0b15fc46d65",
+  "summary": {
+    "measured": 35,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 25,
+        "violations": 5,
+        "rate": 0.2
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 2,
+        "violations": 1,
+        "rate": 0.5
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 30,
+        "violations": 4,
+        "rate": 0.133
+      },
+      "index-reference (#2039)": {
+        "n": 38,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R8-consequence-kody-rule-prior · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 1,
+        "n": 5,
+        "delivered": 2
+      },
+      "K5-rule-repost-stored-implemented · rangeLabel-start-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K5-rule-repost-stored-implemented · dayKey-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P02-rule-screenshot-mask-still-missing · screenshot-mask-repeat [not_deliver]": {
+        "pass": 3,
+        "n": 5,
+        "delivered": 2
+      },
+      "P02-rule-screenshot-mask-still-missing · screenshot-mask-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P12-rule-soft-asserts-moved-down · soft-asserts-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 5,
+        "delivered": 3
+      },
+      "P12-rule-soft-asserts-moved-down · cap-truthy-new-site [deliver]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 4
+      },
+      "P22-rule-forward-parsed-pingpong · create-order-raw-body-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P22-rule-forward-parsed-pingpong · cancel-order-raw-body-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P32-install-failure-only-logged · install-failure-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P42-rule-tenant-scope-after-decline · external-id-tenant-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "eval": "review-rounds",
+  "question": "When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, revisions linked, nothing already sent posted again?",
+  "metric": {
+    "name": "of claims handled right",
+    "value": 0.8181818181818182,
+    "floor": 0.8,
+    "baseline": 0.903
+  },
+  "runs": 5,
+  "tokens": {
+    "in": 1175120,
+    "out": 78620,
+    "cacheRead": 983952,
+    "cacheWrite": 0
+  },
+  "infra": {
+    "errored": 0,
+    "total": 35
+  },
+  "cases": [
+    {
+      "id": "R8-consequence-kody-rule-prior",
+      "checks": "resubmit-double-charge: posted and linked",
+      "hits": 1,
+      "total": 5,
+      "detail": [
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": true
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "id": "K5-rule-repost-stored-implemented",
+      "checks": "rangeLabel-start-repeat: not posted; dayKey-new-site: posted",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P02-rule-screenshot-mask-still-missing",
+      "checks": "Kody Rule on a visual test file new in the PR; the developer edited the test but the screenshot assertion still has no mask; stored implemented; 11 earlier comments",
+      "hits": 8,
+      "total": 10,
+      "detail": [
+        {
+          "what": "screenshot-mask-repeat",
+          "ok": false
+        },
+        {
+          "what": "screenshot-mask-new-site",
+          "ok": true
+        },
+        {
+          "what": "screenshot-mask-repeat",
+          "ok": true
+        },
+        {
+          "what": "screenshot-mask-new-site",
+          "ok": true
+        },
+        {
+          "what": "screenshot-mask-repeat",
+          "ok": true
+        },
+        {
+          "what": "screenshot-mask-new-site",
+          "ok": true
+        },
+        {
+          "what": "screenshot-mask-repeat",
+          "ok": false
+        },
+        {
+          "what": "screenshot-mask-new-site",
+          "ok": true
+        },
+        {
+          "what": "screenshot-mask-repeat",
+          "ok": true
+        },
+        {
+          "what": "screenshot-mask-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P12-rule-soft-asserts-moved-down",
+      "checks": "Kody Rule on hard, exact test assertions; the developer added ~60 lines of tests above and re-touched the flagged soft/truthy assertions, which moved down; stored not_implemented; 2 earlier comments",
+      "hits": 6,
+      "total": 10,
+      "detail": [
+        {
+          "what": "soft-asserts-repeat",
+          "ok": false
+        },
+        {
+          "what": "cap-truthy-new-site",
+          "ok": true
+        },
+        {
+          "what": "soft-asserts-repeat",
+          "ok": false
+        },
+        {
+          "what": "cap-truthy-new-site",
+          "ok": false
+        },
+        {
+          "what": "soft-asserts-repeat",
+          "ok": true
+        },
+        {
+          "what": "cap-truthy-new-site",
+          "ok": true
+        },
+        {
+          "what": "soft-asserts-repeat",
+          "ok": true
+        },
+        {
+          "what": "cap-truthy-new-site",
+          "ok": true
+        },
+        {
+          "what": "soft-asserts-repeat",
+          "ok": false
+        },
+        {
+          "what": "cap-truthy-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P22-rule-forward-parsed-pingpong",
+      "checks": "Ping-pong on one function: an early comment asked to forward the raw input, a later Kody Rule comment asked to forward only the validated data (stored implemented); the developer forwards the raw object again; 40 earlier comments",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "create-order-raw-body-repeat",
+          "ok": true
+        },
+        {
+          "what": "cancel-order-raw-body-new-site",
+          "ok": true
+        },
+        {
+          "what": "create-order-raw-body-repeat",
+          "ok": true
+        },
+        {
+          "what": "cancel-order-raw-body-new-site",
+          "ok": true
+        },
+        {
+          "what": "create-order-raw-body-repeat",
+          "ok": true
+        },
+        {
+          "what": "cancel-order-raw-body-new-site",
+          "ok": true
+        },
+        {
+          "what": "create-order-raw-body-repeat",
+          "ok": true
+        },
+        {
+          "what": "cancel-order-raw-body-new-site",
+          "ok": true
+        },
+        {
+          "what": "create-order-raw-body-repeat",
+          "ok": true
+        },
+        {
+          "what": "cancel-order-raw-body-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P32-install-failure-only-logged",
+      "checks": "Bug finder (Ruby); an install step's failure is ignored; the developer added logging but the failure is still not raised, so the release goes on; stored partially_implemented; 15 earlier comments",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "install-failure-repeat",
+          "ok": true
+        },
+        {
+          "what": "install-failure-repeat",
+          "ok": true
+        },
+        {
+          "what": "install-failure-repeat",
+          "ok": true
+        },
+        {
+          "what": "install-failure-repeat",
+          "ok": true
+        },
+        {
+          "what": "install-failure-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P42-rule-tenant-scope-after-decline",
+      "checks": "Kody Rule: the earlier comment was declined (not_implemented) and its site is unchanged context; the diff adds a new function breaking the same rule; 6 earlier comments",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "external-id-tenant-new-site",
+          "ok": true
+        },
+        {
+          "what": "external-id-tenant-new-site",
+          "ok": true
+        },
+        {
+          "what": "external-id-tenant-new-site",
+          "ok": true
+        },
+        {
+          "what": "external-id-tenant-new-site",
+          "ok": true
+        },
+        {
+          "what": "external-id-tenant-new-site",
+          "ok": true
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 46714,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 61978,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now rethrows NotReadyError, so pollCharge takes its resubmit branch and calls the non-idempotent gw.submit() for a charge the gateway already holds. WHY: NotReadyError is documented as 'the gateway has the charge but has not settled it yet' (errors.ts:1), yet pollCharge treats NotReadyError as 'the gateway never received it' and resubmits (poller.ts:5-15), and Gateway.submit is explicitly non-idempotent ('every call creates a new charge', gateway.ts:3) — so a transient not-ready status now produces a duplicate charge on every poll tick. HOW: don't let NotReadyError cross the fetchStatus boundary as a resubmit signal; either translate it to a distinct retry-without-resubmit signal that pollCharge handles separately, or update pollCharge to stop resubmitting on NotReadyError (it should only resubmit on the never-received error).",
+          "keep": true,
+          "rationale": "Confirmed the full path. status.ts:8-10 rethrows NotReadyError unchanged; poller.ts:13-15 catches NotReadyError and calls gw.submit(charge.payload) with the comment 'resend', returning 'resubmitted'. errors.ts:1 documents NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', and gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge.' So a transient not-ready status causes a duplicate charge on each poll tick — a real, concrete data-integrity bug, not style. Note the previous decision (round-a-propagate) explicitly REQUIRED propagating NotReadyError unchanged; this finding is the direct consequence of applying that earlier suggestion, which the current diff does not reverse. Per the rules, a different problem arising from applying an earlier suggestion is not a repeat — it is a distinct failure (duplicate charge) in a separate operation (submit). The finding should be kept and its revisesSuggestionId should be round-a-propagate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now propagates NotReadyError, so pollCharge takes its resubmit branch and calls gw.submit() for an error that only means 'the charge is not settled yet'. WHY: NotReadyError is documented in errors.ts as 'The gateway has the charge but has not settled it yet (transient)', while Gateway.submit is documented as NOT idempotent ('every call creates a new charge') — this resubmit path creates a duplicate charge on every poll tick for an already-accepted charge. HOW: don't drive the resubmit decision off NotReadyError. Either distinguish a genuinely-not-received error type (e.g. an UnreceivedError) from the transient 'not settled' NotReadyError and only resubmit on the former, or make pollCharge treat NotReadyError as 'wait and retry the status check' rather than resubmitting.",
+          "keep": true,
+          "rationale": "Confirmed. NotReadyError is documented as 'the gateway has the charge but has not settled it yet (transient)' (errors.ts:1), i.e. the charge WAS received. fetchStatus now propagates it (status.ts:8-9, per the implemented earlier suggestion). pollCharge (poller.ts:13-15), which runs 'on every tick', catches NotReadyError and calls gw.submit(), which is documented NOT idempotent ('every call creates a new charge', gateway.ts:3). Thus each poll tick for an already-accepted but unsettled charge creates a duplicate charge. This is a concrete, reachable failure path. It is a DIFFERENT problem from the previous decision (round-a-propagate), which only required propagating NotReadyError for retryability; this finding is a consequence of applying that suggestion and should be flagged as a revision of it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|NotReadyError|submit\\(",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nBecause `fetchStatus` propagates `NotReadyError` (documented in `errors.ts` as transient 'the gateway has the charge but has not settled it yet'), `pollCharge` takes its resubmit branch and calls the non-idempotent `gw.submit()` for an already-accepted charge, creating a duplicate charge on every poll tick. Stop driving the resubmit decision off `NotReadyError`: either distinguish a genuinely-not-received error such as `UnreceivedError` and resubmit only on that, or make `pollCharge` treat `NotReadyError` as wait-and-retry for the status check."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nBecause `fetchStatus` rethrows `NotReadyError`, `pollCharge` treats it as 'the gateway never received it' and resubmits via non-idempotent `gw.submit()` (`gateway.ts:3`), even though `NotReadyError` only means the gateway has the charge but has not settled it (`errors.ts:1`), so a transient status produces a duplicate charge on every poll tick (`poller.ts:5-15`). Don't let `NotReadyError` cross the `fetchStatus` boundary as a resubmit signal; either translate it into a distinct retry-without-resubmit signal that `pollCharge` handles separately, or update `pollCharge` to stop resubmitting on `NotReadyError` and resubmit only on the never-received error."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 59341,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: the new `if (err instanceof NotReadyError) throw err;` on lines 8-10 now propagates NotReadyError verbatim to pollCharge, whose handler calls the non-idempotent `gw.submit(charge.payload)`. WHY: pollCharge runs on every tick (poller.ts:5-6) and Gateway.submit is documented as 'NOT idempotent: every call creates a new charge' (gateway.ts:3), so a charge that stays in the transient not-settled state causes a brand-new charge to be created on every poll tick — duplicate charges / repeated billing, a path that was previously unreachable because fetchStatus converted NotReadyError into a terminal FailedError. HOW: distinguish a transient 'not settled' status from a 'gateway never received it' signal before resubmitting — e.g. keep propagating NotReadyError but make pollCharge's resubmit idempotent (dedupe by charge id / use an idempotency key) instead of blindly calling submit, or introduce a distinct terminal error for the never-received case and only resubmit on that.",
+          "keep": true,
+          "rationale": "Confirmed: status.ts:8-10 re-throws NotReadyError verbatim, and pollCharge (poller.ts:12-16) catches it and calls gw.submit(charge.payload) on every poll tick. gateway.ts:3-4 documents submit as NOT idempotent (every call creates a new charge). A charge stuck in a transient not-settled state thus creates a new charge per tick — duplicate billing. This path was previously unreachable because fetchStatus converted NotReadyError to terminal FailedError. The previous review decision addressed a different problem (retryable-errors-stay-retryable) and this finding is a distinct consequence of applying that fix, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|\\.submit\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "gateway*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NOT idempotent|idempotent|submit",
+                "path": "src/billing"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "text": "In `src/billing/status.ts`, the new `if (err instanceof NotReadyError) throw err;` on lines 8-10 propagates `NotReadyError` verbatim to `pollCharge`, whose handler calls the non-idempotent `gw.submit(charge.payload)` on every tick (`poller.ts:5-6`), and because `Gateway.submit` creates a new charge per call (`gateway.ts:3`), a charge stuck in the transient not-settled state is duplicated and billed repeatedly—a path previously unreachable because `fetchStatus` converted `NotReadyError` into a terminal `FailedError`. Distinguish a transient not-settled status from a gateway-never-received signal before resubmitting: either keep propagating `NotReadyError` but make `pollCharge` resubmit idempotently via charge-id dedupe or an idempotency key instead of blindly calling `submit`, or introduce a distinct terminal error for the never-received case and resubmit only on that."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 25788,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 38921,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K5-rule-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17211,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "`dayKey` converts a `Date` to a calendar day with `toISOString().slice(0, 10)`, which returns the previous day for users west of UTC. Use `formatLocalDate(at)` (already imported) so the key reflects the local calendar day."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K5-rule-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18859,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "`dayKey` uses `toISOString().slice(0, 10)`, which returns the previous calendar day for users west of UTC. Replace it with `formatLocalDate(at)` from `src/reports/dates.ts`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K5-rule-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16147,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "Deriving the calendar day with `at.toISOString().slice(0, 10)` in the new `dayKey` helper shifts the key to the previous day for users west of UTC. Use `formatLocalDate(at)` so the key reflects the local calendar day."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K5-rule-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14138,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "For users west of UTC, deriving the calendar day with `at.toISOString().slice(0, 10)` returns the previous day, so the newly added `dayKey` is incorrect. Use `formatLocalDate(at)`, which is already imported in this file."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K5-rule-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 13590,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "`dayKey` derives a calendar day with `toISOString().slice(0, 10)`, which produces the previous day for users west of UTC. Use `formatLocalDate(at)` so the key reflects the local calendar day."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P02-rule-screenshot-mask-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 35478,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P02-rule-screenshot-mask-still-missing",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 19,
+          "text": "**Revises an earlier Kody suggestion** on `e2e/visual/activity-feed.spec.ts:18` (2026-10-06 12:00 UTC).\n\nBecause the expanded feed renders the same relative timestamps and author avatars as the collapsed feed, this screenshot assertion in `e2e/visual/activity-feed.spec.ts` violates the rule 'Mask dynamic content in screenshot assertions' and will differ between runs and flake, and the earlier suggestion claiming the mask was added does not match the current diff. Add `mask: dynamicMasks(page)` to the options while keeping `fullPage: true`, as the collapsed-feed test already does.\n\n**Also found in:**\n- `e2e/visual/activity-feed.spec.ts:31-31`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P02-rule-screenshot-mask-still-missing",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "alsoFoundIn": true,
+          "text": "**Revises an earlier Kody suggestion** on `e2e/visual/activity-feed.spec.ts:18` (2026-10-06 12:00 UTC).\n\nBecause the expanded feed renders the same relative timestamps and author avatars as the collapsed feed, this screenshot assertion in `e2e/visual/activity-feed.spec.ts` violates the rule 'Mask dynamic content in screenshot assertions' and will differ between runs and flake, and the earlier suggestion claiming the mask was added does not match the current diff. Add `mask: dynamicMasks(page)` to the options while keeping `fullPage: true`, as the collapsed-feed test already does.\n\n**Also found in:**\n- `e2e/visual/activity-feed.spec.ts:31-31`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P02-rule-screenshot-mask-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 42189,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P02-rule-screenshot-mask-still-missing",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P02-rule-screenshot-mask-still-missing",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "text": "The drawer screenshot captures the author card, including the avatar and relative timestamps, so the snapshot varies between runs and will flake. Pass `mask: dynamicMasks(page)` in the options object, consistent with the other screenshot assertions in this file."
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P02-rule-screenshot-mask-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 34179,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P02-rule-screenshot-mask-still-missing",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P02-rule-screenshot-mask-still-missing",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "text": "The drawer renders the author card with avatar and relative timestamps, so this unmasked snapshot differs between runs and the test will flake. Pass `{ mask: dynamicMasks(page) }` to `toHaveScreenshot` for the dialog screenshot in \"opens the entry drawer with the author card\"."
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P02-rule-screenshot-mask-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21208,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 19,
+          "text": "Without `mask: dynamicMasks(page)`, the expanded feed's relative timestamps and author avatars make the snapshot differ between runs and flake, violating the `Mask dynamic content in screenshot assertions` rule. Pass `{ fullPage: true, mask: dynamicMasks(page) }` to the `toHaveScreenshot` call in \"shows every entry after loading more\".\n\n**Also found in:**\n- `e2e/visual/activity-feed.spec.ts:31-31`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "alsoFoundIn": true,
+          "text": "Without `mask: dynamicMasks(page)`, the expanded feed's relative timestamps and author avatars make the snapshot differ between runs and flake, violating the `Mask dynamic content in screenshot assertions` rule. Pass `{ fullPage: true, mask: dynamicMasks(page) }` to the `toHaveScreenshot` call in \"shows every entry after loading more\".\n\n**Also found in:**\n- `e2e/visual/activity-feed.spec.ts:31-31`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P02-rule-screenshot-mask-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20486,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P02-rule-screenshot-mask-still-missing",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P02-rule-screenshot-mask-still-missing",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "text": "The dialog screenshot in \"opens the entry drawer with the author card\" will flake because the author card contains a relative timestamp and an avatar that vary between runs, violating the rule \"Mask dynamic content in screenshot assertions\". Pass `{ mask: dynamicMasks(page) }` to `toHaveScreenshot`, as the collapsed-feed test already does."
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 55253,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P12-rule-soft-asserts-moved-down",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "text": "**Revises an earlier Kody suggestion** on `src/pricing/discounts.test.ts:7` (2026-10-06 12:00 UTC).\n\nBecause `toBeTruthy()` passes for any non-zero discount, the 40% + 30% of 10,000 cents (7,000 cents, capped at 50% to 5,000 cents) can ship with a broken cap green, even after the earlier `round-a-P12-rule-soft-asserts-moved-down` suggestion replaced `expect.soft` with `toBeTruthy`. Assert the now-known exact value with `expect(capped.discountCents).toBe(5_000)`.\n\n**Also found in:**\n- `src/pricing/discounts.test.ts:65-66`\n- `src/pricing/discounts.test.ts:67-67`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P12-rule-soft-asserts-moved-down",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "alsoFoundIn": true,
+          "text": "**Revises an earlier Kody suggestion** on `src/pricing/discounts.test.ts:7` (2026-10-06 12:00 UTC).\n\nBecause `toBeTruthy()` passes for any non-zero discount, the 40% + 30% of 10,000 cents (7,000 cents, capped at 50% to 5,000 cents) can ship with a broken cap green, even after the earlier `round-a-P12-rule-soft-asserts-moved-down` suggestion replaced `expect.soft` with `toBeTruthy`. Assert the now-known exact value with `expect(capped.discountCents).toBe(5_000)`.\n\n**Also found in:**\n- `src/pricing/discounts.test.ts:65-66`\n- `src/pricing/discounts.test.ts:67-67`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P12-rule-soft-asserts-moved-down",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 67,
+          "alsoFoundIn": true,
+          "text": "**Revises an earlier Kody suggestion** on `src/pricing/discounts.test.ts:7` (2026-10-06 12:00 UTC).\n\nBecause `toBeTruthy()` passes for any non-zero discount, the 40% + 30% of 10,000 cents (7,000 cents, capped at 50% to 5,000 cents) can ship with a broken cap green, even after the earlier `round-a-P12-rule-soft-asserts-moved-down` suggestion replaced `expect.soft` with `toBeTruthy`. Assert the now-known exact value with `expect(capped.discountCents).toBe(5_000)`.\n\n**Also found in:**\n- `src/pricing/discounts.test.ts:65-66`\n- `src/pricing/discounts.test.ts:67-67`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23728,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "label": "kody_rules",
+          "earlierId": "round-a-P12-rule-soft-asserts-moved-down",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "text": "Using `expect.soft` with only a truthiness check is disallowed by the rule and fails to verify the exact 15% coupon result on 10,000 cents. Replace it with hard, exact assertions such as `expect(priced.totalCents).toBe(8_500)` and `expect(priced.discountCents).toBe(1_500)`.\n\n**Also found in:**\n- `src/pricing/discounts.test.ts:66-66`\n- `src/pricing/discounts.test.ts:67-67`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 66,
+          "alsoFoundIn": true,
+          "text": "Using `expect.soft` with only a truthiness check is disallowed by the rule and fails to verify the exact 15% coupon result on 10,000 cents. Replace it with hard, exact assertions such as `expect(priced.totalCents).toBe(8_500)` and `expect(priced.discountCents).toBe(1_500)`.\n\n**Also found in:**\n- `src/pricing/discounts.test.ts:66-66`\n- `src/pricing/discounts.test.ts:67-67`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 67,
+          "alsoFoundIn": true,
+          "text": "Using `expect.soft` with only a truthiness check is disallowed by the rule and fails to verify the exact 15% coupon result on 10,000 cents. Replace it with hard, exact assertions such as `expect(priced.totalCents).toBe(8_500)` and `expect(priced.discountCents).toBe(1_500)`.\n\n**Also found in:**\n- `src/pricing/discounts.test.ts:66-66`\n- `src/pricing/discounts.test.ts:67-67`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 51661,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "text": "Because `toBeTruthy()` passes for any non-zero value, a regression in the cap logic ships green even though a 40% and 30% coupon on 10,000 cents should stack to 7,000 cents and be capped at 50% of the subtotal, or 5,000 cents. Assert the exact value with `expect(capped.discountCents).toBe(5_000)` and keep `expect(capped.capped).toBe(true)`.\n\n**Also found in:**\n- `src/pricing/discounts.test.ts:65-65`\n- `src/pricing/discounts.test.ts:67-67`\n- `src/pricing/discounts.test.ts:66-66`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "alsoFoundIn": true,
+          "text": "Because `toBeTruthy()` passes for any non-zero value, a regression in the cap logic ships green even though a 40% and 30% coupon on 10,000 cents should stack to 7,000 cents and be capped at 50% of the subtotal, or 5,000 cents. Assert the exact value with `expect(capped.discountCents).toBe(5_000)` and keep `expect(capped.capped).toBe(true)`.\n\n**Also found in:**\n- `src/pricing/discounts.test.ts:65-65`\n- `src/pricing/discounts.test.ts:67-67`\n- `src/pricing/discounts.test.ts:66-66`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 67,
+          "alsoFoundIn": true,
+          "text": "Because `toBeTruthy()` passes for any non-zero value, a regression in the cap logic ships green even though a 40% and 30% coupon on 10,000 cents should stack to 7,000 cents and be capped at 50% of the subtotal, or 5,000 cents. Assert the exact value with `expect(capped.discountCents).toBe(5_000)` and keep `expect(capped.capped).toBe(true)`.\n\n**Also found in:**\n- `src/pricing/discounts.test.ts:65-65`\n- `src/pricing/discounts.test.ts:67-67`\n- `src/pricing/discounts.test.ts:66-66`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 66,
+          "alsoFoundIn": true,
+          "text": "Because `toBeTruthy()` passes for any non-zero value, a regression in the cap logic ships green even though a 40% and 30% coupon on 10,000 cents should stack to 7,000 cents and be capped at 50% of the subtotal, or 5,000 cents. Assert the exact value with `expect(capped.discountCents).toBe(5_000)` and keep `expect(capped.capped).toBe(true)`.\n\n**Also found in:**\n- `src/pricing/discounts.test.ts:65-65`\n- `src/pricing/discounts.test.ts:67-67`\n- `src/pricing/discounts.test.ts:66-66`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 27965,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "label": "kody_rules",
+          "earlierId": "round-a-P12-rule-soft-asserts-moved-down",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "text": "The cap test's `toBeTruthy()` passes for any non-zero value, so a wrong cap amount ships green even though a 10,000 cent subtotal capped at 50% has exactly one right answer. Assert the exact value with `capped.discountCents` equal to `5_000` via `.toBe(5_000)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39786,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "text": "The `expect.soft` truthiness/presence assertions in `src/pricing/discounts.test.ts` violate the hard, exact assertions rule by letting any non-zero total pass, so a wrong 15% coupon discount on 10,000 cents ships green. Replace them with hard exact assertions for `priced.totalCents` = `8_500`, `priced.discountCents` = `1_500`, and `priced.appliedCoupon` = `percent(15)`.\n\n**Also found in:**\n- `src/pricing/discounts.test.ts:43-43`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "alsoFoundIn": true,
+          "text": "The `expect.soft` truthiness/presence assertions in `src/pricing/discounts.test.ts` violate the hard, exact assertions rule by letting any non-zero total pass, so a wrong 15% coupon discount on 10,000 cents ships green. Replace them with hard exact assertions for `priced.totalCents` = `8_500`, `priced.discountCents` = `1_500`, and `priced.appliedCoupon` = `percent(15)`.\n\n**Also found in:**\n- `src/pricing/discounts.test.ts:43-43`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28624,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P22-rule-forward-parsed-pingpong",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "text": "Because `req.body` is published instead of the parsed schema output, any extra fields the client sent bypass `CancelOrderSchema` validation and are forwarded downstream. Publish `result.data` so only validated fields leave the handler."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20652,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P22-rule-forward-parsed-pingpong",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "text": "Although `CancelOrderSchema` validates `req.body`, forwarding the raw object lets a client smuggle unchecked fields such as `status` or `actorId` through to downstream consumers. Pass `result.data` to `bus.publish` so only the parsed payload is published."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 22341,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P22-rule-forward-parsed-pingpong",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "text": "The handler validates `req.body` with `CancelOrderSchema` but forwards the raw body to the event bus, so any field the schema never checked, such as an unexpected `status` or `refunded`, rides along on the published event. Publish the parsed result via `await bus.publish('order.cancel_requested', result.data)` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17167,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/orders/create-order.handler.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P22-rule-forward-parsed-pingpong",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "text": "Fields the schema never checked, such as client-supplied `status` or `tenantId`, ride along unvalidated on the event bus. Pass the parsed `result.data` to `bus.publish` instead, matching the fix already applied in `create-order.handler.ts`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21162,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P22-rule-forward-parsed-pingpong",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "text": "Because the handler validates `req.body` with `CancelOrderSchema` but publishes raw `req.body` to the event bus instead of the parsed result, any extra field a client sends, such as a forged `status` or internal flag, reaches downstream consumers unchecked and violates the rule to validate request bodies and forward only the parsed result. Publish `result.data` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 27657,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 40107,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "lib/deploy/release.rb",
+          "claim": "WHAT: When install_gems returns false/nil, run! only logs 'aborting the release' and then continues to migrate, precompile_assets and activate. WHY: the release is activated (symlink switched) with gems missing, so the app crashes at boot after the switch — the same failure the earlier install-failure finding described, and the log message is a false statement of what happens. HOW: abort the release on install failure, e.g. `unless install_gems; @logger.error(\"...aborting the release\"); raise \"bundle install failed in #{@release_dir}\"; end`, or run the install through sh! so a non-zero exit raises.",
+          "keep": false,
+          "rationale": "The finding is a repeat of PreviousDecision round-a-P32-install-failure-only-logged, which already raised the same failure on this exact PR: install_gems failure leads to migrating/activating a release with missing gems and the app crashing at boot after the switch. Judged by the failure (not the cause or wording), this is the same crash in the same operation. The current code confirms it: run! only logs and then proceeds to migrate/precompile_assets/activate. The earlier decision's Outcome is \"partially_implemented\" and the diff shows no concrete evidence the applied change is wrong or reverted — only the error log line was added. Per the rules, raising again the problem a previous entry already raised is a DROP.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "lib/deploy/release.rb",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 44277,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 41107,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26550,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P42-rule-tenant-scope-after-decline",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23089,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "text": "An `externalId` from a request can load a project belonging to another tenant because `findByExternalId` queries by `externalId` alone, violating the rule to scope repository queries by tenant. Add a `tenantId` parameter and include it in the `where` clause, as `findById` does: `where: { tenantId, externalId }`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P42-rule-tenant-scope-after-decline",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16835,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "text": "Because `findByExternalId` queries projects by `externalId` alone, any caller passing an `externalId` from the request can load another tenant's project, violating the \"Scope repository queries by tenant\" rule. Take `tenantId` as a parameter and add it to the where clause as `findById` does: `where: { tenantId, externalId }`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P42-rule-tenant-scope-after-decline",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 13011,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "text": "Because `findByExternalId` queries by `externalId` alone, any caller passing an `externalId` from the request can load a project belonging to another tenant. Take `tenantId` as a parameter and add it to the `where` clause as `findById` does: `where: { tenantId, externalId }`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P42-rule-tenant-scope-after-decline",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 13878,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "text": "Any caller that passes an `externalId` from the request can load a project belonging to another tenant because `findByExternalId` queries by `externalId` alone, violating the rule to scope repository queries by tenant. Add a `tenantId` parameter and include it in the `where` clause as `findById` does, using `where: { tenantId, externalId }`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P42-rule-tenant-scope-after-decline",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 11960,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "text": "Any caller passing an `externalId` taken from the request can load a project belonging to another tenant, since `findByExternalId` filters on `externalId` alone. Add a `tenantId` parameter and include it in the `where` clause as `findById` does, using `where: { tenantId, externalId }`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

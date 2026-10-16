@@ -25,6 +25,7 @@ import {
 import type { RequestContext, RoutingVerdict } from './routing-strategy';
 import { StaticTaskStrategy } from './static-task-strategy';
 import { resolveModelSlot } from './resolve-model-slot';
+import { asServedSlot } from './served-slot';
 
 // Manual routing policy (Phase 4). Stateless + dependency-free — instantiated once.
 const strategy = new StaticTaskStrategy();
@@ -67,12 +68,12 @@ export function resolveTaskSlot(
     // above), giving the usage span its per-task dimension; `usedFallback` is the
     // one boolean the verdict adds (primary tiers all gated out).
     const slot = routed
-        ? {
+        ? asServedSlot({
               ...routed,
               ...(verdict.modelName ? { model: verdict.modelName } : {}),
               route: task,
               usedFallback: verdict.usedFallback,
-          }
+          })
         : routed;
 
     // Runtime failover target: stamp the org's configured fallback (gate-checked)
@@ -113,7 +114,7 @@ function attachFallback(
     }
     return {
         ...primarySlot,
-        fallback: { ...fbRouted, route: task, usedFallback: true },
+        fallback: asServedSlot({ ...fbRouted, route: task, usedFallback: true }),
     };
 }
 

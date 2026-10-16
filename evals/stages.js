@@ -36,7 +36,8 @@
 //              (stage-signals.js READERS); its row then comes only from the
 //              nightly, never from the wiring smoke
 //   metric   — what the measured number counts, shown under it
-//   set      — what the model reviews to produce it
+//   set      — what the model reviews to produce it. The panel reads it after
+//              "<model> reviews <cases>", so it starts with a plural noun
 //   caveat   — what a green number does not prove
 //   friday   — when the Friday check (evals/tier0-smoke.js) runs it on every
 //              tier-0 model: the key of its outcome in that check's
@@ -119,13 +120,18 @@ const STAGES = [
         id: 'parse',
         name: 'Output parsing',
         group: 'Finding issues',
-        label: 'Output recovery: every LLM call parses its answer',
+        label: "Parse: the end of each finder run becomes findings",
         pipeline: ['AgentReviewStage'],
-        eval: 'evals/review-chain',
-        model: 'mocked',
-        wiring: ['review-chain', 'shape-invariance'],
+        eval: 'evals/parse',
+        model: 'real',
+        wiring: ['parse', 'review-chain', 'shape-invariance'],
+        nightly: 'shared',
+        friday: 'parse',
+        metric: 'of written findings handled right by the parse',
+        set: 'recorded finder outputs from nine production models on public PRs, with the shapes production lost (#2112)',
+        caveat: 'Replays recorded model output: a model that changes how it writes its findings shows here once its runs are recorded again (evals/parse/capture.js).',
         byHand: ['evals/parser', 'evals/structured-outputs'],
-        note: 'deterministic: every call site wired to the shared recovery, every wire shape normalized',
+        note: 'every PR against the scripted model (the deterministic part); nightly on the real model when the parse or its payloads change',
     },
     {
         id: 'severity',
@@ -158,10 +164,14 @@ const STAGES = [
         label: 'Formatting of each suggestion',
         pipeline: ['AgentReviewStage'],
         eval: 'evals/format',
-        model: 'mocked',
+        model: 'real',
         wiring: ['format'],
-        byHand: ['evals/format'],
-        note: 'mock only on a schedule',
+        nightly: 'shared',
+        friday: 'format',
+        metric: 'of findings formatted right',
+        set: 'batches of findings: each of 31 real reviews under four team languages and a writing guideline',
+        caveat: 'Checks the text a reviewer sees, not whether the claim stayed the same.',
+        note: 'every PR against the scripted model (the local fallback); nightly on the real model when the formatter or its cases change',
     },
     {
         id: 'anchoring',
@@ -182,10 +192,14 @@ const STAGES = [
         label: 'Later review rounds: no reposts, nothing lost',
         pipeline: ['AgentReviewStage'],
         eval: 'evals/review-rounds',
-        model: 'scripted',
+        model: 'real',
         wiring: ['review-rounds', 'review-lifecycle'],
-        byHand: ['evals/review-rounds'],
-        note: 'scripted model only on a schedule; real-model runs are on demand',
+        nightly: 'shared',
+        friday: 'review_rounds',
+        metric: 'of claims handled right',
+        set: 'later rounds of a PR: reposts that must stay off it, new problems and revisions that must post',
+        caveat: 'The nightly runs one model on a subset (evals/nightly-evals.js, targets.json sets.nightly); the full set, the lifecycle chains and other models run by hand.',
+        note: 'targets.json sets.nightly in the nightly (evals/nightly-evals.js); the full set runs by hand',
     },
     {
         id: 'rules-learned',
@@ -230,6 +244,21 @@ const STAGES = [
         model: 'mocked',
         wiring: [],
         note: 'no AI, in the unit test suite: the agent is offered the memory action in those threads',
+    },
+    {
+        id: 'memories',
+        name: 'Following memories',
+        group: 'Kody Rules',
+        label: "Follows the team's memories: quiet where one says the code is intended, a finding where one says it is wrong",
+        pipeline: ['AgentReviewStage'],
+        eval: 'evals/memories',
+        model: 'real',
+        wiring: ['memories'],
+        nightly: 'shared',
+        friday: 'memories',
+        metric: 'of memory cases the review got right',
+        set: 'small invented pull requests, one per kind of memory production teams keep, each paired with a bug the memory must not silence',
+        note: 'every PR against the scripted model; nightly on the real model when the finder or its cases change',
     },
     {
         id: 'detectors',
