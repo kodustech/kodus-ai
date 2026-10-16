@@ -50,6 +50,9 @@ export function createGapCheck(run: AgentRun): GapCheck {
         // The lines the agent was shown: a citation must be one of them.
         const shown = new Map<string, Set<number>>();
         let refuted: GapRefuted | undefined;
+        // Set once the agent has answered: the loop stops on that step
+        // instead of asking the model once more only to close the run.
+        let answered = false;
 
         const registry = new InMemoryToolRegistry([
             {
@@ -149,6 +152,7 @@ export function createGapCheck(run: AgentRun): GapCheck {
                         evidence: [{ file, line }],
                         note: String(a.note ?? '').trim(),
                     };
+                    answered = true;
                     return { output: 'Noted. Answer DONE.' };
                 },
             },
@@ -160,7 +164,10 @@ export function createGapCheck(run: AgentRun): GapCheck {
                     type: 'object',
                     properties: {},
                 } as JSONSchema,
-                execute: async () => ({ output: 'Noted. Answer DONE.' }),
+                execute: async () => {
+                    answered = true;
+                    return { output: 'Noted. Answer DONE.' };
+                },
             },
         ]);
 
@@ -173,7 +180,9 @@ export function createGapCheck(run: AgentRun): GapCheck {
                 spanName: 'BusinessRulesValidation::gapCheck',
                 systemPrompt: systemPrompt(input.userLanguage),
                 tools: registry,
-                policies: [],
+                policies: [
+                    { name: 'gap-check-answered', shouldStop: () => answered },
+                ],
                 maxSteps: MAX_STEPS,
                 maxOutputTokens: 800,
             },

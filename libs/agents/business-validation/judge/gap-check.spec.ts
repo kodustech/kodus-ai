@@ -174,6 +174,18 @@ describe('createGapCheck', () => {
         await expect(unreadable(input)).resolves.toBeUndefined();
     });
 
+    it('stops the loop on the step the agent answers', async () => {
+        let stop: () => boolean = () => false;
+        const check = createGapCheck(async (spec) => {
+            const policy = spec.policies.find((p) => p.shouldStop);
+            stop = () => policy!.shouldStop!({} as any) as boolean;
+            expect(stop()).toBe(false);
+            await spec.tools.get('report_missing')!.execute({}, {} as any);
+        });
+        await check(input);
+        expect(stop()).toBe(true);
+    });
+
     it('keeps MISSING when the agent finds nothing or fails', async () => {
         await expect(
             createGapCheck(scripted([['report_missing', {}]]))(input),
