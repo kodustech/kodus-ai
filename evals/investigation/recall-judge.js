@@ -246,10 +246,10 @@ function extractText(provider, data) {
     return parts.map((p) => p.text || '').join('') || '{}';
 }
 
-function parseMatch(text) {
-    // Now shared across Anthropic/OpenAI/Google, whose responses may wrap the
-    // JSON in ```json fences or leading/trailing prose. Try the fence-stripped
-    // whole response first, then fall back to the outermost {..} span.
+// Shared JSON extraction: Anthropic/OpenAI/Google may wrap the JSON in
+// ```json fences or leading/trailing prose. Try the fence-stripped whole
+// response first, then the outermost {..} span. The parsed object, or null.
+function parseJudgeJson(text) {
     const raw = String(text || '')
         .replace(/^\s*```(?:json)?\s*/i, '')
         .replace(/\s*```\s*$/i, '')
@@ -260,13 +260,27 @@ function parseMatch(text) {
     if (first !== -1 && last > first) candidates.push(raw.slice(first, last + 1));
     for (const json of candidates) {
         try {
-            const p = JSON.parse(json);
-            return !!p.match && (p.confidence ?? 0) >= MATCH_CONFIDENCE;
+            return JSON.parse(json);
         } catch {
             /* try the next candidate */
         }
     }
-    return false;
+    return null;
+}
+
+function parseMatch(text) {
+    const p = parseJudgeJson(text);
+    return !!p?.match && (p?.confidence ?? 0) >= MATCH_CONFIDENCE;
+}
+
+// The verdict with its confidence, so a known bug can keep the one finding the
+// judge is surest of (recall-assertion.js). A match still has to clear OUR
+// floor: Martian's judge has none (step3_judge_comments.py), and the eval
+// measures on our judge.
+function parseMatchDetailed(text) {
+    const p = parseJudgeJson(text);
+    const confidence = Number(p?.confidence ?? 0) || 0;
+    return { match: !!p?.match && confidence >= MATCH_CONFIDENCE, confidence };
 }
 
 // Judge a (golden, candidate) pair with an explicit model — used by the
@@ -277,6 +291,14 @@ async function matchCommentWith(model, apiKey, golden, candidate) {
         String(candidate || '').slice(0, 4000),
     );
     return parseMatch(await judgeCall(model, apiKey, prompt));
+}
+
+async function matchCommentDetailedWith(model, apiKey, golden, candidate) {
+    const prompt = JUDGE_PROMPT.replace('{golden_comment}', golden).replace(
+        '{candidate}',
+        String(candidate || '').slice(0, 4000),
+    );
+    return parseMatchDetailed(await judgeCall(model, apiKey, prompt));
 }
 
 // Judge with the configured JUDGE_MODEL. Same signature as before so
@@ -316,6 +338,11 @@ async function assertsClaim(apiKey, claim, reply) {
     return parseMatch(String(text || '').replace(/"asserts"\s*:/, '"match":'));
 }
 
+// The configured judge's verdict with its confidence (recall-assertion.js).
+async function matchCommentDetailed(apiKey, golden, candidate) {
+    return matchCommentDetailedWith(JUDGE_MODEL, apiKey, golden, candidate);
+}
+
 module.exports = {
     JUDGE_MODEL,
     assertsClaim,
@@ -324,4 +351,6 @@ module.exports = {
     providerFor,
     matchComment,
     matchCommentWith,
+    matchCommentDetailed,
+    matchCommentDetailedWith,
 };

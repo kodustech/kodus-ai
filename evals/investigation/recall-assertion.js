@@ -11,7 +11,7 @@
  * regression case "must find the SSRF" runs with RECALL_THRESHOLD=1.
  */
 const { parseOutput } = require('./parse-output');
-const { loadJudgeKey, matchComment } = require('./recall-judge');
+const { loadJudgeKey, matchCommentDetailed } = require('./recall-judge');
 
 function asArray(v) {
     if (Array.isArray(v)) return v;
@@ -105,26 +105,35 @@ module.exports = async (output, context) => {
     const totalCalls = typeof trace.replayCalls === 'number' ? trace.replayCalls : unserved;
     const hitRate = totalCalls ? Math.max(0, (totalCalls - unserved) / totalCalls) : 1;
     // Judge every (golden, finding) pair so we get BOTH:
-    //   recall    — goldens covered by >=1 finding  (did we catch the real bugs?)
-    //   precision — findings that hit >=1 golden     (is what we post real, not noise?)
-    // Skip a pair only when both sides are already decided.
-    const goldenHit = new Array(goldens.length).fill(false);
-    const findingHit = new Array(candidates.length).fill(false);
+    //   recall    — goldens covered by a finding  (did we catch the real bugs?)
+    //   precision — findings that are a golden's match, of all findings
+    //               (is what we post real, not noise?)
+    // Each known bug is matched by ONE finding: the one the judge is surest of
+    // (as Martian's step3_judge_comments.py keeps the best-confidence match, and
+    // feat/improve-harness-to-big-models b2575151d after it). Two findings of
+    // the same bug count one hit and one false positive; before, both counted
+    // as hits and a repeated finding raised precision. Every pair is judged,
+    // since the best match is only known after all of them. The match floor is
+    // ours (MATCH_CONFIDENCE in recall-judge.js).
+    const best = new Array(goldens.length).fill(-1);
+    const bestConfidence = new Array(goldens.length).fill(0);
     for (let gi = 0; gi < goldens.length; gi++) {
         const goldenText = typeof goldens[gi] === 'string' ? goldens[gi] : goldens[gi].comment;
         for (let fi = 0; fi < candidates.length; fi++) {
-            if (goldenHit[gi] && findingHit[fi]) continue;
             // eslint-disable-next-line no-await-in-loop
-            if (await matchComment(apiKey, goldenText, candidates[fi])) {
-                goldenHit[gi] = true;
-                findingHit[fi] = true;
+            const { match, confidence } = await matchCommentDetailed(apiKey, goldenText, candidates[fi]);
+            if (match && confidence > bestConfidence[gi]) {
+                bestConfidence[gi] = confidence;
+                best[gi] = fi;
             }
         }
     }
+    const goldenHit = best.map((fi) => fi >= 0);
+    const findingHit = candidates.map((_, fi) => best.includes(fi));
 
     const matched = goldenHit.filter(Boolean).length; // goldens covered (recall TP)
-    const tpFindings = findingHit.filter(Boolean).length; // findings that hit a golden
-    const fpFindings = candidates.length - tpFindings; // findings that hit nothing
+    const tpFindings = findingHit.filter(Boolean).length; // findings that are a golden's match
+    const fpFindings = candidates.length - tpFindings; // findings that are no golden's match
 
     const missed = [];
     for (let gi = 0; gi < goldens.length; gi++) {
@@ -141,7 +150,8 @@ module.exports = async (output, context) => {
     const untestable = missed.filter((m) => m.fair.present === null).length;
 
     const recall = matched / goldens.length;
-    const precision = candidates.length ? tpFindings / candidates.length : 0;
+    // A finding that is the match of two goldens counts two hits.
+    const precision = matched + fpFindings ? matched / (matched + fpFindings) : 0;
     const f1 = recall + precision ? (2 * recall * precision) / (recall + precision) : 0;
     // Fair recall = TP / (TP + recognition-misses) — excludes replay artifacts.
     const fairDenom = matched + realMiss + untestable;
@@ -149,7 +159,7 @@ module.exports = async (output, context) => {
 
     const reason =
         `recall ${matched}/${goldens.length} (${Math.round(recall * 100)}%) · ` +
-        `precision ${tpFindings}/${candidates.length} (${Math.round(precision * 100)}%) · ` +
+        `precision ${matched}/${matched + fpFindings} (${Math.round(precision * 100)}%) · ` +
         `F1 ${f1.toFixed(2)} · ` +
         `fair-recall ${Math.round(fairRecall * 100)}% · ` +
         `loop-fidelity ${Math.round(hitRate * 100)}% (${totalCalls - unserved}/${totalCalls} served)` +

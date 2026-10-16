@@ -16,7 +16,7 @@
  * lógica par-a-par, mesmas métricas), para os números seguirem comparáveis com
  * o histórico. Ver evals/scorer/README.md para o contrato dos formatos.
  */
-const { matchCommentWith } = require('../investigation/recall-judge');
+const { matchCommentDetailedWith } = require('../investigation/recall-judge');
 
 const STOPWORDS =
     /^(this|self|true|false|null|none|with|that|when|then|from|will|have|been|which|these|there|where|while|should|could|would|because|without|value|values|method|function|class|object|return|input|output|param|params|error|check|other|using|used|into|only|note|here)$/i;
@@ -85,21 +85,23 @@ async function scoreCase({ findings, goldens, corpus = '', trace = null, judge }
         return { skipped: true, reason: 'caso sem goldenComments — nada a pontuar' };
     }
 
-    // Matching par-a-par, idêntico a recall-assertion.js: um golden pode ser
-    // coberto por vários findings e vice-versa; pula o par só quando ambos os
-    // lados já estão decididos.
-    const goldenHit = new Array(goldenTexts.length).fill(false);
-    const findingHit = new Array(candidates.length).fill(false);
+    // Matching par-a-par, idêntico a recall-assertion.js: cada golden fica com
+    // UM finding, aquele em que o juiz tem mais confiança; dois findings do
+    // mesmo golden contam um acerto e um falso positivo. Todo par é julgado.
+    const best = new Array(goldenTexts.length).fill(-1);
+    const bestConfidence = new Array(goldenTexts.length).fill(0);
     for (let gi = 0; gi < goldenTexts.length; gi++) {
         for (let fi = 0; fi < candidates.length; fi++) {
-            if (goldenHit[gi] && findingHit[fi]) continue;
             // eslint-disable-next-line no-await-in-loop
-            if (await matchCommentWith(judge.model, judge.apiKey, goldenTexts[gi], candidates[fi])) {
-                goldenHit[gi] = true;
-                findingHit[fi] = true;
+            const { match, confidence } = await matchCommentDetailedWith(judge.model, judge.apiKey, goldenTexts[gi], candidates[fi]);
+            if (match && confidence > bestConfidence[gi]) {
+                bestConfidence[gi] = confidence;
+                best[gi] = fi;
             }
         }
     }
+    const goldenHit = best.map((fi) => fi >= 0);
+    const findingHit = candidates.map((_, fi) => best.includes(fi));
 
     const matched = goldenHit.filter(Boolean).length;
     const tpFindings = findingHit.filter(Boolean).length;
@@ -120,7 +122,7 @@ async function scoreCase({ findings, goldens, corpus = '', trace = null, judge }
     // sistematicamente quem se abstem: o gemini-3.7-flash aparecia com 33,3%
     // (16 de 30 casos mudos entrando como 0) quando a precisao real era 73,9%.
     // `mean()` descarta null, entao o caso sai da media em vez de afunda-la.
-    const precision = candidates.length ? tpFindings / candidates.length : null;
+    const precision = candidates.length ? matched / (matched + fpFindings) : null;
     // `recall + precision` como guard e falsy quando os dois sao 0 (modelo
     // reportou algo, mas errou tudo) — isso caia no ramo null, tratando "TODO
     // ERRADO" igual a "SEM PREDICAO". So precision===null e abstencao real;

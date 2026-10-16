@@ -37,7 +37,7 @@ deterministic tool replay (no sandbox / droplet / GitHub), then a Sonnet judge m
 the agent's findings against each PR's golden bugs. Per PR it reports:
 
 - **recall** — goldens covered by ≥1 finding (did we catch the real bugs?)
-- **precision** — findings that hit ≥1 golden (is what we post real, not noise?)
+- **precision** — known bugs matched, of those plus the findings that match none (is what we post real, not noise?). Each golden keeps one finding, the one the judge is surest of: a second finding of the same bug is a false positive
 - **F1**
 - **fair-recall** — recall with _replay artifacts_ removed from the denominator. A
   missed golden is an artifact if its code wasn't in the corpus the finder saw (the
@@ -45,6 +45,16 @@ the agent's findings against each PR's golden bugs. Per PR it reports:
 - **loop-fidelity** — % of the agent's tool calls the replay could serve. Low
   fidelity = the agent explored beyond the recording and reflected on empty results →
   that PR's number is unreliable, discard it.
+
+The finder runs as production's generalist does (`agent-provider.js`,
+`buildProductionRun`): the PR's whole diff (`changedFilesFull`), every category
+the team leaves on (all three by default), the orchestrator's step budget, and
+the model routed through production's resolver: the env/managed route by
+default, a stored BYOK config when `RECALL_REASONING_EFFORT` is set. On a PR too
+large for the model's window it applies production's low-signal filter, file
+tiers and batches. A subscription model (`@sub`) has no production route and the
+run exits 2. `RECALL_CATEGORIES` and `RECALL_MAX_STEPS` override the defaults for
+an experiment.
 
 What this eval validates: changes to **how the finder/verify judge the code they
 already see** (prompt tweaks, sink checklists, few-shot, verify tuning, model, thinking
