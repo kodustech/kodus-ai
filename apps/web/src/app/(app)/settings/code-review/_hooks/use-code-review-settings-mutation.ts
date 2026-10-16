@@ -18,8 +18,11 @@ import {
     type FormattedCodeReviewConfig,
     type FormattedGlobalCodeReviewConfig,
 } from "../_types";
+import {
+    getChangedConfigMask,
+    pickChangedConfig,
+} from "../_utils/changed-config";
 import { mergeFormattedCodeReviewConfigForScope } from "../_utils/settings-shell";
-import { withoutUntouchedModelOverride } from "../[repositoryId]/_utils/model-override-field";
 
 type SavePreparationResult = {
     savedFormData: CodeReviewFormType;
@@ -128,12 +131,22 @@ export const useCodeReviewSettingsMutation = (params: {
     ): Promise<SaveSettingsResult> => {
         const prepared = await (options?.prepare ?? defaultPrepare)(formData);
 
+        const { language: _language, ...formattedConfig } = formData;
+        const changedConfig = pickChangedConfig(
+            prepared.codeReviewConfig,
+            getChangedConfigMask(formattedConfig, form.formState.defaultValues),
+        );
+
+        // Nothing in the code-review config changed (e.g. only the language,
+        // which `prepare` already saved).
+        if (Object.keys(changedConfig).length === 0) {
+            form.reset(prepared.savedFormData);
+            invalidateRelatedQueries();
+            return {};
+        }
+
         const result = await createOrUpdateCodeReviewParameter(
-            withoutUntouchedModelOverride(
-                prepared.codeReviewConfig,
-                formData.byokModelId?.value,
-                form.formState.defaultValues?.byokModelId?.value,
-            ),
+            changedConfig,
             teamId,
             repositoryId,
             directoryId,
