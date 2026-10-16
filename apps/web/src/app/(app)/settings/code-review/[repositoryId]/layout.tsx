@@ -101,6 +101,16 @@ export default function Layout(props: React.PropsWithChildren) {
                 hydrationKey,
             )
         ) {
+            // Same scope, refetched config (e.g. a Kody Rules toggle saved on
+            // its own): take the server values for every field the user has
+            // not edited, so the form never holds a value that is gone. The
+            // other flags keep pending edits flagged as unsaved.
+            form.reset(initialFormValues, {
+                keepDirtyValues: true,
+                keepDirty: true,
+                keepErrors: true,
+                keepTouched: true,
+            });
             return;
         }
 
