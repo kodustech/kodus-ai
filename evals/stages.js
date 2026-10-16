@@ -79,7 +79,7 @@ const STAGES = [
         eval: 'evals/security-analyzers',
         model: 'on-demand',
         wiring: [],
-        note: 'on demand only, not scheduled',
+        note: "on demand: node evals/security-analyzers/run-stage.js runs production's RunAnalyzersStage (the secret scan on a sandbox checkout of each sample) and needs betterleaks installed",
     },
     {
         id: 'finder',
@@ -153,10 +153,12 @@ const STAGES = [
         group: 'The agents, side by side',
         label: 'Turns a mechanical rule into a pattern match whose hits the AI confirms',
         pipeline: ['AgentReviewStage'],
-        eval: 'evals/kody-rules/detector-fp-repro.js',
+        eval: 'evals/kody-rules/polyglot-cases.json',
         model: 'on-demand',
         wiring: [],
-        note: 'on demand only; unit tests cover the compiler',
+        byHand: ['evals/kody-rules'],
+        note: "on demand: node evals/kody-rules/real-agent.js --dataset=polyglot-cases runs production's review (compile, sandbox, stage) with a Ruby-only rule over polyglot PRs; the kody-rules nightly also reaches the detector route, its rules carrying examples",
+        caveat: 'A negative control: it counts comments on files the rule must not touch, not violations found.',
     },
     {
         id: 'kody-rules',

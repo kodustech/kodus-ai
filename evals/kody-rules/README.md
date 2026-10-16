@@ -9,11 +9,18 @@
 Does the review correctly enforce team Kody Rules? The kody-rules agent is a
 separate agent from the bug/security finder, so this eval is its own thing.
 
-It runs the **production engine** — the real `KodyRulesAgentProvider.execute()`,
-the same agent loop, the same tools (grep/readFile/listDir), the same
-verify-skip / ruleUuid reconciliation / `@@PATH_MISMATCH@@` drop — over **real PR
-diffs**, with deterministic tool replay (no sandbox/GitHub at run time), exactly
-like the finder-recall eval. Only the tool *outputs* are replayed.
+It runs **production's review** on each case, from data: the rule saved through
+the save-time compile and loaded for review (`KodyRuleDetectorCompilerService`,
+`KodyRulesValidationService.filterKodyRules`), the PR's head cloned by the
+self-hosted sandbox (`LocalSandboxService.createSandboxWithRepo`, `exec`
+included), the changed files fetched by `FetchChangedFilesStage`, and
+`AgentReviewStage` running the Kody Rules agent (the team's generalist
+categories off) and every step after it. `production-review.js` is the one file
+that wires it, and it supplies only data: the team's stored rules and settings,
+what the code host answers about the PR (recorded by `materialize-cases.js`),
+and in-memory stores where production writes to a database. What the stage
+keeps, with the places it merged into one comment (`kodyRuleOtherLocations`),
+is what is scored.
 
 ## What it measures (per rule, over N runs)
 
@@ -35,28 +42,34 @@ set is the ground truth. No judge, no circular labeling.
 
 ## Datasets
 
-- **`github-cases.json`** (committed fixture, primary) — 14 real merged PRs / 43
+- **`github-cases.json`** (committed, primary) — 14 real merged PRs / 43
   violation sites harvested from large TS repos (n8n, medusa, twenty, appsmith,
-  typeorm, backstage). Frozen so CI is deterministic. Regenerate/refresh with
-  `harvest-github-cases.js` (needs `gh` auth + network — a manual step, not CI).
-- **`bench-cases.json`** (gitignored, regenerable) — built by
-  `build-bench-cases.js` from the committed `evals/investigation/datasets`
-  (benchmark PR diffs + recorded tool replay). Deterministic from versioned data.
+  typeorm, backstage). Each case carries its PR as the code host answers it
+  (`pr`: refs, title, body, every changed file with its patch, commits) and the
+  rule with the examples a team gives, so production's compile can give a
+  mechanical rule a detector. The ground truth is read from those patches
+  (`patterns.js`). Refresh with `harvest-github-cases.js`, then
+  `materialize-cases.js` (both need `gh` auth + network, a manual step).
+- **`polyglot-cases.json`** (committed, a negative control) — a Ruby-only rule over
+  12 real Ruby, JavaScript and template PRs. Nothing outside the rule's language
+  should be commented on; the metric is specificity (`--dataset=polyglot-cases`).
+  Ruby sources are not scored.
 
 ## Run
 
 ```bash
 yarn eval:kody-rules                 # real engine over the 14 frozen GitHub PRs
 yarn eval:kody-rules:gate            # same, but exit non-zero if below baseline (CI)
-yarn eval:kody-rules:bench           # regenerate + run the benchmark-diff tier
 yarn eval:kody-rules:harvest         # refresh github-cases.json from live GitHub
+node evals/kody-rules/materialize-cases.js   # record each PR as the code host answers it
+node evals/kody-rules/real-agent.js --dataset=polyglot-cases   # the negative control
 ```
 
-Flags: `--model=` (`gpt-5.4` | `gpt-5.4-mini` | DO models), `--runs=`,
+Flags: `--model=<tier-0 id>`, `--runs=`, `--cases=<caseId,...>`, `--limit=`,
 `--gate` with `--occ-min=70 --spec-min=95`. Needs the model key in
-`~/.kodus-dev/config` (or `.env`). Loads `.ts` via an **esbuild** require-hook,
-not ts-node: `agent-loop.ts` has value imports mid-file that ts-node leaves
-un-hoisted (`Cannot access 'llm_1' before initialization`).
+`~/.kodus-dev/config` (or `.env`) and network to GitHub: every run clones the
+PR's head, and the call graph is built by `kodus-graph` (installed by the stage
+on first use).
 
 ## CI gate
 

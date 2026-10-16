@@ -1,15 +1,14 @@
 /**
- * Runnable eval harness for the business-rules Verifier (Etapa 3 measurement).
+ * Runnable eval for the business-logic stage's analyzer and its verify pass.
  *
- * Closes the "eval is just a seam" gap: wires the real BusinessRulesVerifier +
- * the analyzer into the generic `runSkillEval` so you can MEASURE the verify
- * gate before turning it on. The two configurations compared are:
- *   - without_skill = the analyzer's raw ValidationResult (no verify)
- *   - with_skill    = the same result AFTER the Verifier + applyBusinessRulesVerdict
+ * It runs the production agent (BusinessRulesValidationAgentProvider's analyzer
+ * step, with the real SKILL.md, prompt, retries, parser and defaults) over each
+ * case's task and diff, with a real model. The two configurations compared are:
+ *   - without_skill = production's default (the verify pass is off)
+ *   - with_skill    = the same agent with the policy's verifyAnalyzerResult on
  * Graded against each case's assertions, so the delta tells you whether verify
  * drops false-positive violations WITHOUT dropping the real ones.
  *
- * Pure of any model: the caller injects `resolveModel` (their BYOK/stack model).
  * Runs on the stack, not in CI — see business-rules-eval.spec.ts (gated by env).
  */
 import * as fs from 'fs';
@@ -23,11 +22,6 @@ import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-s
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
 
-import {
-    applyBusinessRulesVerdict,
-    BusinessRulesVerifier,
-} from '@libs/agents/infrastructure/services/agents/business-rules-validation/business-rules-verifier';
-import { parseBusinessRulesValidationResult } from '@libs/agents/infrastructure/services/agents/business-rules-validation/validation-result.parser';
 import type { ValidationResult } from '@libs/agents/infrastructure/services/agents/business-rules-validation/types';
 
 import {
@@ -65,79 +59,83 @@ export function loadBusinessRulesEvalSuite(): {
     return { suite: raw, fixtures };
 }
 
-/** Run the analyzer once (single-shot) over a fixture → ValidationResult + state. */
-async function runAnalyzer(
-    runner: AiSdkAgentRunner,
-    system: string,
-    diff: string,
-    task: string,
-): Promise<{ result: ValidationResult; state: unknown }> {
-    const spec: AgentSpec = {
-        id: 'br-eval-analyzer',
-        systemPrompt: system,
-        tools: new InMemoryToolRegistry([]),
-        policies: [],
-        maxSteps: 1,
-    };
-    const prompt = [
-        '## Task requirements',
-        task || '(none provided)',
-        '',
-        '## PR diff',
-        diff || '(none provided)',
-        '',
-        'Return ONLY the JSON verdict object.',
-    ].join('\n');
-    const { ctx, cleanup } = createAgentRunContext({ runId: 'br-eval:analyze' });
-    try {
-        const state = await runner.run(spec, { prompt }, ctx);
-        const result = parseBusinessRulesValidationResult(finalText(state));
-        return { result, state };
-    } finally {
-        cleanup();
+/**
+ * The agent production runs for the business-logic stage, built from its own
+ * services: the permission service over an org with no BYOK config (the
+ * env/managed model route), the parameters service over an in-memory
+ * repository holding the team's language, and the skill runner that loads the
+ * real SKILL.md. The eval supplies data only: the case's task and diff.
+ */
+function productionAgent(verifyAnalyzerResult: boolean) {
+    const { PermissionValidationService } = require('@libs/ee/shared/services/permissionValidation.service');
+    const { ParametersService } = require('@libs/organization/infrastructure/adapters/services/parameters.service');
+    const { ObservabilityService } = require('@libs/core/log/observability.service');
+    const { GenericSkillRunnerService } = require('@libs/agents/skills/generic-skill-runner.service');
+    const { SkillLoaderService } = require('@libs/agents/skills/skill-loader.service');
+    const {
+        BusinessRulesValidationAgentProvider,
+    } = require('@libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent');
+
+    const observability = new ObservabilityService({ get: () => undefined });
+    const skillRunner = new GenericSkillRunnerService(new SkillLoaderService(), observability);
+    if (verifyAnalyzerResult) {
+        // The one setting a team's skill config changes: production's verify
+        // pass is off by default (SkillExecutionPolicy.verifyAnalyzerResult);
+        // `with_skill` runs the same agent with it on.
+        const getExecutionPolicy = skillRunner.getExecutionPolicy.bind(skillRunner);
+        skillRunner.getExecutionPolicy = (name: string) => ({ ...getExecutionPolicy(name), verifyAnalyzerResult: true });
     }
+    const parameters = new ParametersService({ findByKey: async () => ({ configValue: 'en-US' }) });
+    return new BusinessRulesValidationAgentProvider(
+        new PermissionValidationService(undefined, { findByKey: async () => null }),
+        parameters,
+        observability,
+        skillRunner,
+    );
 }
 
-const ANALYZER_SYSTEM = [
-    'You validate whether a PR diff implements the task requirements, to find',
-    'missing/forgotten business logic. Output a single JSON object:',
-    '{ "needsMoreInfo": boolean, "reason": "analysis_ready" | "task_context_missing" | "task_context_weak" | "pr_diff_missing", "summary": string, "confidence": "low"|"medium"|"high" }.',
-    'If a required behavior from the task is NOT implemented in the diff, say so in summary with confidence high.',
-].join('\n');
+/**
+ * Runs the production analyzer step (analysis prompt, retries, parse, the
+ * verify pass when the policy has it, defaults) over a case whose task and diff
+ * production has already judged usable.
+ */
+async function runAnalyzer(
+    agent: ReturnType<typeof productionAgent>,
+    diff: string,
+    task: string,
+): Promise<{ result: ValidationResult }> {
+    const ctx = {
+        organizationAndTeamData: {
+            organizationId: '00000000-0000-4000-8000-0000000b1001',
+            teamId: '00000000-0000-4000-8000-0000000b1002',
+        },
+        prDiff: diff,
+        taskContext: task,
+        taskQuality: 'COMPLETE',
+        userLanguage: 'en-US',
+        analysisEligibility: {
+            mode: 'full_analysis',
+            taskContextStatus: 'usable',
+            prDiffStatus: 'usable',
+            reason: 'analysis_ready',
+        },
+        prepareContext: {},
+    };
+    const out = await (agent as any).runAnalyzer({ type: 'llm' }, ctx);
+    return { result: out.validationResult as ValidationResult };
+}
 
-/** Build the analyze fn: without_skill = raw analyzer; with_skill = + verify. */
+/** Build the analyze fn: without_skill = production's default; with_skill = its verify pass on. */
 export function buildBusinessRulesAnalyze(params: {
     slot?: NormalizedModel;
     fixtures: Map<string | number, { diff: string; task: string }>;
 }): AnalyzeFn {
-    const runner = new AiSdkAgentRunner(params.slot);
+    const raw = productionAgent(false);
+    const verified = productionAgent(true);
     return async (evalCase, config) => {
         const fx = params.fixtures.get(evalCase.id) ?? { diff: '', task: '' };
-        const { result, state } = await runAnalyzer(
-            runner,
-            ANALYZER_SYSTEM,
-            fx.diff,
-            fx.task,
-        );
-        if (config === 'without_skill') {
-            return { output: result, state: state as never };
-        }
-        // with_skill = run the Verifier and apply its verdict (refute-to-drop).
-        const verifier = new BusinessRulesVerifier(runner, {
-            modelId: 'resolved',
-            diff: fx.diff,
-            taskContext: fx.task,
-        });
-        const { ctx, cleanup } = createAgentRunContext({ runId: 'br-eval:verify' });
-        try {
-            const verdict = await verifier.verify(result, ctx);
-            return {
-                output: applyBusinessRulesVerdict(result, verdict),
-                state: state as never,
-            };
-        } finally {
-            cleanup();
-        }
+        const { result } = await runAnalyzer(config === 'without_skill' ? raw : verified, fx.diff, fx.task);
+        return { output: result, state: undefined as never };
     };
 }
 

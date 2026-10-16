@@ -2,7 +2,7 @@
 
 > - **Answers:** Does a deterministic analyzer catch vulnerabilities the LLM reviewer does not? Scoring a scanner in isolation cannot answer that — a finding the reviewer already makes is a duplicate, not new evidence.
 > - **Runs:** on demand, not in CI. It costs real model calls and the corpora are built by hand; it ran to decide which analyzers to ship and is kept as the record of that decision.
-> - **Run it:** `node evals/security-analyzers/llm-vs-analyzers.js` · `node evals/security-analyzers/agent-path.js`
+> - **Run it:** `node evals/security-analyzers/run-stage.js --tranche=vuln|noise` (production's `RunAnalyzersStage`; needs `betterleaks`) · the 2026 comparison scripts `llm-vs-analyzers.js` and `agent-path.js` are the record of the decision below
 > - **Gate:** none. This is a measurement, not a regression gate — no threshold blocks a PR on it.
 > - **Cost:** one security-review call per sample, per run, against a live model. The 90-sample corpus exhausted a credit balance mid-run; see the caveat below.
 

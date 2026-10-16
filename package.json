@@ -113,7 +113,6 @@
         "eval:new": "node evals/shared/new-eval.js",
         "eval:kody-rules": "node evals/kody-rules/real-agent.js --dataset=github-cases",
         "eval:kody-rules:gate": "node evals/kody-rules/real-agent.js --dataset=github-cases --gate",
-        "eval:kody-rules:bench": "node evals/kody-rules/build-bench-cases.js && node evals/kody-rules/real-agent.js --dataset=bench-cases",
         "eval:kody-rules:harvest": "node evals/kody-rules/harvest-github-cases.js",
         "eval:kody-rules:atoms": "node evals/kody-rules/run-full-pipeline.js --dataset=rails-convention-cases-all --only=digest --atoms --model=gpt-5.4-mini",
         "eval:review-chain": "node evals/review-chain/run.js --gate",
