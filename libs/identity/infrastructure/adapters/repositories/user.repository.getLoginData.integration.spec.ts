@@ -23,7 +23,7 @@ import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { OrganizationModel } from '@libs/organization/infrastructure/adapters/repositories/schemas/organization.model';
 
 import { UserModel } from './schemas/user.model';
-import { UserRepository } from './user.repository';
+import { UserDatabaseRepository } from './user.repository';
 
 const dataSource = new DataSource({
     type: 'postgres',
@@ -60,7 +60,7 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
     () => {
         let reachable = true;
         let queryRunner: QueryRunner;
-        let repo: UserRepository;
+        let repo: UserDatabaseRepository;
         const sfx = randomUUID().slice(0, 8);
         const domain = `citest-${sfx}.invalid`;
 
@@ -85,8 +85,9 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
             queryRunner = dataSource.createQueryRunner();
             await queryRunner.connect();
             await queryRunner.startTransaction();
-            repo = new UserRepository(
+            repo = new UserDatabaseRepository(
                 queryRunner.manager.getRepository(UserModel) as any,
+                dataSource,
             );
         });
 

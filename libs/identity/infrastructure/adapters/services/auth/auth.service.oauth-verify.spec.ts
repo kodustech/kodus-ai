@@ -177,7 +177,7 @@ describe('AuthService.verifyOAuthProviderEmail (GHSA-95hw)', () => {
         ).rejects.toBeInstanceOf(UnauthorizedException);
 
         expect(warn).toHaveBeenCalledTimes(1);
-        const logged = warn.mock.calls[0][0];
+        const logged = warn.mock.calls[0][0] as any;
         expect(logged.message).toContain('no verified email');
         expect(JSON.stringify(logged)).not.toContain(TOKEN);
     });
@@ -263,6 +263,27 @@ describe('AuthService.verifyOAuthProviderEmail (GHSA-95hw)', () => {
         } finally {
             if (prev === undefined) delete process.env.WEB_GITLAB_OAUTH_URL;
             else process.env.WEB_GITLAB_OAUTH_URL = prev;
+        }
+    });
+
+    it('falls back to the public gitlab.com API when WEB_GITLAB_OAUTH_URL is not set', async () => {
+        // The inactive direction of the guard: with no self-hosted URL the
+        // token must be validated against gitlab.com, not against
+        // `undefined/api/v4/user`.
+        const svc = makeService();
+        const prev = process.env.WEB_GITLAB_OAUTH_URL;
+        delete process.env.WEB_GITLAB_OAUTH_URL;
+        mockedGet.mockResolvedValue({
+            data: { email: 'dev@gitlab.example', name: 'Dev', username: 'dev' },
+        });
+        try {
+            await svc.verifyOAuthProviderEmail(AuthProvider.GITLAB, 'valid');
+            expect(mockedGet).toHaveBeenCalledWith(
+                'https://gitlab.com/api/v4/user',
+                expect.anything(),
+            );
+        } finally {
+            if (prev !== undefined) process.env.WEB_GITLAB_OAUTH_URL = prev;
         }
     });
 

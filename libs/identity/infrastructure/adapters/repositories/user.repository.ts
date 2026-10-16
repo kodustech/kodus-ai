@@ -215,7 +215,8 @@ export class UserDatabaseRepository implements IUserRepository {
             if (!userSelected) {
                 userSelected = await this.userRepository
                     .createQueryBuilder('users')
-                    .leftJoinAndSelect('users.organization', 'organization')
+                    .leftJoin('users.organization', 'organization')
+                    .addSelect('organization.uuid')
                     .where('LOWER(users.email) = LOWER(:email)', { email })
                     .orderBy('users.createdAt', 'ASC')
                     .getOne();
