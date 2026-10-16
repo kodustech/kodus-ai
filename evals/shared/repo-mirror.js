@@ -1,0 +1,110 @@
+// A local bare mirror of a public repository, holding the refs a case
+// reviews, so production's sandbox (LocalSandboxService.createSandboxWithRepo)
+// clones from it exactly as it clones from the platform: same refspecs, same
+// shallow fetches, from a file:// URL. The mirror is data: it holds what
+// GitHub holds for those refs, fetched once and kept between runs (CI caches
+// the directory, EVAL_REPO_CACHE).
+//
+// A repository written for an eval (repoFiles) becomes a one-branch mirror the
+// same way, so every eval's tools run on production's sandbox.
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+
+const execFileAsync = promisify(execFile);
+
+const ROOT = process.env.EVAL_REPO_CACHE || path.join(os.homedir(), '.cache', 'kodus-evals', 'repos');
+
+// git without the variables that point it at another repository (a hook's
+// GIT_DIR), as the sandbox itself runs git (local-sandbox.service.ts sandboxEnv).
+function gitEnv(extra = {}) {
+    const env = { ...process.env, ...extra };
+    for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_COMMON_DIR', 'GIT_NAMESPACE']) delete env[key];
+    return env;
+}
+const git = (dir, args, opts = {}) =>
+    execFileAsync('git', ['-C', dir, ...args], { maxBuffer: 64 * 1024 * 1024, timeout: opts.timeout ?? 15 * 60_000, env: gitEnv(opts.env) });
+
+// One fetch at a time per mirror: concurrent fetches into one repository fight
+// over its lock files.
+const queues = new Map();
+function serial(key, fn) {
+    const prev = queues.get(key) || Promise.resolve();
+    const next = prev.then(fn, fn);
+    queues.set(key, next.catch(() => undefined));
+    return next;
+}
+
+async function hasRef(dir, ref, sha) {
+    try {
+        const { stdout } = await git(dir, ['rev-parse', '--verify', `${ref}^{commit}`]);
+        return !sha || stdout.trim() === sha;
+    } catch {
+        return false;
+    }
+}
+
+async function ensureBare(dir) {
+    if (fs.existsSync(path.join(dir, 'HEAD'))) return;
+    fs.mkdirSync(dir, { recursive: true });
+    await git(dir, ['init', '--bare', '-q']);
+    // The sandbox fetches by SHA on the CLI path (checkoutSha).
+    await git(dir, ['config', 'uploadpack.allowAnySHA1InWant', 'true']);
+}
+
+/**
+ * The mirror of `repo` (owner/name) holding the case's head (refs/pull/<n>/head
+ * for a PR, the commit itself otherwise) and its base branch. Returns the
+ * file:// URL the sandbox clones from.
+ */
+async function mirrorFor({ repo, prNumber, headSha, baseRef }) {
+    const dir = path.join(ROOT, `${repo.replace('/', '__')}.git`);
+    const upstream = `https://github.com/${repo}.git`;
+    return serial(dir, async () => {
+        await ensureBare(dir);
+        const headRef = prNumber ? `refs/pull/${prNumber}/head` : `refs/eval/${headSha}`;
+        if (!(await hasRef(dir, headRef, headSha))) {
+            const source = prNumber ? headRef : headSha;
+            await git(dir, ['fetch', '-q', '--depth=1', upstream, `+${source}:${headRef}`]);
+            if (headSha && !(await hasRef(dir, headRef, headSha))) {
+                const { stdout } = await git(dir, ['rev-parse', headRef]);
+                throw new Error(`${repo} ${headRef} is ${stdout.trim()}, the case reviews ${headSha}`);
+            }
+        }
+        if (baseRef && !(await hasRef(dir, `refs/heads/${baseRef}`))) {
+            await git(dir, ['fetch', '-q', '--depth=1', upstream, `+refs/heads/${baseRef}:refs/heads/${baseRef}`]);
+        }
+        return `file://${dir}`;
+    });
+}
+
+/**
+ * A repository written for an eval, as a mirror: every file of `files` on
+ * `branch`, and `base` (the same tree) as its base branch. Returns the URL and
+ * a cleanup.
+ */
+async function inlineMirror(files, { branch = 'feature', base = 'main' } = {}) {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-inline-mirror-'));
+    try {
+        for (const [file, content] of Object.entries(files || {})) {
+            const target = path.join(work, file);
+            if (!target.startsWith(work + path.sep)) throw new Error(`repoFiles path escapes the repository: ${file}`);
+            fs.mkdirSync(path.dirname(target), { recursive: true });
+            fs.writeFileSync(target, String(content));
+        }
+        const author = { GIT_AUTHOR_NAME: 'dev', GIT_AUTHOR_EMAIL: 'dev@example.com', GIT_COMMITTER_NAME: 'dev', GIT_COMMITTER_EMAIL: 'dev@example.com' };
+        await git(work, ['init', '-q', '-b', base]);
+        await git(work, ['add', '-A']);
+        await git(work, ['commit', '-q', '-m', 'head of the pull request'], { env: author });
+        await git(work, ['branch', branch]);
+        await git(work, ['config', 'uploadpack.allowAnySHA1InWant', 'true']);
+    } catch (error) {
+        fs.rmSync(work, { recursive: true, force: true });
+        throw error;
+    }
+    return { cloneUrl: `file://${work}`, branch, base, cleanup: async () => fs.rmSync(work, { recursive: true, force: true }) };
+}
+
+module.exports = { mirrorFor, inlineMirror, MIRROR_ROOT: ROOT };
