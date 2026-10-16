@@ -131,6 +131,14 @@ export const AddRepoModal = ({
 
             await Promise.all([
                 invalidateQueries({
+                    queryKey: generateQueryKey(
+                        PARAMETERS_PATHS.CODE_REVIEW_SCOPES,
+                        {
+                            params: { teamId },
+                        },
+                    ),
+                }),
+                invalidateQueries({
                     queryKey: generateQueryKey(PARAMETERS_PATHS.GET_BY_KEY, {
                         params: {
                             key: ParametersConfigKey.CODE_REVIEW_CONFIG,

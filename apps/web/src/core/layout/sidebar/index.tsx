@@ -877,20 +877,14 @@ const ScopeSelector = ({
         ResourceType.GitSettings,
     );
 
-    // Only repositories with their own configuration are scopes, same filter
-    // as the settings band's picker.
+    // A repository that inherits Global is still an editable settings scope.
     const repositories = useMemo(
         () =>
-            scopes
-                .filter(
-                    (item) =>
-                        item.isSelected || (item.directories?.length ?? 0) > 0,
-                )
-                .sort((a, b) =>
-                    (a.name ?? "").localeCompare(b.name ?? "", undefined, {
-                        sensitivity: "base",
-                    }),
-                ),
+            [...scopes].sort((a, b) =>
+                (a.name ?? "").localeCompare(b.name ?? "", undefined, {
+                    sensitivity: "base",
+                }),
+            ),
         [scopes],
     );
 
@@ -1011,25 +1005,28 @@ const ScopeSelector = ({
                         <CommandGroup heading="Repositories">
                             {repositories.map((item) => (
                                 <div key={item.id}>
-                                    {item.isSelected && (
-                                        <ScopeItem
-                                            value={`repo-${item.id}`}
-                                            keywords={[item.name]}
-                                            icon={FolderIcon}
-                                            label={item.name}
-                                            count={countFor({
+                                    <ScopeItem
+                                        value={`repo-${item.id}`}
+                                        keywords={[item.name]}
+                                        icon={FolderIcon}
+                                        label={item.name}
+                                        sublabel={
+                                            item.isSelected
+                                                ? undefined
+                                                : "Inherits Global"
+                                        }
+                                        count={countFor({
+                                            repositoryId: item.id,
+                                        })}
+                                        selected={isCurrent({
+                                            repositoryId: item.id,
+                                        })}
+                                        onSelect={() =>
+                                            goToScope({
                                                 repositoryId: item.id,
-                                            })}
-                                            selected={isCurrent({
-                                                repositoryId: item.id,
-                                            })}
-                                            onSelect={() =>
-                                                goToScope({
-                                                    repositoryId: item.id,
-                                                })
-                                            }
-                                        />
-                                    )}
+                                            })
+                                        }
+                                    />
                                     {item.directories.map((dir) => (
                                         <ScopeItem
                                             key={dir.id}
@@ -1041,7 +1038,7 @@ const ScopeSelector = ({
                                             icon={FolderTreeIcon}
                                             label={item.name}
                                             sublabel={directoryScopeLabel(dir)}
-                                            indent={item.isSelected}
+                                            indent
                                             count={countFor({
                                                 repositoryId: item.id,
                                                 directoryId: dir.id,

@@ -191,7 +191,7 @@ function SettingsLayoutShell({
             redirect(`/settings/code-review/global/${pageName}`);
         }
 
-        if (!repository?.isSelected) {
+        if (directoryId) {
             const directory = safeArray(repository?.directories).find(
                 (directoryItem) => directoryItem.id === directoryId,
             );
@@ -295,7 +295,7 @@ function CodeReviewScopeTools({
             <ScopeToolsPortal slot="status">
                 <KodusConfigFileStatusBadge compact={compact} />
             </ScopeToolsPortal>
-            {repository && (
+            {repository && (repository.isSelected || directory) && (
                 <ScopeToolsPortal slot="actions">
                     <SidebarRepositoryOrDirectoryDropdown
                         repository={repository}
