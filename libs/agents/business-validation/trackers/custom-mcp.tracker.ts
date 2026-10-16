@@ -64,9 +64,17 @@ export type AgentToolReader = (input: {
 
 type Schema = {
     type?: string;
-    properties?: Record<string, { type?: string; enum?: unknown[] }>;
+    properties?: Record<
+        string,
+        { type?: string | string[]; enum?: unknown[]; description?: string }
+    >;
     required?: string[];
 };
+
+/** An argument that picks what a multi-purpose tool does. */
+const ACTION_PARAM = /^(action|operation|op|method|mode)$/i;
+/** The read verb among a tool's actions. */
+const READ_VERB = /^(get|read|fetch|view)$/i;
 
 /**
  * A task tracker connected as a custom MCP plugin (#1884). Without a tool the
@@ -281,23 +289,36 @@ export function buildReadArgs(
     }
 
     const args: Record<string, unknown> = {};
-    const numeric =
-        properties[id]?.type === 'number' || properties[id]?.type === 'integer';
+    const types = [properties[id]?.type].flat();
+    const numeric = types.includes('number') || types.includes('integer');
     if (numeric && !/^\d+$/.test(reference.id)) {
         return undefined;
     }
-    args[id] = numeric ? Number(reference.id) : reference.id;
+    // An id with no declared type (Azure's `wit_work_item`) goes as a number
+    // when it is one: a work item id is.
+    const untyped = !properties[id]?.type && /^\d+$/.test(reference.id);
+    args[id] = numeric || untyped ? Number(reference.id) : reference.id;
 
     for (const [name, property] of Object.entries(properties)) {
-        if (name === id || !Array.isArray(property.enum)) {
+        if (name === id) {
             continue;
         }
-        // A tool that reads and writes behind an `action` argument: only ever "get".
-        const read = property.enum.find(
-            (value) =>
-                typeof value === 'string' &&
-                /^(get|read|fetch|view)$/i.test(value),
-        );
+        // A tool that reads and writes behind an `action` argument: only ever
+        // the read, listed in an enum or, when the argument is free text
+        // (Azure: "Use 'action' to choose: 'get' …"), quoted in its description.
+        const read = Array.isArray(property.enum)
+            ? property.enum.find(
+                  (value) => typeof value === 'string' && READ_VERB.test(value),
+              )
+            : ACTION_PARAM.test(name)
+              ? [
+                    ...`${property.description ?? ''} ${tool.description ?? ''}`.matchAll(
+                        /['"`]([a-z_]+)['"`]/gi,
+                    ),
+                ]
+                    .map((m) => m[1])
+                    .find((verb) => READ_VERB.test(verb))
+              : undefined;
         if (read) {
             args[name] = read;
         }

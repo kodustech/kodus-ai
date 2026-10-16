@@ -98,7 +98,13 @@ export function describeTask(
     return {
         title,
         description,
-        url: textField(fields, ['html_url', 'web_url', 'app_url', 'url']),
+        // Azure answers with an API `url` and the page under `_links.html`
+        // (the REST API) or `links.links.html` (its MCP server).
+        url:
+            textField(fields, ['html_url', 'web_url', 'app_url']) ??
+            toText(asRecord(asRecord(item._links).html).href) ??
+            toText(asRecord(asRecord(asRecord(item.links).links).html).href) ??
+            textField(fields, ['url']),
         ...(Object.keys(named).length ? { fields: named } : {}),
         ...(links ? { links } : {}),
     };
@@ -129,7 +135,8 @@ export const MAX_SUBTASKS = 25;
 /**
  * The parent, sub-tasks and documents a task record names, in any tracker's
  * shape: Linear `parentId` and `documents`, Jira `fields.parent` and
- * `fields.subtasks`, ClickUp `parent` and `subtasks`, GitHub `sub_issues`.
+ * `fields.subtasks`, ClickUp `parent` and `subtasks`, GitHub `sub_issues`,
+ * Azure Boards `fields['System.Parent']`.
  */
 export function linksIn(item: JsonRecord): TaskLinks | undefined {
     const fields = { ...item, ...asRecord(item.fields) };
@@ -145,6 +152,8 @@ export function linksIn(item: JsonRecord): TaskLinks | undefined {
             'parent_id',
             'parentKey',
             'parent_key',
+            // Azure Boards names a work item's parent in its fields.
+            'System.Parent',
         ]);
     const subtasks = SUBTASK_FIELDS.flatMap((key) =>
         Array.isArray(fields[key]) ? (fields[key] as unknown[]) : [],

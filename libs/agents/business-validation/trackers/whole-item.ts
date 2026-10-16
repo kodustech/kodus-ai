@@ -47,7 +47,20 @@ export function wholeItem(
             whole[name] = [...asked, ...wanted];
         }
     }
-    if (expand.type === 'string' && !Array.isArray(expand.enum)) {
+    // An `expand` that only names its options in prose (Azure's
+    // `wit_work_item`: "Expand options ('All', … 'Relations')"): the item
+    // with its relations, where a work item names its parent.
+    const expandOptions = [
+        ...String(expand.description ?? '').matchAll(/['"`](\w+)['"`]/g),
+    ].map((m) => m[1]);
+    if (!expand.type && expandOptions.length && args.expand === undefined) {
+        const wanted =
+            expandOptions.find((o) => /^all$/i.test(o)) ??
+            expandOptions.find((o) => /^relations$/i.test(o));
+        if (wanted) {
+            whole.expand = wanted;
+        }
+    } else if (expand.type === 'string' && !Array.isArray(expand.enum)) {
         const asked = typeof args.expand === 'string' ? args.expand : '';
         whole.expand = /\bnames\b/.test(asked)
             ? asked
