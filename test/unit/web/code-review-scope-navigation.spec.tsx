@@ -110,10 +110,6 @@ jest.mock(
     }),
 );
 jest.mock(
-    '../../../apps/web/src/app/(app)/settings/_components/kodus-config-file-status',
-    () => ({ KodusConfigFileStatusBadge: () => null }),
-);
-jest.mock(
     '../../../apps/web/src/app/(app)/settings/_components/override-count',
     () => ({ OverrideCount: () => null }),
 );
@@ -163,13 +159,15 @@ const ConfigProbe = () => {
     );
 };
 
-const Harness = () => (
+const Harness = ({
+    config = configValue,
+}: { config?: typeof configValue } = {}) => (
     <TooltipProvider>
         <ScopeToolsProvider>
             <AppSidebar />
             <SettingsLayout
                 initialTeamId="team-1"
-                initialConfigValue={configValue as any}
+                initialConfigValue={config as any}
                 initialDefaultConfig={{} as any}
                 initialPlatformConfig={{ configValue: {} } as any}
                 initialParameters={{}}
@@ -257,6 +255,48 @@ it('offers directory grouping only for the current repository without creating r
     expect(screen.getByText('Directories for app')).toBeVisible();
     expect(createOrUpdateCodeReviewParameter).not.toHaveBeenCalled();
 });
+
+it.each<[string, string, boolean]>([
+    ['loaded', 'kodus-config.yml applied', false],
+    ['not_found', 'kodus-config.yml not found', true],
+    ['unavailable', 'kodus-config.yml unavailable', true],
+])(
+    'keeps an inherited repository accessible when its file status is %s',
+    (status, badge, value) => {
+        mockPathname = '/settings/code-review/inherited/general';
+        const fileConfig = {
+            ...configValue,
+            repositories: configValue.repositories.map((repo) =>
+                repo.id === 'inherited'
+                    ? {
+                          ...repo,
+                          kodusConfigFile: {
+                              status,
+                              error:
+                                  status === 'unavailable'
+                                      ? 'provider timeout'
+                                      : undefined,
+                          },
+                          configs: {
+                              automatedReviewActive: {
+                                  value,
+                                  level:
+                                      status === 'loaded'
+                                          ? 'repository_file'
+                                          : 'global',
+                              },
+                          },
+                      }
+                    : repo,
+            ),
+        };
+        render(<Harness config={fileConfig} />);
+        expect(mockRedirect).not.toHaveBeenCalled();
+        expect(screen.getByText(badge)).toBeVisible();
+        expect(screen.getByText(`app: ${String(value)}`)).toBeVisible();
+        expect(createOrUpdateCodeReviewParameter).not.toHaveBeenCalled();
+    },
+);
 
 it('keeps directory navigation available under a repository inheriting Global', () => {
     mockPathname = '/settings/code-review/with-directory/general';

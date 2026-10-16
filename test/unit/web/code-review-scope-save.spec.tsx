@@ -18,7 +18,7 @@ const scopesKey = (teamId: string) =>
         params: { teamId },
     });
 
-function harness() {
+function harness(overrides: Record<string, unknown> = {}) {
     const client = new QueryClient({
         defaultOptions: { queries: { retry: false } },
     });
@@ -35,6 +35,7 @@ function harness() {
                     language: 'en-US',
                     automatedReviewActive: { value: true, level: 'global' },
                     byokModelId: { value: '', level: 'default' },
+                    ...overrides,
                 },
             });
             const mutation = useCodeReviewSettingsMutation({
@@ -128,4 +129,31 @@ it('keeps an unchanged inherited scope without creating configuration', async ()
         );
     });
     expect(save).not.toHaveBeenCalled();
+});
+
+it('does not copy file-owned values into web overrides when saving another setting', async () => {
+    const { result } = harness({
+        runOnDraft: {
+            value: false,
+            level: 'repository_file',
+            overriddenValue: true,
+            overriddenLevel: 'global',
+        },
+    });
+    await act(async () => {
+        await result.current.saveSettings({
+            ...result.current.form.getValues(),
+            automatedReviewActive: { value: false, level: 'repository' },
+        } as any);
+    });
+    expect(save).toHaveBeenCalledWith(
+        { automatedReviewActive: false },
+        'team-1',
+        'repo-1',
+        undefined,
+    );
+    expect(result.current.form.getValues()).toHaveProperty(
+        'runOnDraft.level',
+        'repository_file',
+    );
 });
