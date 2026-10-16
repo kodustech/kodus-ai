@@ -40,11 +40,19 @@ const isDeepEqual = (a: unknown, b: unknown): boolean => {
     return false;
 };
 
-// The prompt editor re-serialises stored text when it mounts, so a prompt
-// counts as changed only when its text does (as on the Custom prompts page).
-const isSamePromptText = (a: unknown, b: unknown) =>
-    getPromptFieldText(parsePromptFieldValue(a)) ===
-    getPromptFieldText(parsePromptFieldValue(b));
+// The prompt editor turns a plain default text into a document on mount, so
+// a plain string only has to match the other side's text. Two documents are
+// compared as documents, so formatting and structure edits are still sent.
+const isSamePromptValue = (a: unknown, b: unknown) => {
+    const parsedA = parsePromptFieldValue(a);
+    const parsedB = parsePromptFieldValue(b);
+
+    if (typeof parsedA === "object" && typeof parsedB === "object") {
+        return isDeepEqual(parsedA, parsedB);
+    }
+
+    return getPromptFieldText(parsedA) === getPromptFieldText(parsedB);
+};
 
 /**
  * Compares the formatted form values with the form's defaults (the last
@@ -70,7 +78,7 @@ export const getChangedConfigMask = (
                 : undefined;
 
             const isSameValue = isPrompt
-                ? isSamePromptText(node.value, baselineProperty?.value)
+                ? isSamePromptValue(node.value, baselineProperty?.value)
                 : isDeepEqual(node.value, baselineProperty?.value);
 
             if (
