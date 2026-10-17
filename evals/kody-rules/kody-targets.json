@@ -5,6 +5,7 @@
         "deepseek-v4-flash@fireworks (the nightly model): calibrated 2026-10-16 from 2 local runs of github-cases on one commit, run one after the other: 39 of 39 sites each, 0 of 139 clean files flagged each, every case alike (paired per-case difference 0). With p = 1 the binomial SE is 0, so the floor is observed − 2·SE with the Agresti–Coull SE (p̃ = (k+2)/(n+4)): occMin 93 (0.9358 over 39 sites: two missed sites pass, three fail), specMin 98 (0.9804 over 139 files: two false alarms pass, three fail).",
         "Deliberate break: production's mergeKodyRuleFindings with kodyRuleOtherLocations dropped (a comment keeps one place per rule, #2015's class of regression): 15 of 39 sites (38%), 0 of 139 clean files flagged, gate red (exit 1).",
         "The truth: an added line matching the rule's pattern, outside a comment (medusa#15810's four console.log are JSDoc examples, so that case has no sites and only scores specificity).",
+        "2026-10-16, cloud route: the model now comes from the org's cloud route (evals/shared/model-route.js) instead of the self-hosted env route (applyModelEnv); on deepseek the request bodies are identical but for reasoning_effort, which the env route sent as high and the managed route leaves unset. Two runs on it: 39 and 39 of 39 sites, 0 of 139 clean files flagged each. The floors stand.",
         "RATCHET: when a PR intentionally moves a model, refresh its floor here with two fresh runs as evidence."
     ],
     "dataset": "github-cases",

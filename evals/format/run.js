@@ -17,7 +17,7 @@
 // Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/README.md).
 const fs = require('fs');
 const path = require('path');
-const { applyModelEnv } = require('../shared/tier0-models');
+const { orgRouteOrExit } = require('../shared/model-route');
 const { countTokens, tokensUsed, withCallErrors } = require('../shared/eval-kit');
 const { evalQuestion, resultProblems } = require('../shared/eval-result');
 const { VARIANTS } = require('./variants');
@@ -48,7 +48,12 @@ const cases = (() => {
 
 // libs/common/utils/crypto.ts reads API_CRYPTO_KEY at import time; CI has no .env.
 if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
-applyModelEnv(MODEL);
+// The org's model, routed as production routes it (evals/shared/model-route.js),
+// and the slot ValidateConfigStage writes into the review config
+// (codeReviewConfig.byokConfig), which AgentReviewStage hands the formatter.
+const ROUTE = orgRouteOrExit(MODEL);
+const { routeCodeReviewModel } = require('../../libs/code-review/pipeline/stages/route-code-review-model.ts');
+const FORMAT_SLOT = routeCodeReviewModel(ROUTE.storedConfig, {}).resolvedModelSlot;
 countTokens();
 const { formatAndShapeSuggestions } = require('../../libs/code-review/infrastructure/agents/engine/format-and-shape-suggestions.ts');
 const { resolveWritingGuidelines } = require('../../libs/common/utils/writing-guidelines.ts');
@@ -80,6 +85,7 @@ async function runCase(c) {
             writingGuidelines: resolveWritingGuidelines(variant.customWritingGuidelines),
             languageResultPrompt: variant.languageResultPrompt,
             organizationId: 'format-eval',
+            byokConfig: FORMAT_SLOT,
         }),
     );
     const refusal = errors.find((e) => REFUSED.has(classifyLLMError(e).category));

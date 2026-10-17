@@ -185,7 +185,7 @@ function observability() {
 
 // The stage with its production collaborators. `verifyAnalyzerResult` is the
 // one skill-policy setting a deployment can change (off by default).
-function buildStage({ verifyAnalyzerResult = false } = {}) {
+function buildStage({ verifyAnalyzerResult = false, storedConfig = null } = {}) {
     const { JwtService } = require('@nestjs/jwt');
     const { BusinessLogicValidationStage } = lib('code-review/pipeline/stages/business-logic-validation.stage.ts');
     const { BusinessRulesValidationAgentProvider } = lib('agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent.ts');
@@ -194,11 +194,11 @@ function buildStage({ verifyAnalyzerResult = false } = {}) {
     const { CapabilityStrategyService } = lib('agents/skills/runtime/capability-strategy.service.ts');
     const { CapabilityResourcePlanService } = lib('agents/skills/runtime/capability-resource-plan.service.ts');
     const { MCPManagerService } = lib('mcp-server/services/mcp-manager.service.ts');
-    const { PermissionValidationService } = lib('ee/shared/services/permissionValidation.service.ts');
     const { ParametersService } = lib('organization/infrastructure/adapters/services/parameters.service.ts');
 
-    // The organization has no BYOK config: the managed model route.
-    const permission = new PermissionValidationService(undefined, { findByKey: async () => null });
+    // The org's stored model config (evals/shared/model-route.js): none on the
+    // managed default, a BYOK config for any other model.
+    const permission = require('../shared/model-route').evalPermissionService(storedConfig);
     const mcpManager = new MCPManagerService(new JwtService(), permission, undefined);
     const skillRunner = new GenericSkillRunnerService(new SkillLoaderService(), observability(), mcpManager);
     if (verifyAnalyzerResult) {

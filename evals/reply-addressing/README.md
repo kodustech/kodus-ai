@@ -12,7 +12,8 @@ reply's thread rebuilt from the PR's comments as GitHub returns them (Kody's
 from its app login, with the marker its comments carry), the free gate
 (`implicitReplyGate`), then the classifier on the model the org routes the
 conversation task to, through production's `PermissionValidationService` over
-an org with no stored config: the env/managed route (`applyModelEnv`).
+the org's stored model config (`evals/shared/model-route.js`: none on the
+managed default, a BYOK config for any other model).
 
 `cases.json` holds the 64 boundary conversations from the TypeSafe experiment
 on the issue, plus threads where two people talk and one of them turns to Kody

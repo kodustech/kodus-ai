@@ -84,12 +84,11 @@ function executionLog() {
     };
 }
 
+// Production's PermissionValidationService over the org's stored model config
+// (evals/shared/model-route.js: none on the managed default, a BYOK config for
+// any other model).
 function permissionService(storedConfig) {
-    const { PermissionValidationService } = lib('ee/shared/services/permissionValidation.service.ts');
-    const { OrganizationParametersKey } = lib('core/domain/enums/organization-parameters-key.enum.ts');
-    return new PermissionValidationService(undefined, {
-        findByKey: async (key) => (key === OrganizationParametersKey.BYOK_CONFIG && storedConfig ? { configValue: storedConfig } : null),
-    });
+    return require('../shared/model-route').evalPermissionService(storedConfig);
 }
 
 let observability;
@@ -195,13 +194,13 @@ async function fetchChangedFiles(context, pr, repoDir) {
  * Reviews one case: returns the suggestions AgentReviewStage keeps (file and
  * PR level), the compile outcomes, the files reviewed, and the sandbox type.
  */
-async function reviewCase(c, { rules, compiled }) {
+async function reviewCase(c, { rules, compiled, storedConfig = null }) {
     const { getDefaultKodusConfigFile } = lib('common/utils/validateCodeReviewConfigFile.ts');
     const { routeCodeReviewModel } = lib('code-review/pipeline/stages/route-code-review-model.ts');
     const { LanguageValue } = lib('core/domain/enums/language-parameter.enum.ts');
     const { PlatformType } = lib('core/domain/enums/platform-type.enum.ts');
     const pr = c.pr;
-    const permission = permissionService(null);
+    const permission = permissionService(storedConfig);
     const repositoryId = `eval-${pr.repositoryFullName}`;
 
     const saved = compiled || (await compileRules(rules, permission));
@@ -219,7 +218,7 @@ async function reviewCase(c, { rules, compiled }) {
         kodyMemoryRules: memoryRules,
         baseBranchDefault: pr.defaultBranch,
     };
-    const { resolvedModelSlot } = routeCodeReviewModel(null, codeReviewConfig);
+    const { resolvedModelSlot } = routeCodeReviewModel(storedConfig, codeReviewConfig);
     codeReviewConfig.resolvedModelSlot = resolvedModelSlot;
     codeReviewConfig.byokConfig = resolvedModelSlot;
 

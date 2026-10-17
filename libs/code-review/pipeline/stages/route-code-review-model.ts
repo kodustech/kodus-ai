@@ -6,7 +6,7 @@ import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
  * ValidateConfigStage writes it into the review config: the routed slot (the
  * id or NAME override applied), or nothing — the env/managed default —
  * when there is no config or the routing is blocked. ValidateConfigStage and
- * the finder eval (evals/investigation/agent-provider.js) both call this.
+ * the evals' review harness (evals/shared/review-stage.js) both call this.
  */
 export function routeCodeReviewModel(
     storedConfig: unknown,

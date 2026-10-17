@@ -12,8 +12,9 @@
 // --show  prints each reply, to read what the judge read; --show=prompt also the prompt
 //
 // Each case runs as its own organization with a connected GitHub, as
-// production wires one (evals/shared/kodus-mcp.js): no BYOK config (its slot is
-// the eval's model), its team's language, and the Kodus MCP connection the
+// production wires one (evals/shared/kodus-mcp.js): the org's model config
+// (evals/shared/model-route.js: none on the managed default, a stored BYOK
+// config for any other model), its team's language, and the Kodus MCP connection the
 // mcp-manager gives it, served in this process by production's MCP server over
 // in-memory stores and the PR's GitHub (evals/shared/github-rest.js). The
 // sandbox is production's local one, fetched from a git remote that carries
@@ -24,7 +25,7 @@
 // Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/README.md).
 const fs = require('fs');
 const path = require('path');
-const { applyModelEnv } = require('../shared/tier0-models');
+const { orgRouteOrExit } = require('../shared/model-route');
 const { countTokens, tokensUsed } = require('../shared/eval-kit');
 const { evalQuestion, resultProblems } = require('../shared/eval-result');
 const { languageOf } = require('../format/checks');
@@ -44,7 +45,8 @@ const cases = CASES.slice(0, args.limit ? Number(args.limit) : undefined);
 
 // libs/common/utils/crypto.ts reads API_CRYPTO_KEY at import time; CI has no .env.
 if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
-applyModelEnv(MODEL);
+// The org's model, routed as production routes it (evals/shared/model-route.js).
+const ROUTE = orgRouteOrExit(MODEL);
 countTokens();
 const { runThread } = require('../shared/pr-thread');
 
@@ -70,7 +72,7 @@ async function main() {
         console.error(`not measured: no key for the judge (${JUDGE_MODEL}); set JUDGE_API_KEY`);
         return 2;
     }
-    const kodus = await startKodusMcp();
+    const kodus = await startKodusMcp({ storedConfig: ROUTE.storedConfig });
     const results = new Array(cases.length);
     let errored = 0;
     let next = 0;

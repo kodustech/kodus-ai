@@ -6,8 +6,8 @@ import type { CodeReviewPipelineContext } from '../context/code-review-pipeline.
 /**
  * What AgentReviewStage settles from the review config before it hands the PR
  * to the agents: which categories run, and the adaptive-fit profile for the
- * model the codeReview task resolved to. AgentReviewStage and the finder eval
- * (evals/investigation/agent-provider.js) both call this.
+ * model the codeReview task resolved to. Called by AgentReviewStage, which the
+ * evals drive (evals/shared/review-stage.js).
  */
 export function resolveAgentReviewSettings(
     codeReviewConfig: CodeReviewPipelineContext['codeReviewConfig'] | undefined,

@@ -11,9 +11,8 @@
 //
 //   node evals/kody-rules/real-agent.js [--runs=3] [--model=<tier-0 id>] [--cases=<caseId,...>] [--limit=N] [--gate] [--output=<result.json>]
 //
-// The model routes through production's managed route (evals/shared/
-// tier0-models.js applyModelEnv). Each run clones the PR's head, so it needs
-// network to GitHub.
+// The model is the org's, routed as production routes it (evals/shared/
+// model-route.js). Each run clones the PR's head, so it needs network to GitHub.
 const fs = require('fs');
 const path = require('path');
 
@@ -117,13 +116,8 @@ function caseResult(c, caseLabel, targets, sites, violFiles, perRun, okRuns) {
 }
 
 async function main() {
-    // The managed route: tier-0 ids only (evals/shared/tier0-models.js).
-    const { TIER0, applyModelEnv } = require('../shared/tier0-models');
-    if (!TIER0[MODELKEY]) {
-        console.error(`not measured: ${MODELKEY} is not a tier-0 model id (evals/shared/tier0-models.js)`);
-        process.exit(2);
-    }
-    applyModelEnv(MODELKEY);
+    // The org's model, routed as production routes it (evals/shared/model-route.js).
+    const ROUTE = require('../shared/model-route').orgRouteOrExit(MODELKEY);
     const unmaterialized = cases.filter((c) => !c.pr);
     if (unmaterialized.length) {
         console.error(`not measured: ${unmaterialized.length} case(s) carry no recorded PR; run node evals/kody-rules/materialize-cases.js --dataset=${DATASET}`);
@@ -140,7 +134,7 @@ async function main() {
     const compiled = new Map();
     const compileOnce = async (rule) => {
         if (!compiled.has(rule.uuid)) {
-            const saved = await review.compileRules([asSaved(rule)], review.permissionService(null));
+            const saved = await review.compileRules([asSaved(rule)], review.permissionService(ROUTE.storedConfig));
             compiled.set(rule.uuid, { rule: saved.rules[0], outcome: saved.outcomes[0] });
             const o = saved.outcomes[0];
             console.log(`compiled ${rule.uuid}: ${o.compiled ? 'detector' : `no detector (${o.declineReason || 'declined'})`}, scope ${JSON.stringify(o.fileScope || null)}, need ${o.contextNeed || 'none'}`);
@@ -177,7 +171,7 @@ async function main() {
             let sugg = [], errored = false;
             totalRuns++;
             try {
-                const res = await review.reviewCase(c, { compiled: { rules: saved } });
+                const res = await review.reviewCase(c, { compiled: { rules: saved }, storedConfig: ROUTE.storedConfig });
                 fileCount = res.files.length;
                 // A review whose agent failed (key, quota, provider) is not a
                 // measurement: production records it as the review's error.

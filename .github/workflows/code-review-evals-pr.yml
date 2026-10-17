@@ -37,6 +37,7 @@ on:
             - "default-kodus-config.yml"
             # The mcp-manager's Kodus MCP tool list and registry: the
             # connection the conversation eval gives its agent.
+            - "apps/mcp-manager/package.json"
             - "apps/mcp-manager/src/clients/kodusMCP/**"
             - "apps/mcp-manager/src/config/managed-mcp-servers.json"
             - "apps/mcp-manager/src/modules/providers/interfaces/**"

@@ -22,7 +22,7 @@ const row = (caseId: string, recall: number, found: string[] = [], missed: strin
         precision: 0.5,
         tpFindings: 1,
         fpFindings: 1,
-        totalCalls: 30,
+        toolCalls: 30,
         goldenResults: [...found.map((golden) => ({ golden, found: true })), ...missed.map((golden) => ({ golden, found: false }))],
     },
 });
@@ -289,7 +289,7 @@ describe('nightly alerting without false positives', () => {
         cases: 1,
         infraFailures: 0,
         metrics: { recall_mean: recall, precision_mean: 0.5 },
-        rows: [{ caseId: 'a', status: 'pass', metadata: { recall, precision: 0.5, tpFindings: 1, fpFindings: 0, totalCalls: 20 } }],
+        rows: [{ caseId: 'a', status: 'pass', metadata: { recall, precision: 0.5, tpFindings: 1, fpFindings: 0, toolCalls: 20 } }],
         gate,
     });
     const confirmedFail = (recall: number) => ({ status: 'fail', checks: [{ name: 'recall_mean', actual: recall, floor: 0.26, pass: false }], confirmation: { runs: [recall, recall] } });
@@ -342,7 +342,7 @@ describe('nightly alerting without false positives', () => {
     });
 
     it('counts a PR whose output did not parse as unmeasured, not as a score', () => {
-        const scored = (caseId: string, recall: number) => ({ caseId, status: 'pass', metadata: { recall, precision: 0.5, tpFindings: 1, fpFindings: 0, totalCalls: 20 } });
+        const scored = (caseId: string, recall: number) => ({ caseId, status: 'pass', metadata: { recall, precision: 0.5, tpFindings: 1, fpFindings: 0, toolCalls: 20 } });
         const night = {
             model: 'deepseek-v4-flash@fireworks',
             cases: 3,

@@ -13,7 +13,7 @@
  * (lineComments, prLevelCommentResults) and the team's summary config. The
  * model is the org's, routed by production's PermissionValidationService
  * (resolveTaskSlot for the prSummary task) over the case's stored BYOK config,
- * or none (the env/managed route). The only stand-ins are the code host: the PR
+ * or the org's route for the run's model (evals/shared/model-route.js). The only stand-ins are the code host: the PR
  * body it returns and the description it receives (recorded after the GitHub
  * adapter's own fitPRDescription), and the full PR diff a commit run fetches
  * (the case's files).
@@ -73,7 +73,7 @@ const FLOOR = TARGET.floor ?? 1;
 const START = '<!-- kody-pr-summary:start -->';
 const END = '<!-- kody-pr-summary:end -->';
 
-const { applyModelEnv, TIER0 } = require('../shared/tier0-models');
+const { TIER0 } = require('../shared/tier0-models');
 const { evalQuestion, resultProblems } = require('../shared/eval-result');
 const { countTokens, tokensUsed } = require('../shared/eval-kit');
 
@@ -83,9 +83,12 @@ function infra(msg) {
     process.exit(2);
 }
 
-// ── Route the model env the same way prod's self-hosted path does. ─────────
+// ── The org's model, routed as production routes it (evals/shared/model-route.js):
+//    none stored on the managed default, a BYOK config for any other model. ──
+const { resolveRoute, EVAL_ORG, storedByokConfigOf, tier0ModelEntry, evalPermissionService } = require('../shared/model-route');
+let ROUTE;
 try {
-    applyModelEnv(MODEL);
+    ROUTE = resolveRoute({ provider: 'tier0', model: MODEL });
 } catch (e) {
     infra(`cannot route model '${MODEL}': ${e.message}`);
 }
@@ -142,7 +145,6 @@ const { PullRequestMessageStatus } = require(
     '../../libs/core/infrastructure/config/types/general/pullRequestMessages.type.ts',
 );
 const { fitPRDescription } = require('../../libs/code-review/utils/fit-pr-description.ts');
-const { EVAL_ORG, storedByokConfig, tier0ModelEntry, evalPermissionService } = require('../shared/org-route');
 
 const REPOSITORY = { name: 'sample', id: 'repo-id' };
 
@@ -214,19 +216,20 @@ const blockContent = (s) => {
 const commentResult = (f) => ({ comment: { suggestion: f }, deliveryStatus: f.deliveryStatus || 'sent' });
 
 // The case's stored BYOK config: its models (each a tier-0 model id, or another
-// model id on the same route) and routing. None: the env/managed route.
+// model id on the same route) and routing. None: the org's route for the run's
+// model.
 function storedConfigOf(c) {
-    if (!c.storedConfig) return null;
+    if (!c.storedConfig) return ROUTE.storedConfig;
     const models = c.storedConfig.models.map((m) => {
         const entry = tier0ModelEntry(m.id, MODEL);
         return m.model ? { ...entry, model: m.model } : entry;
     });
-    return storedByokConfig(models, c.storedConfig.routing);
+    return storedByokConfigOf(models, c.storedConfig.routing);
 }
 
 // The model the org's routing should pick for the summary, as the call names it.
 function expectedModelOf(c) {
-    if (!c.storedConfig) return { model: TIER0[MODEL]?.doModel || MODEL, byokModelId: undefined };
+    if (!c.storedConfig) return { model: TIER0[MODEL]?.doModel || MODEL, byokModelId: ROUTE.storedConfig?.routing.defaultModelId };
     const routing = c.storedConfig.routing || {};
     const id = routing.taskOverrides?.prSummary || routing.defaultModelId || c.storedConfig.models[0].id;
     const m = c.storedConfig.models.find((x) => x.id === id);

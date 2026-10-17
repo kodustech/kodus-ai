@@ -3,16 +3,13 @@
         "Floors per model for the share of PRs the stage answered right on cases.json (run.js --gate), as ratios.",
         "eval-fake (the wiring smoke, every PR): deterministic. Two runs of the same commit gave 1 of 3 alike: the scripted analyzer's answer is published as a gap on both PRs it reaches (right on missing-requirement's outcome, without the word it must name; wrong on fully-implemented), and the unreadable ticket is skipped. floor = observed.",
         "deepseek-v4-flash@fireworks (the nightly model): calibrated 2026-10-16 from 2 local runs on one commit, 2 of 3 each, every case alike (paired difference 0); a third run with --verify gave the same. fully-implemented fails in all three: the analyzer answers '**Status:** Compliant' (the format SKILL.md prescribes) and the stage's classifyResult does not read that as a pass, so it publishes 'Business logic gap detected'. floor = observed: any further miss fails, and the nightly measures again before alerting. With the stage's classification broken to call every answer a pass: 1 of 3, below the floor.",
+        "2026-10-16, cloud route: the model now comes from the org's cloud route (evals/shared/model-route.js) instead of the self-hosted env route (applyModelEnv); on deepseek the request bodies are identical but for reasoning_effort, which the env route sent as high and the managed route leaves unset. Two runs on it: 1 and 2 of 3. fully-implemented fails in both (#2019); no-task-context is skipped in one run and published as a gap in the other. A floor from these runs would be 1 of 3, which the deliberate break above also scores, so deepseek has no floor until the cases can tell a broken stage from a good one: measured, reported as ungated.",
         "RATCHET: a PR that moves the value on purpose (the stage's classification, the skill, the cases) recalibrates here in the same PR, with its runs as evidence."
     ],
     "models": {
         "eval-fake": {
             "floor": 0.333,
             "observed": 0.333
-        },
-        "deepseek-v4-flash@fireworks": {
-            "floor": 0.666,
-            "observed": 0.667
         }
     }
 }

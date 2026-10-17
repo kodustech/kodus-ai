@@ -15,11 +15,11 @@ const fs = require('fs');
 const { evaluateGate, avg } = require('./gate');
 const { poolTokens } = require('../shared/eval-result');
 
-const MEANS = ['recall', 'precision', 'f1', 'fairRecall', 'hitRate', 'totalCalls', 'tpFindings', 'fpFindings'];
+const MEANS = ['recall', 'loopRecall', 'precision', 'f1', 'toolCalls', 'tpFindings', 'fpFindings'];
 
 // The summary field each per-case metric feeds (run-recall.js builds the same
 // means from the same rows).
-const SUMMARY_OF = { recall: 'recall_mean', precision: 'precision_mean', f1: 'f1_mean', fairRecall: 'fair_recall_mean', hitRate: 'fidelity_mean' };
+const SUMMARY_OF = { recall: 'recall_mean', loopRecall: 'loop_recall_mean', precision: 'precision_mean', f1: 'f1_mean' };
 
 function combineRow(a, b) {
     if (!b || b.status === 'infra' || !b.metadata) return a;

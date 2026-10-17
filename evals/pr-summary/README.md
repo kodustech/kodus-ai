@@ -22,7 +22,8 @@ on a pipeline context carrying the case's PR, its review's comments
 (`lineComments`, `prLevelCommentResults`, which production always passes) and
 the team's summary config. The model is the org's, routed by production's
 `PermissionValidationService` (`resolveTaskSlot` for `prSummary`) over the
-case's stored BYOK config, or none (`evals/shared/org-route.js`). The only
+case's stored BYOK config, or the org's route for the run's model
+(`evals/shared/model-route.js`). The only
 stand-ins are the code host: the PR body it returns, the description it
 receives (recorded after the GitHub adapter's own `fitPRDescription`), and the
 full PR diff a commit run fetches (the case's files).

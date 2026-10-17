@@ -9,7 +9,7 @@
 // review-chain manifest all drifted this way).
 //
 // This runs every model-backed eval end-to-end against a scripted local model
-// (evals/shared/fake-llm-server.js) through the real self-hosted route, plus the
+// (evals/shared/fake-llm-server.js) through an org's BYOK route, plus the
 // deterministic evals. It measures nothing. It fails when the harness can no
 // longer drive the engine, in the PR that broke it.
 //
@@ -96,6 +96,10 @@ async function main() {
         ...process.env,
         EVAL_FAKE_LLM_URL: server.url,
         EVAL_FAKE_LLM_KEY: 'fake',
+        // The scripted model is an org's BYOK custom endpoint: listed, as ops
+        // list a schema-capable proxy, so it gets json_schema the way Fireworks
+        // does (libs/llm/structured-output-gate.ts).
+        API_TRUST_JSON_SCHEMA_BASE_URLS: new URL(server.url).host,
         // The judge scores the one scripted finding against the goldens through
         // the same local server, so scoring is exercised without a key.
         JUDGE_MODEL: 'gpt-eval-fake',
@@ -115,10 +119,6 @@ async function main() {
         { name: 'review-chain', args: ['evals/review-chain/run.js', '--gate'] },
         { name: 'shape-invariance', args: ['evals/review-chain/shape-invariance.js', '--gate'] },
         { name: 'verifier-verdict', args: ['evals/verifier-verdict/run.js', '--gate'] },
-        { name: 'dedup', args: ['evals/dedup/run.js', '--mock=identity', '--gate'] },
-        // The live dedup runner goes through LLM.run like the stage does.
-        { name: 'dedup-engine', model: true, args: ['evals/dedup/run.js', '--model=eval-fake'] },
-        { name: 'severity', args: ['evals/severity/run.js', '--mock=heuristic', '--gate'] },
         // The scripted model answers nothing usable: this measures the local fallback.
         { name: 'format', model: true, args: ['evals/format/run.js', '--model=eval-fake', '--gate'] },
         // The stage, its MCP adapter over HTTP and production's Kodus MCP server.

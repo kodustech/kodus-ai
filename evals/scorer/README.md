@@ -139,9 +139,8 @@ The benchmark site links to this file, so this section is the whole contribution
 Three parts of it are not guessable from the schema above.
 
 **Get the cases.** The datasets are not in the benchmark repo: they are versioned here,
-one JSON file per case under `evals/investigation/datasets/`, carrying the `toolReplay`
-and `goldenComments` the scorer reads. That directory also holds `smoke` and
-`trace-context` fixtures for other evals, which carry no goldens. Clone this repository;
+one JSON file per case under `evals/investigation/datasets/`, carrying the `goldenComments`
+the scorer reads (and the old `toolReplay`, read only for a submission made on it). Clone this repository;
 there is no separate download.
 
 **Run the set the leaderboard is built from.** The comparable set is the 30-case `light`

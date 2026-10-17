@@ -24,7 +24,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { applyModelEnv } = require('../shared/tier0-models');
+const { orgRouteOrExit } = require('../shared/model-route');
 const { countTokens, tokensUsed } = require('../shared/eval-kit');
 const { evalQuestion, resultProblems } = require('../shared/eval-result');
 const { assertsClaim, loadJudgeKey, JUDGE_MODEL } = require('../investigation/recall-judge');
@@ -49,7 +49,8 @@ const cases = CASES.filter((c) => !KIND || kindOf(c) === KIND).slice(0, args.lim
 
 // libs/common/utils/crypto.ts reads API_CRYPTO_KEY at import time; CI has no .env.
 if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
-applyModelEnv(MODEL);
+// The org's model, routed as production routes it (evals/shared/model-route.js).
+const ROUTE = orgRouteOrExit(MODEL);
 countTokens();
 const { runThread, REPOSITORY, orgOf } = require('../shared/pr-thread');
 const { buildKodyRuleLink } = require('../../libs/code-review/utils/build-kody-rule-link.ts');
@@ -117,7 +118,7 @@ async function main() {
         console.error(`not measured: no key for the judge (${JUDGE_MODEL}); set JUDGE_API_KEY`);
         return 2;
     }
-    const kodus = await startKodusMcp();
+    const kodus = await startKodusMcp({ storedConfig: ROUTE.storedConfig });
     const results = new Array(cases.length);
     let errored = 0;
     let next = 0;

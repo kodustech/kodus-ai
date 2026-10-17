@@ -1,9 +1,9 @@
 # Business-logic validation eval
 
 > - **Answers:** Does the business-logic stage report what a PR leaves out of the Jira ticket it closes, pass a PR that does all of it, and stay quiet when it cannot read the ticket?
-> - **Runs:** nightly on one real model when a file it loads changed, gated on its floor and measured again before alerting (`evals/nightly-evals.js`); every engine PR against the scripted model (`evals/wiring-smoke.js`).
+> - **Runs:** nightly on one real model when a file it loads changed (`evals/nightly-evals.js`), ungated on it for now; every engine PR against the scripted model (`evals/wiring-smoke.js`).
 > - **Run it:** `node evals/business-logic/run.js [--model=<tier-0 id>] [--gate] [--verify]`
-> - **Gate:** `--gate` uses the per-model floor in `evals/business-logic/targets.json`.
+> - **Gate:** `--gate` uses the per-model floor in `evals/business-logic/targets.json`; the nightly model has none until the cases can tell a broken stage from a good one (the reason is there), so it reports ungated.
 > - **Cost:** per case, the analyzer call (and the verify call with `--verify`); three cases.
 
 It runs production's `BusinessLogicValidationStage` (`production-stage.js`).
@@ -20,7 +20,9 @@ case's PR. The eval supplies data only:
   answers from the case's ticket in Atlassian's shape, and with Jira's 404 text
   for a ticket it does not have;
 - the code host's answers about the PR (its record and its files' patches);
-- the team's settings: business logic on, no BYOK config (the managed route).
+- the team's settings: business logic on, and the org's model config
+  (`evals/shared/model-route.js`: none on the managed default, a stored BYOK
+  config for any other model).
 
 What is scored is what the stage records and publishes: its outcome
 (`gap_found`, `success`, `skipped`) and, for a gap, whether the published

@@ -60,7 +60,7 @@ const RUN = (name) => `#!/usr/bin/env node
 // Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/README.md).
 const fs = require('fs');
 const path = require('path');
-const { applyModelEnv } = require('../shared/tier0-models');
+const { orgRouteOrExit } = require('../shared/model-route');
 const { countTokens, tokensUsed } = require('../shared/eval-kit');
 const { evalQuestion, resultProblems } = require('../shared/eval-result');
 
@@ -70,8 +70,10 @@ const cases = require('./cases.json').slice(0, args.limit ? Number(args.limit) :
 const floor = (require('./targets.json').models[MODEL] || {}).floor ?? null;
 
 // TODO: drive the engine's real entry point for one case and return what it
-// produced. Never a hand-written stub of an engine service (evals/README.md).
-async function runCase(_testCase) {
+// produced, handing it the org's model through production's permission service
+// (evalPermissionService(route.storedConfig), evals/shared/model-route.js). Never a hand-written stub of an
+// engine service (evals/README.md).
+async function runCase(_testCase, _route) {
     throw new Error('not wired: runCase must call the engine');
 }
 
@@ -82,13 +84,14 @@ function score(testCase, output) {
 }
 
 async function main() {
-    applyModelEnv(MODEL);
+    // The org's model, routed as production routes it.
+    const route = orgRouteOrExit(MODEL);
     countTokens();
     const results = [];
     let errored = 0;
     for (const testCase of cases) {
         try {
-            results.push({ id: testCase.id, checks: testCase.checks, ...score(testCase, await runCase(testCase)) });
+            results.push({ id: testCase.id, checks: testCase.checks, ...score(testCase, await runCase(testCase, route)) });
         } catch (error) {
             errored += 1;
             console.error(\`  \${testCase.id}: \${String(error.message || error).slice(0, 200)}\`);

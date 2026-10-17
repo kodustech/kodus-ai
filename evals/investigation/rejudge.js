@@ -38,15 +38,15 @@ function datasetVars() {
 
 // Submission findings keep summary+content joined in `description`; label and
 // file come back as the extra fields recall-assertion appends. The trace isn't
-// re-derived: scoring doesn't read it, and the fidelity fields are copied from
-// the source row (FIDELITY).
+// re-derived: scoring doesn't read it, and what the run did is copied from the
+// source row (FROM_THE_RUN).
 function agentOutputOf(result) {
     return JSON.stringify({
         findings: (result.findings || []).map((f) => ({ oneSentenceSummary: f.description, label: f.category, relevantFile: f.path })),
     });
 }
 
-const FIDELITY = ['totalCalls', 'hitRate', 'unserved'];
+const FROM_THE_RUN = ['toolCalls'];
 
 async function main() {
     const [summaryFile, submissionFile] = process.argv.slice(2);
@@ -79,8 +79,8 @@ async function main() {
             }
             try {
                 const assertion = await recallAssertion(agentOutputOf(result), { vars: caseVars });
-                const fidelity = Object.fromEntries(FIDELITY.map((key) => [key, row.metadata?.[key] ?? null]));
-                rows.push({ caseId: row.caseId, status: assertion.pass ? 'pass' : 'fail', score: assertion.score, metadata: { ...assertion.metadata, ...fidelity }, judgedBefore: row.metadata?.recall ?? null });
+                const fromTheRun = Object.fromEntries(FROM_THE_RUN.map((key) => [key, row.metadata?.[key] ?? null]));
+                rows.push({ caseId: row.caseId, status: assertion.pass ? 'pass' : 'fail', score: assertion.score, metadata: { ...assertion.metadata, ...fromTheRun }, judgedBefore: row.metadata?.recall ?? null });
             } catch (error) {
                 infraFailures += 1;
                 rows.push({ caseId: row.caseId, status: 'infra', reason: error.message });

@@ -1,7 +1,9 @@
 /**
  * Builds finder-RECALL test cases from the per-PR investigation datasets,
- * reusing their benchmark-grounded vars (real diff, goldenComments, deterministic
- * toolReplay) but swapping the tool-use assertion for recall-assertion.js.
+ * scored by recall-assertion.js. A case is the PR's platform data (`prFiles`,
+ * `prCommits`, `prHead`, `prBase`, from fetch-pr-data.js) and its `goldenComments`;
+ * the fields of the old harness (`changedFiles`, `toolReplay`, `expected*`,
+ * `callGraphJson`, `assert`) are not read.
  *
  * Default: the PR-balanced set (8 cases / 38 goldens). Override:
  *   RECALL_SET=smoke                   → 5 high-signal cases / 25 goldens

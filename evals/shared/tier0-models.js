@@ -20,11 +20,9 @@
 // does, tier-0 is declared here, once, instead of copy-pasted into a workflow
 // where it drifted unnoticed.
 //
-// Routing recap (buildModelFromSlot, no BYOK config → self-hosted path):
-//   API_LLM_PROVIDER_MODEL = <id>   picks the model + provider by name prefix
-//   gemini-*  → Google AI Studio   key in API_GOOGLE_AI_API_KEY
-//   claude-*  → Anthropic native   key in API_OPEN_AI_API_KEY (no force base url)
-//   anything  → OpenAI-compatible  key in API_OPEN_AI_API_KEY (+ API_OPENAI_FORCE_BASE_URL)
+// An eval reaches these models the way a cloud org does (evals/shared/
+// model-route.js): the managed default with no stored config, any other model
+// through a stored BYOK config holding its key from `keyEnvs`.
 
 // id → { provider, keyEnvs (first present wins), baseURL? }
 // keyEnvs mirror the benchmark's secret names so the same CI secrets work.
@@ -115,7 +113,7 @@ const TIER0 = {
     'claude-sonnet-5-5@openrouter': { provider: 'openai_compatible', doModel: 'anthropic/claude-sonnet-5.5', openrouterProviderOrder: ['anthropic'], keyEnvs: ['BYOK_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY'], baseURL: 'https://openrouter.ai/api/v1' },
 
     // Scripted local model (evals/shared/fake-llm-server.js) for the wiring
-    // smoke: the real self-hosted openai_compatible route, pointed at 127.0.0.1.
+    // smoke: an org's BYOK openai_compatible endpoint at 127.0.0.1.
     // Measures nothing — it proves the harness still drives the engine.
     'eval-fake': {
         provider: 'openai_compatible',
@@ -147,14 +145,18 @@ function defaultMatrix() {
     return Object.keys(TIER0).filter((id) => id !== 'gpt-5.4-mini' && !EXCLUDED_BY_DEFAULT.has(id) && !LOCAL_ONLY.has(id));
 }
 
-// Point the env at `modelId` so buildModelFromSlot(undefined, ...) builds it.
+// The self-hosted env route: points the env at `modelId` so
+// buildModelFromSlot(undefined, ...) builds it. Not for an eval, which reaches
+// its model the way a cloud org does (evals/shared/model-route.js, rule 5 of
+// evals/README.md); kept for scripts/analysis. It writes the model's key over
+// API_OPEN_AI_API_KEY, the platform key the dedup's embedder reads.
 // Returns the spec; throws a clear error when the model is unknown or its key is
 // absent (so a CI matrix leg fails loudly instead of silently picking a default).
 function applyModelEnv(modelId, env = process.env) {
     const spec = TIER0[modelId];
     if (!spec) throw new Error(`unknown tier-0 model '${modelId}' (known: ${Object.keys(TIER0).join(', ')})`);
-    // Assinatura nao usa env var: credencial em ~/.codex/auth.json, modelo
-    // construido direto em createModel (agent-provider.js).
+    // A subscription takes no env var: its credential is ~/.codex/auth.json
+    // (libs/llm/codex-subscription-model.ts).
     if (spec.provider === 'codex_subscription') return spec;
     const key = spec.keyEnvs.map((e) => env[e]).find(Boolean);
     if (!key) throw new Error(`no API key for ${modelId} — set one of ${spec.keyEnvs.join('/')}`);
@@ -174,25 +176,6 @@ function applyModelEnv(modelId, env = process.env) {
         if (spec.baseURL) env.API_OPENAI_FORCE_BASE_URL = spec.baseURL;
     }
     return spec;
-}
-
-// Flags for the promptfoo evals (investigation, promotion) that accept explicit
-// --provider/--model/--base-url/--api-key-env — lets them run the SAME tier-0
-// model without depending on their own (stale) preset registries. The key is
-// read from the env var applyModelEnv populated.
-const PROMPTFOO_PROVIDER = {
-    openai: 'openai', anthropic: 'anthropic', google: 'google', openai_compatible: 'openai-compatible',
-};
-function promptfooFlags(modelId) {
-    const spec = TIER0[modelId];
-    if (!spec) throw new Error(`unknown tier-0 model '${modelId}'`);
-    const apiKeyEnv = spec.provider === 'google' ? 'API_GOOGLE_AI_API_KEY' : 'API_OPEN_AI_API_KEY';
-    return [
-        '--provider', PROMPTFOO_PROVIDER[spec.provider],
-        '--model', modelId,
-        '--api-key-env', apiKeyEnv,
-        ...(spec.baseURL ? ['--base-url', spec.baseURL] : []),
-    ];
 }
 
 // The cloud platform's own keys, under the variables production reads them
@@ -216,4 +199,4 @@ function applyPlatformEnv(env = process.env) {
     }
 }
 
-module.exports = { TIER0, EXCLUDED_BY_DEFAULT, tier0, defaultMatrix, applyModelEnv, applyPlatformEnv, promptfooFlags };
+module.exports = { TIER0, EXCLUDED_BY_DEFAULT, tier0, defaultMatrix, applyModelEnv, applyPlatformEnv };

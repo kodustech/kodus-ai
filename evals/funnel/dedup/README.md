@@ -15,5 +15,5 @@ production), then the cross-stream pass. A known bug is lost when every finding
 that matches it is merged away. A dedup that fails keeps every finding, in
 production and here; only a provider refusal leaves a PR unmeasured. The
 control pair: two findings of one bug merge into one, two findings of
-different bugs both stay. `evals/dedup` keeps its labelled datasets for the
-merge decisions themselves.
+different bugs both stay. `guard-pairs.json` holds the labelled pairs the merge
+guard's bands were tuned on (`dedup-prompt.ts`).

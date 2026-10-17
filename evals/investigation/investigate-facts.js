@@ -90,7 +90,7 @@ function buildFacts({ tonight, tonightSubmission, lastGreen, lastGreenSubmission
     };
     const oneDecimal = (v) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(1) : 'n/a');
     const collapse = (key) => `${oneDecimal(avg(nowRows.map(pick(key))))} vs ${oneDecimal(avg(beforeRows.map(pick(key))))}`;
-    out.push(`Mean findings per PR: ${collapse('findings')} · mean tool calls: ${collapse('totalCalls')} · replay fidelity: ${collapse('hitRate')}`);
+    out.push(`Mean findings per PR: ${collapse('findings')} · mean tool calls: ${collapse('toolCalls')}`);
     out.push('');
 
     out.push('## Commits measured (engine files changed since the last green night)', '');
@@ -105,7 +105,7 @@ function buildFacts({ tonight, tonightSubmission, lastGreen, lastGreenSubmission
         for (const c of comparison.perCase) {
             const n = rowsNow.get(c.caseId)?.metadata || {};
             const b = rowsBefore.get(c.caseId)?.metadata || {};
-            out.push(`| ${c.caseId} | ${pct(c.recallBefore)} → ${pct(c.recall)} | ${(b.tpFindings ?? 0) + (b.fpFindings ?? 0)} → ${(n.tpFindings ?? 0) + (n.fpFindings ?? 0)} | ${b.totalCalls ?? '?'} → ${n.totalCalls ?? '?'} | ${c.lost ? c.lost.length : 'n/a'} | ${c.gained ? c.gained.length : 'n/a'} |`);
+            out.push(`| ${c.caseId} | ${pct(c.recallBefore)} → ${pct(c.recall)} | ${(b.tpFindings ?? 0) + (b.fpFindings ?? 0)} → ${(n.tpFindings ?? 0) + (n.fpFindings ?? 0)} | ${b.toolCalls ?? '?'} → ${n.toolCalls ?? '?'} | ${c.lost ? c.lost.length : 'n/a'} | ${c.gained ? c.gained.length : 'n/a'} |`);
         }
         out.push('');
 

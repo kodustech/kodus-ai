@@ -6,8 +6,9 @@
  * (reply-thread.ts): the reply's thread rebuilt from the PR's comments as
  * GitHub returns them, the free gate (`implicitReplyGate`), then the classifier
  * on the model the org routes the conversation task to (production's
- * PermissionValidationService over an org with no stored config: the
- * env/managed route, `applyModelEnv`). Cases: `cases.json`, the 64 boundary
+ * PermissionValidationService over the org's stored model config,
+ * evals/shared/model-route.js: none on the managed default, a BYOK config for
+ * any other model). Cases: `cases.json`, the 64 boundary
  * conversations from the TypeSafe experiment plus threads where two people talk
  * and one of them addresses Kody. A reply the gate silences counts as not
  * answered, as in production.
@@ -78,12 +79,13 @@ function infra(msg) {
     process.exit(2);
 }
 
-const { applyModelEnv } = require('../shared/tier0-models');
 const { countTokens, tokensUsed } = require('../shared/eval-kit');
 const { evalQuestion } = require('../shared/eval-result');
 const TARGET = (require('./targets.json').models || {})[MODEL] || {};
+const { resolveRoute, EVAL_ORG, evalPermissionService } = require('../shared/model-route');
+let ROUTE;
 try {
-    applyModelEnv(MODEL);
+    ROUTE = resolveRoute({ provider: 'tier0', model: MODEL });
 } catch (e) {
     infra(`cannot route model '${MODEL}': ${e.message}`);
 }
@@ -91,10 +93,9 @@ try {
 const { implicitReplyGate } = require('../../libs/platform/application/use-cases/codeManagement/implicit-reply.ts');
 const { buildReplyThread, classifyImplicitReply } = require('../../libs/platform/application/use-cases/codeManagement/reply-thread.ts');
 const { PlatformType } = require('../../libs/core/domain/enums/platform-type.enum.ts');
-const { EVAL_ORG, evalPermissionService } = require('../shared/org-route');
-// An org with no stored BYOK config: production's routing sends the
-// conversation task to the env/managed model.
-const permissionValidationService = evalPermissionService(null);
+// The org's stored model config: production's routing sends the conversation
+// task to its model.
+const permissionValidationService = evalPermissionService(ROUTE.storedConfig);
 
 // cases: boundary conversations. repo-cases: real replies in Kody threads on
 // kodustech/kodus-ai, labeled by hand (see README).

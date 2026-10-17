@@ -61,7 +61,7 @@ function matches(row, filter) {
 }
 const copy = (v) => structuredClone(v);
 
-async function startKodusMcp() {
+async function startKodusMcp({ storedConfig = null } = {}) {
     const { mapSimpleModelToEntity, mapSimpleModelsToEntities } = lib('core/infrastructure/repositories/mappers.ts');
     const { KodyRulesEntity } = lib('kodyRules/domain/entities/kodyRules.entity.ts');
     const { IssuesEntity } = lib('issues/domain/entities/issues.entity.ts');
@@ -152,7 +152,7 @@ async function startKodusMcp() {
     const { JwtService } = require('@nestjs/jwt');
     const { EventEmitter2 } = require('@nestjs/event-emitter');
     const { createCache } = require('cache-manager');
-    const { evalPermissionService } = require('./org-route');
+    const { evalPermissionService } = require('./model-route');
     if (!process.env.API_JWT_SECRET) process.env.API_JWT_SECRET = crypto.randomBytes(32).toString('hex');
     let controller;
     let guards;
@@ -254,7 +254,9 @@ async function startKodusMcp() {
     const platformIntegrationFactory = new PlatformIntegrationFactory();
     platformIntegrationFactory.registerCodeManagementService(PlatformType.GITHUB, githubService);
     const codeManagementService = new CodeManagementService(integrationService, platformIntegrationFactory);
-    const permissionValidationService = evalPermissionService(null);
+    // The org's stored model config (evals/shared/model-route.js): none on the
+    // managed default, a BYOK config for any other model.
+    const permissionValidationService = evalPermissionService(storedConfig);
     const kodyRulesValidationService = new KodyRulesValidationService(permissionValidationService);
     const telemetry = new TelemetryService(new PostHogProvider(configService), new ResendEventsProvider(configService), new N8nProvider(configService));
     const mcpManagerService = new MCPManagerService(new JwtService(), permissionValidationService, telemetry);

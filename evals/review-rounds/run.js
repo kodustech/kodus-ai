@@ -85,7 +85,6 @@ try {
 }
 const { selectCases } = require('./case-selection');
 const { assertCompleteRuleReview } = require('./measurement');
-const { applyModelEnv } = require('../shared/tier0-models');
 const { evalQuestion } = require('../shared/eval-result');
 const { countTokens, tokensUsed } = require('../shared/eval-kit');
 const {
@@ -128,7 +127,8 @@ if (!MODEL && require.main === module) {
 function engineSnapshot() {
     const root = path.join(__dirname, '../..');
     const git = (...args) =>
-        execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+        // A large uncommitted diff overflows the default 1 MB buffer.
+        execFileSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 512 * 1024 * 1024 });
     const hash = crypto.createHash('sha256');
     hash.update(git('diff', 'HEAD', '--', 'libs', 'evals'));
     const extra = git(
@@ -619,11 +619,12 @@ async function main() {
         console.log(JSON.stringify(summary.problems, null, 2));
         process.exit(0);
     }
-    // Resolve the judge key BEFORE applyModelEnv: it overwrites API_OPEN_AI_API_KEY
-    // with the reviewed model's key (see recall-judge.js loadJudgeKey).
     const judgeKey = loadJudgeKey();
+    // The org's route, resolved before any case: an unknown model or a missing
+    // key stops the run here. It leaves API_OPEN_AI_API_KEY the platform's key,
+    // which the dedup's embedder reads.
     try {
-        applyModelEnv(MODEL);
+        orgRoute();
     } catch (e) {
         console.error(`INFRA: ${e.message}`);
         process.exit(2);
@@ -806,7 +807,7 @@ function sharedResult(rows, selected) {
     };
 }
 
-module.exports = { once, instrumentVerifier, engineSnapshot };
+module.exports = { once, instrumentVerifier, engineSnapshot, orgRoute };
 if (require.main === module)
     main().catch((error) => {
         console.error(`INFRA: ${error.stack || error}`);

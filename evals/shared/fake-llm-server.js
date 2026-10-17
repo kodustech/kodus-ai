@@ -2,8 +2,8 @@
 //
 // Why a server and not a mocked LanguageModel: the engine builds its own model
 // from the slot (LLM.run → buildModelFromSlot → openai_compatible executor), so
-// an in-process mock would have to replace production code. Pointing the SAME
-// self-hosted route at 127.0.0.1 keeps every Kodus line real — slot resolution,
+// an in-process mock would have to replace production code. Pointing an org's
+// BYOK route at 127.0.0.1 keeps every Kodus line real — slot resolution,
 // provider options, tool registry, structured-output parsing — and swaps only
 // the vendor at the network edge. No key, no cost, deterministic.
 //

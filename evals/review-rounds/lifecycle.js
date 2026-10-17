@@ -3,9 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execFileSync } = require('child_process');
-const { once, instrumentVerifier, engineSnapshot } = require('./run');
+const { once, instrumentVerifier, engineSnapshot, orgRoute } = require('./run');
 const { cases } = require('./cases');
-const { applyModelEnv } = require('../shared/tier0-models');
 const { loadJudgeKey, JUDGE_MODEL } = require('../investigation/recall-judge');
 require('ts-node/register/transpile-only');
 require('tsconfig-paths/register');
@@ -237,7 +236,9 @@ async function main() {
     const only = arg('sequence');
     const judgeKey = loadJudgeKey();
     if (!judgeKey || !model) throw new Error('Missing model or judge key');
-    applyModelEnv(model);
+    // The org's route (shared with run.js): stops here on an unknown model or
+    // a missing key, and leaves the platform's embedder key alone.
+    orgRoute();
     instrumentVerifier();
     const engine = engineSnapshot();
     const selected = sequences().filter((s) => !only || s.id === only);

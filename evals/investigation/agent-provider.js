@@ -230,11 +230,6 @@ class InvestigationAgentProvider {
                     anomalies: agentResult.anomalies,
                     verification: agentResult.verification,
                     toolCalls: (agentResult.toolCalls || []).map((call) => ({ tool: call.toolName || call.tool, args: call.args || {} })),
-                    // Production's tools over the checkout: nothing is replayed.
-                    unexpectedToolCalls: [],
-                    replayCalls: null,
-                    repoPrepared: true,
-                    sandboxExec: true,
                     production: {
                         route: route.route,
                         model: first.modelName ?? null,
