@@ -18,6 +18,15 @@ const remoteCommands = {
     exec: jest.fn(async () => ({ stdout: '', stderr: '', exitCode: 1 })),
 };
 
+const astGrepInstalled = {
+    ...remoteCommands,
+    exec: jest.fn(async () => ({
+        stdout: 'ast-grep 0.45.3',
+        stderr: '',
+        exitCode: 0,
+    })),
+};
+
 function adapterWith(tools: MCPTool[]): MCPAdapter {
     return {
         connect: jest.fn(async () => {}),
@@ -40,14 +49,14 @@ describe('buildCustomAgentTools', () => {
         const set = await buildCustomAgentTools(
             {
                 tools: {
-                    astGrepConfig: 'tools/review-rules.yml',
+                    astGrepConfig: 'id: no-raw-sql\nlanguage: ts\nrule:\n  pattern: db.raw($Q)',
                     mcp: [
                         { integrationId: 'int-tracker', tools: ['get_ticket'] },
                     ],
                 },
             },
             {
-                remoteCommands,
+                remoteCommands: astGrepInstalled,
                 writeFile: jest.fn(async () => {}),
                 changedFiles: ['src/a.ts'],
                 readTargetFile: jest.fn(async () => null),
@@ -68,6 +77,19 @@ describe('buildCustomAgentTools', () => {
             'Tracker__get_ticket',
         ]);
         expect(set.tools[0].inputSchema.properties).toHaveProperty('useRules');
+    });
+
+    it('leaves astGrep out when the sandbox has no ast-grep binary', async () => {
+        const set = await buildCustomAgentTools(
+            { tools: {} },
+            {
+                remoteCommands,
+                writeFile: jest.fn(async () => {}),
+                changedFiles: ['src/a.ts'],
+            },
+        );
+        expect(set.tools).toEqual([]);
+        expect(remoteCommands.exec).toHaveBeenCalledWith('ast-grep --version');
     });
 
     it('leaves astGrep out when the sandbox cannot write its neutral config', async () => {

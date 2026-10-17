@@ -43,6 +43,8 @@ export interface AstGrepToolDeps {
     changedFiles: readonly string[];
     /** The agent's `tools.astGrepConfig`: repository path of the rule file. */
     rulesPath?: string;
+    /** Rule YAML saved on the agent itself; wins over `rulesPath`. */
+    rules?: string;
     /** Reads a file from the PR target branch; null when it is not there. */
     readTargetFile?: (path: string) => Promise<string | null>;
     /** Temp directory name; random per run unless a test pins it. */
@@ -143,7 +145,8 @@ export function buildAstGrepTool(
     const workDir = deps.workDirName ?? randomWorkDir();
     const configPath = `${workDir}/sgconfig.yml`;
     const rulesFile = `${workDir}/rules.yml`;
-    const hasRules = !!deps.rulesPath && !!deps.readTargetFile;
+    const hasRules =
+        !!deps.rules?.trim() || (!!deps.rulesPath && !!deps.readTargetFile);
 
     // Written once per run; a failed write is retried on the next call.
     let configReady: Promise<void> | null = null;
@@ -163,15 +166,20 @@ export function buildAstGrepTool(
     const ensureRules = (): Promise<void> => {
         if (!rulesReady) {
             rulesReady = (async () => {
-                const text = await deps.readTargetFile!(deps.rulesPath!);
+                const source = deps.rules?.trim()
+                    ? 'The rules saved on the agent'
+                    : `Rule file ${deps.rulesPath}`;
+                const text = deps.rules?.trim()
+                    ? deps.rules
+                    : await deps.readTargetFile!(deps.rulesPath!);
                 if (text === null || text === undefined || !text.trim()) {
                     throw new Error(
-                        `Rule file ${deps.rulesPath} was not found on the target branch.`,
+                        `${source} was not found on the target branch.`,
                     );
                 }
                 if (Buffer.byteLength(text, 'utf8') > MAX_AST_GREP_RULE_BYTES) {
                     throw new Error(
-                        `Rule file ${deps.rulesPath} is larger than ${MAX_AST_GREP_RULE_BYTES} bytes.`,
+                        `${source} are larger than ${MAX_AST_GREP_RULE_BYTES} bytes.`,
                     );
                 }
                 await deps.writeFile(rulesFile, text);

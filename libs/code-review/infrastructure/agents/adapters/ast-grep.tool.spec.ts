@@ -225,6 +225,31 @@ describe('astGrep tool', () => {
             '  pattern: db.raw($Q)',
         ].join('\n');
 
+        it('writes the rules saved on the agent and never reads the branch for them', async () => {
+            const readTargetFile = jest.fn(async () => 'from the branch');
+            const { tool, exec, writeFile } = setup({
+                rules: RULES,
+                readTargetFile,
+            });
+            exec.mockResolvedValueOnce({
+                stdout: match('src/orders/cart.ts', 9, 'db.raw(q)', {
+                    ruleId: 'no-raw-sql',
+                }),
+                stderr: '',
+                exitCode: 0,
+            });
+
+            expect(tool.inputSchema.properties).toHaveProperty('useRules');
+            const r = await tool.execute({ useRules: true }, ctx);
+
+            expect(readTargetFile).not.toHaveBeenCalled();
+            expect(writeFile).toHaveBeenCalledWith(
+                `${WORK_DIR}/rules.yml`,
+                RULES,
+            );
+            expect(r.output).toContain('[no-raw-sql]');
+        });
+
         it('reads the rule file from the target branch and scans only the changed files', async () => {
             const readTargetFile = jest.fn(async () => RULES);
             const { tool, exec, writeFile } = setup({

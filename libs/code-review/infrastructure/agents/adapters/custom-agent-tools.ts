@@ -46,6 +46,22 @@ export interface CustomAgentToolset {
     close(): Promise<void>;
 }
 
+async function hasAstGrep(
+    exec: NonNullable<RemoteCommands['exec']>,
+): Promise<boolean> {
+    try {
+        const result = await exec('ast-grep --version');
+        if (result.exitCode === 0) return true;
+    } catch {
+        // Reported below like a missing binary.
+    }
+    logger.warn({
+        message: 'ast-grep is not installed in the sandbox; astGrep is not offered',
+        context: 'buildCustomAgentTools',
+    });
+    return false;
+}
+
 export async function buildCustomAgentTools(
     agent: Pick<CustomAgentConfig, 'tools'>,
     deps: CustomAgentToolDeps,
@@ -54,15 +70,19 @@ export async function buildCustomAgentTools(
     const closers: Array<() => Promise<void>> = [];
 
     // ast-grep needs the neutral config written before any run (see the tool),
-    // so without a file writer it is not offered at all.
-    if (deps.remoteCommands?.exec && deps.writeFile) {
+    // so without a file writer it is not offered at all; nor on a sandbox
+    // image that predates the binary, where every call would fail.
+    if (
+        deps.remoteCommands?.exec &&
+        deps.writeFile &&
+        (await hasAstGrep(deps.remoteCommands.exec))
+    ) {
         tools.push(
             buildAstGrepTool({
                 exec: deps.remoteCommands.exec,
                 writeFile: deps.writeFile,
                 changedFiles: deps.changedFiles,
-                rulesPath: agent.tools?.astGrepConfig?.trim() || undefined,
-                readTargetFile: deps.readTargetFile,
+                rules: agent.tools?.astGrepConfig?.trim() || undefined,
             }) as AgentTool,
         );
     }

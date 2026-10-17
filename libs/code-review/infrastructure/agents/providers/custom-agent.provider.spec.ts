@@ -288,7 +288,14 @@ describe('CustomAgentProvider — knowledge and tools', () => {
             run: sandboxRun,
             repoDir: '/home/user/repo',
             writeFile: jest.fn(),
-            remoteCommands: { exec: jest.fn() },
+            remoteCommands: {
+                // A sandbox image with ast-grep installed.
+                exec: jest.fn(async () => ({
+                    stdout: 'ast-grep 0.45.3',
+                    stderr: '',
+                    exitCode: 0,
+                })),
+            },
         };
         const cli = {
             name: 'ledgerctl',
