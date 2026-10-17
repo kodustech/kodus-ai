@@ -1,0 +1,12 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#opa-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "app/controllers/uploads_controller.rb:6 accepts unrestricted `type`, which becomes the tempfile prefix at line 55 through lib/file_helper.rb:14; the supported Ruby 2.0 implementation [preserves that prefix](https://raw.githubusercontent.com/ruby/ruby/v2_0_0_0/lib/tmpdir.rb). The newly added downsizing call at app/controllers/uploads_controller.rb:67 passes this path into unescaped command arguments at app/models/optimized_image.rb:129 and :133, executed through shell backticks at :161, allowing command injection during oversized API URL uploads.",
+   "severity": "critical"
+  }
+ ]
+}

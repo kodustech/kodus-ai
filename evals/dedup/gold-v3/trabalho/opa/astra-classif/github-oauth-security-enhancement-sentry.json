@@ -1,0 +1,12 @@
+{
+ "caseId": "github-oauth-security-enhancement-sentry",
+ "items": [
+  {
+   "issueId": "github-oauth-security-enhancement-sentry#opa-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The new comparison uses plain `!=` at src/sentry/integrations/github/integration.py:412, but the claim that it compares a secret CSRF token is false: src/sentry/pipeline/base.py:132-133 computes the signature solely from pipeline view class names. Those views are fixed at src/sentry/integrations/github/integration.py:343-344, so timing cannot expose a secret; constant-time comparison would not address the separate problem of predictable OAuth state.",
+   "severity": "high"
+  }
+ ]
+}

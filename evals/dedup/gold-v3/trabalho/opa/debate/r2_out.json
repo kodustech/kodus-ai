@@ -1,0 +1,9 @@
+{
+ "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02": {
+  "class": "TP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede on the narrower point. At base the limit/offset block ran only `if group.automatic?`, so non-automatic groups never read params[:limit]. At head groups_controller.rb:22 `limit = (params[:limit] || 50).to_i` and :26 `.limit(limit).offset(offset)` apply it to every group, so limit=-1 (or offset=-1) on a public non-automatic group now reaches PostgreSQL ('LIMIT must not be negative') and returns a 500. That failure on client-controlled input is newly introduced by this PR and is missing input validation that surfaces as a failure. The oversize part of the comment stays pre-existing/not a regression, but the issue as a whole is TP none, medium (edge-case input, error-handling failure)."
+ }
+}

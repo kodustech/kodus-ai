@@ -1,0 +1,55 @@
+{
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "issues": {
+   "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02": {
+    "comentarios": [
+     {
+      "gid": "opus-api:S4",
+      "file": "app/controllers/groups_controller.rb",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "WHAT: the public members endpoint takes limit straight from params with no upper bound or positivity check. WHY: any visitor can request limit=1000000 and force serialization of every member of large groups, including automatic trust-level groups. A negative limit produces a PostgreSQL error (500). HOW: clamp limit to a sane range."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "groups_controller.rb:22-26 does take limit from params without a bound, but before the PR non-automatic groups returned all members with no limit and automatic groups already used an unbounded params[:limit]; the PR adds a default of 50 and paginates, so it does not introduce the unbounded read."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The changed endpoint passes the integer limit directly into the query and serializes its results without bounds checks (app/controllers/groups_controller.rb:22\u201329), allowing oversized responses and PostgreSQL errors for negative limits. Visible groups are accessible anonymously (lib/guardian.rb:120\u2013121); although automatic groups already accepted unchecked limits, this PR extends that behavior to nonautomatic groups."
+     },
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "Keep FP none. The PR adds a bound rather than removing one. At base, groups_controller.rb applied `members.limit(limit).offset(offset)` only `if group.automatic?`, and every non-automatic group serialized ALL members with no limit at all (`render_serialized(members.to_a, GroupUserSerializer)`). At head (:22-26) `limit = (params[:limit] || 50).to_i` paginates every group. So `limit=1000000` returns no more than a plain request did before, and the unchecked params[:limit] for automatic groups (including negative values) is carried over unchanged from base (`(params[:limit] || 200).to_i`). The PR only shrinks the default exposure; it introduces no oversize or unbounded read.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "Keep TP, specifically for negative limits newly affecting nonautomatic groups. At base, those groups ignored params[:limit]; at head, groups_controller.rb:22\u201326 unconditionally applies it, so limit=-1 now reaches PostgreSQL and produces a 500 during serialization. The reviewer correctly identifies oversized responses and unchecked limits on automatic groups as pre-existing, but that does not eliminate the newly introduced failure for nonautomatic groups."
+     }
+    ]
+   }
+  }
+ }
+}

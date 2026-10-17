@@ -1,0 +1,372 @@
+{
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+  "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "prTitle": "FEATURE: Can edit category/host relationships for embedding",
+  "issues": [
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S8",
+      "file": "app/assets/javascripts/discourse/models/store.js.es6",
+      "lines": [
+       192,
+       201
+      ],
+      "texto": "WHAT: The new `_ids` branch runs for every key ending in `_ids` on every hydrated model. It always deletes the original key and replaces it with the result of mapping _lookupSubType, which returns undefined when the root has no matching collection; a null value crashes on `.map`. WHY: Existing REST models with plain id-array attributes (e.g. `group_ids`) lose that data or throw while hydrating, a regression outside the embedding feature. HOW: Only replace the key when the value is an array and the pluralized collection exists in root."
+     },
+     {
+      "gid": "opus-api:S22",
+      "file": "app/assets/javascripts/discourse/models/store.js.es6",
+      "lines": [
+       196,
+       201
+      ],
+      "texto": "Any payload key ending in `_ids` whose value is null now reaches `obj[k].map`, which throws a TypeError. Before this change such keys were only matched by the `_id` regex and handled safely, so hydrating the record now fails."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "prTitle": "fix: handle collective multiple host on destinationCalendar",
+  "issues": [
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S9",
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       727,
+       761
+      ],
+      "texto": "WHAT: the catch block turns the plain Error thrown for an empty or invalid dynamicUserList into a generic 500 'Unable to load users'. WHY: a client input error comes back as a server error with its message hidden. HOW: throw `new HttpError({ statusCode: 400, ... })` directly for the validation failure."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S18",
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1079
+      ],
+      "texto": "For COLLECTIVE events, every team member's full DestinationCalendar row (credentialId, externalId, userId) is now pushed into `evt.destinationCalendar`. `evt` is spread into the webhook payload, so other members' calendar IDs (often email addresses) and their credential IDs are sent to the webhook subscriber. Keep the team members' calendars off `evt`, for example by passing them to EventManager separately, or remove the field before building the payload."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "prTitle": "FIX: proper handling of group memberships",
+  "issues": [
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S2",
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       71,
+       75
+      ],
+      "texto": "WHAT: add_members calls group.add(user) (users.push) for every username without checking whether the user is already a member. WHY: group_users has a UNIQUE (group_id,user_id) index, so adding an existing member raises ActiveRecord::RecordNotUnique and returns a 500, while users earlier in the list stay inserted (partial update). HOW: skip users who are already members."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S4",
+      "file": "app/controllers/groups_controller.rb",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "WHAT: the public members endpoint takes limit straight from params with no upper bound or positivity check. WHY: any visitor can request limit=1000000 and force serialization of every member of large groups, including automatic trust-level groups. A negative limit produces a PostgreSQL error (500). HOW: clamp limit to a sane range."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fixing-re-authentication-with-passkeys-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "744e031019af8dbaacf407e792fbb3756364e2b4",
+  "head": "25bf964a844ea0bc64dc838bff038345048cb1fa",
+  "prTitle": "Fixing Re-authentication with passkeys",
+  "issues": [
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S3",
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java",
+      "lines": [
+       51,
+       54
+      ],
+      "texto": "After someone submits only a username, `PasswordForm.authenticate` calls `webauthnAuth.fillContextForm(context)`. The new `authn_select` block in `passkeys.ftl` then puts that user's WebAuthn credential IDs into the page as hidden `authn_use_chk` inputs. Because the block is only rendered when the user has a passkey, any unauthenticated visitor can type a username and learn whether that account has a passkey, plus its credential IDs. Limit this to re-authentication: only fill the user-specific data when `USER_SET_BEFORE_USERNAME_PASSWORD_AUTH` is set, and otherwise use the user-less conditional UI data."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#opa-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S4",
+      "file": "WebAuthnConditionalUIAuthenticator",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "Missing test coverage: no test triggers a passkey failure during re-authentication, so the new `AuthenticatorUtils.setupReauthenticationInUsernamePasswordFormError` call in `WebAuthnConditionalUIAuthenticator` is never exercised. Consider adding a test where passkey authentication fails after `prompt=login` and asserting the resulting error and form state."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "github-oauth-security-enhancement-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "344aa102e7818606e29426ebe69d5a680d8727c6",
+  "head": "bb75657fc8f13923c1d7983f422290908a1e7310",
+  "prTitle": "GitHub OAuth Security Enhancement",
+  "issues": [
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S10",
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       412,
+       413
+      ],
+      "texto": "The OAuth `state` parameter, which is the CSRF token tying the GitHub callback to this pipeline, is checked against `pipeline.signature` with a plain `!=`. That comparison can leak timing information about the expected value. Use `constant_time_compare` from `django.utils.crypto` instead."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "implement-access-token-context-encoding-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "c22f76867f595f0f7c327376a66a08dca01949e8",
+  "head": "daffb05b5ad091d3ec09933c3c99c2b54f448696",
+  "prTitle": "Implement access token context encoding framework",
+  "issues": [
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S4",
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       29,
+       33
+      ],
+      "texto": "WHAT: `getShortcut()` is added as an abstract method on the provider-facing OAuth2GrantTypeFactory interface, with no default implementation. WHY: Existing custom grant type factories no longer compile, or throw AbstractMethodError when DefaultTokenContextEncoderProviderFactory.postInit calls gtf.getShortcut(), which stops the server from starting. HOW: Add a default implementation that derives a fallback shortcut, or make the encoder handle factories that do not supply one."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "notification-rule-processing-engine-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "47e5bd23163e6037fc0741068ac78930bba2769f",
+  "head": "8df850371034b73dc4dd9908cc30fa09f12a1f97",
+  "prTitle": "Notification Rule Processing Engine",
+  "issues": [
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S10",
+      "file": "public/app/features/alerting/unified/components/rules/RulesTable.test.tsx",
+      "lines": [
+       100,
+       145
+      ],
+      "texto": "RulesTable gives AlertRuleMenu a ruler-backed Grafana rule, and AlertRuleMenu allows Delete when either the ruler check or the Grafana prom-rule check passes. These tests set only the useGrafanaPromRuleAbilities mock and leave useRulerRuleAbilities at its default of [false,false]. As a result, the ruler-based Delete permission check is never set to allow or deny, and a broken ruler path would go unnoticed."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "bc89fe00ea84d20bedcec782f0701b9711dc8201",
+  "head": "9fde0e906897cc0f4f71793f647dd629faba3317",
+  "prTitle": "OAuth credential sync and app integration enhancements",
+  "issues": [
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S11",
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       40,
+       54
+      ],
+      "texto": "WHAT: appStoreMetadata is indexed by app.slug, but the map is keyed by app directory name (see _appRegistry.ts:17, which uses app.dirName). WHY: for apps whose slug differs from their dirName (e.g. google-calendar vs googlecalendar), the lookup returns undefined and the webhook always responds 404, so those credentials cannot be synced. HOW: select dirName from prisma.app and index appStoreMetadata by it."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S13",
+      "file": "packages/app-store/_utils/oauth/createOAuthAppCredential.ts",
+      "lines": [
+       30,
+       59
+      ],
+      "texto": "WHAT: when state.teamId is present, the code only checks that the user is an accepted team member before creating a team credential, and throwIfNotHaveAdminAccessToTeam runs only on the path where teamId is falsy, so it is effectively a no-op. WHY: any non-admin team member can install OAuth apps on behalf of the team through a crafted state parameter. HOW: call throwIfNotHaveAdminAccessToTeam({ teamId: state.teamId, userId }) inside the teamId branch before prisma.credential.create."
+     },
+     {
+      "gid": "opus-api:S31",
+      "file": "createOAuthAppCredential",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "In `createOAuthAppCredential`, the team branch checks only team membership and not admin access. The reviewer flagged this as outside the assigned scope."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "replays-self-serve-bulk-delete-system-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "49a275847631e231672d01b5dcd66558c069d25b",
+  "head": "ea188e2d736fd6ed27c1dba8aae63b7268e2a7a9",
+  "prTitle": "Replays Self-Serve Bulk Delete System",
+  "issues": [
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S3",
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       84,
+       94
+      ],
+      "texto": "WHAT: Every paginated GET now runs query_replay_instance and then a nodestore get_multi over all of the replay's error_ids, with no cap and before pagination. WHY: a replay with many errors loads every full event payload from nodestore on every page request, which adds large latency and memory use to a request that already calls Seer. HOW: cap error_ids (e.g. error_ids[:N]) before calling fetch_error_details."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S5",
+      "file": "static/app/views/performance/newTraceDetails/traceDrawer/details/span/eapSections/attributes.tsx",
+      "lines": [
+       62,
+       69
+      ],
+      "texto": "The `HIDDEN_ATTRIBUTES` check was added only to the search branch, while the early `return sorted;` (no search query) still returns everything. In the default view, is_segment, project_id and received are still shown, which defeats the purpose of the hidden list. Apply the hidden-attribute filter in the early-return path as well."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-03",
+    "comentarios": [
+     {
+      "gid": "opus-api:S9",
+      "file": "tests/sentry/replays/tasks/test_delete_replays_bulk.py",
+      "lines": [
+       94,
+       99
+      ],
+      "texto": "The row was changed to `max_segment_id: None` to cover the new early return in `_make_recording_filenames`, but this test patches `delete_matched_rows` and only checks that the mock received the rows. `_make_recording_filenames` never runs, so the test would still pass if the None guard were removed and `range(None + 1)` crashed. Add a direct test that calls `_make_recording_filenames(project_id, row)` with `max_segment_id=None` and asserts it returns `[]`, or stop mocking `delete_matched_rows` in this case."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "unified-storage-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "871af07203177ce59a24e742107119409274f48a",
+  "head": "26fed312840cd76b766cbd2158e17a7e6c0ec548",
+  "prTitle": "Unified Storage Performance Optimizations",
+  "issues": [
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S2",
+      "file": "pkg/storage/unified/resource/server.go",
+      "lines": [
+       258,
+       262
+      ],
+      "texto": "NewResourceServer used to be a cheap constructor, and Init ran later (first request or service start). It now synchronously runs lifecycle Init, builds the full search index and starts the watcher, and returns nil plus an error if any step fails. Callers such as sql/service.go, unified/client.go, apistore/restoptions.go and dashboard/legacy_storage.go were not changed: an Init failure now aborts construction instead of only failing requests, and startup blocks until the whole index build finishes."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ }
+}

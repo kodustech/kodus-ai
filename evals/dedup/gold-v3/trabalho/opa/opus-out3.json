@@ -1,0 +1,428 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "S1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Meet fallback dereferences mainHostDestinationCalendar.integration without optional chaining."
+  },
+  {
+   "id": "S2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+   "newGroup": null,
+   "reason": "Video references lose credentialId, so cancel cannot delete the meeting."
+  },
+  {
+   "id": "S3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "updateEvent fallback searches for the absent externalCalendarId, never matches."
+  },
+  {
+   "id": "S4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Same dead fallback in deleteEvent, covered by the issue for update/delete."
+  },
+  {
+   "id": "S5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Optional push on null destinationCalendar drops other hosts calendars."
+  },
+  {
+   "id": "S6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "newGroup": null,
+   "reason": "Office365 createEvent ignores credential and always uses first destination calendar."
+  },
+  {
+   "id": "S7",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Recurring deletion runs once per reference, duplicating delete calls."
+  },
+  {
+   "id": "S8",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "newGroup": null,
+   "reason": "Inverted IS_TEAM_BILLING_ENABLED slug condition."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Error handling of invalid dynamicUserList mapped to 500; no golden issue covers it."
+  },
+  {
+   "id": "S10",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Meet fallback .integration on undefined mainHostDestinationCalendar."
+  },
+  {
+   "id": "S11",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Google update fallback compares against the falsy externalCalendarId."
+  },
+  {
+   "id": "S12",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Null destinationCalendar makes push a no-op, team calendars dropped."
+  },
+  {
+   "id": "S13",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Meet fallback TypeError without optional chaining."
+  },
+  {
+   "id": "S14",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Meet fallback TypeError without optional chaining."
+  },
+  {
+   "id": "S15",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Meet fallback TypeError without optional chaining."
+  },
+  {
+   "id": "S16",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Google update fallback find never matches."
+  },
+  {
+   "id": "S17",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-03",
+   "newGroup": null,
+   "reason": "loadUsers forwards raw Prisma error message to the client."
+  },
+  {
+   "id": "S18",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Leak of other members destination calendars into webhook payload; not in golden set."
+  },
+  {
+   "id": "S19",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "newGroup": null,
+   "reason": "Inverted billing condition for slug."
+  },
+  {
+   "id": "S20",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Dead destination calendar fallback in Google update/delete."
+  },
+  {
+   "id": "S21",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+   "newGroup": null,
+   "reason": "Video references stored without credentialId."
+  },
+  {
+   "id": "S22",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Null destinationCalendar drops collective hosts calendars."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Post#cook returns raw_html unsanitized, stored XSS."
+  },
+  {
+   "id": "S2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "URL interpolated unescaped into footer anchor."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Throttle per URL lets attackers create unlimited topics; different from the feed-poll cost issue."
+  },
+  {
+   "id": "S4",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+   "newGroup": null,
+   "reason": "Each uncached retrieval synchronously polls the whole feed."
+  },
+  {
+   "id": "S5",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "newGroup": null,
+   "reason": "Protocol-relative URLs mangled by absolutize_urls."
+  },
+  {
+   "id": "S6",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "i.content.scrub crashes for items without content."
+  },
+  {
+   "id": "S7",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
+   "newGroup": null,
+   "reason": "Nil embed.post passed to PostRevisor on update path."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Dangling end if in embed template; not in golden set."
+  },
+  {
+   "id": "S9",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Substring origin check in postMessage handler."
+  },
+  {
+   "id": "S10",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#24",
+   "newGroup": null,
+   "reason": "Hard-coded strftime date format not localized."
+  },
+  {
+   "id": "S11",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Unescaped URL in imported_from footer."
+  },
+  {
+   "id": "S12",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Nil content crashes the poll."
+  },
+  {
+   "id": "S13",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#17",
+   "newGroup": null,
+   "reason": "Check-then-create race hits unique index."
+  },
+  {
+   "id": "S14",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "newGroup": null,
+   "reason": "Protocol-relative URLs mangled."
+  },
+  {
+   "id": "S15",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Substring origin check."
+  },
+  {
+   "id": "S16",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Embed rendered as current_user then publicly cached; not in golden set."
+  },
+  {
+   "id": "S17",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+   "newGroup": null,
+   "reason": "requires feed_polling_url spec does not isolate its guard."
+  },
+  {
+   "id": "S18",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+   "newGroup": null,
+   "reason": "requires embed_by_username spec does not isolate its guard."
+  },
+  {
+   "id": "S19",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "feed_polling_enabled spec isolation; the issue covers only the url and username specs."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "S1",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Backup code plus dummy totpCode bypasses password check."
+  },
+  {
+   "id": "S2",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Non-atomic backup-code consumption."
+  },
+  {
+   "id": "S3",
+   "match": "feat-2fa-backup-codes-cal-com#02",
+   "newGroup": null,
+   "reason": "onEnable only on Close button; dismiss leaves 2FA shown disabled."
+  },
+  {
+   "id": "S4",
+   "match": "feat-2fa-backup-codes-cal-com#17",
+   "newGroup": null,
+   "reason": "Case-sensitive backup code comparison."
+  },
+  {
+   "id": "S5",
+   "match": "feat-2fa-backup-codes-cal-com#04",
+   "newGroup": null,
+   "reason": "Component in BackupCode.tsx named TwoFactor."
+  },
+  {
+   "id": "S6",
+   "match": "feat-2fa-backup-codes-cal-com#14",
+   "newGroup": null,
+   "reason": "Disable endpoint log says backup code login."
+  },
+  {
+   "id": "S7",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Non-atomic read-modify-write of backup codes."
+  },
+  {
+   "id": "S8",
+   "match": "feat-2fa-backup-codes-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "indexOf comparison not constant-time."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unawaited isChecked() in e2e test; not in golden set."
+  },
+  {
+   "id": "S10",
+   "match": "feat-2fa-backup-codes-cal-com#05",
+   "newGroup": null,
+   "reason": "Copy e2e test only waits for unconditional toast."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "newGroup": null,
+   "reason": "getClientsWithPermission returns type resource name instead of client ids."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "setPermissionsEnabled throws in V2 so client removal listener fails; issue #01 is about orphaned cleanup, a different problem."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "canExchangeTo throws UnsupportedOperationException under V2."
+  },
+  {
+   "id": "S4",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+   "newGroup": null,
+   "reason": "requireView Javadoc says returns true."
+  },
+  {
+   "id": "S5",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+   "newGroup": null,
+   "reason": "requireViewClientScopes Javadoc says returns true."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Listener calls throwing V2 setPermissionsEnabled on client delete."
+  },
+  {
+   "id": "S7",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#11",
+   "newGroup": null,
+   "reason": "ForbiddenException comes from getDefaultClientScopes before remove."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "CONFIGURE granted with MAP_ROLES_COMPOSITE masks the check; not in golden set."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "canExchangeTo throws under V2 in token exchange."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Management-permissions endpoints hit throwing V2 overrides."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08",
+   "newGroup": null,
+   "reason": "Update invalidation uses org-aware enabled state, skipping invalidation."
+  },
+  {
+   "id": "S2",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Cleanup registered for literal alias."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Shared login predicate change affects linked-IdP filtering in non-org login bean."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Per-org merges cause repeated invalidations/growing entry (perf); #05 is the lost-invalidation race."
+  },
+  {
+   "id": "S5",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#11",
+   "newGroup": null,
+   "reason": "LoginFilter javadoc no longer complete."
+  },
+  {
+   "id": "S6",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Cleanup uses literal alias."
+  }
+ ],
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": [
+  {
+   "id": "S1",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "newGroup": null,
+   "reason": "Converted config copy never returned."
+  },
+  {
+   "id": "S2",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "newGroup": null,
+   "reason": "Converted config copy never returned."
+  }
+ ]
+}

@@ -1,0 +1,1905 @@
+{
+ "model": "opus-5.5",
+ "verificador": "claude-opus-5.5@sdk-api",
+ "versao": "genopa-h1t10",
+ "versaoDedup": "genopa-dedup",
+ "prs": {
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/core/EventManager.ts:118-119: `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? [];` then `if (evt.location === MeetLocationType && mainHostDestinationCalendar.integration !== \"google_calendar\")`. There is no optional chaining.",
+     "reason": "With a null or empty destinationCalendar the destructured value is undefined, and reading `.integration` on it throws whenever the location is Google Meet. The comment's factual claims about the code are accurate.",
+     "passos": 3
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/core/EventManager.ts:170 `credentialId: isCalendarType ? result.credentialId : undefined`; packages/features/bookings/lib/handleCancelBooking.ts:491-500 only calls deleteMeeting when `bookingVideoReference.credentialId` is set.",
+     "reason": "Video references get credentialId undefined at line 170, and the cancel handler only deletes video meetings when the reference has a credentialId, so these meetings aren't deleted on cancel. I didn't check the claim about the previous behavior against the old code.",
+     "passos": 7
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "handleNewBooking.ts:1063-1067 sets destinationCalendar to null when neither eventType.destinationCalendar nor organizerUser.destinationCalendar exists; line 1078 `evt.destinationCalendar?.push(...teamDestinationCalendars)` is a no-op on null.",
+     "reason": "The code matches the comment's description: with a null default, the team destination calendars are never added.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "office365calendar/lib/CalendarService.ts:73 uses `const [mainHostDestinationCalendar] = event.destinationCalendar` for the URL; EventManager.ts:339-370 loops destinations calling createEvent per credential; CalendarManager.ts:236 calls `calendar.createEvent(calEvent, credential.id)` without passing externalId; googlecalendar CalendarService.ts:145-148 matches by credentialId.",
+     "reason": "The comment's statements check out: Office365 always takes the first destination calendar, even though it is called once per host credential, while Google matches by credentialId.",
+     "passos": 8
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/features/bookings/lib/handleCancelBooking.ts:423-471 — inside `for (const reference of bookingCalendarReference)`, the recurring branch (444-468) goes through all user `_calendar` credentials and calls deleteEvent for every booking in updatedBookings, without depending on the current reference.",
+     "reason": "The recurring deletion really is nested in the per-reference loop and doesn't depend on the reference, so with multiple calendar references it repeats the same delete calls once per reference, as the comment says.",
+     "passos": 3
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/trpc/server/routers/viewer/organizations/create.handler.ts:151 `...(IS_TEAM_BILLING_ENABLED ? { slug } : {})` and :153 `...(IS_TEAM_BILLING_ENABLED ? { requestedSlug: slug } : {})`",
+     "reason": "The code works as the comment describes: with billing enabled the slug is set right away and also stored as requestedSlug, and with billing disabled no slug is set. The two lines only make sense together if line 151 is negated. I could not see the diff, so the earlier `!IS_TEAM_BILLING_ENABLED` is not checked, but nothing in the code contradicts the comment.",
+     "passos": 7
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "handleNewBooking.ts:727-728 throws a plain Error for an empty or invalid dynamicUserList; lines 757-761 pass through only HttpError and PrismaClientKnownRequestError as 400 and turn everything else into a 500 'Unable to load users'.",
+     "reason": "The code matches the comment: the plain Error for invalid input falls through to the generic 500.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/googlecalendar/lib/CalendarService.ts:315-317: `const calendarId = externalCalendarId ? externalCalendarId : event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)?.externalId;` and line 322 `calendarId: calendarId ? calendarId : defaultCalendarId` with defaultCalendarId = \"primary\".",
+     "reason": "The fallback only runs when externalCalendarId is falsy, and it then looks for a calendar whose externalId equals that falsy value. That gives undefined (or at most an empty string), so the delete always goes to \"primary\". The comment's factual claim is accurate.",
+     "passos": 3
+    }
+   ],
+   "uso": {
+    "chamadas": 8,
+    "input": 139889,
+    "cacheRead": 99339,
+    "output": 6246,
+    "reasoning": 0,
+    "ms": 24942
+   }
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "addGuests.handler.ts:46-48 computes isTeamAdminOrOwner as `await isTeamAdmin(...) && await isTeamOwner(...)`. packages/lib/server/queries/teams/index.ts:270 has isTeamAdmin match role ADMIN or OWNER, and line 292 has isTeamOwner require role OWNER.",
+     "reason": "Combining the two with && is true only for OWNERs. A team ADMIN who is not the organizer or an attendee therefore gets FORBIDDEN at lines 54-55, which is what the comment reports.",
+     "passos": 4
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "addGuests.handler.ts:168 calls `sendAddGuestsEmails(evt, guests)` with the raw input, while `uniqueGuests` is filtered at lines 74-78. email-manager.ts:540-546 sends AttendeeScheduledEmail to attendees whose email is in newGuests and AttendeeAddGuestsEmail to the rest.",
+     "reason": "An existing attendee included in `guests` alongside a new guest passes the uniqueGuests.length check, is in evt.attendees, and so gets the scheduled email instead of the guests-added notice.",
+     "passos": 6
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "addGuests.handler.ts:158-163 builds EventManager from getUsersCredentials(ctx.user) and `...user` (ctx.user), not from booking.user, whose credentials are loaded at lines 35-40. Line 54 lets attendees and team admins/owners through. EventManager.ts:596-602 updateCalendarAttendees calls updateAllCalendarEvents, which uses this.calendarCredentials (e.g. line 658).",
+     "reason": "The comment's factual claims hold: the calendar update uses the caller's credentials, and non-organizers can trigger it.",
+     "passos": 6
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/core/CalendarManager.ts:330-348 — calendar.updateEvent(...) has a .catch(...) that logs 'updateEvent failed' and returns undefined, so updateEvent returns an EventResult with success:false instead of throwing. packages/core/EventManager.ts:815-939 — updateAllCalendarEvents is wrapped in try/catch that returns failure results.",
+     "reason": "The comment says a failed calendar provider call makes updateCalendarAttendees throw, so the client gets an error and no emails are sent. Provider errors are caught and turned into success:false results inside updateEvent, so they never reach addGuestsHandler. sendAddGuestsEmails still runs and the mutation returns success.",
+     "passos": 14
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "addGuests.handler.ts:71 lowercases blacklist entries; lines 76-77 compare `guest` with its original casing (`guest === attendee.email`, `blacklistedGuestEmails.includes(guest)`); addGuests.schema.ts:5 `z.array(z.string().email())` does not lowercase the input.",
+     "reason": "The blacklist is lowercased but guest emails are not, so a mixed-case address gets past the blacklist check, as the comment says.",
+     "passos": 4
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "addGuests.schema.ts:5 `guests: z.array(z.string().email())` has no duplicate check; addGuests.handler.ts:74-78 filters only against existing booking.attendees and the blacklist; handler.ts:101-103 passes the result to createMany; schema.prisma has no unique constraint on attendee (bookingId, email).",
+     "reason": "The schema accepts duplicate emails, and the handler only removes guests who are already attendees, so a repeated email in one request is inserted twice via createMany.",
+     "passos": 5
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "addGuests.schema.ts:5 `guests: z.array(z.string().email())` has no max; addGuests.handler.ts:52-56 lets any attendee through (`isAttendee`); lines 92-106 add every non-duplicate guest as an attendee, and line 168 calls `sendAddGuestsEmails(evt, guests)` with the organizer as the event organizer (lines 130-135).",
+     "reason": "The array has no size limit, attendees are authorized to call the mutation, and emails go out to the submitted guests. Nothing in the code contradicts the comment.",
+     "passos": 5
+    }
+   ],
+   "uso": {
+    "chamadas": 7,
+    "input": 238546,
+    "cacheRead": 202967,
+    "output": 6990,
+    "reasoning": 0,
+    "ms": 29082
+   }
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "parseRefreshTokenResponse.ts:16-29 calls safeParse and returns the result object (`return refreshTokenResponse;`) instead of `.data`. CalendarService.ts:97-100 writes it straight in with `prisma.credential.update({ data: { key } })`. googleCredentialSchema.ts:3-9 requires top-level scope/token_type/expiry_date/access_token/refresh_token, and CalendarService.ts:75 parses credential.key with that schema.",
+     "reason": "The helper really does return the SafeParse wrapper and the Google service stores it as the credential key. The next googleCredentialSchema.parse on that key throws because the required fields sit under `data`, not at the top level.",
+     "passos": 7
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "CalendarService.ts:53 `const credentialId = credential.id;` and :92-93 pass `credentialId` as the third arg; refreshOAuthTokens.ts:3 declares the third param `userId: number | null` and line 11 sends `calcomUserId: userId.toString()` to the sync endpoint.",
+     "reason": "The code passes the credential id where the function expects a user id, and the endpoint receives it as calcomUserId, as the comment states.",
+     "passos": 5
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "parseRefreshTokenResponse.ts:5-11: `[z.string().toString()]: z.number()` and `[z.string().optional().toString()]: z.unknown().optional()` both become the key \"[object Object]\"; the object has no .passthrough(), and line 16 uses this schema whenever sync is enabled.",
+     "reason": "The computed keys are literally \"[object Object]\", and a plain z.object strips undeclared keys, so the expiry and other fields are lost in sync mode, as the comment says.",
+     "passos": 3
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "parseRefreshTokenResponse.ts:25-27 sets refreshTokenResponse.data.refresh_token = \"refresh_token\" when it is missing; office365calendar/lib/CalendarService.ts:264 does o365AuthCredentials = { ...o365AuthCredentials, ...(tokenResponse.success && tokenResponse.data) }; line 254 sends o365AuthCredentials.refresh_token in the next refresh request.",
+     "reason": "The code does what the comment says: when the response has no refresh_token, the placeholder string is spread over the stored office365 credentials and replaces the real token, which the next refresh request then uses.",
+     "passos": 4
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/salesforce/lib/CalendarService.ts:1-20 has no @calcom/prisma import, yet line 96 calls prisma.credential.update. packages/prisma/index.ts:8 declares a global `var prisma` (so tsc likely passes), but lines 58-60 only assign globalThis.prisma when NODE_ENV !== 'production'.",
+     "reason": "The import really is missing. TypeScript may not error because of the global declaration, but in production globalThis.prisma is never set, so the bare `prisma` reference throws a ReferenceError and getClient rejects, as the comment says.",
+     "passos": 6
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/salesforce/lib/CalendarService.ts:86: `if (response.statusText !== \"OK\") throw new HttpError({ statusCode: 400, message: response.statusText });` runs after the refresh-token fetch and before the jsforce.Connection is built.",
+     "reason": "The code does test success by comparing statusText to \"OK\" and throws a 400 otherwise. If statusText is empty, as it is over HTTP/2, a successful refresh would throw and the client would never be created. None of the comment's facts are wrong.",
+     "passos": 2
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/salesforce/lib/CalendarService.ts:96-108 — the credential row is updated with accessTokenParsed.data, then the Connection is built with instanceUrl: credentialKey.instance_url and accessToken: credentialKey.access_token (the old credential values).",
+     "reason": "The refreshed token is saved but not used for the connection that is returned, exactly as the comment says.",
+     "passos": 3
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/salesforce/lib/CalendarService.ts:57 calls this.getClient(credential) in the constructor; lines 75-84 always send a refresh_token request to login.salesforce.com, with no expiry check before it; lines 96-99 always run prisma.credential.update.",
+     "reason": "The comment's factual claims hold: every construction makes an unconditional token-refresh HTTP call and a credential DB write.",
+     "passos": 3
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app-credential.ts:42-50 selects only slug and looks up appStoreMetadata[app.slug]; apps.metadata.generated.ts:98 has the key `googlecalendar` (directory name), and _appRegistry.ts:17 reads the map by app.dirName; googlecalendar/_metadata.ts:17 has slug \"google-calendar\".",
+     "reason": "The metadata map is keyed by directory name, not slug. For apps where the two differ (e.g. google-calendar vs googlecalendar), the lookup returns undefined and the handler returns 404 at lines 52-53.",
+     "passos": 7
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "apps/web/pages/api/webhook/app-credential.ts:24-29: `if (req.headers[process.env.CALCOM_WEBHOOK_HEADER_NAME || \"calcom-webhook-secret\"] !== process.env.CALCOM_WEBHOOK_SECRET) { return res.status(403)... }`; lines 62-91 update/create prisma.credential for arbitrary reqBody.userId.",
+     "reason": "The secret is compared with a plain !== rather than a constant-time comparison, and the endpoint writes credentials for any userId supplied in the body. Both facts the comment relies on hold.",
+     "passos": 3
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "createOAuthAppCredential.ts:30-56 checks only accepted membership (members.some {userId, accepted:true}) before prisma.credential.create with teamId, then returns. throwIfNotHaveAdminAccessToTeam is called only at line 59 with state?.teamId ?? null, which is always falsy on that path, and throwIfNotHaveAdminAccessToTeam.ts:11-13 returns immediately when teamId is falsy.",
+     "reason": "Every factual claim in the comment matches the code: the team path has no admin check, and the existing admin-check call does nothing.",
+     "passos": 5
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4",
+      "S14"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-15 returns the raw fetch Response in sync mode; packages/app-store/googlecalendar/lib/CalendarService.ts:94-95 does `const token = res?.data; googleCredentials.access_token = token.access_token;`",
+     "reason": "A fetch Response has no .data property, so token is undefined and token.access_token throws. The catch at lines 103-108 swallows the non-invalid_grant error and returns the old auth, so the refresh never takes effect in sync mode.",
+     "passos": 5
+    }
+   ],
+   "uso": {
+    "chamadas": 12,
+    "input": 233023,
+    "cacheRead": 192004,
+    "output": 9530,
+    "reasoning": 0,
+    "ms": 36835
+   }
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [],
+   "uso": null
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:38-42 — the second OR branch is `{ retryCount: { gt: 1 } }` with no method filter, while only the first branch (lines 32-37) has `method: WorkflowMethods.SMS`.",
+     "reason": "The deleteMany OR clause deletes any WorkflowReminder with retryCount > 1, whatever its method, exactly as the comment states.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:158-188 — the retryCount increment is inside the `else` of `if (scheduledSMS)`, which sits inside `if (message?.length && message?.length > 0 && sendTo)` with no outer else. The catch block (189-199) only runs on thrown errors. The fetch at 48-60 selects `scheduled: false` reminders with scheduledDate <= now+7d, and the delete at 30-44 needs scheduledDate <= now or retryCount > 1.",
+     "reason": "Reminders with an empty message or no sendTo never increment retryCount, so they are fetched again on every run until scheduledDate passes. This is exactly what the comment says.",
+     "passos": 3
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:189-199: the catch block runs an unguarded `await prisma.workflowReminder.update({ where: { id: reminder.id }, data: { retryCount: reminder.retryCount + 1 } })` inside the for-loop that starts at line 67. No inner try/catch wraps it.",
+     "reason": "The code matches the comment. If the update inside the catch throws (for example P2025 when the row is gone), the error leaves the for-loop, the remaining reminders are skipped, and line 201's success response is never sent.",
+     "passos": 3
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "twilioProvider.ts:92-95 returns undefined when SMS sending is locked; twilioProvider.ts:98-101 calls checkSMSRateLimit, which can throw; scheduleSMSReminders.ts:178-197 adds 1 to retryCount in both the undefined branch and the catch block; scheduleSMSReminders.ts:38-42 deletes reminders with retryCount > 1.",
+     "reason": "Every failure path adds to retryCount whatever the error type, and the reminder is deleted once the count passes 1, so the comment's factual claims are correct.",
+     "passos": 6
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:184 `retryCount: reminder.retryCount + 1` (also line 195); the value was read earlier via select at line 58.",
+     "reason": "The code does a read-then-write increment rather than an atomic Prisma increment, as the comment says.",
+     "passos": 4
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 88106,
+    "cacheRead": 69147,
+    "output": 3706,
+    "reasoning": 0,
+    "ms": 17158
+   }
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/features/auth/lib/next-auth-options.ts:121 `if (user.password && !credentials.totpCode) { ... verifyPassword ... }` skips the password check whenever totpCode is set; lines 131-145 `if (user.twoFactorEnabled && credentials.backupCode) {...}` only validate the backup code; the TOTP check at line 157 is in the else branch, so it is skipped.",
+     "reason": "Each statement the comment relies on matches the code: sending any totpCode skips the password check, and the backup-code branch neither looks at totpCode nor requires the password to have been verified.",
+     "passos": 3
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/features/auth/lib/next-auth-options.ts:137-156 decrypts user.backupCodes, finds the code with indexOf, sets the entry to null, then calls prisma.user.update({ where: { id: user.id }, data: { backupCodes: ... } }). There is no transaction or lock, and the update does not check that backupCodes is unchanged.",
+     "reason": "The code shows the unconditional read-modify-write the comment describes, so two concurrent logins can both spend the same backup code.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "apps/web/components/settings/EnableTwoFactorModal.tsx:134-135 sets step to DisplayBackupCodes after a successful enable; lines 266-270 call resetState()/onEnable() only from the Close button; line 166 passes onOpenChange straight to Dialog. apps/web/pages/settings/security/two-factor-auth.tsx:64 onOpenChange only toggles enableModalOpen; only onEnable (65-68) invalidates viewer.me; the modal is always mounted, so step state persists.",
+     "reason": "Every factual claim holds: Escape/overlay dismissal goes through onOpenChange, which only toggles the flag. It never resets step or invalidates viewer.me, and component state persists because the modal stays mounted.",
+     "passos": 8
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "apps/web/pages/api/auth/two-factor/totp/setup.ts:61 generates codes with crypto.randomBytes(5).toString(\"hex\"), which is lowercase. packages/features/auth/lib/next-auth-options.ts:144 runs backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\")) with no case normalization, and line 145 throws IncorrectBackupCode when there is no match. apps/web/components/auth/BackupCode.tsx:21 uses placeholder \"XXXXX-XXXXX\" and registers the input without changing its case.",
+     "reason": "Every factual claim in the comment matches the code: codes are lowercase hex, the comparison is exact after stripping dashes only, and nothing on the client or server converts the case.",
+     "passos": 5
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 89114,
+    "cacheRead": 68222,
+    "output": 3578,
+    "reasoning": 0,
+    "ms": 18075
+   }
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [],
+   "uso": null
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/models/optimized_image.rb:145 defines downsize(from, to, max_width, max_height, opts={}), and :149 then defines downsize(from, to, dimensions, opts={}), which replaces it. app/jobs/regular/resize_emoji.rb:14 calls OptimizedImage.downsize(path, path, 100, 100, opts) with 5 arguments.",
+     "reason": "Ruby keeps only the last definition, which accepts 3 or 4 arguments, so the 5-argument call in ResizeEmoji raises ArgumentError, exactly as the comment says.",
+     "passos": 4
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "uploads_controller.rb:67 passes \"80%\" to OptimizedImage.downsize with allow_animation; optimized_image.rb:155 routes .gif files to downsize_instructions_animated (line 137), which calls resize_instructions_animated, producing `gifsicle --resize-fit 80%` (line 120); convert_with returns false on non-zero exit (lines 161-162); the loop at uploads_controller.rb:65-69 runs up to 5 times and the upload proceeds regardless.",
+     "reason": "The code path the comment describes exists as stated. A percentage is passed straight into gifsicle's --resize-fit, which expects WxH dimensions, and a failed command just returns false.",
+     "passos": 6
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/uploads_controller.rb:6 `type = params.require(:type)` (no validation); :55 `FileHelper.download(url, ..., \"discourse-upload-#{type}\")`; lib/file_helper.rb:14 `Tempfile.new([tmp_file_name, extension])`; uploads_controller.rb:67 `OptimizedImage.downsize(tempfile.path, tempfile.path, ...)`; app/models/optimized_image.rb:129 `#{from}[0]` and :161 `` `#{instructions.join(\" \")} &> /dev/null` ``",
+     "reason": "All the facts the comment relies on are true: `type` comes from the request without validation, becomes part of the temp file path for API URL uploads, and that path is passed unescaped into a backtick shell command when the image is downsized.",
+     "passos": 8
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/uploads_controller.rb:64-69: `while attempt > 0 && tempfile.size > SiteSetting.max_image_size_kb.kilobytes` calls OptimizedImage.downsize up to 5 times with no pixel-dimension check first. The only FastImage use is in Upload.create_for (app/models/upload.rb:71), which runs after the downsizing. Line 55 caps API URL downloads at 10.megabytes.",
+     "reason": "The code does run convert up to 5 times on large images with no pixel limit. The comment overstates which images are affected (only those above max_image_size_kb), but that does not disprove the decompression-bomb risk.",
+     "passos": 5
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/assets/javascripts/discourse/lib/utilities.js:181-185: `var maxSizeKB = 10 * 1024; // 10MB` is used for every `type` in validateUploadedFile, and the same value is passed to the file_too_large message.",
+     "reason": "The size check really does use a hardcoded 10MB for every upload type, attachments included, and puts that value in the error message. Nothing in the code contradicts the comment.",
+     "passos": 3
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 97035,
+    "cacheRead": 78044,
+    "output": 5454,
+    "reasoning": 0,
+    "ms": 19052
+   }
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:9-11 and :15 index [0] on execute results with no row-count check; line 19 guards the embeddable_hosts query with cmd_tuples > 0, but the earlier two queries have no such guard.",
+     "reason": "If embed_category is unset or matches no category, the query returns no rows and indexing [0] raises. With PG::Result that is probably an IndexError, not a NoMethodError from nil as the comment says, but the migration still fails, so the reported problem exists.",
+     "passos": 3
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:22-25 inserts each split line raw via execute; app/models/embeddable_host.rb:5-8 strips the scheme and path only in before_validation; app/models/embeddable_host.rb:14-17 matches lower(host) against the bare uri.host.",
+     "reason": "The migration skips the model's normalization, and the lookup compares against the bare host, so a migrated value with a scheme or path would not match. Every factual claim in the comment checks out.",
+     "passos": 5
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:25: execute \"INSERT INTO embeddable_hosts (host, category_id, created_at, updated_at) VALUES ('#{h}', #{category_id}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)\" where h comes from the site_settings value split on newlines (lines 18-24).",
+     "reason": "The host value from site_settings is put directly into the INSERT statement with no quoting or escaping, as the comment says.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/models/embeddable_host.rb:14 `host = uri.host` (Ruby's URI keeps the host's case) and :17 `where(\"lower(host) = ?\", host)` compare a lowercased column with an argument that is never lowercased.",
+     "reason": "The query lowercases the column but not the argument, so a URL host with uppercase letters never matches and embedding is rejected, as the comment says.",
+     "passos": 3
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/models/embeddable_host.rb:2 regex allows (:[0-9]{1,5})?; lines 6-7 strip only the scheme and path, so the port is kept; line 14 uses uri.host (no port) and line 17 compares it exactly with lower(host) = ?",
+     "reason": "A host stored as 'example.com:8080' never equals uri.host 'example.com', so record_for_host never finds it. Every claim in the comment holds.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/models/embeddable_host.rb:5-8 calls self.host.sub! with no nil check; app/controllers/admin/embeddable_hosts_controller.rb:23 sets host.host = params[:embeddable_host][:host], which can be nil; the migration defines host as null: false with no default, so EmbeddableHost.new has a nil host.",
+     "reason": "Each fact the comment depends on holds: there is no nil guard, and the host can be nil both on a new record and when the request has no host param. A nil host makes sub! raise NoMethodError during validation.",
+     "passos": 7
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/admin/embeddable_hosts_controller.rb:10 and :15 use `EmbeddableHost.where(id: params[:id]).first`; line 16 calls `host.destroy` and line 23 (save_host) calls `host.host =` on the result with no nil check.",
+     "reason": "For an unknown id, `where(...).first` returns nil, and both actions then call methods on it, so they raise NoMethodError instead of RecordNotFound. The comment's factual claims hold.",
+     "passos": 3
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/assets/javascripts/discourse/models/store.js.es6:222-224 — `if (root.__rest_serializer === \"1\") { this._hydrateEmbedded(type, obj, root); }`; the flag is set only via `rest_serializer: true` (application_controller.rb:244-245), used only by queued_posts, similar_topics, admin/embeddable_hosts and admin/embedding controllers.",
+     "reason": "The comment says the `_ids` branch runs on every hydrated model, so existing REST models with id-array attributes would lose data or crash. In fact `_hydrateEmbedded` runs only when the payload has `__rest_serializer: \"1\"`, which only a few endpoints set. Models with plain id arrays (user/category serializers) never go through this code, so the reported regression doesn't exist.",
+     "passos": 7
+    }
+   ],
+   "uso": {
+    "chamadas": 8,
+    "input": 126497,
+    "cacheRead": 105479,
+    "output": 6140,
+    "reasoning": 0,
+    "ms": 28735
+   }
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/models/post.rb:133 returns raw unchanged for raw_html; app/jobs/scheduled/poll_feed.rb:35 runs CGI.unescapeHTML on feed content, which goes to TopicEmbed.import (app/models/topic_embed.rb:22) with cook_method raw_html and only absolutize_urls applied; app/views/embed/best.html.erb:19 renders `raw post.cooked` and app/views/topics/show.html.erb:12 renders `post.cooked.html_safe`.",
+     "reason": "The core claim holds: RSS-imported HTML is stored as cooked without sanitization and rendered unescaped. Remote pages do get partial filtering from Readability's tag and attribute whitelist, but that does not cover the RSS path, so nothing the reported problem depends on is false.",
+     "passos": 7
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/models/topic_embed.rb:13 interpolates `url` raw into `<a href='#{url}'>#{url}</a>`; line 11 only checks the scheme; lib/topic_retriever.rb:15 validates only the host (`SiteSetting.embeddable_host != URI(@embed_url).host`) and line 52 passes @embed_url to import_remote -> import. The post is created with cook_method raw_html (line 22).",
+     "reason": "Every fact the comment relies on holds: the URL is not escaped, it comes from embed_url, and only the host and scheme are checked.",
+     "passos": 4
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "lib/topic_retriever.rb:26 uses `retrieved:#{@embed_url}` as the throttle key; app/controllers/embed_controller.rb:15 enqueues retrieve_topic for anonymous users (current_user.try(:id)), gated only by a Referer host check at line 26; app/models/topic_embed.rb:15-28 creates a new topic when no TopicEmbed exists for the exact URL.",
+     "reason": "Every factual claim holds: the throttle and embed key is the raw URL, only the host is validated, and the Referer check can be forged by non-browser clients. Changing the query string gets past the throttle and creates a new topic as embed_by_username.",
+     "passos": 8
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "lib/topic_retriever.rb:40-43 calls Jobs::PollFeed.new.execute({}) inline; app/jobs/scheduled/poll_feed.rb:29-37 fetches the whole feed via open() with no timeout and runs TopicEmbed.import for each item; the throttle key at topic_retriever.rb:26 is per embed URL; feed_key (poll_feed.rb:20-22) is never used.",
+     "reason": "Every fact the comment relies on matches the code: the feed poll runs synchronously on every unknown-URL retrieval, it downloads the full feed without a timeout and imports every item, and only a per-URL throttle limits it.",
+     "passos": 6
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/models/topic_embed.rb:64-65 and 70-71: `if href.present? && href.start_with?('/')` then `a['href'] = \"#{prefix}/#{href.sub(/^\\/+/, '')}\"`, with the same logic for img src; prefix is `\"#{uri.scheme}://#{uri.host}\"` (line 58).",
+     "reason": "A protocol-relative URL starting with `//` passes the start_with?('/') check, and the regex strips both slashes, giving `scheme://host/cdn.example.com/...`. That is exactly what the comment describes.",
+     "passos": 3
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/jobs/scheduled/poll_feed.rb:35 `content = CGI.unescapeHTML(i.content.scrub)` with no nil guard; line 12 `sidekiq_options retry: false`; lib/topic_retriever.rb:41 calls `Jobs::PollFeed.new.execute({})` inline before fetch_http.",
+     "reason": "The code calls .scrub on i.content unconditionally. A description-only RSS item gives nil content, which raises NoMethodError and stops both the scheduled poll and the inline poll in TopicRetriever. The comment's facts hold; only 'no items are imported' is slightly overstated.",
+     "passos": 6
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/models/topic_embed.rb:32-36: `post = embed.post` is passed to `PostRevisor.new(post).revise!` with no nil check. lib/trashable.rb:5: `default_scope { where(with_deleted_scope_sql) }`, and Post includes Trashable, so a soft-deleted post makes embed.post nil. lib/post_revisor.rb:27: `@post.raw` raises NoMethodError on nil. app/jobs/scheduled/poll_feed.rb:31-37: the per-item loop calls TopicEmbed.import with no rescue.",
+     "reason": "Every factual claim holds: the default scope hides soft-deleted posts, so embed.post can be nil; that nil reaches PostRevisor, whose revise! calls .raw on it; and nothing in the poll loop catches the exception, so the remaining items are skipped.",
+     "passos": 11
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/views/embed/best.html.erb:6 is `<%- end if %>`, closing the if/else from lines 2-5 with an `if` modifier that has no condition. The next compiled statement (from line 8, `<%= link_to(image_tag(SiteSetting.logo_url, ...)) %>`, or the whitespace text before it) becomes the condition.",
+     "reason": "The dangling `end if` the comment reports is in the code, and the suggested fix (`<%- end %>`) is correct. Whether the logo or the whitespace before it becomes the condition depends on how ERB compiles the template, so that detail can't be settled from the repository, but nothing in the code contradicts the comment.",
+     "passos": 3
+    }
+   ],
+   "uso": {
+    "chamadas": 8,
+    "input": 174442,
+    "cacheRead": 136969,
+    "output": 9178,
+    "reasoning": 0,
+    "ms": 36952
+   }
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "lib/freedom_patches/translate_accelerator.rb:68 `load_locale(config.locale) unless @loaded_locales.include?(config.locale)` loads only the current locale; FallbackLocaleList#ensure_loaded! (config/initializers/i18n.rb:20-22) is called only at app/controllers/application_controller.rb:159; app/services/post_alerter.rb:138 and lib/post_destroyer.rb:102 call I18n.with_locale outside a controller.",
+     "reason": "Fallback locales are loaded only in ApplicationController. translate loads only config.locale, so code that switches locale outside a request can fall back to a locale that was never loaded.",
+     "passos": 6
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "config/initializers/i18n.rb:17 builds the fallback chain from SiteSetting.default_locale; lib/freedom_patches/translate_accelerator.rb:72 builds the cache key as \"#{key}#{config.locale}#{config.backend.object_id}\"; @cache is only cleared in I18n.reload! (translate_accelerator.rb:41), which no production code calls.",
+     "reason": "The cache key really is key+locale+backend id and leaves out the default_locale-based fallback chain, and nothing clears the cache when default_locale changes, so cached fallback results can go stale.",
+     "passos": 8
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 61290,
+    "cacheRead": 53341,
+    "output": 2139,
+    "reasoning": 0,
+    "ms": 16414
+   }
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "groups_controller.rb:90 `group.users.delete(user_id)`; group.rb:8 `has_many :users, through: :group_users` (no dependent option, so delete_all); group_user.rb:2 `belongs_to :group, counter_cache: \"user_count\"`; group.rb:287-291 destroy_deletions is the only place primary_group_id is nulled, and only for @deletions.",
+     "reason": "The comment's claims hold. Deleting through users uses delete_all, so GroupUser callbacks and the user_count counter cache are skipped (AR 4.1.8 would only adjust a nonexistent group_users_count column). primary_group_id is only cleared via destroy_deletions, which remove_member never reaches.",
+     "passos": 9
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/admin/groups_controller.rb:71-75 calls group.add(user) without a membership check; app/models/group.rb:272-274 defines add as self.users.push(user); db/migrate/20130416004933_group_users.rb:9 adds a unique index on group_users [:group_id, :user_id]; app/models/group_user.rb:2-3 has only belongs_to and no uniqueness validation.",
+     "reason": "Every fact the comment depends on holds: there is no duplicate check, push writes each row straight away on a saved group, and the unique index makes the database reject a duplicate. Earlier pushes in the loop are already saved by then.",
+     "passos": 8
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "admin-group.js.es6:13 `return Math.floor(this.get(\"user_count\") / this.get(\"limit\")) + 1;`; line 17 showingLast = propertyEqual(currentPage, totalPages); line 33 offset = Math.min(offset + limit, user_count).",
+     "reason": "When user_count is an exact multiple of limit, the floor+1 formula gives one extra page. showingLast is false on the real last page, and next moves offset to user_count, which loads an empty page shown as 2/2, as the comment says.",
+     "passos": 2
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/groups_controller.rb:22 `limit = (params[:limit] || 50).to_i` is passed unchecked to `.limit(limit)` at line 26; lib/guardian.rb:121 `can_see_group?` returns true for any visible group, regardless of who is asking.",
+     "reason": "The limit param is not clamped or checked for being positive, and the endpoint is open to any visitor for visible groups, so the comment's factual claims hold.",
+     "passos": 7
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 117952,
+    "cacheRead": 96574,
+    "output": 5453,
+    "reasoning": 0,
+    "ms": 32966
+   }
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "pkg/api/webassets/webassets.go:41-47 checks the cache only under RLock; lines 48-70 take Lock() and always call readWebAssetsFromFile (line 60) and assign entryPointAssetsCache (line 69) without checking the cache again.",
+     "reason": "Nothing after Lock() checks the cache again, so goroutines that saw a nil cache under the RLock each re-read and re-parse the manifest in turn, as the comment says.",
+     "passos": 2
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 12701,
+    "cacheRead": 9199,
+    "output": 566,
+    "reasoning": 0,
+    "ms": 8342
+   }
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "database.go:52 `func ProvideAnonDBStore(sqlStore db.DB, deviceLimit int64)`; pkg/server/wire.go:374-375 still list `anonstore.ProvideAnonDBStore` and `wire.Bind(new(anonstore.AnonStore), new(*anonstore.AnonDBStore))`; impl.go:43 builds the store directly via `anonstore.ProvideAnonDBStore(sqlStore, cfg.AnonymousDeviceLimit)`; no provider in pkg/server returns int64.",
+     "reason": "The provider now needs an int64, Wire still registers it, and nothing provides an int64, so Wire generation breaks as the comment says.",
+     "passos": 5
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "impl.go:83-87 checks the cache and calls SetDefault before CreateOrUpdateDevice (impl.go:93), and the key is not removed on error; impl.go:42 sets a 29-minute cache; database.go:96 returns ErrDeviceLimitReached; client.go:44-47 rejects authentication only on that error.",
+     "reason": "Every fact the comment relies on matches the code: after the first rejection, the cache hit returns nil for 29 minutes, so later requests from the over-limit device are authenticated.",
+     "passos": 7
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "impl.go:119-122: `deviceID := httpReq.Header.Get(deviceIDHeader); if deviceID == \"\" { return nil }`; client.go:44-58 returns the anonymous identity unless TagDevice returns ErrDeviceLimitReached; the limit check only happens in anonstore/database.go:109-115 via CreateOrUpdateDevice.",
+     "reason": "TagDevice returns nil when the device ID header is empty, so Authenticate never reaches the limit check and grants an anonymous identity. The comment's factual basis holds.",
+     "passos": 8
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/sqlstore/sqlstore.go:287 builds the MySQL DSN as \"%s:%s@%s(%s)/%s?collation=utf8mb4_unicode_ci&allowNativePasswords=true&clientFoundRows=true\", and sqlstore_test.go checks that this option is present.",
+     "reason": "The comment's bug requires MySQL to return changed rows, not matched rows, from RowsAffected. Grafana's MySQL connection sets clientFoundRows=true, so matched rows are returned. An already-registered device with unchanged values still counts as 1 row and is not wrongly given ErrDeviceLimitReached.",
+     "passos": 6
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/anonymous/anonimpl/anonstore/database.go:109-118: CountDevices is called, then if count < deviceLimit the code falls through to a separate WithDbSession Exec of the INSERT/upsert (lines 149-153). There is no transaction or lock around the two, and the INSERT has no count condition. The caller tagDeviceUI (impl.go:80-98) only checks a per-device local cache before calling CreateOrUpdateDevice.",
+     "reason": "The count and the insert really are separate, unsynchronized DB operations, so the race the comment describes exists.",
+     "passos": 6
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "client.go:44 calls a.anonDeviceService.TagDevice(ctx, ...) inline in Authenticate and returns an error on ErrDeviceLimitReached. impl.go:83-93 calls anonStore.CreateOrUpdateDevice for devices not in the local cache. database.go:109-117 runs CountDevices (SELECT COUNT(*) FROM anon_device, line 161) when deviceLimit > 0, then does the insert/upsert (or an update once the limit is reached).",
+     "reason": "Authenticate waits on the device tagging, which does a COUNT(*) plus a write for every uncached device when a limit is set. This matches the comment's factual claims.",
+     "passos": 6
+    }
+   ],
+   "uso": {
+    "chamadas": 6,
+    "input": 164716,
+    "cacheRead": 125551,
+    "output": 6576,
+    "reasoning": 0,
+    "ms": 31534
+   }
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "pkg/plugins/log/fake.go:46-48 `func (f *TestLogger) FromContext(_ context.Context) Logger { return NewTestLogger() }`; pkg/services/pluginsintegration/clientmiddleware/logger_middleware.go:58 `m.logger.FromContext(ctx).Info(\"Plugin Request Completed\", logParams...)`",
+     "reason": "FromContext returns a new TestLogger instead of the receiver, and the middleware logs only through FromContext, so the logs never reach the injected fake's InfoLogs, as the comment says.",
+     "passos": 5
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 21145,
+    "cacheRead": 16742,
+    "output": 827,
+    "reasoning": 0,
+    "ms": 10970
+   }
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "search.go:207-216 starts the watch goroutine before calling s.search.TotalDocs(); handleEvent -> getOrCreateIndex -> s.build (search.go:237,298) leads to BuildIndex, which writes b.cache under cacheMu.Lock (bleve.go:137-139); TotalDocs (bleve.go:144-154) ranges over b.cache without taking cacheMu.",
+     "reason": "Every claim checks out: TotalDocs reads the map without a lock, the goroutine started earlier can write it through BuildIndex, so an unsynchronized concurrent map read/write is possible.",
+     "passos": 5
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 22944,
+    "cacheRead": 17686,
+    "output": 1054,
+    "reasoning": 0,
+    "ms": 15533
+   }
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:50-57: `go func() { ctx, cancel := context.WithTimeoutCause(ctx, time.Second*10, ...) ... d.Legacy.Create(ctx, ...) }()`. The same pattern appears at lines 110 (Delete), 135 (Update) and 163 (DeleteCollection). Legacy errors only feed recordLegacyDuration/recordStorageDuration metrics and are never logged or returned.",
+     "reason": "All four async legacy writes derive their context from the request ctx without detaching it from cancellation, and the handler returns without waiting for them. The comment's factual claims hold.",
+     "passos": 3
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:139 calls d.Legacy.Update(ctx, name, objInfo, ...) with the same raw objInfo passed to Storage.Update at line 126, not wrapped with res. In contrast, dualwriter_mode2.go:298 wraps it: &updateWrapper{upstream: objInfo, updated: updated}. updateWrapper.UpdatedObject (dualwriter.go:142-144) returns the stored object without recomputing.",
+     "reason": "The main claim holds: legacy recomputes the update from raw objInfo instead of receiving the object unified storage stored. One detail is off: updateWrapper forwards the upstream preconditions (dualwriter.go:136-138), so the fix changes only the object legacy writes, not its preconditions. The claim that the code used updateWrapper before this PR could not be checked against the base, but nothing found contradicts it.",
+     "passos": 9
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:165-166: `_, err := d.Legacy.DeleteCollection(...)` followed by `d.recordStorageDuration(err != nil, mode3Str, options.Kind, method, startLegacy)`; line 140 uses recordLegacyDuration for another legacy call.",
+     "reason": "The legacy DeleteCollection timing is recorded with recordStorageDuration, as the comment states.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:106 `d.recordStorageDuration(false, mode3Str, name, method, startStorage)` while lines 103 and 113 pass options.Kind; metrics.go:59-61 passes that value into WithLabelValues of DualWriterStorageDuration, whose labels are {is_error, mode, kind, method} (metrics.go:23).",
+     "reason": "The object name is passed where the kind label value belongs, so each deleted object name creates a new series. The only imprecision is calling it the 'name label' (that's the parameter name; the Prometheus label is 'kind'), which doesn't change the problem.",
+     "passos": 6
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:96-97: `log := d.Log.WithValues(\"name\", name, \"kind\", options.Kind, \"method\", method)` then `ctx = klog.NewContext(ctx, d.Log)`. Create, Get, List, Update and DeleteCollection (lines 39, 66, 82, 123, 150) use `klog.NewContext(ctx, log)`.",
+     "reason": "Delete puts d.Log into the context instead of the logger it just built, unlike the other methods. Storage.Delete and Legacy.Delete get that context, so the claim holds.",
+     "passos": 2
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "dualwriter_mode3_test.go:51-54 creates one mock.Mock and passes it to both legacyStoreMock and storageMock. storage_mocks_test.go:33 and :97 both call m.Called, so both record \"Create\" on the same mock. The error case (test lines 37-44) only sets setupLegacyFn. Mode3 Create calls d.Storage.Create first (dualwriter_mode3.go:42), which matches the legacy-registered expectation.",
+     "reason": "The shared mock and the cross-matching of expectations in the Create error case work exactly as the comment describes.",
+     "passos": 9
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:42-48: after `d.Storage.Create` fails, line 45 calls `d.recordLegacyDuration(true, mode3Str, options.Kind, method, startStorage)`, while the success path on line 48 calls `d.recordStorageDuration(false, ...)`.",
+     "reason": "The failure of a Storage.Create call is recorded with the legacy duration metric, as the comment states.",
+     "passos": 2
+    }
+   ],
+   "uso": {
+    "chamadas": 7,
+    "input": 145018,
+    "cacheRead": 115603,
+    "output": 6120,
+    "reasoning": 0,
+    "ms": 33788
+   }
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "useAbilities.ts:354-355 returns loading:false when rule is undefined; line 309 `const MaybeSupported = loading ? NotSupported : AlwaysSupported;`; line 313 duplicateSupported = MaybeSupported for non-plugin rules; line 318 Duplicate = toAbility(duplicateSupported, rulesPermissions.create); line 401 maps skipToken to undefined; AlertRuleMenu.tsx:73 passes skipToken for non-Grafana rules and lines 91-92 OR the Grafana duplicate ability with the ruler one.",
+     "reason": "Every factual claim checks out: when the rule is skipped, Duplicate comes back as [AlwaysSupported, Grafana create permission], and AlertRuleMenu ORs it with the ruler ability.",
+     "passos": 9
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "AlertRuleMenu.tsx:96 `canSilence = (silenceSupported && silenceAllowed) || (grafanaSilenceSupported && grafanaSilenceAllowed)` (true from the promRule alone); GrafanaRuleListItem.tsx:47 `<RuleActionsButtons promRule={rule} groupIdentifier={groupIdentifier} compact />` (no ruler rule); RuleActionsButtons.V2.tsx:104-105 `{rulerRuleType.grafana.alertingRule(rule) && showSilenceDrawer && (<SilenceGrafanaRuleDrawer rulerRule={rule} .../>)}`",
+     "reason": "With only promRule passed, the Silence menu item can show, but the drawer needs a ruler rule, so clicking the item sets state and nothing renders. Every fact the comment relies on holds.",
+     "passos": 6
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "useAbilities.ts:302 sets isAlertingRule = prometheusRuleType.grafana.alertingRule(rule), and lines 324-329 use it to gate ModifyExport/Pause/Restore/DeletePermanently. The ruler version (useAbilities.ts:246) uses rulerRuleType.grafana.rule = isGrafanaRulerRule (rules.ts:58-60), which only checks for 'grafana_alert' and so is true for recording rules too. prometheusRuleType.grafana.rule exists at rules.ts:133 and covers alerting and recording rules.",
+     "reason": "The comment's factual claims about both hooks and the suggested replacement match the code.",
+     "passos": 6
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "FilterView.tsx:157-162 renders <GrafanaRuleListItem rule={rule} groupIdentifier={groupIdentifier} namespaceName={...} showLocation={true} /> with no key prop, although `key` is destructured at line 152 and passed to the sibling branches at lines 165 and 169.",
+     "reason": "The Grafana branch of rules.map does render GrafanaRuleListItem without a key, so the missing-key problem the comment reports is real.",
+     "passos": 3
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "GrafanaRuleListItem.tsx:47 passes only promRule to RuleActionsButtons; RuleActionsButtons.V2.tsx:95 forwards rulerRule={rule} (undefined) to AlertRuleMenu; AlertRuleMenu.tsx:123 gates Pause on rulerRuleType.grafana.rule(rulerRule) and line 165 gates Delete on `canDelete && rulerRule`.",
+     "reason": "With rulerRule undefined in the list view, Pause and Delete are never rendered no matter what permissions the user has, as the comment says.",
+     "passos": 5
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 136176,
+    "cacheRead": 107765,
+    "output": 5615,
+    "reasoning": 0,
+    "ms": 26322
+   }
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "AccessTokenContext.java:73: `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\");` checks grantType instead of rawTokenId. DefaultTokenContextEncoderProvider.java:117 appends `':' + tokenContext.getRawTokenId()`, which produces ':null' when rawTokenId is null.",
+     "reason": "Line 73 checks grantType again, so a null rawTokenId gets through the constructor, and the encoder's string concatenation then produces an id ending in ':null', as the comment says.",
+     "passos": 4
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "AssertEvents.java:483: `if (items[0].substring(3, 5).equals(expectedGrantShortcut)) return false;`",
+     "reason": "The matcher returns false when the grant shortcut equals the expected one and otherwise goes on to the UUID check, so the condition is inverted exactly as the comment says.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "AssertEvents.java:483 uses items[0].substring(3, 5); DefaultTokenContextEncoderProvider.java:79-81 decodes sessionType=substring(0,2), tokenType=substring(2,4), grantType=substring(4,6).",
+     "reason": "The matcher reads indices 3-5, but the encoder puts the grant shortcut at 4-6, so the slice straddles the token type and the grant exactly as the comment says.",
+     "passos": 4
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "server-spi-private/.../OAuth2GrantTypeFactory.java:33 declares `String getShortcut();` with no default; services/.../DefaultTokenContextEncoderProviderFactory.java:74 calls `gtf.getShortcut()` for every OAuth2GrantType factory in postInit, with no guard.",
+     "reason": "The method is abstract with no default, and postInit calls it unconditionally for every grant type factory. Custom factories that predate the change would fail to compile or throw AbstractMethodError, as the comment says.",
+     "passos": 5
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 62726,
+    "cacheRead": 44353,
+    "output": 2861,
+    "reasoning": 0,
+    "ms": 14246
+   }
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "GroupTest.java:139-149 starts the reader with `new Thread(...).start()` and keeps no reference, so it is never joined. Line 155 sets deletedAll and line 157 asserts caughtExceptions is empty right away, while a request from line 143 may still be running.",
+     "reason": "The thread is never joined before the assertion, so an exception recorded after the assertion runs is missed, as the comment says.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "GroupTest.java:152-155: the delete forEach is followed by a plain `deletedAll.set(true);` with no try/finally. Lines 139-149: `new Thread(() -> { while (!deletedAll.get()) { try {...} catch (Exception e) { caughtExceptions.add(e); } } }).start();` never calls setDaemon, and the loop swallows every Exception.",
+     "reason": "The code matches the comment: an exception during deletion skips setting the flag, and the reader thread, which is not marked daemon and swallows its own exceptions, keeps looping.",
+     "passos": 3
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 24334,
+    "cacheRead": 18381,
+    "output": 1224,
+    "reasoning": 0,
+    "ms": 13911
+   }
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties:112 reads `totpStep1=在您的手機上安裝以下應用程式之一：` (Traditional 手機/安裝/應用程式), while line 111 is `mobile=手机` and line 113 uses `应用` (Simplified).",
+     "reason": "The zh_CN totpStep1 value does contain Traditional Chinese characters, unlike the Simplified text on the lines around it, so the reported problem is real.",
+     "passos": 3
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "VerifyMessageProperties.java:102-111: prefix loop `while (start < sanitized.length() && start < value.length() && ...)` and suffix loop `while (end < sanitized.length() && end < value.length() && ...)` are independent; line 111 calls `sanitized.substring(start, sanitized.length() - end)`.",
+     "reason": "Neither loop accounts for the other's matched characters, so start+end can exceed the shorter string's length. For '><br>' vs '>', start=1 and end=1, so substring(1,0) throws StringIndexOutOfBoundsException, as the comment says.",
+     "passos": 3
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "VerifyMessageProperties.java:74-80 builds englishFile by regex replacement and on IOException does `throw new RuntimeException(\"unable to read file \" + englishFile, e)`. MessagePropertiesFilter.java:28 accepts any messages_*.properties file. ThemeVerifierMojo.java:43-52 calls verify() on every such file in all resource dirs and catches nothing. verify() (lines 46-56) only catches IOException.",
+     "reason": "Every claim checks out: a missing derived _en file causes an uncaught RuntimeException instead of a validation message, and the mojo runs on every messages_* file in the project's resources.",
+     "passos": 6
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties:3138 reads `error-invalid-multivalued-size=Attribute {0} must have at least {1} and at most {2} {2,choice,0#values|1#value|1<values}.` while sibling keys at lines 2989-3008 use i18next `{{0}}` syntax (e.g. line 2995 `error-invalid-length='{{0}}' must have a length between {{1}} and {{2}}.`).",
+     "reason": "The cited line uses MessageFormat placeholders and a choice format, unlike every sibling error-* key in this i18next-consumed admin-ui file. No code contradicts the comment's claims.",
+     "passos": 4
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71: loginTotpStep1=Installa una delle seguenti applicazioni sul tuo cellulare:",
+     "reason": "The Lithuanian message file holds an Italian sentence for loginTotpStep1, as the comment says.",
+     "passos": 3
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 79488,
+    "cacheRead": 63843,
+    "output": 3646,
+    "reasoning": 0,
+    "ms": 21649
+   }
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "PasswordForm.java:62-64 returns true when isConditionalPasskeysEnabled(user) is true; UsernamePasswordForm.java:160-162 makes that true for a user with a WebAuthn credential. keycloak.v2/login/login-password.ftl:4,18 imports and calls passkeys.conditionalUIData; grep of base/login/login-password.ftl for passkey/webauthn returns nothing. In base, only login.ftl and login-username.ftl use the macro.",
+     "reason": "Both facts the comment relies on are true: configuredFor now covers passkey-only users, and the base login-password.ftl has no passkey UI.",
+     "passos": 9
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 29562,
+    "cacheRead": 24663,
+    "output": 1222,
+    "reasoning": 0,
+    "ms": 18249
+   }
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "ClientPermissionsV2.java:138-141 finds resources by type CLIENTS_RESOURCE_TYPE (\"Clients\") and returns their names. AdminPermissionsSchema.java:101-111 creates per-client resources without calling setType. The type-level resource is named \"Clients\" (AdminPermissionsSchema.java:133). AvailableRoleMappingResource.java:230 (rest/admin-ui-ext) calls realm.getClientById(cid).getRolesStream() on each returned value.",
+     "reason": "Per-client V2 resources are created without a type, so the type lookup only matches the type-level resource named \"Clients\". That name is returned as a client ID, and getClientById(\"Clients\") returns null, causing the NPE at the cited caller.",
+     "passos": 11
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "ClientPermissionsV2.java:192-195 throws UnsupportedOperationException in setPermissionsEnabled. AdminPermissions.java:77/91 calls clients().setPermissionsEnabled on ClientRemovedEvent when ADMIN_FINE_GRAINED_AUTHZ is enabled. AdminPermissions.java:67-68 returns MgmtPermissionsV2 when V2 is enabled. MgmtPermissionsV2.java:64-66 makes clients() return ClientPermissionsV2.",
+     "reason": "Every factual claim I checked holds: the listener calls the V2 method that now throws whenever both features are enabled.",
+     "passos": 6
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "ClientPermissionsV2.java:147-150 throws UnsupportedOperationException in canExchangeTo(..., AccessToken); AbstractTokenExchangeProvider.java:276 calls clients().canExchangeTo(client, targetClient, token); AdminPermissions.java:40-41 returns MgmtPermissionsV2 when ADMIN_FINE_GRAINED_AUTHZ_V2 is enabled; MgmtPermissionsV2.java:64-67 makes clients() return ClientPermissionsV2.",
+     "reason": "Each fact the comment relies on holds: the method throws, the token-exchange caller exists, and with V2 enabled the call reaches ClientPermissionsV2.",
+     "passos": 8
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 104252,
+    "cacheRead": 87357,
+    "output": 4153,
+    "reasoning": 0,
+    "ms": 33493
+   }
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "InfinispanIdentityProviderStorageProvider.java:91-93: idpById = getById(...) and is passed to registerIDPLoginInvalidationOnUpdate. getById returns createOrganizationAwareIdentityProviderModel(...) on every path (lines 135, 139, 141). The wrapper's isEnabled (lines 436-443) requires org.isEnabled(). LoginFilter.ENABLED uses IdentityProviderModel::isEnabled (IdentityProviderStorageProvider.java:220), and the early return at line 405 skips invalidation when both predicate checks fail.",
+     "reason": "Every factual statement in the comment holds: the original model is the org-aware wrapper, its isEnabled() depends on whether the org is enabled, and the predicate failing for both models skips the login cache invalidation.",
+     "passos": 9
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "OrganizationCacheTest.java:374 sets alias \"idp-alias-\" + i, while line 381 registers cleanup via testRealm().identityProviders().get(\"alias\")::remove. The same happens at lines 419/425 for idp-alias-20. Only idp-alias-1 is removed explicitly (line 428).",
+     "reason": "The cleanup targets the literal alias \"alias\", which never matches the created IdPs, so they aren't cleaned up. The '21' count is right; only the 'none removed' wording is slightly off because idp-alias-1 is removed explicitly.",
+     "passos": 5
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "IdentityProviderStorageProvider.java:254 adds the organizationId/BROKER_PUBLIC condition to getLoginPredicate(); IdentityProviderBean.java:225-226 federatedProviderPredicate() returns getLoginPredicate(), and IdentityProviderBean.java:213 applies it to the user's linked IdPs; InfinispanIdentityProviderStorageProvider.java:384,405,409 also use getLoginPredicate().",
+     "reason": "The base login bean shares the predicate that now contains the org/public check, so linked non-public org IdPs are filtered even outside the organization-aware bean, as the comment says.",
+     "passos": 7
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "InfinispanIdentityProviderStorageProvider.java:215 cacheKey = cacheKeyForLogin(getRealm(), mode) (no orgId); lines 233-240: if query.getIDPs(searchKey)==null -> cache.invalidateObject(cacheKey) then new IdentityProviderListQuery(..., searchKey, cached, query) and addRevisioned; IdentityProviderListQuery.java:39-45 copies previous.searchKeys via putAll and adds the new key.",
+     "reason": "The comment's main facts hold: one entry per realm/mode, invalidated and rebuilt with all previous org search keys merged in whenever a new org is looked up. 'Cluster-wide' overstates it, since CacheManager.invalidateObject does a local remove plus a revision bump, but the reported invalidate-and-rebuild of a growing entry exists.",
+     "passos": 9
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 147914,
+    "cacheRead": 125007,
+    "output": 5922,
+    "reasoning": 0,
+    "ms": 24181
+   }
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "project_replay_summarize_breadcrumbs.py:118 `zip(error_ids, events.values())`; nodestore/base.py:184 `id_list = list(dict.fromkeys(id_list))` (dedup); base.py:199-205 service items built first, then `items.update(cache_items)` appends cached ones.",
+     "reason": "Each fact the comment relies on is in the code: get_multi removes duplicates and puts cached items after the service results, so the returned order and length can differ from error_ids, and the caller zips by position.",
+     "passos": 4
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "project_replay_summarize_breadcrumbs.py:115 uses the nodestore event 'timestamp' (float seconds) for ErrorEvent; lines 153-155 compare error_events[idx]['timestamp'] < event.get('timestamp', 0) where event is a raw rrweb event (ms epoch). No unit conversion exists.",
+     "reason": "The comparison mixes seconds and milliseconds, so every error sorts before all breadcrumbs, as the comment says. The comment wrongly says event_parser types the top-level timestamp (it types ClickEvent.timestamp as int), but the bug doesn't depend on that.",
+     "passos": 6
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:70-94 calls query_replay_instance and then fetch_error_details with the full error_ids list (line 84, no slicing), before self.paginate at line 96. Lines 107-108 build node IDs for all error_ids and call nodestore.backend.get_multi. Lines 177-181 call Seer via make_seer_request.",
+     "reason": "Every factual claim holds: the query and the uncapped nodestore get_multi run on every GET before pagination, and the same request calls Seer. The fetch can be turned off with enable_error_context=false (lines 87-92), but it runs by default, which doesn't contradict the comment.",
+     "passos": 3
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/issues/endpoints/browser_reporting_collector.py:56-59: `def validate_age(self, value): if self.initial_data.get(\"timestamp\"): raise serializers.ValidationError(...)`. DRF runs validate_age for age=0 because the field is present, so any non-zero timestamp sent with it is rejected.",
+     "reason": "The comment says a report with both timestamp and age=0 passes validation. It doesn't: the symmetric validate_age check rejects it whenever the timestamp is non-zero. Only the narrow case where both are 0 gets through, which is not the problem the comment describes.",
+     "passos": 3
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 74973,
+    "cacheRead": 52945,
+    "output": 3632,
+    "reasoning": 0,
+    "ms": 15890
+   }
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "flusher.py:53 `multiprocessing.get_context(\"spawn\")`, :105 `make_process = self.mp_context.Process` (a SpawnProcess, as the line-68 annotation says), :254 `if isinstance(process, multiprocessing.Process): process.kill()`. In CPython, SpawnProcess subclasses process.BaseProcess, not multiprocessing.Process.",
+     "reason": "The isinstance check is False for spawned processes, so kill() is skipped. A process restarted for a hang is still alive and keeps running next to its replacement, as the comment says.",
+     "passos": 4
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "flusher.py:299-301 loops over self.buffers.values() calling buffer.get_memory_info(); buffer.py:375-376 get_memory_info returns iter_cluster_memory_usage(self.client); buffer.py:162-163 client property returns get_redis_client(), the same cluster client for every buffer.",
+     "reason": "Every buffer queries the same cluster, so each submit sends the memory INFO queries N times. Used and available are both multiplied by N, so the ratio stays the same, exactly as the comment says.",
+     "passos": 5
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "flusher.py:337-347: `for process_index, process in self.processes.items(): if deadline is not None: remaining_time = deadline - time.time(); if remaining_time <= 0: break` ... `process.terminate()` is only reached inside the loop body.",
+     "reason": "Once the deadline passes, the loop breaks before reaching terminate() for the remaining processes, exactly as the comment says.",
+     "passos": 3
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "test_consumer.py:15 monkeypatch.setattr(\"time.sleep\", lambda _: None); test_consumer.py:62 time.sleep(0.1) calls the patched module attribute; flusher.py:331 join sets self.stopped.value = True; flusher.py:166 loop runs while not stopped.value",
+     "reason": "time.sleep is patched to a no-op, so the added sleep doesn't wait, and join() sets the stopped flag the flusher loop checks. Both claims the comment depends on hold.",
+     "passos": 5
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 72765,
+    "cacheRead": 58414,
+    "output": 3182,
+    "reasoning": 0,
+    "ms": 14376
+   }
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/integrations/services/assignment_source.py:18 `queued: datetime = timezone.now()` is a dataclass default evaluated at class definition; from_integration (lines 21-25) never passes `queued`.",
+     "reason": "The default is computed once when the module is imported, so every AssignmentSource created without an explicit `queued` gets the same stale timestamp, exactly as the comment says.",
+     "passos": 3
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 11224,
+    "cacheRead": 9137,
+    "output": 465,
+    "reasoning": 0,
+    "ms": 7240
+   }
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/integrations/github/integration.py:402 `state = pipeline.signature`; :412 `if request.GET.get(\"state\") != pipeline.signature`; src/sentry/pipeline/base.py:132-133 `pipe_ids = [f\"{type(v).__module__}.{type(v).__name__}\" ...]; self.signature = md5_text(*pipe_ids).hexdigest()`",
+     "reason": "The OAuth state is the pipeline signature, an md5 of the view class names. It is the same for every user and session, so it gives no per-session CSRF protection, as the comment says.",
+     "passos": 4
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "integration.py:503 reads `integration.metadata[\"sender\"][\"login\"]` directly. integration.py:376-377 sets metadata['sender'] only when state.get('sender') is truthy. installation.py:44 checks `if \"sender\" not in integration.metadata`.",
+     "reason": "Every fact the comment relies on matches the code. An Integration without 'sender' in its metadata would raise KeyError at line 503.",
+     "passos": 4
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/integrations/github/integration.py:481-482 returns pipeline.next_step() on Integration.DoesNotExist; the github_authenticated_user vs sender check (lines 500-505) only runs when the Integration exists; build_integration (351-379) never checks the authenticated user.",
+     "reason": "The comment's factual claims match the code: the DoesNotExist path skips the user-match check, and build_integration does no identity check.",
+     "passos": 5
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "integration.py:423 calls safe_urlopen outside the try (lines 425-429 wrap only safe_urlread/parse_qsl); line 434 calls get_user_info with no error handling; identity/github/provider.py:16 calls resp.raise_for_status().",
+     "reason": "The comment's statements about which calls are and aren't wrapped in error handling, and that get_user_info raises on HTTP errors, all match the code.",
+     "passos": 6
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 80307,
+    "cacheRead": 65312,
+    "output": 3094,
+    "reasoning": 0,
+    "ms": 15166
+   }
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/monitors/logic/incident_occurrence.py:160-168: `config = monitor_environment.monitor.config.copy()`; `config[\"schedule_type\"] = monitor_environment.monitor.get_schedule_type_display()`; the return uses `\"config\": monitor_environment.monitor.config`",
+     "reason": "The modified copy `config` is never used. The returned context uses the original monitor config, which still holds the raw schedule_type.",
+     "passos": 2
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 11301,
+    "cacheRead": 9176,
+    "output": 438,
+    "reasoning": 0,
+    "ms": 8765
+   }
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/incidents/grouptype.py:11-12 defines MetricAlertDetectorHandler(StatefulDetectorHandler[...]) with only `pass`; src/sentry/workflow_engine/processors/detector.py:143-167 declares counter_names, get_dedupe_value, get_group_key_values, build_occurrence_and_event_data as @abc.abstractmethod; src/sentry/workflow_engine/models/detector.py:86 calls `group_type.detector_handler(self)`.",
+     "reason": "The subclass leaves the parent's abstract methods unimplemented, and Detector.detector_handler instantiates it, so a TypeError will be raised as the comment says.",
+     "passos": 6
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/issues/issue_occurrence.py:181-184 defines `def __eq__(self, other): ... return self.id == other.id`, so it compares only id. tests/sentry/workflow_engine/processors/test_detector.py:252 sets the constant id=\"eb4b0acffadb4d098d48cb14165ab578\" in build_mock_occurrence_and_event.",
+     "reason": "The comment says IssueOccurrence equality compares fingerprint, so the different group_key makes the assertion fail. IssueOccurrence overrides __eq__ to compare only id, and the id is the same constant on both sides, so the different fingerprint does not affect equality and the test passes.",
+     "passos": 11
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 75997,
+    "cacheRead": 64415,
+    "output": 2752,
+    "reasoning": 0,
+    "ms": 19551
+   }
+  }
+ }
+}

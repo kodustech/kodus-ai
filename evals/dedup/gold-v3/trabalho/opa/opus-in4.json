@@ -1,0 +1,1595 @@
+{
+ "add-guest-management-functionality-to-existing-bookings-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "92f44dcea7ff19e9123a30c63c167a2938df5a55",
+  "base": "b004587262e8221083bafbe9a0c515e7becaa7b3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     46,
+     48
+    ],
+    "texto": "WHAT: isTeamAdminOrOwner uses `&&` between isTeamAdmin and isTeamOwner, and isTeamAdmin already matches ADMIN or OWNER roles, so the check passes only for OWNERs. WHY: Team ADMINs who are not the organizer or an attendee get FORBIDDEN, even though the variable name says admins should be allowed. HOW: Use `||`, or just call isTeamAdmin, which already covers owners."
+   },
+   {
+    "id": "S2",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     168,
+     168
+    ],
+    "texto": "WHAT: sendAddGuestsEmails gets the raw `guests` input instead of the filtered `uniqueGuests`. WHY: An already-existing attendee who appears in the submitted list is treated as a new guest and gets a 'new booking scheduled' email instead of the 'guests added' notice. HOW: Pass `uniqueGuests`."
+   },
+   {
+    "id": "S3",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     158,
+     165
+    ],
+    "texto": "WHAT: EventManager is built from the caller's (ctx.user) credentials, but updateCalendarAttendees updates the booking references that live in the organizer's calendar. WHY: When an attendee or team owner adds guests, the calendar update runs with credentials that don't own those events, so the organizer's calendar event never gets the new attendees, or the update throws. HOW: Build EventManager from booking.user and that user's credentials, as other booking handlers do."
+   },
+   {
+    "id": "S4",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     165,
+     165
+    ],
+    "texto": "WHAT: updateCalendarAttendees runs after attendees are already saved to the database, and it is not wrapped in error handling. WHY: If the calendar provider call fails, the client gets an error but the guests stay saved without emails, and a retry is rejected with 'emails_must_be_unique_valid'. HOW: Wrap the calendar update in try/catch and log the error so emails still go out and the mutation reports success."
+   },
+   {
+    "id": "S5",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     74,
+     78
+    ],
+    "texto": "WHAT: Blacklist entries are lowercased, but each guest email is compared with its original casing. WHY: Submitting a blacklisted address with any uppercase letter (e.g. `Bad@x.com`) gets past BLACKLISTED_GUEST_EMAILS and the address is added and emailed. HOW: Lowercase the guest before comparing it to the blacklist and to existing attendees."
+   },
+   {
+    "id": "S6",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+    "lines": [
+     5,
+     5
+    ],
+    "texto": "WHAT: The server schema accepts duplicate emails in `guests`, and the handler only removes guests that are already attendees, not repeats within the input. WHY: A direct API call with the same email twice inserts duplicate attendee rows via createMany, because the uniqueness check exists only on the client. HOW: Add a refine that rejects duplicates (or dedupe with a Set in the handler)."
+   },
+   {
+    "id": "S7",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+    "lines": [
+     5,
+     5
+    ],
+    "texto": "WHAT: `guests` has no maximum length, and any booking attendee is allowed to call the mutation. WHY: An authenticated attendee can submit thousands of arbitrary addresses in one request, and each one gets a calendar-invite email sent in the organizer's name, which turns this endpoint into a spam relay. HOW: Cap the array size (e.g. `.max(10)`), on top of rate limiting."
+   },
+   {
+    "id": "S8",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     74,
+     78
+    ],
+    "texto": "The blacklist entries are lowercased (line 71), but the incoming guest email is compared without normalisation, so `includes(guest)` misses any mixed-case version of a blacklisted address. An attacker can add a blacklisted guest by changing the case of a few letters (e.g. `Spam@Domain.com`). Lowercase the guest before the blacklist comparison."
+   },
+   {
+    "id": "S9",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     168,
+     168
+    ],
+    "texto": "sendAddGuestsEmails in email-manager.ts assumes `newGuests` lists only newly added attendees and sends them the full AttendeeScheduledEmail invite. The handler instead passes the raw `guests` input, which can include emails that were already attendees. Those existing attendees then get a fresh booking confirmation instead of the add-guests notice; passing `uniqueGuests` fixes this."
+   },
+   {
+    "id": "S10",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+    "lines": [
+     5,
+     5
+    ],
+    "texto": "Only the client dialog checks that guest emails are unique; the server schema accepts duplicates. The handler only removes guests who are already attendees, so a request like [\"a@x.com\",\"a@x.com\"] creates two Attendee rows for the same email, because the Attendee table has no unique constraint. Enforce uniqueness on the server, for example by de-duplicating in the handler or adding a refine to the schema."
+   },
+   {
+    "id": "S11",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     74,
+     106
+    ],
+    "texto": "The handler filters the guests against an attendee list it read earlier, then calls createMany, with no transaction and no unique constraint on (bookingId, email). Two concurrent addGuests requests for the same booking can both pass the filter and insert the same guest twice. Re-check existing attendees inside a transaction, or add a unique constraint and use skipDuplicates."
+   },
+   {
+    "id": "S12",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     168,
+     168
+    ],
+    "texto": "sendAddGuestsEmails is passed the raw `guests` input instead of `uniqueGuests`. Guests that were filtered out because they were already attendees still receive the new-booking (AttendeeScheduledEmail) email instead of the guests-added email."
+   },
+   {
+    "id": "S13",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     46,
+     48
+    ],
+    "texto": "The variable is named isTeamAdminOrOwner, but it is only true when the user passes both isTeamAdmin AND isTeamOwner. A team admin who is not an owner therefore gets FORBIDDEN. Use || to match the intent."
+   },
+   {
+    "id": "S14",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     168,
+     168
+    ],
+    "texto": "The handler builds uniqueGuests by dropping existing attendees and blacklisted emails, but sendAddGuestsEmails is called with the original `guests`. Any existing attendee included in the input is treated as a new guest and gets a fresh 'scheduled' email instead of the 'guests added' notice. Pass uniqueGuests."
+   },
+   {
+    "id": "S15",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     74,
+     78
+    ],
+    "texto": "blacklistedGuestEmails is lowercased, but each guest is compared exactly as entered. A blacklisted address typed with any uppercase letters gets past the filter. Lowercase the guest email before comparing."
+   },
+   {
+    "id": "S16",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     158,
+     165
+    ],
+    "texto": "The booking is loaded with user.credentials, but EventManager is built from ctx.user and that user's own credentials. When an attendee or team admin adds guests, the update to the organizer's calendar event runs with the wrong user's credentials and will not find the event or will fail. Build EventManager from booking.user and its credentials."
+   },
+   {
+    "id": "S17",
+    "file": "packages/ui/form/MultiEmail.tsx",
+    "lines": [
+     46,
+     46
+    ],
+    "texto": "The tooltip text \"Remove email\" is hard-coded in English. The rest of the component translates its text through t() from useLocale (for example t(\"add_another\")), so users in other languages see this one string in English. Use a translation key instead."
+   },
+   {
+    "id": "S18",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     46,
+     48
+    ],
+    "texto": "The variable is named isTeamAdminOrOwner, but the code joins the isTeamAdmin and isTeamOwner checks with &&, so it is only true when both pass. Code that trusts the name will assume admins without the owner role are allowed. Use || so the logic matches the name."
+   },
+   {
+    "id": "S19",
+    "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+    "lines": [
+     43,
+     44
+    ],
+    "texto": "The message is built with a template literal that always contains text, so `message || t(\"unable_to_add_guests\")` never uses the translated fallback. When err.data.code or err.message is missing, users see raw text like \"undefined: \" instead of the localized error."
+   },
+   {
+    "id": "S20",
+    "file": "packages/ui/form/MultiEmailLazy.tsx",
+    "lines": [
+     3,
+     3
+    ],
+    "texto": "The comment \"These are like 40kb\" appears to be copied from the phone input lazy loader. MultiEmail only uses existing UI components, so the size claim misleads readers about why it is lazy-loaded."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+    "descricao": "isTeamAdminOrOwner combines isTeamAdmin and isTeamOwner with &&, so only team owners pass; team admins who are not organizer or attendee are wrongly rejected with FORBIDDEN.",
+    "textoGolden": "The logic for checking team admin/owner permissions is incorrect. This condition uses AND (&&) which requires both isTeamAdmin AND isTeamOwner to be true, but it should use OR (||) since a user needs to be either an admin OR an owner to have permission.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "WHAT: isTeamAdminOrOwner is computed with && instead of ||. WHY: isTeamAdmin returns truthy for role ADMIN or OWNER while isTeamOwner returns true only for OWNER, so the && expression is only true for OWNERs; team ADMINs are treated as unauthorized and get FORBIDDEN when adding guests, contradicting the variable's intent. HOW: use `(await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) || (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0))`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "The flag is named `isTeamAdminOrOwner` but is computed with `&&` (both admin AND owner). A team admin who is not the owner, or the owner who is not flagged admin, will fail this check, so the guard at line 54 wrongly throws FORBIDDEN for legitimate admins/owners. Use `||` between isTeamAdmin and isTeamOwner."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "The variable `isTeamAdminOrOwner` names an OR condition, but the code combines `isTeamAdmin(...)` and `isTeamOwner(...)` with `&&`, so it is true only when the user is both admin AND owner. Either the name is wrong or the operator is; as written the permission check at line 54 denies a plain team admin, contradicting what the identifier promises. Use `||` to match the name (or rename if AND is intended)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+    "descricao": "The guest blacklist is lowercased but incoming guest emails are compared without normalization, so a blacklisted address submitted with different casing bypasses BLACKLISTED_GUEST_EMAILS and is added and emailed.",
+    "textoGolden": "The addGuests.handler.ts blacklist check uses blacklistedGuestEmails.includes(guest) after lowercasing the blacklist but not the input guest emails, allowing attackers to bypass BLACKLISTED_GUEST_EMAILS restrictions by submitting emails with uppercase characters.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       70,
+       78
+      ],
+      "texto": "WHAT: The blacklist is compared case-sensitively against guest input while blacklistedGuestEmails are lowercased. WHY: blacklistedGuestEmails entries are lowercased but the filter compares `guest` verbatim (`!blacklistedGuestEmails.includes(guest)`); an authenticated user can add a blacklisted address simply by changing its case (e.g. `Foo@bar.com` vs `foo@bar.com`), bypassing the configured BLACKLISTED_GUEST_EMAILS restriction. HOW: normalize the guest before comparison, e.g. `!blacklistedGuestEmails.includes(guest.toLowerCase())`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       70,
+       78
+      ],
+      "texto": "Case-sensitivity bypass of the guest blacklist. `blacklistedGuestEmails` is lowercased on the list side (line 71) but the input side is compared raw: `blacklistedGuestEmails.includes(guest)` (line 77). A guest email submitted with any different casing (e.g. `Foo@Bar.com` when the blacklist holds `foo@bar.com`) passes the filter and is persisted, defeating BLACKLISTED_GUEST_EMAILS. Normalize the input before comparison, e.g. filter on `!blacklistedGuestEmails.includes(guest.toLowerCase())` (and likewise lowercase `guest` for the attendee dedup check)."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       70,
+       78
+      ],
+      "texto": "WHAT: BLACKLISTED_GUEST_EMAILS entries are lowercased but the incoming guest string is compared without lowercasing/normalizing. WHY: an attacker bypasses the blocklist with case variation (e.g. Spam@Example.com) and gets added/emailed."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+    "descricao": "The server never deduplicates the guests array, so a request with the same email twice inserts duplicate attendee rows for the booking.",
+    "textoGolden": "uniqueGuests filters out existing attendees and blacklisted emails but does not deduplicate duplicates within the input; createMany can insert duplicate attendee rows if the client submits repeated emails.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       74,
+       78
+      ],
+      "texto": "WHAT: uniqueGuests filter only dedupes against existing booking.attendees with case-sensitive === and never dedupes duplicates within the input guests array itself (server schema has no uniqueness refine unlike the client). WHY: a request with the same new email twice creates duplicate attendee rows via createMany."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       74,
+       106
+      ],
+      "texto": "uniqueGuests filters only against existing attendees/blacklist but never dedupes guests[] itself and schema has no uniqueness check. A request like guests=[a@x.com,a@x.com] passes the filter twice and createMany inserts duplicate attendee rows or throws an unhandled DB unique-constraint exception. Dedupe/normalize input (and reject intra-request duplicates) before createMany."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       74,
+       78
+      ],
+      "texto": "uniqueGuests filters against existing attendees but does not deduplicate addresses within the incoming guests array. A direct mutation with the same new address twice inserts two Attendee records and sends duplicate invitations because the server schema permits duplicates and the Attendee model has no unique booking/email constraint. Deduplicate normalized input before filtering and inserting."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#04",
+    "descricao": "Check-then-insert without a transaction or unique constraint lets two concurrent addGuests calls for the same email both pass the existing-attendee check and create duplicate attendees.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       26,
+       106
+      ],
+      "texto": "Race condition: findFirst check for existing attendees then booking.update+createMany is not atomic. Two concurrent addGuests calls with the same new email both see it as absent and both insert, creating duplicates. Guard with a unique constraint and handle conflict or run in a transaction/serializable check."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       92,
+       106
+      ],
+      "texto": "Check-then-insert race: the handler reads `booking.attendees` at the start, filters against it, then inserts in a separate `prisma.booking.update ... createMany` with no transaction or unique guard. Two concurrent addGuests calls for the same guest both see it as absent and both insert, producing duplicate attendees. Wrap the read+filter+insert in a transaction (or rely on a unique constraint on (bookingId, email) and handle the conflict) so concurrent requests cannot both succeed."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#05",
+    "descricao": "Attendee authorization and existing-attendee dedup compare emails case-sensitively, so an attendee with differently-cased stored email is FORBIDDEN and a case-variant of an existing attendee is added again.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       52,
+       76
+      ],
+      "texto": "Inconsistent email normalization for identity checks. Both the authorization check `attendee.email === user.email` (line 52) and the existing-attendee dedup `guest === attendee.email` (line 76) use strict case-sensitive equality, while emails are treated as case-insensitive everywhere else in this handler (the blacklist block directly below lowercases). Consequence: a legitimate attendee whose stored casing differs from their session email is wrongly FORBIDDEN, and a guest differing from an existing attendee only by case is duplicated rather than filtered. Compare on a normalized form (both sides `.toLowerCase()`), consistent with the blacklist normalization."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+    "descricao": "The handler passes the unfiltered guests list to sendAddGuestsEmails, which uses it to pick who gets AttendeeScheduledEmail, so existing attendees included in the request receive a new-booking confirmation instead of the add-guests email.",
+    "textoGolden": "The sendAddGuestsEmails function in email-manager.ts passes the full calendarEvent.attendees array when determining which attendees receive AttendeeScheduledEmail vs AttendeeAddGuestsEmail, but checks if newGuests.includes(attendee.email) where newGuests is the input guests array.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       167,
+       168
+      ],
+      "texto": "WHAT: sendAddGuestsEmails(evt, guests) passes the raw input guests instead of the filtered uniqueGuests. WHY: already-existing attendees included in the request are misclassified as newGuests in email-manager and receive AttendeeScheduledEmail instead of AttendeeAddGuestsEmail (wrong notification)."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       167,
+       168
+      ],
+      "texto": "Dead-transform / wrong input: `uniqueGuests` is computed (dedup vs existing attendees + blacklist) and written to DB, but `sendAddGuestsEmails(evt, guests)` passes the original `guests`. Existing attendees re-submitted are then `includes()`-matched as new and get AttendeeScheduledEmail instead of AttendeeAddGuestsEmail. Pass `uniqueGuests`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       167,
+       169
+      ],
+      "texto": "Pass `uniqueGuests` (the filtered set written to DB) to sendAddGuestsEmails instead of raw `guests`; the email layer assumes newGuests exactly equals newly created attendees for its Scheduled vs AddGuests branch."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
+    "descricao": "EventManager is created with the requesting user's credentials, so when a non-organizer adds guests the organizer's calendar event is not updated (or the wrong account is used) for references without a credentialId.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       158,
+       162
+      ],
+      "texto": "EventManager is initialized with the requesting user's credentials rather than the booking organizer's credentials. When an attendee or team owner adds guests to a booking whose calendar reference lacks credentialId, updateAllCalendarEvents selects credentials by type from the caller's calendars, so the organizer's event is not updated or the update targets the wrong account. Load credentials for booking.userId and initialize the manager with the booking owner."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#09",
+    "descricao": "Claims a failing calendar update at addGuests.handler.ts:165 aborts the mutation after guests are persisted; the calendar update path already swallows provider errors.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       165,
+       171
+      ],
+      "texto": "The attendees are written to the database at line 92, but `eventManager.updateCalendarAttendees` at line 165 runs outside the try/catch. If it throws, the mutation returns an error even though the guests are already persisted, so the DB and the calendar are out of sync. No emails are sent, and a retry then fails with 'emails_must_be_unique_valid'. Catch and handle the calendar update failure after the DB write."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       165,
+       165
+      ],
+      "texto": "The attendees are already committed to the DB when `eventManager.updateCalendarAttendees` is awaited without a try/catch. If the calendar sync throws, the mutation returns an error and skips the emails, although the guests were added. The caller sees a failure for a partly applied change and may retry. Handle calendar sync failure as best-effort, as the email send is, or run it before the DB write."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#10",
+    "descricao": "Claims any attendee can add guests and trigger invites; this is the deliberate permission model of the new feature.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       52,
+       56
+      ],
+      "texto": "Any attendee, matched only by email, is allowed to add arbitrary guests to a booking, and the handler then sends emails and calendar invites on the organizer's behalf. Any attendee can use this to send invites to arbitrary addresses. Restrict the action to the organizer and team admins, or verify that the attendee's email is confirmed."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#11",
+    "descricao": "The guests array has no server-side size limit, so any authorized caller, including an attendee, can add thousands of guests and trigger an unbounded batch of inserts and emails.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+      "lines": [
+       3,
+       6
+      ],
+      "texto": "WHAT: guests is an unbounded z.array(z.string().email()) with no max length. WHY: any authorized caller (including a mere attendee) can submit thousands of emails causing unbounded createMany inserts plus unbounded Promise.all email fanout in sendAddGuestsEmails."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+      "lines": [
+       5,
+       5
+      ],
+      "texto": "The mutation accepts an unbounded guest array that is persisted and immediately expanded into concurrent emails to every attendee. For non-seated bookings each email's ICS serializes the full attendee list, so adding N guests creates O(N) concurrent sends and O(N\u00b2) aggregate attachment work; repeated additions also resend to all existing attendees. Enforce a server-side guest-count and total-attendee limit before insertion and bound notification concurrency."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#12",
+    "descricao": "The Remove email tooltip in MultiEmail is a hard-coded English string instead of a translation key.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/ui/form/MultiEmail.tsx",
+      "lines": [
+       44,
+       51
+      ],
+      "texto": "Tooltip content=\"Remove email\" is hard-coded English user-facing text bypassing i18n while surrounding strings in the same file/PR use t(). Wrap it in t() e.g. content={t(\"remove_email\")} and add the key to locales."
+     },
+     {
+      "file": "packages/ui/form/MultiEmail.tsx",
+      "lines": [
+       46,
+       46
+      ],
+      "texto": "`Tooltip content=\"Remove email\"` is a hard-coded English user-facing string, while the surrounding code in this same component routes user text through `t()` (e.g. `t(\"add_another\")` on line 69). This string bypasses the translation mechanism and will never be localised; it should use a translation key."
+     },
+     {
+      "file": "packages/ui/form/MultiEmail.tsx",
+      "lines": [
+       46,
+       46
+      ],
+      "texto": "The new removal tooltip hard-codes `Remove email`, so users in non-English locales see English text even though the neighbouring controls use `t(...)` and this component already obtains `t` from useLocale. Route this tooltip through a translation key (and supply its English translation) rather than using the literal."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#13",
+    "descricao": "The onError fallback to unable_to_add_guests is unreachable because the template-string message is always truthy.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       42,
+       44
+      ],
+      "texto": "Unreachable fallback: `message` is a template string `${code}: ${...}` which is always truthy, so `message || t(\"unable_to_add_guests\")` never takes the fallback. Build message conditionally or test the underlying parts for emptiness."
+     },
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       42,
+       45
+      ],
+      "texto": "In `onError`, `message` is always a non-empty template string (`\"${err.data?.code}: ${t(err.message)}\"`), so the fallback `|| t(\"unable_to_add_guests\")` is unreachable and the newly added `unable_to_add_guests` translation is never shown. The user is instead shown a raw error code prefix like `BAD_REQUEST: ...` rather than the translated message; the fallback and code prefix handling should be corrected so the intended translated text reaches the user."
+     },
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       43,
+       44
+      ],
+      "texto": "The error message is built as a template string, so it is always truthy. The `|| t(\"unable_to_add_guests\")` fallback is therefore dead code, and the user can see \"undefined: ...\" or an untranslated raw message. Use `err.message ? t(err.message) : t(\"unable_to_add_guests\")`."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#14",
+    "descricao": "After a validation failure followed by a successful add, isInvalidEmail stays true, so the stale emails_must_be_unique_valid error shows the next time the dialog is opened.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       35,
+       41
+      ],
+      "texto": "WHAT: addGuestsMutation onSuccess resets multiEmailValue and closes the dialog but never resets isInvalidEmail. WHY: after one failed validation the red emails_must_be_unique_valid error persists on the next open/successful add."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#16",
+    "descricao": "sendAddGuestsEmails ignores the event type's disableStandardEmails settings, so hosts and attendees receive add-guests emails even when standard emails are disabled.",
+    "textoGolden": "The `sendAddGuestsEmails` function does not check the `disableStandardEmails` flags in the `EventType` metadata, which may result in sending emails to hosts/attendees even when standard emails are disabled for the event type.",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#e2b-01",
+    "descricao": "The add-guests handler omits booking.iCalUID from the CalendarEvent, so the add-guests emails' .ics attachments use booking.uid as UID and recipients' calendars treat them as a new event rather than an update of the original booking invite.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#sncc-01",
+    "descricao": "The addGuests FORBIDDEN error uses the translation key you_do_not_have_permission, which is missing from the locale files, so the dialog shows the raw key to users.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "implement-access-token-context-encoding-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "daffb05b5ad091d3ec09933c3c99c2b54f448696",
+  "base": "c22f76867f595f0f7c327376a66a08dca01949e8",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     73,
+     73
+    ],
+    "texto": "WHAT: The fourth null check validates `grantType` again instead of `rawTokenId`, even though its message says 'Null rawTokenId not allowed'. WHY: An AccessTokenContext with a null rawTokenId is accepted, and encodeTokenId then quietly builds a token id ending in ':null' instead of failing fast. HOW: Check `rawTokenId` in that call."
+   },
+   {
+    "id": "S2",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     483,
+     483
+    ],
+    "texto": "WHAT: The matcher returns false when the grant shortcut equals the expected one, so the condition is inverted. WHY: Tokens with the correct grant are rejected and tokens with any other grant are accepted, so the assertion validates the opposite of what it intends. HOW: Negate the comparison so it returns false when the shortcut does not match."
+   },
+   {
+    "id": "S3",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     483
+    ],
+    "texto": "WHAT: The matcher reads the grant shortcut with substring(3, 5), but DefaultTokenContextEncoderProvider puts it at characters 4-6 (sessionType 0-2, tokenType 2-4, grant 4-6). WHY: The matcher compares a slice that straddles the token type and the grant (e.g. 'ta' for 'onrtac'), so it never actually checks the grant type. HOW: Use substring(4, 6)."
+   },
+   {
+    "id": "S4",
+    "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+    "lines": [
+     29,
+     33
+    ],
+    "texto": "WHAT: `getShortcut()` is added as an abstract method on the provider-facing OAuth2GrantTypeFactory interface, with no default implementation. WHY: Existing custom grant type factories no longer compile, or throw AbstractMethodError when DefaultTokenContextEncoderProviderFactory.postInit calls gtf.getShortcut(), which stops the server from starting. HOW: Add a default implementation that derives a fallback shortcut, or make the encoder handle factories that do not supply one."
+   },
+   {
+    "id": "S5",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     483
+    ],
+    "texto": "The encoder puts the grant shortcut at characters 4-5 of the prefix (session type 0-1, token type 2-3, grant 4-5), but the matcher reads `substring(3, 5)`. For `onrtac:...` that gives `ta` instead of `ac`, so the matcher compares the wrong characters. Use `substring(4, 6)`."
+   },
+   {
+    "id": "S6",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     483,
+     483
+    ],
+    "texto": "The matcher returns false when the extracted shortcut equals the expected one, which is the opposite of what it should do. Once the indices are fixed, every correctly encoded token ID would fail the match and every wrong grant would pass. Negate the condition so the matcher returns false only when the shortcut does not match."
+   },
+   {
+    "id": "S7",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     483,
+     483
+    ],
+    "texto": "The condition returns false when the grant shortcut matches the expected value, which is the opposite of what the matcher is for. Combined with the wrong offset, the check never fails, so every event assertion that uses this matcher accepts a token ID with any grant type. It should reject when the shortcut does NOT match."
+   },
+   {
+    "id": "S8",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     483
+    ],
+    "texto": "encodeTokenId writes 2 chars of session type, then 2 chars of token type, then 2 chars of grant shortcut, so the grant shortcut is at substring(4, 6). substring(3, 5) takes the last char of the token type and the first char of the grant shortcut (for example \"ta\" from \"onrtac\"), so it never compares against the real grant shortcut."
+   },
+   {
+    "id": "S9",
+    "file": "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java",
+    "lines": [
+     77,
+     85
+    ],
+    "texto": "\"ac\" is not in the test's maps, so getGrantTypeByShortcut calls sessionFactory.getProviderFactoriesStream. sessionFactory is null because postInit is never called, so the call throws a NullPointerException. Catching RuntimeException hides this, so the test passes even if the unknown-grant IllegalArgumentException path is broken. It should catch IllegalArgumentException and give the factory a stub sessionFactory."
+   },
+   {
+    "id": "S10",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     73,
+     73
+    ],
+    "texto": "This null check's message says 'Null rawTokenId not allowed', but the argument it checks is `grantType` again. The message is wrong about what was checked, and rawTokenId is never checked, so a null raw ID gets through. Pass `rawTokenId` to match the message."
+   },
+   {
+    "id": "S11",
+    "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+    "lines": [
+     29,
+     33
+    ],
+    "texto": "The javadoc tells implementers the shortcut is 'usually like 3-letters'. DefaultTokenContextEncoderProvider expects a 6-character context where the grant shortcut takes exactly 2 characters, and every built-in shortcut is 2 letters. A custom grant that follows the doc and uses 3 letters would produce token IDs that fail to parse with IllegalArgumentException, so the doc should say the shortcut must be exactly 2 characters."
+   },
+   {
+    "id": "S12",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     483
+    ],
+    "texto": "The comment says the grant shortcut starts at the 4th character, and the code uses substring(3,5). The encoder lays out the context as session(0-2) + token type(2-4) + grant(4-6), so the shortcut is at characters 5\u20136, i.e. substring(4,6). As written, the comment and the code both read the wrong part of the token ID."
+   },
+   {
+    "id": "S13",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     73,
+     73
+    ],
+    "texto": "The check labelled 'Null rawTokenId not allowed' passes `grantType` instead of `rawTokenId`, so a null raw token id is never caught. That null would then be encoded into a token id like 'onrtac:null'."
+   },
+   {
+    "id": "S14",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     483
+    ],
+    "texto": "The matcher returns false when the grant shortcut equals the expected value, which is the opposite of what it should do. With the inverted check, a token id that has the correct grant shortcut would be rejected."
+   },
+   {
+    "id": "S15",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     483
+    ],
+    "texto": "The encoder writes the grant shortcut at characters 4-6 of the prefix (session type 0-2, token type 2-4), but the matcher reads substring(3,5). For an id like 'onrtac' it compares 'ta' instead of 'ac', so the grant type it checks does not match what the encoder writes."
+   },
+   {
+    "id": "S16",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     483
+    ],
+    "texto": "DefaultTokenContextEncoderProvider.encodeTokenId puts the 2-char grant shortcut after the 2-char session type and 2-char token type, so it is at indices 4-6 (getTokenContextFromTokenId reads substring(4, 6)). This matcher reads substring(3, 5), which mixes the last token-type character with the first grant character, so the comparison never checks the real grant. Read substring(4, 6) so the check matches what the encoder produces; the improved line also flips the inverted comparison so a mismatched grant returns false."
+   },
+   {
+    "id": "S17",
+    "file": "",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The `isAccessTokenId` test matcher has inverted logic and uses the wrong substring indices. The reviewer noted this as outside their security class."
+   },
+   {
+    "id": "S18",
+    "file": "AccessTokenContext",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "`AccessTokenContext` null-checks `grantType` twice instead of checking `rawTokenId`. The reviewer noted this as outside their security class."
+   },
+   {
+    "id": "S19",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     480,
+     484
+    ],
+    "texto": "The token ID prefix is 6 characters (2 for session type, 2 for token type, 2 for grant), so the grant shortcut is at substring(4, 6), not substring(3, 5). The check also returns false when the shortcut matches. As a result the matcher never checks the grant type and would reject a correct grant if the offset were right, so these assertions don't test what they claim."
+   },
+   {
+    "id": "S20",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     73,
+     73
+    ],
+    "texto": "The constructor promises to reject a null rawTokenId but passes grantType to requireNonNull a second time. A null raw ID is therefore accepted and later encoded as a token id like \"onrtac:null\"."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#01",
+    "descricao": "The AccessTokenContext constructor checks grantType twice instead of rawTokenId, so a null rawTokenId passes validation and is encoded as ':null'.",
+    "textoGolden": "In AccessTokenContext constructor, the fourth Objects.requireNonNull validates grantType twice instead of validating rawTokenId, allowing null rawTokenId values to pass validation.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       73,
+       73
+      ],
+      "texto": "WHAT: the constructor validates `grantType` a second time instead of `rawTokenId` (`Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")`). WHY: a null `rawTokenId` is silently accepted, so `encodeTokenId` produces a token id ending in `:null` and any later consumer of the raw id gets an invalid value instead of an early failure. HOW: change the argument to `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")`."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       69,
+       78
+      ],
+      "texto": "Line 73 calls Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\") \u2014 it validates grantType a second time (line 72 already does) with a message naming a different field. rawTokenId is never validated, so a null rawTokenId is accepted at construction and the advertised check/message is wrong. It should be Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       73,
+       73
+      ],
+      "texto": "The null-check message names the wrong parameter: `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")` validates `grantType` but reports `rawTokenId`, and it duplicates the check on line 72 while `rawTokenId` is never validated at all. The message that reaches the reader contradicts the code it guards; it should be `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")`."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#02",
+    "descricao": "isAccessTokenId reads the grant shortcut at the wrong offset (3,5 instead of 4,6) and inverts the comparison, so the event assertions never verify the token's grant type.",
+    "textoGolden": "In isAccessTokenId, the substring for the grant shortcut and the equality check look inverted: the grant shortcut occupies indices 4\u20135 (substring(4,6)), and a match should return true (combined with UUID check), not false.",
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       483,
+       483
+      ],
+      "texto": "WHAT: `isAccessTokenId` reads the grant shortcut from the wrong offset and inverts the comparison \u2014 `if (items[0].substring(3, 5).equals(expectedGrantShortcut)) return false;`. WHY: for the encoded id `ssttgg:raw` the grant shortcut occupies 0-based indices 4-5, so `substring(3,5)` inspects the token-type/grant boundary and can never equal the expected shortcut; combined with the inverted `return false`, the equality branch is unreachable and the matcher validates only the UUID part. As a result the new assertions in `expectCodeToToken`/`expectRefresh`/`expectDeviceCodeToToken`/`expectAuthReqIdToToken` do not actually assert the grant type and would pass even if the grant shortcut were wrong. HOW: use `items[0].substring(4, 6)` and negate the condition (`if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`)."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       476,
+       492
+      ],
+      "texto": "The matcher logic is inverted: line 483 returns false when the extracted grant shortcut EQUALS expectedGrantShortcut, so a token that actually carries the expected grant fails the matcher, while a token with any other grant shortcut falls through and passes. The condition should be negated: `if (!items[0].substring(3,5).equals(expectedGrantShortcut)) return false;`. Also note the encode site writes the grant shortcut at chars 4-6 (substring(4,6)); substring(3,5) reads one character early into the token-type field, so the offset is off by one relative to TokenManager.encodeTokenId."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       482,
+       483
+      ],
+      "texto": "The comment 'Grant type shortcut starts at character 4th char' disagrees with the encoding that this PR defines (sessionType chars 1-2, tokenType 3-4, grantType 5-6, e.g. 'trltcc'), and the code reads substring(3,5) \u2014 the 4th-5th chars, i.e. the token-type second char plus the grant first char, never the grant shortcut. The comment (and the index) should point at the 5th char / substring(4,6)."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#03",
+    "descricao": "getShortcut() Javadoc says shortcuts are usually 3 letters, but the encoding requires exactly 2-character shortcuts.",
+    "textoGolden": "Javadoc mentions \"usually like 3-letters shortcut\" but some implementations use 2-letter shortcuts (\"ac\", \"cc\", \"rt\", \"te\", \"pc\", \"ci\", \"ro\"). Consider updating documentation to reflect actual usage pattern.",
+    "comentarios": [
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The Javadoc says getShortcut() returns 'usually like 3-letters shortcut', but every implementation introduced in this PR returns a 2-character shortcut ('ac','cc','pg','pc','rt','ro','te','ci','dg') and the encoder relies on exactly 2 chars (encoded context length 6 = 2+2+2). The doc states a length the code does not produce; it should say 2-character shortcut."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Grant shortcuts are registered without enforcing the two-character length required by the decoder. A custom grant returning a three-character shortcut, which the new OAuth2GrantTypeFactory documentation explicitly suggests, produces a seven-character prefix that getTokenContextFromTokenId rejects, breaking encode/decode round trips for that grant. Validate shortcut length during registration and dynamic refresh, and document the required two-character format."
+     },
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The new contract describes getShortcut() as usually returning a three-letter shortcut, but DefaultTokenContextEncoderProvider requires exactly two characters for the grant field (six total prefix characters, decoded with substring(4, 6)). An extension author following this documentation can produce token IDs that the default decoder rejects. Document the required two-character length rather than advertising three letters."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#04",
+    "descricao": "testIncorrectGrantType catches any RuntimeException, so it passes on a NullPointerException from the unset sessionFactory rather than verifying the unknown-grant IllegalArgumentException.",
+    "textoGolden": " Catching generic RuntimeException is too broad. The implementation throws IllegalArgumentException specifically - catch that instead for more precise testing.",
+    "comentarios": [
+     {
+      "file": "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java",
+      "lines": [
+       77,
+       83
+      ],
+      "texto": "Catching RuntimeException allows this negative test to pass for an unrelated fixture failure. The fixture constructs the factory without postInit, leaving sessionFactory null; resolving the unregistered `ac` shortcut calls sessionFactory.getProviderFactoriesStream and throws NullPointerException before the decoder's intended unknown-grant IllegalArgumentException. Catch/assert IllegalArgumentException specifically and provide a factory fixture whose lookup returns no matching grant, so removing the decoder's validation would fail the test."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#05",
+    "descricao": "Client-credentials (and UMA permission) token issuance never sets the GRANT_TYPE attribute, so their access token ids are encoded with the unknown grant 'na' instead of their shortcut.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+      "lines": [
+       57,
+       60
+      ],
+      "texto": "The new grant metadata falls back to 'na' for client-credentials and UMA tokens because their issuance paths never set Constants.GRANT_TYPE on their fresh ClientSessionContext. ClientCredentialsGrantType calls responseBuilder.generateAccessToken directly, and PermissionGrantType delegates to AuthorizationTokenService, so neither executes the new assignment in createTokenResponse; tokens from these known grants therefore carry unknown grant context. Set the grant attribute in both issuance paths before generating the access token."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#06",
+    "descricao": "Lazy registration of newly deployed grants does not check shortcut uniqueness, so a grant reusing an existing shortcut silently overwrites the reverse mapping and older tokens decode to the wrong grant.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+      "lines": [
+       112,
+       114
+      ],
+      "texto": "Enforce shortcut uniqueness during lazy registration rather than overwriting grantsByShortcuts. If a newly deployed grant B uses existing grant A's shortcut, this path replaces shortcut\u2192A with shortcut\u2192B while retaining both forward entries. Previously issued A tokens then decode as B. Concurrent registrations of two new grants with the same shortcut likewise both succeed, with the last inverse-map write winning. Use collision-aware atomic registration and reject the conflicting grant before publishing its forward mapping."
+     }
+    ]
+   }
+  ]
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "c790227e0cda780e6fea9bb03af27948d9e286b9",
+  "base": "917c7b0764f4c6bfdca95db2c5f73dbfdbe11757",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     38,
+     42
+    ],
+    "texto": "WHAT: The `retryCount > 1` branch of the deleteMany OR has no `method: WorkflowMethods.SMS` filter, so the SMS cron deletes any WorkflowReminder (email or WhatsApp) whose retryCount is above 1. WHY: Once another cron starts incrementing retryCount, this job will silently delete reminders for other methods. HOW: Add `method: WorkflowMethods.SMS` to the retryCount condition."
+   },
+   {
+    "id": "S2",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     178,
+     188
+    ],
+    "texto": "WHAT: The new retryCount increment sits inside `if (message?.length && ... && sendTo)`, so a reminder with a missing phone number or an empty message never increments its counter. WHY: These reminders can never succeed, but they are still re-fetched and re-processed on every cron run until scheduledDate passes, which is the behavior the PR is meant to stop. HOW: Move the increment into an else branch of the outer `if` as well, or into one failure path that covers both cases."
+   },
+   {
+    "id": "S3",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     189,
+     198
+    ],
+    "texto": "WHAT: The prisma.workflowReminder.update added in the catch block has no guard, so if it throws (for example P2025 because the reminder was deleted, or a DB error), the exception escapes the for-loop. WHY: All remaining reminders in this cron run are skipped and the handler returns an error instead of continuing. HOW: Wrap the catch-block update in its own try/catch, or use updateMany, which does not throw when no row matches."
+   },
+   {
+    "id": "S4",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     178,
+     197
+    ],
+    "texto": "WHAT: Every failure from twilio.scheduleSMS increments retryCount, including temporary ones: an undefined return while the account is SMS-locked, a throw from checkSMSRateLimit when the monthly limit is hit, and Twilio network or 5xx errors. WHY: Two consecutive cron runs with a temporary failure permanently delete a valid reminder, so the attendee never gets the SMS even after the condition clears. HOW: Increment retryCount only for permanent errors, such as Twilio invalid-number error codes, and let temporary errors retry without counting."
+   },
+   {
+    "id": "S5",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     184,
+     184
+    ],
+    "texto": "WHAT: retryCount is written as `reminder.retryCount + 1` from a value read earlier, not with an atomic increment. WHY: Overlapping cron invocations processing the same reminder overwrite each other and lose increments. HOW: Use `retryCount: { increment: 1 }`."
+   },
+   {
+    "id": "S6",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     28,
+     43
+    ],
+    "texto": "The comment says only past-dated SMS reminders are deleted, but the new OR branch also deletes any reminder with retryCount > 1, whatever its method or scheduled date. Update the comment so it describes both deletion criteria and readers aren't misled about which reminders are removed."
+   },
+   {
+    "id": "S7",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     38,
+     42
+    ],
+    "texto": "The `retryCount > 1` branch of the OR has no `method: WorkflowMethods.SMS` filter, so this SMS cron will delete any WorkflowReminder (EMAIL, WHATSAPP, ...) whose retryCount exceeds 1. The comment and the rest of the handler are scoped to SMS, but this clause isn't. Add the method filter inside this branch so the cleanup only touches SMS reminders."
+   },
+   {
+    "id": "S8",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     189,
+     198
+    ],
+    "texto": "Before this change, the per-reminder catch block only logged, so one bad reminder never stopped the cron run. It now awaits `prisma.workflowReminder.update` without a guard, so if that update throws (DB error, or the record was deleted at the same time), the exception escapes the loop. The handler then fails and all remaining reminders in this run go unscheduled."
+   },
+   {
+    "id": "S9",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     189,
+     198
+    ],
+    "texto": "The new update in the catch block can throw. That happens if the reminder was deleted concurrently (for example, its booking was cancelled), which gives P2025, or if the original error was a DB failure. The throw escapes the for loop, so every remaining reminder is skipped and the handler returns a 500 instead of carrying on. Use updateMany, which does not throw when no row matches, and catch any error from it so one failed reminder cannot stop the batch."
+   },
+   {
+    "id": "S10",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     38,
+     42
+    ],
+    "texto": "The second OR branch deletes any WorkflowReminder with retryCount > 1, whatever its method. This SMS cron can therefore delete EMAIL or WHATSAPP reminders as soon as any other path starts using retryCount. Add method: WorkflowMethods.SMS to this branch."
+   },
+   {
+    "id": "S11",
+    "file": "scheduleSMSReminders.ts",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The retryCount branch of the OR condition in the cleanup is not limited to SMS reminders, so it may delete or affect non-SMS reminders. The reviewer flagged this as outside their assigned review class."
+   },
+   {
+    "id": "S12",
+    "file": "scheduleSMSReminders.ts",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The retry counter is updated with a read-then-write instead of an atomic increment. Concurrent runs could lose updates. The reviewer flagged this as outside their assigned review class."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#01",
+    "descricao": "retryCount is set to reminder.retryCount + 1 from a value read at the start of the run instead of an atomic increment, so overlapping runs can lose increments.",
+    "textoGolden": "Using retryCount: reminder.retryCount + 1 reads a possibly stale value and can lose increments under concurrency; consider an atomic increment via Prisma (increment: 1) to avoid race conditions (also applies to the similar update in the catch block).",
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       179,
+       197
+      ],
+      "texto": "WHAT: retryCount is incremented with a read-value computed at the start of the run (`retryCount: reminder.retryCount + 1`) instead of an atomic increment. WHY: if two cron invocations overlap (or the same reminder is processed twice before the write commits), both read the same retryCount and both write N+1, so failures are undercounted and the reminder can loop forever without ever reaching the `retryCount > 1` deletion threshold. HOW: use `data: { retryCount: { increment: 1 } }` so the increment is atomic (the initial read value is then irrelevant)."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "`retryCount: reminder.retryCount + 1` is a read-modify-write of the value fetched at the top of the handler, not an atomic increment. Two overlapping cron runs both read the same retryCount and both write the same +1, losing an update, so failed reminders can be retried indefinitely and never reach the `gt: 1` deletion threshold. Use Prisma's atomic `retryCount: { increment: 1 }` instead of computing from the stale in-memory value (same issue in the else branch at lines 179-186)."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       183,
+       185
+      ],
+      "texto": "Retry counts are assigned from the stale findMany snapshot instead of incremented atomically, both here and in the catch branch. Two overlapping cron requests can each fail scheduling the same reminder with retryCount zero and both write one, so two failed attempts do not reach the deletion threshold and additional attempts are scheduled. Use Prisma's atomic retryCount increment operation in both failure branches."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+    "descricao": "The deleteMany OR clause applies retryCount > 1 without the SMS method filter, so the SMS cron deletes any workflow reminder (email, WhatsApp) with retryCount above 1.",
+    "textoGolden": "The deletion logic in scheduleSMSReminders.ts incorrectly deletes non-SMS workflow reminders (e.g., Email, WhatsApp) that have retryCount > 1. This occurs because the retryCount condition within the OR clause for deletion lacks a method: WorkflowMethods.SMS filter, causing it to apply to all reminder types instead of only SMS reminders, which is the intended scope of this function.",
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       28,
+       43
+      ],
+      "texto": "The comment \"//delete all scheduled sms reminders where scheduled date is past current date\" no longer describes the deleteMany below it. After this change the query also deletes reminders with retryCount > 1, and that OR branch has no `method: WorkflowMethods.SMS` filter, so non-SMS (email) reminders with retryCount > 1 are now deleted too. Update the comment (or add the missing SMS filter to the retryCount branch) so the prose matches what the code actually deletes."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       53,
+       63
+      ],
+      "texto": "The deleteMany OR clause deletes any reminder with retryCount > 1 regardless of method."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       38,
+       43
+      ],
+      "texto": "The second OR branch `{ retryCount: { gt: 1 } }` has no `method` filter, unlike the first branch (`method: WorkflowMethods.SMS`). Because `retryCount` is a generic column on WorkflowReminder used by all reminder methods, this deleteMany now permanently deletes every reminder of ANY method (including EMAIL) whose retryCount exceeds 1, even though this cron is only supposed to clean up SMS reminders. Add `method: WorkflowMethods.SMS` to this branch (or scope the whole where to SMS) so non-SMS reminders are never destroyed."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#03",
+    "descricao": "The cleanup comment describes only past-date SMS deletion and omits the new retryCount > 1 deletion branch.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       38,
+       42
+      ],
+      "texto": "Update the cleanup comment to describe the new retry-exhaustion deletion branch. It currently says this deletes scheduled SMS reminders whose date has passed, but this OR branch also deletes any reminder with retryCount > 1, including future-dated reminders and without an SMS restriction. The comment now misrepresents the scope of this destructive operation."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       28,
+       44
+      ],
+      "texto": "Stale comment: line 28 says 'delete all scheduled sms reminders where scheduled date is past current date' but the new OR clause also deletes any reminder with retryCount > 1 regardless of method or date. Update the comment to describe both branches."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+    "descricao": "The retry-count update inside the catch block is not guarded, so if it throws (for example the reminder was deleted concurrently) the error escapes the loop and the cron run fails, skipping the remaining reminders.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       189,
+       198
+      ],
+      "texto": "WHAT: the catch block performs an unguarded `prisma.workflowReminder.update` while handling the scheduling error. WHY: if this write itself rejects (e.g. the row was concurrently removed, or a transient DB error), the rejection is not caught and escapes the for-loop, aborting the whole cron run so all remaining reminders go unprocessed. HOW: wrap the retryCount update in its own try/catch (log and continue) so a failure to record the retry does not abort processing of the remaining reminders."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "This new `prisma.workflowReminder.update` sits inside the catch block, which is NOT protected by any try/catch. If this update throws (e.g. the reminder was already removed by the `deleteMany` at the top of the file during a concurrent run -> Prisma P2025, or a transient DB error), the exception escapes the `for` loop and rejects the handler, so all remaining unscheduled reminders are skipped and the cron request fails. Previously the catch only did `console.log`, so a single bad reminder never aborted the batch and the endpoint always returned 200. Wrap this update in its own try/catch (or `updateMany`/catch-and-log) so a failed retry-count write cannot take down the whole scheduling run."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "The new database update inside catch can itself throw when a reminder has been deleted during scheduling. Booking cancellation deletes reminders through handleCancelBooking and deleteScheduledSMSReminder, so a concurrent cancellation followed by a scheduling error now rejects the entire cron handler and prevents the remaining reminders from being processed. Use an updateMany filtered by the reminder ID to tolerate an already-deleted row, and guard errors from retry bookkeeping so they do not escape the per-reminder error handler."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#06",
+    "descricao": "Claims transient errors increment retryCount, so two runs during an outage delete the whole pending SMS reminder queue.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "WHAT: The catch block unconditionally increments retryCount for any exception (profile/bookerUrl/templating/rate-limit/Twilio outage). WHY: Two consecutive cron runs with a transient global failure increment every pending SMS reminder to 2 and the startup deleteMany then wipes the entire future SMS queue, not just permanently-invalid numbers. HOW: Only increment on permanent scheduleSMS failure, or distinguish transient errors from terminal ones before counting toward deletion."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
+    "descricao": "The new OR arm on retryCount has no supporting index, so the cleanup delete can no longer be fully served by the existing index and may scan the table.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       31,
+       43
+      ],
+      "texto": "WHAT: the deleteMany WHERE now uses `OR` between `(method = SMS AND scheduledDate <= now)` and `retryCount > 1`, but WorkflowReminder has no index on the newly added retryCount column. WHY: Postgres cannot satisfy a two-way OR using the existing (method, scheduled, scheduledDate) index and will fall back to a sequential scan of the entire WorkflowReminder table on every cron invocation, turning a previously indexed delete into a full table scan as the table grows. HOW: add an index on retryCount (or restructure so each branch is index-usable), then re-check the query plan."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#09",
+    "descricao": "The retryCount increment update is duplicated in the else branch and the catch block.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "scheduleSMSReminders.ts",
+      "lines": [
+       178,
+       197
+      ],
+      "texto": "The retryCount increment is duplicated in the else-branch and catch."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+    "descricao": "SMS-sending locks are counted as failed scheduling attempts: scheduleSMS returns undefined for locked users/teams, retryCount is incremented, and after two cron runs the retryCount > 1 cleanup deletes future reminders even if sending is later unlocked.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01",
+    "descricao": "retryCount is not incremented when a reminder has no message or no sendTo number, so such reminders are reprocessed on every cron run until their scheduled date.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/controllers/admin/groups_controller.rb",
+    "lines": [
+     90,
+     90
+    ],
+    "texto": "WHAT: `group.users.delete(user_id)` on a has_many :through removes the GroupUser row with delete_all semantics, so GroupUser callbacks (the `counter_cache: \"user_count\"` decrement) do not run, and the user's primary_group_id is not cleared. WHY: groups.user_count stays inflated after removals, so the admin list shows the wrong count. Removed users also keep this group as their primary group (title/flair) even though they are no longer members. HOW: destroy the join record and clear primary_group_id, as destroy_deletions does."
+   },
+   {
+    "id": "S2",
+    "file": "app/controllers/admin/groups_controller.rb",
+    "lines": [
+     71,
+     75
+    ],
+    "texto": "WHAT: add_members calls group.add(user) (users.push) for every username without checking whether the user is already a member. WHY: group_users has a UNIQUE (group_id,user_id) index, so adding an existing member raises ActiveRecord::RecordNotUnique and returns a 500, while users earlier in the list stay inserted (partial update). HOW: skip users who are already members."
+   },
+   {
+    "id": "S3",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     11,
+     14
+    ],
+    "texto": "WHAT: totalPages uses Math.floor(user_count / limit) + 1, which counts one page too many whenever user_count is an exact multiple of limit (for example 50 users with limit 50 gives 2 pages). WHY: showingLast stays false on the real last page, so 'next' moves offset to user_count and loads an empty member page labeled 2/2. HOW: use Math.ceil."
+   },
+   {
+    "id": "S4",
+    "file": "app/controllers/groups_controller.rb",
+    "lines": [
+     22,
+     26
+    ],
+    "texto": "WHAT: the public members endpoint takes limit straight from params with no upper bound or positivity check. WHY: any visitor can request limit=1000000 and force serialization of every member of large groups, including automatic trust-level groups. A negative limit produces a PostgreSQL error (500). HOW: clamp limit to a sane range."
+   },
+   {
+    "id": "S5",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     11,
+     14
+    ],
+    "texto": "`floor(user_count / limit) + 1` gives one page too many when user_count is an exact multiple of limit. For example, 50 members with a limit of 50 shows \"1/2\", and clicking next loads an empty page at offset 50. Use `Math.ceil(user_count / limit)` to get the real page count."
+   },
+   {
+    "id": "S6",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     11,
+     14
+    ],
+    "texto": "`Math.floor(user_count / limit) + 1` adds an extra page whenever user_count is an exact multiple of limit (e.g. 50 users with limit 50 gives 2 pages). As a result `showingLast` is false on the real last page, and `next` moves the offset to user_count and loads an empty members page. Use `Math.ceil(user_count / limit)` instead."
+   },
+   {
+    "id": "S7",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     11,
+     14
+    ],
+    "texto": "floor(user_count / limit) + 1 gives one page too many when user_count divides evenly by limit (e.g. 50 members, limit 50 \u2192 2 pages). As a result, showingLast is false on the real last page, and 'next' loads an empty page shown as 2/2. Use Math.ceil(user_count / limit) instead."
+   },
+   {
+    "id": "S8",
+    "file": "spec/controllers/admin/groups_controller_spec.rb",
+    "lines": [
+     114,
+     117
+    ],
+    "texto": "This test sends `xhr :put` to remove_member, but in routes.rb remove_member is reachable only through `delete \"members\"`; PUT on that path goes to add_members. Controller specs skip verb routing, so the test exercises a request the app never routes to this action and would not catch a broken DELETE mapping. Use `xhr :delete` here so it matches the real endpoint and the sibling success test."
+   },
+   {
+    "id": "S9",
+    "file": "app/controllers/groups_controller.rb",
+    "lines": [
+     22,
+     26
+    ],
+    "texto": "The members endpoint used to return every member of a non-automatic group, and now it always applies `limit` (default 50). The public group members page (`group-members.js.es6` / `group/members.hbs`) calls `findMembers()` once and has no paging controls, so any member past the 50th can no longer be reached there. Either add next/previous paging to the public page, or keep returning the full list to callers that don't send a limit."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+    "descricao": "The admin group pager computes total pages as floor(user_count / limit) + 1, so when the member count is an exact multiple of the limit it shows an extra page and Next navigates to an empty member list.",
+    "textoGolden": "The `totalPages` calculation using `Math.floor(user_count / limit) + 1` produces an extra page when `user_count` is an exact multiple of `limit`, leading to incorrect pagination. For example, with 100 users and a limit of 50, it reports 3 pages instead of 2, allowing navigation to an empty page.",
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+      "lines": [
+       11,
+       14
+      ],
+      "texto": "totalPages (and currentPage) use `Math.floor(user_count / limit) + 1`, which is an off-by-one when user_count is an exact multiple of limit (e.g. 50 members, limit 50 \u2192 reports 2 pages although only 1 exists). This leaves `showingLast` false on the real last page, so 'next' navigates to an empty page at offset=user_count. Use `Math.ceil(user_count / limit)` (and compute currentPage consistently) to get the correct page count."
+     },
+     {
+      "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+      "lines": [
+       11,
+       14
+      ],
+      "texto": "totalPages is off by one when user_count is an exact multiple of limit: `Math.floor(user_count / limit) + 1` gives 2 for user_count=50, limit=50, although 50 members occupy exactly one page. Correct it to `Math.ceil(this.get('user_count') / this.get('limit'))`. Effect: for a group whose member count is a multiple of the page size, totalPages is one too high, showingLast remains false so the 'next' link stays enabled, and clicking it navigates to a phantom empty page."
+     },
+     {
+      "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+      "lines": [
+       11,
+       14
+      ],
+      "texto": "`totalPages` uses `Math.floor(user_count / limit) + 1`, which over-counts by one whenever `user_count` is an exact multiple of `limit` (e.g. 50 members with limit 50 yields 2 pages instead of 1). Since `showingLast` is `propertyEqual(\"currentPage\", \"totalPages\")`, on a full last page `showingLast` is false, so the `next` action stays enabled and advances `offset` to `user_count`, rendering an empty page labeled as the last page. Use `Math.ceil(user_count / limit)` (with the zero-member guard) so the count matches the real number of pages."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#03",
+    "descricao": "Several Group model functions (findMembers, destroy, userCountDisplay) return a value on some paths and undefined on others, triggering consistent-return lint warnings.",
+    "textoGolden": "Expected to return a value at the end of function - code paths without explicit returns will return undefined",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#04",
+    "descricao": "Paging actions fire overlapping member requests and each response unconditionally overwrites offset and members, so a stale response arriving last can revert the list to an earlier page.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/models/group.js",
+      "lines": [
+       30,
+       35
+      ],
+      "texto": "Guard against stale member-fetch responses before updating the model. `next` updates offset immediately and leaves navigation enabled, so with at least three pages two rapid clicks issue requests for offsets 50 and 100. If the offset-100 response arrives first and the offset-50 response arrives last, this unconditional `setProperties` resets both offset and members to the older page, undoing the latest navigation. Refreshes after membership changes can similarly be overwritten by an earlier fetch. Track a per-model request generation and apply only the latest response, or serialize navigation and refresh requests."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+    "descricao": "The public members endpoint now always caps results at 50 per page, but the public group members page has no pagination, so groups with more than 50 members are silently truncated for users.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/routes/group-members.js.es6",
+      "lines": [
+       10,
+       11
+      ],
+      "texto": "The public members route now loads only the model's default 50-member page without providing any way to request subsequent pages. The public group/members.hbs template only renders members and has no Next/Previous controls, so members after the first 50 become inaccessible (manual groups previously returned all members). Add public pagination controls and actions that update offset and reload members."
+     },
+     {
+      "file": "app/controllers/groups_controller.rb",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "The new default limit applies to nonautomatic groups as well, but the public group-members route still calls findMembers() only once and its template simply iterates members without pagination. Previously this endpoint returned every member of a nonautomatic group; now a group with more than 50 members exposes only the first 50 on its public members page, with no way to reach the rest. Update that consumer to fetch subsequent pages or provide pagination when introducing this endpoint contract."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/routes/group-members.js.es6",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "Provide pagination or load subsequent pages for the public group-members view. findMembers now requests only 50 members, and this route calls it only once while its template simply iterates members without navigation. Custom groups previously returned all members, so groups larger than 50 now have members that cannot be viewed on this page."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#07",
+    "descricao": "Creating a group ignores the alias_level the admin selected, saving only name and visibility, so new groups keep the default alias level.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       23,
+       27
+      ],
+      "texto": "Persist params[:alias_level] when creating a group, just as update does. The creation form exposes aliasLevelOptions and group.asJSON sends the selected alias_level, but create saves only name and visible. A newly created group therefore retains the default alias level instead of the administrator's selection."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+    "descricao": "Removing a member deletes the membership row directly and skips clearing the user's primary_group_id, so a removed user can keep this group as their primary group.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       84,
+       91
+      ],
+      "texto": "WHAT: remove_member uses group.users.delete(user_id) instead of the Group#remove destroy path. WHY: bypasses GroupUser destroy callbacks and primary_group_id cleanup done in destroy_deletions, leaving stale membership side-effects (e.g. dangling primary_group_id). HOW: load the User and call group.remove(user)."
+     },
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       90,
+       90
+      ],
+      "texto": "Removing a member with group.users.delete bypasses the primary_group_id cleanup previously performed by Group#destroy_deletions during usernames updates. A user whose primary group is this group remains associated with it as their primary group after membership removal, leaving stale primary-group state used by user administration and post serialization. Clear primary_group_id for the removed user when it equals this group's id as part of the removal operation."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#12",
+    "descricao": "The remove_member spec issues a PUT request although the route only maps DELETE to remove_member, so the test uses a verb never routed in production.",
+    "textoGolden": "The remove_member test uses xhr :put to call the remove_member action, but the route defines delete 'members' => 'groups#remove_member' requiring DELETE method.",
+    "comentarios": [
+     {
+      "file": "spec/controllers/admin/groups_controller_spec.rb",
+      "lines": [
+       114,
+       117
+      ],
+      "texto": "This example sends `xhr :put, :remove_member`, but the PR maps `remove_member` only to DELETE (`delete \"members\" => \"groups#remove_member\"`); PUT on that path routes to `groups#add_members`. Controller specs bypass the router, so the example still lands on `remove_member` and passes regardless \u2014 it would still pass if the DELETE route were missing or wired to the wrong action, leaving the newly introduced verb/action pairing untested. Use `xhr :delete, :remove_member`, as the sibling example at line 125 already does."
+     },
+     {
+      "file": "spec/controllers/admin/groups_controller_spec.rb",
+      "lines": [
+       114,
+       117
+      ],
+      "texto": "The test 'cannot remove members from automatic groups' sends `xhr :put, :remove_member`, but the route is `delete \"members\" => \"groups#remove_member\"`. It exercises the action with a verb that is never routed in production. Use `xhr :delete, :remove_member, group_id: 1, user_id: 42` so the test matches the real request."
+     }
+    ]
+   }
+  ]
+ },
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "4def149a50c4b9b2c24fbb753ac60fe4f4df0cac",
+  "base": "c834e7473c02f11451216b3fbf355f953cfd95e9",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     139,
+     157
+    ],
+    "texto": "WHAT: The reader thread is started but never joined before `assertThat(caughtExceptions, Matchers.empty())` runs. WHY: A read request still in flight when `deletedAll` is set can record its exception after the assertion has already passed, so the regression this test is meant to catch can go undetected and the test is flaky. HOW: Keep a reference to the Thread and call `join()` after `deletedAll.set(true)` and before the assertion."
+   },
+   {
+    "id": "S2",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     152,
+     155
+    ],
+    "texto": "WHAT: `deletedAll.set(true)` only runs if every `remove()` call succeeds, because it is not in a finally block. WHY: If any delete throws, the non-daemon reader thread loops forever calling the groups endpoint, which leaks into the following tests and can keep the test JVM from exiting. HOW: Wrap the delete loop in try/finally and set `deletedAll` in the finally block."
+   },
+   {
+    "id": "S3",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     139,
+     157
+    ],
+    "texto": "The test sets `deletedAll` and then checks `caughtExceptions` right away, without waiting for the reader thread to finish its current `groups()` call. An exception from that last read gets added after the assertion has run, so the test can pass even when the concurrent-delete failure happens. Keep a reference to the thread and call `join()` on it before the assertion."
+   },
+   {
+    "id": "S4",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     139,
+     157
+    ],
+    "texto": "The test starts the reader thread without keeping a reference and never joins it. `assertThat(caughtExceptions, empty())` therefore runs while a read may still be in progress (or before any read ran), and an exception added after the check is silently lost. Keep the Thread reference and call `join()` after `deletedAll.set(true)` and before the assertion, so the check covers every read that was attempted."
+   },
+   {
+    "id": "S5",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     139,
+     157
+    ],
+    "texto": "The test asserts `caughtExceptions` is empty right after `deletedAll.set(true)`, without waiting for the reader thread to finish. If a request is still in flight when the flag is set, its exception (e.g. the NPE from getSubGroupsCount) is added after the assertion has run. The thread may also not have run any request while the deletions were happening, so the test can pass with the bug reintroduced. Keep a reference to the thread and call `join()` before the assertion."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+    "descricao": "The cached GroupAdapter.getSubGroupsCount returns null when the group was deleted concurrently, violating the GroupModel contract that it never returns null and risking NPEs in callers that unbox it.",
+    "textoGolden": "Returning null from getSubGroupsCount() violates the GroupModel contract (Javadoc says it never returns null) and may lead to NPEs in callers that expect a non-null count.",
+    "comentarios": [
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+      "lines": [
+       274,
+       275
+      ],
+      "texto": "WHAT: `getSubGroupsCount()` now returns `null` when the delegate model is gone, violating the `GroupModel.getSubGroupsCount()` contract whose javadoc (GroupModel.java:296) states 'Never returns null'. WHY: In-repo callers happen to tolerate a Long null, but any caller that unboxes the result (`long c = group.getSubGroupsCount()`) or does arithmetic on it will NPE, converting the old NPE into a different one. HOW: return a non-null sentinel such as `0L` (and assert the empty/absent case explicitly), or update the interface contract to document a nullable return."
+     },
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+      "lines": [
+       274,
+       275
+      ],
+      "texto": "getSubGroupsCount() now returns null when the cached delegate is gone (modelSupplier.get() == null), whereas before this change the method delegate-called getGroupModel().getSubGroupsCount(), which could not yield null (a missing delegate surfaced as an exception instead). The declared type Long is now genuinely nullable in a path that previously always produced a value or threw, so any caller that relies on the old contract \u2014 unboxing the result (e.g. `group.getSubGroupsCount() > 0`, `long n = group.getSubGroupsCount()`, or passing it to a primitive-typed parameter) \u2014 will now throw a NullPointerException instead of getting a value or the previous exception. Since consumers were not updated for the new nullable contract, either keep the non-null behavior for callers that cannot handle null or audit/update every caller of GroupModel.getSubGroupsCount() to null-check before use."
+     },
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+      "lines": [
+       274,
+       275
+      ],
+      "texto": "getSubGroupsCount() now returns null when modelSupplier.get() is null, but the count is consumed as a number by brief-representation building; the sibling cache entity changed in this PR (CachedGroup) handles the same 'model unavailable' case by returning a non-null default (getRoleMappings returns Collections.emptySet(), and the subGroups/attributes loaders are built with non-null empty defaults). Returning null here breaks that convention and can surface as an unboxing/NPE on the consumer side of the read path. Return a non-null value (e.g., 0) or only null if the GroupModel contract explicitly declares it nullable."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+    "descricao": "The concurrency regression test never waits for the reader thread before asserting no exceptions, so it can pass even when the concurrent-deletion NPE still occurs.",
+    "textoGolden": "The reader thread isn\u2019t waited for; flipping deletedAll to true and asserting immediately can race and miss exceptions added just after the flag change, making this test flaky.",
+    "comentarios": [
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       136,
+       157
+      ],
+      "texto": "The reader thread is started but never synchronized with: the test does not wait for it to complete a read before deleting, and does not join it before asserting caughtExceptions is empty. The deletes can finish before the reader reads at all, or a failing read can land after the assertion, so the test passes even with the bug present. Use a CountDownLatch counted down after the reader's first successful read, start deleting only after it fires, and join the thread (after setting deletedAll) before asserting."
+     },
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       149,
+       157
+      ],
+      "texto": "WHAT: The reader thread started at line 139-149 is never joined before `assertThat(caughtExceptions, Matchers.empty())` runs. WHY: The reader can be mid-request when `deletedAll.set(true)` executes; if that request throws (e.g., reading a group deleted concurrently), the exception is appended to `caughtExceptions` AFTER the assertion has already evaluated, so the test can pass even when the NPE regression it targets is present (and is flaky). HOW: after `deletedAll.set(true)`, `thread.join(<timeout>)` (storing the Thread reference) before the assertion."
+     },
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       139,
+       157
+      ],
+      "texto": "The reader Thread is started but never joined, so the assertion at line 157 can execute before the reader has completed a single groups() read (or while a read that would throw the NPE is still in flight). If the GroupAdapter.getSubGroupsCount null-model NullPointerException were reintroduced, this test could still pass because caughtExceptions is asserted empty before the racing reader thread has recorded anything. Capture the Thread, then join it (e.g. Thread reader = new Thread(...); reader.start(); ... deletions ...; deletedAll.set(true); reader.join();) before asserting so the test actually waits on the condition it verifies."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#03",
+    "descricao": "The reader thread's stop flag is set only after all deletions succeed, so a failing delete leaves a non-daemon thread polling indefinitely.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       139,
+       155
+      ],
+      "texto": "WHAT: The reader loop `while (!deletedAll.get())` has no termination guarantee and `deletedAll.set(true)` at line 155 only runs after the delete loop at 152-154 completes. WHY: If any `group(groupUuid).remove()` throws, `deletedAll` is never set, so the non-daemon thread loops forever and the test JVM hangs. HOW: set the thread as daemon and/or wrap deletion in try/finally so `deletedAll.set(true)` always executes."
+     },
+     {
+      "file": "GroupTest.java",
+      "lines": [
+       117,
+       158
+      ],
+      "texto": "The test has a mid-loop abort hazard."
+     },
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       152,
+       155
+      ],
+      "texto": "The reader's stop flag is set only after every deletion succeeds, with no finally block. If any remove() throws, the test exits with a live non-daemon thread that keeps issuing requests and collecting exceptions indefinitely, interfering with teardown and potentially preventing JVM termination. Put stop signaling and reader termination in a finally block around deletion."
+     }
+    ]
+   }
+  ]
+ },
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "da09bc0808e7c6df1bc10e00d5acf764d94c7cc7",
+  "base": "c9a47dd0cebd121ff73f24e1f8c1829579daf8e3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/lib/server/service/insightsBooking.ts",
+    "lines": [
+     72,
+     80
+    ],
+    "texto": "`getAuthorizationConditions()` always returns a non-null `Prisma.Sql`, even when access is denied (it returns `NOTHING_CONDITION`), and a Sql object is always truthy. So the `else if (filterConditions)` and final `else` branches can never run. Anyone reading the code would wrongly think filters might be applied without authorization; simplify to always using `authConditions`, ANDed with `filterConditions` when that is present."
+   },
+   {
+    "id": "S2",
+    "file": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts",
+    "lines": [
+     480,
+     491
+    ],
+    "texto": "The only booking in this test matches both the authorization condition (the user's own non-team booking) and the eventTypeId filter. As a result, getBaseConditions would still pass if it returned only authConditions, only filterConditions, or joined them with OR. Add a booking for the same user with a different event type, which the filter should exclude, and a booking of the filtered event type that auth should exclude (for example, by another user). Then assert that only userBooking is returned."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#01",
+    "descricao": "In getBaseConditions, the branches for a missing authorization condition are unreachable because getAuthorizationConditions always returns a Prisma.Sql.",
+    "textoGolden": "In getBaseConditions(), the else if (filterConditions) and final else branches are unreachable. This is because getAuthorizationConditions() always returns a non-null Prisma.Sql object, making authConditions always truthy, which means only the first two if/else if conditions are ever evaluated.",
+    "comentarios": [
+     {
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       72,
+       80
+      ],
+      "texto": "getAuthorizationConditions() always returns a non-null Prisma.Sql, so the `else if (filterConditions)` and final `else` branches (returning NOTHING_CONDITION) in getBaseConditions can never execute. Simplify to: if filterConditions, combine it with authConditions; otherwise return authConditions."
+     },
+     {
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       68,
+       81
+      ],
+      "texto": "Unreachable branches in getBaseConditions: authConditions is always a truthy Prisma.Sql object (never null, NOTHING is `1=0`), so `else if (filterConditions)` and final `else { return NOTHING }` can never execute. Simplify to if(filter) return auth AND filter else return auth, or make the nothing-case explicit."
+     },
+     {
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       76,
+       77
+      ],
+      "texto": "WHAT: `getBaseConditions` returns `filterConditions` alone (no authorization predicate) when `authConditions` is falsy (`else if (filterConditions) { return filterConditions; }`). WHY: The WHERE clause returned to consumers then contains no ownership/authorization restriction, so a caller using it would return every booking matching the filters (e.g. all bookings for the given eventTypeId/memberUserId) regardless of the requesting user's org/team membership \u2014 an authorization-boundary bypass if `getAuthorizationConditions()` ever yields a falsy value. HOW: Always AND the authorization predicate with the filters and fall back to `NOTHING_CONDITION` when no auth predicate exists, e.g. `return filterConditions ? Prisma.sql`(${authConditions}) AND (${filterConditions})` : authConditions;` (or keep the `NOTHING_CONDITION` default when auth is missing)."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#03",
+    "descricao": "The getBaseConditions test uses a single booking matching both auth and filter conditions, so it would pass even if the conditions were not combined.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts",
+      "lines": [
+       480,
+       491
+      ],
+      "texto": "The rewritten \"should combine authorization and filter conditions\" test cannot fail if the combination is broken. The fixture creates a single booking that satisfies the auth condition (userId = user.id AND teamId IS NULL) and the filter condition (eventTypeId = eventType.id) independently, so getBaseConditions returning auth-only, filter-only, or the AND combination all yield the same single-row result asserted here. Only a `1=0` result would be caught. Make the data distinguish the two: add a booking that matches the filter but not the auth (e.g. a team booking with the same eventTypeId), then assert the result excludes it, so that dropping either branch changes the returned rows."
+     }
+    ]
+   }
+  ]
+ }
+}

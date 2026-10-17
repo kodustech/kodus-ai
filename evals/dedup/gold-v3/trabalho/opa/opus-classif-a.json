@@ -1,0 +1,170 @@
+{
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "IdentityProviderStorageProvider.java:254 adds `orgId == null || BROKER_PUBLIC` to the shared getLoginPredicate, and IdentityProviderBean.java:225-226 uses it unmodified as federatedProviderPredicate for the base bean used when organizations are disabled (getFederatedIdentityProviders:213). A user's linked IdP that carries an organizationId but is not public is now filtered out of the base login page, a behaviour change beyond caching.",
+    "category": "bug",
+    "comment": "Adding the organization/BROKER_PUBLIC check to the shared LoginFilter.getLoginPredicate also changes IdentityProviderBean.federatedProviderPredicate, so with organizations disabled a user's linked IdP that has an organizationId but is not public is no longer shown on the login page.",
+    "severity": "medium"
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-02": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "InfinispanIdentityProviderStorageProvider.java:215 keys the cache by realm+mode only; lines 233-240 invalidate the entry and rebuild it merged with prior search keys for each new organizationId. This mirrors the existing getByOrganization pattern (lines 178-195) and the rebuild happens once per org until invalidation, so the cost is a design trade-off rather than a user-visible defect.",
+    "category": "perf",
+    "comment": "getForLogin caches all organizations under one realm/mode entry, so each new organizationId invalidates and rebuilds that entry with every previously cached search merged in, instead of caching per organization.",
+    "severity": "medium"
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "Profile.java:56-58 defines ADMIN_FINE_GRAINED_AUTHZ (v1) and ADMIN_FINE_GRAINED_AUTHZ_V2 as two versions of the same feature key, and Profile.java:285 rejects enabling multiple versions together. The listener at AdminPermissions.java:77 only runs when V1 is enabled, in which case management() returns MgmtPermissions, never ClientPermissionsV2, so the throwing setPermissionsEnabled is unreachable from it.",
+    "category": null,
+    "comment": "Claims that with both fine-grained authz V1 and V2 enabled, the ClientRemovedEvent listener calls ClientPermissionsV2.setPermissionsEnabled, which now throws, so client deletion fails.",
+    "severity": "high"
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-02": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "ClientPermissionsV2.java:147-150 now throws UnsupportedOperationException from canExchangeTo, and MgmtPermissionsV2.clients() returns ClientPermissionsV2. V1 TOKEN_EXCHANGE (Profile.java:76) has no dependency on FGAP V1, and V1TokenExchangeProvider:154 reaches AbstractTokenExchangeProvider.java:276 `clients().canExchangeTo(...)`, so with V1 token exchange plus FGAP V2 a client-to-client exchange becomes a server error instead of an allow/deny.",
+    "category": "bug",
+    "comment": "ClientPermissionsV2.canExchangeTo throws UnsupportedOperationException, but AbstractTokenExchangeProvider still calls clients().canExchangeTo for client-to-client exchange, so with token exchange and FGAP V2 enabled the request fails with a server error instead of a permission decision.",
+    "severity": "high"
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-03": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "RoleContainerResource.java:353 requires CONFIGURE (canManage -> clients().canConfigure), but RoleResource.java:122 then calls requireMapComposite(composite), which goes through RolePermissions.canMapComposite:398 -> clients().canMapCompositeRoles; canManageDefault only checks MANAGE_CLIENTS. CONFIGURE therefore cannot make addComposites succeed on its own, so a broken canMapCompositeRoles would make the positive step at PermissionClientTest.java:364 fail.",
+    "category": null,
+    "comment": "Claims the test grants CONFIGURE together with MAP_ROLES_COMPOSITE, so addComposites may succeed because of CONFIGURE and the test would pass even if canMapCompositeRoles were broken.",
+    "severity": "medium"
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-04": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "Both management-permissions endpoints in ClientResource.java (GET ~line 706, PUT ~line 739) start with ProfileHelper.requireFeature(ADMIN_FINE_GRAINED_AUTHZ). V1 cannot be enabled together with V2 (Profile.java:285), so under V2 the request is rejected before isPermissionsEnabled/setPermissionsEnabled/resource/getPermissions on ClientPermissionsV2 are reached.",
+    "category": null,
+    "comment": "Claims that under FGAP V2 the client management-permissions GET/PUT endpoints call the throwing ClientPermissionsV2 overrides and return 500.",
+    "severity": "high"
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com#opa-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "packages/ui/form/MultiEmailLazy.tsx:3 carries `/** These are like 40kb that not every user needs */`, copied verbatim from PhoneInputLazy.tsx:3 and AddressInputLazy.tsx:3, while MultiEmail.tsx only imports existing @calcom/ui components. The comment is inaccurate but changes no behaviour.",
+    "category": "doc_defect",
+    "comment": "The comment in MultiEmailLazy.tsx (\"These are like 40kb\") is copied from the phone input lazy loader and does not apply to MultiEmail, which only uses existing UI components.",
+    "severity": "low"
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak#opa-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "VerifyMessageProperties.java:74-79 derives the _en.properties path by string replacement and wraps the FileInputStream IOException in a RuntimeException, which escapes verify() (it only catches IOException from line 49) and ThemeVerifierMojo:51. A messages_* file without an English sibling crashes the mojo with an unhandled exception instead of a validation message.",
+    "category": "bug",
+    "comment": "If the English counterpart of a messages_*.properties file does not exist, verifySafeHtml throws an unchecked RuntimeException that escapes the mojo, crashing the build instead of reporting a validation message.",
+    "severity": "medium"
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex#opa-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "database.go:52 changes ProvideAnonDBStore to take `deviceLimit int64`, while pkg/server/wire.go:374-375 still lists anonstore.ProvideAnonDBStore and binds AnonStore to it. No provider supplies a bare int64 and impl.go now constructs the store itself, so wire generation fails.",
+    "category": "api",
+    "comment": "ProvideAnonDBStore now takes an int64 deviceLimit but is still registered as a Wire provider (with an AnonStore bind) in pkg/server/wire.go; Wire cannot supply an int64, so DI generation and the server build fail.",
+    "severity": "high"
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex#opa-02": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "client.go:44-50 enforces the limit only via TagDevice returning ErrDeviceLimitReached, and impl.go:119-122 returns nil when the X-Grafana-Device-Id header is empty. A client that omits the header always gets an anonymous identity regardless of device_limit.",
+    "category": "security",
+    "comment": "The anonymous device limit is enforced only through TagDevice, which returns nil when the client-controlled device ID header is missing, so requests without the header authenticate anonymously regardless of the configured limit.",
+    "severity": "medium"
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex#opa-03": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "Grafana's MySQL connection string sets clientFoundRows=true (pkg/services/sqlstore/sqlstore.go:287), so RowsAffected reports matched rows, not changed rows. An existing device in the window returns 1 even when its values are unchanged, so database.go:95 does not wrongly report ErrDeviceLimitReached.",
+    "category": null,
+    "comment": "Claims updateDevice's RowsAffected()==0 check wrongly denies already-registered devices on MySQL because MySQL reports changed rather than matched rows.",
+    "severity": "medium"
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex#opa-04": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "database.go:72 says updateDevice updates a device 'updated between the given times', but the signature at :73 takes only ctx and device and computes the window internally (:80-81) and returns ErrDeviceLimitReached on no match. Inaccurate doc comment, no behaviour impact.",
+    "category": "doc_defect",
+    "comment": "The doc comment on updateDevice says it updates a device \"updated between the given times\", but the function takes no times, computes the 30-day window itself and returns ErrDeviceLimitReached when no row matches.",
+    "severity": "low"
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "topic_retriever.rb:26 throttles on `retrieved:#{@embed_url}` and embed_controller.rb:15 enqueues retrieve_topic for any embed_url on the embeddable host (Referer check at :26 is forgeable). Varying the query string yields new keys and TopicEmbed.import (topic_embed.rb:15-28) creates a new topic per distinct URL as embed_by_username.",
+    "category": "security",
+    "comment": "The retrieve throttle is keyed by the full embed URL, so an anonymous client can vary the query string on the embeddable host to bypass it and make the server create an unbounded number of topics.",
+    "severity": "medium"
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-02": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "best.html.erb:6 `<%- end if %>` is followed by a blank line and indentation, so in Rails' Erubis the next compiled statement is the whitespace text append, not the logo output at :8. That append is truthy and harmless; the logo is still emitted after the if/else, so the header order does not change.",
+    "category": null,
+    "comment": "Claims `<%- end if %>` leaves a dangling if modifier that makes the logo output the condition, so the logo renders before the header button.",
+    "severity": "low"
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-03": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "discourse_expires_in (application_controller.rb:168-170) returns immediately unless can_cache_content?, which is `!current_user.present?` (:163-165), and the anonymous cache middleware also skips requests with an auth cookie. A logged-in user's TopicView is never put in the shared cache.",
+    "category": null,
+    "comment": "Claims the embed best action builds the view for current_user and then marks it publicly cacheable, so a staff member's view could be served to anonymous visitors.",
+    "severity": "high"
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-04": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "poll_feed.rb:15-17 requires feed_polling_enabled?, feed_polling_url.present? and embed_by_username.present?; site_settings.yml:356-357 defaults both to ''. The spec at poll_feed_spec.rb:12-16 only stubs feed_polling_enabled? to false, so it would still pass if that check were removed.",
+    "category": "test_gap",
+    "comment": "The \"requires feed_polling_enabled?\" spec leaves feed_polling_url and embed_by_username at their blank defaults, so poll_feed is skipped regardless and the test would pass even without the enabled check.",
+    "severity": "medium"
+  },
+  "feat-2fa-backup-codes-cal-com#opa-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "login.2fa.e2e.ts:53 asserts on an unawaited isChecked() Promise, but that assertion predates this PR; the PR only adds a FIXME at :50-51 acknowledging it passes even when unchecked. It is a known pre-existing defect the PR explicitly flags rather than introduces.",
+    "category": null,
+    "comment": "The first 2FA e2e test asserts toBeTruthy() on an unawaited isChecked() Promise, so it always passes even though the backup-codes step now keeps 2FA unchecked until Close is clicked.",
+    "severity": "medium"
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#opa-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "assignment_source.py to_dict uses asdict, so `queued` is a datetime, but Sentry's bad-pickle check (celery.py:40-58 holds_bad_pickle_object) only rejects Django models and classes from sentry./getsentry. modules; datetime passes. So apply_async in sync.py:136-144 does not fail under CELERY_COMPLAIN_ABOUT_BAD_USE_OF_PICKLE, and the JSON-serializer failure is hypothetical.",
+    "category": null,
+    "comment": "Claims passing AssignmentSource.to_dict() with a raw datetime to sync_assignee_outbound.apply_async fails Sentry's bad-pickle check in tests and would break under a JSON serializer.",
+    "severity": "medium"
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#opa-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "IssueOccurrence defines a custom __eq__ comparing only id (src/sentry/issues/issue_occurrence.py:181-184), and build_mock_occurrence_and_event uses a fixed id. The fingerprint mismatch (val1 vs group_key) at test_detector.py:536-551 therefore does not make the equality fail.",
+    "category": null,
+    "comment": "Claims test_dedupe in TestEvaluateGroupKeyValue fails because the expected occurrence is built with group_key \"val1\" while evaluation uses \"group_key\", and IssueOccurrence compares fingerprints in __eq__.",
+    "severity": "low"
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#opa-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "workflow_engine/types.py:8-12 defines DetectorPriorityLevel LOW/MEDIUM/HIGH as PriorityLevel.LOW/MEDIUM/HIGH (25/50/75 in types/group.py:63-66), and detector.py:299-301 only calls PriorityLevel(new_status) when new_status != OK. The conversion is safe; the comment is an unverified 'check that' request with no defect.",
+    "category": null,
+    "comment": "Asks to verify that PriorityLevel(new_status) in evaluate_group_key_value is safe, i.e. that non-OK DetectorPriorityLevel values match PriorityLevel values.",
+    "severity": "medium"
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor#opa-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "uploads_controller.rb:55 names the API URL-upload tempfile `discourse-upload-#{type}` with type from params, and :67 now passes tempfile.path to OptimizedImage.downsize, whose convert_with (optimized_image.rb:160-161) runs the joined instructions through backticks without escaping. Shell metacharacters in `type` execute on the server when an oversized image is downsized.",
+    "category": "security",
+    "comment": "The upload tempfile path, which for API URL uploads embeds the request-controlled type param, is now passed to OptimizedImage.downsize and run unescaped in a shell via backticks, allowing command injection through type.",
+    "severity": "critical"
+  }
+}

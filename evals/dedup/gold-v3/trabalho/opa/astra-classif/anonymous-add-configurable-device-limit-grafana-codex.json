@@ -1,0 +1,33 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "items": [
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "pkg/server/wire.go:374-375 retains the provider and binding, but pkg/services/anonymous/anonimpl/impl.go:36-43 now constructs the store directly, leaving neither type required by injection. Wire permits unused providers inside imported provider sets, so this registration does not require resolving int64 or cause the claimed generation failure.",
+   "severity": "high"
+  },
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-02",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "pkg/services/anonymous/anonimpl/impl.go:119-122 returns nil when the device header is absent, and client.go:44-58 consequently returns an anonymous identity without checking the configured limit. This bypasses the enforcement introduced by the PR, although the additional claim about fresh random IDs is incorrect: database.go:95-96 rejects unknown devices when the limit is reached.",
+   "severity": "high"
+  },
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-03",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "pkg/services/sqlstore/sqlstore.go:287 explicitly sets clientFoundRows=true for MySQL connections, so RowsAffected reports matched rows even when values remain unchanged. Consequently, the check in pkg/services/anonymous/anonimpl/anonstore/database.go:90-96 does not reject an existing matching device under the described conditions.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-04",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "pkg/services/anonymous/anonimpl/anonstore/database.go:72 describes 'given times', but the signature at line 73 accepts only context and device, and lines 80-81 derive the window internally. This is imprecise documentation introduced by the PR, with no behavioral effect.",
+   "severity": "low"
+  }
+ ]
+}

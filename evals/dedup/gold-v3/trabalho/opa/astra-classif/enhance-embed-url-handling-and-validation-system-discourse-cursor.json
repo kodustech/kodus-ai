@@ -1,0 +1,33 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "lib/topic_retriever.rb:26 keys throttling by the unchanged URL, and app/models/topic_embed.rb:15-28 creates separate topics for distinct URL strings. Anonymous requests enqueue retrieval after only a Referer-host check (app/controllers/embed_controller.rb:15,26), allowing query-string variants to generate duplicate topics; when embed_by_username is staff, model rate limits also permit unlimited creation (lib/rate_limiter.rb:73-74).",
+   "severity": "high"
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-02",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "app/views/embed/best.html.erb:6-8 contains whitespace between the dangling modifier and the logo expression. Under the configured [Rails template compiler](https://raw.githubusercontent.com/rails/rails/v4.0.2/actionpack/lib/action_view/template/handlers/erb.rb), that whitespace append becomes the condition, so the logo does not move before the button as claimed.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-03",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "app/controllers/application_controller.rb:163-170 explicitly skips discourse_expires_in caching whenever current_user is present; it does not mark authenticated responses publicly cacheable. lib/middleware/anonymous_cache.rb:29-30 also excludes requests with authentication cookies, preventing the claimed privileged-response cache leak.",
+   "severity": "critical"
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-04",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "spec/jobs/poll_feed_spec.rb:12-16 stubs only the enabled flag, leaving feed_polling_url and embed_by_username blank as configured in config/site_settings.yml:355-357. Consequently, the independent presence checks in app/jobs/scheduled/poll_feed.rb:15-17 keep the test passing even if the enabled check is removed, so it does not verify its stated behavior.",
+   "severity": "medium"
+  }
+ ]
+}

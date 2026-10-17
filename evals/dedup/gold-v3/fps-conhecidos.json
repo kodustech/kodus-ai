@@ -631,6 +631,54 @@
     "subclass_opus_inicial": "hallucination",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination"
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-02",
+    "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+    "comment": "getForLogin caches all organizations under one realm/mode entry, so each new organizationId invalidates and rebuilds that entry with every previously cached search merged in, instead of caching per organization.",
+    "commentOpus": "getForLogin caches all organizations under one realm/mode entry, so each new organizationId invalidates and rebuilds that entry with every previously cached search merged in, instead of caching per organization.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S4"
+     ]
+    },
+    "reason_opus": "InfinispanIdentityProviderStorageProvider.java:215 keys the cache by realm+mode only; lines 233-240 invalidate the entry and rebuild it merged with prior search keys for each new organizationId. This mirrors the existing getByOrganization pattern (lines 178-195) and the rebuild happens once per org until invalidation, so the cost is a design trade-off rather than a user-visible defect.",
+    "reason_astra": "The claimed cluster-wide invalidations do not occur: model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/CacheManager.java:124 only removes the local entry and bumps its revision, and quarkus/runtime/src/main/resources/cache-ispn.xml:26 configures realms as a local cache. model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/IdentityProviderListQuery.java:43 does copy previous search mappings on a miss, but that does not establish the claimed cluster-wide login-path performance regression.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "opa",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "texto": "InfinispanIdentityProviderStorageProvider.java:215 keys the cache by realm+mode only; lines 233-240 invalidate the entry and rebuild it merged with prior search keys for each new organizationId. This mirrors the existing getByOrganization pattern (lines 178-195) and the rebuild happens once per org until invalidation, so the cost is a design trade-off rather than a user-visible defect."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "texto": "The claimed cluster-wide invalidations do not occur: model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/CacheManager.java:124 only removes the local entry and bumps its revision, and quarkus/runtime/src/main/resources/cache-ispn.xml:26 configures realms as a local cache. model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/IdentityProviderListQuery.java:43 does copy previous search mappings on a miss, but that does not establish the claimed cluster-wide login-path performance regression."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "texto": "Concede. CacheManager.java:124 `invalidateObject` only does `cache.remove(id)` + `bumpVersion(id)`, and cache-ispn.xml:26 declares `<local-cache name=\"realms\" simple-cache=\"true\">`, so no cluster-wide invalidation happens. The comment's main harm rests on a false fact. What remains, rebuilding a merged entry once per new org, is a bounded design trade-off that mirrors getByOrganization."
+     }
+    ],
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed_after_debate",
+    "severity": "medium",
+    "category": null
    }
   ],
   "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
@@ -887,6 +935,82 @@
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination",
     "rodada": "sncc",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "high",
+    "category": null
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-01",
+    "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+    "comment": "Claims that with both fine-grained authz V1 and V2 enabled, the ClientRemovedEvent listener calls ClientPermissionsV2.setPermissionsEnabled, which now throws, so client deletion fails.",
+    "commentOpus": "Claims that with both fine-grained authz V1 and V2 enabled, the ClientRemovedEvent listener calls ClientPermissionsV2.setPermissionsEnabled, which now throws, so client deletion fails.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S2",
+      "S6"
+     ]
+    },
+    "reason_opus": "Profile.java:56-58 defines ADMIN_FINE_GRAINED_AUTHZ (v1) and ADMIN_FINE_GRAINED_AUTHZ_V2 as two versions of the same feature key, and Profile.java:285 rejects enabling multiple versions together. The listener at AdminPermissions.java:77 only runs when V1 is enabled, in which case management() returns MgmtPermissions, never ClientPermissionsV2, so the throwing setPermissionsEnabled is unreachable from it.",
+    "reason_astra": "common/src/main/java/org/keycloak/common/Profile.java:283-306 rejects enabling multiple versions of the same feature and enables only the selected version. Consequently, the V1 guard at services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java:77 prevents the deletion listener from reaching the throwing V2 method.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "opa",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "high",
+    "category": null
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-03",
+    "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+    "comment": "Claims the test grants CONFIGURE together with MAP_ROLES_COMPOSITE, so addComposites may succeed because of CONFIGURE and the test would pass even if canMapCompositeRoles were broken.",
+    "commentOpus": "Claims the test grants CONFIGURE together with MAP_ROLES_COMPOSITE, so addComposites may succeed because of CONFIGURE and the test would pass even if canMapCompositeRoles were broken.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S8"
+     ]
+    },
+    "reason_opus": "RoleContainerResource.java:353 requires CONFIGURE (canManage -> clients().canConfigure), but RoleResource.java:122 then calls requireMapComposite(composite), which goes through RolePermissions.canMapComposite:398 -> clients().canMapCompositeRoles; canManageDefault only checks MANAGE_CLIENTS. CONFIGURE therefore cannot make addComposites succeed on its own, so a broken canMapCompositeRoles would make the positive step at PermissionClientTest.java:364 fail.",
+    "reason_astra": "services/src/main/java/org/keycloak/services/resources/admin/RoleResource.java:123 independently requires permission to map each composite role. RolePermissions.java:391-398 calls canMapCompositeRoles, and its default bypass at RolePermissions.java:475-480 checks canManageClientsDefault, not canConfigure; CONFIGURE therefore does not bypass the composite permission check as claimed.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "opa",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-04",
+    "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+    "comment": "Claims that under FGAP V2 the client management-permissions GET/PUT endpoints call the throwing ClientPermissionsV2 overrides and return 500.",
+    "commentOpus": "Claims that under FGAP V2 the client management-permissions GET/PUT endpoints call the throwing ClientPermissionsV2 overrides and return 500.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S10"
+     ]
+    },
+    "reason_opus": "Both management-permissions endpoints in ClientResource.java (GET ~line 706, PUT ~line 739) start with ProfileHelper.requireFeature(ADMIN_FINE_GRAINED_AUTHZ). V1 cannot be enabled together with V2 (Profile.java:285), so under V2 the request is rejected before isPermissionsEnabled/setPermissionsEnabled/resource/getPermissions on ClientPermissionsV2 are reached.",
+    "reason_astra": "services/src/main/java/org/keycloak/services/resources/admin/ClientResource.java:706 and :739 already guard both endpoints with the V1 feature requirement. Since common/src/main/java/org/keycloak/common/Profile.java:283-306 makes V1 and V2 mutually exclusive, services/src/main/java/org/keycloak/utils/ProfileHelper.java:30-32 rejects these requests with 501 before any throwing V2 override is reached.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "opa",
     "class": "FP",
     "subclass": "hallucination",
     "status": "agreed",
@@ -2319,6 +2443,81 @@
     "subclass": "hallucination",
     "status": "agreed",
     "severity": "high",
+    "category": null
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-01",
+    "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+    "comment": "ProvideAnonDBStore now takes an int64 deviceLimit but is still registered as a Wire provider (with an AnonStore bind) in pkg/server/wire.go; Wire cannot supply an int64, so DI generation and the server build fail.",
+    "commentOpus": "ProvideAnonDBStore now takes an int64 deviceLimit but is still registered as a Wire provider (with an AnonStore bind) in pkg/server/wire.go; Wire cannot supply an int64, so DI generation and the server build fail.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S1",
+      "S8",
+      "S12"
+     ]
+    },
+    "reason_opus": "database.go:52 changes ProvideAnonDBStore to take `deviceLimit int64`, while pkg/server/wire.go:374-375 still lists anonstore.ProvideAnonDBStore and binds AnonStore to it. No provider supplies a bare int64 and impl.go now constructs the store itself, so wire generation fails.",
+    "reason_astra": "pkg/server/wire.go:374-375 retains the provider and binding, but pkg/services/anonymous/anonimpl/impl.go:36-43 now constructs the store directly, leaving neither type required by injection. Wire permits unused providers inside imported provider sets, so this registration does not require resolving int64 or cause the claimed generation failure.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "opa",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "database.go:52 changes ProvideAnonDBStore to take `deviceLimit int64`, while pkg/server/wire.go:374-375 still lists anonstore.ProvideAnonDBStore and binds AnonStore to it. No provider supplies a bare int64 and impl.go now constructs the store itself, so wire generation fails."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "texto": "pkg/server/wire.go:374-375 retains the provider and binding, but pkg/services/anonymous/anonimpl/impl.go:36-43 now constructs the store directly, leaving neither type required by injection. Wire permits unused providers inside imported provider sets, so this registration does not require resolving int64 or cause the claimed generation failure."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "texto": "Concede. wire.go:374-375 keeps the provider inside wireBasicSet (wire.NewSet at :174), not as a direct wire.Build argument. Nothing injected depends on AnonStore any more: impl.go:43 `anonStore: anonstore.ProvideAnonDBStore(sqlStore, cfg.AnonymousDeviceLimit)` and impl.go:61 passes it to api.NewAnonDeviceServiceAPI by hand. Wire resolves only what the injector needs, so the int64 input is never required and generation does not fail. What remains is a dead registration, not the claimed build failure."
+     }
+    ],
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed_after_debate",
+    "severity": "high",
+    "category": null
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-03",
+    "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+    "comment": "Claims updateDevice's RowsAffected()==0 check wrongly denies already-registered devices on MySQL because MySQL reports changed rather than matched rows.",
+    "commentOpus": "Claims updateDevice's RowsAffected()==0 check wrongly denies already-registered devices on MySQL because MySQL reports changed rather than matched rows.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S4"
+     ]
+    },
+    "reason_opus": "Grafana's MySQL connection string sets clientFoundRows=true (pkg/services/sqlstore/sqlstore.go:287), so RowsAffected reports matched rows, not changed rows. An existing device in the window returns 1 even when its values are unchanged, so database.go:95 does not wrongly report ErrDeviceLimitReached.",
+    "reason_astra": "pkg/services/sqlstore/sqlstore.go:287 explicitly sets clientFoundRows=true for MySQL connections, so RowsAffected reports matched rows even when values remain unchanged. Consequently, the check in pkg/services/anonymous/anonimpl/anonstore/database.go:90-96 does not reject an existing matching device under the described conditions.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "opa",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "medium",
     "category": null
    }
   ],
@@ -3987,6 +4186,56 @@
     "status": "agreed_after_debate",
     "severity": "high",
     "category": null
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-02",
+    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "comment": "Claims `<%- end if %>` leaves a dangling if modifier that makes the logo output the condition, so the logo renders before the header button.",
+    "commentOpus": "Claims `<%- end if %>` leaves a dangling if modifier that makes the logo output the condition, so the logo renders before the header button.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S8"
+     ]
+    },
+    "reason_opus": "best.html.erb:6 `<%- end if %>` is followed by a blank line and indentation, so in Rails' Erubis the next compiled statement is the whitespace text append, not the logo output at :8. That append is truthy and harmless; the logo is still emitted after the if/else, so the header order does not change.",
+    "reason_astra": "app/views/embed/best.html.erb:6-8 contains whitespace between the dangling modifier and the logo expression. Under the configured [Rails template compiler](https://raw.githubusercontent.com/rails/rails/v4.0.2/actionpack/lib/action_view/template/handlers/erb.rb), that whitespace append becomes the condition, so the logo does not move before the button as claimed.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "opa",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "low",
+    "category": null
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-03",
+    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "comment": "Claims the embed best action builds the view for current_user and then marks it publicly cacheable, so a staff member's view could be served to anonymous visitors.",
+    "commentOpus": "Claims the embed best action builds the view for current_user and then marks it publicly cacheable, so a staff member's view could be served to anonymous visitors.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S16"
+     ]
+    },
+    "reason_opus": "discourse_expires_in (application_controller.rb:168-170) returns immediately unless can_cache_content?, which is `!current_user.present?` (:163-165), and the anonymous cache middleware also skips requests with an auth cookie. A logged-in user's TopicView is never put in the shared cache.",
+    "reason_astra": "app/controllers/application_controller.rb:163-170 explicitly skips discourse_expires_in caching whenever current_user is present; it does not mark authenticated responses publicly cacheable. lib/middleware/anonymous_cache.rb:29-30 also excludes requests with authentication cookies, preventing the claimed privileged-response cache leak.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "opa",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "high",
+    "category": null
    }
   ],
   "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
@@ -4296,6 +4545,61 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#opa-01",
+    "caseId": "feat-2fa-backup-codes-cal-com",
+    "comment": "The first 2FA e2e test asserts toBeTruthy() on an unawaited isChecked() Promise, so it always passes even though the backup-codes step now keeps 2FA unchecked until Close is clicked.",
+    "commentOpus": "The first 2FA e2e test asserts toBeTruthy() on an unawaited isChecked() Promise, so it always passes even though the backup-codes step now keeps 2FA unchecked until Close is clicked.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S9"
+     ]
+    },
+    "reason_opus": "login.2fa.e2e.ts:53 asserts on an unawaited isChecked() Promise, but that assertion predates this PR; the PR only adds a FIXME at :50-51 acknowledging it passes even when unchecked. It is a known pre-existing defect the PR explicitly flags rather than introduces.",
+    "reason_astra": "apps/web/playwright/login.2fa.e2e.ts:53 asserts the truthiness of the Promise returned by isChecked(), so it never verifies the switch state. Although that assertion predates this PR, the PR changes EnableTwoFactorModal.tsx:135 to display backup codes and delays onEnable() until Close at :269; that callback refreshes the switch state in apps/web/pages/settings/security/two-factor-auth.tsx:65-67. The first test skips this newly required step, leaving its completion assertion ineffective for the changed flow.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "opa",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "login.2fa.e2e.ts:53 asserts on an unawaited isChecked() Promise, but that assertion predates this PR; the PR only adds a FIXME at :50-51 acknowledging it passes even when unchecked. It is a known pre-existing defect the PR explicitly flags rather than introduces."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "apps/web/playwright/login.2fa.e2e.ts:53 asserts the truthiness of the Promise returned by isChecked(), so it never verifies the switch state. Although that assertion predates this PR, the PR changes EnableTwoFactorModal.tsx:135 to display backup codes and delays onEnable() until Close at :269; that callback refreshes the switch state in apps/web/pages/settings/security/two-factor-auth.tsx:65-67. The first test skips this newly required step, leaving its completion assertion ineffective for the changed flow."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Keep FP none. login.2fa.e2e.ts:53 `await expect(page.locator(...).isChecked()).toBeTruthy();` is unchanged by the PR; the PR only adds the FIXME at :50-51 that admits it is vacuous. It was just as vacuous before, so the pre-existing ruling applies. The new flow does not break what the test checks. 2FA is enabled on the server when the OTP is submitted (settings/EnableTwoFactorModal.tsx:~86-92 calls the enable API and receives `body.backupCodes`); only the UI refresh waits for Close (:265-269). The 'Login with 2FA enabled' step (:60-80) still fails if 2FA was not enabled, so the test's purpose holds and the defect predates this PR."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Changed to FP: the unawaited isChecked() assertion is unchanged from base; this PR only adds a FIXME acknowledging its existing defect. The enable endpoint persists twoFactorEnabled: true before the backup-codes screen appears, so Close refreshes the UI rather than enabling 2FA. The subsequent login step still exercises OTP authentication. The vacuous switch assertion therefore falls under the pre-existing-defect rule."
+     }
+    ],
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "medium",
+    "category": null
    }
   ],
   "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
@@ -4603,6 +4907,31 @@
     "subclass_opus_inicial": "nit",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination"
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#opa-01",
+    "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+    "comment": "Claims passing AssignmentSource.to_dict() with a raw datetime to sync_assignee_outbound.apply_async fails Sentry's bad-pickle check in tests and would break under a JSON serializer.",
+    "commentOpus": "Claims passing AssignmentSource.to_dict() with a raw datetime to sync_assignee_outbound.apply_async fails Sentry's bad-pickle check in tests and would break under a JSON serializer.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S5"
+     ]
+    },
+    "reason_opus": "assignment_source.py to_dict uses asdict, so `queued` is a datetime, but Sentry's bad-pickle check (celery.py:40-58 holds_bad_pickle_object) only rejects Django models and classes from sentry./getsentry. modules; datetime passes. So apply_async in sync.py:136-144 does not fail under CELERY_COMPLAIN_ABOUT_BAD_USE_OF_PICKLE, and the JSON-serializer failure is hypothetical.",
+    "reason_astra": "AssignmentSource.to_dict() preserves the datetime (src/sentry/integrations/services/assignment_source.py:18,27-28), but the claimed validation failure is false: the bad-pickle check rejects Django models and sentry/getsentry classes, not datetime objects (src/sentry/celery.py:49-58). Celery currently uses pickle (src/sentry/conf/server.py:739), so the hypothetical serializer change establishes no enqueue defect in this PR.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "opa",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
    }
   ],
   "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
@@ -5210,6 +5539,55 @@
     "subclass_opus_inicial": "hallucination",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination"
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#opa-01",
+    "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+    "comment": "_hydrateEmbedded now treats every `_ids` key as an embedded collection: it calls `.map` without a null/array check (TypeError on null) and always deletes the original key, replacing real id arrays with undefined lookups when the root has no matching collection.",
+    "commentOpus": "_hydrateEmbedded now treats every `_ids` key as an embedded collection: it calls `.map` without a null/array check (TypeError on null) and always deletes the original key, replacing real id arrays with undefined lookups when the root has no matching collection.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S8",
+      "S22"
+     ]
+    },
+    "reason_opus": "store.js.es6:192-201 changes the regex to /(.+)_id(s?)$/ and, for any `_ids` key, unconditionally calls obj[k].map(...) and deletes the original key. A null value throws a TypeError and a plain id array whose collection is not in root is replaced by an array of undefined under the pluralized key, losing the ids.",
+    "reason_astra": "The branch does not run on every hydrated model: app/assets/javascripts/discourse/models/store.js.es6:222 requires root.__rest_serializer === \"1\", which app/controllers/application_controller.rb:244-245 adds only explicitly. The opted-in serializers supply no plain group_ids or nullable *_ids; the new relationship is a has_many collection with embedded records (app/serializers/embedding_serializer.rb:3; app/serializers/application_serializer.rb:2), so the claimed regression has no producer in this checkout. The base regex /(.+)\\_id$/ also never matched *_ids, contrary to the second comment.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "opa",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "store.js.es6:192-201 changes the regex to /(.+)_id(s?)$/ and, for any `_ids` key, unconditionally calls obj[k].map(...) and deletes the original key. A null value throws a TypeError and a plain id array whose collection is not in root is replaced by an array of undefined under the pluralized key, losing the ids."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "texto": "The branch does not run on every hydrated model: app/assets/javascripts/discourse/models/store.js.es6:222 requires root.__rest_serializer === \"1\", which app/controllers/application_controller.rb:244-245 adds only explicitly. The opted-in serializers supply no plain group_ids or nullable *_ids; the new relationship is a has_many collection with embedded records (app/serializers/embedding_serializer.rb:3; app/serializers/application_serializer.rb:2), so the claimed regression has no producer in this checkout. The base regex /(.+)\\_id$/ also never matched *_ids, contrary to the second comment."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "texto": "Concede. store.js.es6:222 `if (root.__rest_serializer === \"1\")` limits _hydrateEmbedded to opt-in responses (application_controller.rb:244-245). The opt-in serializers (Embedding, EmbeddableHost, QueuedPost, SimilarTopic and the topic/user serializers they embed) contain no plain or nullable *_ids; the only one is the has_many `embeddable_hosts, embed: :ids` with include true. So the claim 'every hydrated model / existing models like group_ids lose data' is false, and the base regex `/(.+)\\_id$/` never matched *_ids, contrary to the second comment."
+     }
+    ],
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed_after_debate",
+    "severity": "high",
+    "category": null
    }
   ],
   "feature-localization-fallbacks-server-side-discourse-cursor": [
@@ -6470,6 +6848,109 @@
     "status": "agreed",
     "severity": "medium",
     "category": null
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#opa-01",
+    "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+    "comment": "After a username-only step, PasswordForm fills WebAuthn context for the user and passkeys.ftl renders their credential IDs as hidden inputs, letting an unauthenticated visitor learn whether an account has a passkey and its credential IDs.",
+    "commentOpus": "After a username-only step, PasswordForm fills WebAuthn context for the user and passkeys.ftl renders their credential IDs as hidden inputs, letting an unauthenticated visitor learn whether an account has a passkey and its credential IDs.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S3"
+     ]
+    },
+    "reason_opus": "PasswordForm.java:51-54 does call webauthnAuth.fillContextForm when the identified user has passkeys, and WebAuthnAuthenticator.fillContextForm:100-108 sets the user's allowed authenticators which passkeys.ftl renders as authn_use_chk. That is the standard identifier-first WebAuthn allowCredentials behaviour (same as the existing webauthn forms after a username step), intended so the identified user can use their passkey on the password page.",
+    "reason_astra": "UsernameForm.java:58-59 validates only the username, and PasswordForm.java:52-53 then fills user-specific WebAuthn data without checking for re-authentication. WebAuthnAuthenticator.java:98-108 supplies that user's credentials, and themes/src/main/resources/theme/base/login/passkeys.ftl:11-14 exposes their IDs, enabling unauthenticated discovery of passkey enrollment.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "opa",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "PasswordForm.java:51-54 does call webauthnAuth.fillContextForm when the identified user has passkeys, and WebAuthnAuthenticator.fillContextForm:100-108 sets the user's allowed authenticators which passkeys.ftl renders as authn_use_chk. That is the standard identifier-first WebAuthn allowCredentials behaviour (same as the existing webauthn forms after a username step), intended so the identified user can use their passkey on the password page."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "UsernameForm.java:58-59 validates only the username, and PasswordForm.java:52-53 then fills user-specific WebAuthn data without checking for re-authentication. WebAuthnAuthenticator.java:98-108 supplies that user's credentials, and themes/src/main/resources/theme/base/login/passkeys.ftl:11-14 exposes their IDs, enabling unauthenticated discovery of passkey enrollment."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Keep FP none. The facts are right but the disclosure is not new. Usernames are already enumerable in this exact flow: UsernameForm.java:78-80 returns `Messages.INVALID_USERNAME` for an unknown user. Filling allowCredentials for an identified user is how WebAuthn works after a username-first step. WebAuthnAuthenticator.java:101-106 already does it for any identified user (`// in 2 Factor Scenario where the user has already been identified ... form.setAttribute(WebAuthnConstants.ALLOWED_AUTHENTICATORS, authenticators)`), and the existing webauthn-authenticate pages render those credential IDs. The PR intends this: PasswordForm.java:51 `// setup webauthn data when passkeys enabled`, and `isConditionalPasskeysEnabled` checks `currentUser.credentialManager().isConfiguredFor(...)`, so the identified user can sign in with a passkey on the password page. Credential IDs are not secrets, and limiting this to re-authentication would break the feature."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "I change my classification to FP: the credential IDs are rendered, but this implements the intended username-first passkey flow. WebAuthnPasswordlessAuthenticator inherits the existing identified-user credential handling, and webauthnAuthenticate.js consumes those IDs as allowCredentials; PasskeysUsernameFormTest explicitly checks passkey availability after entering a username. Authentication still requires a verified assertion through user.credentialManager().isValid(cred), so these identifiers do not grant access. Restricting this to re-authentication would remove intended functionality; severity remains high only under the required assumption that the alleged conditional security weakness is real."
+     }
+    ],
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "medium",
+    "category": null
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#opa-02",
+    "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+    "comment": "No test exercises a passkey failure during re-authentication, so the new setupReauthenticationInUsernamePasswordFormError call in WebAuthnConditionalUIAuthenticator is never covered.",
+    "commentOpus": "No test exercises a passkey failure during re-authentication, so the new setupReauthenticationInUsernamePasswordFormError call in WebAuthnConditionalUIAuthenticator is never covered.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S4"
+     ]
+    },
+    "reason_opus": "WebAuthnConditionalUIAuthenticator.java:52-53 adds setupReauthenticationInUsernamePasswordFormError on the passkey-error path, and none of the added tests (PasskeysUsernameFormTest, PasskeysUsernamePasswordFormTest, PasskeysOrganizationAuthenticationTest) submit a failing passkey during prompt=login re-authentication; only success and wrong-password cases are covered.",
+    "reason_astra": "PasskeysUsernamePasswordFormTest.java:367-378 exercises a password failure followed by successful passkey authentication, so it does not cover the passkey-error branch at WebAuthnConditionalUIAuthenticator.java:48-56. However, the comment only requests additional coverage; it identifies neither faulty behavior nor a test failing to verify its stated purpose.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "opa",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "texto": "WebAuthnConditionalUIAuthenticator.java:52-53 adds setupReauthenticationInUsernamePasswordFormError on the passkey-error path, and none of the added tests (PasskeysUsernameFormTest, PasskeysUsernamePasswordFormTest, PasskeysOrganizationAuthenticationTest) submit a failing passkey during prompt=login re-authentication; only success and wrong-password cases are covered."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "PasskeysUsernamePasswordFormTest.java:367-378 exercises a password failure followed by successful passkey authentication, so it does not cover the passkey-error branch at WebAuthnConditionalUIAuthenticator.java:48-56. However, the comment only requests additional coverage; it identifies neither faulty behavior nor a test failing to verify its stated purpose."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Concede. Per the rubric, a request to add a test, with no defect and no existing test that fails to verify what it was written for, is a 'consider' request: FP none. WebAuthnConditionalUIAuthenticator.java:52-53 is untested on the passkey-error path, but nothing is shown to be wrong."
+     }
+    ],
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "medium",
+    "category": null
    }
   ],
   "frontend-asset-optimization-grafana-codex": [
@@ -6866,6 +7347,54 @@
     "status": "agreed_after_debate",
     "severity": "medium",
     "category": null
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#opa-01",
+    "caseId": "github-oauth-security-enhancement-sentry",
+    "comment": "The OAuth state check in GitHub OAuthLoginView compares the callback state to pipeline.signature with a plain `!=` instead of a constant-time comparison.",
+    "commentOpus": "The OAuth state check in GitHub OAuthLoginView compares the callback state to pipeline.signature with a plain `!=` instead of a constant-time comparison.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S10"
+     ]
+    },
+    "reason_opus": "The new OAuthLoginView (github/integration.py:412) compares request.GET['state'] to pipeline.signature with `!=`, while other secret comparisons in the integrations use constant_time_compare. The state is a per-pipeline value checked over the network, so the timing difference is a hardening nit rather than an exploitable flaw.",
+    "reason_astra": "The new comparison uses plain `!=` at src/sentry/integrations/github/integration.py:412, but the claim that it compares a secret CSRF token is false: src/sentry/pipeline/base.py:132-133 computes the signature solely from pipeline view class names. Those views are fixed at src/sentry/integrations/github/integration.py:343-344, so timing cannot expose a secret; constant-time comparison would not address the separate problem of predictable OAuth state.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "opa",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "texto": "The new OAuthLoginView (github/integration.py:412) compares request.GET['state'] to pipeline.signature with `!=`, while other secret comparisons in the integrations use constant_time_compare. The state is a per-pipeline value checked over the network, so the timing difference is a hardening nit rather than an exploitable flaw."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "texto": "The new comparison uses plain `!=` at src/sentry/integrations/github/integration.py:412, but the claim that it compares a secret CSRF token is false: src/sentry/pipeline/base.py:132-133 computes the signature solely from pipeline view class names. Those views are fixed at src/sentry/integrations/github/integration.py:343-344, so timing cannot expose a secret; constant-time comparison would not address the separate problem of predictable OAuth state."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "texto": "Concede. The expected value is not secret. pipeline/base.py:132-133 `pipe_ids = [f\"{type(v).__module__}.{type(v).__name__}\" ...]; self.signature = md5_text(*pipe_ids).hexdigest()` hashes fixed class names, and github/integration.py:343-344 `return [OAuthLoginView(), GitHubInstallation()]` makes them constant. A timing leak cannot reveal anything an attacker cannot already compute, so the problem described is impossible."
+     }
+    ],
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed_after_debate",
+    "severity": "high",
+    "category": null
    }
   ],
   "implement-access-token-context-encoding-framework-keycloak": [
@@ -7257,6 +7786,32 @@
     "subclass_opus_inicial": "hallucination",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination"
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-02",
+    "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
+    "comment": "createOAuthAppCredential only verifies team membership, not admin access, before creating a team credential, so any team member can install OAuth apps for the team via a crafted state.",
+    "commentOpus": "createOAuthAppCredential only verifies team membership, not admin access, before creating a team credential, so any team member can install OAuth apps for the team via a crafted state.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S13",
+      "S31"
+     ]
+    },
+    "reason_opus": "createOAuthAppCredential.ts:30-55 indeed only checks accepted team membership in the teamId branch, but git diff -M shows the file was only moved from _utils/ to _utils/oauth/ with import path changes; the team-branch logic is unchanged pre-existing code.",
+    "reason_astra": "The membership-only check and return before admin authorization exist at packages/app-store/_utils/oauth/createOAuthAppCredential.ts:30-59. However, the base already contains identical logic at packages/app-store/_utils/createOAuthAppCredential.ts:30-59; this PR only relocates the helper and updates its imports, leaving the pre-existing authorization defect unchanged.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "opa",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "high",
+    "category": null
    }
   ],
   "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
@@ -8956,6 +9511,31 @@
     "status": "agreed",
     "severity": "medium",
     "category": null
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#opa-01",
+    "caseId": "unified-storage-performance-optimizations-grafana-codex",
+    "comment": "NewResourceServer now runs Init synchronously (lifecycle, full search index build, watcher) and returns an error on failure, so callers that were not changed block on startup and abort construction on Init failure.",
+    "commentOpus": "NewResourceServer now runs Init synchronously (lifecycle, full search index build, watcher) and returns an error on failure, so callers that were not changed block on startup and abort construction on Init failure.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S2"
+     ]
+    },
+    "reason_opus": "server.go:258-262 does now call s.Init(ctx) inside NewResourceServer and the per-request Init calls were removed, but this eager initialisation is the purpose of the PR; the constructor already returned errors to its callers, and failing at startup instead of on each request is intended fail-fast behaviour, not a defect.",
+    "reason_astra": "The constructor now synchronously initializes the server (pkg/storage/unified/resource/server.go:258–262), but this establishes readiness before serving; search initialization explicitly requires blocking startup on failure (pkg/storage/unified/resource/search.go:171–195). Callers already propagate construction errors correctly (pkg/storage/unified/sql/service.go:113–115; pkg/storage/unified/client.go:101–104), so the comment identifies a lifecycle change without demonstrating a broken contract or unintended failure.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "opa",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
    }
   ],
   "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
@@ -9078,6 +9658,58 @@
     "subclass_astra_inicial": "hallucination",
     "rodada": "e2b"
    }
+  ],
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#opa-01",
+    "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+    "comment": "Claims test_dedupe in TestEvaluateGroupKeyValue fails because the expected occurrence is built with group_key \"val1\" while evaluation uses \"group_key\", and IssueOccurrence compares fingerprints in __eq__.",
+    "commentOpus": "Claims test_dedupe in TestEvaluateGroupKeyValue fails because the expected occurrence is built with group_key \"val1\" while evaluation uses \"group_key\", and IssueOccurrence compares fingerprints in __eq__.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S2"
+     ]
+    },
+    "reason_opus": "IssueOccurrence defines a custom __eq__ comparing only id (src/sentry/issues/issue_occurrence.py:181-184), and build_mock_occurrence_and_event uses a fixed id. The fingerprint mismatch (val1 vs group_key) at test_detector.py:536-551 therefore does not make the equality fail.",
+    "reason_astra": "src/sentry/issues/issue_occurrence.py:181-184 explicitly defines equality using only id, not fingerprint. Both occurrences receive the same fixed id from tests/sentry/workflow_engine/processors/test_detector.py:252, so the differing group keys at lines 537 and 540 do not cause the claimed assertion failure.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "opa",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "low",
+    "category": null
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#opa-02",
+    "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+    "comment": "Asks to verify that PriorityLevel(new_status) in evaluate_group_key_value is safe, i.e. that non-OK DetectorPriorityLevel values match PriorityLevel values.",
+    "commentOpus": "Asks to verify that PriorityLevel(new_status) in evaluate_group_key_value is safe, i.e. that non-OK DetectorPriorityLevel values match PriorityLevel values.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S8"
+     ]
+    },
+    "reason_opus": "workflow_engine/types.py:8-12 defines DetectorPriorityLevel LOW/MEDIUM/HIGH as PriorityLevel.LOW/MEDIUM/HIGH (25/50/75 in types/group.py:63-66), and detector.py:299-301 only calls PriorityLevel(new_status) when new_status != OK. The conversion is safe; the comment is an unverified 'check that' request with no defect.",
+    "reason_astra": "src/sentry/workflow_engine/types.py:8-12 defines every non-OK DetectorPriorityLevel directly from PriorityLevel, whose values are 25, 50, and 75 in src/sentry/types/group.py:63-66. src/sentry/workflow_engine/processors/detector.py:290-300 handles OK separately, so this compatibility check identifies no defect.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "opa",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
+   }
   ]
  },
  "modelos": [
@@ -9086,7 +9718,8 @@
   "sonnet-5.5",
   "muse-spark-1.3",
   "gpt-6.1-sol@e2b",
-  "sonnet-5.5@cc"
+  "sonnet-5.5@cc",
+  "opus-5.5@api"
  ],
  "classificadores": [
   "claude-opus-5.5",

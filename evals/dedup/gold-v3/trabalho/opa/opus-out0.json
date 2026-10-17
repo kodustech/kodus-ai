@@ -1,0 +1,421 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "S1",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Google Calendar persists the safeParse result object instead of its data as the credential key, corrupting the stored credential so later reads fail."
+  },
+  {
+   "id": "S2",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: In sync mode refreshOAuthTokens returns a raw fetch Response, but callers expect their provider-specific shapes (res.data, axios .data, HubspotToken), so token refresh breaks for Google, Zoho and HubSpot when credential sharing is on."
+  },
+  {
+   "id": "S3",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Zoho Bigin passes the credential id instead of the user id to refreshOAuthTokens, so the sync endpoint receives the wrong calcomUserId."
+  },
+  {
+   "id": "S4",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: In sync mode refreshOAuthTokens returns a raw fetch Response, but callers expect their provider-specific shapes (res.data, axios .data, HubspotToken), so token refresh breaks for Google, Zoho and HubSpot when credential sharing is on."
+  },
+  {
+   "id": "S5",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: minimumTokenResponseSchema uses computed keys from z.string().toString(), which produce a literal key rather than a wildcard, so the sync-mode schema does not validate or keep expiry and other token fields as intended."
+  },
+  {
+   "id": "S6",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: parseRefreshTokenResponse writes the hardcoded string 'refresh_token' when the refresh response omits a refresh token, so the stored credential gets an invalid refresh token and later refreshes fail."
+  },
+  {
+   "id": "S7",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#14",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The new Salesforce token refresh uses prisma without importing it, so the code fails type checking and throws a ReferenceError at runtime."
+  },
+  {
+   "id": "S8",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Salesforce checks response.statusText !== 'OK' instead of response.ok when refreshing the token, which can misclassify successful responses, and then ignores the refreshed token."
+  },
+  {
+   "id": "S9",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: After refreshing the Salesforce token, jsforce.Connection is created with the stale access_token and instance_url instead of the newly refreshed values."
+  },
+  {
+   "id": "S10",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Salesforce getClient now refreshes the OAuth token and writes the credential on every service construction, adding a network round trip and DB write even when the access token is valid."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "App metadata lookup by slug instead of dirName in the webhook; no golden issue covers it."
+  },
+  {
+   "id": "S12",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The new app-credential webhook checks its shared secret with a plain !== string comparison instead of a constant-time comparison, leaking timing information about the secret."
+  },
+  {
+   "id": "S13",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Team branch of createOAuthAppCredential checks membership but not admin access; no golden issue covers it."
+  },
+  {
+   "id": "S14",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: In sync mode refreshOAuthTokens returns a raw fetch Response, but callers expect their provider-specific shapes (res.data, axios .data, HubspotToken), so token refresh breaks for Google, Zoho and HubSpot when credential sharing is on."
+  },
+  {
+   "id": "S15",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The new app-credential webhook checks its shared secret with a plain !== string comparison instead of a constant-time comparison, leaking timing information about the secret."
+  },
+  {
+   "id": "S16",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Zoho Bigin passes the credential id instead of the user id to refreshOAuthTokens, so the sync endpoint receives the wrong calcomUserId."
+  },
+  {
+   "id": "S17",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Google Calendar persists the safeParse result object instead of its data as the credential key, corrupting the stored credential so later reads fail."
+  },
+  {
+   "id": "S18",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Zoho Bigin passes the credential id instead of the user id to refreshOAuthTokens, so the sync endpoint receives the wrong calcomUserId."
+  },
+  {
+   "id": "S19",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: In sync mode refreshOAuthTokens returns a raw fetch Response, but callers expect their provider-specific shapes (res.data, axios .data, HubspotToken), so token refresh breaks for Google, Zoho and HubSpot when credential sharing is on."
+  },
+  {
+   "id": "S20",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: minimumTokenResponseSchema uses computed keys from z.string().toString(), which produce a literal key rather than a wildcard, so the sync-mode schema does not validate or keep expiry and other token fields as intended."
+  },
+  {
+   "id": "S21",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Zoho Bigin passes the credential id instead of the user id to refreshOAuthTokens, so the sync endpoint receives the wrong calcomUserId."
+  },
+  {
+   "id": "S22",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Google Calendar persists the safeParse result object instead of its data as the credential key, corrupting the stored credential so later reads fail."
+  },
+  {
+   "id": "S23",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Zoho Bigin passes the credential id instead of the user id to refreshOAuthTokens, so the sync endpoint receives the wrong calcomUserId."
+  },
+  {
+   "id": "S24",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: In sync mode refreshOAuthTokens returns a raw fetch Response, but callers expect their provider-specific shapes (res.data, axios .data, HubspotToken), so token refresh breaks for Google, Zoho and HubSpot when credential sharing is on."
+  },
+  {
+   "id": "S25",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Google Calendar persists the safeParse result object instead of its data as the credential key, corrupting the stored credential so later reads fail."
+  },
+  {
+   "id": "S26",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Zoho Bigin passes the credential id instead of the user id to refreshOAuthTokens, so the sync endpoint receives the wrong calcomUserId."
+  },
+  {
+   "id": "S27",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: In sync mode refreshOAuthTokens returns a raw fetch Response, but callers expect their provider-specific shapes (res.data, axios .data, HubspotToken), so token refresh breaks for Google, Zoho and HubSpot when credential sharing is on."
+  },
+  {
+   "id": "S28",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Zoho Bigin passes the credential id instead of the user id to refreshOAuthTokens, so the sync endpoint receives the wrong calcomUserId."
+  },
+  {
+   "id": "S29",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Google Calendar persists the safeParse result object instead of its data as the credential key, corrupting the stored credential so later reads fail."
+  },
+  {
+   "id": "S30",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: minimumTokenResponseSchema uses computed keys from z.string().toString(), which produce a literal key rather than a wildcard, so the sync-mode schema does not validate or keep expiry and other token fields as intended."
+  },
+  {
+   "id": "S31",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Team branch of createOAuthAppCredential checks membership but not admin access; no golden issue covers it."
+  },
+  {
+   "id": "S32",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Google Calendar persists the safeParse result object instead of its data as the credential key, corrupting the stored credential so later reads fail."
+  },
+  {
+   "id": "S33",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Zoho Bigin passes the credential id instead of the user id to refreshOAuthTokens, so the sync endpoint receives the wrong calcomUserId."
+  },
+  {
+   "id": "S34",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: minimumTokenResponseSchema uses computed keys from z.string().toString(), which produce a literal key rather than a wildcard, so the sync-mode schema does not validate or keep expiry and other token fields as intended."
+  },
+  {
+   "id": "S35",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: In sync mode refreshOAuthTokens returns a raw fetch Response, but callers expect their provider-specific shapes (res.data, axios .data, HubspotToken), so token refresh breaks for Google, Zoho and HubSpot when credential sharing is on."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: downsize is defined twice in OptimizedImage; the new (from, to, dimensions, opts) version overrides the (max_width, max_height) one, so existing callers such as ResizeEmoji that pass width and height now raise ArgumentError."
+  },
+  {
+   "id": "S2",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The upload downsizing passes a percentage ('80%') as dimensions, but for animated GIFs the gifsicle path uses --resize-fit, which expects WxH geometry, so downsizing silently fails."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Shell injection via unescaped tempfile path in convert_with; not in the golden set."
+  },
+  {
+   "id": "S4",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Claims up to five synchronous ImageMagick runs per oversized upload block request threads and enable DoS."
+  },
+  {
+   "id": "S5",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The client-side upload size check hardcodes 10 MB instead of the per-type max_<type>_size_kb setting, so attachment limits diverge from the server: larger allowed attachments are blocked and smaller limits are only enforced server-side."
+  },
+  {
+   "id": "S6",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: downsize is defined twice in OptimizedImage; the new (from, to, dimensions, opts) version overrides the (max_width, max_height) one, so existing callers such as ResizeEmoji that pass width and height now raise ArgumentError."
+  },
+  {
+   "id": "S7",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: downsize is defined twice in OptimizedImage; the new (from, to, dimensions, opts) version overrides the (max_width, max_height) one, so existing callers such as ResizeEmoji that pass width and height now raise ArgumentError."
+  },
+  {
+   "id": "S8",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: downsize is defined twice in OptimizedImage; the new (from, to, dimensions, opts) version overrides the (max_width, max_height) one, so existing callers such as ResizeEmoji that pass width and height now raise ArgumentError."
+  },
+  {
+   "id": "S9",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The client-side upload size check hardcodes 10 MB instead of the per-type max_<type>_size_kb setting, so attachment limits diverge from the server: larger allowed attachments are blocked and smaller limits are only enforced server-side."
+  },
+  {
+   "id": "S10",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: downsize is defined twice in OptimizedImage; the new (from, to, dimensions, opts) version overrides the (max_width, max_height) one, so existing callers such as ResizeEmoji that pass width and height now raise ArgumentError."
+  },
+  {
+   "id": "S11",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The client-side upload size check hardcodes 10 MB instead of the per-type max_<type>_size_kb setting, so attachment limits diverge from the server: larger allowed attachments are blocked and smaller limits are only enforced server-side."
+  },
+  {
+   "id": "S12",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The 413 upload error message states a hard-coded 10 MB maximum that may not match the limit the server or web server actually enforces."
+  },
+  {
+   "id": "S13",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The comment promises images are reduced to the allowed size, but the loop only tries five 80% reductions with no guarantee of reaching the limit."
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: When the Grafana prom-rule branch is skipped (datasource rules), useAllGrafanaPromRuleAbilities(undefined) still reports Duplicate as supported and allowed by Grafana create permission, and AlertRuleMenu ORs it with the ruler ability, so Duplicate appears on cloud rules even when the ruler check denies it."
+  },
+  {
+   "id": "S2",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: For list-view Grafana rules RuleActionsButtons gets only promRule, so the Silence menu item is shown but the silence drawer, still gated on a ruler alerting rule, never renders and clicking Silence does nothing."
+  },
+  {
+   "id": "S3",
+   "match": "notification-rule-processing-engine-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The Grafana prom-rule abilities gate Pause, Restore, Export and DeletePermanently on alertingRule(rule) while the comment claims it checks Grafana-managed rules, so Grafana recording rules lose these actions in the list view."
+  },
+  {
+   "id": "S4",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The Grafana branch of the filtered rule list renders GrafanaRuleListItem without a key prop, so React reconciles the streaming list by index and warns about missing keys."
+  },
+  {
+   "id": "S5",
+   "match": "notification-rule-processing-engine-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The pause menu item is still gated on a Grafana ruler rule, but the list view now passes only the Prometheus rule, so Pause/Resume disappears for list-view rules even when the user may pause them."
+  },
+  {
+   "id": "S6",
+   "match": "notification-rule-processing-engine-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The comment claims GrafanaPromRuleDTO abilities have no loading state, but the next line makes support depend on the folder loading flag."
+  },
+  {
+   "id": "S7",
+   "match": "notification-rule-processing-engine-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The Grafana prom-rule abilities gate Pause, Restore, Export and DeletePermanently on alertingRule(rule) while the comment claims it checks Grafana-managed rules, so Grafana recording rules lose these actions in the list view."
+  },
+  {
+   "id": "S8",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: For list-view Grafana rules RuleActionsButtons gets only promRule, so the Silence menu item is shown but the silence drawer, still gated on a ruler alerting rule, never renders and clicking Silence does nothing."
+  },
+  {
+   "id": "S9",
+   "match": "notification-rule-processing-engine-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The test named 'should render More button with action menu options' only checks the More button exists, never the menu options."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Test coverage gap for the ruler-based Delete check in RulesTable tests; not in the golden set."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Fallback locale catalogs are only loaded in the controller's set_locale filter, while translate loads just the current locale, so translations outside requests (jobs, mailers) cannot fall back to the site default or English."
+  },
+  {
+   "id": "S2",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The translation cache key does not include the site or its default locale, but fallback results now depend on SiteSetting.default_locale, so multisite processes or a changed default locale serve stale fallback translations."
+  },
+  {
+   "id": "S3",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Fallback locale catalogs are only loaded in the controller's set_locale filter, while translate loads just the current locale, so translations outside requests (jobs, mailers) cannot fall back to the site default or English."
+  },
+  {
+   "id": "S4",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Fallback locale catalogs are only loaded in the controller's set_locale filter, while translate loads just the current locale, so translations outside requests (jobs, mailers) cannot fall back to the site default or English."
+  },
+  {
+   "id": "S5",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Fallback locale catalogs are only loaded in the controller's set_locale filter, while translate loads just the current locale, so translations outside requests (jobs, mailers) cannot fall back to the site default or English."
+  },
+  {
+   "id": "S6",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Fallback locale catalogs are only loaded in the controller's set_locale filter, while translate loads just the current locale, so translations outside requests (jobs, mailers) cannot fall back to the site default or English."
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [
+  {
+   "id": "S1",
+   "match": "fixing-re-authentication-with-passkeys-keycloak#03",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: PasswordForm now accepts passkey-only users, but only the keycloak.v2 login-password.ftl renders the passkeys conditional UI; the base template (used by the legacy keycloak theme) does not, so a passkey-only user is shown a password-only form they cannot complete."
+  },
+  {
+   "id": "S2",
+   "match": "fixing-re-authentication-with-passkeys-keycloak#06",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The test comment says it sets the passwordless policy for discoverable keys, but the updater only disables passkeys for the realm."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Username enumeration / credential id leak via passkey data filled for unauthenticated users; not in the golden set."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Missing test for passkey failure during re-authentication; not in the golden set."
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": []
+}

@@ -1,0 +1,12 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#opa-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The constructor now synchronously initializes the server (pkg/storage/unified/resource/server.go:258\u2013262), but this establishes readiness before serving; search initialization explicitly requires blocking startup on failure (pkg/storage/unified/resource/search.go:171\u2013195). Callers already propagate construction errors correctly (pkg/storage/unified/sql/service.go:113\u2013115; pkg/storage/unified/client.go:101\u2013104), so the comment identifies a lifecycle change without demonstrating a broken contract or unintended failure.",
+   "severity": "high"
+  }
+ ]
+}

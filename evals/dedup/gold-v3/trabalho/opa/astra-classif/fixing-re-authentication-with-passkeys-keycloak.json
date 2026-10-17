@@ -1,0 +1,19 @@
+{
+ "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+ "items": [
+  {
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#opa-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "UsernameForm.java:58-59 validates only the username, and PasswordForm.java:52-53 then fills user-specific WebAuthn data without checking for re-authentication. WebAuthnAuthenticator.java:98-108 supplies that user's credentials, and themes/src/main/resources/theme/base/login/passkeys.ftl:11-14 exposes their IDs, enabling unauthenticated discovery of passkey enrollment.",
+   "severity": "high"
+  },
+  {
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#opa-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "PasskeysUsernamePasswordFormTest.java:367-378 exercises a password failure followed by successful passkey authentication, so it does not cover the passkey-error branch at WebAuthnConditionalUIAuthenticator.java:48-56. However, the comment only requests additional coverage; it identifies neither faulty behavior nor a test failing to verify its stated purpose.",
+   "severity": "medium"
+  }
+ ]
+}

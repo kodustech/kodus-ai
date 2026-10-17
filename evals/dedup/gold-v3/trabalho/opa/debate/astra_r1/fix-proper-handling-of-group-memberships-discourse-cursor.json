@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "Keep TP, specifically for negative limits newly affecting nonautomatic groups. At base, those groups ignored params[:limit]; at head, groups_controller.rb:22\u201326 unconditionally applies it, so limit=-1 now reaches PostgreSQL and produces a 500 during serialization. The reviewer correctly identifies oversized responses and unchecked limits on automatic groups as pre-existing, but that does not eliminate the newly introduced failure for nonautomatic groups."
+  }
+ ]
+}

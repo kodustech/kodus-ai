@@ -1,0 +1,12 @@
+{
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "items": [
+  {
+   "issueId": "implement-access-token-context-encoding-framework-keycloak#opa-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The PR adds abstract getShortcut() without a default in server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java:33, breaking compilation of existing custom implementations lacking it. services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java:70-76 unconditionally calls it on every registered grant factory during postInit, so previously compiled implementations can throw AbstractMethodError and prevent startup.",
+   "severity": "high"
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "common/src/main/java/org/keycloak/common/Profile.java:283-306 rejects enabling multiple versions of the same feature and enables only the selected version. Consequently, the V1 guard at services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java:77 prevents the deletion listener from reaching the throwing V2 method.",
+   "severity": "high"
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-02",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/V1TokenExchangeProviderFactory.java:59-60 enables legacy token exchange independently of admin authorization V1, and AbstractTokenExchangeProvider.java:276 calls canExchangeTo for another target client. The new dispatch at services/src/main/java/org/keycloak/services/resources/admin/permissions/MgmtPermissionsV2.java:64-67 reaches ClientPermissionsV2.java:148-149, which throws instead of returning a permission decision.",
+   "severity": "high"
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-03",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "services/src/main/java/org/keycloak/services/resources/admin/RoleResource.java:123 independently requires permission to map each composite role. RolePermissions.java:391-398 calls canMapCompositeRoles, and its default bypass at RolePermissions.java:475-480 checks canManageClientsDefault, not canConfigure; CONFIGURE therefore does not bypass the composite permission check as claimed.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-04",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "services/src/main/java/org/keycloak/services/resources/admin/ClientResource.java:706 and :739 already guard both endpoints with the V1 feature requirement. Since common/src/main/java/org/keycloak/common/Profile.java:283-306 makes V1 and V2 mutually exclusive, services/src/main/java/org/keycloak/utils/ProfileHelper.java:30-32 rejects these requests with 501 before any throwing V2 override is reached.",
+   "severity": "high"
+  }
+ ]
+}

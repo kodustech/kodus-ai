@@ -1,0 +1,854 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "bc89fe00ea84d20bedcec782f0701b9711dc8201",
+  "head": "9fde0e906897cc0f4f71793f647dd629faba3317",
+  "prTitle": "OAuth credential sync and app integration enhancements",
+  "issues": [
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S11",
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       40,
+       54
+      ],
+      "texto": "WHAT: appStoreMetadata is indexed by app.slug, but the map is keyed by app directory name (see _appRegistry.ts:17, which uses app.dirName). WHY: for apps whose slug differs from their dirName (e.g. google-calendar vs googlecalendar), the lookup returns undefined and the webhook always responds 404, so those credentials cannot be synced. HOW: select dirName from prisma.app and index appStoreMetadata by it."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S13",
+      "file": "packages/app-store/_utils/oauth/createOAuthAppCredential.ts",
+      "lines": [
+       30,
+       59
+      ],
+      "texto": "WHAT: when state.teamId is present, the code only checks that the user is an accepted team member before creating a team credential, and throwIfNotHaveAdminAccessToTeam runs only on the path where teamId is falsy, so it is effectively a no-op. WHY: any non-admin team member can install OAuth apps on behalf of the team through a crafted state parameter. HOW: call throwIfNotHaveAdminAccessToTeam({ teamId: state.teamId, userId }) inside the teamId branch before prisma.credential.create."
+     },
+     {
+      "gid": "opus-api:S31",
+      "file": "createOAuthAppCredential",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "In `createOAuthAppCredential`, the team branch checks only team membership and not admin access. The reviewer flagged this as outside the assigned scope."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+  "head": "ffbaf8c54269df2ce510de91245760fddce09896",
+  "prTitle": "FEATURE: automatically downsize large images",
+  "issues": [
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S3",
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       64,
+       69
+      ],
+      "texto": "WHAT: tempfile.path is now passed to OptimizedImage.downsize, and convert_with runs it in a shell through backticks without escaping. For API URL uploads, that path contains the request-controlled `type` param (`discourse-upload-#{type}`). WHY: A `type` containing shell metacharacters such as `$(...)` or `;` runs arbitrary commands on the server when the oversized image is downsized. HOW: Restrict `type` to a whitelist (or Shellwords-escape every argument in convert_with) before the path reaches the shell."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "notification-rule-processing-engine-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "47e5bd23163e6037fc0741068ac78930bba2769f",
+  "head": "8df850371034b73dc4dd9908cc30fa09f12a1f97",
+  "prTitle": "Notification Rule Processing Engine",
+  "issues": [
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S10",
+      "file": "public/app/features/alerting/unified/components/rules/RulesTable.test.tsx",
+      "lines": [
+       100,
+       145
+      ],
+      "texto": "RulesTable gives AlertRuleMenu a ruler-backed Grafana rule, and AlertRuleMenu allows Delete when either the ruler check or the Grafana prom-rule check passes. These tests set only the useGrafanaPromRuleAbilities mock and leave useRulerRuleAbilities at its default of [false,false]. As a result, the ruler-based Delete permission check is never set to allow or deny, and a broken ruler path would go unnoticed."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fixing-re-authentication-with-passkeys-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "744e031019af8dbaacf407e792fbb3756364e2b4",
+  "head": "25bf964a844ea0bc64dc838bff038345048cb1fa",
+  "prTitle": "Fixing Re-authentication with passkeys",
+  "issues": [
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S3",
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java",
+      "lines": [
+       51,
+       54
+      ],
+      "texto": "After someone submits only a username, `PasswordForm.authenticate` calls `webauthnAuth.fillContextForm(context)`. The new `authn_select` block in `passkeys.ftl` then puts that user's WebAuthn credential IDs into the page as hidden `authn_use_chk` inputs. Because the block is only rendered when the user has a passkey, any unauthenticated visitor can type a username and learn whether that account has a passkey, plus its credential IDs. Limit this to re-authentication: only fill the user-specific data when `USER_SET_BEFORE_USERNAME_PASSWORD_AUTH` is set, and otherwise use the user-less conditional UI data."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#opa-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S4",
+      "file": "WebAuthnConditionalUIAuthenticator",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "Missing test coverage: no test triggers a passkey failure during re-authentication, so the new `AuthenticatorUtils.setupReauthenticationInUsernamePasswordFormError` call in `WebAuthnConditionalUIAuthenticator` is never exercised. Consider adding a test where passkey authentication fails after `prompt=login` and asserting the resulting error and form state."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "github-oauth-security-enhancement-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "344aa102e7818606e29426ebe69d5a680d8727c6",
+  "head": "bb75657fc8f13923c1d7983f422290908a1e7310",
+  "prTitle": "GitHub OAuth Security Enhancement",
+  "issues": [
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S10",
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       412,
+       413
+      ],
+      "texto": "The OAuth `state` parameter, which is the CSRF token tying the GitHub callback to this pipeline, is checked against `pipeline.signature` with a plain `!=`. That comparison can leak timing information about the expected value. Use `constant_time_compare` from `django.utils.crypto` instead."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "replays-self-serve-bulk-delete-system-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "49a275847631e231672d01b5dcd66558c069d25b",
+  "head": "ea188e2d736fd6ed27c1dba8aae63b7268e2a7a9",
+  "prTitle": "Replays Self-Serve Bulk Delete System",
+  "issues": [
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S3",
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       84,
+       94
+      ],
+      "texto": "WHAT: Every paginated GET now runs query_replay_instance and then a nodestore get_multi over all of the replay's error_ids, with no cap and before pagination. WHY: a replay with many errors loads every full event payload from nodestore on every page request, which adds large latency and memory use to a request that already calls Seer. HOW: cap error_ids (e.g. error_ids[:N]) before calling fetch_error_details."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S5",
+      "file": "static/app/views/performance/newTraceDetails/traceDrawer/details/span/eapSections/attributes.tsx",
+      "lines": [
+       62,
+       69
+      ],
+      "texto": "The `HIDDEN_ATTRIBUTES` check was added only to the search branch, while the early `return sorted;` (no search query) still returns everything. In the default view, is_segment, project_id and received are still shown, which defeats the purpose of the hidden list. Apply the hidden-attribute filter in the early-return path as well."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-03",
+    "comentarios": [
+     {
+      "gid": "opus-api:S9",
+      "file": "tests/sentry/replays/tasks/test_delete_replays_bulk.py",
+      "lines": [
+       94,
+       99
+      ],
+      "texto": "The row was changed to `max_segment_id: None` to cover the new early return in `_make_recording_filenames`, but this test patches `delete_matched_rows` and only checks that the mock received the rows. `_make_recording_filenames` never runs, so the test would still pass if the None guard were removed and `range(None + 1)` crashed. Add a direct test that calls `_make_recording_filenames(project_id, row)` with `max_segment_id=None` and asserts it returns `[]`, or stop mocking `delete_matched_rows` in this case."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "bb5a6837cb5b3d8d3b174e17d42ec14486ef8738",
+  "head": "9501091c52ae94e8d916f79b35d21975b3f9cadb",
+  "prTitle": "feat(ecosystem): Implement cross-system issue synchronization",
+  "issues": [
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S5",
+      "file": "src/sentry/integrations/utils/sync.py",
+      "lines": [
+       136,
+       144
+      ],
+      "texto": "`assignment_source.to_dict()` returns `asdict(self)`, so the `queued` datetime goes into the `sync_assignee_outbound.apply_async` kwargs as is. That value is not JSON-safe: Sentry's bad-pickle check (celery.py, which raises when CELERY_COMPLAIN_ABOUT_BAD_USE_OF_PICKLE is on, as in tests) and any future move to the JSON serializer will fail at enqueue. Convert `queued` to a string (e.g. isoformat) in to_dict and parse it back in from_dict."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "b004587262e8221083bafbe9a0c515e7becaa7b3",
+  "head": "92f44dcea7ff19e9123a30c63c167a2938df5a55",
+  "prTitle": "Add guest management functionality to existing bookings",
+  "issues": [
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S20",
+      "file": "packages/ui/form/MultiEmailLazy.tsx",
+      "lines": [
+       3,
+       3
+      ],
+      "texto": "The comment \"These are like 40kb\" appears to be copied from the phone input lazy loader. MultiEmail only uses existing UI components, so the size claim misleads readers about why it is lazy-loaded."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "implement-access-token-context-encoding-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "c22f76867f595f0f7c327376a66a08dca01949e8",
+  "head": "daffb05b5ad091d3ec09933c3c99c2b54f448696",
+  "prTitle": "Implement access token context encoding framework",
+  "issues": [
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S4",
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       29,
+       33
+      ],
+      "texto": "WHAT: `getShortcut()` is added as an abstract method on the provider-facing OAuth2GrantTypeFactory interface, with no default implementation. WHY: Existing custom grant type factories no longer compile, or throw AbstractMethodError when DefaultTokenContextEncoderProviderFactory.postInit calls gtf.getShortcut(), which stops the server from starting. HOW: Add a default implementation that derives a fallback shortcut, or make the encoder handle factories that do not supply one."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "prTitle": "FIX: proper handling of group memberships",
+  "issues": [
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S2",
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       71,
+       75
+      ],
+      "texto": "WHAT: add_members calls group.add(user) (users.push) for every username without checking whether the user is already a member. WHY: group_users has a UNIQUE (group_id,user_id) index, so adding an existing member raises ActiveRecord::RecordNotUnique and returns a 500, while users earlier in the list stay inserted (partial update). HOW: skip users who are already members."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S4",
+      "file": "app/controllers/groups_controller.rb",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "WHAT: the public members endpoint takes limit straight from params with no upper bound or positivity check. WHY: any visitor can request limit=1000000 and force serialization of every member of large groups, including automatic trust-level groups. A negative limit produces a PostgreSQL error (500). HOW: clamp limit to a sane range."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+  "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "prTitle": "FEATURE: Can edit category/host relationships for embedding",
+  "issues": [
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S8",
+      "file": "app/assets/javascripts/discourse/models/store.js.es6",
+      "lines": [
+       192,
+       201
+      ],
+      "texto": "WHAT: The new `_ids` branch runs for every key ending in `_ids` on every hydrated model. It always deletes the original key and replaces it with the result of mapping _lookupSubType, which returns undefined when the root has no matching collection; a null value crashes on `.map`. WHY: Existing REST models with plain id-array attributes (e.g. `group_ids`) lose that data or throw while hydrating, a regression outside the embedding feature. HOW: Only replace the key when the value is an array and the pluralized collection exists in root."
+     },
+     {
+      "gid": "opus-api:S22",
+      "file": "app/assets/javascripts/discourse/models/store.js.es6",
+      "lines": [
+       196,
+       201
+      ],
+      "texto": "Any payload key ending in `_ids` whose value is null now reaches `obj[k].map`, which throws a TypeError. Before this change such keys were only matched by the `_id` regex and handled safely, so hydrating the record now fails."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "f3c8e8f3487112f2c99aa78400430cce2d30be39",
+  "head": "02f48f776f43734d1ac8914d3ad6a7115acdcb33",
+  "prTitle": "Add HTML sanitizer for translated message resources",
+  "issues": [
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S7",
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       73,
+       80
+      ],
+      "texto": "WHAT: If the derived English counterpart of a messages_*.properties file doesn't exist, verifySafeHtml throws a RuntimeException instead of adding a validation message. WHY: The ThemeVerifierMojo applies to every messages_* file in the project's resources, so a single locale file without an _en sibling crashes the build with an unhandled exception. HOW: On FileNotFoundException, add an entry to `messages` (or fall back to an empty English bundle) and return."
+     },
+     {
+      "gid": "opus-api:S9",
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       73,
+       80
+      ],
+      "texto": "The English file's path is built by string replacement, and if no `_en.properties` file exists at that path, `FileInputStream` throws. That error is rethrown as an unchecked `RuntimeException`, which escapes `verify()` and the mojo's message collection. The whole build then crashes instead of reporting a validation message for that file. Record a message and skip the HTML check when the English bundle is missing."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "50f4e78a39914711d0d231a501ba215becf17ebc",
+  "head": "bbd8c507cdf56f6b884373809e0b24abd4a2353d",
+  "prTitle": "Anonymous: Add configurable device limit",
+  "issues": [
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S1",
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       52,
+       54
+      ],
+      "texto": "WHAT: ProvideAnonDBStore now takes an int64 deviceLimit, but pkg/server/wire.go:374-375 still registers it as a provider and binds anonstore.AnonStore to it. WHY: Wire has no provider for int64, so DI generation fails and the server won't build. The store is also no longer injected anywhere. HOW: Remove anonstore.ProvideAnonDBStore and its wire.Bind from wire.go, or have the provider take *setting.Cfg and read AnonymousDeviceLimit from it."
+     },
+     {
+      "gid": "opus-api:S8",
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       52,
+       53
+      ],
+      "texto": "ProvideAnonDBStore now takes a `deviceLimit int64` parameter, but pkg/server/wire.go:374-375 still lists `anonstore.ProvideAnonDBStore` as a provider and binds `anonstore.AnonStore` to it. Wire cannot supply a bare int64, so dependency-injection generation/build fails. AnonDeviceService now builds the store itself, so remove the provider and the Bind from wire.go."
+     },
+     {
+      "gid": "opus-api:S12",
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       52,
+       54
+      ],
+      "texto": "`pkg/server/wire.go:374-375` still registers `anonstore.ProvideAnonDBStore` and binds `AnonStore` to it. The new signature needs an `int64` that no wire provider supplies, and after the change to `impl.go` nothing consumes `AnonStore`, so the provider is also unused. Wire generation fails. Remove the provider and its binding from `wire.go`, or give the provider an injectable dependency such as `*setting.Cfg`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S3",
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       50
+      ],
+      "texto": "WHAT: Authenticate enforces the device limit only through TagDevice, and TagDevice returns nil when the client-controlled X-Grafana-Device-Id header is empty (impl.go:119-122). WHY: Any client that leaves out the header, or sends a fresh random ID each time, gets an anonymous identity no matter what device_limit is set to. HOW: When a device limit is configured, reject anonymous authentication for requests without a device ID."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-03",
+    "comentarios": [
+     {
+      "gid": "opus-api:S4",
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       90,
+       97
+      ],
+      "texto": "WHAT: updateDevice treats RowsAffected()==0 as ErrDeviceLimitReached, but MySQL by default reports changed rows, not matched rows. WHY: When the limit is reached, an already-registered device whose client_ip, user_agent and second-precision updated_at are unchanged (for example, concurrent requests across instances) gets 0 rows and is wrongly denied. HOW: Check that the device exists with a SELECT on device_id within the window instead of relying on RowsAffected."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-04",
+    "comentarios": [
+     {
+      "gid": "opus-api:S7",
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       72,
+       73
+      ],
+      "texto": "The doc comment says `updateDevice` updates a device \"updated between the given times\", but it takes only ctx and device. It computes the window internally as `device.UpdatedAt` minus 30 days to `device.UpdatedAt` plus one minute, and returns `ErrDeviceLimitReached` when no row matches, so callers reading the comment get the wrong contract."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "bdd229e3f22e307fe40b30ef99e92ff3f6723da4",
+  "head": "8422030ef456e3a898415e96475b4d8ddfc7640f",
+  "prTitle": "feat(workflow_engine): Add in hook for producing occurrences from the stateful detector",
+  "issues": [
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S2",
+      "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+      "lines": [
+       536,
+       538
+      ],
+      "texto": "WHAT: test_dedupe builds the expected occurrence with group_key \"val1\", but it evaluates group_key \"group_key\", so the expected and actual fingerprints differ (`<id>:val1` vs `<id>:group_key`). WHY: IssueOccurrence is a frozen dataclass that compares fingerprint in __eq__, so `evaluate_group_key_value(...) == expected_result` fails. HOW: Pass \"group_key\" to build_mock_occurrence_and_event."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#opa-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S8",
+      "file": "src/sentry/workflow_engine/processors/detector.py",
+      "lines": [
+       246,
+       309
+      ],
+      "texto": "Unverified risk: in `evaluate_group_key_value`, the new `else` branch calls `build_occurrence_and_event_data` with `PriorityLevel(new_status)`. This is only safe if the non-OK `DetectorPriorityLevel` values (believed to be 25, 50, 75) match `PriorityLevel` values. The reviewer did not read either enum definition, so this is unconfirmed. Check that the two enums share these values."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "unified-storage-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "871af07203177ce59a24e742107119409274f48a",
+  "head": "26fed312840cd76b766cbd2158e17a7e6c0ec548",
+  "prTitle": "Unified Storage Performance Optimizations",
+  "issues": [
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S2",
+      "file": "pkg/storage/unified/resource/server.go",
+      "lines": [
+       258,
+       262
+      ],
+      "texto": "NewResourceServer used to be a cheap constructor, and Init ran later (first request or service start). It now synchronously runs lifecycle Init, builds the full search index and starts the watcher, and returns nil plus an error if any step fails. Callers such as sql/service.go, unified/client.go, apistore/restoptions.go and dashboard/legacy_storage.go were not changed: an Init failure now aborts construction instead of only failing requests, and startup blocks until the whole index build finishes."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "prTitle": "fix: handle collective multiple host on destinationCalendar",
+  "issues": [
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S9",
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       727,
+       761
+      ],
+      "texto": "WHAT: the catch block turns the plain Error thrown for an empty or invalid dynamicUserList into a generic 500 'Unable to load users'. WHY: a client input error comes back as a server error with its message hidden. HOW: throw `new HttpError({ statusCode: 400, ... })` directly for the validation failure."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S18",
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1079
+      ],
+      "texto": "For COLLECTIVE events, every team member's full DestinationCalendar row (credentialId, externalId, userId) is now pushed into `evt.destinationCalendar`. `evt` is spread into the webhook payload, so other members' calendar IDs (often email addresses) and their credential IDs are sent to the webhook subscriber. Keep the team members' calendars off `evt`, for example by passing them to EventManager separately, or remove the field before building the payload."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "62db063e1e1abe691313ab42682a68f796d63769",
+  "head": "4f8aed295a29954023b2849c060ef4fb299d1b5d",
+  "prTitle": "Enhance embed URL handling and validation system",
+  "issues": [
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S3",
+      "file": "lib/topic_retriever.rb",
+      "lines": [
+       26,
+       30
+      ],
+      "texto": "WHAT: The throttle key is the full embed URL, and anonymous requests to /embed/best (whose Referer can be forged by non-browser clients) enqueue retrieve jobs that create topics. WHY: an attacker can vary the query string or path on the embeddable host (`?a=1`, `?a=2`, ...) to get past the throttle and make the server create an unlimited number of topics as embed_by_username. HOW: throttle per client or globally rather than per URL, and normalize the URL (or drop the query string) before using it as the throttle key and embed key."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S8",
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       6,
+       6
+      ],
+      "texto": "WHAT: `<%- end if %>` leaves a dangling `if` modifier, so the next compiled template expression (the logo output) becomes the condition of the whole if/else block. WHY: the logo is written to the buffer before the header button, so the header renders in the wrong order. HOW: use a plain `<%- end %>`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-03",
+    "comentarios": [
+     {
+      "gid": "opus-api:S16",
+      "file": "app/controllers/embed_controller.rb",
+      "lines": [
+       12,
+       19
+      ],
+      "texto": "`best` builds the TopicView for `current_user`, so a staff member or a user with extra permissions may see posts that anonymous visitors cannot. It then calls `discourse_expires_in 1.minute`, and if that marks the response publicly cacheable, a shared proxy or CDN can serve that version to other visitors of the embedding page for up to a minute. Render the embed as anonymous (pass `nil` as the user) or skip public caching when a user is logged in."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-04",
+    "comentarios": [
+     {
+      "gid": "opus-api:S19",
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       12,
+       16
+      ],
+      "texto": "feed_polling_url and embed_by_username are blank by default, so the present? checks alone keep poll_feed from being called. The test would still pass if the feed_polling_enabled? check were deleted. Stub the url and username to valid values so only the enabled flag is false."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-2fa-backup-codes-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "efa6d464a38e60ceeeb88f40668c1c4ac4bfaf54",
+  "head": "54486a059cd2032042189bb565646ba4e0f6bd61",
+  "prTitle": "feat: 2fa backup codes",
+  "issues": [
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S9",
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       50,
+       53
+      ],
+      "texto": "`isChecked()` returns a Promise that is never awaited, so `toBeTruthy()` always passes, even when 2FA is not enabled. After this PR, the modal stays on the backup-codes step until Close is clicked, so the switch is still unchecked at this point and the test passes anyway. Click `backup-codes-close` first, then assert on `data-state=\"checked\"`, as the second test does."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "b8c1cd410f4499c77a8b372decfe1718b80ccfd2",
+  "head": "1950a511026d520a7329c7b6b9ee60a4af8f8b55",
+  "prTitle": "Add Client resource type and scopes to authorization schema",
+  "issues": [
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S2",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       192,
+       195
+      ],
+      "texto": "WHAT: setPermissionsEnabled now throws UnsupportedOperationException, but the ClientRemovedEvent listener in AdminPermissions:91 still calls it whenever ADMIN_FINE_GRAINED_AUTHZ is enabled. management() returns MgmtPermissionsV2 whenever V2 is enabled. WHY: when both features are enabled, deleting any client throws inside the removal event and the deletion fails; before this PR the inherited V1 implementation handled the call. HOW: Make setPermissionsEnabled a no-op in V2, or skip the V1 cleanup in the listener when ADMIN_FINE_GRAINED_AUTHZ_V2 is enabled."
+     },
+     {
+      "gid": "opus-api:S6",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java",
+      "lines": [
+       77,
+       95
+      ],
+      "texto": "The listener checks only the V1 flag ADMIN_FINE_GRAINED_AUTHZ, but `management()` returns `MgmtPermissionsV2` whenever V2 is enabled. With this PR, `MgmtPermissionsV2.clients()` returns `ClientPermissionsV2`, whose `setPermissionsEnabled` throws UnsupportedOperationException, so with both features enabled a ClientRemovedEvent makes client deletion fail. Skip the listener body when V2 is enabled."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S3",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       147,
+       150
+      ],
+      "texto": "WHAT: canExchangeTo now throws UnsupportedOperationException, but AbstractTokenExchangeProvider:276 still calls AdminPermissions.management(...).clients().canExchangeTo(...), and that returns ClientPermissionsV2 whenever V2 is enabled. WHY: token exchange to a target client now fails with a server error instead of an allow/deny decision when V2 and token exchange are enabled together. HOW: Return false (deny) instead of throwing, or keep the inherited V1 behavior until V2 supports token exchange."
+     },
+     {
+      "gid": "opus-api:S9",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       147,
+       150
+      ],
+      "texto": "`AbstractTokenExchangeProvider` (line 276) calls `AdminPermissions.management(session, realm).clients().canExchangeTo(...)`. With V2 enabled, `clients()` now returns `ClientPermissionsV2`, so this throws `UnsupportedOperationException` instead of returning a boolean. A token exchange request that previously got a permission decision now fails with a server error; either return a deny result (`false`) here or update the caller to skip this check under V2."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-03",
+    "comentarios": [
+     {
+      "gid": "opus-api:S8",
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java",
+      "lines": [
+       357,
+       364
+      ],
+      "texto": "CONFIGURE is granted in the same permission as MAP_ROLES_COMPOSITE. Role management for a client role goes through `clients().canConfigure(client)`, so addComposites may succeed because of CONFIGURE, and the test would still pass if `canMapCompositeRoles` were broken. Test MAP_ROLES_COMPOSITE separately from CONFIGURE, or add a negative case where it is left out, so a regression in that check fails the test."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-04",
+    "comentarios": [
+     {
+      "gid": "opus-api:S10",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       187,
+       205
+      ],
+      "texto": "`ClientResource` (lines 710-742) calls `permissions.clients().isPermissionsEnabled`, `resource`, `getPermissions` and `setPermissionsEnabled` for the client management-permissions endpoints. These were not updated, and under V2 the calls now hit these throwing overrides, so GET/PUT on that endpoint returns a 500 instead of a valid response or a proper 4xx. The endpoint should be guarded or rejected explicitly when V2 is enabled."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "272cfc68dcc88615396ae62ed1571918e9c58ad3",
+  "head": "e944e2acf1e64421860a8e827f93ad06c169621b",
+  "prTitle": "Add caching support for IdentityProviderStorageProvider.getForLogin operations",
+  "issues": [
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S3",
+      "file": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java",
+      "lines": [
+       254,
+       254
+      ],
+      "texto": "WHAT: Adding the organization/BROKER_PUBLIC condition to the shared getLoginPredicate also changes IdentityProviderBean.federatedProviderPredicate, which the base (non-organization) login bean uses to filter the user's already-linked IdPs. WHY: when the organization feature is disabled, a user whose linked IdP still has an organizationId but is not public no longer sees that IdP on the login page, a regression unrelated to caching. HOW: keep the org condition in a separate predicate used only for cache invalidation in InfinispanIdentityProviderStorageProvider."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S4",
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+      "lines": [
+       234,
+       241
+      ],
+      "texto": "WHAT: Every distinct organizationId passed to getForLogin calls invalidateObject on the single per-realm/per-mode cache entry and re-adds it with all previously cached org id sets merged in. WHY: in realms with many organizations the login path triggers repeated cluster-wide invalidations, and one ever-growing cache entry is rebuilt on each new org lookup. HOW: include the organizationId in the cache key (one entry per org) instead of merging search keys into one entry."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ }
+}

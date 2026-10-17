@@ -1,0 +1,130 @@
+{
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#opa-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "store.js.es6:192-201 changes the regex to /(.+)_id(s?)$/ and, for any `_ids` key, unconditionally calls obj[k].map(...) and deletes the original key. A null value throws a TypeError and a plain id array whose collection is not in root is replaced by an array of undefined under the pluralized key, losing the ids.",
+    "category": "bug",
+    "comment": "_hydrateEmbedded now treats every `_ids` key as an embedded collection: it calls `.map` without a null/array check (TypeError on null) and always deletes the original key, replacing real id arrays with undefined lookups when the root has no matching collection.",
+    "severity": "medium"
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "handleNewBooking.ts:727-729 throws a plain Error when dynamicUserList is empty or not an array; the catch at 758-762 only maps HttpError/Prisma errors to 400 and turns everything else into HttpError 500 'Unable to load users'. Before the PR an empty list just yielded no users.",
+    "category": "bug",
+    "comment": "loadUsers throws a plain Error for an empty/invalid dynamicUserList, which the catch block converts into a generic 500 'Unable to load users', hiding a client input error behind a server error.",
+    "severity": "medium"
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-02": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "For COLLECTIVE events handleNewBooking.ts:990-994 collects each member's full DestinationCalendar row and 1077-1079 pushes them into evt.destinationCalendar; webhookData at 1754-1771 spreads ...evt and sendPayload forwards all fields, so other members' externalId/credentialId reach the webhook subscriber.",
+    "category": "security",
+    "comment": "Collective bookings now push every team member's DestinationCalendar row (externalId, credentialId, userId) into evt.destinationCalendar, and since evt is spread into the webhook payload these other members' calendar identifiers are sent to webhook subscribers.",
+    "severity": "medium"
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "The new add_members action (admin/groups_controller.rb:65-81) calls group.add(user), which is users.push (group.rb:272-274), for every username with no membership check; group_users has a UNIQUE (group_id,user_id) index, so re-adding an existing member raises RecordNotUnique (500) after earlier usernames were already inserted.",
+    "category": "bug",
+    "comment": "Admin add_members pushes every username into group.users without skipping existing members, so adding someone already in the group hits the unique group_users index, returns a 500 and leaves earlier users partially added.",
+    "severity": "medium"
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "groups_controller.rb:22-26 does take limit from params without a bound, but before the PR non-automatic groups returned all members with no limit and automatic groups already used an unbounded params[:limit]; the PR adds a default of 50 and paginates, so it does not introduce the unbounded read.",
+    "category": null,
+    "comment": "The public group members endpoint takes `limit` from params with no upper bound or positivity check, letting a visitor request huge pages or trigger a 500 with a negative limit.",
+    "severity": "medium"
+  },
+  "fixing-re-authentication-with-passkeys-keycloak#opa-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "PasswordForm.java:51-54 does call webauthnAuth.fillContextForm when the identified user has passkeys, and WebAuthnAuthenticator.fillContextForm:100-108 sets the user's allowed authenticators which passkeys.ftl renders as authn_use_chk. That is the standard identifier-first WebAuthn allowCredentials behaviour (same as the existing webauthn forms after a username step), intended so the identified user can use their passkey on the password page.",
+    "category": null,
+    "comment": "After a username-only step, PasswordForm fills WebAuthn context for the user and passkeys.ftl renders their credential IDs as hidden inputs, letting an unauthenticated visitor learn whether an account has a passkey and its credential IDs.",
+    "severity": "medium"
+  },
+  "fixing-re-authentication-with-passkeys-keycloak#opa-02": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "WebAuthnConditionalUIAuthenticator.java:52-53 adds setupReauthenticationInUsernamePasswordFormError on the passkey-error path, and none of the added tests (PasskeysUsernameFormTest, PasskeysUsernamePasswordFormTest, PasskeysOrganizationAuthenticationTest) submit a failing passkey during prompt=login re-authentication; only success and wrong-password cases are covered.",
+    "category": "test_gap",
+    "comment": "No test exercises a passkey failure during re-authentication, so the new setupReauthenticationInUsernamePasswordFormError call in WebAuthnConditionalUIAuthenticator is never covered.",
+    "severity": "low"
+  },
+  "github-oauth-security-enhancement-sentry#opa-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "The new OAuthLoginView (github/integration.py:412) compares request.GET['state'] to pipeline.signature with `!=`, while other secret comparisons in the integrations use constant_time_compare. The state is a per-pipeline value checked over the network, so the timing difference is a hardening nit rather than an exploitable flaw.",
+    "category": "security",
+    "comment": "The OAuth state check in GitHub OAuthLoginView compares the callback state to pipeline.signature with a plain `!=` instead of a constant-time comparison.",
+    "severity": "low"
+  },
+  "implement-access-token-context-encoding-framework-keycloak#opa-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "OAuth2GrantTypeFactory.java:29-33 adds `String getShortcut();` with no default to the provider factory interface, and DefaultTokenContextEncoderProviderFactory.java:74 calls gtf.getShortcut() for every deployed grant factory. Only built-in factories were updated, so third-party grant type factories fail to compile or hit AbstractMethodError at postInit.",
+    "category": "api",
+    "comment": "getShortcut() is added as an abstract method to OAuth2GrantTypeFactory without a default, breaking existing custom grant type factories (compile error or AbstractMethodError when DefaultTokenContextEncoderProviderFactory.postInit calls it).",
+    "severity": "high"
+  },
+  "notification-rule-processing-engine-grafana-codex#opa-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "AlertRuleMenu.tsx:85-87 allows Delete when either the ruler ability or the Grafana prom-rule ability passes; the rewritten RulesTable.test.tsx:100-145 now only overrides useGrafanaPromRuleAbilities and leaves useRulerRuleAbilities at [false,false] from beforeEach, whereas before the PR the tests drove the ruler hook. The ruler branch is no longer exercised.",
+    "category": "test_gap",
+    "comment": "RulesTable RBAC tests only mock useGrafanaPromRuleAbilities and leave useRulerRuleAbilities denied, so the ruler-based Delete permission branch of AlertRuleMenu is never tested.",
+    "severity": "low"
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "The new app-credential.ts:40-54 selects only app.slug and indexes appStoreMetadata[app.slug], but appStoreMetadata is keyed by directory name (apps.metadata.generated.ts:98 `googlecalendar:`), while googlecalendar/_metadata.ts:17 has slug 'google-calendar'. For such apps the lookup is undefined and the webhook returns 404.",
+    "category": "bug",
+    "comment": "The app-credential webhook looks up appStoreMetadata by app.slug, but the map is keyed by dirName, so apps whose slug differs from their directory (e.g. google-calendar) always get a 404 and their credentials cannot be synced.",
+    "severity": "high"
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "createOAuthAppCredential.ts:30-55 indeed only checks accepted team membership in the teamId branch, but git diff -M shows the file was only moved from _utils/ to _utils/oauth/ with import path changes; the team-branch logic is unchanged pre-existing code.",
+    "category": null,
+    "comment": "createOAuthAppCredential only verifies team membership, not admin access, before creating a team credential, so any team member can install OAuth apps for the team via a crafted state.",
+    "severity": "high"
+  },
+  "replays-self-serve-bulk-delete-system-sentry#opa-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "project_replay_summarize_breadcrumbs.py:67-94 now runs query_replay_instance and fetch_error_details on every GET before pagination, and fetch_error_details does nodestore.backend.get_multi over all error_ids with no cap, loading full event payloads per page request.",
+    "category": "perf",
+    "comment": "Every paginated breadcrumb-summary request queries the replay and fetches all of its error events from nodestore with no cap, adding latency and memory proportional to the replay's error count on each page.",
+    "severity": "medium"
+  },
+  "replays-self-serve-bulk-delete-system-sentry#opa-02": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "attributes.tsx:59-70 returns `sorted` unchanged when the search query is empty and only applies the HIDDEN_ATTRIBUTES filter inside the search branch, so is_segment, project_id and received are still shown in the default view.",
+    "category": "bug",
+    "comment": "HIDDEN_ATTRIBUTES is applied only when a search query is present; the no-search early return shows all attributes, so the hidden attributes still appear in the default span attributes view.",
+    "severity": "medium"
+  },
+  "replays-self-serve-bulk-delete-system-sentry#opa-03": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "test_delete_replays_bulk.py:94-99 changes a row to max_segment_id None, but the test patches sentry.replays.tasks.delete_matched_rows and only asserts the mock call, so _make_recording_filenames (delete.py:86-90, the new None guard) never runs.",
+    "category": "test_gap",
+    "comment": "The bulk delete test sets max_segment_id to None to cover the new guard in _make_recording_filenames, but it mocks delete_matched_rows, so the guard is never executed and removing it would not fail the test.",
+    "severity": "medium"
+  },
+  "unified-storage-performance-optimizations-grafana-codex#opa-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "server.go:258-262 does now call s.Init(ctx) inside NewResourceServer and the per-request Init calls were removed, but this eager initialisation is the purpose of the PR; the constructor already returned errors to its callers, and failing at startup instead of on each request is intended fail-fast behaviour, not a defect.",
+    "category": null,
+    "comment": "NewResourceServer now runs Init synchronously (lifecycle, full search index build, watcher) and returns an error on failure, so callers that were not changed block on startup and abort construction on Init failure.",
+    "severity": "medium"
+  }
+}

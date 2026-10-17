@@ -1,0 +1,12 @@
+{
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "items": [
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#opa-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The PR leaves useRulerRuleAbilities returning [false,false] in RulesTable.test.tsx:68\u201370, while the Grafana Delete tests vary only the prom-rule menu permissions at lines 105\u2013109 and 139\u2013143. RuleActionsButtons.tsx:110\u2013112 passes the ruler-backed rule to AlertRuleMenu, whose Delete condition ORs both permission sources (AlertRuleMenu.tsx:85\u201387). Consequently, these modified tests pass even if the Grafana ruler-based Delete permission path stops working, losing coverage of that path.",
+   "severity": "medium"
+  }
+ ]
+}

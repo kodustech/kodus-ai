@@ -1,0 +1,19 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The new add_members action calls group.add for every supplied username without checking membership or wrapping the batch in a transaction (app/controllers/admin/groups_controller.rb:71\u201377). Group#add unconditionally pushes the user (app/models/group.rb:272\u2013273), conflicting with the unique membership index (db/migrate/20130416004933_group_users.rb:9); an existing member therefore causes an exception after earlier additions have persisted.",
+   "severity": "high"
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The changed endpoint passes the integer limit directly into the query and serializes its results without bounds checks (app/controllers/groups_controller.rb:22\u201329), allowing oversized responses and PostgreSQL errors for negative limits. Visible groups are accessible anonymously (lib/guardian.rb:120\u2013121); although automatic groups already accepted unchecked limits, this PR extends that behavior to nonautomatic groups.",
+   "severity": "medium"
+  }
+ ]
+}

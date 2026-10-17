@@ -1,0 +1,1519 @@
+{
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     9,
+     16
+    ],
+    "texto": "WHAT: `execute(...)[0]['id']` (and `[0]['value']` on line 15) assumes the query returns a row. On sites where embed_category is unset or does not match a category name, or where uncategorized_category_id is not stored in site_settings, it returns none. WHY: `[0]` is nil, so the migration raises NoMethodError and the deploy fails. HOW: Check the result's ntuples before indexing and fall back to a default."
+   },
+   {
+    "id": "S2",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     22,
+     26
+    ],
+    "texto": "WHAT: Legacy embeddable_hosts values (often 'http://host', with paths or trailing \\r) are inserted raw, skipping the model's scheme/path stripping. WHY: EmbeddableHost.record_for_host compares the column against the bare uri.host, so migrated entries like 'http://discourse.org' never match, and embedding stops working for existing sites after upgrade. HOW: Before inserting, strip whitespace, the scheme and any path from each value."
+   },
+   {
+    "id": "S3",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     25,
+     25
+    ],
+    "texto": "WHAT: Host values from site_settings are interpolated directly into an INSERT statement as '#{h}'. WHY: A value containing a single quote breaks the migration or injects arbitrary SQL that runs with migration privileges. HOW: Quote the value with connection.quote(h)."
+   },
+   {
+    "id": "S4",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     14,
+     17
+    ],
+    "texto": "WHAT: The query lowercases the column (`lower(host)`) but compares it to uri.host without downcasing it. WHY: A referer or embed URL with uppercase characters (e.g. 'http://EvilTrout.com/x') fails the check, and embedding is wrongly rejected. HOW: Downcase the argument."
+   },
+   {
+    "id": "S5",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     10,
+     18
+    ],
+    "texto": "WHAT: The validation regex accepts a port and before_validation keeps it in the stored host ('example.com:8080'), but record_for_host compares against uri.host, which never includes the port. WHY: Hosts saved with a port pass validation and can never match a referer, so embedding from them always fails. HOW: Either compare host plus port (when it is not the default port), or strip the port before saving."
+   },
+   {
+    "id": "S6",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     5,
+     8
+    ],
+    "texto": "WHAT: before_validation calls `self.host.sub!` with no nil guard. WHY: A create/update request without a host param (or EmbeddableHost.new without a host) raises NoMethodError and returns a 500 instead of a validation error. HOW: Return early when host is nil."
+   },
+   {
+    "id": "S7",
+    "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+    "lines": [
+     9,
+     17
+    ],
+    "texto": "WHAT: destroy (and update) use `where(id:).first`, which returns nil for an unknown id, and then call methods on it. WHY: Deleting or updating a host that does not exist (or was already deleted) raises NoMethodError and returns a 500 instead of a 404. HOW: Use `EmbeddableHost.find(params[:id])` so ActiveRecord::RecordNotFound returns a 404."
+   },
+   {
+    "id": "S8",
+    "file": "app/assets/javascripts/discourse/models/store.js.es6",
+    "lines": [
+     192,
+     201
+    ],
+    "texto": "WHAT: The new `_ids` branch runs for every key ending in `_ids` on every hydrated model. It always deletes the original key and replaces it with the result of mapping _lookupSubType, which returns undefined when the root has no matching collection; a null value crashes on `.map`. WHY: Existing REST models with plain id-array attributes (e.g. `group_ids`) lose that data or throw while hydrating, a regression outside the embedding feature. HOW: Only replace the key when the value is an array and the pluralized collection exists in root."
+   },
+   {
+    "id": "S9",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     14,
+     17
+    ],
+    "texto": "`record_for_host` lowercases the stored `host` column but compares it with `uri.host` unchanged, and Ruby's URI does not lowercase hostnames. A referer like `http://EvilTrout.com/page` therefore never matches an allowed host, so embed checks and topic retrieval reject valid hosts. Fix: lowercase the incoming host (`host.downcase`) so both sides are normalised the same way."
+   },
+   {
+    "id": "S10",
+    "file": "spec/fabricators/category_fabricator.rb",
+    "lines": [
+     1,
+     4
+    ],
+    "texto": "`category_fabricator.rb` now contains only the `:embeddable_host` fabricator, and `embeddable_host_fabricator.rb` contains every category fabricator. Each file name now describes the other file's contents, so anyone looking for a fabricator by file name opens the wrong file. Swap the contents back so each file holds the fabricator it is named after."
+   },
+   {
+    "id": "S11",
+    "file": "spec/models/topic_spec.rb",
+    "lines": [
+     1403,
+     1405
+    ],
+    "texto": "This change removed the embeddable-host check from `expandable_first_post?`, but the test is still called \"is false if embeddable_host is blank\". It actually passes because the newly built topic has no topic embed, so the name points readers to a condition the code no longer checks. Rename it to describe the real reason it returns false."
+   },
+   {
+    "id": "S12",
+    "file": "spec/models/topic_spec.rb",
+    "lines": [
+     1403,
+     1405
+    ],
+    "texto": "expandable_first_post? no longer checks embeddable hosts. This test returns false only because the built topic has no topic embed (has_topic_embed? is false), so the name claims behaviour the code does not have. It would pass whether or not any host exists, so either rename it to match what it really covers or remove it."
+   },
+   {
+    "id": "S13",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     9,
+     16
+    ],
+    "texto": "The migration assumes the `embed_category` join query returns at least one row. Site settings left at their default are not stored in `site_settings`, so on most installs the result is empty and `[0]['id']` raises, aborting the migration. Check the row count before indexing and fall back to the uncategorized category if there are no rows."
+   },
+   {
+    "id": "S14",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     2,
+     17
+    ],
+    "texto": "The validation accepts `host:port`, and before_validation strips only the scheme and path, so a value like `example.com:8080` is stored with its port. `record_for_host` compares that column against `uri.host`, which never includes the port, so the record is unreachable and embedding from that host is always rejected. Either strip the port before saving or compare against host plus port."
+   },
+   {
+    "id": "S15",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     17,
+     17
+    ],
+    "texto": "`lower(host) = ?` lowercases only the stored value, while `uri.host` keeps the referer's original case. A referer like `http://EvilTrout.com` therefore never matches the stored `eviltrout.com`. Downcase the referer host before comparing."
+   },
+   {
+    "id": "S16",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     14,
+     17
+    ],
+    "texto": "The query compares `lower(host)` with `uri.host`, but Ruby's URI keeps the original case, so a referer like `http://EvilTrout.com/page` will never match the stored host. Embeds and topic retrieval then wrongly fail with 'invalid referer host'. Lowercase the input before comparing."
+   },
+   {
+    "id": "S17",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     9,
+     16
+    ],
+    "texto": "If `embed_category` is unset or names no existing category, the SELECT returns no rows. `[0]` is then nil and `['id']` raises NoMethodError, so the migration aborts and the `category_id == 0` fallback can never run. Guard against an empty result before reading the id."
+   },
+   {
+    "id": "S18",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     2,
+     8
+    ],
+    "texto": "The validation regex allows `:port`, and `before_validation` only strips the scheme and path, so `example.com:8080` is saved with the port. `record_for_host` compares against `uri.host`, which never includes a port, so such hosts can never be allowed. Strip the port before saving, or include `uri.port` when looking up."
+   },
+   {
+    "id": "S19",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     9,
+     11
+    ],
+    "texto": "When no 'embed_category' row exists in site_settings (the default, since defaults aren't stored), the SELECT returns zero rows. `[0]` is then nil, and `nil['id']` raises NoMethodError, which aborts the migration on most installs."
+   },
+   {
+    "id": "S20",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     5,
+     8
+    ],
+    "texto": "The before_validation callback calls `sub!` on `host` with no nil check. Creating or updating a host without a host value (for example when `params[:embeddable_host][:host]` is missing) raises NoMethodError instead of returning a validation error."
+   },
+   {
+    "id": "S21",
+    "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+    "lines": [
+     14,
+     18
+    ],
+    "texto": "`where(...).first` returns nil for an unknown id (for example a double delete or a stale UI), and `host.destroy` then raises NoMethodError, which returns a 500. Use `find` so the request returns a 404 instead."
+   },
+   {
+    "id": "S22",
+    "file": "app/assets/javascripts/discourse/models/store.js.es6",
+    "lines": [
+     196,
+     201
+    ],
+    "texto": "Any payload key ending in `_ids` whose value is null now reaches `obj[k].map`, which throws a TypeError. Before this change such keys were only matched by the `_id` regex and handled safely, so hydrating the record now fails."
+   },
+   {
+    "id": "S23",
+    "file": "embeddable_host.rb",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "Possible issue: `record_for_host` compares the database's `lower(host)` against `uri.host`, which isn't lowercased, so a referer containing capital letters would fail the host-allowed check. Lowercase `uri.host` before comparing. (The reviewer noted this as outside the cross-file assignment, since it sits within a single hunk, and did not formally report it.)"
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+    "descricao": "EmbeddableHost's before_validation calls self.host.sub! unconditionally, so saving a record with a nil host raises NoMethodError instead of returning a validation error.",
+    "textoGolden": "The EmbeddableHost model's before_validation callback calls self.host.sub! to strip http://, https://, and path segments, but if self.host is nil, this raises NoMethodError.",
+    "comentarios": [
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       5,
+       7
+      ],
+      "texto": "The before_validation callback calls `sub!` on host without guarding nil. Creating a host with a missing or null host field reaches this callback from save_host and raises NoMethodError instead of returning a validation error. Guard nil during normalization and let presence/format validation reject it."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       5,
+       8
+      ],
+      "texto": "WHAT: `before_validation` calls `self.host.sub!(...)` unconditionally, so a record with a nil host raises NoMethodError (`nil.sub!`) instead of producing a normal format-invalid result. WHY: `Admin::EmbeddableHostsController#save_host` assigns `params[:embeddable_host][:host]` directly; any request that omits the host value makes the save raise a 500 instead of returning the `render_json_error(host)` validation response. HOW: guard the mutation, e.g. `return if host.blank?` at the top of the before_validation block (or use `self.host = self.host.to_s` before stripping)."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       5,
+       8
+      ],
+      "texto": "before_validation calls self.host.sub!(...) on a possibly-nil host before validates_format_of runs. The controller assigns host.host = params[:embeddable_host][:host], so a request without a host key leaves it nil and nil.sub! raises NoMethodError at save time instead of the format validation producing a normal error response. Add a presence guard so validation reports the failure."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+    "descricao": "update and destroy in Admin::EmbeddableHostsController fetch the host with where(id:).first and never check for nil, so an unknown id raises NoMethodError and returns a 500 instead of not-found.",
+    "textoGolden": "The update and destroy methods in Admin::EmbeddableHostsController do not validate the existence of the EmbeddableHost record retrieved by ID. If EmbeddableHost.where(id: params[:id]).first returns nil (i.e., the host does not exist), attempting to call methods on the nil object (e.g., save_host or destroy) will result in a NoMethodError.",
+    "comentarios": [
+     {
+      "file": "",
+      "lines": [
+       15,
+       16
+      ],
+      "texto": "In the destroy action, the nil-host case (line 15-16) would raise NoMethodError. Consider adding a nil check to handle the case where the host is not found."
+     },
+     {
+      "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+      "lines": [
+       9,
+       18
+      ],
+      "texto": "update and destroy fetch the record with EmbeddableHost.where(id: params[:id]).first but never check for nil, then immediately use it (save_host(host) does host.host = ... / host.save; destroy does host.destroy). A stale or already-deleted id, or an interleaving where a concurrent delete removes the row first, makes host nil and the first call on it raises NoMethodError -> unhandled 500. Guard with a nil/404 check before use."
+     },
+     {
+      "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+      "lines": [
+       10,
+       11
+      ],
+      "texto": "Update passes the nullable result of where(...).first directly to save_host, which immediately assigns host.host. Updating a nonexistent or concurrently deleted record returns an internal error instead of a not-found response; destroy has the same lookup failure. Use find or explicitly raise a not-found error before dereferencing the lookup result."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+    "descricao": "record_for_host compares lower(host) against the un-lowercased URI host, so mixed-case referer hosts fail to match allowed hosts and embedding is rejected.",
+    "textoGolden": "record_for_host compares lower(host) = ? but does not normalize the parameter\u2019s case, so mixed\u2011case referer hosts may fail to match even though comparison intends to be case\u2011insensitive.",
+    "comentarios": [
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "Normalize the parsed hostname before comparing it with lower(host). URI parsing preserves hostname case, so an allowed entry such as example.com does not match https://EXAMPLE.com/page even though DNS hostnames are case-insensitive. This makes valid embedding requests fail the host authorization check and makes category lookup inconsistent for equivalent domain identities. Compare against host.downcase (or normalize both operands equivalently), and add a mixed-case URL test."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "The query compares lower(host) to the un-downcased uri.host. A referer such as http://EvilTrout.com never matches the stored lowercase host, so embedding is wrongly denied. Fix: use where(\"lower(host) = ?\", host.downcase)."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "The query compares lower(host) in the database with uri.host, which is not lowercased, so the comparison normalizes only one side. A referer or URL with uppercase letters (e.g. http://EvilTrout.com) will not match the stored host. Compare against host.downcase, i.e. where('lower(host) = ?', host.downcase)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+    "descricao": "The migration copies the legacy embeddable_hosts values into the new table without stripping scheme and path, so hosts stored as http://example.com no longer match the bare-host lookup and previously allowed embeds are rejected after upgrade.",
+    "textoGolden": "Because this migration inserts embeddable_hosts rows with raw SQL, any existing embeddable_hosts values that include http:// or /https:// or path segments won\u2019t go through the EmbeddableHost model\u2019s normalization, so the new host lookup (which compares only the bare host) may fail for migrated data. Consider ensuring that migrated hosts are normalized to the same format as newly created EmbeddableHost records so existing embedding configurations keep working.",
+    "comentarios": [
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       24,
+       26
+      ],
+      "texto": "WHAT: migration inserts raw embeddable_hosts lines (e.g. http://example.com/123) without stripping scheme/path like the model does. WHY: migrated rows never match EmbeddableHost.record_for_host which compares bare uri.host, silently breaking previously allowed embeds."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "Migration INSERTs raw embeddable_hosts lines with scheme/path intact, but EmbeddableHost normalizes to bare domain (before_validation strips protocol/path, record_for_host looks up by URI.host). Strip protocol and path before INSERT or migrated hosts will never satisfy host_allowed?."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       24,
+       25
+      ],
+      "texto": "Legacy hosts are inserted verbatim instead of applying the new model's scheme/path normalization. Existing values such as http://discourse.org or https://example.com/1234 remain in the table, while record_for_host compares only URI.host, so previously configured embedding hosts stop working after upgrade. Normalize migrated entries to the same representation used by the model before inserting them."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+    "descricao": "The contents of category_fabricator.rb and embeddable_host_fabricator.rb are swapped, so each file defines the other's fabricators.",
+    "textoGolden": "The contents of `category_fabricator.rb` and `embeddable_host_fabricator.rb` have been swapped, resulting in the loss of original category fabricators and potentially causing errors in fabricator usage.",
+    "comentarios": [
+     {
+      "file": "spec/fabricators/category_fabricator.rb",
+      "lines": [
+       1,
+       4
+      ],
+      "texto": "File named category_fabricator.rb now defines Fabricator(:embeddable_host) while Fabricator(:category) was moved to embeddable_host_fabricator.rb. Filenames disagree with contents \u2014 swap contents back so each file defines the fabricator its name states."
+     },
+     {
+      "file": "spec/fabricators/embeddable_host_fabricator.rb",
+      "lines": [
+       1,
+       27
+      ],
+      "texto": "The file names and contents are swapped. embeddable_host_fabricator.rb defines the category fabricators (:category, :diff_category, :happy_category, :private_category), and category_fabricator.rb defines :embeddable_host. Restore category_fabricator.rb to the original category fabricators and put the :embeddable_host fabricator in embeddable_host_fabricator.rb."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+    "descricao": "The migration builds its INSERT by interpolating each legacy host value into the SQL string instead of quoting or binding it, so a value with a quote breaks the statement.",
+    "textoGolden": "The SQL query in the `app/controllers/admin/embeddable_hosts_controller.rb` file uses string interpolation (`'#{h}'`) to insert values, which is vulnerable to SQL injection. It should use parameter binding or proper quoting to prevent this security vulnerability.",
+    "comentarios": [
+     {
+      "file": "",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The migration's INSERT statement uses string interpolation: VALUES ('#{h}', ...). This is a SQL-injection concern and should be fixed by using parameterized queries or proper escaping."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       25,
+       25
+      ],
+      "texto": "WHAT: migration interpolates raw host string into SQL: VALUES ('#{h}', ...). WHY: a host value containing a single quote breaks the statement and allows SQL injection via site_settings value."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+    "descricao": "The migration reads execute(...)[0]['id'] for embed_category without checking for an empty result, so installs without that setting stored crash the migration instead of falling back to the uncategorized category.",
+    "textoGolden": "The migration accesses execute(...)[0]['id'] without checking if the query returned any rows, which causes a crash when no embed_category setting exists. This can lead to a broken feature when attempting to edit category/host relationships.",
+    "comentarios": [
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       9,
+       12
+      ],
+      "texto": "WHAT: migration does execute(...)[0]['id'] with no guard when embed_category setting/category is missing. WHY: nil[0] dereference crashes the migration and blocks deploy on instances without that setting."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       9,
+       16
+      ],
+      "texto": "Migration does execute(...)[0]['id'] without checking empty result; missing site_settings row throws NoMethodError and fails migration. Check for nil row."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       9,
+       11
+      ],
+      "texto": "The migration indexes the first category-query result before checking whether any row was returned. An installation without a persisted embed_category setting, or with no matching category name, aborts migration before reaching the uncategorized fallback. Check whether the result contains a row before accessing its id and handle missing fallback settings as well."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+    "descricao": "The spec 'is false if embeddable_host is blank' no longer sets up any host condition and passes only because embed_truncate defaults to false, so its name no longer matches what it tests.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/models/topic_spec.rb",
+      "lines": [
+       1399,
+       1406
+      ],
+      "texto": "Test 'is false if embeddable_host is blank' does not establish the true-branch preconditions (embed_truncate true, has_topic_embed true) nor control host presence, so it passes regardless of host logic and would still pass if host checking were broken/removed. Set truncate true + stub embed true with no hosts for the false case."
+     },
+     {
+      "file": "spec/models/topic_spec.rb",
+      "lines": [
+       1401,
+       1404
+      ],
+      "texto": "The test named \"is false if embeddable_host is blank\" now uses an ordinary built topic without setting embed_truncate or making has_topic_embed? true. It therefore returns false for reasons unrelated to the missing host, and passes even with the new implementation that never checks host availability. If blank-host behavior remains the intended contract, arrange all the other prerequisites before asserting false; if the contract intentionally changed, replace this case with a test of the actual intended behavior rather than retaining a misleading passing test."
+     },
+     {
+      "file": "spec/models/topic_spec.rb",
+      "lines": [
+       1403,
+       1404
+      ],
+      "texto": "The description \"is false if embeddable_host is blank\" no longer matches the code. This PR changed Topic#expandable_first_post? (app/models/topic.rb:869) to `SiteSetting.embed_truncate? && has_topic_embed?`, removing the embeddable_hosts condition entirely, and removed the `SiteSetting.embeddable_hosts` setup from this test. The assertion now passes only because `has_topic_embed?` is unstubbed (false) and embed_truncate is unset, so the name states a cause the method no longer has \u2014 rename it (e.g. \"is false when there is no topic embed\") or set up the precondition it claims to test."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#10",
+    "descricao": "The 'find embedded' test requests fruit 2 but the pretender always returns fruit 1, so it asserts fruit 1's colors and would not notice a find that ignores the id.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "test/javascripts/models/store-test.js.es6",
+      "lines": [
+       109,
+       121
+      ],
+      "texto": "Test requests fruit id 2 but pretender returns fruits[0] unconditionally, so assertions on colors [1,2] never cover fruit 2's color_ids [3]. Make pretender honor :id or request id 1 / assert single-element case to actually verify plural _ids hydration."
+     },
+     {
+      "file": "test/javascripts/models/store-test.js.es6",
+      "lines": [
+       111,
+       117
+      ],
+      "texto": "This test now requests fruit 2 but expects fruit 1's two colors. The /fruits/:id Pretender handler always returns fruits[0], so the test passes while hydrating the wrong record and would not catch a find implementation that ignores the requested ID. Make the handler select the requested fruit and assert its ID and corresponding colors (fruit 2 has only color 3), or request fruit 1 if testing its two-color hydration is the goal."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11",
+    "descricao": "After saving a host, the component overwrites its category with findById(categoryId); when no category was chosen this is null even though the server saved the uncategorized category, so the row shows no category until reload.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+      "lines": [
+       38,
+       38
+      ],
+      "texto": "The save callback overwrites the category using categoryId even when the server substituted the uncategorized category for a blank selection. Adding a host without choosing a category therefore leaves its category badge empty, and editing it reads an undefined category id despite a valid category_id having been returned. Resolve the category from the saved response's category_id rather than the submitted selection."
+     },
+     {
+      "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+      "lines": [
+       37,
+       38
+      ],
+      "texto": "When categoryId is null (the default for a new row, or a cleared selection), the controller saves SiteSetting.uncategorized_category_id and returns that category_id. This callback instead overwrites host.category with findById(null), making the displayed category disagree with the saved category. Use the category from the save response or its returned category_id rather than the pre-save selection."
+     },
+     {
+      "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+      "lines": [
+       37,
+       38
+      ],
+      "texto": "Use the saved response's category rather than overwriting it from categoryId after saving. For a new host with no category selected, categoryId is null, while the new controller deliberately saves SiteSetting.uncategorized_category_id and returns that ID through the serializer. This callback replaces the hydrated category with findById(null), leaving the row without its actual category until reload (and reopening edit also initializes from that incorrect relationship)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+    "descricao": "Hosts saved with a port (allowed by the validation regex) are stored as host:port, but lookup compares only URI.host, so those configured hosts never match and embedding fails for them.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "Host lookup compares URI.host against a stored value that validation explicitly permits to include a port. Saving example.com:8080 succeeds, but a request from http://example.com:8080 produces URI.host equal to example.com and never matches that record, disabling embedding and retrieval for the configured host. Use a consistent port representation in both storage and lookup."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "The validator accepts hosts such as `example.com:8080`, but record_for_host extracts only URI.host (`example.com`) and compares it to the stored port-qualified string. An accepted and saved host therefore never authorizes its corresponding URLs. Normalize the stored and queried authority consistently, including a deliberate port policy."
+     }
+    ]
+   }
+  ]
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "02f48f776f43734d1ac8914d3ad6a7115acdcb33",
+  "base": "f3c8e8f3487112f2c99aa78400430cce2d30be39",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties",
+    "lines": [
+     3138,
+     3138
+    ],
+    "texto": "WHAT: The admin-ui message now uses Java MessageFormat placeholders ('{0}' and '{2,choice,...}'), but this file is consumed by i18next, which every sibling error-* key reflects with '{{0}}' syntax. WHY: The admin console will show the literal text 'Attribute {0} must have at least {1} and at most {2} {2,choice,0#values|1#value|1<values}' instead of the interpolated values. HOW: Keep i18next interpolation syntax and use i18next plurals or neutral wording."
+   },
+   {
+    "id": "S2",
+    "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+    "lines": [
+     188,
+     188
+    ],
+    "texto": "WHAT: The account-ui message was changed from i18next '{{0}}' interpolation to MessageFormat '{0}' with a '{2,choice,...}' construct, which i18next does not support. WHY: The account console will render the raw placeholders and choice pattern to end users instead of the attribute name and limits. HOW: Restore the '{{n}}' interpolation syntax used by this React UI."
+   },
+   {
+    "id": "S3",
+    "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+    "lines": [
+     71,
+     71
+    ],
+    "texto": "WHAT: The Lithuanian loginTotpStep1 was replaced with an Italian sentence ('Installa una delle seguenti applicazioni sul tuo cellulare:'). WHY: Lithuanian users see Italian text on the OTP setup login page. HOW: Use a Lithuanian translation such as '\u012ediekite vien\u0105 i\u0161 \u0161i\u0173 program\u0117li\u0173 savo mobiliajame telefone:'."
+   },
+   {
+    "id": "S4",
+    "file": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+    "lines": [
+     101,
+     101
+    ],
+    "texto": "WHAT: The Lithuanian account totpStep1 was replaced with an Italian sentence. WHY: Lithuanian users see Italian text in the account console OTP setup. HOW: Replace it with a Lithuanian translation of 'Install one of the following applications on your mobile:'."
+   },
+   {
+    "id": "S5",
+    "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+    "lines": [
+     112,
+     112
+    ],
+    "texto": "WHAT: The Simplified Chinese (zh_CN) totpStep1 was replaced with Traditional Chinese text ('\u624b\u6a5f', '\u61c9\u7528\u7a0b\u5f0f'). WHY: zh_CN users see mixed Traditional characters that don't match the rest of the locale. HOW: Use the Simplified form '\u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u7a0b\u5e8f\u4e4b\u4e00\uff1a'."
+   },
+   {
+    "id": "S6",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     106,
+     111
+    ],
+    "texto": "WHAT: The common prefix (start) and suffix (end) are computed independently, so start + end can exceed the shorter string's length. For example, value '><br>' vs sanitized '>' gives start=1 and end=1, and sanitized.substring(1, 0) is called. WHY: This throws StringIndexOutOfBoundsException and crashes the Maven plugin instead of reporting the illegal HTML. HOW: Limit the suffix loop with `end < Math.min(value.length(), sanitized.length()) - start`."
+   },
+   {
+    "id": "S7",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     73,
+     80
+    ],
+    "texto": "WHAT: If the derived English counterpart of a messages_*.properties file doesn't exist, verifySafeHtml throws a RuntimeException instead of adding a validation message. WHY: The ThemeVerifierMojo applies to every messages_* file in the project's resources, so a single locale file without an _en sibling crashes the build with an unhandled exception. HOW: On FileNotFoundException, add an entry to `messages` (or fall back to an empty English bundle) and return."
+   },
+   {
+    "id": "S8",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     106,
+     111
+    ],
+    "texto": "The suffix loop does not stop at the prefix already counted, so `start + end` can be larger than the shorter string's length. Example: value=\"foo  bar\" and sanitized=\"foo bar\" give start=4 and end=4, so `sanitized.substring(4, 3)` throws StringIndexOutOfBoundsException instead of reporting the illegal HTML. Limit `end` to `min(value.length(), sanitized.length()) - start`."
+   },
+   {
+    "id": "S9",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     73,
+     80
+    ],
+    "texto": "The English file's path is built by string replacement, and if no `_en.properties` file exists at that path, `FileInputStream` throws. That error is rethrown as an unchecked `RuntimeException`, which escapes `verify()` and the mojo's message collection. The whole build then crashes instead of reporting a validation message for that file. Record a message and skip the HTML check when the English bundle is missing."
+   },
+   {
+    "id": "S10",
+    "file": "js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties",
+    "lines": [
+     3138,
+     3138
+    ],
+    "texto": "This bundle is used by the admin console's i18next, which fills in `{{0}}`-style placeholders. That is why every community translation of this key still uses `{{0}}`. With `{0}` and `{2,choice,...}`, the attribute name and counts are probably not substituted, and the raw choice pattern shows up in the validation error. Unless an ICU post-processor is configured, keep i18next syntax, e.g. `{{0}}`/`{{1}}`/`{{2}}` with i18next plurals."
+   },
+   {
+    "id": "S11",
+    "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+    "lines": [
+     188,
+     188
+    ],
+    "texto": "The account console loads this bundle into i18next (js/apps/account-ui/src/i18n.ts), and the other account-ui translations of this key use `{{0}}` placeholders. Changing to `{0}` and `{2,choice,...}` probably makes the account console show the unsubstituted placeholders and the raw choice pattern. Unless the setup supports ICU syntax, keep i18next placeholders."
+   },
+   {
+    "id": "S12",
+    "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+    "lines": [
+     71,
+     71
+    ],
+    "texto": "The Lithuanian login bundle now has an Italian sentence (\"Installa una delle seguenti applicazioni sul tuo cellulare:\"), so Lithuanian users see Italian during OTP setup. The same Italian line was also put into account/messages_lt.properties totpStep1."
+   },
+   {
+    "id": "S13",
+    "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+    "lines": [
+     112,
+     112
+    ],
+    "texto": "The zh_CN bundle now uses Traditional Chinese characters (\u624b\u6a5f, \u5b89\u88dd, \u61c9\u7528\u7a0b\u5f0f) instead of the Simplified Chinese used by the rest of the file. Mainland Chinese users get mixed scripts."
+   },
+   {
+    "id": "S14",
+    "file": "js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties",
+    "lines": [
+     3138,
+     3138
+    ],
+    "texto": "This file is rendered by i18next, and every neighbouring error-* string uses `{{0}}` placeholders. The new value uses `{0}` and `{2,choice,...}`, which i18next does not support, so users will see the raw placeholders and choice syntax instead of the values."
+   },
+   {
+    "id": "S15",
+    "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+    "lines": [
+     188,
+     188
+    ],
+    "texto": "The account UI is rendered by i18next, which uses `{{n}}` placeholders and has no ChoiceFormat support. The changed value uses `{0}` and `{2,choice,...}`, so it will show up uninterpolated, and it no longer matches the community translations, which still use `{{0}}`."
+   },
+   {
+    "id": "S16",
+    "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+    "lines": [
+     71,
+     71
+    ],
+    "texto": "The Lithuanian `loginTotpStep1` (and `totpStep1` in the account `messages_lt.properties`) was replaced with an Italian sentence, so Lithuanian users get Italian OTP setup instructions. Replace it with a Lithuanian translation."
+   },
+   {
+    "id": "S17",
+    "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+    "lines": [
+     188,
+     188
+    ],
+    "texto": "Account-ui strings are rendered by i18next, which by default substitutes `{{0}}`. Every other locale in this directory except German still uses `{{0}}`. With `{0}` and Java `ChoiceFormat` syntax, the UI would likely show the raw placeholders and `{2,choice,...}` instead of the attribute name and counts (the same applies to the admin-ui English file at line 3138)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+    "descricao": "The Lithuanian TOTP setup step was replaced with Italian text in both the account and login bundles.",
+    "textoGolden": "The translation is in Italian instead of Lithuanian. This should be translated to Lithuanian to match the file's locale (messages_lt.properties).",
+    "comentarios": [
+     {
+      "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The Lithuanian OTP setup instruction has been replaced with an Italian sentence. login-config-totp.ftl renders this message directly, so users selecting Lithuanian receive an instruction in the wrong language; the same copied sentence also appears in the Lithuanian account bundle at line 101. Replace both values with the Lithuanian translation of the new installation instruction."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+      "lines": [
+       101,
+       101
+      ],
+      "texto": "The replacement OTP setup instruction is Italian (\u201cInstalla una delle seguenti applicazioni sul tuo cellulare\u201d), but this is the Lithuanian locale and the surrounding setup steps are Lithuanian. Translate the new instruction into Lithuanian rather than copying the Italian translation. The same incorrect replacement appears in the login bundle at themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71 and should be corrected there too; otherwise Lithuanian users see an untranslated first step in both OTP setup flows."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The replacement OTP setup instruction is Italian, not Lithuanian (`Installa una delle seguenti applicazioni sul tuo cellulare`). The same replacement was made for `totpStep1` in the Lithuanian account bundle. Translate both replacements into Lithuanian so selecting Lithuanian does not display Italian instructions during authenticator setup."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+    "descricao": "The zh_CN totpStep1 translation is written in Traditional Chinese instead of Simplified Chinese.",
+    "textoGolden": "The totpStep1 value uses Traditional Chinese terms in the Simplified Chinese file (zh_CN), which is likely incorrect for this locale. Please verify the locale\u2011appropriate translation.",
+    "comentarios": [
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "The zh_CN (Simplified Chinese) file was given Traditional Chinese characters: totpStep1=\u5728\u60a8\u7684\u624b\u6a5f\u4e0a\u5b89\u88dd\u4ee5\u4e0b\u61c9\u7528\u7a0b\u5f0f\u4e4b\u4e00\uff1a. Compare the unchanged neighbouring lines (e.g. '\u6253\u5f00\u5e94\u7528\u626b\u63cf\u4e8c\u7ef4\u7801\u2026') which use Simplified forms; \u624b\u6a5f/\u61c9\u7528\u7a0b\u5f0f/\u5b89\u88dd are Traditional. zh_CN must be Simplified Chinese, so this string is in the wrong script/variant for the locale."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "totpStep1 in messages_zh_CN uses Traditional Chinese (\u624b\u6a5f, \u5b89\u88dd, \u61c9\u7528\u7a0b\u5f0f), not Simplified Chinese as the rest of the file does. Replace it with the Simplified form: \u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u4e4b\u4e00\uff1a"
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "The Simplified Chinese (zh_CN) totpStep1 was replaced with Traditional Chinese (\"\u5728\u60a8\u7684\u624b\u6a5f\u4e0a\u5b89\u88dd\u4ee5\u4e0b\u61c9\u7528\u7a0b\u5f0f\u4e4b\u4e00\uff1a\"). Use the Simplified form, \"\u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u7a0b\u5e8f\u4e4b\u4e00\uff1a\"."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#04",
+    "descricao": "The method santizeAnchors is misspelled; it should be sanitizeAnchors.",
+    "textoGolden": "The method name 'santizeAnchors' should be 'sanitizeAnchors' (missing 'i').",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#05",
+    "descricao": "HTML_TAGS is a non-static, non-private field instead of a private static final constant.",
+    "textoGolden": "Field HTML_TAGS should be declared as 'private static final' following Java naming conventions for constants",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+    "descricao": "The diff-trimming code computes common prefix and suffix independently, so they can overlap and substring throws StringIndexOutOfBoundsException, crashing the verifier instead of reporting the illegal HTML.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       101,
+       111
+      ],
+      "texto": "The common prefix (start) and common suffix (end) are computed independently and can overlap, for example value \"aa\" vs sanitized \"a\". Then substring(start, length - end) gets begin > end and throws StringIndexOutOfBoundsException, so the verifier crashes instead of reporting the illegal HTML. Bound the suffix scan so that start + end <= min(value.length(), sanitized.length()), e.g. `while (end < min - start && ...)`."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       102,
+       111
+      ],
+      "texto": "The common prefix and common suffix are computed independently and can overlap, so `sanitized.substring(start, sanitized.length() - end)` can have start > end and throw StringIndexOutOfBoundsException. This crashes the verifier instead of reporting 'Illegal HTML'. Cap the suffix scan with `end < Math.min(value.length(), sanitized.length()) - start`."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       102,
+       111
+      ],
+      "texto": "WHAT: Common prefix/suffix stripping for the diff message can compute start+end larger than the string length and call substring(start, length-end) with start > end. WHY: Throws StringIndexOutOfBoundsException inside the key loop and crashes verification instead of reporting Illegal HTML. HOW: Clamp end so start+end <= min lengths, e.g. stop suffix scan when end >= length-start."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#07",
+    "descricao": "normalizeValue blanks the entire choice expression for some keys before HTML validation, so markup placed inside a choice branch of those keys bypasses the new verifier.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       124,
+       126
+      ],
+      "texto": "Choice normalization removes all branch content before HTML validation, allowing prohibited markup to bypass the new translation policy. A translated error-invalid-multivalued-size value such as `{2,choice,0#values|1#<a href=\"https://malicious.example\">value</a>|1<values}` becomes `...` and passes without checking the injected link, while consumers using MessageFormat expand that branch into the rendered message. Preserve and validate branch text, normalizing only the choice comparison syntax that conflicts with HTML parsing."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       124,
+       127
+      ],
+      "texto": "WHAT: normalizeValue replaces the entire {n,choice,...} block with ... before sanitizing, so HTML inside choice options is never checked. WHY: A translation can smuggle tags (e.g. {2,choice,0#<script>...}) in error-invalid-multivalued-size/linkExpirationFormatter keys and pass the verifier, reaching UI rendering as XSS. HOW: Sanitize/validate the choice body instead of blanking it, or run the HTML policy on the inner choice text as well."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+    "descricao": "The account and admin UI bundles now use Java MessageFormat placeholders and choice syntax for error-invalid-multivalued-size, but i18next expects {{n}}, so the UI shows literal {0}/{1}/{2} and the raw choice text.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties",
+      "lines": [
+       3138,
+       3138
+      ],
+      "texto": "The admin-ui bundle is consumed by react-i18next, which interpolates with double-brace `{{0}}` syntax (the previous value was `Attribute {{0}} ... {{2}}`). This line was rewritten to Java MessageFormat/ICU syntax (`{0}` ... `{2,choice,0#values|1#value|1<values}`), which i18next does not understand: the placeholders will not be substituted and the literal `{2,choice,...}` text will be shown to users. Keep the JS-side value in `{{0}}` form (and don't introduce ICU ChoiceFormat into the JS bundle); the ICU/choice spelling belongs only in the Java theme properties."
+     },
+     {
+      "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+      "lines": [
+       188,
+       188
+      ],
+      "texto": "Same contract break in the account-ui bundle: the value was `Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).` (i18next double-brace interpolation) and was changed to `{0}`/`{2,choice,...}` MessageFormat+ICU syntax. The account console's i18next based consumer was not updated to match, so interpolation will fail and the raw placeholder/choice syntax will be rendered. Restore `{{0}}`-style placeholders for the JS bundle."
+     },
+     {
+      "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+      "lines": [
+       188,
+       188
+      ],
+      "texto": "The account-ui bundle is consumed by i18next, which interpolates with double braces (the original string was `Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).`). This PR aligned the value to the Java theme convention, replacing `{{0}}/{{1}}/{{2}}` with `{0}/{1}/{2}` and adding ICU `{2,choice,...}`. i18next will no longer substitute the placeholders and cannot interpret the ICU choice, so the account UI shows the raw `{0}`, `{1}`, `{2}` and literal choice text. Keep the JS-side double-brace form for this bundle (adapt the choice accordingly) rather than the Java single-brace/ICU form used by the theme messages."
+     }
+    ]
+   }
+  ]
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "bbd8c507cdf56f6b884373809e0b24abd4a2353d",
+  "base": "50f4e78a39914711d0d231a501ba215becf17ebc",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     52,
+     54
+    ],
+    "texto": "WHAT: ProvideAnonDBStore now takes an int64 deviceLimit, but pkg/server/wire.go:374-375 still registers it as a provider and binds anonstore.AnonStore to it. WHY: Wire has no provider for int64, so DI generation fails and the server won't build. The store is also no longer injected anywhere. HOW: Remove anonstore.ProvideAnonDBStore and its wire.Bind from wire.go, or have the provider take *setting.Cfg and read AnonymousDeviceLimit from it."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/anonymous/anonimpl/impl.go",
+    "lines": [
+     144,
+     148
+    ],
+    "texto": "WHAT: TagDevice now returns ErrDeviceLimitReached to block authentication, but tagDeviceUI writes the device's localCache key before CreateOrUpdateDevice runs and leaves it there when the call fails. WHY: Only the first request from a device over the limit is rejected; for the next 29 minutes the cache hit returns nil and the request is authenticated anonymously, so the limit is effectively not enforced. HOW: In tagDeviceUI, set the cache entry only after CreateOrUpdateDevice succeeds, or delete it when the call fails."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/services/anonymous/anonimpl/client.go",
+    "lines": [
+     44,
+     50
+    ],
+    "texto": "WHAT: Authenticate enforces the device limit only through TagDevice, and TagDevice returns nil when the client-controlled X-Grafana-Device-Id header is empty (impl.go:119-122). WHY: Any client that leaves out the header, or sends a fresh random ID each time, gets an anonymous identity no matter what device_limit is set to. HOW: When a device limit is configured, reject anonymous authentication for requests without a device ID."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     90,
+     97
+    ],
+    "texto": "WHAT: updateDevice treats RowsAffected()==0 as ErrDeviceLimitReached, but MySQL by default reports changed rows, not matched rows. WHY: When the limit is reached, an already-registered device whose client_ip, user_agent and second-precision updated_at are unchanged (for example, concurrent requests across instances) gets 0 rows and is wrongly denied. HOW: Check that the device exists with a SELECT on device_id within the window instead of relying on RowsAffected."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     109,
+     118
+    ],
+    "texto": "WHAT: CreateOrUpdateDevice counts devices and then inserts without a transaction, lock or constraint. WHY: Concurrent requests from new devices can all see count < deviceLimit before any of them inserts, so the configured limit is exceeded. HOW: Run the count and insert in one transaction with appropriate locking, or do a conditional insert that checks the count in the same statement."
+   },
+   {
+    "id": "S6",
+    "file": "pkg/services/anonymous/anonimpl/client.go",
+    "lines": [
+     44,
+     50
+    ],
+    "texto": "WHAT: Device tagging used to run in a background goroutine with its own timeout and now runs inline in Authenticate. With a limit set, that means a COUNT(*) over anon_device plus an upsert for every uncached device. WHY: Anonymous authentication now waits on these DB round trips, so a slow DB or a flood of new device IDs adds latency and DB load to every such anonymous request. HOW: Keep the DB write async and enforce the limit from a cached or periodically refreshed device count."
+   },
+   {
+    "id": "S7",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     72,
+     73
+    ],
+    "texto": "The doc comment says `updateDevice` updates a device \"updated between the given times\", but it takes only ctx and device. It computes the window internally as `device.UpdatedAt` minus 30 days to `device.UpdatedAt` plus one minute, and returns `ErrDeviceLimitReached` when no row matches, so callers reading the comment get the wrong contract."
+   },
+   {
+    "id": "S8",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     52,
+     53
+    ],
+    "texto": "ProvideAnonDBStore now takes a `deviceLimit int64` parameter, but pkg/server/wire.go:374-375 still lists `anonstore.ProvideAnonDBStore` as a provider and binds `anonstore.AnonStore` to it. Wire cannot supply a bare int64, so dependency-injection generation/build fails. AnonDeviceService now builds the store itself, so remove the provider and the Bind from wire.go."
+   },
+   {
+    "id": "S9",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     108,
+     118
+    ],
+    "texto": "The device count and the insert/upsert run as separate statements with no transaction or lock. Concurrent requests from new devices can all read count < deviceLimit and all insert, so the limit is exceeded. Make the check and the insert one atomic operation, for example a conditional insert or a locked transaction."
+   },
+   {
+    "id": "S10",
+    "file": "pkg/services/anonymous/anonimpl/impl.go",
+    "lines": [
+     144,
+     148
+    ],
+    "texto": "tagDeviceUI puts the device key in localCache before CreateOrUpdateDevice runs and returns nil early on a cache hit. When the limit is reached, only the first request gets ErrDeviceLimitReached, and requests from the same device in the next 29 minutes skip the DB check and authenticate. Set the cache entry only after the store write succeeds."
+   },
+   {
+    "id": "S11",
+    "file": "pkg/services/anonymous/anonimpl/impl.go",
+    "lines": [
+     144,
+     148
+    ],
+    "texto": "tagDeviceUI caches the device key before CreateOrUpdateDevice, and the key stays cached when that call returns ErrDeviceLimitReached. Now that this error rejects authentication, only the first request from a device over the limit is denied. Its later requests within the 29-minute cache TTL get nil back from tagDeviceUI and are authenticated, so the limit is not enforced. Fix: delete the cache entry when CreateOrUpdateDevice fails, or set it only after the call succeeds."
+   },
+   {
+    "id": "S12",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     52,
+     54
+    ],
+    "texto": "`pkg/server/wire.go:374-375` still registers `anonstore.ProvideAnonDBStore` and binds `AnonStore` to it. The new signature needs an `int64` that no wire provider supplies, and after the change to `impl.go` nothing consumes `AnonStore`, so the provider is also unused. Wire generation fails. Remove the provider and its binding from `wire.go`, or give the provider an injectable dependency such as `*setting.Cfg`."
+   },
+   {
+    "id": "S13",
+    "file": "pkg/services/anonymous/anonimpl/client.go",
+    "lines": [
+     44,
+     50
+    ],
+    "texto": "This check assumes `TagDevice` returns `ErrDeviceLimitReached` on every request from a device over the limit. But `tagDeviceUI` in `impl.go` puts the device key in `localCache` before `CreateOrUpdateDevice` fails, so for the next 29 minutes later requests hit the cache, get nil, and are authenticated. Write the cache entry only after the store write succeeds, or remove the key when the limit is hit."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#01",
+    "descricao": "The device limit check counts devices and then inserts in separate non-atomic steps, so concurrent requests from new devices can all pass the check and exceed the configured limit.",
+    "textoGolden": "Race condition: Multiple concurrent requests could pass the device count check simultaneously and create devices beyond the limit. Consider using a database transaction or lock.",
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "The limit check counts devices and then inserts in separate steps with no lock or transaction. Concurrent requests from new devices can all see count < limit and all insert, so the limit is exceeded. Make the count-and-insert atomic, for example with a conditional INSERT ... SELECT ... WHERE (SELECT COUNT(*)) < limit."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "The device limit check is a non-atomic count followed by an insert. Concurrent requests from different new devices can all see count < limit and all insert, so the number of devices exceeds deviceLimit. Make the check and insert atomic, for example with a conditional INSERT ... SELECT WHERE (SELECT COUNT(*)) < limit, or serialize the check and insert under a lock."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "WHAT: CreateOrUpdateDevice does check-then-act (CountDevices then INSERT/UPSERT) with no lock, transaction, or unique-guard when deviceLimit>0. WHY: Two concurrent new-device requests can both observe count < limit and both insert, exceeding the configured limit and breaking the enforcement contract. HOW: Enforce atomically (e.g., conditional insert guarded by count in one statement/transaction with serializable lock, or re-check count on conflict)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#02",
+    "descricao": "Device slots are keyed by the client-controlled X-Grafana-Device-Id header with no validation or rate limiting, so an anonymous caller can fill the limit with fake IDs and deny anonymous access to every new legitimate device.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       109,
+       117
+      ],
+      "texto": "WHAT: Device slots counted toward deviceLimit are keyed by the unauthenticated X-Grafana-Device-Id header (read in impl.go TagDevice) with no validation or rate-limit. WHY: Any anonymous caller can mint arbitrary device IDs to fill the table up to the limit, after which all legitimate new anonymous devices get ErrDeviceLimitReached and authentication is denied \u2014 a trivial anonymous-access DoS introduced by the limit. HOW: Do not let a single client consume many slots (e.g., bind slot consumption to IP/fingerprint, rate-limit new-device creation, or require proof of distinct device)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#05",
+    "descricao": "TestIntegrationBeyondDeviceLimit only checks that a new device is rejected at the limit and never verifies that an existing device can still be updated at the limit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database_test.go",
+      "lines": [
+       51,
+       70
+      ],
+      "texto": "The at-limit call reuses a brand-new device ID (\"keep\") that was never inserted, so it only reaches updateDevice's `rowsAffected == 0` -> ErrDeviceLimitReached branch. The success branch of the newly added updateDevice (an existing device still being updated while the store is at the limit) is never exercised by any test \u2014 every other call uses deviceLimit 0, so updateDevice is never invoked. A regression that made updateDevice always affect 0 rows, use a wrong WHERE/SET, or unconditionally return ErrDeviceLimitReached whenever limit>0 would leave this and all other tests green. Add a case that, after the store is at the limit, calls CreateOrUpdateDevice again with the SAME DeviceID and asserts require.NoError (and ideally that client_ip/user_agent/updated_at were changed), so the update path is actually verified."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database_test.go",
+      "lines": [
+       51,
+       70
+      ],
+      "texto": "TestIntegrationBeyondDeviceLimit only checks that a new device is rejected at the limit. It would still pass if updateDevice always returned ErrDeviceLimitReached, because it never re-submits the existing device (DeviceID \"32mdo31deeqwes\") at the limit. Add a call that updates the existing device with a new UserAgent or UpdatedAt, require NoError, and check the stored row changed."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#07",
+    "descricao": "tagDeviceUI caches the device key before CreateOrUpdateDevice; when the store returns ErrDeviceLimitReached the entry stays, so the next request from the same device skips the limit check and authenticates for up to 29 minutes.",
+    "textoGolden": "The `tagDeviceUI` function populates the local cache with the device ID before the `CreateOrUpdateDevice` call. If `ErrDeviceLimitReached` is returned, the cache entry remains set, allowing subsequent requests to bypass the device limit until the cache expires after 29 minutes.",
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       47
+      ],
+      "texto": "WHAT: TagDevice failures that triggered the new ErrDeviceLimitReached early-return are not permanent, because tagDeviceUI (impl.go:87) writes the device key into localCache BEFORE CreateOrUpdateDevice (impl.go:93) and never evicts it on error; tagDeviceUI returns early on any cache hit (impl.go:83-84). WHY: the first request from a new over-limit device is denied, but the poisoned cache makes every subsequent request from that same device skip the limit check entirely and authenticate successfully, so the configurable device limit is bypassed by simply retrying. HOW: only set the cache key after CreateOrUpdateDevice returns nil (e.g. move a.localCache.SetDefault after the successful DB write, or delete the key when it returns ErrDeviceLimitReached)."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/impl.go",
+      "lines": [
+       144,
+       148
+      ],
+      "texto": "TagDevice now propagates ErrDeviceLimitReached to deny an over-limit anonymous device, but tagDeviceUI (impl.go:83-95) records the device in localCache at line 87 *before* calling a.anonStore.CreateOrUpdateDevice. When the store rejects the device with ErrDeviceLimitReached, the key is already cached, so the next request for that same device returns early at line 83 with a nil error and the device is admitted. The limit therefore only blocks the first request and is silently bypassed on retry. Fix by only setting the cache entry after CreateOrUpdateDevice succeeds (move SetDefault after the store call), or by removing/not caching the key on failure."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       46
+      ],
+      "texto": "The new authentication gate accepts retries from devices that were rejected by the limit because tagDeviceUI inserts the cache entry before CreateOrUpdateDevice succeeds. At capacity, the first request with a new X-Grafana-Device-Id fails, but subsequent requests with that same ID hit the 29-minute cache and receive an anonymous identity without admission to the device store. Cache only successful admissions, and ensure concurrent requests cannot treat an in-progress admission as successful."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#09",
+    "descricao": "Device tagging now runs synchronously in Authenticate, adding DB round-trips on cache-miss anonymous requests where it used to be fire-and-forget.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       50
+      ],
+      "texto": "WHAT: Anonymous.Authenticate changed from fire-and-forget goroutine TagDevice to synchronous TagDevice(ctx) that runs CountDevices + INSERT/UPDATE inline. WHY: Every cache-miss anonymous authentication now blocks on two DB round-trips in the login hot path, adding latency and DB load per request where previously auth returned immediately. HOW: Restore async tagging for the non-limit path or at least decouple denial from the hot path (e.g., async count with cached count, or only synchronously enforce when near limit)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#11",
+    "descricao": "The new auth.anonymous device_limit setting has no entry in conf/defaults.ini, so the GF_AUTH_ANONYMOUS_DEVICE_LIMIT environment override is ignored and the limit stays 0.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/setting/setting.go",
+      "lines": [
+       1654,
+       1654
+      ],
+      "texto": "The new device_limit setting is read without adding a corresponding key to conf/defaults.ini. applyEnvVariableOverrides only visits keys already present in the loaded INI and runs before readAuthSettings, so setting GF_AUTH_ANONYMOUS_DEVICE_LIMIT alone is ignored and leaves the limit at zero, disabling enforcement. Add an uncommented device_limit = 0 entry under auth.anonymous in defaults.ini so the standard environment override mechanism can apply it."
+     }
+    ]
+   }
+  ]
+ },
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "8422030ef456e3a898415e96475b4d8ddfc7640f",
+  "base": "bdd229e3f22e307fe40b30ef99e92ff3f6723da4",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "WHAT: MetricAlertDetectorHandler now subclasses StatefulDetectorHandler with an empty body, so it does not implement the abstract counter_names, get_dedupe_value, get_group_key_values or build_occurrence_and_event_data. WHY: Detector.detector_handler calls `group_type.detector_handler(self)`, so every metric_alert_fire detector raises `TypeError: Can't instantiate abstract class` inside process_detectors; before this PR the handler was concrete and returned no results. HOW: Implement the abstract members, or keep MetricAlertDetectorHandler on DetectorHandler with a stub evaluate returning {} until the stateful implementation is ready."
+   },
+   {
+    "id": "S2",
+    "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+    "lines": [
+     536,
+     538
+    ],
+    "texto": "WHAT: test_dedupe builds the expected occurrence with group_key \"val1\", but it evaluates group_key \"group_key\", so the expected and actual fingerprints differ (`<id>:val1` vs `<id>:group_key`). WHY: IssueOccurrence is a frozen dataclass that compares fingerprint in __eq__, so `evaluate_group_key_value(...) == expected_result` fails. HOW: Pass \"group_key\" to build_mock_occurrence_and_event."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/workflow_engine/processors/detector.py",
+    "lines": [
+     226,
+     233
+    ],
+    "texto": "This PR changed `evaluate` to return `dict[DetectorGroupKey, DetectorEvaluationResult]`, but the docstring still says it returns a list. Anyone who reads the docstring will expect a list and may iterate it as a list of results, when iterating the dict actually yields group keys. Update the docstring to describe the dict keyed by group key."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     10,
+     12
+    ],
+    "texto": "The TODO says MetricAlertDetectorHandler will become a stateful detector once that abstraction exists. This PR already makes it a subclass of StatefulDetectorHandler, so the comment is no longer true. Remove the comment, or change it to describe the work that is actually left, such as implementing the abstract methods."
+   },
+   {
+    "id": "S5",
+    "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+    "lines": [
+     244,
+     275
+    ],
+    "texto": "`build_mock_occurrence_and_event` takes `value` but never puts it into the occurrence or event data. The tests build their expected results with this same helper, so they would still pass if `evaluate_group_key_value` passed the wrong value to `build_occurrence_and_event_data`. You can see this in `test_state_results_multi_group`, which expects value 6 for group_2 even though the packet has 10, and the test still passes. Put `value` into a compared field, such as `evidence_data`, so a wrong value makes the test fail, and fix the expected values to match the inputs."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "`MetricAlertDetectorHandler` now subclasses `StatefulDetectorHandler` with only `pass`, so it does not implement the abstract `get_dedupe_value` and `get_group_key_values`, or the `build_occurrence_and_event_data` method this PR adds. When `Detector.detector_handler` instantiates it for a metric alert detector, Python raises `TypeError: Can't instantiate abstract class` (before this PR the class implemented `evaluate` and could be created). Add stub implementations of these methods so the handler can be created."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler, which this PR gave a new abstract method (build_occurrence_and_event_data), but its body is just `pass`, so the class stays abstract. Detector.detector_handler calls `group_type.detector_handler(self)`, and for metric-alert detectors that call now raises TypeError where the old concrete handler returned no results. Add concrete overrides, even placeholder stubs, for the abstract methods so the class can be instantiated."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/workflow_engine/processors/detector.py",
+    "lines": [
+     246,
+     309
+    ],
+    "texto": "Unverified risk: in `evaluate_group_key_value`, the new `else` branch calls `build_occurrence_and_event_data` with `PriorityLevel(new_status)`. This is only safe if the non-OK `DetectorPriorityLevel` values (believed to be 25, 50, 75) match `PriorityLevel` values. The reviewer did not read either enum definition, so this is unconfirmed. Check that the two enums share these values."
+   },
+   {
+    "id": "S9",
+    "file": "(file not specified in review)",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "Unverified risk: `MetricAlertDetectorHandler` is now an empty subclass of an abstract base, so instantiating it would raise TypeError. The reviewer did not check whether anything instantiates it. Confirm it is never instantiated, or implement the required abstract methods."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#01",
+    "descricao": "The TODO above MetricAlertDetectorHandler says it will become a stateful detector, but the class already subclasses StatefulDetectorHandler.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       10,
+       12
+      ],
+      "texto": "The comment 'TODO: This will be a stateful detector when we build that abstraction' is now stale. MetricAlertDetectorHandler already subclasses StatefulDetectorHandler. Remove or reword the TODO."
+     },
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "Remove or revise the adjacent TODO saying this will become a stateful detector 'when we build that abstraction'. The class now inherits StatefulDetectorHandler, so the comment describes already-completed work as a future migration and misleads maintainers about which abstraction this handler uses."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+    "descricao": "MetricAlertDetectorHandler subclasses StatefulDetectorHandler without implementing its abstract methods, so instantiating it for metric alert detectors raises TypeError where it previously returned an empty-result handler.",
+    "textoGolden": "MetricAlertDetectorHandler inherits from StatefulDetectorHandler but only contains pass, failing to implement its required abstract methods: counter_names (property), get_dedupe_value(), get_group_key_values(), and build_occurrence_and_event_data(). This will cause a TypeError at runtime when the class is instantiated.",
+    "comentarios": [
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "WHAT: MetricAlertDetectorHandler now subclasses StatefulDetectorHandler with an empty body, so it does not implement the abstract methods counter_names, get_dedupe_value, get_group_key_values, and build_occurrence_and_event_data declared on StatefulDetectorHandler. WHY: the class is now abstract, and Detector.detector_handler (src/sentry/workflow_engine/models/detector.py:86) instantiates it via group_type.detector_handler(self), so any detector whose type resolves to this grouptype will raise TypeError: Can't instantiate abstract class MetricAlertDetectorHandler \u2014 the previous version implemented evaluate and was instantiable. HOW: implement the required abstract methods (or keep a concrete evaluate override) so the handler can be constructed."
+     },
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler but with `pass`, so it implements none of the abstract methods it inherits (counter_names, get_dedupe_value, get_group_key_values, and the newly added build_occurrence_and_event_data). The class is therefore still abstract and instantiating it (it is registered as `detector_handler` on MetricAlertFire and is constructed by Detector.detector_handler) raises `TypeError: Can't instantiate abstract class MetricAlertDetectorHandler with abstract methods ...`. Before this change it subclassed DetectorHandler and implemented the single abstract `evaluate`, so it was instantiable; the PR makes the metric-alert handler path throw. Either implement the required abstract methods or keep the class free of unimplemented abstracts."
+     },
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler (an abc.ABC) with only `pass`. StatefulDetectorHandler declares four abstract methods \u2014 counter_names, get_dedupe_value, get_group_key_values, and the newly added build_occurrence_and_event_data (detector.py:142-170) \u2014 none of which are implemented here. The class therefore remains abstract and cannot be instantiated; Detector.detector_handler's `group_type.detector_handler(self)` will raise `TypeError: Can't instantiate abstract class MetricAlertDetectorHandler` for the metric_alert_fire group type. Previously this class was a concrete DetectorHandler with an implemented evaluate, so this PR newly makes it uninstantiable. Implement the required abstract methods (or revert to a concrete handler) to satisfy the base-class contract."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03",
+    "descricao": "The evaluate() docstring says it returns a list of DetectorEvaluationResult, but it now returns a dict keyed by group key.",
+    "textoGolden": "Docstring says this returns a list of DetectorEvaluationResult, but the method now returns a dict keyed by DetectorGroupKey. Consider updating the docstring to match the new return type.",
+    "comentarios": [
+     {
+      "file": "src/sentry/workflow_engine/processors/detector.py",
+      "lines": [
+       226,
+       228
+      ],
+      "texto": "Update evaluate's adjacent docstring to describe a dictionary keyed by DetectorGroupKey rather than a list of DetectorEvaluationResult. This change returns a dictionary and callers now consume .values(), but the documented return contract still tells readers to expect a list; iterating the documented result as a list would instead yield group keys."
+     },
+     {
+      "file": "src/sentry/workflow_engine/processors/detector.py",
+      "lines": [
+       226,
+       231
+      ],
+      "texto": "Docstring says 'returns a list of DetectorEvaluationResult' but signature/body now return dict[DetectorGroupKey, DetectorEvaluationResult]. Update docstring to describe dict keyed by group_key."
+     },
+     {
+      "file": "src/sentry/workflow_engine/processors/detector.py",
+      "lines": [
+       226,
+       233
+      ],
+      "texto": "The evaluate() docstring still says it returns a list of `DetectorEvaluationResult`. The method now returns a dict mapping group key to `DetectorEvaluationResult`. Update the docstring to describe the dict return shape."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#04",
+    "descricao": "The mock occurrence builder ignores its value argument, so tests (e.g. group_2 expected with 6 while the packet carries 10) pass regardless of which value is passed to build_occurrence_and_event_data.",
+    "textoGolden": "Wrong value `6` passed for `group_2` occurrence \u2014 the data packet specifies `\"group_2\": 10`. Should be `10` to accurately reflect the test scenario, which will ensure the test produces the correct occurrence data.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+      "lines": [
+       244,
+       265
+      ],
+      "texto": "The new occurrence builder accepts `value` but never incorporates or asserts it, so the occurrence tests cannot detect incorrect forwarding of the measured value to `build_occurrence_and_event_data`. For example, `test_state_results_multi_group` supplies 10 for group_2 but builds its expected occurrence with 6 and still passes. A regression that passes a constant or another group's measurement at the new production hook would therefore go unnoticed. Include the value in the mock occurrence's evidence and use the actual expected measurement, or assert the hook's arguments directly."
+     },
+     {
+      "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+      "lines": [
+       244,
+       275
+      ],
+      "texto": "`build_mock_occurrence_and_event` accepts `value: int` but never uses it (the occurrence is built only from `group_key`/`new_status`), and this same helper is also the implementation of `MockDetectorStateHandler.build_occurrence_and_event_data`. Because neither the expected occurrence nor the handler output depends on the value, tests like `test_state_results_multi_group` (which incorrectly builds the group_2 occurrence with `value=6` while the packet carries `10`) and `TestEvaluate.test_dedupe` (expected built with 6 vs packet 8) pass regardless of the value actually passed into `build_occurrence_and_event_data`. If evaluation passed a wrong value, these tests would still pass, so they do not verify the value/threshold path they appear to cover. Include `value` in a field of the occurrence (or assert on it in the handler) and fix the wrong expected values so the argument is actually checked."
+     },
+     {
+      "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+      "lines": [
+       244,
+       275
+      ],
+      "texto": "`build_mock_occurrence_and_event` accepts a `value: int` parameter but never uses it \u2014 the returned IssueOccurrence is derived only from `group_key` and `new_status`. Because `value` is dead, callers can pass a mismatched value with no failure: in `test_state_results_multi_group` the packet contains `group_2: 10`, but the expected occurrence for `group_2` is built with `6`. Either use `value` when constructing the occurrence so the test validates the group value, or drop the unused parameter and pass the correct value; otherwise the test silently accepts wrong group values."
+     }
+    ]
+   }
+  ]
+ },
+ "frontend-asset-optimization-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "b1613e320acff00623e6efc59f00ee68c7684a97",
+  "base": "3ce1a5b0caab215346a51629b0344b90d67e9478",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/api/webassets/webassets.go",
+    "lines": [
+     48,
+     49
+    ],
+    "texto": "WHAT: After taking the write lock at line 48, the code does not check entryPointAssetsCache again, so every goroutine that saw a nil cache under the RLock rebuilds it again. WHY: When the cache is empty in non-dev mode, concurrent index and frontend-settings requests queue on the mutex and each one re-reads and re-parses assets-manifest.json in turn, even after the first one has filled the cache. HOW: After Lock(), return the cached value when it is non-nil and cfg.Env != setting.Dev."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/api/webassets/webassets.go",
+    "lines": [
+     48,
+     49
+    ],
+    "texto": "After `entryPointAssetsCacheMu.Lock()` the code never checks `entryPointAssetsCache` again. Every goroutine that saw a nil cache under the RLock therefore re-reads and re-parses the manifest and overwrites the cache, even after another goroutine has already filled it. Re-check the cache right after taking the write lock (outside Dev) and return it if it is set."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/api/webassets/webassets.go",
+    "lines": [
+     48,
+     49
+    ],
+    "texto": "Goroutines that saw a nil cache under RLock each take the write lock in turn and reload the manifest, even after the first one has already filled the cache. If a later reload fails, it overwrites the good cached value with nil and that caller gets an error. Check entryPointAssetsCache again right after Lock() (outside Dev) and return it if it is already set."
+   },
+   {
+    "id": "S4",
+    "file": "webassets.go",
+    "lines": [
+     40,
+     71
+    ],
+    "texto": "GetWebAssets does not re-check the cache after acquiring the write lock, so concurrent callers that miss the cache under RLock may each reload the assets. This is redundant work rather than a correctness bug, and the reviewer noted it falls outside their assigned review class. Consider re-checking the cached pointer after taking the write lock (double-checked locking)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "frontend-asset-optimization-grafana-codex#01",
+    "descricao": "GetWebAssets does not re-check the cache after acquiring the write lock, so concurrent callers that missed the cache each reload the assets manifest.",
+    "textoGolden": "The GetWebAssets function implements an incomplete double-checked locking pattern for caching web assets. The function first checks if the cache is populated using a read lock (RLock), and if the cache is empty, it acquires a write lock to populate it. However, it fails to re-check whether the cache was populated by another goroutine while waiting to acquire the write lock.",
+    "comentarios": [
+     {
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       48,
+       69
+      ],
+      "texto": "WHAT: The exclusive lock acquired at line 48 is held (via defer on line 49) across the blocking file read / synchronous CDN HTTP request (lines 56-67) and there is no re-check of entryPointAssetsCache after acquiring the lock. WHY: On a cold cache, all concurrent callers (api/index.go:82, api/frontendsettings.go:62, middleware/recovery.go:141) block on the write lock and then each sequentially re-executes the full load (file I/O or blocking http.DefaultClient.Do), producing a thundering-herd serialization and N redundant loads instead of one; in Dev mode this happens on every request since the fast path is skipped, serializing all concurrent page loads. HOW: after `entryPointAssetsCacheMu.Lock()` re-check the cache (`if cfg.Env != setting.Dev && entryPointAssetsCache != nil { return entryPointAssetsCache, nil }`) so only the first goroutine performs the load, and drop the defer in favor of releasing the lock immediately after assigning `entryPointAssetsCache = result` to avoid holding it during I/O."
+     },
+     {
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       41,
+       48
+      ],
+      "texto": "cache is not re-checked under the lock after re-acquiring write Lock, so concurrent callers can each recompute web assets"
+     },
+     {
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       48,
+       49
+      ],
+      "texto": "The cache is not rechecked after acquiring the write lock, so concurrent production requests that initially observe a nil cache each reload and decode the manifest even after another request has populated it. During a cold-start request burst, these redundant filesystem reads and JSON decodes execute serially under the global lock, delaying queued page and frontend-settings requests and blocking cache readers while each reload runs. After acquiring the write lock, return the populated cache when cfg.Env != setting.Dev before performing asset loading."
+     }
+    ]
+   },
+   {
+    "issueId": "frontend-asset-optimization-grafana-codex#sncc-02",
+    "descricao": "GetWebAssets holds a global exclusive mutex through the whole manifest load, so in Dev mode, where the cache is bypassed, every request serializes behind it.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "unified-storage-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "26fed312840cd76b766cbd2158e17a7e6c0ec548",
+  "base": "871af07203177ce59a24e742107119409274f48a",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/storage/unified/resource/search.go",
+    "lines": [
+     216,
+     216
+    ],
+    "texto": "WHAT: The new log line calls s.search.TotalDocs() after the watch goroutine has started (line 207). bleveBackend.TotalDocs ranges over b.cache without holding cacheMu, while that goroutine can write b.cache through getOrCreateIndex -> BuildIndex. WHY: a watch event for a namespace with no index during startup causes a concurrent map read/write, which Go treats as a fatal error and crashes the process. HOW: take b.cacheMu.RLock() inside TotalDocs, or compute the doc count before starting the watch goroutine."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/storage/unified/resource/server.go",
+    "lines": [
+     258,
+     262
+    ],
+    "texto": "NewResourceServer used to be a cheap constructor, and Init ran later (first request or service start). It now synchronously runs lifecycle Init, builds the full search index and starts the watcher, and returns nil plus an error if any step fails. Callers such as sql/service.go, unified/client.go, apistore/restoptions.go and dashboard/legacy_storage.go were not changed: an Init failure now aborts construction instead of only failing requests, and startup blocks until the whole index build finishes."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/storage/unified/search/bleve.go",
+    "lines": [
+     137,
+     139
+    ],
+    "texto": "BuildIndex no longer holds cacheMu during the build, and getOrCreateIndex has no per-key guard, so two callers can build the same key at once and the last to finish unconditionally replaces the cached index. If the slower build listed storage before a watch event was written, its stale index overwrites the one that has the event, and that event is lost from search. Keep the per-key build serialized, or under the lock re-check the cache and keep the existing entry instead of replacing it."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#01",
+    "descricao": "BuildIndex now locks only the final cache assignment, so concurrent callers for the same uncached key all build the same expensive index in parallel and the last one overwrites the others.",
+    "textoGolden": "A race condition in BuildIndex allows multiple goroutines to concurrently build the same expensive index for the same key. This is caused by moving the b.cacheMu lock from protecting the entire function to only protecting the final cache assignment. ",
+    "comentarios": [
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "WHAT: Removing the function-wide `b.cacheMu.Lock()/defer Unlock()` and keeping only the lock around `b.cache[key]=idx` removes the only thing that serialized GetIndex against an in-flight build. WHY: getOrCreateIndex (resource/search.go:287-307) does GetIndex -> if nil -> build; previously BuildIndex held the write lock for its whole body so a concurrent caller's GetIndex (RLock) blocked until the first build cached the index and then saw it (no second build). Now GetIndex can return nil while a build for the same key is still running, so two requests/watch events build the SAME key concurrently \u2014 producing two distinct index instances where the caller holding the non-cached one never observes later writes (stale search results), and, for file-backed indices (size > FileThreshold), two concurrent `bleve.New(dir, mapper)` opening the same on-disk directory. HOW: guard the build per key (e.g. re-check the cache under the write lock after acquiring it, or use a per-key single-flight/lock so only one build runs per NamespacedResource), rather than relying on a global write lock held for the entire body."
+     },
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "The cache mutex was moved to cover only the cache assignment, removing the serialization that previously surrounded the whole BuildIndex. Two concurrent BuildIndex calls for the same key can now both construct an index (including `bleve.New(dir, mapper)` on the same on-disk path) and both write `b.cache[key]`; the second overwrites the first, so callers get distinct index instances for one key and writes made through the losing instance are invisible to readers of the cached one (and the file-backed build may collide on the same directory). Keep the build for a given key serialized (e.g. restore the lock around the build, or take a per-key lock) instead of locking only the map write."
+     },
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "Locking only cache publication allows concurrent requests for the same uncached key to build separate indexes and overwrite each other's cache entries. Search and handleEvent both call getOrCreateIndex, whose GetIndex previously blocked behind the build-wide lock; now an event can update one newly built index before another build replaces it, losing that update from subsequent search results and leaving the discarded index open. Serialize builds per NamespacedResource and recheck the cache after acquiring that per-key guard."
+     }
+    ]
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#02",
+    "descricao": "The new startup log calls TotalDocs, which iterates the index cache without a lock, after the event goroutine that can add indexes has started, so a concurrent map read and write can crash the process.",
+    "textoGolden": "Calling s.search.TotalDocs() here may race with concurrent index creation: TotalDocs iterates b.cache without synchronization, and the event watcher goroutine started just above could trigger BuildIndex writes concurrently, potentially causing a concurrent map read/write panic.",
+    "comentarios": [
+     {
+      "file": "pkg/storage/unified/resource/search.go",
+      "lines": [
+       216,
+       216
+      ],
+      "texto": "The newly added `s.search.TotalDocs()` call is unsafe: `bleveBackend.TotalDocs()` (pkg/storage/unified/search/bleve.go:144-150) iterates `b.cache` without holding `cacheMu`, while the bleve.go hunk in this same PR keeps `cacheMu` for the `b.cache[key] = idx` write only. Because search.go:207-213 already started the watch-event goroutine that can call `build` \u2192 `BuildIndex` \u2192 cache write, line 216 can iterate the map concurrently with that write, causing a `concurrent map iteration and map write` panic or data race. Either guard the `TotalDocs` read with `cacheMu`, or move this call to a point where no build can run concurrently."
+     },
+     {
+      "file": "pkg/storage/unified/resource/search.go",
+      "lines": [
+       216,
+       216
+      ],
+      "texto": "The new startup log calls TotalDocs after launching the write-event listener, but bleveBackend.TotalDocs iterates b.cache without cacheMu.RLock. A write event for an unindexed resource can concurrently publish an index through BuildIndex, causing a map iteration/write race and potentially a fatal runtime error during initialization. Protect TotalDocs cache iteration with the same read lock used by GetIndex."
+     },
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "BuildIndex now writes b.cache under Lock while TotalDocs (called from search.init after the watch goroutine starts) ranges over b.cache without any lock. This can cause a concurrent map read/write fatal error. Fix by taking cacheMu.RLock in TotalDocs."
+     }
+    ]
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#03",
+    "descricao": "NewResourceServer returns an error when Init fails without cancelling the server context created earlier.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/storage/unified/resource/server.go",
+      "lines": [
+       258,
+       262
+      ],
+      "texto": "WHAT: NewResourceServer now calls s.Init(ctx) and, on error, returns `nil, err` without invoking the `cancel` func created at line 229 and without running any lifecycle cleanup. WHY: Init may have already started long-lived goroutines \u2014 searchSupport.init's event-consumption loop uses context.Background() (resource/search.go:202) and initWatcher starts a watcher bound to s.ctx (server.go:752-770) \u2014 so if search.init succeeds and initWatcher (or a later step) fails, the constructor discards the server while those goroutines keep running with no way to stop them, leaking the internal context and watcher goroutines. HOW: on the error path call `cancel()` (and any needed lifecycle.Stop) before returning, or defer the cancel until success."
+     },
+     {
+      "file": "pkg/storage/unified/resource/server.go",
+      "lines": [
+       258,
+       262
+      ],
+      "texto": "WHAT: NewResourceServer calls s.Init(ctx) synchronously but returns nil,err without calling the cancel created for s.ctx. WHY: Failed startup leaks the server context (and any lifecycle/watch resources partially started by Init), leaving goroutines/channel watches alive. HOW: On Init error call s.cancel() (and lifecycle Stop cleanup) before returning."
+     }
+    ]
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#sncc-01",
+    "descricao": "The PR skips the storage-server module integration test on postgres instead of fixing the failure, removing coverage of the new eager initialization on postgres.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ }
+}

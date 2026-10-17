@@ -1,0 +1,26 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The newly added path fetches all returned error IDs by default before pagination (src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:84\u2013100), and fetch_error_details passes every ID to nodestore.get_multi (lines 104\u2013108). The query aggregation has no cap (src/sentry/replays/query.py:461\u2013495), so each page can load all error payloads, causing meaningful latency and memory overhead for error-heavy replays.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-02",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The initial search is empty, and the early return bypasses the newly added hidden-attribute filter (static/app/views/performance/newTraceDetails/traceDrawer/details/span/eapSections/attributes.tsx:51\u201368). Those unfiltered attributes are passed directly to AttributesTree at line 139, so the default view still displays the attributes intended to be hidden.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-03",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The changed None fixture is in a test that patches delete_matched_rows and only checks that the rows were forwarded (tests/sentry/replays/tasks/test_delete_replays_bulk.py:81\u2013113). Consequently, it never reaches the new guard in src/sentry/replays/usecases/delete.py:89\u201390 and would still pass if removing that guard caused the arithmetic at line 100 to fail.",
+   "severity": "medium"
+  }
+ ]
+}

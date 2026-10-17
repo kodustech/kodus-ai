@@ -1,0 +1,1263 @@
+{
+ "model": "opus-5.5",
+ "verificador": "claude-opus-5.5@sdk-api",
+ "versao": "v3d",
+ "versaoDedup": "hvopa-dedup",
+ "prs": {
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "It names a specific failure: a second Office365 host's event goes to the first host's calendar ID and fails, because createEvent always takes the first destinationCalendar entry.",
+     "passos": 0
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure: with multiple calendar references, the recurring-series deletion runs once per reference, sending duplicate delete calls for the same events that fail with 404/410 errors.",
+     "passos": 0
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong result: bad client input (an empty dynamicUserList) comes back as a generic 500 with its message hidden, instead of a 400.",
+     "passos": 0
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete security issue: on a public, unauthenticated endpoint, the new catch block sends raw Prisma error messages, including internal database structure, back to the client.",
+     "passos": 0
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete leak: for COLLECTIVE events, other team members' calendar IDs and credential IDs end up in the webhook payload sent to subscribers, which is a security problem rather than an optional suggestion.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 104125,
+    "cacheRead": 68664,
+    "output": 1319,
+    "reasoning": 0,
+    "ms": 10983
+   }
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete security hole: any attendee can send an unlimited guest list and trigger invite emails to arbitrary addresses in the organizer's name, which makes the endpoint a spam relay.",
+     "passos": 0
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete race: two concurrent addGuests requests both pass the non-transactional filter and createMany inserts the same guest twice, corrupting the attendee data.",
+     "passos": 0
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "nit": true,
+     "reason": "The hard-coded English tooltip is a localization and consistency issue that causes no crash, wrong result or data problem; non-English users just see one English tooltip string.",
+     "passos": 0
+    },
+    {
+     "rep": "S19",
+     "membros": [
+      "S19"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure: the template literal is always non-empty, so the localized fallback never runs and users can see raw text like \"undefined: ...\" in the error toast.",
+     "passos": 0
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S20"
+     ],
+     "nit": true,
+     "reason": "It only questions a copied comment's bundle-size claim, which has no effect on behaviour or on how anyone calls the component.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 96296,
+    "cacheRead": 34044,
+    "output": 1516,
+    "reasoning": 0,
+    "ms": 11406
+   }
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure: office365calendar spreads the parsed data over the stored credentials, so the placeholder string 'refresh_token' replaces the real refresh token and the next token refresh fails.",
+     "passos": 0
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "The file never imports prisma, so the new prisma.credential.update call fails to compile or throws at runtime, which breaks every Salesforce operation.",
+     "passos": 0
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure: when statusText is empty (e.g. over HTTP/2), successful Salesforce token refreshes throw a 400 and the connection is never created.",
+     "passos": 0
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete bug: the Salesforce connection is built with the old access token and instance URL instead of the refreshed ones, so requests can use an expired token.",
+     "passos": 0
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "reason": "The new code refreshes the Salesforce token unconditionally on every construction, which adds an external HTTP call and a database write to every calendar operation and risks rate-limit failures, so this is a real cost rather than a cosmetic or speculative point.",
+     "passos": 0
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure: looking up appStoreMetadata by slug instead of dirName makes the webhook return 404 for apps like google-calendar, so their credentials can't be synced.",
+     "passos": 0
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "nit": false,
+     "reason": "It names a specific security hole: any accepted team member, not just an admin, can create a team OAuth credential by putting a teamId in the OAuth state, because the admin check never runs on that path.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 7,
+    "input": 208392,
+    "cacheRead": 204417,
+    "output": 2049,
+    "reasoning": 0,
+    "ms": 11771
+   }
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "It names a concrete path (missing phone number or empty message) where the retry counter never increments, so a reminder that can never succeed is reprocessed on every cron run, which is what the PR is meant to stop.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a specific path where temporary failures push retryCount above 1 and the new deleteMany condition permanently deletes a valid reminder, so the SMS is never sent.",
+     "passos": 0
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete lost-update race: overlapping cron runs read the same retryCount and overwrite each other's `+1`, so an increment is lost.",
+     "passos": 0
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "reason": "It only asks to reword a code comment that is incomplete rather than false, and leaving it unchanged causes no crash, wrong result or data issue.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 29183,
+    "cacheRead": 24322,
+    "output": 1439,
+    "reasoning": 0,
+    "ms": 8227
+   }
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "reason": "The comment points out unreachable branches, but behavior is correct either way, so it is only a readability cleanup.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "reason": "It asks for stronger test coverage and names no real defect in the code, which correctly ANDs the auth and filter conditions.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 28604,
+    "cacheRead": 7602,
+    "output": 456,
+    "reasoning": 0,
+    "ms": 4713
+   }
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete security hole: sending any non-empty totpCode skips the password check, and the new backup-code branch ignores totpCode, so a leaked backup code is enough to log in without the password.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "It names a concrete failure: closing the dialog with Escape or an overlay click on the backup-codes step skips onEnable() and resetState(), so the switch shows 2FA as off when it is on and the modal reopens on the old backup-codes step.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete failure: a valid backup code typed in uppercase is rejected because the comparison is case-sensitive against lowercase hex, which can lock users out of recovery.",
+     "passos": 0
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "reason": "The component is a default export imported as BackupCode, so the copied function name TwoFactor only changes the name in DevTools and stack traces, and nothing breaks.",
+     "passos": 0
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "reason": "The comment only asks to reword a copied log message; ignoring it changes no behaviour, response, data or security property, so it is a logging/wording nit.",
+     "passos": 0
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment names a specific security weakness, where comparing backup codes with ordinary string equality could leak the stored codes through response timing, rather than a style or speculative concern.",
+     "passos": 0
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete defect: the un-awaited `isChecked()` makes the assertion always pass, so the test misses that the first test never closes the new backup-codes step and the switch stays unchecked.",
+     "passos": 0
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": true,
+     "reason": "It asks for more test coverage (checking the clipboard contents in the e2e test) and doesn't identify any concrete failure in the product code.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 8,
+    "input": 154670,
+    "cacheRead": 75767,
+    "output": 2367,
+    "reasoning": 0,
+    "ms": 12915
+   }
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [],
+   "uso": null
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure: the migration inserts legacy host values without stripping the scheme or path, so `record_for_host`'s comparison against the bare host never matches and embedding breaks for existing sites after upgrade.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "It names a concrete failure: a host value containing a single quote breaks the migration's INSERT or injects SQL, which counts as a crash or security hole rather than a style or speculative concern.",
+     "passos": 0
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": true,
+     "reason": "The swapped files only affect where the fabricators live, since all fabricator files are loaded anyway and nothing crashes or behaves differently, so this is a file-organisation nit.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 59835,
+    "cacheRead": 42773,
+    "output": 601,
+    "reasoning": 0,
+    "ms": 5417
+   }
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete stored XSS path: unsanitized HTML from RSS or remote pages is stored as cooked and rendered with `raw post.cooked`, so scripts in that content run in the Discourse origin.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete security failure: changing the query string gets past the per-URL throttle, so anonymous requests can make the server create unlimited topics as embed_by_username.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "It names a concrete path where anonymous requests with distinct URLs each force a synchronous full feed fetch and import, letting callers exhaust worker resources, which is a real failure rather than an optional improvement.",
+     "passos": 0
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "It describes a specific crash: a soft-deleted post makes embed.post nil, and PostRevisor then raises NoMethodError, which stops the feed poll for the remaining items.",
+     "passos": 0
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete rendering bug: the dangling `end if` makes the logo expression the block's condition, so the header renders in the wrong order.",
+     "passos": 0
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": true,
+     "reason": "Showing the post date with an English strftime format is a localisation and consistency issue; it causes no crash, wrong result, data loss or security problem.",
+     "passos": 0
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "nit": false,
+     "reason": "It names a specific check-then-create race between concurrent importers, where the unique embed_url index makes create! raise RecordNotUnique, crashing the job and halting the feed loop.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 7,
+    "input": 142539,
+    "cacheRead": 107112,
+    "output": 1992,
+    "reasoning": 0,
+    "ms": 10736
+   }
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "It names a concrete wrong result: the translate cache key leaves out the fallback chain, so stale or 'translation missing' results stay cached after `default_locale` changes or a fallback locale loads.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 6844,
+    "cacheRead": 6379,
+    "output": 270,
+    "reasoning": 0,
+    "ms": 4408
+   }
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete failure: passing '80%' to gifsicle --resize-fit for animated GIFs makes the resize fail, so oversized GIFs are never shrunk and get rejected.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "It names a specific command-injection path: the request-controlled `type` goes into the tempfile path, which is run through an unescaped shell call in convert_with, and that is a security hole if merged.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete attack: a decompression-bomb image that makes the new downsizing loop run ImageMagick up to five times, allocating gigabytes and tying up workers, which is a resource-exhaustion security hole rather than an optional suggestion.",
+     "passos": 0
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "nit": false,
+     "reason": "It names a concrete user-visible failure: the 413 alert shows a hard-coded 10MB maximum instead of the real server limit, so users are told the wrong size.",
+     "passos": 0
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete mismatch: the code comment promises images will be reduced to the allowed size, but the loop gives up after 5 attempts without checking the final size or the downsize result, so the stated guarantee is false.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 38406,
+    "cacheRead": 29325,
+    "output": 1415,
+    "reasoning": 0,
+    "ms": 10522
+   }
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [],
+   "uso": null
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete wrong result: removing a member skips the GroupUser callbacks, so user_count stays too high and the removed user's primary_group_id isn't cleared.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure: adding a user who is already a member breaks the unique index on group_users, so the request returns a 500 and leaves the group partly updated.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment names concrete failures on the public members endpoint: a negative limit causes a PostgreSQL error and a 500, and an unbounded limit lets any visitor force serialization of every member of large groups.",
+     "passos": 0
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": true,
+     "reason": "The comment asks for a more accurate HTTP verb in a test; the production code and routing behave correctly either way, so ignoring it only leaves a coverage gap.",
+     "passos": 0
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": false,
+     "reason": "It names a concrete regression: the public group members page now shows only the first 50 members and has no paging to reach the rest, where before it listed every member of a non-automatic group.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 98065,
+    "cacheRead": 65050,
+    "output": 1192,
+    "reasoning": 0,
+    "ms": 11884
+   }
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete security bypass: requests without the X-Grafana-Device-Id header make TagDevice return nil, so anonymous authentication succeeds even when the configured device limit has been reached.",
+     "passos": 0
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "reason": "The comment is about possible extra latency and DB load from running device tagging synchronously, which the PR needs in order to enforce the limit, and it names no crash, wrong result, data loss or broken behavior.",
+     "passos": 0
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "It only asks to fix vague wording in the doc comment of a private helper with one caller, and the code works correctly either way.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 40564,
+    "cacheRead": 29934,
+    "output": 1312,
+    "reasoning": 0,
+    "ms": 9471
+   }
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete wrong result: logs written through the fake's FromContext go to a throwaway instance, so tests that check InfoLogs on the injected TestLogger silently miss the middleware's log.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "reason": "Renaming the test function from TestInstrumentationMiddleware to TestMetricsMiddleware is a naming change only, and the test still runs and checks the right code either way.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 59710,
+    "cacheRead": 42777,
+    "output": 921,
+    "reasoning": 0,
+    "ms": 13050
+   }
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "Putting `d.Log` instead of `log` in the context only drops some log fields from downstream log lines and has no effect on behavior or results.",
+     "passos": 0
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": true,
+     "reason": "The comment only asks to rename a stale test-case description; the test logic and production code behave correctly either way, so this is a naming fix rather than a functional failure.",
+     "passos": 0
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18"
+     ],
+     "nit": true,
+     "reason": "The two store mocks share one mock.Mock, so the storage Create call still returns the error and the test passes correctly; moving the expectation into setupStorageFn is only a clarity change with no effect on behavior.",
+     "passos": 0
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S20"
+     ],
+     "nit": false,
+     "reason": "It names a concrete regression: the new Delete returns on a NotFound error from unified storage, so an object that exists only in legacy storage can no longer be deleted in mode 3 and stays there.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 97238,
+    "cacheRead": 35251,
+    "output": 998,
+    "reasoning": 0,
+    "ms": 10685
+   }
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete concurrent map read/write between the unlocked TotalDocs and the watch goroutine's BuildIndex cache write, which crashes the process.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete change in caller behavior: NewResourceServer now returns nil and an error when Init fails and blocks until the index is built, which aborts construction in callers that were not updated.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete race where two builds of the same key run at once and the stale index overwrites the newer one in the cache, so a watch event goes missing from search results.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 26447,
+    "cacheRead": 15978,
+    "output": 830,
+    "reasoning": 0,
+    "ms": 8621
+   }
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment shows that with skipToken the Grafana-prom Duplicate ability is still AlwaysSupported, and because AlertRuleMenu ORs it with the ruler ability, the Duplicate menu item wrongly appears on cloud/datasource rules for users with Grafana create permission.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The change dropped the `key` prop that the other `rules.map` branches still pass, so React matches Grafana rule rows by position and can attach one row's state, like an open menu or modal, to a different rule as filtered results stream in.",
+     "passos": 0
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a specific regression: Pause and Delete menu items disappear for Grafana rules in the list view because AlertRuleMenu still requires rulerRule, which list items no longer pass.",
+     "passos": 0
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": true,
+     "reason": "The comment asks for clearer wording in a code comment that is mostly accurate (it says 'no loading state for ruler availability'), and the code works correctly either way.",
+     "passos": 0
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": true,
+     "reason": "It asks for a stronger test assertion (open the menu and check its items), which doesn't change how the production code behaves.",
+     "passos": 0
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": true,
+     "reason": "The comment points out a test-coverage gap (the ruler-based ability path isn't exercised by the mocks) rather than a concrete failure in production code, so it is effectively a request for more tests.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 6,
+    "input": 165218,
+    "cacheRead": 103967,
+    "output": 2079,
+    "reasoning": 0,
+    "ms": 15439
+   }
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [],
+   "uso": null
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure: if any delete throws, `deletedAll` is never set, so the non-daemon reader thread loops forever, interfering with later tests and possibly keeping the JVM from exiting.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 8030,
+    "cacheRead": 7560,
+    "output": 415,
+    "reasoning": 0,
+    "ms": 6937
+   }
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure: custom grant type factories without getShortcut() either fail to compile or throw AbstractMethodError in DefaultTokenContextEncoderProviderFactory.postInit, which stops the server from starting.",
+     "passos": 0
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment points to a concrete logic inversion in the test matcher that makes it give wrong results, rejecting correct grant shortcuts and accepting wrong ones.",
+     "passos": 0
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": true,
+     "reason": "The comment is accurate, but it only concerns test quality (a too-broad catch hides an NPE in the test setup) and describes no failure in production behavior, so it amounts to a request for better test coverage.",
+     "passos": 0
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": false,
+     "reason": "The javadoc's '3-letters' guidance is false: the decoder accepts only a 6-character context with a 2-character grant shortcut, so a custom grant that follows the doc produces token IDs that fail to parse with an IllegalArgumentException.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 116091,
+    "cacheRead": 56733,
+    "output": 1551,
+    "reasoning": 0,
+    "ms": 12004
+   }
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete failure: in base-derived themes, a passkey-only user sees a password form they cannot use and no passkey option, and the old path that set the password required action is skipped.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "reason": "The comment only points out a copy-pasted, inaccurate code comment inside a test; leaving it unchanged causes no failure and does not affect any caller or user.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a specific information leak: unauthenticated visitors can enter a username and learn whether that account has a passkey, plus its credential IDs, which is a security hole if ignored.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 67687,
+    "cacheRead": 29723,
+    "output": 771,
+    "reasoning": 0,
+    "ms": 6614
+   }
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong result: the method returns the type-level resource name \"Clients\" instead of client IDs, which leads to a NullPointerException in AvailableRoleMappingResource and means per-client permissions are never returned.",
+     "passos": 0
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "The comment rightly points out that the test's negative check never reaches the delete endpoint, but this only weakens test coverage and causes no crash, wrong result, data loss or security hole in production code.",
+     "passos": 0
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure: under V2, ClientResource's management-permissions endpoints call methods that ClientPermissionsV2 now overrides to throw UnsupportedOperationException, so those requests return HTTP 500.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 90575,
+    "cacheRead": 51798,
+    "output": 1096,
+    "reasoning": 0,
+    "ms": 10230
+   }
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "It names a concrete failure: comparing error timestamps in seconds with breadcrumb timestamps in milliseconds puts every error before the first breadcrumb, so the log order sent to Seer is wrong.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "The comment raises a speculative performance concern about latency and memory from fetching every error with no cap, but describes no crash, wrong result, or other concrete failure if it is ignored.",
+     "passos": 0
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete wrong result: the early return with no search query skips the HIDDEN_ATTRIBUTES filter, so hidden attributes still appear in the default view.",
+     "passos": 0
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "nit": true,
+     "reason": "The comment asks for better test coverage of the None guard and names no concrete failure in production code, so ignoring it breaks nothing.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 87050,
+    "cacheRead": 50204,
+    "output": 935,
+    "reasoning": 0,
+    "ms": 5217
+   }
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "reason": "The comment admits the used/available ratio is unchanged, so it only flags redundant Redis INFO calls on a path that isn't hot, which is a minor optimization with no wrong result or crash.",
+     "passos": 0
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment shows the new docstring is false: it says there is one process per shard, but the code caps processes at max_processes (default 1), so readers are misled about how the flusher runs.",
+     "passos": 0
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": true,
+     "reason": "It asks to tighten a test assertion for better coverage and points to no concrete bug in production code, so it is a test-coverage nit.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 42055,
+    "cacheRead": 21174,
+    "output": 760,
+    "reasoning": 0,
+    "ms": 6009
+   }
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete path where the predicate runs on the org-aware wrapper, so the login cache isn't invalidated and a hidden or link-only IdP appears on the login page, which is a wrong result.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete bug: the cleanup targets the literal alias \"alias\" instead of the aliases actually created, so the 21 identity providers are never removed and stay in the shared test realm, where they can change the results of later tests.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete regression: the changed shared login predicate hides a user's linked, non-public IdP that has an organizationId from the base login page, which is a wrong result for users.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "reason": "The comment proposes a different cache-key design for performance, but it names no crash, wrong result or data corruption, since each new organization lookup still rebuilds the merged entry correctly.",
+     "passos": 0
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "reason": "The comment only asks to update the LoginFilter Javadoc or add a comment, and since getForLogin already adds the organization and BROKER_PUBLIC filters separately, nothing breaks or returns wrong results if it is ignored.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 114776,
+    "cacheRead": 98678,
+    "output": 2115,
+    "reasoning": 0,
+    "ms": 19150
+   }
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "reason": "Renaming a test or adding coverage for list input is optional cleanup, and production behaviour is the same whether or not the author makes the change.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 12921,
+    "cacheRead": 3800,
+    "output": 190,
+    "reasoning": 0,
+    "ms": 4661
+   }
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [],
+   "uso": null
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a specific CSRF attack: because the OAuth state is a fixed pipeline signature rather than a per-session nonce, an attacker can bind their own GitHub login into a victim's install pipeline, which is a security hole.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete security hole: when no Integration row exists yet, the user-match check is skipped, so someone else's GitHub installation could be linked to the wrong Sentry org.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure: a rejected token or a GitHub/network error raises outside the try/except, giving a 500 instead of the error page, so the install popup never gets its postMessage.",
+     "passos": 0
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete regression: two error strings that were translated before this change are no longer extracted because `_()` now wraps a variable, so users in other locales get untranslated error text.",
+     "passos": 0
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "nit": true,
+     "reason": "The comment points out that the test passes through the state-mismatch error instead of the installation-not-found path, which is a test-coverage weakness that doesn't cause any production failure.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 71710,
+    "cacheRead": 49270,
+    "output": 1484,
+    "reasoning": 0,
+    "ms": 9996
+   }
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure: the expected occurrence's fingerprint uses \"val1\" while the evaluated key is \"group_key\", so the equality assertion in test_dedupe fails.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The docstring now says evaluate returns a list when it returns a dict keyed by group key, so a reader who trusts it and iterates the result gets group keys instead of results.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "reason": "The comment asks to remove or reword an outdated TODO, which is a cleanup change with no effect on runtime behavior.",
+     "passos": 0
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "reason": "The comment says a test helper ignores `value`, which makes the tests weaker, but it names no failure in production code, so it is a request for better test coverage.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 75720,
+    "cacheRead": 15200,
+    "output": 1168,
+    "reasoning": 0,
+    "ms": 6204
+   }
+  }
+ }
+}

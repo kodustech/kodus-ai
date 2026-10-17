@@ -1,0 +1,12 @@
+{
+ "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+ "items": [
+  {
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#opa-01",
+   "class": "FP",
+   "subclass": "none",
+   "severity": "high",
+   "reply": "I change my classification to FP: the credential IDs are rendered, but this implements the intended username-first passkey flow. WebAuthnPasswordlessAuthenticator inherits the existing identified-user credential handling, and webauthnAuthenticate.js consumes those IDs as allowCredentials; PasskeysUsernameFormTest explicitly checks passkey availability after entering a username. Authentication still requires a verified assertion through user.credentialManager().isValid(cred), so these identifiers do not grant access. Restricting this to re-authentication would remove intended functionality; severity remains high only under the required assumption that the alleged conditional security weakness is real."
+  }
+ ]
+}

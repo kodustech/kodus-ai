@@ -1,0 +1,19 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "packages/prisma/zod-utils.ts:214 permits eventTypeId: 0, and :220 accepts an empty user array, making this validation reachable for dynamic bookings. The newly added plain Error at packages/features/bookings/lib/handleNewBooking.ts:728 falls through to the generic HTTP 500 at :761, masking a client validation failure.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-02",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "packages/features/bookings/lib/handleNewBooking.ts:993 collects members\u2019 complete destination-calendar records and :1078 appends them to evt.destinationCalendar. The webhook payload spreads evt at :2297, and packages/features/webhooks/lib/sendPayload.ts:122 serializes the unfiltered data, exposing other hosts\u2019 calendar and credential identifiers to ordinary webhook subscribers.",
+   "severity": "high"
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+{
+ "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+ "items": [
+  {
+   "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#opa-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "src/sentry/issues/issue_occurrence.py:181-184 explicitly defines equality using only id, not fingerprint. Both occurrences receive the same fixed id from tests/sentry/workflow_engine/processors/test_detector.py:252, so the differing group keys at lines 537 and 540 do not cause the claimed assertion failure.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#opa-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "src/sentry/workflow_engine/types.py:8-12 defines every non-OK DetectorPriorityLevel directly from PriorityLevel, whose values are 25, 50, and 75 in src/sentry/types/group.py:63-66. src/sentry/workflow_engine/processors/detector.py:290-300 handles OK separately, so this compatibility check identifies no defect.",
+   "severity": "low"
+  }
+ ]
+}

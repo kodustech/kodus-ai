@@ -1,0 +1,65 @@
+{
+ "notification-rule-processing-engine-grafana-codex#opa-01": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "low",
+  "concede": false,
+  "text": "Keep TP nit. The tests do verify the Delete gating they were written for, through the Grafana prom-rule path this PR adds: AlertRuleMenu.tsx:87 `const canDelete = (deleteSupported && deleteAllowed) || (grafanaDeleteSupported && grafanaDeleteAllowed);` and RulesTable.test.tsx:105-109 drive `useGrafanaPromRuleAbilities` to deny/allow Delete, with the button asserted absent (:114) and present (:146). Nothing in the test is vacuous: each assertion would fail if the gating broke on that path. What is missing is one more case for the other OR branch (ruler ability true, prom false). That is a coverage gap, i.e. a request for an extra test, not a test that fails to check its own behaviour, so it stays a nit at low severity."
+ },
+ "fixing-re-authentication-with-passkeys-keycloak#opa-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "Keep FP none. The facts are right but the disclosure is not new. Usernames are already enumerable in this exact flow: UsernameForm.java:78-80 returns `Messages.INVALID_USERNAME` for an unknown user. Filling allowCredentials for an identified user is how WebAuthn works after a username-first step. WebAuthnAuthenticator.java:101-106 already does it for any identified user (`// in 2 Factor Scenario where the user has already been identified ... form.setAttribute(WebAuthnConstants.ALLOWED_AUTHENTICATORS, authenticators)`), and the existing webauthn-authenticate pages render those credential IDs. The PR intends this: PasswordForm.java:51 `// setup webauthn data when passkeys enabled`, and `isConditionalPasskeysEnabled` checks `currentUser.credentialManager().isConfiguredFor(...)`, so the identified user can sign in with a passkey on the password page. Credential IDs are not secrets, and limiting this to re-authentication would break the feature."
+ },
+ "fixing-re-authentication-with-passkeys-keycloak#opa-02": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede. Per the rubric, a request to add a test, with no defect and no existing test that fails to verify what it was written for, is a 'consider' request: FP none. WebAuthnConditionalUIAuthenticator.java:52-53 is untested on the passkey-error path, but nothing is shown to be wrong."
+ },
+ "github-oauth-security-enhancement-sentry#opa-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "high",
+  "concede": true,
+  "text": "Concede. The expected value is not secret. pipeline/base.py:132-133 `pipe_ids = [f\"{type(v).__module__}.{type(v).__name__}\" ...]; self.signature = md5_text(*pipe_ids).hexdigest()` hashes fixed class names, and github/integration.py:343-344 `return [OAuthLoginView(), GitHubInstallation()]` makes them constant. A timing leak cannot reveal anything an attacker cannot already compute, so the problem described is impossible."
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "Keep FP none. The PR adds a bound rather than removing one. At base, groups_controller.rb applied `members.limit(limit).offset(offset)` only `if group.automatic?`, and every non-automatic group serialized ALL members with no limit at all (`render_serialized(members.to_a, GroupUserSerializer)`). At head (:22-26) `limit = (params[:limit] || 50).to_i` paginates every group. So `limit=1000000` returns no more than a plain request did before, and the unchecked params[:limit] for automatic groups (including negative values) is carried over unchanged from base (`(params[:limit] || 200).to_i`). The PR only shrinks the default exposure; it introduces no oversize or unbounded read."
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#opa-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "high",
+  "concede": true,
+  "text": "Concede. store.js.es6:222 `if (root.__rest_serializer === \"1\")` limits _hydrateEmbedded to opt-in responses (application_controller.rb:244-245). The opt-in serializers (Embedding, EmbeddableHost, QueuedPost, SimilarTopic and the topic/user serializers they embed) contain no plain or nullable *_ids; the only one is the has_many `embeddable_hosts, embed: :ids` with include true. So the claim 'every hydrated model / existing models like group_ids lose data' is false, and the base regex `/(.+)\\_id$/` never matched *_ids, contrary to the second comment."
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex#opa-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "high",
+  "concede": true,
+  "text": "Concede. wire.go:374-375 keeps the provider inside wireBasicSet (wire.NewSet at :174), not as a direct wire.Build argument. Nothing injected depends on AnonStore any more: impl.go:43 `anonStore: anonstore.ProvideAnonDBStore(sqlStore, cfg.AnonymousDeviceLimit)` and impl.go:61 passes it to api.NewAnonDeviceServiceAPI by hand. Wire resolves only what the injector needs, so the int64 input is never required and generation does not fail. What remains is a dead registration, not the claimed build failure."
+ },
+ "feat-2fa-backup-codes-cal-com#opa-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "Keep FP none. login.2fa.e2e.ts:53 `await expect(page.locator(...).isChecked()).toBeTruthy();` is unchanged by the PR; the PR only adds the FIXME at :50-51 that admits it is vacuous. It was just as vacuous before, so the pre-existing ruling applies. The new flow does not break what the test checks. 2FA is enabled on the server when the OTP is submitted (settings/EnableTwoFactorModal.tsx:~86-92 calls the enable API and receives `body.backupCodes`); only the UI refresh waits for Close (:265-269). The 'Login with 2FA enabled' step (:60-80) still fails if 2FA was not enabled, so the test's purpose holds and the defect predates this PR."
+ },
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-02": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede. CacheManager.java:124 `invalidateObject` only does `cache.remove(id)` + `bumpVersion(id)`, and cache-ispn.xml:26 declares `<local-cache name=\"realms\" simple-cache=\"true\">`, so no cluster-wide invalidation happens. The comment's main harm rests on a false fact. What remains, rebuilding a merged entry once per new org, is a bounded design trade-off that mirrors getByOrganization."
+ }
+}

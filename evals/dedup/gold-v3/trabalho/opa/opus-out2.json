@@ -1,0 +1,428 @@
+{
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+    {
+      "id": "S1",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+      "newGroup": null,
+      "reason": "Unguarded execute(...)[0] on the embed_category query crashes the migration when no row exists."
+    },
+    {
+      "id": "S2",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+      "newGroup": null,
+      "reason": "Legacy hosts migrated raw with scheme/path, so they no longer match bare-host lookup."
+    },
+    {
+      "id": "S3",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+      "newGroup": null,
+      "reason": "Legacy host values interpolated into the INSERT SQL without quoting."
+    },
+    {
+      "id": "S4",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+      "newGroup": null,
+      "reason": "lower(host) compared against non-downcased uri.host, mixed-case referers rejected."
+    },
+    {
+      "id": "S5",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+      "newGroup": null,
+      "reason": "Hosts stored with port never match uri.host lookup."
+    },
+    {
+      "id": "S6",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+      "newGroup": null,
+      "reason": "before_validation calls host.sub! without nil guard."
+    },
+    {
+      "id": "S7",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+      "newGroup": null,
+      "reason": "update/destroy use where(id:).first without nil check, 500 instead of 404."
+    },
+    {
+      "id": "S8",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Store _ids hydration branch breaks on null/non-collection _ids keys; not in golden set."
+    },
+    {
+      "id": "S9",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+      "newGroup": null,
+      "reason": "Same case-mismatch in record_for_host."
+    },
+    {
+      "id": "S10",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+      "newGroup": null,
+      "reason": "Fabricator file contents swapped."
+    },
+    {
+      "id": "S11",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+      "newGroup": null,
+      "reason": "Spec name \"is false if embeddable_host is blank\" no longer matches what it tests."
+    },
+    {
+      "id": "S12",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+      "newGroup": null,
+      "reason": "Same misleading spec name."
+    },
+    {
+      "id": "S13",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+      "newGroup": null,
+      "reason": "Same: empty embed_category result makes [0]['id'] raise and abort the migration."
+    },
+    {
+      "id": "S14",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+      "newGroup": null,
+      "reason": "Same host:port stored vs uri.host lookup mismatch."
+    },
+    {
+      "id": "S15",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+      "newGroup": null,
+      "reason": "Same case-mismatch in record_for_host."
+    },
+    {
+      "id": "S16",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+      "newGroup": null,
+      "reason": "Same case-mismatch in record_for_host."
+    },
+    {
+      "id": "S17",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+      "newGroup": null,
+      "reason": "Same: empty embed_category SELECT makes [0] nil and the migration aborts."
+    },
+    {
+      "id": "S18",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+      "newGroup": null,
+      "reason": "Same host:port stored vs uri.host lookup mismatch."
+    },
+    {
+      "id": "S19",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+      "newGroup": null,
+      "reason": "Same: missing embed_category row crashes the migration."
+    },
+    {
+      "id": "S20",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+      "newGroup": null,
+      "reason": "Same nil host NoMethodError in before_validation."
+    },
+    {
+      "id": "S21",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+      "newGroup": null,
+      "reason": "Same unknown-id nil in destroy causing 500."
+    },
+    {
+      "id": "S22",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Same store _ids branch crashing on null value with .map."
+    },
+    {
+      "id": "S23",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+      "newGroup": null,
+      "reason": "Same case-mismatch in record_for_host."
+    }
+  ],
+  "add-html-sanitizer-for-translated-message-resources-keycloak": [
+    {
+      "id": "S1",
+      "match": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+      "newGroup": null,
+      "reason": "UI bundles use MessageFormat {0}/choice syntax that i18next does not interpolate."
+    },
+    {
+      "id": "S2",
+      "match": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+      "newGroup": null,
+      "reason": "UI bundles use MessageFormat {0}/choice syntax that i18next does not interpolate."
+    },
+    {
+      "id": "S3",
+      "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+      "newGroup": null,
+      "reason": "Lithuanian TOTP step replaced with Italian text."
+    },
+    {
+      "id": "S4",
+      "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+      "newGroup": null,
+      "reason": "Lithuanian TOTP step replaced with Italian text."
+    },
+    {
+      "id": "S5",
+      "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+      "newGroup": null,
+      "reason": "zh_CN totpStep1 written in Traditional Chinese."
+    },
+    {
+      "id": "S6",
+      "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+      "newGroup": null,
+      "reason": "Prefix/suffix computed independently can overlap, substring throws."
+    },
+    {
+      "id": "S7",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Missing _en counterpart file throws RuntimeException and crashes the build; not in golden set."
+    },
+    {
+      "id": "S8",
+      "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+      "newGroup": null,
+      "reason": "Prefix/suffix computed independently can overlap, substring throws."
+    },
+    {
+      "id": "S9",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Missing _en counterpart file throws RuntimeException and crashes the build; not in golden set."
+    },
+    {
+      "id": "S10",
+      "match": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+      "newGroup": null,
+      "reason": "UI bundles use MessageFormat {0}/choice syntax that i18next does not interpolate."
+    },
+    {
+      "id": "S11",
+      "match": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+      "newGroup": null,
+      "reason": "UI bundles use MessageFormat {0}/choice syntax that i18next does not interpolate."
+    },
+    {
+      "id": "S12",
+      "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+      "newGroup": null,
+      "reason": "Lithuanian TOTP step replaced with Italian text."
+    },
+    {
+      "id": "S13",
+      "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+      "newGroup": null,
+      "reason": "zh_CN totpStep1 written in Traditional Chinese."
+    },
+    {
+      "id": "S14",
+      "match": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+      "newGroup": null,
+      "reason": "UI bundles use MessageFormat {0}/choice syntax that i18next does not interpolate."
+    },
+    {
+      "id": "S15",
+      "match": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+      "newGroup": null,
+      "reason": "UI bundles use MessageFormat {0}/choice syntax that i18next does not interpolate."
+    },
+    {
+      "id": "S16",
+      "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+      "newGroup": null,
+      "reason": "Lithuanian TOTP step replaced with Italian text."
+    },
+    {
+      "id": "S17",
+      "match": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+      "newGroup": null,
+      "reason": "UI bundles use MessageFormat {0}/choice syntax that i18next does not interpolate."
+    }
+  ],
+  "anonymous-add-configurable-device-limit-grafana-codex": [
+    {
+      "id": "S1",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "wire.go still registers ProvideAnonDBStore whose new int64 param has no provider; build breaks."
+    },
+    {
+      "id": "S2",
+      "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+      "newGroup": null,
+      "reason": "tagDeviceUI caches device key before CreateOrUpdateDevice, so limit bypassed for cache TTL."
+    },
+    {
+      "id": "S3",
+      "match": "new",
+      "newGroup": "N2",
+      "reason": "Requests with empty device-id header bypass the limit entirely; differs from issue 02 (fake IDs filling slots / DoS)."
+    },
+    {
+      "id": "S4",
+      "match": "new",
+      "newGroup": "N3",
+      "reason": "MySQL RowsAffected==0 for unchanged rows wrongly denies existing devices."
+    },
+    {
+      "id": "S5",
+      "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+      "newGroup": null,
+      "reason": "Non-atomic count then insert lets concurrent new devices exceed limit."
+    },
+    {
+      "id": "S6",
+      "match": "anonymous-add-configurable-device-limit-grafana-codex#09",
+      "newGroup": null,
+      "reason": "Device tagging now synchronous in Authenticate adding DB round trips."
+    },
+    {
+      "id": "S7",
+      "match": "new",
+      "newGroup": "N4",
+      "reason": "Stale doc comment on updateDevice parameters."
+    },
+    {
+      "id": "S8",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Same stale wire provider for ProvideAnonDBStore."
+    },
+    {
+      "id": "S9",
+      "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+      "newGroup": null,
+      "reason": "Same non-atomic count/insert race."
+    },
+    {
+      "id": "S10",
+      "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+      "newGroup": null,
+      "reason": "Same cache-before-write bypass."
+    },
+    {
+      "id": "S11",
+      "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+      "newGroup": null,
+      "reason": "Same cache-before-write bypass."
+    },
+    {
+      "id": "S12",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Same stale wire provider for ProvideAnonDBStore."
+    },
+    {
+      "id": "S13",
+      "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+      "newGroup": null,
+      "reason": "Same cache-before-write bypass."
+    }
+  ],
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+    {
+      "id": "S1",
+      "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+      "newGroup": null,
+      "reason": "MetricAlertDetectorHandler lacks abstract methods, instantiation raises TypeError."
+    },
+    {
+      "id": "S2",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "test_dedupe expected occurrence uses wrong group_key; not in golden set."
+    },
+    {
+      "id": "S3",
+      "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03",
+      "newGroup": null,
+      "reason": "evaluate() docstring says list but returns dict."
+    },
+    {
+      "id": "S4",
+      "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#01",
+      "newGroup": null,
+      "reason": "Stale TODO says it will become stateful though it already subclasses StatefulDetectorHandler."
+    },
+    {
+      "id": "S5",
+      "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#04",
+      "newGroup": null,
+      "reason": "Mock occurrence builder ignores value, tests cannot detect wrong value."
+    },
+    {
+      "id": "S6",
+      "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+      "newGroup": null,
+      "reason": "Same abstract-class TypeError."
+    },
+    {
+      "id": "S7",
+      "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+      "newGroup": null,
+      "reason": "Same abstract-class TypeError."
+    },
+    {
+      "id": "S8",
+      "match": "new",
+      "newGroup": "N2",
+      "reason": "Speculative DetectorPriorityLevel/PriorityLevel enum value mismatch."
+    },
+    {
+      "id": "S9",
+      "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+      "newGroup": null,
+      "reason": "Same abstract-class TypeError (hedged)."
+    }
+  ],
+  "frontend-asset-optimization-grafana-codex": [
+    {
+      "id": "S1",
+      "match": "frontend-asset-optimization-grafana-codex#01",
+      "newGroup": null,
+      "reason": "No re-check of cache after taking write lock, concurrent callers reload manifest."
+    },
+    {
+      "id": "S2",
+      "match": "frontend-asset-optimization-grafana-codex#01",
+      "newGroup": null,
+      "reason": "No re-check of cache after taking write lock, concurrent callers reload manifest."
+    },
+    {
+      "id": "S3",
+      "match": "frontend-asset-optimization-grafana-codex#01",
+      "newGroup": null,
+      "reason": "No re-check of cache after taking write lock, concurrent callers reload manifest."
+    },
+    {
+      "id": "S4",
+      "match": "frontend-asset-optimization-grafana-codex#01",
+      "newGroup": null,
+      "reason": "No re-check of cache after taking write lock, concurrent callers reload manifest."
+    }
+  ],
+  "unified-storage-performance-optimizations-grafana-codex": [
+    {
+      "id": "S1",
+      "match": "unified-storage-performance-optimizations-grafana-codex#02",
+      "newGroup": null,
+      "reason": "TotalDocs iterates cache without lock while watcher goroutine writes it."
+    },
+    {
+      "id": "S2",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Eager Init in constructor changes failure/startup-blocking semantics for callers; not the uncancelled-context issue."
+    },
+    {
+      "id": "S3",
+      "match": "unified-storage-performance-optimizations-grafana-codex#01",
+      "newGroup": null,
+      "reason": "BuildIndex no longer serialized, concurrent builds of same key overwrite each other."
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+ "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "items": [
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java:254 adds an unconditional organization/public restriction, which services/src/main/java/org/keycloak/forms/login/freemarker/model/IdentityProviderBean.java:213 applies to linked providers through the predicate returned at line 226. With the organization feature disabled, model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:433 returns the original provider without disabling it, so this new restriction removes previously visible, enabled linked IdPs.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-02",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The claimed cluster-wide invalidations do not occur: model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/CacheManager.java:124 only removes the local entry and bumps its revision, and quarkus/runtime/src/main/resources/cache-ispn.xml:26 configures realms as a local cache. model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/IdentityProviderListQuery.java:43 does copy previous search mappings on a miss, but that does not establish the claimed cluster-wide login-path performance regression.",
+   "severity": "medium"
+  }
+ ]
+}

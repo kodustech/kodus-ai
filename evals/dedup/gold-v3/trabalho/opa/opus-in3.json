@@ -1,0 +1,1935 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     118,
+     119
+    ],
+    "texto": "WHAT: `mainHostDestinationCalendar.integration` is read without optional chaining, and mainHostDestinationCalendar is undefined when evt.destinationCalendar is null or empty. WHY: any Google Meet booking where neither the organizer nor the event type has a destination calendar throws a TypeError, and booking creation fails. The old code used `?.`. HOW: use `mainHostDestinationCalendar?.integration`."
+   },
+   {
+    "id": "S2",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     170,
+     170
+    ],
+    "texto": "WHAT: references for non-calendar results (video) now get `credentialId: undefined`, where they used to get result.credentialId. WHY: handleCancelBooking only deletes video meetings when the video reference has a credentialId, so Zoom/Daily meetings are no longer deleted on cancel. HOW: keep result.credentialId for every result type."
+   },
+   {
+    "id": "S3",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     254,
+     256
+    ],
+    "texto": "WHAT: the fallback only runs when externalCalendarId is falsy, but it then searches for `cal.externalId === externalCalendarId`, so it never matches a real calendar. WHY: the calendar id becomes undefined, which drops the old fallback to destinationCalendar.externalId and sends updates for legacy references to the wrong calendar or makes them fail. HOW: fall back to the first destination calendar's externalId."
+   },
+   {
+    "id": "S4",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     315,
+     317
+    ],
+    "texto": "WHAT: the deleteEvent fallback searches for `cal.externalId === externalCalendarId` only when externalCalendarId is falsy, so it always returns undefined. WHY: for references without externalCalendarId, the destination calendar fallback is lost and the delete falls back to the default calendar. If the event lives in a different calendar, it is left behind. HOW: use `event.destinationCalendar?.[0]?.externalId`."
+   },
+   {
+    "id": "S5",
+    "file": "packages/features/bookings/lib/handleNewBooking.ts",
+    "lines": [
+     1063,
+     1079
+    ],
+    "texto": "WHAT: destinationCalendar is set to null when neither the event type nor the organizer has one, so `evt.destinationCalendar?.push(...teamDestinationCalendars)` does nothing. WHY: in collective events where the first host has no destination calendar, the other hosts' calendars are silently dropped, which is the case this PR is supposed to fix. HOW: default to `[]` instead of null."
+   },
+   {
+    "id": "S6",
+    "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+    "lines": [
+     72,
+     77
+    ],
+    "texto": "WHAT: createEvent always uses destinationCalendar[0].externalId. createAllCalendarEvents now calls it once per host credential, so every host's Office365 credential gets the first host's calendar id. WHY: a second collective host using Office365 posts to `/me/calendars/<host1-calendar-id>/events`, which does not exist in their account, so their event creation fails. HOW: pick the destination entry whose credentialId matches this credential, as GoogleCalendarService does."
+   },
+   {
+    "id": "S7",
+    "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+    "lines": [
+     423,
+     471
+    ],
+    "texto": "WHAT: the recurring-series branch, which deletes the events of all updatedBookings for every user calendar credential, now sits inside the per-reference loop. WHY: with multiple calendar references, the same recurring events get one delete call per reference, which causes duplicate API calls and 404/410 errors. HOW: move the recurring deletion out of the reference loop so it runs once."
+   },
+   {
+    "id": "S8",
+    "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+    "lines": [
+     151,
+     151
+    ],
+    "texto": "WHAT: the slug condition was flipped from `!IS_TEAM_BILLING_ENABLED` to `IS_TEAM_BILLING_ENABLED`. WHY: with billing enabled, the slug is set right away and also stored as requestedSlug, and with billing disabled, organizations are created with no slug. HOW: restore the negation."
+   },
+   {
+    "id": "S9",
+    "file": "packages/features/bookings/lib/handleNewBooking.ts",
+    "lines": [
+     727,
+     761
+    ],
+    "texto": "WHAT: the catch block turns the plain Error thrown for an empty or invalid dynamicUserList into a generic 500 'Unable to load users'. WHY: a client input error comes back as a server error with its message hidden. HOW: throw `new HttpError({ statusCode: 400, ... })` directly for the validation failure."
+   },
+   {
+    "id": "S10",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     117,
+     119
+    ],
+    "texto": "`mainHostDestinationCalendar` comes from `evt.destinationCalendar ?? []`, so it is `undefined` when there is no destination calendar. Callers now pass `[]` or `null` in that case. A Google Meet booking without a destination calendar then throws a TypeError on `.integration` instead of falling back to Cal Video."
+   },
+   {
+    "id": "S11",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     254,
+     256
+    ],
+    "texto": "The `find` fallback only runs when `externalCalendarId` is falsy, but it searches for a calendar whose `externalId` equals that same falsy value. It therefore never returns the event's destination calendar, and the update goes out with an undefined calendarId instead of the destination calendar used before this PR."
+   },
+   {
+    "id": "S12",
+    "file": "packages/features/bookings/lib/handleNewBooking.ts",
+    "lines": [
+     1063,
+     1079
+    ],
+    "texto": "When neither the event type nor the organizer has a destination calendar, `destinationCalendar` is set to `null`. The following `evt.destinationCalendar?.push(...teamDestinationCalendars)` then does nothing, so collective team members' calendars are silently discarded. Initializing it to an empty array keeps them."
+   },
+   {
+    "id": "S13",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     118,
+     121
+    ],
+    "texto": "When there is no destination calendar, handleNewBooking now passes `destinationCalendar: null` and other callers pass `[]`. `evt.destinationCalendar ?? []` then leaves `mainHostDestinationCalendar` undefined, so reading `.integration` throws a TypeError. Every Google Meet booking without a destination calendar fails instead of falling back to Cal Video; using `?.integration` keeps the old fallback."
+   },
+   {
+    "id": "S14",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     118,
+     119
+    ],
+    "texto": "When evt.destinationCalendar is null or [] (handleNewBooking sets null when neither the event type nor the organizer has a destination calendar), mainHostDestinationCalendar is undefined. `mainHostDestinationCalendar.integration` then throws a TypeError for every Google Meet booking. This breaks booking creation in the very case the Cal Video fallback is meant to handle."
+   },
+   {
+    "id": "S15",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     118,
+     119
+    ],
+    "texto": "`destinationCalendar` is now an array, and when it is null or empty (handleNewBooking passes null if no event-type or organizer calendar is set), `mainHostDestinationCalendar` is undefined. The old code read `evt.destinationCalendar?.integration`, which handled null. The new code reads `.integration` on undefined, so every such booking throws a TypeError in EventManager.create. The fix is optional chaining on `mainHostDestinationCalendar`."
+   },
+   {
+    "id": "S16",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     254,
+     256
+    ],
+    "texto": "This branch only runs when `externalCalendarId` is falsy, but it searches `destinationCalendar` for `cal.externalId === externalCalendarId` using that same falsy value. The search never matches, so `selectedCalendar` is undefined. Before this change, the code fell back to the destination calendar's externalId."
+   },
+   {
+    "id": "S17",
+    "file": "packages/features/bookings/lib/handleNewBooking.ts",
+    "lines": [
+     757,
+     762
+    ],
+    "texto": "The new catch block in loadUsers copies `error.message` from `PrismaClientKnownRequestError` into a 400 HttpError, which this public, unauthenticated booking endpoint sends back to the caller. Prisma error messages can include model, field and constraint names and query details, which exposes internal database structure. Log the Prisma error on the server and return a generic message to the client."
+   },
+   {
+    "id": "S18",
+    "file": "packages/features/bookings/lib/handleNewBooking.ts",
+    "lines": [
+     1077,
+     1079
+    ],
+    "texto": "For COLLECTIVE events, every team member's full DestinationCalendar row (credentialId, externalId, userId) is now pushed into `evt.destinationCalendar`. `evt` is spread into the webhook payload, so other members' calendar IDs (often email addresses) and their credential IDs are sent to the webhook subscriber. Keep the team members' calendars off `evt`, for example by passing them to EventManager separately, or remove the field before building the payload."
+   },
+   {
+    "id": "S19",
+    "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+    "lines": [
+     151,
+     151
+    ],
+    "texto": "The old code set `slug` only when team billing was disabled. The rewrite sets it only when billing is enabled, the same condition as `requestedSlug`. With billing enabled, orgs now get a final slug before payment or verification. With billing disabled, they get no slug at all."
+   },
+   {
+    "id": "S20",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     254,
+     256
+    ],
+    "texto": "The else branch runs only when `externalCalendarId` is falsy, yet it looks for `cal.externalId === externalCalendarId`. That can never match a real calendar, so the destination calendar fallback is dead code and `selectedCalendar` is always undefined. The same expression appears in deleteEvent (lines 315-317). The fallback should pick the destination calendar that belongs to this credential, or the main host's calendar."
+   },
+   {
+    "id": "S21",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     169,
+     170
+    ],
+    "texto": "The old code used `result.credentialId` for non-calendar (video) results. The new ternary returns `undefined` for them, so video references are stored without the credential that created the meeting. Later updates and deletes of those meetings can no longer find the right credential."
+   },
+   {
+    "id": "S22",
+    "file": "packages/features/bookings/lib/handleNewBooking.ts",
+    "lines": [
+     1063,
+     1079
+    ],
+    "texto": "`destinationCalendar` falls back to `null` when neither the event type nor the organizer has one. In that case `evt.destinationCalendar?.push(...teamDestinationCalendars)` does nothing, and the destination calendars of the other collective hosts are thrown away. Initializing to an empty array keeps those team calendars."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#02",
+    "descricao": "Claims the optional chaining in mainHostDestinationCalendar?.integration is redundant because a ternary already checks it.",
+    "textoGolden": "The optional chaining on mainHostDestinationCalendar?.integration is redundant since you already check mainHostDestinationCalendar in the ternary condition.",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+    "descricao": "When externalCalendarId is absent, updateEvent/deleteEvent look for a destination calendar whose externalId equals that absent value, so the lookup never matches and the configured destination calendar is no longer used.",
+    "textoGolden": "Logic error: when externalCalendarId is provided, you're searching for a calendar where externalId === externalCalendarId, but this will always fail since you're looking for a calendar that matches itself. Should likely find by credentialId or use different logic.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       254,
+       256
+      ],
+      "texto": "WHAT: The fallback `event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)?.externalId` only executes when `externalCalendarId` is falsy, so it compares `cal.externalId` against `null`/`undefined` and matches nothing (the same wrong pattern is duplicated in deleteEvent at lines 315-317).\nWHY: When `updateEvent`/`deleteEvent` are called without an externalCalendarId, `selectedCalendar`/`calendarId` now resolves to `undefined` instead of the host's destination calendar externalId (old code fell back to `event.destinationCalendar?.externalId`), so the Google API is invoked with an undefined calendarId and the update/delete targets the wrong (or default) calendar or errors.\nHOW: Find the destination calendar for the current credential (e.g. by credentialId) rather than comparing `externalId` to the already-falsy `externalCalendarId`, or restore the single fallback `event.destinationCalendar?.[0]?.externalId`."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       254,
+       256
+      ],
+      "texto": "Dead computation in the fallback: the else branch runs only when externalCalendarId is falsy, yet it calls `event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)`, comparing every cal.externalId to undefined. Nothing can match, so selectedCalendar is always undefined and the fallback that previously returned `event.destinationCalendar?.externalId` is lost. Match the intended criterion (destination calendar's own externalId/credentialId), not the already-falsy externalCalendarId."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       315,
+       317
+      ],
+      "texto": "Same dead-computation defect in deleteEvent: the else branch executes only when externalCalendarId is falsy, yet the predicate `(cal) => cal.externalId === externalCalendarId` compares against undefined and can never match, so calendarId falls through to \"primary\" and the event is deleted from the wrong calendar instead of the booking's destination calendar. Fix the predicate to use the destination calendar's externalId (or credentialId) rather than the falsy externalCalendarId."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+    "descricao": "The organization slug is now set only when team billing is enabled (inverted condition), so with billing both slug and requestedSlug are set and without billing neither is.",
+    "textoGolden": "Logic inversion in organization creation: The slug property is now conditionally set when IS_TEAM_BILLING_ENABLED is true, instead of when it's false as originally intended. This change, combined with requestedSlug still being set when IS_TEAM_BILLING_ENABLED is true, results in both properties being set when billing is enabled, and neither when disabled",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+      "lines": [
+       151,
+       151
+      ],
+      "texto": "Organization creation no longer assigns a slug when team billing is disabled, while requestedSlug is also omitted in that mode. New self-hosted organizations therefore have neither publication field, and publish.handler rejects them because requestedSlug is missing. Restore the non-billing slug assignment."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+      "lines": [
+       148,
+       152
+      ],
+      "texto": "WHAT: slug spread condition was inverted from ...(!IS_TEAM_BILLING_ENABLED && {slug}) to ...(IS_TEAM_BILLING_ENABLED ? {slug} : {}). WHY: organizations get slug when billing enabled and lose it when disabled, opposite of prior contract and breaking slug/requestedSlug pairing. HOW: restore negation for slug branch."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+    "descricao": "Office365 (and Lark) createEvent ignore the new credentialId argument and always use the first destination calendar, so in collective bookings other hosts' credentials target the organizer's calendar instead of their own.",
+    "textoGolden": "The Calendar interface now requires createEvent(event, credentialId), but some implementations (e.g., Lark/Office365) still declare createEvent(event) only\u2014this breaks the interface contract (also applies to other locations in the PR).",
+    "comentarios": [
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Office365 creation always selects the first host's destination despite being invoked separately with each host's credential. A collective booking with distinct Office365 calendars sends the second host's token to the first host's calendar ID, causing failed or incorrectly targeted creation. Accept the credentialId supplied by CalendarManager and select the matching destination."
+     },
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Select the destination belonging to the current credential rather than always taking the first array entry. EventManager now calls createEvent once per destination with that destination's credential, while passing the full event array each time. In a collective booking with two Outlook hosts, the second host therefore attempts to insert into the first host's calendar using the second host's token, typically failing instead of creating the second calendar event. Accept the credentialId passed by CalendarManager and match the destination by that ID (or pass a destination-specific event)."
+     },
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       72,
+       76
+      ],
+      "texto": "Select the destination belonging to the credential passed by CalendarManager, rather than always selecting the first array element. EventManager now invokes creation for each collective host with the full destination array. A second Office365 host therefore attempts to write to the first host's calendar using its own token, causing creation to fail or target the wrong calendar; meanwhile the saved reference records the second host's externalId."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#06",
+    "descricao": "Claims updateAllCalendarEvents passes an undefined credential to updateEvent when reference.credentialId points to a credential that cannot be found.",
+    "textoGolden": "The `credential` may be undefined when passed to `updateEvent` if `reference.credentialId` is set but the credential is not found. This can lead to a runtime error when `updateEvent` is called with an undefined credential, which should be handled to prevent crashes.",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+    "descricao": "The Google Meet fallback reads mainHostDestinationCalendar.integration without optional chaining, so a Meet booking with a null or empty destinationCalendar throws instead of falling back to Cal Video.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       119,
+       119
+      ],
+      "texto": "WHAT: `mainHostDestinationCalendar.integration` is dereferenced without optional chaining after destructuring `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []`.\nWHY: The previous code was `evt.destinationCalendar?.integration !== \"google_calendar\"`, which was null-safe; now when `destinationCalendar` is null/empty (e.g. handleNewBooking.ts:1063-1067 sets it to `null` when neither eventType nor organizer has one) and `evt.location === MeetLocationType`, destructuring yields `undefined` and `.integration` throws `TypeError: Cannot read properties of undefined`, crashing the booking creation flow.\nHOW: Use `mainHostDestinationCalendar?.integration !== \"google_calendar\"`."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       118,
+       119
+      ],
+      "texto": "`mainHostDestinationCalendar` can be `undefined` because `evt.destinationCalendar` may now be null or an empty array (callers such as handleNewBooking pass `: null` / `: []`). The old code used `evt.destinationCalendar?.integration`, but the new line dereferences `mainHostDestinationCalendar.integration` without optional chaining, throwing `TypeError: Cannot read properties of undefined (reading 'integration')` whenever `evt.location === MeetLocationType`. Use `mainHostDestinationCalendar?.integration !== \"google_calendar\"` to preserve the null-safe fallback."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       118,
+       119
+      ],
+      "texto": "The Meet-location fallback destructures `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []` and then reads `mainHostDestinationCalendar.integration` without optional chaining. When `destinationCalendar` is an empty array (which this PR now produces in many callers, e.g. handleCancelBooking.ts, the payment webhooks, confirm/editLocation/deleteCredential/requestReschedule handlers all set `[]` when there is no destination calendar), the destructured value is `undefined` and `.integration` throws `TypeError: Cannot read properties of undefined (reading 'integration')`, aborting event creation. Use `mainHostDestinationCalendar?.integration` to preserve the previous optional-chained behavior."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+    "descricao": "For collective events whose organizer has no destination calendar, destinationCalendar is null and the optional push drops all other hosts' destination calendars, so those hosts never get calendar events.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1078
+      ],
+      "texto": "WHAT: `evt.destinationCalendar?.push(...teamDestinationCalendars)` silently does nothing when `evt.destinationCalendar` is `null`.\nWHY: For a COLLECTIVE event where neither `eventType.destinationCalendar` nor `organizerUser.destinationCalendar` exists, the evt field is set to `null` (lines 1063-1067), so the collected `teamDestinationCalendars` of the other hosts are dropped and those hosts are never invited \u2014 defeating the multi-host support this PR adds.\nHOW: Initialize to an array (e.g. `evt.destinationCalendar ?? []` before pushing, or default the field to `[]` instead of `null`) so team destination calendars are always appended."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1078
+      ],
+      "texto": "The optional push discards all collected team destinations when the organizer has no destination calendar. A collective booking with configured secondary hosts therefore creates none of their calendar events even though teamDestinationCalendars contains them. Initialize the array before appending the team destinations."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1079
+      ],
+      "texto": "Initialize destinationCalendar to an array before appending collective hosts' destinations. When neither the event type nor organizer has a destination, it is set to null above, so optional push silently discards all the computed teamDestinationCalendars. Hosts with configured destination calendars consequently receive no calendar events."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+    "descricao": "Video booking references are now saved without their credentialId, so cancelling the booking can no longer find the video credential and the meeting is not deleted.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       169,
+       170
+      ],
+      "texto": "WHAT: `credentialId: isCalendarType ? result.credentialId : undefined` drops the previous non-calendar fallback `result.credentialId`.\nWHY: For non-calendar results (video events) `referencesToCreate` now stores `credentialId: undefined` where it previously stored `result.credentialId`, so the persisted video reference loses its credentialId; later code that looks the reference up by credentialId (e.g. handleCancelBooking.ts:491-502 deleting the video meeting, or EventManager.updateLocation) can no longer resolve the credential and the meeting is not cleaned up.\nHOW: Keep the fallback for non-calendar results: `credentialId: isCalendarType ? result.credentialId : result.credentialId` (i.e. just `result.credentialId` for both branches)."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       170,
+       170
+      ],
+      "texto": "The reference mapping discards credentialId for every video result. createMeeting returns the video credential ID, and handleCancelBooking only deletes a video meeting when its reference has that ID, so newly created video meetings are left behind on cancellation. Preserve result.credentialId for video results as well."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       170,
+       170
+      ],
+      "texto": "Retain result.credentialId for non-calendar references as well. The previous mapping saved the dedicated video integration's credential ID; this change unconditionally replaces it with undefined for video results, losing the association needed to identify the account that created the meeting during subsequent lifecycle operations."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#10",
+    "descricao": "createAllCalendarEvents and updateAllCalendarEvents fetch each missing host credential with a separate findUnique inside the loop instead of one batched query.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       341,
+       355
+      ],
+      "texto": "WHAT: The new `for (const destination of event.destinationCalendar)` loop performs a `prisma.credential.findUnique` on every destination whose credential is not found in the cached `this.calendarCredentials` (line 344); the same per-reference DB lookup was added in updateAllCalendarEvents at line 517.\nWHY: For collective bookings with multiple hosts this turns one in-memory lookup into up to N sequential database round-trips added to the booking-creation hot path, scaling with host count.\nHOW: Resolve all missing credential ids in a single batched query (`prisma.credential.findMany({ where: { id: { in: missingIds } } })`) before the loop and build a lookup map."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+    "descricao": "updateLocation stores externalCalendarId and credentialId from updateEvent's result, which never returns them, so calendar references rewritten on location edit lose their calendar and credential and later updates or cancellations misroute.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       208,
+       209
+      ],
+      "texto": "updateLocation now reads externalId and credentialId exclusively from results, but CalendarManager.updateEvent returns neither field. Calendar references produced by location editing consequently lose their calendar and credential routing information, breaking subsequent updates or cancellation, particularly for secondary collective hosts. Return those fields from updateEvent or preserve them from the corresponding booking reference."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
+    "descricao": "Cancelling all remaining occurrences of a recurring collective booking deletes only the first calendar reference of each booking, repeated once per host, so the other hosts' events stay on their calendars.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       423,
+       424
+      ],
+      "texto": "The new per-reference loop runs the recurring-series deletion branch for every host, but that branch still iterates only bookingToDelete.user.credentials and selects the first calendar reference in each occurrence. Canceling all remaining collective occurrences repeatedly deletes the owner's events while leaving secondary hosts' events untouched. For each occurrence, delete the reference matching the current host credential using the resolved calendarCredential."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       449,
+       457
+      ],
+      "texto": "For cancel-all-remaining recurring collective bookings, delete each updated booking's reference matching the current outer reference/credential. The new outer loop iterates all calendar references, but this inner block still iterates only the organizer's credentials and takes the first calendar reference of each booking. Every outer iteration therefore repeats deletion of the first host's event, while the additional hosts' recurring events remain on their calendars after cancellation."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#14",
+    "descricao": "Google createEvent picks the target calendar only by matching credentialId, so destination calendars without a credentialId are ignored and events are created on the primary calendar instead.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       145,
+       154
+      ],
+      "texto": "createEvent now picks the target calendar only by matching credentialId. Destination calendars without a credentialId (handled by EventManager's integration-based branch) never match, so events are inserted into \"primary\" instead of the configured destination externalId as before."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#15",
+    "descricao": "For destination calendars without a credentialId, createEvent is called without the externalId, so the booking reference is stored with an undefined externalCalendarId.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       376,
+       381
+      ],
+      "texto": "In the no-credentialId branch createEvent(c, event) is called without externalId, so EventResult.externalId is undefined. The booking reference's externalCalendarId, which used to come from evt.destinationCalendar.externalId, is now not stored, which breaks later update/delete targeting. Pass destination.externalId."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       375,
+       381
+      ],
+      "texto": "In the branch for destinations without a credentialId, `createEvent(c, event)` is called without the externalId argument. CalendarManager.createEvent only returns `externalId` when it is passed in, and EventManager now stores `result.externalId` as externalCalendarId, so these booking references are saved with an undefined externalCalendarId. Pass `destination.externalId` as the third argument, so the producer returns what the consumer stores."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+    "descricao": "When cancelling a recurring booking with multiple calendar references, the recurring-event deletion over all remaining bookings and credentials runs once per reference, causing duplicate delete calls and errors.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-03",
+    "descricao": "loadUsers forwards raw Prisma error messages to the client in a 400 response, exposing internal model and query details.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "4f8aed295a29954023b2849c060ef4fb299d1b5d",
+  "base": "62db063e1e1abe691313ab42682a68f796d63769",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/models/post.rb",
+    "lines": [
+     133,
+     133
+    ],
+    "texto": "WHAT: Post#cook returns `raw` unchanged for raw_html posts, so HTML imported from RSS (after CGI.unescapeHTML) or from remote pages is stored as `cooked` with no sanitization. WHY: <script> tags, event handlers or `javascript:` hrefs in feed or page content run in the Discourse origin wherever cooked is rendered (topic view and the embed iframe use `raw post.cooked`), which is stored XSS. HOW: run the raw HTML through the same whitelist sanitizer the normal pipeline uses (e.g. PrettyText's sanitize step) before returning it."
+   },
+   {
+    "id": "S2",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     13,
+     13
+    ],
+    "texto": "WHAT: `url` is interpolated into `<a href='#{url}'>#{url}</a>` without HTML escaping, and it comes from the user-supplied embed_url parameter (TopicRetriever only checks the host). WHY: a URL like `http://host/'onmouseover='alert(1)` is a valid URI and breaks out of the attribute, injecting an event handler into the imported post. HOW: escape the URL with ERB::Util.html_escape in both the attribute and the link text."
+   },
+   {
+    "id": "S3",
+    "file": "lib/topic_retriever.rb",
+    "lines": [
+     26,
+     30
+    ],
+    "texto": "WHAT: The throttle key is the full embed URL, and anonymous requests to /embed/best (whose Referer can be forged by non-browser clients) enqueue retrieve jobs that create topics. WHY: an attacker can vary the query string or path on the embeddable host (`?a=1`, `?a=2`, ...) to get past the throttle and make the server create an unlimited number of topics as embed_by_username. HOW: throttle per client or globally rather than per URL, and normalize the URL (or drop the query string) before using it as the throttle key and embed key."
+   },
+   {
+    "id": "S4",
+    "file": "lib/topic_retriever.rb",
+    "lines": [
+     40,
+     43
+    ],
+    "texto": "WHAT: For every embed URL that is not yet imported, perform_retrieve runs Jobs::PollFeed synchronously, which downloads the whole feed and runs TopicEmbed.import for every item. WHY: every retrieval for an unknown URL (which an anonymous caller can trigger repeatedly with distinct URLs) costs a full feed fetch with no timeout plus N import/SHA comparisons, so worker time grows with feed size \u00d7 request rate. HOW: rely on the hourly scheduled poll, or cache the last poll time in Redis and skip the inline poll if one ran recently."
+   },
+   {
+    "id": "S5",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     62,
+     73
+    ],
+    "texto": "WHAT: `href.start_with?('/')` also matches protocol-relative URLs like `//cdn.example.com/a.png`, and `sub(/^\\/+/, '')` strips both slashes. WHY: external links and images become `http://host/cdn.example.com/a.png`, which breaks them in every imported post. HOW: skip values that start with `//` (and do the same for img src)."
+   },
+   {
+    "id": "S6",
+    "file": "app/jobs/scheduled/poll_feed.rb",
+    "lines": [
+     35,
+     35
+    ],
+    "texto": "WHAT: `i.content.scrub` assumes every feed item has a <content> element, but standard RSS 2.0 items often only have <description>, in which case SimpleRSS returns nil for content. WHY: the NoMethodError on nil aborts the whole poll (retry: false) and also aborts the inline poll inside TopicRetriever, so no items are imported. HOW: fall back to description and skip items that have no body."
+   },
+   {
+    "id": "S7",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     32,
+     37
+    ],
+    "texto": "WHAT: `post = embed.post` can be nil when the imported post has been deleted (soft-deleted posts are excluded by the default scope), and it is passed straight to PostRevisor. WHY: when the feed content changes, `PostRevisor.new(nil).revise!` raises NoMethodError, which aborts the feed poll for every remaining item. HOW: return early (or recreate the post) when embed.post is nil."
+   },
+   {
+    "id": "S8",
+    "file": "app/views/embed/best.html.erb",
+    "lines": [
+     6,
+     6
+    ],
+    "texto": "WHAT: `<%- end if %>` leaves a dangling `if` modifier, so the next compiled template expression (the logo output) becomes the condition of the whole if/else block. WHY: the logo is written to the buffer before the header button, so the header renders in the wrong order. HOW: use a plain `<%- end %>`."
+   },
+   {
+    "id": "S9",
+    "file": "app/assets/javascripts/embed.js",
+    "lines": [
+     17,
+     17
+    ],
+    "texto": "`discourseUrl.indexOf(e.origin)` accepts any origin that is a substring of discourseUrl. For example, `https://forum.example.co` passes for `https://forum.example.com/`, so an attacker-controlled domain can send messages to the embedding page. Parse discourseUrl and compare its exact origin to `e.origin` instead."
+   },
+   {
+    "id": "S10",
+    "file": "app/views/embed/best.html.erb",
+    "lines": [
+     14,
+     14
+    ],
+    "texto": "The embed view formats dates with strftime(\"%e %b %Y\"), which always gives English month abbreviations and a fixed day-month-year order. Every other string in this view goes through I18n.t, so this date is the one piece of text that is not localised. Use I18n.l with a date format instead."
+   },
+   {
+    "id": "S11",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     13,
+     13
+    ],
+    "texto": "The imported_from footer builds `<a href='#{url}'>#{url}</a>` from a feed-supplied URL without escaping it. The post is cooked as raw_html, so this markup is shown to readers unchanged. A quote or `<` in the URL breaks out of the attribute and injects markup. Escape the URL with ERB::Util.html_escape before putting it into the HTML."
+   },
+   {
+    "id": "S12",
+    "file": "app/jobs/scheduled/poll_feed.rb",
+    "lines": [
+     31,
+     36
+    ],
+    "texto": "SimpleRSS sets `content` only from a `<content>` element; standard RSS 2.0 items only have `<description>`, so `i.content` is nil and `i.content.scrub` raises NoMethodError. The error aborts the whole poll, so no items get imported, and it also propagates into TopicRetriever, which runs PollFeed synchronously. Fall back to `description` (or skip the item) when `content` is nil."
+   },
+   {
+    "id": "S13",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     15,
+     30
+    ],
+    "texto": "The code looks up `TopicEmbed.where(embed_url: url).first` and then creates the topic, post and embed, with no lock between the two steps. PollFeed, RetrieveTopic jobs (staff skip the throttle) and the Disqus importer can import the same URL at the same time. Both see no embed, and the second `create!` raises ActiveRecord::RecordNotUnique on the unique `embed_url` index, which crashes that job and stops the rest of its feed loop. Rescue RecordNotUnique and fall back to the update path, or serialize imports per URL with a lock."
+   },
+   {
+    "id": "S14",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     62,
+     73
+    ],
+    "texto": "`start_with?('/')` also matches protocol-relative URLs such as `//cdn.example.com/img.png`, and `sub(/^\\/+/, '')` strips both slashes, giving `http://eviltrout.com/cdn.example.com/img.png`. Imported links and images that point to other hosts therefore break. Skip values that start with `//` in both the `a` loop and the `img` loop."
+   },
+   {
+    "id": "S15",
+    "file": "app/assets/javascripts/embed.js",
+    "lines": [
+     17,
+     17
+    ],
+    "texto": "`indexOf(e.origin) === -1` accepts any origin that appears anywhere in discourseUrl, including a shorter host that is a prefix, like `http://forum.example.co` for `http://forum.example.com/`. Messages from that origin are then trusted and can resize the iframe. Require discourseUrl to begin with the exact origin followed by `/`, or to equal it."
+   },
+   {
+    "id": "S16",
+    "file": "app/controllers/embed_controller.rb",
+    "lines": [
+     12,
+     19
+    ],
+    "texto": "`best` builds the TopicView for `current_user`, so a staff member or a user with extra permissions may see posts that anonymous visitors cannot. It then calls `discourse_expires_in 1.minute`, and if that marks the response publicly cacheable, a shared proxy or CDN can serve that version to other visitors of the embedding page for up to a minute. Render the embed as anonymous (pass `nil` as the user) or skip public caching when a user is logged in."
+   },
+   {
+    "id": "S17",
+    "file": "spec/jobs/poll_feed_spec.rb",
+    "lines": [
+     18,
+     22
+    ],
+    "texto": "This test only sets feed_polling_url to nil. feed_polling_enabled? stays false by default and embed_by_username stays blank, so poll_feed is never called whether or not the url check exists. Stub feed_polling_enabled? to true and embed_by_username to a real name so the url check is the only thing stopping the call."
+   },
+   {
+    "id": "S18",
+    "file": "spec/jobs/poll_feed_spec.rb",
+    "lines": [
+     24,
+     28
+    ],
+    "texto": "This test only sets embed_by_username to nil. feed_polling_enabled? is still false and feed_polling_url is still blank by default, so execute never calls poll_feed whether or not the username check exists. Stub the other two settings to valid values so the username check is the only thing stopping the call."
+   },
+   {
+    "id": "S19",
+    "file": "spec/jobs/poll_feed_spec.rb",
+    "lines": [
+     12,
+     16
+    ],
+    "texto": "feed_polling_url and embed_by_username are blank by default, so the present? checks alone keep poll_feed from being called. The test would still pass if the feed_polling_enabled? check were deleted. Stub the url and username to valid values so only the enabled flag is false."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+    "descricao": "The postMessage handler in embed.js checks the sender with discourseUrl.indexOf(e.origin), a substring test instead of exact origin equality, so a page on an origin that is a substring of the Discourse URL can send forged discourse-resize messages to the embedding page.",
+    "textoGolden": "The current origin validation using indexOf is insufficient and can be bypassed. An attacker could use a malicious domain like evil-discourseUrl.com to pass this check.",
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/embed.js",
+      "lines": [
+       15,
+       17
+      ],
+      "texto": "The message-origin check uses substring matching: `discourseUrl.indexOf(e.origin) === -1`. Any origin that is a substring of discourseUrl is accepted (e.g. discourseUrl `https://discourse.example.com` accepts origin `https://discourse`), so a malicious page can post `discourse-resize` messages into the embed. Compare against the iframe's actual origin exactly (`e.origin !== expectedOrigin`) instead of a substring test."
+     },
+     {
+      "file": "embed.js",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "Uses indexOf containment instead of origin equality, but it cannot be bypassed."
+     },
+     {
+      "file": "app/assets/javascripts/embed.js",
+      "lines": [
+       15,
+       17
+      ],
+      "texto": "WHAT: postMessage origin check is reversed (`discourseUrl.indexOf(e.origin)===-1`) instead of strict origin equality. WHY: any e.origin that is a substring of discourseUrl passes, letting a foreign iframe drive `iframe.height` handling and future message branches."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#04",
+    "descricao": "The referer and embed_url host checks compare against SiteSetting.embeddable_host case-sensitively, so a host differing only in case is rejected even though hostnames are case-insensitive.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/embed_controller.rb",
+      "lines": [
+       26,
+       26
+      ],
+      "texto": "Host identity is compared case-sensitively: `URI(request.referer).host != SiteSetting.embeddable_host`. Hostnames are case-insensitive, so a referer such as `http://EVILTROUT.COM/...` never matches the configured `eviltrout.com` (and the same flaw exists in lib/topic_retriever.rb:15 for `URI(@embed_url).host`). Normalize both sides with downcase before comparing so case variations of the same host are treated identically."
+     },
+     {
+      "file": "embed_controller.rb",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The referer/host comparison does not lowercase either side, so a mixed-case host is wrongly rejected. The reviewer notes this fails closed and is not a bypass. Normalize case on both sides of the host comparison (e.g. downcase both) to avoid false rejections. The same issue applies to topic_retriever.rb."
+     },
+     {
+      "file": "topic_retriever.rb",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The host comparison does not lowercase either side, so a mixed-case host is wrongly rejected. This fails closed and is not a bypass. Normalize case on both sides of the comparison (e.g. downcase both) to avoid false rejections."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+    "descricao": "PollFeed reads i.content.scrub for every feed item, so items without a content element (common in RSS feeds that only have description) raise NoMethodError and abort the import of the remaining items.",
+    "textoGolden": "Calling `i.content.scrub` assumes that `i.content` is always populated. However, many RSS feeds do not provide a `content` field, leading to a potential nil pointer exception when `i.content` is nil. A fallback to `description` should be implemented to prevent crashes.",
+    "comentarios": [
+     {
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       35,
+       35
+      ],
+      "texto": "WHAT: `CGI.unescapeHTML(i.content.scrub)` assumes every feed item has a `content` element. WHY: many RSS 2.0 items expose only `<description>` (simple-rss returns nil for `content`), so `nil.scrub` raises NoMethodError and, because the job is `sidekiq_options retry: false`, the entire hourly feed import for all items is aborted. HOW: fall back to the available field, e.g. `(i.content || i.description || i.summary).to_s.scrub`, and skip items whose body is blank."
+     },
+     {
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       31,
+       36
+      ],
+      "texto": "The feed item is consumed unconditionally: url = i.link, then i.title, and content = CGI.unescapeHTML(i.content.scrub). SimpleRSS item accessors raise NoMethodError when the element is absent (RSS 2.0 feeds frequently carry only <description>, no <content>, and some items have no <link>/<title>), so a single malformed or content-less item aborts the whole hourly job with an unhandled exception instead of skipping it. The code already anticipates a blank link (line 33 fallback) but reads i.content/i.title without a nil guard; use i.content.to_s (or fall back to i.description/summary) and skip items whose content is blank."
+     },
+     {
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       31,
+       37
+      ],
+      "texto": "`i.content.scrub` raises NoMethodError when a feed item has no content (only a description). The exception aborts the whole poll, so every item after it is never imported. Fall back to `i.content || i.description`, skip items with blank content, and rescue per item."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+    "descricao": "Posts imported from RSS or remote pages use cook_method raw_html, which makes Post#cook return the raw HTML without sanitization, and the embed view outputs it with raw post.cooked, allowing stored XSS from imported content.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/post.rb",
+      "lines": [
+       130,
+       136
+      ],
+      "texto": "WHAT: the new `return raw if cook_method == Post.cook_methods[:raw_html]` makes `Post#cook` return completely unsanitized HTML, and Jobs::PollFeed stores untrusted feed content this way (poll_feed.rb:35-36 \u2192 TopicEmbed.import, unlike import_remote which sanitizes via Readability's tag/attribute whitelist). WHY: the stored `cooked` value is then emitted with `<%= raw post.cooked %>` in app/views/embed/best.html.erb:19, and that page is served from the forum's own origin \u2014 so a malicious/compromised RSS feed item containing `<script>` or `onerror=` runs attacker JavaScript in the forum origin and can read cookies/session and perform authenticated actions (stored XSS). HOW: sanitize the raw HTML before persisting it (e.g. run the feed content through the same HTML sanitizer used for regular posts, or restrict the raw_html cook path to trusted, pre-sanitized sources only)."
+     },
+     {
+      "file": "app/models/post.rb",
+      "lines": [
+       130,
+       133
+      ],
+      "texto": "WHAT: Post#cook returns raw verbatim for cook_method raw_html, skipping the cooking/sanitization pipeline and plugin filters. WHY: any RSS/readability HTML imported via TopicEmbed is rendered unsanitized in embed/best.html.erb, executing attacker script in the Discourse origin."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       22,
+       22
+      ],
+      "texto": "Feed-provided HTML is persisted with raw_html cooking after only Nokogiri parsing and URL rewriting, which do not sanitize scripts or event-handler attributes. A malicious feed entry containing executable HTML is stored as post.cooked and executed under the forum origin when rendered, including through the new raw cooked embed view. Sanitize imported HTML with an explicit safe tag, attribute and URL-scheme allowlist before storing it or returning it from the raw_html cooking path."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+    "descricao": "TopicEmbed.import appends a footer that interpolates the URL unescaped into an <a href='...'> tag in raw HTML that is later rendered unsanitized, so a crafted URL can inject markup; it also appends to contents with << without handling nil.",
+    "textoGolden": "The TopicEmbed.import method is susceptible to a NoMethodError if the contents parameter is nil when attempting to append a string, and an XSS vulnerability due to unescaped url interpolation in the generated HTML.",
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       10,
+       13
+      ],
+      "texto": "WHAT: TopicEmbed.import interpolates feed-controlled url unescaped into raw HTML (`<a href='#{url}'>#{url}</a>`) and stores feed HTML as raw_html. WHY: url passing /^https?\\:\\/\\// can still contain `'`, `>` or script, and RSS content is never sanitized, giving stored XSS when rendered via `raw post.cooked`. HOW: HTML-escape url and sanitize content instead of raw_html passthrough."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       10,
+       14
+      ],
+      "texto": "TopicEmbed.import interpolates feed-controlled url unescaped into HTML link stored with cook_method raw_html (Post#cook returns raw, bypassing pipeline) and rendered with raw post.cooked: XSS via quote/script break-out. Escape url for text and attribute contexts before storing."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       13,
+       13
+      ],
+      "texto": "The url is interpolated unescaped into `<a href='#{url}'>#{url}</a>`. The post is stored with cook_method raw_html and rendered with `raw post.cooked`, so a url containing a quote or markup is output as live HTML. Escape it with ERB::Util.html_escape (or CGI.escapeHTML) for both the href and the link text."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#16",
+    "descricao": "TopicEmbed.import appends the footer with contents <<, mutating the caller's string in place instead of building a new string.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       13,
+       13
+      ],
+      "texto": "`contents <<` mutates the caller's string in place. This raises FrozenError for frozen strings and appends the footer twice if the same string is imported again. Use `contents = contents + ...` instead."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#17",
+    "descricao": "TopicEmbed.import checks for an existing embed and then creates the post and TopicEmbed without handling the unique-index conflict, so two concurrent imports of the same URL make one job fail with RecordNotUnique.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       15,
+       30
+      ],
+      "texto": "TopicEmbed.import does a check-then-insert on embed_url (where(...).first, then TopicEmbed.create!) with no rescue for the unique index declared on topic_embeds.embed_url. The only guard against concurrent intake is the Redis throttle in TopicRetriever, which is bypassed for staff (retrieve_topic.rb:17 passes no_throttle: user.try(:staff?)) and can expire while a slow retrieval (which may synchronously run a full PollFeed, topic_retriever.rb:41) is still running. Two interleaved retrievals for the same URL both see embed.blank? and both attempt creation; the loser raises ActiveRecord::RecordNotUnique, which is unhandled anywhere in the job path, breaking execution. Guard the create against the race (rescue/retry on RecordNotUnique, or use find_or_create_by on embed_url inside the transaction) so concurrent retrievals cannot raise."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       20,
+       28
+      ],
+      "texto": "Make creation idempotent under concurrent imports. Two workers can both read no embed at line 15 and create posts before attempting the same unique embed_url insert. The unique index correctly rolls back the losing transaction, but its unhandled uniqueness exception aborts that job (and potentially the rest of a feed polling run). This is reachable when scheduled polling overlaps retrieval-triggered polling; the per-URL retrieval throttle does not serialize those paths. Handle the conflict outside the transaction and return the winning embed/post, or serialize imports for the URL."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       20,
+       30
+      ],
+      "texto": "Race on check-then-create: two concurrent imports both see TopicEmbed.where(embed_url:url).first blank, both create Post + TopicEmbed.create!. Unique index on embed_url then raises RecordNotUnique (unhandled) or creates duplicates. Need atomic find-or-create / rescue unique violation."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
+    "descricao": "When the embedded post has been deleted, TopicEmbed.import's update path passes a nil embed.post to PostRevisor and crashes on every later import of that URL.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       31,
+       39
+      ],
+      "texto": "On the update path `embed.post` can be nil if the post was deleted. `PostRevisor.new(nil)` then raises NoMethodError, and every later import of that URL fails the same way. Guard against a nil post, for example by skipping the revision or recreating the topic."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       32,
+       37
+      ],
+      "texto": "WHAT: update path uses `embed.post` without nil guard then `PostRevisor.new(post)`. WHY: if the first post was deleted, post is nil and revise! dereferences nil, crashing feed-poll updates instead of recreating/skipping."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       31,
+       37
+      ],
+      "texto": "Orphan-post crash on update path: post = embed.post can be nil if the post/topic was deleted, then PostRevisor.new(nil).revise! raises NoMethodError. Must handle missing post (recreate or skip) instead of assuming present."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#19",
+    "descricao": "Claims import_remote crashes on unparseable pages (nil content) and dead URLs because it does no nil check or network error handling around open(url).read.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       44,
+       52
+      ],
+      "texto": "WHAT: import_remote passes `doc.content` (and title) directly to import where `contents <<` assumes a String, with no nil check or network-error handling around `open(url).read`. WHY: unparseable pages (nil content) raise NoMethodError and dead URLs raise OpenURI errors, crashing RetrieveTopic/Disqus imports with no topic created."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+    "descricao": "absolutize_urls only handles root-relative paths: protocol-relative URLs like //cdn.example.com/x.png are rewritten to http://host/cdn.example.com/x.png and path-relative links are left unresolved, breaking links and images in imported posts.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       64,
+       71
+      ],
+      "texto": "The URL rewrite treats protocol-relative URLs such as `//cdn.example.com/image.jpg` as paths on the article host, producing `http://article-host/cdn.example.com/image.jpg`. Imported images and links using protocol-relative external URLs therefore point to the wrong server. Resolve both href and src using URI joining against the article URL, which also handles ordinary relative paths correctly."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       62,
+       72
+      ],
+      "texto": "Resolve relative href/src references with URI joining rather than handling only leading slashes. For an article at http://example.com/blog/article, href='next' and src='images/photo.jpg' remain relative and resolve against the forum instead of the imported article. Moreover, '//cdn.example.com/photo.jpg' is rewritten to 'http://example.com/cdn.example.com/photo.jpg'. Both yield incorrect links/images in imported posts; apply proper URI resolution to both anchors and images."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       62,
+       73
+      ],
+      "texto": "absolutize_urls treats any href or src starting with '/' as site-relative and strips all leading slashes. Protocol-relative URLs like '//cdn.example.com/a.png' are rewritten to 'http://site/cdn.example.com/a.png', which is broken. Skip values starting with '//' (or prefix them with the scheme) and only rewrite single-slash paths."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#24",
+    "descricao": "The embed view formats post dates with a hard-coded strftime pattern, so users in non-English locales see English month names and a fixed order while the rest of the view is translated.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       14,
+       14
+      ],
+      "texto": "The post date uses a hard-coded strftime format `\"%e %b %Y\"`. `%b` emits English month abbreviations (Jan, Feb, ...) no matter what locale the viewer is in, so the date is frozen to en-US while the surrounding strings in this same view are localized via I18n.t. This is a locale-pinned user-facing format; it should be localized (e.g. via the app's localized date helper / l( ) rather than a literal strftime pattern)."
+     },
+     {
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       14,
+       14
+      ],
+      "texto": "Use a localized date formatter rather than strftime(\"%e %b %Y\"). %b produces English month abbreviations and the fixed day-month-year order ignores the selected locale, although the neighbouring header and footer labels are translated. Embedded comments therefore show English-formatted dates for users of other locales."
+     },
+     {
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       14,
+       14
+      ],
+      "texto": "Date uses strftime(\"%e %b %Y\") hard-coding one locale's month names/order while neighbouring strings go through I18n.t. Use I18n.l with a locale date format so non-English users see localized dates."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#29",
+    "descricao": "The Disqus importer now creates topics through TopicEmbed.import_remote, dropping the thread's created_at and the category option and requiring a live HTTP fetch per thread, so imported topics get wrong dates/categories and a dead link aborts the import.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "lib/tasks/disqus.thor",
+      "lines": [
+       143,
+       149
+      ],
+      "texto": "WHAT: Disqus import replaced PostCreator (title/raw/created_at/category) with `TopicEmbed.import_remote` per thread, dropping category_id, created_at, and strip handling. WHY: imported topics lose categories/timestamps and now require a live HTTP fetch per thread, failing when links are dead."
+     },
+     {
+      "file": "lib/tasks/disqus.thor",
+      "lines": [
+       148,
+       148
+      ],
+      "texto": "Preserve the Disqus thread creation timestamp when switching to TopicEmbed.import_remote. The previous PostCreator call passed `created_at: Date.parse(t[:created_at])`, but this replacement passes only the title, and TopicEmbed.import_remote/import never forward a timestamp to PostCreator. Imported historical topics now get the migration time as their initial post creation date while their replies retain historical dates, losing the importer's chronological fidelity. Extend the import options to forward created_at and pass the thread timestamp here."
+     },
+     {
+      "file": "lib/tasks/disqus.thor",
+      "lines": [
+       148,
+       148
+      ],
+      "texto": "The Disqus import now calls TopicEmbed.import_remote instead of PostCreator. This silently drops the `--category` option and the `created_at` from the Disqus thread, and the `--category` method_option was removed from the CLI. It also now makes a live HTTP fetch of every thread link, and `open(url)` raises on a failure that previously could not happen, aborting the whole import. Keep the category and date handling, and rescue fetch errors per thread."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+    "descricao": "Every retrieval of an article not yet embedded synchronously polls and imports the entire RSS feed, and since throttling is per URL, many different article requests repeat the full feed download and processing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "lib/topic_retriever.rb",
+      "lines": [
+       40,
+       42
+      ],
+      "texto": "Every uncached article retrieval synchronously downloads and processes the complete configured feed before fetching the article. Because the retrieval throttle is keyed by individual embed URL, simultaneous requests for different articles each repeat the feed download and all per-item database lookups/imports, multiplying worker load by the number of requests times feed size. Coalesce feed polling with a feed-wide throttle or lock and reuse its recent results instead of executing a full poll per article."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#32",
+    "descricao": "The 'is 404 without an embed_url' spec never sets an embeddable host, so the request is rejected by ensure_embeddable before the embed_url check runs, and the test would pass even without that check.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "The test is named 'is 404 without an embed_url' but passes for the wrong reason: it never sets embeddable_host, which defaults to '' so the before_filter `ensure_embeddable` raises at the blank-host check before `params.require(:embed_url)` is reached. The request is rejected regardless of whether the embed_url requirement exists, so the test would still pass if that requirement were removed. Stub a valid embeddable_host here so the failure is actually attributable to the missing embed_url."
+     },
+     {
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       8,
+       10
+      ],
+      "texto": "The missing-embed_url test does not establish a valid embeddable host and referer, so ensure_embeddable rejects this request before best reaches params.require(:embed_url). It also only checks non-success despite claiming a 404. Removing the required-parameter check would therefore leave this test green. Configure an allowed host/referer for this case and assert the intended missing-parameter response."
+     },
+     {
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "The 'is 404 without an embed_url' test never sets embeddable_host, so ensure_embeddable rejects the request before params.require(:embed_url) runs. It passes without the embed_url check. Stub embeddable_host and the referer so the missing param is the only failure cause."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+    "descricao": "The 'requires feed_polling_url' and 'requires embed_by_username' specs leave feed_polling_enabled at its false default, so they never reach the condition they name and would pass with those checks deleted.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       12,
+       28
+      ],
+      "texto": "The three 'requires ...' tests do not isolate the guard they name: each stubs only one setting to falsy while the other two remain falsy by default, so poll_feed is never called even if the named check were deleted. Stub the other two settings to truthy values in each test so removing the named guard would cause poll_feed to run and fail the test."
+     },
+     {
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       18,
+       28
+      ],
+      "texto": "These two tests do not verify the conditions they name. `execute` is guarded by `feed_polling_enabled? && feed_polling_url.present? && embed_by_username.present?`, and feed_polling_enabled defaults to false. Neither test stubs feed_polling_enabled? to true, so the guard short-circuits at the first clause and poll_feed is never called no matter what feed_polling_url/embed_by_username are. Both would still pass if the URL/username checks were deleted entirely. Stub `SiteSetting.stubs(:feed_polling_enabled?).returns(true)` in each so the specific condition under test is actually reached."
+     },
+     {
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       18,
+       27
+      ],
+      "texto": "The URL and username prerequisite tests never enable feed polling (whose configured default is false) or supply the other required setting. execute consequently short-circuits at feed_polling_enabled? and never evaluates the prerequisite each test claims to cover. Both tests still pass if their corresponding presence checks are removed. Set all other prerequisites to valid values before making only the setting under test absent, so the poll_feed.never expectation actually detects removal of that guard."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-02",
+    "descricao": "PollFeed.feed_key computes a per-feed cache key that is never used, so the feed is re-fetched and re-processed every hour without a modified-since check.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
+    "descricao": "The embed layout references the 'embed' stylesheet and embed.js, but neither is in config.assets.precompile, so with precompiled assets in production the embed page fails to load them.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-2fa-backup-codes-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "54486a059cd2032042189bb565646ba4e0f6bd61",
+  "base": "efa6d464a38e60ceeeb88f40668c1c4ac4bfaf54",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     131,
+     145
+    ],
+    "texto": "WHAT: The new backup-code branch is evaluated even when the password check was skipped. The existing guard `if (user.password && !credentials.totpCode)` skips verifyPassword whenever totpCode is non-empty, and the backup-code branch then ignores totpCode entirely. WHY: An attacker who has a victim's email and one leaked backup code can POST credentials with `totpCode=x` and `backupCode=<code>` and log in without the password, so the backup code replaces both factors. HOW: Require that the password was verified before accepting a backup code. For example, reject when `credentials.backupCode` is set and the password check did not run, or run verifyPassword unconditionally in the backup-code branch."
+   },
+   {
+    "id": "S2",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     147,
+     156
+    ],
+    "texto": "WHAT: Spending a backup code is a non-atomic read-decrypt-modify-write of `user.backupCodes`, with no lock and no condition that the stored value is unchanged. WHY: Two concurrent login requests with the same code both read the old list, both find the code, and both succeed, so a single-use code can authenticate multiple sessions. HOW: Make the update conditional on the previously read ciphertext (`updateMany({ where: { id: user.id, backupCodes: user.backupCodes }, ... })`) and reject the login if count is 0."
+   },
+   {
+    "id": "S3",
+    "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+    "lines": [
+     134,
+     137
+    ],
+    "texto": "WHAT: 2FA is already enabled on the server when the DisplayBackupCodes step is shown, but onEnable() and resetState() run only from the Close button; dismissing the dialog with Escape or an overlay click goes through the parent's onOpenChange, which just toggles `enableModalOpen`. WHY: After that dismissal, viewer.me is never invalidated, so the switch stays unchecked even though 2FA is on. The next time the modal opens it starts on the stale backup-codes step instead of ConfirmPassword. HOW: Wrap onOpenChange so that closing while `step === SetupStep.DisplayBackupCodes` calls resetState() and onEnable()."
+   },
+   {
+    "id": "S4",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     144,
+     144
+    ],
+    "texto": "WHAT: Backup codes are generated as lowercase hex (`randomBytes(5).toString(\"hex\")`), but the user's input is compared exactly after stripping only dashes, with no case normalization. WHY: A user who types the code in uppercase, which the 'XXXXX-XXXXX' placeholder invites, gets IncorrectBackupCode and can be locked out of recovery. HOW: Normalize with `.toLowerCase()` before indexOf."
+   },
+   {
+    "id": "S5",
+    "file": "apps/web/components/auth/BackupCode.tsx",
+    "lines": [
+     7,
+     7
+    ],
+    "texto": "The new backup-code input component is declared as `function TwoFactor`, a name copied from the TOTP component, so stack traces and React DevTools will show TwoFactor for a different component. Rename it to BackupCode so the name matches the file and what the component does."
+   },
+   {
+    "id": "S6",
+    "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+    "lines": [
+     49,
+     52
+    ],
+    "texto": "This error message was copied from the login flow and says \"cannot proceed with backup code login\", but this endpoint disables 2FA. Anyone reading the logs would be pointed to the wrong flow. Change the wording to describe disabling 2FA."
+   },
+   {
+    "id": "S7",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     139,
+     156
+    ],
+    "texto": "The code reads the backup-code list, checks it in memory, then writes it back with an unconditional update. Two concurrent logins can both read the old list, so the same one-time code is accepted twice, and concurrent use of different codes can bring an already-used code back to life. Make the write conditional on the ciphertext that was read (for example `updateMany` where `backupCodes` still equals the value read, and reject the login if the update count is 0), or run it in a serializable transaction."
+   },
+   {
+    "id": "S8",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     143,
+     145
+    ],
+    "texto": "The backup code typed by the user is checked against the stored codes with `backupCodes.indexOf(...)`, which uses ordinary string equality. That comparison can stop at the first mismatched character and run faster or slower depending on the input, so response timing can leak information about the stored codes. Compare each stored code with crypto.timingSafeEqual on equal-length buffers instead (the same check is used in disable.ts)."
+   },
+   {
+    "id": "S9",
+    "file": "apps/web/playwright/login.2fa.e2e.ts",
+    "lines": [
+     50,
+     53
+    ],
+    "texto": "`isChecked()` returns a Promise that is never awaited, so `toBeTruthy()` always passes, even when 2FA is not enabled. After this PR, the modal stays on the backup-codes step until Close is clicked, so the switch is still unchecked at this point and the test passes anyway. Click `backup-codes-close` first, then assert on `data-state=\"checked\"`, as the second test does."
+   },
+   {
+    "id": "S10",
+    "file": "apps/web/playwright/login.2fa.e2e.ts",
+    "lines": [
+     119,
+     122
+    ],
+    "texto": "The success toast is shown right after `navigator.clipboard.writeText` is called, without waiting for the copy to succeed, so waiting for the toast proves nothing about the copy. The test would still pass if the copied text were wrong or the clipboard write failed. Read the clipboard and check that it contains the 10 formatted backup codes."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#01",
+    "descricao": "The credentials authorize() skips the password check when any totpCode is present, and the new backup-code branch never validates that totpCode, so a backup code plus a dummy totpCode logs in without the account password.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       131,
+       156
+      ],
+      "texto": "The new backup-code branch authenticates without guaranteeing the password check ran: password verification at line 121 is gated on `!credentials.totpCode`, and the branch at line 131 triggers on any truthy `credentials.backupCode` regardless of that gate. A POST to the credentials callback supplying a valid backup code together with any non-empty totpCode therefore takes the backup branch (skipping TOTP validation) while line 121 skips password verification \u2014 granting a session using only a second-factor backup code, with no account password. Require the password check before the backup branch, or include backupCode in the guard at line 121 (e.g. `if (user.password && !credentials.totpCode && !credentials.backupCode)`)."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       131,
+       145
+      ],
+      "texto": "The backup-code branch accepts a valid backup code even when an arbitrary nonempty totpCode has skipped password verification. The preceding guards at lines 113\u2013125 trust the presence of totpCode, but this new branch does not validate it, allowing a holder of a backup code to log in to a password account without knowing its password by submitting both fields. Require password verification for backup-code authentication rather than allowing an unverified totpCode to bypass it."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       131,
+       145
+      ],
+      "texto": "WHAT: The new backup-code login branch authenticates without verifying the password when credentials also contain any totpCode value (password check at line 121 is skipped when totpCode is truthy, and the backup branch never checks it). WHY: An attacker holding only a backup code can add a dummy totpCode to the credentials callback and log in without the password, reducing two factors to one. HOW: Verify the password whenever backupCode is used (or decouple the password check from totpCode presence)."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#02",
+    "descricao": "After enabling 2FA, onEnable is only called from the backup-codes Close button; dismissing the dialog by Escape/overlay never notifies the parent, so the settings page keeps showing 2FA disabled.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       134,
+       136
+      ],
+      "texto": "On a successful enable (response.status === 200) the modal no longer calls onEnable(); it only advances to SetupStep.DisplayBackupCodes, and onEnable() is now invoked solely from the 'close' button (line 269). If the user dismisses the Dialog via ESC or an overlay click, DialogContent's onOpenChange fires (wired to a plain setEnableModalOpen toggle at apps/web/pages/settings/security/two-factor-auth.tsx:64 and the conditional render at apps/web/components/security/TwoFactorAuthSection.tsx:36), so onEnable never runs. The parent callbacks (setEnableModalOpen(false) + utils.viewer.me.invalidate() / setEnabled(true)) are skipped, leaving the 2FA Switch unchecked and the UI showing 2FA as disabled even though the server has enabled it. Call onEnable() from the dismiss path (onOpenChange) or when transitioning into DisplayBackupCodes, not only from the Close button."
+     },
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       134,
+       136
+      ],
+      "texto": "Successful enablement no longer invokes onEnable until the backup-code screen's explicit Close button is clicked. Dismissing that screen through the dialog's onOpenChange instead only closes it in the parent and does not invalidate viewer.me, leaving the settings switch showing disabled even though the server has enabled 2FA. Ensure dismissal after successful enablement also invokes the completion callback and resets the setup state."
+     },
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       132,
+       136
+      ],
+      "texto": "After a successful enable, `onEnable()` is no longer called and is only called from the backup-codes Close button. If the user dismisses the dialog by Escape or overlay click (`onOpenChange`) while the codes are displayed, the parent is never notified that 2FA is enabled. The modal also keeps its step state and the plaintext backup codes. Call `onEnable` when 2FA is enabled, or make the dialog's `onOpenChange(false)` on the DisplayBackupCodes step run the same handler as Close, which resets state and clears `backupCodes`."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#04",
+    "descricao": "The default export in BackupCode.tsx is named TwoFactor, a copy-paste leftover from the TOTP component.",
+    "textoGolden": "The exported function TwoFactor handles backup codes and is in BackupCode.tsx. Inconsistent naming.",
+    "comentarios": [
+     {
+      "file": "apps/web/components/auth/BackupCode.tsx",
+      "lines": [
+       7,
+       7
+      ],
+      "texto": "The default export is named `TwoFactor` but this file (BackupCode.tsx) renders the backup-code field and is imported as `BackupCode` by callers. The copied identifier misstates what the component is; rename the function to `BackupCode` so the name matches the file, the imports and the rendered content."
+     },
+     {
+      "file": "apps/web/components/auth/BackupCode.tsx",
+      "lines": [
+       7,
+       7
+      ],
+      "texto": "The default export in BackupCode.tsx is named `TwoFactor`, which is the name of the separate TOTP component. It is a copy-paste leftover and misleads readers and stack traces. Rename it to `BackupCode`."
+     },
+     {
+      "file": "apps/web/components/auth/BackupCode.tsx",
+      "lines": [
+       7,
+       7
+      ],
+      "texto": "Component in BackupCode.tsx is named `TwoFactor` (`export default function TwoFactor`) while the file is BackupCode.tsx and it is imported as `BackupCode`. The name disagrees with the code's contract and duplicates the real TwoFactor component, misleading callers/readers. Rename to `BackupCode`."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#05",
+    "descricao": "The backup-code copy e2e test only waits for the success toast, which is shown unconditionally, so it never verifies the clipboard content.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       119,
+       122
+      ],
+      "texto": "This 'copy' test does not verify the copy behaviour it names: it clicks backup-codes-copy and then only waits for the toast-success element. The handler (EnableTwoFactorModal) runs navigator.clipboard.writeText(...) without awaiting it and then calls showToast(...) unconditionally, so the toast appears even when the clipboard write is removed or fails. The assertion therefore passes with the backup-code copy feature broken; assert the actual effect (clipboard content, or that the formatted codes reached writeText) instead of the toast."
+     },
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       119,
+       122
+      ],
+      "texto": "The copy test only waits for a success toast, but the implementation emits that toast unconditionally without awaiting navigator.clipboard.writeText. Removing the clipboard write entirely, copying an empty string, or rejecting the write would still pass this test. Read the clipboard after the click and compare its contents with the displayed backup codes so the test verifies the actual copy effect."
+     },
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       119,
+       122
+      ],
+      "texto": "Copy test only waits for toast-success, explicitly TODOing clipboard check. Broken writeText (wrong format/empty) still passes; assert clipboard content equals formatted backup codes."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#07",
+    "descricao": "Backup-code consumption is a non-atomic read-modify-write, so concurrent logins can accept the same backup code more than once or overwrite each other's removal.",
+    "textoGolden": "Because backupCodes are decrypted and mutated in memory before being written back, two concurrent login requests using the same backupCode could both pass this check and update, so a single backup code may effectively be accepted more than once if used concurrently, weakening the intended one-time-use semantics.",
+    "comentarios": [
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       144,
+       156
+      ],
+      "texto": "Backup-code consumption is a non-atomic read-modify-write: the code is validated with indexOf (line 144) and only then persisted via prisma.user.update (line 149), with no unique constraint or lock. Two concurrent login requests sending the same valid backup code both read the unchanged row, both pass the indexOf check, and both obtain a session, violating the 'each backup code can be used exactly once' invariant. Consume the code atomically (e.g. a conditional update on the raw encrypted value / a dedicated used-backup-codes table with a unique index) so only one request can succeed."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       144,
+       156
+      ],
+      "texto": "Backup-code consumption is a non-atomic read-modify-write, breaking the stated invariant that each backup code is single-use. Two concurrent login requests with the same backup code both read the same user.backupCodes array and both pass `index !== -1` before either `prisma.user.update` commits; both then persist a stale array (each nulling only its own index), so the code authenticates twice. Make consumption atomic (e.g. compare-and-swap on the encrypted value/updatedAt, a transaction with a conditional update, or an optimistic-locking retry) so exactly one request can claim a given code."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       148,
+       156
+      ],
+      "texto": "Backup-code consumption overwrites the encrypted list by user ID without checking that the stored list still matches the value read before verification. Concurrent requests can both authenticate with the same single-use code, and requests using different codes can overwrite each other's removals and restore a consumed code. Use a conditional atomic update matching the original backupCodes ciphertext and reject or retry authentication if no row was updated."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#12",
+    "descricao": "The copy button shows a success toast without awaiting clipboard.writeText, so a failed copy still tells the user their backup codes were saved.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       276,
+       279
+      ],
+      "texto": "The handler shows \u201cBackup codes copied!\u201d immediately after calling `navigator.clipboard.writeText`, without awaiting its promise. If clipboard access is denied or the write otherwise rejects, the user still receives a success message and may close the dialog believing their recovery codes were saved. Await the clipboard write and show the success toast only after it resolves; handle rejection with an appropriate translated failure message."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#13",
+    "descricao": "The download e2e test checks only the filename, not that the file contains the displayed backup codes.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       113,
+       117
+      ],
+      "texto": "The download assertion checks only the static filename from the anchor's download attribute. It still passes if the blob contains empty or incorrect backup codes, leaving the essential recovery-code export behavior unverified. Read the downloaded file and compare its contents to the displayed codes, including their formatting."
+     },
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       112,
+       117
+      ],
+      "texto": "Download test only asserts suggestedFilename, explicitly TODOing file-content check. Empty/wrong backupCodes blob with correct filename still passes; assert downloaded file lines equal displayed/formatted backup codes."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#14",
+    "descricao": "The disable endpoint's error log says 'backup code login' although it is disabling 2FA.",
+    "textoGolden": "Error message mentions 'backup code login' but this is a disable endpoint, not login",
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+      "lines": [
+       50,
+       50
+      ],
+      "texto": "The error log says \"cannot proceed with backup code login\", but this endpoint disables two-factor authentication and does not log in. Change the message to describe disabling 2FA with a backup code."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#15",
+    "descricao": "resetState does not clear backup codes/secret or revoke the backup-codes object URL, leaving a small blob URL leaked per setup cycle.",
+    "textoGolden": "Object URL for backup codes is not revoked on component unmount, leading to a potential memory leak. This can cause increased memory usage over time, especially if the component is mounted and unmounted frequently.",
+    "comentarios": [
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       71,
+       75
+      ],
+      "texto": "WHAT: resetState() clears only password/error/step and never clears backupCodes, secret, dataUri, nor revokes backupCodesUrl. WHY: Closing the modal after setup leaves TOTP secret and backup codes in memory and leaks the Blob object URL on every setup/close cycle. HOW: Clear those states and call URL.revokeObjectURL in resetState and on unmount."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#16",
+    "descricao": "The disable endpoint calls replaceAll on req.body.backupCode without checking it is a string, so non-string input throws a 500.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+      "lines": [
+       60,
+       64
+      ],
+      "texto": "WHAT: req.body.backupCode.replaceAll assumes a string with no type guard. WHY: A non-string JSON value (number/array) throws TypeError and returns 500 instead of the 400 IncorrectBackupCode contract, breaking error handling and enabling error-probing. HOW: Validate typeof backupCode === 'string' (or String(...)) before replaceAll."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#17",
+    "descricao": "Backup codes are matched case-sensitively against lowercase hex, so a user typing the code in uppercase is rejected.",
+    "textoGolden": "Backup code validation is case-sensitive due to the use of indexOf(). This causes validation to fail if a user enters uppercase hex characters, as backup codes should be case-insensitive for a better user experience.",
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#sncc-01",
+    "descricao": "The backup code is compared with the stored codes through Array.indexOf, which is not constant-time and leaks timing information about the secret backup codes.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "1950a511026d520a7329c7b6b9ee60a4af8f8b55",
+  "base": "b8c1cd410f4499c77a8b372decfe1718b80ccfd2",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "lines": [
+     136,
+     144
+    ],
+    "texto": "WHAT: getClientsWithPermission looks up resources of type \"Clients\", but getOrCreateResource creates per-client V2 resources without a type. The only match is the type-level resource, so the method returns {\"Clients\"} instead of client IDs. WHY: AvailableRoleMappingResource:230 calls realm.getClientById(\"Clients\").getRolesStream(), which throws a NullPointerException, and permissions granted on individual clients are never returned. HOW: Iterate the per-client resources (for example, find the policies attached to Clients-scope resources and resolve their resource names), and handle the type-level resource separately so it is never returned as a client ID."
+   },
+   {
+    "id": "S2",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "lines": [
+     192,
+     195
+    ],
+    "texto": "WHAT: setPermissionsEnabled now throws UnsupportedOperationException, but the ClientRemovedEvent listener in AdminPermissions:91 still calls it whenever ADMIN_FINE_GRAINED_AUTHZ is enabled. management() returns MgmtPermissionsV2 whenever V2 is enabled. WHY: when both features are enabled, deleting any client throws inside the removal event and the deletion fails; before this PR the inherited V1 implementation handled the call. HOW: Make setPermissionsEnabled a no-op in V2, or skip the V1 cleanup in the listener when ADMIN_FINE_GRAINED_AUTHZ_V2 is enabled."
+   },
+   {
+    "id": "S3",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "lines": [
+     147,
+     150
+    ],
+    "texto": "WHAT: canExchangeTo now throws UnsupportedOperationException, but AbstractTokenExchangeProvider:276 still calls AdminPermissions.management(...).clients().canExchangeTo(...), and that returns ClientPermissionsV2 whenever V2 is enabled. WHY: token exchange to a target client now fails with a server error instead of an allow/deny decision when V2 and token exchange are enabled together. HOW: Return false (deny) instead of throwing, or keep the inherited V1 behavior until V2 supports token exchange."
+   },
+   {
+    "id": "S4",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+    "lines": [
+     95,
+     98
+    ],
+    "texto": "The new Javadoc says requireView() returns true when canView() is true, but the method returns void and throws ForbiddenException when access is denied. A caller reading this comment could expect a boolean result and miss that the call throws."
+   },
+   {
+    "id": "S5",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+    "lines": [
+     100,
+     103
+    ],
+    "texto": "The new Javadoc says requireViewClientScopes() returns true, but the method is void and throws ForbiddenException when canViewClientScopes() is false. This does not match the method's actual contract or the wording used for the other require* methods."
+   },
+   {
+    "id": "S6",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java",
+    "lines": [
+     77,
+     95
+    ],
+    "texto": "The listener checks only the V1 flag ADMIN_FINE_GRAINED_AUTHZ, but `management()` returns `MgmtPermissionsV2` whenever V2 is enabled. With this PR, `MgmtPermissionsV2.clients()` returns `ClientPermissionsV2`, whose `setPermissionsEnabled` throws UnsupportedOperationException, so with both features enabled a ClientRemovedEvent makes client deletion fail. Skip the listener body when V2 is enabled."
+   },
+   {
+    "id": "S7",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java",
+    "lines": [
+     147,
+     153
+    ],
+    "texto": "Before the permission is granted, `clientResource.getDefaultClientScopes()` is already denied (it needs view permission), so the ForbiddenException comes from the GET and `removeDefaultClientScope` is never called. If the manage check on the remove endpoint were dropped, this block would still pass. Get the scope id with the realm admin client (`realm.admin()`) and then call `removeDefaultClientScope` with `realmAdminClient`, so the assertion actually covers the delete endpoint."
+   },
+   {
+    "id": "S8",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java",
+    "lines": [
+     357,
+     364
+    ],
+    "texto": "CONFIGURE is granted in the same permission as MAP_ROLES_COMPOSITE. Role management for a client role goes through `clients().canConfigure(client)`, so addComposites may succeed because of CONFIGURE, and the test would still pass if `canMapCompositeRoles` were broken. Test MAP_ROLES_COMPOSITE separately from CONFIGURE, or add a negative case where it is left out, so a regression in that check fails the test."
+   },
+   {
+    "id": "S9",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "lines": [
+     147,
+     150
+    ],
+    "texto": "`AbstractTokenExchangeProvider` (line 276) calls `AdminPermissions.management(session, realm).clients().canExchangeTo(...)`. With V2 enabled, `clients()` now returns `ClientPermissionsV2`, so this throws `UnsupportedOperationException` instead of returning a boolean. A token exchange request that previously got a permission decision now fails with a server error; either return a deny result (`false`) here or update the caller to skip this check under V2."
+   },
+   {
+    "id": "S10",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "lines": [
+     187,
+     205
+    ],
+    "texto": "`ClientResource` (lines 710-742) calls `permissions.clients().isPermissionsEnabled`, `resource`, `getPermissions` and `setPermissionsEnabled` for the client management-permissions endpoints. These were not updated, and under V2 the calls now hit these throwing overrides, so GET/PUT on that endpoint returns a 500 instead of a valid response or a proper 4xx. The endpoint should be guarded or rejected explicitly when V2 is enabled."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+    "descricao": "Claims the removal-cleanup listener is guarded by the V1 fine-grained flag, so client/role/group permissions are orphaned when V1 is disabled or only V2 is enabled.",
+    "textoGolden": "Inconsistent feature flag bug causing orphaned permissions. The AdminPermissions event listener, responsible for cleaning up permissions upon role, client, or group removal, is incorrectly guarded by the ADMIN_FINE_GRAINED_AUTHZ (V1) feature flag. This is inconsistent with other methods in the class that use ADMIN_FINE_GRAINED_AUTHZ_V2. Consequently, if ADMIN_FINE_GRAINED_AUTHZ_V2 is enabled but V1 is not, the permission cleanup logic will not execute, leading to orphaned permission data. Cleanup should occur regardless of which fine-grained authorization version is enabled.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java",
+      "lines": [
+       77,
+       95
+      ],
+      "texto": "The cleanup is now entirely wrapped in Profile.isFeatureEnabled(ADMIN_FINE_GRAINED_AUTHZ), so when the feature is disabled the pre-existing removal cleanup (roles/clients/groups .setPermissionsEnabled(..., false)) no longer runs. Realms using the non-V2 permission model will keep orphaned authorization resources/permissions after a client, role or group is removed. The gate should preserve the old behavior when the feature is off (run for V1), or the V1 cleanup must be performed elsewhere."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+    "descricao": "getClientsWithPermission in ClientPermissionsV2 only finds the type-level 'Clients' resource and returns its name, never actual client ids, so callers that resolve the returned values as client ids get wrong results or null clients.",
+    "textoGolden": "In getClientsWithPermission(String scope), iterating resourceStore.findByType(server, AdminPermissionsSchema.CLIENTS_RESOURCE_TYPE) and returning resource.getName() will only ever consider the type-level 'Clients' resource (per-client resources have no type) and return its name, while AvailableRoleMappingResource#getRoleIdsWithPermissions expects actual client IDs to pass to realm.getClientById, which can lead to incorrect behavior or a null client and subsequent failures.",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+    "descricao": "Claims getResourceTypeResource can return null in ClientPermissionsV2.hasPermission, causing a NullPointerException in findByResource.",
+    "textoGolden": "In ClientPermissionsV2.hasPermission, the method getResourceTypeResource could return null, leading to a NullPointerException in findByResource. Defensive null checks are needed to prevent this issue.",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#05",
+    "descricao": "ClientPermissionsV2 has an unused private getEvaluationContext method.",
+    "textoGolden": "Remove unused getEvaluationContext private method in ClientPermissionsV2 - it is defined but never called",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       262,
+       272
+      ],
+      "texto": "Dead computation: `getEvaluationContext(ClientModel, AccessToken)` is private and has no caller anywhere in the class. Its only possible consumer in the V1 class, `canExchangeTo`, was overridden to throw UnsupportedOperationException (line 148-150). The EvaluationContext and its overridden getBaseAttributes are built and then never used \u2014 remove the method (or wire it into canExchangeTo if token-exchange is meant to be supported)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+    "descricao": "The Javadoc of the void requireView() and requireViewClientScopes() methods says they return true instead of documenting that they throw ForbiddenException.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+      "lines": [
+       95,
+       98
+      ],
+      "texto": "The Javadoc for `void requireView()` says \"Returns {@code true} if {@link #canView()} returns {@code true}\", but requireView() is void and throws ForbiddenException rather than returning a value. It is a copy-paste of the canView() doc and should read \"Throws ForbiddenException if {@link #canView()} returns {@code false}\", matching the sibling require* methods (requireListClientScopes, requireConfigure, etc.)."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+      "lines": [
+       100,
+       103
+      ],
+      "texto": "The Javadoc for `void requireViewClientScopes()` says \"Returns {@code true} if {@link #canViewClientScopes()} returns {@code true}\", but the method is void and throws ForbiddenException. The doc describes a boolean return the method never produces; it should state that it throws ForbiddenException if canViewClientScopes() returns false, consistent with the other require* methods."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+      "lines": [
+       95,
+       103
+      ],
+      "texto": "Declaration does not match the method it documents: the javadoc for `requireView()` ('Returns {@code true} if {@link #canView()} returns {@code true}.') and for `requireViewClientScopes()` ('Returns {@code true} if {@link #canViewClientScopes()} returns {@code true}.') describes a boolean-returning accessor, but both methods are declared `void` and are the require* counterparts that throw ForbiddenException (as documented for requireManage/requireConfigure above). The text was copy-pasted from the corresponding can* methods; it should state that the method throws when canView()/canViewClientScopes() is false."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+    "descricao": "ClientPermissionsV2.canView() ignores a global MANAGE permission, so admins with only global manage take the unpaginated, per-client evaluated listing path.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       86,
+       87
+      ],
+      "texto": "canView() does not recognize an all-clients MANAGE permission even though canView(client) grants viewing through canConfigure(client) and canManage(client). For an administrator with global MANAGE but no VIEW, ClientsResource.getClients selects an unpaginated realm-wide client stream and evaluates authorization for clients before applying pagination, instead of fetching the requested database page. Include the global MANAGE permission in the global viewing capability while preserving client-specific denial semantics."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+    "descricao": "canView(client) short-circuits on the global all-clients VIEW permission, so a client-specific permission denying an admin is never evaluated and the client is still viewable.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       78,
+       82
+      ],
+      "texto": "The global VIEW check returns true before evaluating client-specific VIEW permissions, bypassing a negative permission on an individual client. An administrator granted VIEW on all clients can therefore read a client explicitly excluded by a client-specific denial; ClientsResource.getClients also bypasses per-client checks when this evaluator's parameterless canView() returns true. Evaluate the specific client resource before falling back to the all-clients permission, and ensure listing does not use a global grant to skip specific denials."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       78,
+       79
+      ],
+      "texto": "Do not short-circuit resource-specific view evaluation on the global fine-grained VIEW grant. With an all-clients VIEW permission allowing an administrator and a client-specific VIEW permission denying that administrator, canView() returns true here and the specific client permission is never evaluated. This differs from the specific-over-global override behavior exercised for users in this PR and exposes the denied client's representation. Keep the administrative-role bypass separate from fine-grained grants and evaluate the client's resource before falling back to the all-clients resource; also ensure the global view result used by client listing cannot bypass those overrides."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#11",
+    "descricao": "The negative check for removing a default client scope expects ForbiddenException, but it can come from the preceding getDefaultClientScopes() call, so the test passes even without a permission check on removal.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java",
+      "lines": [
+       147,
+       152
+      ],
+      "texto": "The expected ForbiddenException can come from getDefaultClientScopes(), before removeDefaultClientScope() is invoked. With no permission granted, the initial read is forbidden, so this test still passes if removal's manage-permission check is removed entirely; the later granted removal also succeeds in that broken implementation. Obtain the scope ID using the privileged realm client outside this try block, then invoke only removeDefaultClientScope() through the restricted client and assert that it is forbidden."
+     }
+    ]
+   }
+  ]
+ },
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "e944e2acf1e64421860a8e827f93ad06c169621b",
+  "base": "272cfc68dcc88615396ae62ed1571918e9c58ad3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+    "lines": [
+     91,
+     93
+    ],
+    "texto": "WHAT: registerIDPLoginInvalidationOnUpdate checks the login predicate against `idpById`, which comes from getById() and is wrapped by createOrganizationAwareIdentityProviderModel, so isEnabled() returns false whenever the linked organization is disabled. WHY: if an org-linked public IdP is set to hideOnLogin/linkOnly while its org is disabled, both checks fail, the login caches are not invalidated, and once the org is re-enabled the cached id is returned and the login page shows a hidden/link-only IdP (the bean only re-checks isEnabled). HOW: run the predicate against the unwrapped stored model (e.g. idpDelegate.getById(model.getInternalId())) instead of the org-aware wrapper."
+   },
+   {
+    "id": "S2",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+    "lines": [
+     381,
+     381
+    ],
+    "texto": "WHAT: The cleanup is registered for an IdP with the literal alias \"alias\" instead of the alias actually created (\"idp-alias-\" + i). WHY: none of the 21 IdPs created in testCacheIDPForLogin are removed, so state leaks into later tests in the realm. HOW: capture the real alias for the cleanup."
+   },
+   {
+    "id": "S3",
+    "file": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java",
+    "lines": [
+     254,
+     254
+    ],
+    "texto": "WHAT: Adding the organization/BROKER_PUBLIC condition to the shared getLoginPredicate also changes IdentityProviderBean.federatedProviderPredicate, which the base (non-organization) login bean uses to filter the user's already-linked IdPs. WHY: when the organization feature is disabled, a user whose linked IdP still has an organizationId but is not public no longer sees that IdP on the login page, a regression unrelated to caching. HOW: keep the org condition in a separate predicate used only for cache invalidation in InfinispanIdentityProviderStorageProvider."
+   },
+   {
+    "id": "S4",
+    "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+    "lines": [
+     234,
+     241
+    ],
+    "texto": "WHAT: Every distinct organizationId passed to getForLogin calls invalidateObject on the single per-realm/per-mode cache entry and re-adds it with all previously cached org id sets merged in. WHY: in realms with many organizations the login path triggers repeated cluster-wide invalidations, and one ever-growing cache entry is rebuilt on each new org lookup. HOW: include the organizationId in the cache key (one entry per org) instead of merging search keys into one entry."
+   },
+   {
+    "id": "S5",
+    "file": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java",
+    "lines": [
+     252,
+     255
+    ],
+    "texto": "The `LoginFilter` Javadoc says this enum holds all the fields that decide whether a provider is available for login. `getLoginPredicate()` now also checks the organization link and `BROKER_PUBLIC`, and neither is an enum value, so `getLoginSearchOptions()` does not include them. Update the Javadoc, or comment the new check, so readers know the enum is no longer the complete set."
+   },
+   {
+    "id": "S6",
+    "file": "OrganizationCacheTest.java",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "In testCacheIDPForLogin, the cleanup passes the literal string \"alias\" instead of each IDP's actual alias, so the identity providers created by the test are not removed. This does not let broken behaviour pass, but the cleanup does not work. Use each IDP's alias in the cleanup."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+    "descricao": "The test registers cleanup for the literal alias \"alias\" instead of the created IDP aliases, so the created identity providers are never cleaned up.",
+    "textoGolden": "Cleanup reference uses incorrect alias - should be 'idp-alias-' + i instead of 'alias'.",
+    "comentarios": [
+     {
+      "file": "testCacheIDPForLogin",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The cleanup registers `identityProviders().get(\"alias\")::remove` inside the loop, and also for idp-alias-20. \"alias\" is a literal string rather than the actual IDP alias, so none of the created IDPs is ever cleaned up. Use the real alias (e.g. the loop's alias variable / \"idp-alias-20\") when registering the cleanup. As written, the 21 leaked providers can skew later tests that count IDPs or login caches."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       381,
+       381
+      ],
+      "texto": "The cleanup is registered for the literal alias \"alias\" rather than the IDP just created (\"idp-alias-\" + i). The 20 created IDPs are never removed, and the same applies to the cleanup at line 425 for \"idp-alias-20\". Use the actual alias, e.g. get(\"idp-alias-\" + i)::remove, so the IDPs don't leak into other tests."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       381,
+       381
+      ],
+      "texto": "The cleanup registered here uses the literal alias \"alias\", but the provider just created has alias \"idp-alias-\" + i. The same mismatch is repeated at line 425 for \"idp-alias-20\". The cleanup can never find/remove the created providers (null dereference/404 on remove, or at best a silent no-op), so none of the 21 IDPs this test creates are cleaned up and the realm is left polluted for later tests. Use the actual alias, e.g. `testRealm().identityProviders().get(\"idp-alias-\" + i)::remove` and `get(\"idp-alias-20\")::remove`."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#05",
+    "descricao": "On a partial cache miss getForLogin merges the previously read login query into a newly revisioned entry, so a concurrent invalidation can be lost and stale IDP IDs for other organizations persist.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+      "lines": [
+       236,
+       240
+      ],
+      "texto": "Do not merge the previously read query into a newly revisioned entry without verifying its revision. A reader can obtain a query containing organization A's IDs, then another transaction disables a provider or changes its organization and invalidates this key. When the reader requests an uncached organization B, this branch obtains a fresh revision but copies the old A results into the new query and publishes it using the current counter. Subsequent A requests receive stale membership indefinitely (a disabled or moved provider still exists, so the null-ID fallback does not repair it). Rebuild rather than copy after invalidation, or ensure the old query's revision is still valid atomically before publishing the merged entry."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08",
+    "descricao": "Login-cache invalidation on update compares the organization-aware enabled state, so changing a broker to private while its organization is disabled skips invalidation and leaves the now-private IDP in the cached login list.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+      "lines": [
+       405,
+       406
+      ],
+      "texto": "The early return compares the original IDP's organization-aware enabled state rather than the persisted enabled state used to populate the login cache. If a cached public IDP's organization is disabled and an admin changes BROKER_PUBLIC to false, the original predicate is false because the organization is disabled and the updated predicate is false because the broker is private, so the stale ID remains cached; re-enabling the organization displays the now-private broker because the login bean only rechecks isEnabled. Compare raw persisted models for login-cache invalidation, for example by loading the original through idpDelegate.getById before applying this predicate."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#11",
+    "descricao": "The LoginFilter javadoc still claims its constants are all criteria for login availability although getLoginPredicate now also checks organization link and BROKER_PUBLIC.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java",
+      "lines": [
+       252,
+       256
+      ],
+      "texto": "getLoginPredicate now also filters on organization link plus the BROKER_PUBLIC config (line 254), but the enum's javadoc directly above (lines 215-217) still states that the enum \"contains all fields that are considered when deciding if a provider should be available for login or not\", presenting ENABLED/LINK_ONLY/HIDE_ON_LOGIN as the exhaustive criteria. Any reader \u2014 or a future LoginFilter constant added against that documented assumption \u2014 will believe organization link and BROKER_PUBLIC play no role. Update the javadoc to include the organization-link/public-broker condition, or move the condition into a documented LoginFilter constant."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#13",
+    "descricao": "The login-cache test creates only public org-linked IDPs, so the new BROKER_PUBLIC check in getLoginPredicate is not covered.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       369,
+       388
+      ],
+      "texto": "Test fixture never covers the new BROKER_PUBLIC branch: all org-linked IDPs are created public, so reverting the getLoginPredicate public-check leaves all counts unchanged and the test still passes. Add at least one org-linked non-public (BROKER_PUBLIC false/missing) enabled IDP and assert it is excluded from getForLogin counts."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#14",
+    "descricao": "The test never consumes or asserts getForLogin's returned providers and never repeats a query, so the cache-hit path that builds the result is untested and could return wrong IDPs without failing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       401,
+       414
+      ],
+      "texto": "Consume and assert the results of getForLogin, including a repeat query for the same mode/organization to exercise a cache hit. All calls in this test discard the returned stream and assert only IdentityProviderListQuery contents. The implementation populates that query before reconstructing the returned models, so returning an empty stream (or the wrong providers) at line 254 would still pass the entire test. Assert the expected provider identities on both the initial query and the cached query, rather than only the internal cached count."
+     }
+    ]
+   }
+  ]
+ },
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "dcdcadb771128e79259cc9eff9c70c38fc597976",
+  "base": "0cfc28e76ddc986d2d89dd9b9f63ee916a18a5f9",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/monitors/logic/incident_occurrence.py",
+    "lines": [
+     160,
+     168
+    ],
+    "texto": "WHAT: get_monitor_environment_context builds `config` with a readable schedule_type, but the return value uses the raw `monitor_environment.monitor.config`, so that copy is never used. WHY: the monitor context sent with each occurrence contains the numeric schedule_type instead of its display value. HOW: return `config` instead of `monitor_environment.monitor.config`."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/monitors/logic/incident_occurrence.py",
+    "lines": [
+     159,
+     171
+    ],
+    "texto": "`config` is a copy of the monitor config with `schedule_type` changed to its readable label, but the returned dict uses `monitor_environment.monitor.config` instead. The copy is never used, so the monitor context in the event shows the raw integer schedule_type, not the label."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#01",
+    "descricao": "get_failure_reason's docstring examples do not match the strings the function returns.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       130,
+       137
+      ],
+      "texto": "The `get_failure_reason` docstring describes output this function does not produce. The singular branch (line 146) returns a `SINGULAR_HUMAN_FAILURE_MAP` value such as \"A missed check-in was detected\", yet the docstring advertises \"A failed check-in was detected\"; the multi-check-in branch joins `\"%(count)d %(status)s\"` fragments with `get_text_list(..., last_word=_(\"and\"))` and appends \" check-ins detected\", yielding \"2 missed and 1 error check-ins detected\", not the docstring's \"2 missed check-ins, 1 timeout check-in and 1 error check-in were detected\". Update the examples (or the format string) so the documented contract matches the code."
+     },
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       131,
+       137
+      ],
+      "texto": "The get_failure_reason docstring examples don't match the output. It shows 'A failed check-in was detected' and '...were detected', but the code returns the per-status singular strings ('A missed check-in was detected') or '<list> check-ins detected'. Update the examples to the real output and fix the 'humam readible' typo."
+     }
+    ]
+   },
+   {
+    "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+    "descricao": "get_monitor_environment_context builds a config copy with the human-readable schedule_type but returns the original monitor.config, so the conversion is lost and the context shows the raw value.",
+    "textoGolden": "The function modifies the config variable to include display values but then returns the original monitor.config instead of the modified version.",
+    "comentarios": [
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       159,
+       171
+      ],
+      "texto": "WHAT: get_monitor_environment_context copies monitor.config to `config` and converts schedule_type display, but returns the original monitor_environment.monitor.config instead of `config`. WHY: the display conversion never takes effect so the occurrence context carries the raw schedule_type value, producing wrong output vs the function's evident intent. HOW: return `\"config\": config` instead of `\"config\": monitor_environment.monitor.config`."
+     },
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       159,
+       171
+      ],
+      "texto": "Dead computation: `config` is copied and `config['schedule_type']` transformed to display value, but return uses `monitor_environment.monitor.config` (original) instead of `config`. Change to `\"config\": config` so transformation is used."
+     },
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       160,
+       168
+      ],
+      "texto": "WHAT: In get_monitor_environment_context the code copies config and replaces config['schedule_type'] with the human-readable get_schedule_type_display(), but the returned context dict uses the original `monitor_environment.monitor.config` instead of the modified local `config`, so the mutation is dead. WHY: The occurrence's monitor context always reports the raw schedule_type value rather than the display string the code intended to substitute, producing incorrect evidence data in the emitted occurrence. HOW: return the local variable, i.e. use \"config\": config in the returned dict."
+     }
+    ]
+   }
+  ]
+ }
+}

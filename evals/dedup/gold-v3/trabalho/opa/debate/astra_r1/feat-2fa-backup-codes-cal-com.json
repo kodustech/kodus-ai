@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "items": [
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#opa-01",
+   "class": "FP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "Changed to FP: the unawaited isChecked() assertion is unchanged from base; this PR only adds a FIXME acknowledging its existing defect. The enable endpoint persists twoFactorEnabled: true before the backup-codes screen appears, so Close refreshes the UI rather than enabling 2FA. The subsequent login step still exercises OTP authentication. The vacuous switch assertion therefore falls under the pre-existing-defect rule."
+  }
+ ]
+}

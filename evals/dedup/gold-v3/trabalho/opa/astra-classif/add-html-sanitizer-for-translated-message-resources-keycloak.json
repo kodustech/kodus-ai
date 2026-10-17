@@ -1,0 +1,12 @@
+{
+ "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+ "items": [
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#opa-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "VerifyMessageProperties.java:74-79 newly opens the derived English bundle unconditionally and wraps a missing-file IOException in RuntimeException. That exception escapes verify(), which catches only IOException (lines 48-53), and ThemeVerifierMojo.java:48-55, aborting validation before collected diagnostics are reported. Existing bundles have English counterparts, but the file-selection path does not enforce that prerequisite, so a missing counterpart triggers the reported error-handling defect.",
+   "severity": "medium"
+  }
+ ]
+}

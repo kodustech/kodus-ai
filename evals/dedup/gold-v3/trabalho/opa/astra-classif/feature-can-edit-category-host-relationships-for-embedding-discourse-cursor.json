@@ -1,0 +1,12 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#opa-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The branch does not run on every hydrated model: app/assets/javascripts/discourse/models/store.js.es6:222 requires root.__rest_serializer === \"1\", which app/controllers/application_controller.rb:244-245 adds only explicitly. The opted-in serializers supply no plain group_ids or nullable *_ids; the new relationship is a has_many collection with embedded records (app/serializers/embedding_serializer.rb:3; app/serializers/application_serializer.rb:2), so the claimed regression has no producer in this checkout. The base regex /(.+)\\_id$/ also never matched *_ids, contrary to the second comment.",
+   "severity": "high"
+  }
+ ]
+}

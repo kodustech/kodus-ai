@@ -1,0 +1,364 @@
+{
+ "notification-rule-processing-engine-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "47e5bd23163e6037fc0741068ac78930bba2769f",
+  "head": "8df850371034b73dc4dd9908cc30fa09f12a1f97",
+  "issues": {
+   "notification-rule-processing-engine-grafana-codex#opa-01": {
+    "comentarios": [
+     {
+      "gid": "opus-api:S10",
+      "file": "public/app/features/alerting/unified/components/rules/RulesTable.test.tsx",
+      "lines": [
+       100,
+       145
+      ],
+      "texto": "RulesTable gives AlertRuleMenu a ruler-backed Grafana rule, and AlertRuleMenu allows Delete when either the ruler check or the Grafana prom-rule check passes. These tests set only the useGrafanaPromRuleAbilities mock and leave useRulerRuleAbilities at its default of [false,false]. As a result, the ruler-based Delete permission check is never set to allow or deny, and a broken ruler path would go unnoticed."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "AlertRuleMenu.tsx:85-87 allows Delete when either the ruler ability or the Grafana prom-rule ability passes; the rewritten RulesTable.test.tsx:100-145 now only overrides useGrafanaPromRuleAbilities and leaves useRulerRuleAbilities at [false,false] from beforeEach, whereas before the PR the tests drove the ruler hook. The ruler branch is no longer exercised."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The PR leaves useRulerRuleAbilities returning [false,false] in RulesTable.test.tsx:68\u201370, while the Grafana Delete tests vary only the prom-rule menu permissions at lines 105\u2013109 and 139\u2013143. RuleActionsButtons.tsx:110\u2013112 passes the ruler-backed rule to AlertRuleMenu, whose Delete condition ORs both permission sources (AlertRuleMenu.tsx:85\u201387). Consequently, these modified tests pass even if the Grafana ruler-based Delete permission path stops working, losing coverage of that path."
+     }
+    ]
+   }
+  }
+ },
+ "fixing-re-authentication-with-passkeys-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "744e031019af8dbaacf407e792fbb3756364e2b4",
+  "head": "25bf964a844ea0bc64dc838bff038345048cb1fa",
+  "issues": {
+   "fixing-re-authentication-with-passkeys-keycloak#opa-01": {
+    "comentarios": [
+     {
+      "gid": "opus-api:S3",
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java",
+      "lines": [
+       51,
+       54
+      ],
+      "texto": "After someone submits only a username, `PasswordForm.authenticate` calls `webauthnAuth.fillContextForm(context)`. The new `authn_select` block in `passkeys.ftl` then puts that user's WebAuthn credential IDs into the page as hidden `authn_use_chk` inputs. Because the block is only rendered when the user has a passkey, any unauthenticated visitor can type a username and learn whether that account has a passkey, plus its credential IDs. Limit this to re-authentication: only fill the user-specific data when `USER_SET_BEFORE_USERNAME_PASSWORD_AUTH` is set, and otherwise use the user-less conditional UI data."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "PasswordForm.java:51-54 does call webauthnAuth.fillContextForm when the identified user has passkeys, and WebAuthnAuthenticator.fillContextForm:100-108 sets the user's allowed authenticators which passkeys.ftl renders as authn_use_chk. That is the standard identifier-first WebAuthn allowCredentials behaviour (same as the existing webauthn forms after a username step), intended so the identified user can use their passkey on the password page."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "UsernameForm.java:58-59 validates only the username, and PasswordForm.java:52-53 then fills user-specific WebAuthn data without checking for re-authentication. WebAuthnAuthenticator.java:98-108 supplies that user's credentials, and themes/src/main/resources/theme/base/login/passkeys.ftl:11-14 exposes their IDs, enabling unauthenticated discovery of passkey enrollment."
+     }
+    ]
+   },
+   "fixing-re-authentication-with-passkeys-keycloak#opa-02": {
+    "comentarios": [
+     {
+      "gid": "opus-api:S4",
+      "file": "WebAuthnConditionalUIAuthenticator",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "Missing test coverage: no test triggers a passkey failure during re-authentication, so the new `AuthenticatorUtils.setupReauthenticationInUsernamePasswordFormError` call in `WebAuthnConditionalUIAuthenticator` is never exercised. Consider adding a test where passkey authentication fails after `prompt=login` and asserting the resulting error and form state."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "WebAuthnConditionalUIAuthenticator.java:52-53 adds setupReauthenticationInUsernamePasswordFormError on the passkey-error path, and none of the added tests (PasskeysUsernameFormTest, PasskeysUsernamePasswordFormTest, PasskeysOrganizationAuthenticationTest) submit a failing passkey during prompt=login re-authentication; only success and wrong-password cases are covered."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "PasskeysUsernamePasswordFormTest.java:367-378 exercises a password failure followed by successful passkey authentication, so it does not cover the passkey-error branch at WebAuthnConditionalUIAuthenticator.java:48-56. However, the comment only requests additional coverage; it identifies neither faulty behavior nor a test failing to verify its stated purpose."
+     }
+    ]
+   }
+  }
+ },
+ "github-oauth-security-enhancement-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "344aa102e7818606e29426ebe69d5a680d8727c6",
+  "head": "bb75657fc8f13923c1d7983f422290908a1e7310",
+  "issues": {
+   "github-oauth-security-enhancement-sentry#opa-01": {
+    "comentarios": [
+     {
+      "gid": "opus-api:S10",
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       412,
+       413
+      ],
+      "texto": "The OAuth `state` parameter, which is the CSRF token tying the GitHub callback to this pipeline, is checked against `pipeline.signature` with a plain `!=`. That comparison can leak timing information about the expected value. Use `constant_time_compare` from `django.utils.crypto` instead."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "The new OAuthLoginView (github/integration.py:412) compares request.GET['state'] to pipeline.signature with `!=`, while other secret comparisons in the integrations use constant_time_compare. The state is a per-pipeline value checked over the network, so the timing difference is a hardening nit rather than an exploitable flaw."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "text": "The new comparison uses plain `!=` at src/sentry/integrations/github/integration.py:412, but the claim that it compares a secret CSRF token is false: src/sentry/pipeline/base.py:132-133 computes the signature solely from pipeline view class names. Those views are fixed at src/sentry/integrations/github/integration.py:343-344, so timing cannot expose a secret; constant-time comparison would not address the separate problem of predictable OAuth state."
+     }
+    ]
+   }
+  }
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "issues": {
+   "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02": {
+    "comentarios": [
+     {
+      "gid": "opus-api:S4",
+      "file": "app/controllers/groups_controller.rb",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "WHAT: the public members endpoint takes limit straight from params with no upper bound or positivity check. WHY: any visitor can request limit=1000000 and force serialization of every member of large groups, including automatic trust-level groups. A negative limit produces a PostgreSQL error (500). HOW: clamp limit to a sane range."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "groups_controller.rb:22-26 does take limit from params without a bound, but before the PR non-automatic groups returned all members with no limit and automatic groups already used an unbounded params[:limit]; the PR adds a default of 50 and paginates, so it does not introduce the unbounded read."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The changed endpoint passes the integer limit directly into the query and serializes its results without bounds checks (app/controllers/groups_controller.rb:22\u201329), allowing oversized responses and PostgreSQL errors for negative limits. Visible groups are accessible anonymously (lib/guardian.rb:120\u2013121); although automatic groups already accepted unchecked limits, this PR extends that behavior to nonautomatic groups."
+     }
+    ]
+   }
+  }
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+  "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "issues": {
+   "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#opa-01": {
+    "comentarios": [
+     {
+      "gid": "opus-api:S8",
+      "file": "app/assets/javascripts/discourse/models/store.js.es6",
+      "lines": [
+       192,
+       201
+      ],
+      "texto": "WHAT: The new `_ids` branch runs for every key ending in `_ids` on every hydrated model. It always deletes the original key and replaces it with the result of mapping _lookupSubType, which returns undefined when the root has no matching collection; a null value crashes on `.map`. WHY: Existing REST models with plain id-array attributes (e.g. `group_ids`) lose that data or throw while hydrating, a regression outside the embedding feature. HOW: Only replace the key when the value is an array and the pluralized collection exists in root."
+     },
+     {
+      "gid": "opus-api:S22",
+      "file": "app/assets/javascripts/discourse/models/store.js.es6",
+      "lines": [
+       196,
+       201
+      ],
+      "texto": "Any payload key ending in `_ids` whose value is null now reaches `obj[k].map`, which throws a TypeError. Before this change such keys were only matched by the `_id` regex and handled safely, so hydrating the record now fails."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "store.js.es6:192-201 changes the regex to /(.+)_id(s?)$/ and, for any `_ids` key, unconditionally calls obj[k].map(...) and deletes the original key. A null value throws a TypeError and a plain id array whose collection is not in root is replaced by an array of undefined under the pluralized key, losing the ids."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "text": "The branch does not run on every hydrated model: app/assets/javascripts/discourse/models/store.js.es6:222 requires root.__rest_serializer === \"1\", which app/controllers/application_controller.rb:244-245 adds only explicitly. The opted-in serializers supply no plain group_ids or nullable *_ids; the new relationship is a has_many collection with embedded records (app/serializers/embedding_serializer.rb:3; app/serializers/application_serializer.rb:2), so the claimed regression has no producer in this checkout. The base regex /(.+)\\_id$/ also never matched *_ids, contrary to the second comment."
+     }
+    ]
+   }
+  }
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "50f4e78a39914711d0d231a501ba215becf17ebc",
+  "head": "bbd8c507cdf56f6b884373809e0b24abd4a2353d",
+  "issues": {
+   "anonymous-add-configurable-device-limit-grafana-codex#opa-01": {
+    "comentarios": [
+     {
+      "gid": "opus-api:S1",
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       52,
+       54
+      ],
+      "texto": "WHAT: ProvideAnonDBStore now takes an int64 deviceLimit, but pkg/server/wire.go:374-375 still registers it as a provider and binds anonstore.AnonStore to it. WHY: Wire has no provider for int64, so DI generation fails and the server won't build. The store is also no longer injected anywhere. HOW: Remove anonstore.ProvideAnonDBStore and its wire.Bind from wire.go, or have the provider take *setting.Cfg and read AnonymousDeviceLimit from it."
+     },
+     {
+      "gid": "opus-api:S8",
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       52,
+       53
+      ],
+      "texto": "ProvideAnonDBStore now takes a `deviceLimit int64` parameter, but pkg/server/wire.go:374-375 still lists `anonstore.ProvideAnonDBStore` as a provider and binds `anonstore.AnonStore` to it. Wire cannot supply a bare int64, so dependency-injection generation/build fails. AnonDeviceService now builds the store itself, so remove the provider and the Bind from wire.go."
+     },
+     {
+      "gid": "opus-api:S12",
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       52,
+       54
+      ],
+      "texto": "`pkg/server/wire.go:374-375` still registers `anonstore.ProvideAnonDBStore` and binds `AnonStore` to it. The new signature needs an `int64` that no wire provider supplies, and after the change to `impl.go` nothing consumes `AnonStore`, so the provider is also unused. Wire generation fails. Remove the provider and its binding from `wire.go`, or give the provider an injectable dependency such as `*setting.Cfg`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "database.go:52 changes ProvideAnonDBStore to take `deviceLimit int64`, while pkg/server/wire.go:374-375 still lists anonstore.ProvideAnonDBStore and binds AnonStore to it. No provider supplies a bare int64 and impl.go now constructs the store itself, so wire generation fails."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "text": "pkg/server/wire.go:374-375 retains the provider and binding, but pkg/services/anonymous/anonimpl/impl.go:36-43 now constructs the store directly, leaving neither type required by injection. Wire permits unused providers inside imported provider sets, so this registration does not require resolving int64 or cause the claimed generation failure."
+     }
+    ]
+   }
+  }
+ },
+ "feat-2fa-backup-codes-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "efa6d464a38e60ceeeb88f40668c1c4ac4bfaf54",
+  "head": "54486a059cd2032042189bb565646ba4e0f6bd61",
+  "issues": {
+   "feat-2fa-backup-codes-cal-com#opa-01": {
+    "comentarios": [
+     {
+      "gid": "opus-api:S9",
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       50,
+       53
+      ],
+      "texto": "`isChecked()` returns a Promise that is never awaited, so `toBeTruthy()` always passes, even when 2FA is not enabled. After this PR, the modal stays on the backup-codes step until Close is clicked, so the switch is still unchecked at this point and the test passes anyway. Click `backup-codes-close` first, then assert on `data-state=\"checked\"`, as the second test does."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "login.2fa.e2e.ts:53 asserts on an unawaited isChecked() Promise, but that assertion predates this PR; the PR only adds a FIXME at :50-51 acknowledging it passes even when unchecked. It is a known pre-existing defect the PR explicitly flags rather than introduces."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "apps/web/playwright/login.2fa.e2e.ts:53 asserts the truthiness of the Promise returned by isChecked(), so it never verifies the switch state. Although that assertion predates this PR, the PR changes EnableTwoFactorModal.tsx:135 to display backup codes and delays onEnable() until Close at :269; that callback refreshes the switch state in apps/web/pages/settings/security/two-factor-auth.tsx:65-67. The first test skips this newly required step, leaving its completion assertion ineffective for the changed flow."
+     }
+    ]
+   }
+  }
+ },
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "272cfc68dcc88615396ae62ed1571918e9c58ad3",
+  "head": "e944e2acf1e64421860a8e827f93ad06c169621b",
+  "issues": {
+   "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-02": {
+    "comentarios": [
+     {
+      "gid": "opus-api:S4",
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+      "lines": [
+       234,
+       241
+      ],
+      "texto": "WHAT: Every distinct organizationId passed to getForLogin calls invalidateObject on the single per-realm/per-mode cache entry and re-adds it with all previously cached org id sets merged in. WHY: in realms with many organizations the login path triggers repeated cluster-wide invalidations, and one ever-growing cache entry is rebuilt on each new org lookup. HOW: include the organizationId in the cache key (one entry per org) instead of merging search keys into one entry."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "text": "InfinispanIdentityProviderStorageProvider.java:215 keys the cache by realm+mode only; lines 233-240 invalidate the entry and rebuild it merged with prior search keys for each new organizationId. This mirrors the existing getByOrganization pattern (lines 178-195) and the rebuild happens once per org until invalidation, so the cost is a design trade-off rather than a user-visible defect."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "text": "The claimed cluster-wide invalidations do not occur: model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/CacheManager.java:124 only removes the local entry and bumps its revision, and quarkus/runtime/src/main/resources/cache-ispn.xml:26 configures realms as a local cache. model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/IdentityProviderListQuery.java:43 does copy previous search mappings on a miss, but that does not establish the claimed cluster-wide login-path performance regression."
+     }
+    ]
+   }
+  }
+ }
+}

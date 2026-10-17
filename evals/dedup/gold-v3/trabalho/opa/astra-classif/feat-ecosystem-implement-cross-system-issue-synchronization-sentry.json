@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+ "items": [
+  {
+   "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#opa-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "AssignmentSource.to_dict() preserves the datetime (src/sentry/integrations/services/assignment_source.py:18,27-28), but the claimed validation failure is false: the bad-pickle check rejects Django models and sentry/getsentry classes, not datetime objects (src/sentry/celery.py:49-58). Celery currently uses pickle (src/sentry/conf/server.py:739), so the hypothetical serializer change establishes no enqueue defect in this PR.",
+   "severity": "high"
+  }
+ ]
+}

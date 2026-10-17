@@ -1,0 +1,1511 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "9fde0e906897cc0f4f71793f647dd629faba3317",
+  "base": "bc89fe00ea84d20bedcec782f0701b9711dc8201",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     101
+    ],
+    "texto": "WHAT: parseRefreshTokenResponse returns the zod SafeParse result object, and that object is written directly as credential.key. WHY: the DB key becomes {success, data}, so googleCredentialSchema.parse(credential.key) at line 75 throws for every later request and the Google credential becomes unusable after the first refresh. HOW: store the parsed data."
+   },
+   {
+    "id": "S2",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     86,
+     96
+    ],
+    "texto": "WHAT: when credential sync is enabled, refreshOAuthTokens returns a fetch Response, but this code reads res?.data as if it were a Gaxios response. WHY: token is undefined, so token.access_token throws a TypeError and Google tokens can never be refreshed in sync mode. HOW: in the sync branch, parse the Response JSON before using it, or make refreshOAuthTokens return the same shape that each caller expects."
+   },
+   {
+    "id": "S3",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     92,
+     94
+    ],
+    "texto": "WHAT: credentialId is passed where refreshOAuthTokens expects the credential's userId. WHY: the sync endpoint receives a credential id as calcomUserId, so it returns tokens for the wrong user or for none. HOW: pass the credential's userId instead."
+   },
+   {
+    "id": "S4",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     96
+    ],
+    "texto": "WHAT: in sync mode, refreshOAuthTokens returns a fetch Response, but this code reads tokenInfo.data.error as if it were an axios response. WHY: tokenInfo.data is undefined, so the property access throws and the token refresh always fails when sync is enabled. HOW: await the Response's json() in the sync branch and use that value as the token data."
+   },
+   {
+    "id": "S5",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     5,
+     11
+    ],
+    "texto": "WHAT: both computed keys `[z.string().toString()]` evaluate to the literal property name '[object Object]', so the schema only declares access_token plus a field named '[object Object]'. WHY: zod strips every other field (expires_in, expiry_date, scope, token_type), so sync-mode refreshes lose expiry information and callers such as Zoom (expires_in) and office365 get NaN or missing values. HOW: use z.object({ access_token: z.string() }).passthrough(), with explicit optional expiry fields if needed."
+   },
+   {
+    "id": "S6",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     25,
+     27
+    ],
+    "texto": "WHAT: when the parsed response has no refresh_token, the code writes the literal string \"refresh_token\" into it. WHY: office365calendar spreads tokenResponse.data over the stored credentials (line 264), so a provider response without refresh_token (always the case with the stripping minimum schema) replaces the real stored refresh token with the string 'refresh_token', and the next refresh fails. HOW: remove the placeholder assignment so callers keep their existing refresh_token."
+   },
+   {
+    "id": "S7",
+    "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+    "lines": [
+     96,
+     99
+    ],
+    "texto": "WHAT: the new code calls prisma.credential.update, but the file never imports prisma. Imports at lines 1-20 have no @calcom/prisma. WHY: this causes a TypeScript compile error or a ReferenceError at runtime, which rejects getClient so every Salesforce operation fails. HOW: add `import prisma from \"@calcom/prisma\";`."
+   },
+   {
+    "id": "S8",
+    "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+    "lines": [
+     86,
+     86
+    ],
+    "texto": "WHAT: success is detected by comparing response.statusText to \"OK\". WHY: statusText is empty over HTTP/2 and in many fetch implementations, so successful refreshes throw a 400 and the Salesforce client can never be created. HOW: check response.ok instead."
+   },
+   {
+    "id": "S9",
+    "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+    "lines": [
+     96,
+     99
+    ],
+    "texto": "WHAT: the token is refreshed and saved, but jsforce.Connection is still built with the old credentialKey.access_token and instance_url. WHY: the refresh result is discarded for the current connection, so requests use the stale or expired token. HOW: pass accessTokenParsed.data.access_token and accessTokenParsed.data.instance_url to the Connection."
+   },
+   {
+    "id": "S10",
+    "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+    "lines": [
+     75,
+     99
+    ],
+    "texto": "WHAT: getClient runs on every SalesforceCalendarService construction and always makes a token refresh HTTP call plus a credential DB write, without checking whether the token is expired. WHY: this adds an external round-trip and a DB write to every booking or calendar operation, and frequent refreshes can hit Salesforce rate limits. HOW: refresh only when the token is invalid or expired, or rely on jsforce's built-in refresh handling."
+   },
+   {
+    "id": "S11",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     40,
+     54
+    ],
+    "texto": "WHAT: appStoreMetadata is indexed by app.slug, but the map is keyed by app directory name (see _appRegistry.ts:17, which uses app.dirName). WHY: for apps whose slug differs from their dirName (e.g. google-calendar vs googlecalendar), the lookup returns undefined and the webhook always responds 404, so those credentials cannot be synced. HOW: select dirName from prisma.app and index appStoreMetadata by it."
+   },
+   {
+    "id": "S12",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     24,
+     29
+    ],
+    "texto": "WHAT: the webhook secret is checked with a plain !== string comparison. WHY: this endpoint can overwrite any user's third-party credentials, and a non-constant-time comparison exposes the secret to timing analysis. HOW: compare using crypto.timingSafeEqual on equal-length buffers after confirming the header is a string."
+   },
+   {
+    "id": "S13",
+    "file": "packages/app-store/_utils/oauth/createOAuthAppCredential.ts",
+    "lines": [
+     30,
+     59
+    ],
+    "texto": "WHAT: when state.teamId is present, the code only checks that the user is an accepted team member before creating a team credential, and throwIfNotHaveAdminAccessToTeam runs only on the path where teamId is falsy, so it is effectively a no-op. WHY: any non-admin team member can install OAuth apps on behalf of the team through a crafted state parameter. HOW: call throwIfNotHaveAdminAccessToTeam({ teamId: state.teamId, userId }) inside the teamId branch before prisma.credential.create."
+   },
+   {
+    "id": "S14",
+    "file": "packages/app-store/hubspot/lib/CalendarService.ts",
+    "lines": [
+     177,
+     189
+    ],
+    "texto": "WHAT: in sync mode, refreshOAuthTokens returns a fetch Response, but the result is used directly as a HubspotToken. WHY: expiresIn and accessToken are undefined on a Response, so expiryDate becomes NaN, a Response object is persisted as the credential key, and setAccessToken(undefined) is called. HOW: parse the Response JSON in the sync branch before treating it as a token."
+   },
+   {
+    "id": "S15",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     24,
+     29
+    ],
+    "texto": "The webhook secret is checked with `!==`, which can leak timing information and let an attacker recover CALCOM_WEBHOOK_SECRET byte by byte. Anyone with the secret can overwrite any user's app credentials. Compare in constant time with crypto.timingSafeEqual, after confirming the header is a string and the lengths match."
+   },
+   {
+    "id": "S16",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "`refreshOAuthTokens` gets `credentialId` (the Credential row id) as its `userId` argument. With credential sync enabled, it asks the sync endpoint for the tokens of the user whose id equals that credential id and saves them onto this credential. As a result, one user's Zoho Bigin access token is stored under another user's account and can be used by them; pass the credential owner's userId instead."
+   },
+   {
+    "id": "S17",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     101
+    ],
+    "texto": "parseRefreshTokenResponse returns a zod SafeParseReturn ({success, data}), but this code saves that whole object as credential.key. The stored Google credential then holds {success, data} instead of access_token/refresh_token/expiry_date, which breaks later reads. Persist `.data` instead."
+   },
+   {
+    "id": "S18",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "refreshOAuthTokens declares its third parameter as userId and sends it to the sync endpoint as calcomUserId. This call passes credentialId instead, so in sync mode the endpoint is asked for tokens for the wrong (or a nonexistent) user. Pass the credential's userId instead."
+   },
+   {
+    "id": "S19",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     86,
+     96
+    ],
+    "texto": "When credential sync is enabled, refreshOAuthTokens returns a raw fetch Response, but this code reads `res?.data` as if it were a googleapis response. That makes `token` undefined, so reading `token.access_token` throws and the refresh fails every time in sync mode. Parse the body with `await res.json()` when the sync path is used."
+   },
+   {
+    "id": "S20",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     7,
+     10
+    ],
+    "texto": "The comments say any numeric property is treated as the expiry and that other properties are allowed. In fact `z.string().toString()` evaluates to the literal key \"[object Object]\", so both lines define that one key and the second overrides the first. Neither documented behaviour exists, so the schema validates a meaningless key instead of an expiry field and does not explicitly pass through extra fields."
+   },
+   {
+    "id": "S21",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "refreshOAuthTokens's third parameter is `userId` and is sent to the sync endpoint as `calcomUserId`, but here it receives the credential id. The sync endpoint is therefore told a credential id is a Cal.com user id, which looks up the wrong user (or none) and also bypasses the user-ownership check. Pass the credential's userId instead, for example by giving it to refreshAccessToken."
+   },
+   {
+    "id": "S22",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     100
+    ],
+    "texto": "`parseRefreshTokenResponse` returns the result of `safeParse` (`{success, data}`), not the parsed credentials. Before this change, `googleCredentialSchema.parse` returned the plain credential object. Now `prisma.credential.update` stores `{success: true, data: {...}}` as the key, so the next read of `access_token` or `refresh_token` from the key finds nothing and authentication breaks."
+   },
+   {
+    "id": "S23",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "`refreshOAuthTokens` sends its third argument to the sync endpoint as `calcomUserId`, but this call passes `credentialId`. When credential sync is enabled, the endpoint gets tokens for an unrelated user, or for no user, and those tokens are used for this credential."
+   },
+   {
+    "id": "S24",
+    "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "lines": [
+     8,
+     15
+    ],
+    "texto": "When sync is enabled, this returns a fetch `Response`. The HubSpot, Zoho CRM and Zoho Bigin callers expect a parsed token object or an axios response and read fields like `.data.error`. On a `Response`, `.data` is undefined, so `.data.error` throws a TypeError and the token refresh fails every time sync is on."
+   },
+   {
+    "id": "S25",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     101
+    ],
+    "texto": "`googleCredentialSchema.parse()` used to return the key object, but `parseRefreshTokenResponse` returns a SafeParse result (`{ success, data }`). That whole wrapper now gets saved as `credential.key`. On the next read, `googleCredentialSchema` and `getGoogleAuth` won't find `access_token` or `refresh_token` at the top level, so every Google credential breaks after its first refresh. Store `.data` instead."
+   },
+   {
+    "id": "S26",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "The third parameter of `refreshOAuthTokens` is the Cal.com `userId`, which the sync endpoint receives as `calcomUserId`. This consumer passes `credentialId`, so the parent app is asked for tokens belonging to the wrong user, or to a user that doesn't exist. Pass the credential's `userId` (it needs to be threaded through from `credential.userId`)."
+   },
+   {
+    "id": "S27",
+    "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "lines": [
+     8,
+     15
+    ],
+    "texto": "When credential sync is enabled, this function returns a fetch `Response`. The google, zoho-bigin and zohocrm callers still read `res.data` / `tokenInfo.data`, which is undefined on a `Response`, so the token refresh throws a TypeError whenever sync is on. Either have the sync path return the shape each caller expects, or update those callers to call `await response.json()`."
+   },
+   {
+    "id": "S28",
+    "file": "zoho-bigin",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The zoho-bigin change passes `credentialId` where a user id is expected. The reviewer flagged this as outside the assigned scope."
+   },
+   {
+    "id": "S29",
+    "file": "Google Calendar",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The Google Calendar change stores the whole `safeParse` result object as the credential key instead of only the parsed data. The reviewer flagged this as outside the assigned scope."
+   },
+   {
+    "id": "S30",
+    "file": "zod schema",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The computed keys in the zod schema (`[z.string().toString()]`) do not do what the comments describe. The reviewer flagged this as outside the assigned scope."
+   },
+   {
+    "id": "S31",
+    "file": "createOAuthAppCredential",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "In `createOAuthAppCredential`, the team branch checks only team membership and not admin access. The reviewer flagged this as outside the assigned scope."
+   },
+   {
+    "id": "S32",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     101
+    ],
+    "texto": "parseRefreshTokenResponse returns a zod SafeParseReturn object (`{success, data}`), not the parsed credentials. That whole wrapper is written to `credential.key`, so the stored key no longer has access_token/refresh_token at the top level. Later reads of the credential then fail. Store `.data` instead."
+   },
+   {
+    "id": "S33",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "refreshOAuthTokens takes a userId as its third argument and sends it to the sync endpoint as `calcomUserId`. Here it gets `credentialId` (credential.id), so the external app is asked for tokens for the wrong user. The guard also fires for team credentials, which other callers exclude by passing userId=null."
+   },
+   {
+    "id": "S34",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     5,
+     11
+    ],
+    "texto": "`[z.string().toString()]` and `[z.string().optional().toString()]` both become the same literal key, \"[object Object]\", so the second overwrites the first and the number/expiry rule is never applied. Because z.object strips unknown keys, the parsed data drops expiry and every other field except access_token. In sync mode this loses the expiry date. Use `z.object({ access_token: z.string() }).passthrough()` instead."
+   },
+   {
+    "id": "S35",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     86,
+     96
+    ],
+    "texto": "When credential sync is enabled, refreshOAuthTokens returns a raw fetch Response instead of the gaxios result. That Response has no `.data` property, so `token` is undefined and `token.access_token` throws. Because of this, Google token refresh always fails in sync mode. Parse the Response body as JSON in that branch."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+    "descricao": "The new app-credential webhook checks its shared secret with a plain !== string comparison instead of a constant-time comparison, leaking timing information about the secret.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       23,
+       29
+      ],
+      "texto": "Direct !== comparison of webhook secret leaks via timing attack. Use constant-time comparison (e.g., crypto.timingSafeEqual on hashed/buffered values with length check) instead of `req.headers[...] !== process.env.CALCOM_WEBHOOK_SECRET`."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       24,
+       27
+      ],
+      "texto": "The webhook authenticates a secret using direct string inequality, which is not constant-time and can leak information about the secret through comparison timing. Compare fixed-length representations using a constant-time primitive (such as crypto.timingSafeEqual), handling absent or malformed headers safely, instead of comparing the secret strings directly."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       24,
+       29
+      ],
+      "texto": "The webhook secret is compared with the `!==` operator, which short-circuits on the first differing byte and leaks the secret via response timing (timing attack). An attacker can iteratively recover CALCOM_WEBHOOK_SECRET and then forge requests that create/update arbitrary user credential keys (decrypted with the AES key) via this endpoint. Use a constant-time comparison, e.g. crypto.timingSafeEqual on equal-length buffers, guarding for length mismatch first."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
+    "descricao": "The webhook parses the body with zod .parse and decrypts/JSON-parses the keys without error handling, so invalid payloads produce 500 errors instead of 400 responses.",
+    "textoGolden": "The `appCredentialWebhookRequestBodySchema.parse` function can throw on invalid payloads, resulting in 500 Internal Server Errors instead of the expected 400 Bad Request responses. This can lead to confusion for clients and hinder proper error handling.",
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       31,
+       31
+      ],
+      "texto": "WHAT: zod parse, symmetricDecrypt and JSON.parse throw unhandled (no try/catch) with no method guard. WHY: Invalid body/keys or GET request crashes handler with 500 and leaks stack, instead of 400/405. HOW: Wrap parse/decrypt in try/catch returning 400 and restrict to POST."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       31,
+       59
+      ],
+      "texto": "schema .parse plus symmetricDecrypt/JSON.parse throw unhandled (ZodError, decrypt error, SyntaxError) on invalid body or tampered keys, crashing webhook with 500. Use safeParse and try/catch with 400 responses."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#03",
+    "descricao": "The webhook's non-atomic findFirst-then-create lets concurrent deliveries for the same user and app insert duplicate credential rows.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       62,
+       70
+      ],
+      "texto": "The webhook performs a non-atomic findFirst followed by create when no credential exists. Concurrent deliveries for the same user and app can both observe no row and insert duplicates because Credential has no unique userId/appId constraint; subsequent findFirst updates only one duplicate, leaving competing credentials stale. Serialize the lookup/create operation for each user/app pair or introduce an appropriate uniqueness constraint and atomic upsert."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+    "descricao": "parseRefreshTokenResponse writes the hardcoded string 'refresh_token' when the refresh response omits a refresh token, so the stored credential gets an invalid refresh token and later refreshes fail.",
+    "textoGolden": "The parseRefreshTokenResponse function incorrectly sets refresh_token to the hardcoded string 'refresh_token' when it's missing from the OAuth refresh token response. This invalidates the token, breaking subsequent token refreshes and causing authentication failures.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       26
+      ],
+      "texto": "The parser fabricates the literal refresh token \"refresh_token\" whenever a successful response omits refresh_token, including when synchronization is disabled. Office365's response schema explicitly permits that omission, and its caller merges parsed data over existing credentials, replacing the valid saved refresh token with this invalid value and breaking the next refresh. Leave the property absent so the existing token survives the merge."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       26
+      ],
+      "texto": "When a refresh response omits refresh_token, this helper manufactures the hardcoded credential \"refresh_token\". Callers such as Office365 merge this into stored credentials, overwriting the valid existing refresh token and causing subsequent provider refreshes to use a predictable invalid token. Leave the field absent and preserve the existing credential when omission is allowed by the provider, or reject the response when a refresh token is required; do not substitute a literal authentication token."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       27
+      ],
+      "texto": "WHAT: Missing refresh_token is replaced with literal string \"refresh_token\". WHY: Stores bogus refresh token in DB, breaking all future refreshes and masking provider errors. HOW: Preserve existing credential refresh_token or throw instead of injecting placeholder."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+    "descricao": "minimumTokenResponseSchema uses computed keys from z.string().toString(), which produce a literal key rather than a wildcard, so the sync-mode schema does not validate or keep expiry and other token fields as intended.",
+    "textoGolden": "The Zod schema in parseRefreshTokenResponse uses computed property keys [z.string().toString()] and [z.string().optional().toString()] in minimumTokenResponseSchema, which is invalid Zod syntax and will throw a runtime error.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "`[z.string().toString()]` evaluates to a fixed string key such as \"ZodString\", so minimumTokenResponseSchema requires a literal numeric property with that name. Every synced token response fails validation and throws \"Invalid refreshed tokens were returned\". Use `z.object({access_token: z.string()}).passthrough()` instead."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "The computed keys `[z.string().toString()]` evaluate to the literal string \"[object Object]\", not a wildcard. The schema therefore requires a numeric property named \"[object Object]\", so safeParse always fails in credential-sync mode and the function throws \"Invalid refreshed tokens were returned\". Use `.passthrough()` on an object with access_token and optional numeric expiry fields instead."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "The computed keys `[z.string().toString()]` evaluate to a literal string like \"ZodString\" and not to a wildcard. The schema therefore requires a numeric property with that nonsense name and never matches real token responses. In sync mode every refresh throws \"Invalid refreshed tokens were returned\". Use `.passthrough()` and a real expiry check instead."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+    "descricao": "In sync mode refreshOAuthTokens returns a raw fetch Response, but callers expect their provider-specific shapes (res.data, axios .data, HubspotToken), so token refresh breaks for Google, Zoho and HubSpot when credential sharing is on.",
+    "textoGolden": "When APP_CREDENTIAL_SHARING_ENABLED and CALCOM_CREDENTIAL_SYNC_ENDPOINT are set, the refreshFunction helper returns the fetch Response, but several callers (for example GoogleCalendarService.refreshAccessToken expecting res.data, and HubspotCalendarService.refreshAccessToken expecting a HubspotToken) assume it returns the integration-specific token object. That mismatch will cause runtime errors in the sync-enabled path unless the return type or those call sites are adjusted.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "lines": [
+       8,
+       15
+      ],
+      "texto": "WHAT: In the credential-sharing branch `refreshOAuthTokens` returns the raw `fetch` `Response` object instead of a parsed token payload, yet several callers treat the result as an already-parsed token object.\nWHY: Callers such as hubspot (`hubspotRefreshToken.expiresIn`), zoho-bigin (`tokenInfo.data.error`), zohocrm (`zohoCrmTokenInfo.data.error`) and googlecalendar (`res?.data`) read `.data`/token fields off the return value; a `Response` has neither, so the sync path yields `undefined`/`NaN` or throws a TypeError \u2014 the feature's primary code path is broken for those apps.\nHOW: Parse the response (e.g. `const data = await response.json(); return data;`) before returning, or make every caller await the appropriate response handler."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "lines": [
+       8,
+       15
+      ],
+      "texto": "In sharing mode refreshOAuthTokens returns the raw fetch Response (no `.data`), but the google caller reads `res?.data` and then `token.access_token`, throwing a TypeError swallowed by the catch, so the token is never refreshed."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       94,
+       95
+      ],
+      "texto": "`res?.data` assumes the value returned by refreshOAuthTokens has a `.data` field (true for the `fetchTokens.res` branch), but when APP_CREDENTIAL_SHARING_ENABLED the helper returns a raw `fetch()` Response, which has no `.data`. Then `token.access_token` throws. Either parse the shared-mode Response here or have refreshOAuthTokens return a normalized `{ data }` shape."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+    "descricao": "Google Calendar persists the safeParse result object instead of its data as the credential key, corrupting the stored credential so later reads fail.",
+    "textoGolden": "parseRefreshTokenResponse returns a Zod safeParse result ({ success, data, error }), not the credential key object. Persisting that as key stores the wrapper instead of the token payload; we should store the parsed data or use schema parse.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns a SafeParse result {success,data}, not the parsed key. Storing it directly as `key` writes the wrapper to the credential. Unwrap like other callers: check .success and use .data."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns SafeParse result {success,data}, but call site stores that wrapper as credential `key` (previously googleCredentialSchema.parse() returned the plain object). Store `key.data` / handle wrapper, otherwise persisted credential becomes {success,data} shape and subsequent credential reads fail."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns SafeParse wrapper {success,data} but code stores the whole wrapper as credential.key. Office365calendar in same PR unwraps via .data. Persisted credential will be {success,data} instead of tokens, so next load fails validation. Unwrap to .data after success check."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#11",
+    "descricao": "After switching to parseRefreshTokenResponse, the tokenResponse.success check in Office365 refreshAccessToken is dead code and the previous error logging was dropped.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       263,
+       264
+      ],
+      "texto": "parseRefreshTokenResponse now throws when parsing fails, so the `tokenResponse.success` check on the next line is dead code and the previous error logging was removed. A failed refresh now throws out of refreshAccessToken instead of keeping the old credentials. Catch the error or restore the previous handling."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+    "descricao": "Salesforce getClient now refreshes the OAuth token and writes the credential on every service construction, adding a network round trip and DB write even when the access token is valid.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       75,
+       84
+      ],
+      "texto": "getClient now unconditionally exchanges the Salesforce refresh token on every service construction, even when the saved access token is valid. Each constructor invocation adds a blocking OAuth network round trip and credential database write before any Salesforce operation, replacing jsforce's existing on-demand refresh behavior. Keep refresh on demand or guard the exchange with a token-expiration check."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#14",
+    "descricao": "The new Salesforce token refresh uses prisma without importing it, so the code fails type checking and throws a ReferenceError at runtime.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       96,
+       99
+      ],
+      "texto": "The new credential update references prisma without importing or declaring it; searching this file finds only the new usage. This fails TypeScript checking and raises ReferenceError after a successful token exchange at runtime. Import prisma from @calcom/prisma before using it."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+    "descricao": "Zoho Bigin passes the credential id instead of the user id to refreshOAuthTokens, so the sync endpoint receives the wrong calcomUserId.",
+    "textoGolden": "The `refreshOAuthTokens` function is passed `credentialId` instead of `userId`, which breaks the credential sync functionality by causing incorrect user lookups. This issue can lead to failures in syncing user credentials, impacting user experience.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "WHAT: The 3rd argument to `refreshOAuthTokens` is `credentialId` (= `credential.id`, line 53), but the function's parameter is `userId` (`refreshOAuthTokens(refreshFunction, appSlug, userId)`).\nWHY: When APP_CREDENTIAL_SHARING_ENABLED, the sync endpoint is sent `calcomUserId: <credential id>` instead of the user id, so Bigin credentials are synced against the wrong/non-existent user (all other apps correctly pass `credential.userId`).\nHOW: Pass `credential.userId` instead of `credentialId` as the third argument."
+     },
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "refreshOAuthTokens' third parameter is the Cal.com userId (used as `calcomUserId` in the sync request and to decide whether sharing runs), but this call passes `credentialId`. Every other caller passes `credential.userId`, so the credential-sync endpoint receives a credential row id as the user id and shared credentials are fetched/updated for the wrong identity. Pass `credential.userId` here."
+     },
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "refreshOAuthTokens' third parameter is `userId` (declared in refreshOAuthTokens.ts line 3 and used as `calcomUserId: userId.toString()`), but this call passes `credentialId` (the Credential row id, line 53) instead of the user id. When credential sharing is enabled the customer's sync endpoint receives a credential id labelled as calcomUserId and cannot resolve the correct Cal.com user. Pass `credential.userId` (the BiginToken/credential payload carries it) or plumb the user id through refreshAccessToken."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+    "descricao": "Salesforce checks response.statusText !== 'OK' instead of response.ok when refreshing the token, which can misclassify successful responses, and then ignores the refreshed token.",
+    "textoGolden": "The Salesforce integration checks `response.statusText` instead of `response.ok` when handling OAuth token refresh responses. This can lead to unreliable behavior, as a successful response may not be correctly identified, resulting in the use of stale credentials and potential authentication failures.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       86,
+       107
+      ],
+      "texto": "WHAT: Checks response.statusText !== \"OK\" instead of response.ok and builds jsforce.Connection from stale credentialKey.access_token/instance_url ignoring accessTokenParsed.data. WHY: Refresh never takes effect (old token reused) and valid refreshes can throw on runtimes where statusText is empty. HOW: Check !response.ok and use parsed access_token/instance_url for connection and DB update."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
+    "descricao": "After refreshing the Salesforce token, jsforce.Connection is created with the stale access_token and instance_url instead of the newly refreshed values.",
+    "textoGolden": "The `jsforce.Connection` is created using stale `credentialKey.access_token` and `credentialKey.instance_url` after a token refresh, which can lead to authentication failures and incorrect data access. Ensure that the connection is established using the refreshed token values instead.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       96,
+       106
+      ],
+      "texto": "WHAT: The new block fetches and persists a fresh access token (`accessTokenParsed.data`) but then creates the `jsforce.Connection` with the stale `credentialKey.access_token` (line 106) instead of the just-refreshed token.\nWHY: The refreshed token is written to the DB but never used for the connection; if the old token was expired, jsforce must refresh again (extra round trip) or fail, and the DB/connection state diverge.\nHOW: Pass the new access token (`accessTokenParsed.data.access_token`) to the `jsforce.Connection`."
+     }
+    ]
+   }
+  ]
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "ffbaf8c54269df2ce510de91245760fddce09896",
+  "base": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "WHAT: The second `def self.downsize(from, to, dimensions, opts={})` silently replaces the 5-argument `downsize(from, to, max_width, max_height, opts={})`, because Ruby has no overloading. WHY: `Jobs::ResizeEmoji` (app/jobs/regular/resize_emoji.rb:14) still calls `OptimizedImage.downsize(path, path, 100, 100, opts)`, which now raises ArgumentError (5 for 3..4), so emoji resizing breaks. HOW: Merge them into one method that accepts both forms, e.g. `def self.downsize(from, to, dimensions_or_width, max_height=nil, opts={})`, or give the new variant a different name."
+   },
+   {
+    "id": "S2",
+    "file": "app/controllers/uploads_controller.rb",
+    "lines": [
+     66,
+     68
+    ],
+    "texto": "WHAT: For GIFs with allow_animated_thumbnails enabled, \"80%\" is passed to downsize_instructions_animated, which runs `gifsicle --resize-fit 80%`; gifsicle expects WxH there, not a percentage. WHY: gifsicle fails, convert_with returns false, the file never shrinks, and all 5 attempts are wasted before the oversized GIF is rejected anyway. HOW: For animated GIFs, compute explicit pixel dimensions (80% of the current width and height) instead of passing a percentage."
+   },
+   {
+    "id": "S3",
+    "file": "app/controllers/uploads_controller.rb",
+    "lines": [
+     64,
+     69
+    ],
+    "texto": "WHAT: tempfile.path is now passed to OptimizedImage.downsize, and convert_with runs it in a shell through backticks without escaping. For API URL uploads, that path contains the request-controlled `type` param (`discourse-upload-#{type}`). WHY: A `type` containing shell metacharacters such as `$(...)` or `;` runs arbitrary commands on the server when the oversized image is downsized. HOW: Restrict `type` to a whitelist (or Shellwords-escape every argument in convert_with) before the path reaches the shell."
+   },
+   {
+    "id": "S4",
+    "file": "app/controllers/uploads_controller.rb",
+    "lines": [
+     64,
+     70
+    ],
+    "texto": "WHAT: Any image up to 10MB is now run through ImageMagick `convert` up to 5 times in the upload path, with no limit on pixel dimensions. WHY: A small, highly compressed image with huge pixel dimensions (a decompression bomb) makes each convert run allocate gigabytes and burn CPU, which ties up web/defer workers. HOW: Check pixel dimensions (e.g. FastImage.size) before downsizing and reject images above a sane limit."
+   },
+   {
+    "id": "S5",
+    "file": "app/assets/javascripts/discourse/lib/utilities.js",
+    "lines": [
+     182,
+     182
+    ],
+    "texto": "WHAT: The client-side size check now uses a hardcoded 10MB for every upload type, attachments included, instead of `max_<type>_size_kb`. WHY: Sites with max_attachment_size_kb above 10MB now see larger attachments rejected in the browser, and the error message reports the wrong limit for attachments. HOW: Keep the hardcoded 10MB only for images and keep using the site setting for other types."
+   },
+   {
+    "id": "S6",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "Ruby has no method overloading, so the second `self.downsize(from, to, dimensions, opts={})` replaces the `(from, to, max_width, max_height, opts={})` version. `ResizeEmoji` calls `OptimizedImage.downsize(path, path, 100, 100, opts)` with 5 arguments and now gets an ArgumentError, so emoji resizing breaks. Use one method that accepts both forms, or give the dimensions-string variant a different name."
+   },
+   {
+    "id": "S7",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "Ruby has no overloading, so `def self.downsize(from, to, dimensions, opts={})` replaces the `downsize(from, to, max_width, max_height, opts={})` definition just above it. app/jobs/regular/resize_emoji.rb:14 still calls `OptimizedImage.downsize(path, path, 100, 100, opts)` with 5 arguments, which now raises ArgumentError, so emoji resizing breaks. Merge the two into one method that accepts both forms, or update the emoji job to pass \"100x100\"."
+   },
+   {
+    "id": "S8",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "Ruby keeps only the last `def self.downsize`, so the `(from, to, max_width, max_height, opts={})` version is silently overwritten by `(from, to, dimensions, opts={})`. The existing call in app/jobs/regular/resize_emoji.rb:14 (`OptimizedImage.downsize(path, path, 100, 100, opts)`) now raises ArgumentError (5 for 3..4), so emoji resizing breaks. Combine the two into one method that accepts both call styles, or give the new one a different name."
+   },
+   {
+    "id": "S9",
+    "file": "app/assets/javascripts/discourse/lib/utilities.js",
+    "lines": [
+     181,
+     183
+    ],
+    "texto": "The client size check now uses a fixed 10MB limit for every upload type, including attachments, instead of `max_attachment_size_kb`. If that setting is above 10MB, the browser rejects attachments the server would accept. Only image uploads, which the server can now shrink, should get the larger client-side limit."
+   },
+   {
+    "id": "S10",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "The new 3-argument `downsize(from, to, dimensions, opts)` was added so uploads_controller can pass \"80%\", but Ruby has no overloading, so it replaces the 4-argument `downsize(from, to, max_width, max_height, opts)` defined just above it. As a result, `ResizeEmoji` (`OptimizedImage.downsize(path, path, 100, 100, opts)`) now raises ArgumentError because it passes 5 arguments to a method that accepts 3\u20134. Keep one `downsize` that accepts both call shapes, or give the new form a different name and use that name in the controller."
+   },
+   {
+    "id": "S11",
+    "file": "app/assets/javascripts/discourse/lib/utilities.js",
+    "lines": [
+     181,
+     185
+    ],
+    "texto": "The size check and the `file_too_large` message now use a hard-coded 10MB for every upload type. The server still enforces `max_attachment_size_kb` for attachments (site_settings.yml:516). So users see a max size that doesn't match the limit actually applied, and an attachment the client accepts can still be rejected by the server. Keep using `Discourse.SiteSettings['max_' + type + '_size_kb']` for attachments, and only raise the client limit for images, which the server now downsizes."
+   },
+   {
+    "id": "S12",
+    "file": "app/assets/javascripts/discourse/lib/utilities.js",
+    "lines": [
+     245,
+     247
+    ],
+    "texto": "A 413 response comes from the web server's client_max_body_size. The site setting descriptions tell admins to keep that value in sync with the max_*_size_kb settings, and it has nothing to do with a fixed 10MB. Hard-coding 10 * 1024 here means the alert can tell users the wrong maximum size whenever the real limit differs."
+   },
+   {
+    "id": "S13",
+    "file": "app/controllers/uploads_controller.rb",
+    "lines": [
+     63,
+     69
+    ],
+    "texto": "The comment says large images 'will be automatically reduced to allowed size'. The loop stops after 5 downsizes to 80% without checking whether the file is now under max_image_size_kb, and it ignores the return value of downsize. Either reword the comment to say this is a best-effort reduction, or make the code guarantee the result."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#01",
+    "descricao": "downsize is defined twice in OptimizedImage; the new (from, to, dimensions, opts) version overrides the (max_width, max_height) one, so existing callers such as ResizeEmoji that pass width and height now raise ArgumentError.",
+    "textoGolden": "The downsize method is defined twice. The second definition, which expects a single dimensions string parameter, overrides the first, which expected separate max_width and max_height parameters. This makes the original method unreachable and breaks existing code that calls it with separate width and height arguments.",
+    "comentarios": [
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       149,
+       151
+      ],
+      "texto": "WHAT: A second `def self.downsize(from, to, dimensions, opts={})` is defined that overrides the existing `downsize(from, to, max_width, max_height, opts={})` at lines 145-147. WHY: Ruby uses the last definition, so the effective downsize now only accepts 3-4 args, and the existing caller app/jobs/regular/resize_emoji.rb:14 (`OptimizedImage.downsize(path, path, 100, 100, opts)`) passes 5 args and raises ArgumentError (wrong number of arguments, given 5, expected 3..4), breaking emoji resizing. HOW: Remove the duplicate; keep a single downsize method whose signature matches all callers (the 4-arg uploads_controller call `downsize(path, path, \"80%\", allow_animation: ...)` and the 5-arg ResizeEmoji call), or rename one of them."
+     },
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       145,
+       151
+      ],
+      "texto": "`downsize` is defined twice: the original 5-param form `downsize(from, to, max_width, max_height, opts)` at lines 145-147 and the new 4-param form `downsize(from, to, dimensions, opts)` at lines 149-151. Ruby keeps only the last definition, so the effective signature is now 4 params and the 5-param version is dead code. The pre-existing consumer app/jobs/regular/resize_emoji.rb:14 still calls `OptimizedImage.downsize(path, path, 100, 100, opts)` with 5 positional args, which now raises ArgumentError on every emoji resize. Either update that caller to the new `dimensions` form or remove the redundant override so the old signature keeps working."
+     },
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       145,
+       151
+      ],
+      "texto": "`self.downsize` is defined twice in the same class scope (line 145 `(from, to, max_width, max_height, opts={})` and the new line 149 `(from, to, dimensions, opts={})`). Ruby keeps only the last definition, so the 4-argument version is dead and unreachable. The existing caller `OptimizedImage.downsize(path, path, 100, 100, opts)` in app/jobs/regular/resize_emoji.rb:14 passes 5 arguments and will now raise ArgumentError (expected 3..4). Remove the duplicate definition (keep only the `dimensions`-based one, or convert resize_emoji's call), otherwise emoji resizing breaks."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#02",
+    "descricao": "The client-side upload size check hardcodes 10 MB instead of the per-type max_<type>_size_kb setting, so attachment limits diverge from the server: larger allowed attachments are blocked and smaller limits are only enforced server-side.",
+    "textoGolden": "Hardcoding maxSizeKB = 10 * 1024 ignores Discourse.SiteSettings['max_' + type + '_size_kb'], so the client-side limit can diverge from server-side and per-type settings (also applies to the 413 handler below).",
+    "comentarios": [
+     {
+      "file": "utilities.js",
+      "lines": [
+       179,
+       249
+      ],
+      "texto": "Hardcoded max size literal 10 * 1024 replaces site-setting-derived max size. Behavioral concern outside assigned class."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "The fixed 10 MB client limit is applied to attachments as well as images, replacing max_attachment_size_kb. Sites configured to allow attachments larger than 10 MB can no longer upload those valid files through the composer, although UploadValidator still permits them. Apply the new input ceiling only to images and retain the configured attachment limit."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       180,
+       184
+      ],
+      "texto": "WHAT: Client check hardcodes maxSizeKB to 10*1024 instead of Discourse.SiteSettings['max_'+type+'_size_kb'], losing image vs attachment distinction. WHY: Sites with smaller max_attachment_size_kb pass client validation then fail server-side, and sites with limits >10MB incorrectly block valid uploads with wrong max_size_kb message. HOW: Restore per-type SiteSetting lookup (keep 10MB only as image downsize ceiling)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#03",
+    "descricao": "The upload downsizing passes a percentage ('80%') as dimensions, but for animated GIFs the gifsicle path uses --resize-fit, which expects WxH geometry, so downsizing silently fails.",
+    "textoGolden": "Passing 80% as the dimensions can fail for animated GIFs when allow_animated_thumbnails is true, since the animated path uses gifsicle --resize-fit which expects WxH geometry, not a percentage; downsizing would then silently fail.",
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "The controller passes the percentage string `\"80%\"` as the dimensions argument to `OptimizedImage.downsize`, but the consumer requires explicit `WxH` geometry: the code this PR deleted built exactly `\"#{width}x#{height}\"`, and the animated path runs `gifsicle --resize-fit #{dimensions}`, which rejects a percentage. Pass an explicit size (e.g. a computed `\"WxH\"` from the max KB target) so the auto-downsize actually reduces the file, rather than silently no-oping and leaving oversized uploads."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       70
+      ],
+      "texto": "Caller passes \"80%\" as dimensions to OptimizedImage.downsize, but the downsize/optimize instruction builders in optimized_image.rb expect explicit \"WxH\" geometry (interpolated as -resize #{dimensions}\\>). A bare percentage does not satisfy that contract and will produce a malformed geometry. Fix the caller to supply WxH dimensions or add explicit percentage handling to the callee."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#04",
+    "descricao": "Auto-downsizing passes the upload tempfile path, which lacks a .gif extension, so the animated branch is never chosen and convert keeps only the first frame, flattening oversized animated GIFs.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       64,
+       70
+      ],
+      "texto": "WHAT: The new auto-downsize call passes a tempfile path whose name has no `.GIF` extension, so `optimize` never selects the animated branch (`method_name += \"_animated\" if opts[:allow_animation] && from =~ /\\.GIF$/i`) and uses `downsize_instructions`, which runs `convert from[0]` and keeps only the first frame. WHY: Animated GIFs larger than max_image_size_kb that are uploaded through this path have their animation flattened to a single frame even though SiteSetting.allow_animated_thumbnails is enabled. HOW: Detect the image type from the original filename/content-type rather than the tempfile path (or pass a flag) so the gifsicle animated downsize path is used for GIF inputs."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "Passing the multipart tempfile path to downsize prevents animation detection when that path does not end in .gif, even when allow_animated_thumbnails is enabled. OptimizedImage.optimize checks the path suffix and otherwise uses convert with input[0], so oversized animated GIF uploads are permanently flattened to their first frame. Preserve the original image extension in the processing path or pass the image format explicitly to select animated processing."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#05",
+    "descricao": "The comment promises images are reduced to the allowed size, but the loop only tries five 80% reductions with no guarantee of reaching the limit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       70
+      ],
+      "texto": "The comment says large images are \"automatically reduced to allowed size\", but the loop only resizes by 80% up to 5 attempts (\u22480.33\u00d7 of the original in the best case) and then stops without any check that the result actually meets `max_image_size_kb`. The prose promises a guarantee the code does not provide; either make the loop actually converge to the allowed size or reword the comment to state that the image is only attempted to be reduced."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#06",
+    "descricao": "The downsize retry loop ignores the false return of a failed conversion and repeats the same failing ImageMagick call up to five times.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       66,
+       68
+      ],
+      "texto": "The retry loop ignores downsize's false return value and retries failed conversions while the file remains oversized. convert_with returns false on converter failure, so an unsupported or malformed oversized image launches the same failing external conversion up to five times per upload without any changed input. Break on a failed downsize result and return an upload error rather than repeating the conversion."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       64,
+       69
+      ],
+      "texto": "WHAT: Downsize loop ignores OptimizedImage.downsize return value and retries up to 5 times unconditionally while checking tempfile.size. WHY: Failed converts (e.g. SVG, invalid 80%> geometry, corrupt image) burn 5 ImageMagick runs then Upload.create_for still runs with oversized/unmodified file and fails validation, wasting CPU and breaking the feature. HOW: Break on false return and handle failure."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#08",
+    "descricao": "Claims up to five synchronous ImageMagick runs per oversized upload block request threads and enable DoS.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       69
+      ],
+      "texto": "WHAT: Up to 5 synchronous OptimizedImage.downsize + ImageOptim convert runs execute inline in create_upload request cycle for every oversized image. WHY: Blocks the Rails request thread with CPU-intensive shell-outs per upload, enabling easy request-thread exhaustion/DoS with large images. HOW: Move downsizing to background job or enforce single-pass/timeout."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#09",
+    "descricao": "Claims the downsize loop checking tempfile.size may never terminate because of a stale cached size, causing infinite loops.",
+    "textoGolden": "The loop checking `tempfile.size` may never terminate correctly due to stale cached size, leading to potential infinite loops or incorrect file handling after modifications.",
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+    "descricao": "The 413 upload error message states a hard-coded 10 MB maximum that may not match the limit the server or web server actually enforces.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "notification-rule-processing-engine-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "8df850371034b73dc4dd9908cc30fa09f12a1f97",
+  "base": "47e5bd23163e6037fc0741068ac78930bba2769f",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     308,
+     313
+    ],
+    "texto": "WHAT: When the rule is undefined (skipToken), useAllGrafanaPromRuleAbilities still returns Duplicate as [AlwaysSupported, hasPermission(grafana create)], because loading is false and MaybeSupported becomes AlwaysSupported. WHY: AlertRuleMenu ORs this with the ruler ability, so the Duplicate item shows for datasource/cloud rules whenever the user has the Grafana rule-create permission, even if the ruler result says it is unsupported or not allowed. HOW: Treat a missing rule as NotSupported, e.g. `const MaybeSupported = !rule || loading ? NotSupported : AlwaysSupported;`."
+   },
+   {
+    "id": "S2",
+    "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+    "lines": [
+     94,
+     96
+    ],
+    "texto": "WHAT: canSilence can now be true from the promRule ability alone, but RuleActionsButtons.V2 only renders SilenceGrafanaRuleDrawer when `rulerRuleType.grafana.alertingRule(rule)` is true, and the list view passes only promRule. WHY: In the list view the 'Silence notifications' item shows, but clicking it sets state that never renders a drawer, so the action does nothing. HOW: Make the silence drawer render from the promRule when no ruler rule is available, or keep the item hidden when the ruler rule is missing."
+   },
+   {
+    "id": "S3",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     323,
+     330
+    ],
+    "texto": "WHAT: The new prom-rule abilities gate Pause, Restore, ModifyExport and DeletePermanently on `isAlertingRule`, while the ruler version used `isGrafanaManagedAlertRule`, which is true for Grafana recording rules too. WHY: Grafana-managed recording rules in the list view no longer offer Pause or Export, even though they are supported. HOW: Use `prometheusRuleType.grafana.rule(rule)` for these entries and keep `isAlertingRule` only for Silence."
+   },
+   {
+    "id": "S4",
+    "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+    "lines": [
+     157,
+     162
+    ],
+    "texto": "WHAT: The `key={key}` prop was dropped when GrafanaRuleLoader was replaced with GrafanaRuleListItem inside `rules.map`. WHY: React falls back to index keys, so items reuse the wrong component state (e.g. an open menu or the silence/delete modal) as filtered results stream in or reorder, and it logs key warnings. HOW: Restore `key={key}` on GrafanaRuleListItem."
+   },
+   {
+    "id": "S5",
+    "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+    "lines": [
+     47,
+     47
+    ],
+    "texto": "WHAT: List items now pass only `promRule` to RuleActionsButtons, but AlertRuleMenu still shows Pause and Delete only when `rulerRule` is present (`rulerRuleType.grafana.rule(rulerRule)` / `canDelete && rulerRule`). WHY: Pause and Delete disappear from every Grafana rule in the list view, even for users with folder edit/delete permissions, which is a functional regression from the previous ruler-backed list. HOW: Let MenuItemPauseRule and the delete handler work from the GrafanaPromRuleDTO (uid + groupIdentifier), or fetch the ruler rule when the user triggers the action."
+   },
+   {
+    "id": "S6",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     308,
+     309
+    ],
+    "texto": "The comment says these rules are always supported and have no loading state, yet the next line returns NotSupported while `loading` is true. That flag is the folder-fetch loading state from useIsGrafanaPromRuleEditable. A reader would wrongly assume the abilities never change between unsupported and supported, so the comment should describe the folder-loading gate."
+   },
+   {
+    "id": "S7",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     301,
+     330
+    ],
+    "texto": "The ruler version gated Pause, Restore, ModifyExport and DeletePermanently on `rulerRuleType.grafana.rule`, which matches every Grafana-managed rule. The prom version uses `prometheusRuleType.grafana.alertingRule`, which matches alerting rules only. Because the list view now checks abilities only through prom rules, Grafana recording rules lose these menu actions there. To keep the old behavior, gate these actions on `prometheusRuleType.grafana.rule(rule)` and keep the alerting-only check for Silence."
+   },
+   {
+    "id": "S8",
+    "file": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+    "lines": [
+     56,
+     61
+    ],
+    "texto": "In the new list view, only `promRule` is passed, so `rule` is undefined. AlertRuleMenu now enables Silence from the Grafana prom-rule abilities, so the menu item appears and clicking it sets `showSilenceDrawer=true`. But the drawer is gated on `rulerRuleType.grafana.alertingRule(rule)`, which is always false here, so the click opens nothing. Either render the silence drawer from the promRule (its uid and labels) when no ruler rule exists, or don't enable Silence when there is no ruler rule."
+   },
+   {
+    "id": "S9",
+    "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+    "lines": [
+     85,
+     102
+    ],
+    "texto": "The test name promises a check of the action menu options, but the body never opens the menu. Its extra assertions only repeat what the lookup already proved: the button was found by its accessible name 'More', so its aria-label and text are already known to be 'More'. If AlertRuleMenu stopped rendering any items, this test would still pass, so it should click More and assert on the menu items."
+   },
+   {
+    "id": "S10",
+    "file": "public/app/features/alerting/unified/components/rules/RulesTable.test.tsx",
+    "lines": [
+     100,
+     145
+    ],
+    "texto": "RulesTable gives AlertRuleMenu a ruler-backed Grafana rule, and AlertRuleMenu allows Delete when either the ruler check or the Grafana prom-rule check passes. These tests set only the useGrafanaPromRuleAbilities mock and leave useRulerRuleAbilities at its default of [false,false]. As a result, the ruler-based Delete permission check is never set to allow or deny, and a broken ruler path would go unnoticed."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#01",
+    "descricao": "The pause menu item is still gated on a Grafana ruler rule, but the list view now passes only the Prometheus rule, so Pause/Resume disappears for list-view rules even when the user may pause them.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       83,
+       83
+      ],
+      "texto": "The new Prometheus-based pause ability cannot display Pause or Resume for list-view rules because the menu still requires rulerRuleType.grafana.rule(rulerRule) before rendering MenuItemPauseRule. GrafanaRuleListItem now supplies only promRule, so these actions disappear even for editable rules. Adapt the pause menu item to accept the Grafana identifier and Prometheus pause state, or load the ruler rule on demand."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#02",
+    "descricao": "The Delete menu item still requires a ruler rule, which list-view Grafana rules no longer provide, so users with delete permission lose the Delete action.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       85,
+       87
+      ],
+      "texto": "The new Prometheus-based delete ability is still gated by `canDelete && rulerRule` when rendering the Delete item. Both Grafana list-view paths now omit rulerRule, so users with delete permission lose the Delete action entirely. Render deletion using the available identifier and group identifier instead of requiring the ruler DTO, adapting the callback contract accordingly."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#03",
+    "descricao": "When the Grafana prom-rule branch is skipped (datasource rules), useAllGrafanaPromRuleAbilities(undefined) still reports Duplicate as supported and allowed by Grafana create permission, and AlertRuleMenu ORs it with the ruler ability, so Duplicate appears on cloud rules even when the ruler check denies it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       89,
+       92
+      ],
+      "texto": "WHAT: canDuplicate ORs ruler ability with grafana ability where grafana path is skipToken=>undefined for cloud rules, and useAllGrafanaPromRuleAbilities(undefined) returns Duplicate=[true,true] whenever the user has global Grafana create permission. WHY: Any user with Grafana rule-create gets Duplicate menu item on cloud/Mimir rules even when ruler abilities deny it \u2014 incorrect authorization gating. HOW: Return NotSupported for all abilities when rule is skipToken/undefined, or gate grafana branch on prometheusRuleType.grafana.rule(promRule) before ORing."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       307,
+       314
+      ],
+      "texto": "useAllGrafanaPromRuleAbilities returns AlwaysSupported for Duplicate when rule is undefined (skipToken): loading is false from the !rule early-return, so MaybeSupported=true and duplicateSupported=true. ORed in AlertRuleMenu/RuleActionsButtons this leaks Grafana create permission into non-Grafana rules. Gate MaybeSupported/duplicateSupported on rule existence (e.g. NotSupported when !rule)."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       287,
+       318
+      ],
+      "texto": "useAllGrafanaPromRuleAbilities must return NotSupported for all actions when rule is undefined (skipToken). Currently MaybeSupported falls back to AlwaysSupported when !loading, so Duplicate=[true, global-create] is true for a cloud rule passed as skipToken, and AlertRuleMenu/RuleActionsButtons OR-logic then incorrectly enables Duplicate (and Explore). Guard with if (!rule) return all-NotSupported abilities or make MaybeSupported require rule."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#04",
+    "descricao": "The refactor of useAllAlertRuleAbilities into useAllRulerRuleAbilities drops the isFederatedRuleGroup check (isFederated is hardcoded false), so federated Mimir rules are reported as editable and deletable.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       223,
+       228
+      ],
+      "texto": "useAllAlertRuleAbilities now delegates to useAllRulerRuleAbilities, which hardcodes isFederated = false. The previous isFederatedRuleGroup(rule.group) check is gone, so federated Mimir rules are no longer treated as immutable and can show edit and delete abilities. Keep the federation check in this wrapper, or pass the federation state into the shared hook."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       227,
+       228
+      ],
+      "texto": "Delegating useAllAlertRuleAbilities to useAllRulerRuleAbilities discards the group's federation status and replaces the previous isFederatedRuleGroup(rule.group) check with a constant false. Legacy RuleActionsButtons consequently enables editing rules in groups with source_tenants, although these groups were explicitly immutable before this change. Preserve the CombinedRule federation check in the wrapper or pass federation status into the delegated ability calculation."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       227,
+       228
+      ],
+      "texto": "Preserve the federated-group immutability check when delegating this CombinedRule hook. Previously useAllAlertRuleAbilities inspected rule.group with isFederatedRuleGroup and disabled modification/removal for federated rules. The replacement delegates to a hook that hardcodes isFederated=false and receives no group information. Existing useAlertRuleAbility/useAlertRuleAbilities consumers therefore now receive supported update/delete abilities for federated rules when datasource permissions allow them, exposing operations that the previous contract explicitly prohibited. Pass the federation state through or retain that restriction in this wrapper."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#05",
+    "descricao": "The Grafana prom-rule abilities gate Pause, Restore, Export and DeletePermanently on alertingRule(rule) while the comment claims it checks Grafana-managed rules, so Grafana recording rules lose these actions in the list view.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       301,
+       302
+      ],
+      "texto": "The comment says all GrafanaPromRuleDTO rules are Grafana-managed, but the variable it describes is `isAlertingRule`. That variable is true only for alerting rules and false for Grafana recording rules. Fix the comment, or rename the variable, so it says the check is for alerting rules. As written, readers will expect Pause, Export and Silence to be enabled for recording rules."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       301,
+       328
+      ],
+      "texto": "The comment says all GrafanaPromRuleDTO rules are Grafana-managed, but the check used is alertingRule(rule), which is false for recording rules. Pause, Restore, ModifyExport and DeletePermanently are therefore wrongly disabled for Grafana recording rules, where the old isGrafanaManagedAlertRule check allowed them. Use prometheusRuleType.grafana.rule(rule) for these abilities, and keep alertingRule only for Silence."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#06",
+    "descricao": "The comment claims GrafanaPromRuleDTO abilities have no loading state, but the next line makes support depend on the folder loading flag.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       308,
+       309
+      ],
+      "texto": "The comment says there is no loading state, but the next line is `loading ? NotSupported : AlwaysSupported`. `loading` comes from the folder fetch. Update the comment to say that support depends on the folder loading state."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#07",
+    "descricao": "The Grafana branch of the filtered rule list renders GrafanaRuleListItem without a key prop, so React reconciles the streaming list by index and warns about missing keys.",
+    "textoGolden": "The rendered GrafanaRuleListItem is missing the required key prop for React list items. This can cause rendering issues when the list order changes.",
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+      "lines": [
+       157,
+       162
+      ],
+      "texto": "WHAT: The grafana branch of the filtered list renders <GrafanaRuleListItem .../> without a `key` prop, dropping the `key={key}` that the replaced <GrafanaRuleLoader key={key} .../> had. WHY: `rules.map` renders a dynamic list keyed by getRuleKey/hashRule; without a key React logs duplicate-key warnings and reconciles rows by index, so as the async rule stream updates/reorders the wrong rule row can be reused/mutated (stale state, swapped actions). HOW: add `key={key}` (the value is already destructured on line 152) to the <GrafanaRuleListItem> element."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+      "lines": [
+       157,
+       162
+      ],
+      "texto": "WHAT: Grafana branch of FilterViewResults renders GrafanaRuleListItem without key={key} while datasource and unknown branches pass key. WHY: Breaks React list reconciliation \u2014 wrong item reuse, stale actions/state and console key warnings for every Grafana hit. HOW: Add key={key} to the GrafanaRuleListItem element."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#08",
+    "descricao": "The test named 'should render More button with action menu options' only checks the More button exists, never the menu options.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       101
+      ],
+      "texto": "The test 'should render More button with action menu options' only checks that the More button exists. It finds the button by name 'More', so the aria-label and text assertions are tautological. It would pass even if the menu had no actions or the abilities were broken. Click the button and assert the expected menu items, or rename the test to match what it checks."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       102
+      ],
+      "texto": "Test named 'should render More button with action menu options' never verifies any action menu option: the body only asserts the More button exists and has aria-label/text 'More'. It would still pass if the dropdown were rendered empty (Silence/Duplicate/Copy link/Export all missing), i.e. the behaviour the name promises is not covered. Either open the menu and assert the menu items, or rename the test to reflect that it only checks the trigger button's rendering/accessibility."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       102
+      ],
+      "texto": "Test named 'should render More button with action menu options' never opens the menu nor asserts menu items \u2014 it only checks More button presence/aria/text. Click More and assert expected menuitems (or rename to 'should render More button') so it fails if menu actions break."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#09",
+    "descricao": "GrafanaGroupLoader's JSDoc still says it loads from Prometheus and Ruler endpoints after the ruler query was removed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx",
+      "lines": [
+       24,
+       28
+      ],
+      "texto": "The JSDoc for GrafanaGroupLoader still says \"Loads an evaluation group from Prometheus and Ruler endpoints.\" but this PR removed the ruler API query entirely \u2014 the component now only calls useGetGrafanaGroupsQuery (Prometheus). The documentation describes a data source the function no longer consumes; update it to state only the Prometheus endpoint is loaded (and the same stale \"Ruler response\" reference in the expectedRulesCount prop doc at lines 18\u201319 should be corrected)."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#11",
+    "descricao": "For list-view Grafana rules RuleActionsButtons gets only promRule, so the Silence menu item is shown but the silence drawer, still gated on a ruler alerting rule, never renders and clicking Silence does nothing.",
+    "textoGolden": "RuleActionsButtons is invoked with only promRule, but SilenceGrafanaRuleDrawer inside RuleActionsButtons still depends on a Grafana Ruler rule being present, so for Grafana rules coming from list views the 'Silence notifications' menu entry (now driven by Grafana Prom abilities) will toggle showSilenceDrawer without ever rendering the drawer. This means clicking 'Silence notifications' for these rules has no visible effect, even when abilities indicate silencing is allowed.",
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+      "lines": [
+       47,
+       47
+      ],
+      "texto": "Passing only promRule enables the Silence notifications menu item but leaves RuleActionsButtons.V2 unable to render its silence drawer, which is guarded by rulerRuleType.grafana.alertingRule(rule). Clicking Silence only updates showSilenceDrawer and displays nothing because rule is undefined. Update the drawer to accept a rule UID\u2014the inspected SilenceGrafanaRuleDrawer only needs grafana_alert.uid\u2014and allow the Prometheus alerting-rule path to render it."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+      "lines": [
+       47,
+       47
+      ],
+      "texto": "The new list item passes only promRule to RuleActionsButtons, but that component renders SilenceGrafanaRuleDrawer only under `rulerRuleType.grafana.alertingRule(rule) && showSilenceDrawer`. With rule undefined, clicking the newly enabled 'Silence notifications' action only sets state and never opens a drawer. Adapt the silence rendering path to load/use the rule by its Prometheus identifier before switching this caller to promRule-only."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+      "lines": [
+       130,
+       144
+      ],
+      "texto": "WHAT: getEditableIdentifier now enables a prom-only path (Grafana uid identifier with rulerRule undefined) but the silence drawer still renders only when rulerRuleType.grafana.alertingRule(rule) is true. WHY: In the list view Silence menu item can be shown via grafana abilities, clicking it sets showSilenceDrawer but the drawer never mounts, so Silence silently does nothing. HOW: Gate the drawer on promRule as well or provide a prom-based silence drawer."
+     }
+    ]
+   }
+  ]
+ },
+ "feature-localization-fallbacks-server-side-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "ecfa17b5a79dfdc91e7a4d50b42ae78a35d0a293",
+  "base": "728845d008f06828630a632e5c7d67e11bf15deb",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "config/initializers/i18n.rb",
+    "lines": [
+     20,
+     22
+    ],
+    "texto": "WHAT: The fallback locales are only loaded by FallbackLocaleList#ensure_loaded!, and only ApplicationController calls it; I18n.translate loads just config.locale. WHY: Code that switches locale outside the controller (PostAlerter's I18n.with_locale(user.effective_locale), Jobs::Base, PostDestroyer, JsLocaleHelper) falls back to :en or the site locale even when that locale was never loaded, so it returns 'translation missing' instead of the fallback text. HOW: Load the whole fallback chain where translation happens, e.g. in I18n.translate call `I18n.fallbacks.ensure_loaded!` (or load each locale from `fallbacks[config.locale]`) instead of loading only config.locale."
+   },
+   {
+    "id": "S2",
+    "file": "config/initializers/i18n.rb",
+    "lines": [
+     17,
+     17
+    ],
+    "texto": "WHAT: The fallback chain now depends on SiteSetting.default_locale, but the translate LRU cache key is still only key+locale+backend id. WHY: A result computed before a fallback locale was loaded ('translation missing'), or before an admin changed default_locale, stays frozen in the cache and keeps being served. HOW: Add the fallback chain to the cache key, e.g. include `SiteSetting.default_locale` in `k`, or clear `@cache` when default_locale changes."
+   },
+   {
+    "id": "S3",
+    "file": "lib/freedom_patches/translate_accelerator.rb",
+    "lines": [
+     62,
+     68
+    ],
+    "texto": "`I18n.fallbacks` now sends lookups to the site default locale and to :en, but `translate` still loads only `config.locale`. The fallback locales are loaded only by the new `ensure_loaded!` call in ApplicationController. Translations made outside a controller request (jobs, mailers, console) therefore fall back to locales that were never loaded, and the LRU cache stores the resulting \"translation missing\" string, so `translate` should load every locale in the fallback chain."
+   },
+   {
+    "id": "S4",
+    "file": "lib/freedom_patches/translate_accelerator.rb",
+    "lines": [
+     62,
+     68
+    ],
+    "texto": "Fallback locales (site default, :en) are loaded only by the new `I18n.fallbacks.ensure_loaded!` in ApplicationController, while `translate` still loads only `config.locale`. In Sidekiq jobs, mailers or rake tasks, a key missing in the user's locale falls back to a locale that was never loaded, and the resulting \"translation missing\" string is frozen into the LRU cache under the real key, so it keeps being returned after the fallback locale loads. Load the fallback chain inside `translate` (or `load_locale`) itself, not only in the controller."
+   },
+   {
+    "id": "S5",
+    "file": "lib/freedom_patches/translate_accelerator.rb",
+    "lines": [
+     62,
+     68
+    ],
+    "texto": "With I18n::Backend::Fallbacks enabled, lookups now also read SiteSetting.default_locale and :en, but `translate` still only calls load_locale(config.locale). The fallback locales are loaded only by `I18n.fallbacks.ensure_loaded!` in ApplicationController#set_locale. In jobs, mailers and rake tasks the fallback chain therefore points at locales that were never loaded, and missing keys come back as 'translation missing' instead of the English text; to fix this, have translate load every locale in I18n.fallbacks[config.locale]."
+   },
+   {
+    "id": "S6",
+    "file": "lib/freedom_patches/translate_accelerator.rb",
+    "lines": [
+     62,
+     68
+    ],
+    "texto": "The new Fallbacks backend in config/initializers/i18n.rb looks up keys in the site default locale and in :en, but `translate` only lazy-loads `config.locale`. The fallback locales are loaded only when ApplicationController calls `I18n.fallbacks.ensure_loaded!`, so translations in jobs, mailers or other non-controller code fall back to unloaded locales and return 'translation missing', and the cache keeps that result. Load the whole fallback chain inside `translate`, for example by replacing the single `load_locale(config.locale)` with `I18n.fallbacks.ensure_loaded!`."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+    "descricao": "Fallback locale catalogs are only loaded in the controller's set_locale filter, while translate loads just the current locale, so translations outside requests (jobs, mailers) cannot fall back to the site default or English.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/application_controller.rb",
+      "lines": [
+       159,
+       159
+      ],
+      "texto": "Fallback catalogs are ensured loaded only in the controller filter, leaving non-controller translation paths without the catalogs required by the newly enabled fallback backend. Jobs::Base sets I18n.locale directly and PostAlerter uses I18n.with_locale, while the accelerator loads only the current locale and backend fallback lookups bypass that loader; missing keys therefore still produce missing translations or skip the configured site fallback until another request happens to load those catalogs. Ensure the full fallback chain is loaded at the translation boundary, rather than relying solely on the controller filter."
+     },
+     {
+      "file": "lib/freedom_patches/translate_accelerator.rb",
+      "lines": [
+       62,
+       69
+      ],
+      "texto": "The new fallbacks contract requires the fallback locales (site default and :en, from FallbackLocaleList#[]) to be loaded before Backend::Simple#translate is asked for them \u2014 Backend::Simple only returns already-loaded translations. This PR added I18n.ensure_loaded!/I18n.fallbacks.ensure_loaded! but wired it only into ApplicationController#set_locale, and the loader that actually gates every translation, I18n.translate (line 68), still loads only `config.locale`. As a result, any I18n.t performed outside the request cycle (console, background jobs, mailers) or before set_locale runs will not load the fallback locales and will silently return 'translation missing' instead of the fallback the new I18n.fallbacks advertises. Fix: have translate ensure the fallback chain is loaded (e.g. call I18n.fallbacks.ensure_loaded! / load the fallback locales here), not rely on the controller hook."
+     },
+     {
+      "file": "lib/freedom_patches/translate_accelerator.rb",
+      "lines": [
+       67,
+       68
+      ],
+      "texto": "translate loads only config.locale, but the new fallback chain (default_locale, :en) is loaded only by the controller's I18n.fallbacks.ensure_loaded!. Outside controllers (jobs, mailers, rake), a key missing in the current locale falls back to a locale that is not loaded, so it returns 'translation missing', and the LRU cache then stores that result. Fix: in translate, call I18n.fallbacks.ensure_loaded! (or load each locale in fallbacks[config.locale]) before the lookup."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#06",
+    "descricao": "The translation cache key does not include the site or its default locale, but fallback results now depend on SiteSetting.default_locale, so multisite processes or a changed default locale serve stale fallback translations.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "config/initializers/i18n.rb",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "The new fallback order depends on SiteSetting.default_locale, but the accelerator's translation cache does not include that setting or the current site in its key. In a multisite process, two sites with the same user locale and different default locales reuse the first site's cached fallback translation; changing the default locale also leaves cached fallback results stale. Include the effective fallback chain or site/default-locale context in the translation cache key."
+     }
+    ]
+   }
+  ]
+ },
+ "fixing-re-authentication-with-passkeys-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "25bf964a844ea0bc64dc838bff038345048cb1fa",
+  "base": "744e031019af8dbaacf407e792fbb3756364e2b4",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java",
+    "lines": [
+     62,
+     64
+    ],
+    "texto": "WHAT: configuredFor now returns true for users who only have a passkey, but only keycloak.v2/login/login-password.ftl got the passkeys macro; base/login/login-password.ftl has no webauthn form or button. WHY: In base-derived themes (\"keycloak\" and custom themes), a passkey-only user reaching a required PasswordForm sees a password field they cannot use and no passkey option, and the old not-configured path (setting the password required action) is skipped. HOW: Add `<@passkeys.conditionalUIData />` (and its import) to base/login/login-password.ftl so every theme that inherits it shows the passkey option."
+   },
+   {
+    "id": "S2",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java",
+    "lines": [
+     281,
+     283
+    ],
+    "texto": "This comment was copied from the other tests and says the block sets a passwordless policy for discoverable keys. The code below only turns passkeys off for the realm, which is the scenario this test's javadoc describes. Change the comment so it says passkeys are disabled."
+   },
+   {
+    "id": "S3",
+    "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java",
+    "lines": [
+     51,
+     54
+    ],
+    "texto": "After someone submits only a username, `PasswordForm.authenticate` calls `webauthnAuth.fillContextForm(context)`. The new `authn_select` block in `passkeys.ftl` then puts that user's WebAuthn credential IDs into the page as hidden `authn_use_chk` inputs. Because the block is only rendered when the user has a passkey, any unauthenticated visitor can type a username and learn whether that account has a passkey, plus its credential IDs. Limit this to re-authentication: only fill the user-specific data when `USER_SET_BEFORE_USERNAME_PASSWORD_AUTH` is set, and otherwise use the user-less conditional UI data."
+   },
+   {
+    "id": "S4",
+    "file": "WebAuthnConditionalUIAuthenticator",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "Missing test coverage: no test triggers a passkey failure during re-authentication, so the new `AuthenticatorUtils.setupReauthenticationInUsernamePasswordFormError` call in `WebAuthnConditionalUIAuthenticator` is never exercised. Consider adding a test where passkey authentication fails after `prompt=login` and asserting the resulting error and form state."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#03",
+    "descricao": "PasswordForm now accepts passkey-only users, but only the keycloak.v2 login-password.ftl renders the passkeys conditional UI; the base template (used by the legacy keycloak theme) does not, so a passkey-only user is shown a password-only form they cannot complete.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java",
+      "lines": [
+       63,
+       63
+      ],
+      "texto": "PasswordForm.configuredFor now accepts passkey-only users even when the active login theme renders the unchanged base login-password.ftl, which contains no passkeys UI. The legacy keycloak theme inherits that template, so a user without a password reaches a password-only challenge with no way to authenticate instead of being able to use the newly accepted passkey credential. Add the passkeys import and conditionalUIData invocation to the base login-password.ftl as well as the keycloak.v2 override."
+     }
+    ]
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#04",
+    "descricao": "The comment 'setup webauthn data when passkeys enabled' does not mention that the condition also requires a selected user to own a passkey credential.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java",
+      "lines": [
+       114,
+       117
+      ],
+      "texto": "The new comment says webauthn data is set up \"when passkeys enabled\", but the guard `isConditionalPasskeysEnabled(context.getUser())` also requires that a known/already-selected user actually has a passkey credential. With realm passkeys enabled and a selected user without a passkey, `fillContextForm` is skipped (the test `passwordLogin_reauthenticationOfUserWithoutPasskey` relies on exactly this), so the comment misdescribes the condition it documents. Rephrase it to match the code, e.g. \"setup webauthn data when conditional passkeys can be used (user unknown or user has a passkey)\"."
+     }
+    ]
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#06",
+    "descricao": "The test comment says it sets the passwordless policy for discoverable keys, but the updater only disables passkeys for the realm.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java",
+      "lines": [
+       281,
+       283
+      ],
+      "texto": "The comment 'set passwordless policy for discoverable keys' is stale. The updater now only calls setWebAuthnPolicyPasskeysEnabled(Boolean.FALSE), so it disables passkeys for the realm. Change the comment to say that passkeys are disabled for the realm."
+     }
+    ]
+   }
+  ]
+ },
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "5b229316ee4c661836ed1161139692a3e8527444",
+  "base": "98fa098e6fade3097a11fe7f99a98a4e6ffb4728",
+  "sugestoes": [],
+  "issues": [
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#01",
+    "descricao": "The flex-item styles target the inner .extra-info-wrapper instead of the component's root div, so in the flexbox header a long topic title keeps its full width and pushes the navigation panel out instead of being truncated.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/base/topic.scss",
+      "lines": [
+       29,
+       30
+      ],
+      "texto": "The flex-item styling targets the inner .extra-info-wrapper rather than the outer div generated by header-extra-info's Ember.Component. With .contents now using flexbox, that outer div retains its automatic minimum width, so a long nowrap topic title cannot shrink to the available space and pushes the navigation panel outside the header instead of being ellipsized by the existing desktop truncation rules. Move the extra-info-wrapper class onto the component's root element and set min-width: 0 on that flex item so ordering and truncation apply to the actual header child."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#02",
+    "descricao": "The align-items mixin emits no -moz-box-align, so on old Firefox versions using the display:-moz-box fallback the advertised vertical centering is not applied.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+      "lines": [
+       117,
+       122
+      ],
+      "texto": "The alignment mixin does not match the Mozilla fallback emitted by flexbox(): when display: -moz-box is selected, neither align-items nor the WebKit/MS declarations control its cross-axis alignment. Consequently @include align-items(center) in the header and small-action leaves those children at the legacy default instead of vertically centering them. Emit -moz-box-align: $alignment alongside -webkit-box-align so the advertised fallback produces the same alignment."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#03",
+    "descricao": "The align-items mixin emits -ms-align-items, which never existed in IE/Edge; the legacy property is -ms-flex-align, so the declaration is dead.",
+    "textoGolden": "-ms-align-items never existed in any version of IE/Edge; the correct legacy property is -ms-flex-align.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+      "lines": [
+       117,
+       123
+      ],
+      "texto": "WHAT: align-items() mixin emits -ms-align-items: $alignment which is not a valid IE10/11 property (only -ms-flex-align exists). WHY: dead declaration shows wrong contract and leaves IE alignment dependent solely on -ms-flex-align, which also breaks for flex-start/flex-end values. HOW: remove the -ms-align-items line and map flex-start/flex-end to start/end for -ms-flex-align/-webkit-box-align."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#05",
+    "descricao": "Removing the float-based right alignment of .d-header .panel leaves the server-rendered (no-JS) header's login panel, which sits inside .row and is not a flex item, no longer right-aligned next to the title.",
+    "textoGolden": "Mixing float: left with flexbox causes layout issues. Further this PR removes the float-based right alignment for .d-header .panel, which may cause the login panel in the non-Ember/noscript header (where .panel is nested inside .row and not a flex item) to stack under the title instead of remaining right-aligned.",
+    "comentarios": []
+   }
+  ]
+ }
+}

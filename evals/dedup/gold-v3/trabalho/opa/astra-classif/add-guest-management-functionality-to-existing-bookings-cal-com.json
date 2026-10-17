@@ -1,0 +1,12 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#opa-01",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "The newly added packages/ui/form/MultiEmailLazy.tsx:3 repeats the size justification from packages/ui/form/PhoneInputLazy.tsx:3. MultiEmail imports only the locale hook and existing UI components (packages/ui/form/MultiEmail.tsx:1-2), unlike the phone-specific dependencies in packages/ui/form/PhoneInput.tsx:3-6; the copied size claim is misleading documentation with no runtime effect.",
+   "severity": "low"
+  }
+ ]
+}

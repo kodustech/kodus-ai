@@ -1,0 +1,428 @@
+{
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Legacy goroutine context derived from cancelled request ctx."
+  },
+  {
+   "id": "S2",
+   "match": "dual-storage-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Legacy.Update gets raw objInfo instead of wrapper with stored object."
+  },
+  {
+   "id": "S3",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage Create failure recorded with recordLegacyDuration."
+  },
+  {
+   "id": "S4",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage Update failure recorded with recordLegacyDuration."
+  },
+  {
+   "id": "S5",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection timed with recordStorageDuration."
+  },
+  {
+   "id": "S6",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete success metric passes name instead of options.Kind."
+  },
+  {
+   "id": "S7",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete puts d.Log instead of enriched log into ctx."
+  },
+  {
+   "id": "S8",
+   "match": "dual-storage-architecture-grafana-codex#13",
+   "newGroup": null,
+   "reason": "Shared mock lets the Create storage-failure case pass with only setupLegacyFn; same root as the issue."
+  },
+  {
+   "id": "S9",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete success metric uses name as kind label."
+  },
+  {
+   "id": "S10",
+   "match": "dual-storage-architecture-grafana-codex#09",
+   "newGroup": null,
+   "reason": "Stale \"not implemented\" List test name."
+  },
+  {
+   "id": "S11",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage Create failure recorded as legacy."
+  },
+  {
+   "id": "S12",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage Update failure recorded as legacy."
+  },
+  {
+   "id": "S13",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection recorded with storage metric."
+  },
+  {
+   "id": "S14",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete passes object name as metric label."
+  },
+  {
+   "id": "S15",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Goroutine context from request ctx cancels legacy write."
+  },
+  {
+   "id": "S16",
+   "match": "dual-storage-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Legacy.Update without updateWrapper diverges."
+  },
+  {
+   "id": "S17",
+   "match": "dual-storage-architecture-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Tests never wait for/assert async legacy writes; shared mock."
+  },
+  {
+   "id": "S18",
+   "match": "dual-storage-architecture-grafana-codex#13",
+   "newGroup": null,
+   "reason": "Create storage-failure case sets only setupLegacyFn, passes via shared mock."
+  },
+  {
+   "id": "S19",
+   "match": "dual-storage-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Legacy.Update receives raw objInfo, stores can drift."
+  },
+  {
+   "id": "S20",
+   "match": "dual-storage-architecture-grafana-codex#sncc-01",
+   "newGroup": null,
+   "reason": "Delete returns on NotFound before deleting legacy-only objects."
+  },
+  {
+   "id": "S21",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "name passed as kind label to metrics."
+  },
+  {
+   "id": "S22",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Swapped legacy/storage metric helpers; vague, closest to storage failures recorded as legacy."
+  },
+  {
+   "id": "S23",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete ctx from d.Log instead of log."
+  },
+  {
+   "id": "S24",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Legacy goroutines use request-derived ctx."
+  },
+  {
+   "id": "S25",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Legacy helper used instead of storage helper."
+  },
+  {
+   "id": "S26",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "name instead of kind label."
+  },
+  {
+   "id": "S27",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Goroutines inherit request ctx and get cancelled."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "S1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "isinstance multiprocessing.Process false for SpawnProcess, hung process not killed."
+  },
+  {
+   "id": "S2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "newGroup": null,
+   "reason": "Cluster-wide memory INFO repeated per flusher buffer."
+  },
+  {
+   "id": "S3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "join breaks on deadline, remaining processes not terminated."
+  },
+  {
+   "id": "S4",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+   "newGroup": null,
+   "reason": "time.sleep(0.1) is a no-op due to monkeypatch."
+  },
+  {
+   "id": "S5",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+   "newGroup": null,
+   "reason": "Docstring says one process per shard."
+  },
+  {
+   "id": "S6",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+   "newGroup": null,
+   "reason": "wait_produce tagged shards vs shard."
+  },
+  {
+   "id": "S7",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#12",
+   "newGroup": null,
+   "reason": "Test counts shards instead of checking exact assignment."
+  },
+  {
+   "id": "S8",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+   "newGroup": null,
+   "reason": "Patched time.sleep makes the wait a no-op."
+  },
+  {
+   "id": "S9",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "SpawnProcess isinstance check skips kill."
+  },
+  {
+   "id": "S10",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "break before terminate on deadline."
+  },
+  {
+   "id": "S11",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "SpawnProcess isinstance check always false."
+  },
+  {
+   "id": "S12",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+   "newGroup": null,
+   "reason": "shards vs shard tag key."
+  },
+  {
+   "id": "S13",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "SpawnProcess isinstance check, kill never runs."
+  },
+  {
+   "id": "S14",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "Early break skips terminate."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "S1",
+   "match": "github-oauth-security-enhancement-sentry#03",
+   "newGroup": null,
+   "reason": "Static pipeline.signature as OAuth state, no CSRF protection."
+  },
+  {
+   "id": "S2",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "metadata[\"sender\"] KeyError."
+  },
+  {
+   "id": "S3",
+   "match": "github-oauth-security-enhancement-sentry#06",
+   "newGroup": null,
+   "reason": "No-Integration branch skips installer ownership check."
+  },
+  {
+   "id": "S4",
+   "match": "github-oauth-security-enhancement-sentry#05",
+   "newGroup": null,
+   "reason": "Token exchange/get_user_info not wrapped in error handling."
+  },
+  {
+   "id": "S5",
+   "match": "github-oauth-security-enhancement-sentry#01",
+   "newGroup": null,
+   "reason": "_(error_short) on variable breaks translation extraction."
+  },
+  {
+   "id": "S6",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "metadata[\"sender\"] KeyError."
+  },
+  {
+   "id": "S7",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "metadata[\"sender\"] KeyError."
+  },
+  {
+   "id": "S8",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "metadata[\"sender\"] KeyError."
+  },
+  {
+   "id": "S9",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "metadata[\"sender\"] KeyError."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Timing-unsafe != comparison of state; different from the static-state issue (a nonce fix would not change the comparison)."
+  },
+  {
+   "id": "S11",
+   "match": "github-oauth-security-enhancement-sentry#10",
+   "newGroup": null,
+   "reason": "test_installation_not_found uses wrong state, never reaches not-found path."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "S1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "zip(error_ids, get_multi values) misaligns ids."
+  },
+  {
+   "id": "S2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Seconds vs milliseconds timestamp comparison."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unbounded nodestore fetch of all error_ids per page; no golden issue."
+  },
+  {
+   "id": "S4",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "Truthiness check treats 0 as absent in mutual exclusion."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "HIDDEN_ATTRIBUTES filter missing on no-search early return; not in golden set."
+  },
+  {
+   "id": "S6",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "Positional zip with get_multi values."
+  },
+  {
+   "id": "S7",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "get_multi order not guaranteed, zip misattaches."
+  },
+  {
+   "id": "S8",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": ".get() treats 0 as absent."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Test mocks delete_matched_rows so None guard is untested; not in golden set."
+  },
+  {
+   "id": "S10",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "Positional zip misaligns events."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default evaluated at class definition."
+  },
+  {
+   "id": "S2",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default evaluated once at import."
+  },
+  {
+   "id": "S3",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default timezone.now() shared."
+  },
+  {
+   "id": "S4",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#03",
+   "newGroup": null,
+   "reason": "empty_array test passes empty dict."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "queued datetime not JSON-safe in celery kwargs; different problem."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+   "newGroup": null,
+   "reason": "FromContext returns new TestLogger instead of receiver."
+  },
+  {
+   "id": "S2",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Test still named TestInstrumentationMiddleware."
+  }
+ ]
+}

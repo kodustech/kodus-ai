@@ -135,7 +135,7 @@ for pasta, chave in RODADAS.items():
 # Rodadas pontuadas pelo juiz Opus contra os TPs do gold v3 (o padrao desde 17/10/26): a sugestao
 # que o juiz casou com um TP herda o TP; o que ele marcou como novo foi agrupado por problema e
 # classificado por Opus e Astra as cegas, com debate (trabalho/<pasta>/debate/estado.json).
-RODADAS_JUIZ = {'sncc': 'sonnet-5.5@cc'}
+RODADAS_JUIZ = {'sncc': 'sonnet-5.5@cc', 'opa': 'opus-5.5@api'}
 for pasta, chave in RODADAS_JUIZ.items():
     R = f'{W}/{pasta}'
     if not os.path.exists(f'{R}/debate/estado.json'):

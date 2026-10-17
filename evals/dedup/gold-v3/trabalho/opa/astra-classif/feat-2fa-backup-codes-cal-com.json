@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "items": [
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#opa-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "apps/web/playwright/login.2fa.e2e.ts:53 asserts the truthiness of the Promise returned by isChecked(), so it never verifies the switch state. Although that assertion predates this PR, the PR changes EnableTwoFactorModal.tsx:135 to display backup codes and delays onEnable() until Close at :269; that callback refreshes the switch state in apps/web/pages/settings/security/two-factor-auth.tsx:65-67. The first test skips this newly required step, leaving its completion assertion ineffective for the changed flow.",
+   "severity": "medium"
+  }
+ ]
+}

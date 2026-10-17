@@ -1,0 +1,12 @@
+{
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "items": [
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#opa-01",
+   "class": "TP",
+   "subclass": "nit",
+   "severity": "low",
+   "reply": "I change my classification to TP/nit, low severity. The rewritten Grafana Delete tests leave ruler abilities false, losing the previous Grafana ruler-path coverage. However, RulesTable.test.tsx:100\u2013148 meaningfully verifies denied and allowed Delete permissions through the newly added prom-rule branch of AlertRuleMenu.tsx:87. This is a request for additional branch coverage, not a test that fails to verify its stated behavior; category: test_gap."
+  }
+ ]
+}
