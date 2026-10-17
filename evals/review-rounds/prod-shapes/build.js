@@ -25,30 +25,30 @@ const { TEAM_RULES, otherComments, commitList } = require('../fixtures/prod-prof
 
 const DECIDED_AT = '2026-10-06T12:00:00Z';
 
+// The file's patch as the platform returns it: its unified hunks, no header.
 function patchFor(filename, before, after) {
     const p = structuredPatch(filename, filename, before ?? '', after, '', '', { context: 3 });
     if (!p.hunks.length) return null;
     const body = p.hunks
         .map((h) => {
-            const newHunk = [];
-            const oldHunk = [];
-            let n = h.newStart;
-            for (const l of h.lines) {
-                if (l.startsWith('\\')) continue;
-                const mark = l[0];
-                const text = l.slice(1);
-                if (mark === '+') newHunk.push(`${n++} +${text}`);
-                else if (mark === '-') oldHunk.push(`-${text}`);
-                else {
-                    newHunk.push(`${n++}  ${text}`);
-                    oldHunk.push(` ${text}`);
-                }
-            }
             const oldStart = h.oldLines === 0 ? 0 : h.oldStart;
-            return `@@ -${oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@\n__new hunk__\n${newHunk.join('\n')}\n__old hunk__\n${oldHunk.join('\n')}`;
+            return `@@ -${oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@\n${h.lines.join('\n')}`;
         })
-        .join('\n\n');
-    return { filename, patchWithLinesStr: `## file: '${filename}'\n\n${body}` };
+        .join('\n');
+    return { filename, patch: body };
+}
+
+// The head lines a patch adds.
+function addedLines(patch) {
+    const added = new Set();
+    let n = 0;
+    for (const l of String(patch || '').split('\n')) {
+        const h = l.match(/^@@ -\d+(?:,\d+)? \+(\d+)/);
+        if (h) n = Number(h[1]);
+        else if (l.startsWith('+')) added.add(n++);
+        else if (l.startsWith(' ')) n++;
+    }
+    return added;
 }
 
 function changedFiles(spec) {
@@ -169,7 +169,7 @@ function problems(spec) {
         // would pass for the wrong reason.
         if (spec.agent === 'kody-rules') {
             const f = files.find((x) => x.filename === c.at.file);
-            const added = new Set(((f && f.patchWithLinesStr) || '').split('\n').map((l) => l.match(/^(\d+) \+/)).filter(Boolean).map((m) => +m[1]));
+            const added = addedLines(f && f.patch);
             const any = Array.from({ length: c.at.lines[1] - c.at.lines[0] + 1 }, (_, i) => c.at.lines[0] + i).some((l) => added.has(l));
             if (!any) out.push(`${c.id}: no added line in ${c.at.file}:${c.at.lines.join('-')} — the rule judge never flags unchanged lines`);
         }

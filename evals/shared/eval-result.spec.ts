@@ -7,6 +7,7 @@ const ok = {
     model: 'deepseek-v4-flash@fireworks',
     metric: { name: 'occurrence recall', value: 0.9 },
     cases: [{ id: 'a', checks: 'Flags every line that breaks "x" in r#1', hits: 3, total: 4 }],
+    tokens: { in: 1200, cacheRead: 300, cacheWrite: 0, out: 80, calls: 2, ms: 900, callMs: [400, 500] },
 };
 
 describe('evals/shared/eval-result', () => {
@@ -24,6 +25,14 @@ describe('evals/shared/eval-result', () => {
         expect(resultProblems({ ...ok, cases: 14 })).toEqual(['no cases']);
     });
 
+    it('asks every result for its tokens in, cached and out, its calls and their time', () => {
+        expect(resultProblems({ ...ok, tokens: undefined })).toEqual(['missing tokens']);
+        // what the memories eval wrote before it counted calls
+        expect(resultProblems({ ...ok, tokens: { in: 10, out: 2, cacheRead: 0 } })).toEqual(['missing tokens.cacheWrite', 'missing tokens.calls', 'missing tokens.ms', 'missing tokens.callMs']);
+        // an eval with no model call records zeros
+        expect(resultProblems({ ...ok, tokens: { in: 0, cacheRead: 0, cacheWrite: 0, out: 0, calls: 0, ms: 0, callMs: [] } })).toEqual([]);
+    });
+
     it('pools two runs by case id: counts summed, an item ok only when ok in both', () => {
         const a = [{ id: 'a', checks: 'c', hits: 2, total: 2, detail: [{ what: 'x', ok: true }, { what: 'y', ok: true }] }];
         const b = [{ id: 'a', checks: 'c', hits: 1, total: 2, detail: [{ what: 'x', ok: true }, { what: 'y', ok: false }] }];
@@ -35,6 +44,8 @@ describe('evals/shared/eval-result', () => {
     it('pools token totals from either run: numbers add up, per-call times join', () => {
         expect(poolTokens({ in: 5, calls: 1, callMs: [40] }, { in: 7, out: 1, calls: 2, callMs: [10, 20] })).toEqual({ in: 12, calls: 3, callMs: [40, 10, 20], out: 1 });
         expect(poolTokens(undefined, { in: 1 })).toEqual({ in: 1 });
+        // Efforts per task: what either run saw.
+        expect(poolTokens({ efforts: { verify: ['low'] } }, { efforts: { verify: ['low', 'off'], finder: ['high'] } })).toEqual({ efforts: { verify: ['low', 'off'], finder: ['high'] } });
     });
 
     it('keeps every case in the signal but caps its detail and long text', () => {

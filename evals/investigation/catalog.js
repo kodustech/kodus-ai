@@ -1,4 +1,4 @@
-// The PRs the nightly runs (the `light` set in recall-tests.js), each named by
+// The PRs the nightly runs (the `controlled` set in recall-tests.js), each named by
 // its title, with the number of known bugs in its dataset.
 const fs = require('fs');
 const path = require('path');
@@ -6,7 +6,7 @@ const { CASE_SETS } = require('./recall-tests');
 
 const DATASETS_DIR = path.join(__dirname, 'datasets');
 
-function catalog(set = 'light') {
+function catalog(set = 'controlled') {
     const wanted = new Set(CASE_SETS[set]);
     const entries = [];
     for (const file of fs.readdirSync(DATASETS_DIR).filter((f) => f.endsWith('.json'))) {

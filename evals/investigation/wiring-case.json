@@ -1,0 +1,18 @@
+{
+    "description": "wiring: a repository written for the scripted model, so its one finding reaches scoring through production's stage",
+    "vars": {
+        "caseId": "wiring-scripted-finding",
+        "prTitle": "Add the fake module",
+        "prBody": "Adds a file for the wiring smoke. Nothing here is reviewed for real.",
+        "repositoryFullName": "eval/wiring",
+        "reviewMode": "normal",
+        "maxSteps": 4,
+        "repoBase": {
+            "README.md": "# wiring\n\nA repository the wiring smoke reviews with a scripted model.\n"
+        },
+        "repoFiles": {
+            "fake": "fake\nfake\n"
+        },
+        "goldenComments": "[{\"comment\":\"fake\",\"severity\":\"High\"}]"
+    }
+}

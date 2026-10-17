@@ -10,7 +10,7 @@
   "runs": [
     {
       "sequence": "rules-rejected-four-rounds",
-      "action": "Trinio-shaped synthetic: rejected rule finding, four nearby commits with line shifts, then a new violation of the same rule in another function.",
+      "action": "Customer-report-shaped synthetic: rejected rule finding, four nearby commits with line shifts, then a new violation of the same rule in another function.",
       "rep": 1,
       "rounds": [
         {
@@ -326,7 +326,7 @@
     },
     {
       "sequence": "rules-rejected-four-rounds",
-      "action": "Trinio-shaped synthetic: rejected rule finding, four nearby commits with line shifts, then a new violation of the same rule in another function.",
+      "action": "Customer-report-shaped synthetic: rejected rule finding, four nearby commits with line shifts, then a new violation of the same rule in another function.",
       "rep": 2,
       "rounds": [
         {
@@ -642,7 +642,7 @@
     },
     {
       "sequence": "rules-rejected-four-rounds",
-      "action": "Trinio-shaped synthetic: rejected rule finding, four nearby commits with line shifts, then a new violation of the same rule in another function.",
+      "action": "Customer-report-shaped synthetic: rejected rule finding, four nearby commits with line shifts, then a new violation of the same rule in another function.",
       "rep": 3,
       "rounds": [
         {

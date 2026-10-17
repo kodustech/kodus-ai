@@ -42,8 +42,11 @@ if (dir) {
     process.on('exit', () => {
         try {
             const loaded = Object.keys(require.cache).map(repoRelative).filter(Boolean);
+            // A read of a file that does not exist (the loader probing for a
+            // package.json) loaded nothing.
+            const files = [...new Set([...loaded, ...read])].filter((rel) => fs.existsSync(path.join(root, rel)));
             fs.mkdirSync(dir, { recursive: true });
-            fs.writeFileSync(path.join(dir, `${label}.${process.pid}.${threadId}.txt`), [...new Set([...loaded, ...read])].join('\n'));
+            fs.writeFileSync(path.join(dir, `${label}.${process.pid}.${threadId}.txt`), files.join('\n'));
         } catch {
             // Tracing must never change the outcome of the step it observes.
         }

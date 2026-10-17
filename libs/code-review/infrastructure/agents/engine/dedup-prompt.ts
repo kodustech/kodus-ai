@@ -1,9 +1,8 @@
 /**
  * Shared dedup prompt + schema + model, extracted from
- * `agent-review.stage.ts#deduplicateSuggestions` so production and the
- * `evals/dedup` harness call the SAME prompt — no drift between what ships and
- * what we measure. Behavior-preserving: production imports these and keeps its
- * own group→kept mapping; the eval reuses them to invoke the real dedup decision.
+ * `agent-review.stage.ts#deduplicateSuggestions`. Behavior-preserving:
+ * production imports these and keeps its own group→kept mapping; the evals
+ * (evals/funnel/dedup) run the stage itself.
  */
 
 /** JSON schema for the dedup LLM output (groups + unique indices). */
@@ -203,7 +202,7 @@ ${summaries}`;
 // When lexical overlap is below DEDUP_CONTENT_THRESHOLD the guard can't tell a
 // real duplicate worded differently from two distinct bugs on the same lines.
 // A semantic embedding cosine separates the clear ends; the ambiguous middle is
-// escalated to a focused LLM tiebreak. Bands tuned on evals/dedup/guard-pairs.json.
+// escalated to a focused LLM tiebreak. Bands tuned on evals/funnel/dedup/guard-pairs.json.
 export const DEDUP_EMBEDDING_LOW = 0.4;
 export const DEDUP_EMBEDDING_HIGH = 0.7;
 

@@ -23,39 +23,69 @@
     "models": {
         "gpt-5.4": {
             "recallFloor": 0.06,
-            "minMeanFindings": 1.0,
+            "minMeanFindings": 1,
             "minMeanToolCalls": 15,
-            "observed": { "recall_mean": 0.163, "sd": 0.139, "meanFindings": 2.3, "meanToolCalls": 35.4 }
+            "observed": {
+                "recall_mean": 0.163,
+                "sd": 0.139,
+                "meanFindings": 2.3,
+                "meanToolCalls": 35.4
+            }
         },
         "claude-sonnet-4-6": {
             "recallFloor": 0.12,
             "minMeanFindings": 2.5,
             "minMeanToolCalls": 18,
-            "observed": { "recall_mean": 0.258, "sd": 0.193, "meanFindings": 5.3, "meanToolCalls": 35.9 }
+            "observed": {
+                "recall_mean": 0.258,
+                "sd": 0.193,
+                "meanFindings": 5.3,
+                "meanToolCalls": 35.9
+            }
         },
         "kimi-k2.7-code": {
             "recallFloor": 0.16,
-            "minMeanFindings": 3.0,
+            "minMeanFindings": 3,
             "minMeanToolCalls": 25,
-            "observed": { "recall_mean": 0.315, "sd": 0.154, "meanFindings": 6.4, "meanToolCalls": 58.3 }
+            "observed": {
+                "recall_mean": 0.315,
+                "sd": 0.154,
+                "meanFindings": 6.4,
+                "meanToolCalls": 58.3
+            }
         },
         "glm-5.2": {
             "recallFloor": 0.15,
             "minMeanFindings": 1.5,
             "minMeanToolCalls": 20,
-            "observed": { "recall_mean": 0.315, "sd": 0.231, "meanFindings": 3.0, "meanToolCalls": 48.3 }
+            "observed": {
+                "recall_mean": 0.315,
+                "sd": 0.231,
+                "meanFindings": 3,
+                "meanToolCalls": 48.3
+            }
         },
         "gemini-3.1-pro-preview-customtools": {
             "recallFloor": 0.11,
             "minMeanFindings": 1.5,
             "minMeanToolCalls": 14,
-            "observed": { "recall_mean": 0.238, "sd": 0.185, "meanFindings": 3.5, "meanToolCalls": 28.5 }
+            "observed": {
+                "recall_mean": 0.238,
+                "sd": 0.185,
+                "meanFindings": 3.5,
+                "meanToolCalls": 28.5
+            }
         },
         "gemini-3-flash-preview": {
             "recallFloor": 0.12,
             "minMeanFindings": 2.5,
             "minMeanToolCalls": 17,
-            "observed": { "recall_mean": 0.233, "sd": 0.157, "meanFindings": 5.3, "meanToolCalls": 35.4 }
+            "observed": {
+                "recall_mean": 0.233,
+                "sd": 0.157,
+                "meanFindings": 5.3,
+                "meanToolCalls": 35.4
+            }
         }
     },
     "sets": {
@@ -63,21 +93,27 @@
             "__doc": [
                 "Floors for the NIGHTLY run (code-review-evals-nightly.yml): --set=light, 30 PRs.",
                 "",
-                "Recalibrated 2026-10-16 when the finder started running production's input and route",
-                "(agent-provider.js buildProductionRun: the PR's whole diff, every category on, the",
-                "orchestrator's step budget, the env/managed model route) and precision started keeping",
-                "one finding per known bug (recall-assertion.js). Two local runs of the nightly command",
-                "on fix/finder-eval-production-parity 4d5e20334, deepseek-v4-flash@fireworks, judge",
-                "gpt-5.6-luna low: recall_mean 0.569 and 0.518 (precision 0.512 and 0.495). Main",
-                "675a05c11 the same day: 0.334 (0.327 re-judged with one finding per bug, precision 0.379).",
+                "Recalibrated 2026-10-17 when every eval moved to production's org route",
+                "(evals/shared/model-route.js). Before, the finder ran the self-hosted env route",
+                "(applyModelEnv): DeepSeek went with reasoning_effort high, and the model's key",
+                "overwrote the platform key, so the dedup's embedder failed. Now it runs the managed",
+                "default a cloud org without BYOK gets: no reasoning_effort, and the embedder works.",
+                "Two local runs of the nightly command on feat/evals-production-parity 57ef595ce,",
+                "deepseek-v4-flash@fireworks, judge gpt-5.6-luna low: recall_mean 0.416 and 0.383",
+                "(precision 0.466 and 0.436, loop recall 0.503 and 0.492). Before, on the env route:",
+                "0.569 and 0.518. One run with RECALL_REASONING_EFFORT=high (a stored BYOK config):",
+                "0.477, +0.078 per PR against these two (paired se 0.033, 10 PRs up, 3 down).",
                 "",
                 "The floor comes from RUN-TO-RUN noise on these 30 PRs, not cross-PR spread: the",
-                "per-PR recall difference between the two runs has sd 0.256, so a night's mean",
-                "moves 0.256/sqrt(2)/sqrt(30) = 0.033, and against this 2-run baseline",
-                "0.033*sqrt(1.5) = 0.041. recallFloor 0.45 = 0.543 - ~2.2 sigma: a ~9pp drop trips",
+                "per-PR recall difference between the two runs has sd 0.276, so a night's mean",
+                "moves 0.276/sqrt(2)/sqrt(30) = 0.036, and against this 2-run baseline",
+                "0.036*sqrt(1.5) = 0.044. recallFloor 0.30 = 0.399 - ~2.2 sigma: a ~10pp drop trips",
                 "it, a normal night does ~1-2% of the time; a drop is then confirmed on a second run.",
-                "minMeanFindings / minMeanToolCalls = ~half the observed mean (3.6 / 89).",
-                "Before: CI run 35171204422 (attempts 1 and 2), re-judged in run 35253466493: 0.368 and 0.346 under the same judge, on at most six files per PR, bug only, 12 steps.",
+                "minMeanFindings / minMeanToolCalls = ~half the observed mean (2.95 / 41). Tool calls",
+                "are the finder trace's (gate.js read a replay-only counter before, 0 on this path).",
+                "Deliberate break, local only: the medium severity filter dropping medium findings",
+                "gave 0.275 (loop recall 0.465), below the floor. The fast step budget on a normal",
+                "review gave 0.43 at 18 tool calls: only minMeanToolCalls catches that one.",
                 "",
                 "JUDGE: floors hold only under `judge` + `judgeReasoningEffort`; the gate refuses a",
                 "run judged otherwise. To change the judge, re-judge two calibration runs with",
@@ -90,10 +126,101 @@
             "judgeReasoningEffort": "low",
             "models": {
                 "deepseek-v4-flash@fireworks": {
-                    "recallFloor": 0.45,
-                    "minMeanFindings": 1.8,
-                    "minMeanToolCalls": 44,
-                    "observed": { "recall_mean": 0.543, "runs": [0.569, 0.518], "sdPerPrRunDiff": 0.256, "precision_mean": 0.503, "meanFindings": 3.6, "meanToolCalls": 89 }
+                    "recallFloor": 0.3,
+                    "minMeanFindings": 1.5,
+                    "minMeanToolCalls": 20,
+                    "observed": {
+                        "recall_mean": 0.399,
+                        "runs": [
+                            0.416,
+                            0.383
+                        ],
+                        "sdPerPrRunDiff": 0.276,
+                        "precision_mean": 0.451,
+                        "meanFindings": 2.95,
+                        "meanToolCalls": 41.3
+                    }
+                }
+            }
+        },
+        "controlled": {
+            "__doc": [
+                "The controlled set (recall-tests.js CONTROLLED_CASES, 15 PRs: three per repository of the light set, the three with the most known bugs, 61 of its 95): the nightly, and every tier-0 model's weekly run (evals/weekly.js). Floors per model, each under the judge below; noise as in nightly-compare.js nightNoise: sdPerPrRunDiff / sqrt(2) / sqrt(15), times sqrt(1.5) for a two-run baseline.",
+                "deepseek-v4-flash@fireworks, calibrated 2026-10-17 from 2 local runs on a725253d6 (the managed route, judge gpt-5.6-luna low): recall 0.460 and 0.437 (one PR of the second run not measured, rate limit; 14 PRs paired), mean 0.448, sdPerPrRunDiff 0.246, sigma 0.057. recallFloor = mean - 2.2 sigma = 0.32. Collapse floors at about half the observed means: 3.61 findings and 40.5 tool calls per PR.",
+                "gpt-6-sol, calibrated 2026-10-17 from 2 local runs on a725253d6 (judge gpt-5.6-luna low): recall 0.494 and 0.484 (15 PRs paired), mean 0.489, sdPerPrRunDiff 0.266, sigma 0.059. recallFloor = mean - 2.2 sigma = 0.35. Collapse floors at about half the observed means: 5.37 findings and 69.7 tool calls per PR.",
+                "claude-sonnet-5-5, calibrated 2026-10-17 from 2 local runs on a725253d6 (judge gpt-5.6-luna low): recall 0.348 and 0.428 (15 PRs paired), mean 0.388, sdPerPrRunDiff 0.197, sigma 0.044. recallFloor = mean - 2.2 sigma = 0.29. Collapse floors at about half the observed means: 2.87 findings and 25 tool calls per PR.",
+                "Deliberate break, 2026-10-17 (local, deepseek, on the managed route, before the evals moved to BYOK): the severity filter dropping medium findings: 0.389, above the floor (a drop of 0.06; the floor sits 2.2 sigma, 0.13, under the mean). The controlled set is 15 PRs on purpose (cost, decided 2026-10-17): a drop this size shows on the full set, run on demand, not the nightly. The same break on the 30-PR light set gave 0.275, below its floor.",
+                "kimi-k2.7-code@openrouter, calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3 (judge gpt-5.6-luna low): recall 0.456 and 0.511 (15 PRs paired), mean 0.483, sdPerPrRunDiff 0.189, sigma 0.042. recallFloor = mean - 2.2 sigma = 0.39. Collapse floors at about half the observed means: 4.07 findings and 35.9 tool calls per PR.",
+                "deepseek-v4-flash@fireworks, calibrated 2026-10-17 from 2 local runs on 641fb1999 (BYOK route) (judge gpt-5.6-luna low): recall 0.331 and 0.45 (15 PRs paired), mean 0.391, sdPerPrRunDiff 0.181, sigma 0.04. recallFloor = mean - 2.2 sigma = 0.3. Collapse floors at about half the observed means: 3.03 findings and 37.4 tool calls per PR.",
+                "RATCHET: a PR that moves recall on purpose recalibrates here, with two runs as evidence."
+            ],
+            "cases": 15,
+            "judge": "gpt-5.6-luna",
+            "judgeReasoningEffort": "low",
+            "models": {
+                "deepseek-v4-flash@fireworks": {
+                    "recallFloor": 0.3,
+                    "minMeanFindings": 1.5,
+                    "minMeanToolCalls": 18,
+                    "observed": {
+                        "recall_mean": 0.391,
+                        "runs": [
+                            0.331,
+                            0.45
+                        ],
+                        "sdPerPrRunDiff": 0.181,
+                        "precision_mean": 0.518,
+                        "meanFindings": 3.03,
+                        "meanToolCalls": 37.4
+                    }
+                },
+                "gpt-6-sol": {
+                    "recallFloor": 0.35,
+                    "minMeanFindings": 2.6,
+                    "minMeanToolCalls": 34,
+                    "observed": {
+                        "recall_mean": 0.489,
+                        "runs": [
+                            0.494,
+                            0.484
+                        ],
+                        "sdPerPrRunDiff": 0.266,
+                        "precision_mean": 0.374,
+                        "meanFindings": 5.37,
+                        "meanToolCalls": 69.7
+                    }
+                },
+                "claude-sonnet-5-5": {
+                    "recallFloor": 0.29,
+                    "minMeanFindings": 1.4,
+                    "minMeanToolCalls": 12,
+                    "observed": {
+                        "recall_mean": 0.388,
+                        "runs": [
+                            0.348,
+                            0.428
+                        ],
+                        "sdPerPrRunDiff": 0.197,
+                        "precision_mean": 0.582,
+                        "meanFindings": 2.87,
+                        "meanToolCalls": 25
+                    }
+                },
+                "kimi-k2.7-code@openrouter": {
+                    "recallFloor": 0.39,
+                    "minMeanFindings": 2,
+                    "minMeanToolCalls": 17,
+                    "observed": {
+                        "recall_mean": 0.483,
+                        "runs": [
+                            0.456,
+                            0.511
+                        ],
+                        "sdPerPrRunDiff": 0.189,
+                        "precision_mean": 0.508,
+                        "meanFindings": 4.07,
+                        "meanToolCalls": 35.9
+                    }
                 }
             }
         }
