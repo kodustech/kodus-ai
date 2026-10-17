@@ -1728,6 +1728,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             byokConfig: context.codeReviewConfig?.byokConfig,
                             languageResultPrompt:
                                 context.codeReviewConfig?.languageResultPrompt,
+                            languageIsDefault: agentWriting !== undefined,
                             organizationId:
                                 context.organizationAndTeamData?.organizationId,
                         },

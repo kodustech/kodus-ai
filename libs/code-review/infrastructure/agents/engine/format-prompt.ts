@@ -25,13 +25,17 @@ export function buildFormatPrompt(
         customWritingGuidelines?: string;
         /** Already-resolved language label (e.g. "Portuguese"), not a locale code. */
         languageLabel?: string | null;
+        /** The language is only a default the guidelines may change (a custom agent's voice). */
+        languageIsDefault?: boolean;
     },
 ): string {
     const customGuidelines = options?.customWritingGuidelines?.trim() || '';
 
-    const langInstruction = options?.languageLabel
-        ? `\nIMPORTANT: Write all output in ${options.languageLabel}. Do not fall back to English.`
-        : '';
+    const langInstruction = !options?.languageLabel
+        ? ''
+        : options.languageIsDefault
+          ? `\nWrite in ${options.languageLabel} unless the writing guidelines above name another language.`
+          : `\nIMPORTANT: Write all output in ${options.languageLabel}. Do not fall back to English.`;
 
     const suggestionsText = suggestions
         .map(

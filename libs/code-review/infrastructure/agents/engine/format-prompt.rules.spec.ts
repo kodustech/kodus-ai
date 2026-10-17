@@ -42,3 +42,24 @@ describe('buildFormatPrompt — body under a title', () => {
         expect(prompt).not.toMatch(/at most 2 sentences/i);
     });
 });
+
+describe('buildFormatPrompt — language under a custom agent voice (#2172)', () => {
+    it('lets an agent voice name another language than the team default', () => {
+        const prompt = buildFormatPrompt([suggestion], {
+            customWritingGuidelines: 'Escreva em português do Brasil.',
+            languageLabel: 'English',
+            languageIsDefault: true,
+        });
+
+        expect(prompt).not.toContain('Do not fall back to English');
+        expect(prompt).toContain(
+            'Write in English unless the writing guidelines above name another language.',
+        );
+    });
+
+    it('keeps the team language mandatory for the main review', () => {
+        const prompt = buildFormatPrompt([suggestion], { languageLabel: 'English' });
+
+        expect(prompt).toContain('IMPORTANT: Write all output in English.');
+    });
+});
