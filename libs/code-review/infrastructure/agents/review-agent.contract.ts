@@ -14,6 +14,7 @@
  * `PrReviewContext & ReviewRuleConfig`) instead of the whole 34-field input.
  */
 import type { RunStatus } from '@libs/agent-harness/domain/contracts/run-state.contract';
+import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contract';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
     CodeReviewConfig,
@@ -502,6 +503,12 @@ export interface AgentLoopSecrets {
         provider: string;
         errorMessage: string;
     }) => void;
+    /**
+     * Extra finder tools for this run (a custom agent's astGrep and read-only
+     * MCP tools, from `buildCustomAgentTools`). Appended to the repository
+     * tools; the caller owns their lifecycle (closes MCP connections).
+     */
+    extraTools?: readonly AgentTool[];
 }
 
 export interface AgentLoopOutput {
