@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, writeFile, symlink } from 'node:fs/promises';
+import { mkdtemp, writeFile, symlink, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -30,6 +30,14 @@ describe('LocalSandboxService exec — flag/path boundary', () => {
         await symlink(join(outside, 'secret.txt'), join(repo, 'slink'));
         // a committed symlink whose name starts with '-' (read via `cat -- -x`)
         await symlink(join(outside, 'secret.txt'), join(repo, '-dashlink'));
+        // a symlinked DIRECTORY pointing outside — reached via a child path
+        // (`cat linkdir/secret.txt`) that the per-arg realpath must still catch
+        await symlink(outside, join(repo, 'linkdir'));
+        // a chained symlink: nested -> slink -> outside
+        await symlink(join(repo, 'slink'), join(repo, 'nested'));
+        // a symlink living in a subdirectory
+        await mkdir(join(repo, 'sub'));
+        await symlink(join(outside, 'secret.txt'), join(repo, 'sub', 'slink2'));
         // hard link inside the repo to the outside file (same tmpfs)
         execFileSync('ln', [join(outside, 'secret.txt'), join(repo, 'hlink')]);
         exec = (svc as any).buildRemoteCommands(repo).exec;
@@ -74,6 +82,22 @@ describe('LocalSandboxService exec — flag/path boundary', () => {
             // `-dashlink` starts with '-', so a naive flag skip would never
             // realpath-check it; `cat -- -dashlink` then reads outside the clone.
             const r = await exec('cat -- -dashlink');
+            expect(isBlocked(r)).toBe(true);
+            expect(leaks(r)).toBe(false);
+        });
+
+        // The variants an independent reviewer reaches for next: the escape is
+        // not the symlink's own name but a path that passes THROUGH one. The
+        // per-arg realpath canonicalises the whole path, so each is caught.
+        it.each([
+            'cat nested', // chained symlink nested -> slink -> outside
+            'cat sub/slink2', // symlink nested in a subdirectory
+            'cat linkdir/secret.txt', // child of a symlinked directory
+            'grep -rn SECRET linkdir', // recurse into a symlinked directory
+            'find linkdir -type f', // enumerate a symlinked directory
+            'cat a.txt slink', // a legit file mixed with the escape arg
+        ])('blocks the outside read via %s', async (cmd) => {
+            const r = await exec(cmd);
             expect(isBlocked(r)).toBe(true);
             expect(leaks(r)).toBe(false);
         });
