@@ -54,7 +54,15 @@ const MAX_RUNS = 10;
 const STEP_EVALS = {
     dedup: {
         smoke: ['funnel-dedup'],
-        primary: { id: 'dedup-groups', label: 'Duplicate pairs joined', run: ['evals/dedup-groups/run.js'], question: 'Does the dedup join the suggestions that report the same problem, and only those?' },
+        primary: {
+            id: 'dedup-groups',
+            label: 'Duplicate pairs joined',
+            run: ['evals/dedup-groups/run.js'],
+            question: 'Does the dedup join the suggestions that report the same problem, and only those?',
+            // Read from the same cases: joining everything would score every pair, so
+            // what it merged must stay right too. Not worse beyond its interval.
+            derived: [{ id: 'pair-precision', label: 'Merges that were right', question: 'Of the pairs the dedup merged, how many does the gold put in one group?', hits: (c) => c.merged - c.falseMerges, total: (c) => c.merged }],
+        },
         guards: [{ id: 'funnel-dedup', label: 'Known bugs kept', run: ['evals/funnel/dedup/run.js', '--set=full'], question: 'Of the known bugs reaching the dedup in a real review, how many does it keep?' }],
     },
 };
@@ -164,6 +172,16 @@ function compare(baseRuns, candidateRuns, { seed = 1 } = {}) {
     };
 }
 
+// A measure read from the main eval's own cases (`derived`): each run's cases
+// with that measure's hits and total, so it compares like any eval.
+function deriveRuns(runs, derived) {
+    return runs.map((run) =>
+        run
+            ? { ...run, cases: (run.cases || []).filter((c) => !c.unmeasured && Number.isFinite(derived.total(c))).map((c) => ({ id: c.id, checks: derived.question, hits: derived.hits(c), total: derived.total(c) })) }
+            : null,
+    );
+}
+
 // Every requested run on both sides, or 'not measured': comparing fewer runs
 // than the experiment reports would overstate it. A missing run is null.
 function comparisonOf(baseRuns, candidateRuns) {
@@ -243,7 +261,10 @@ function phaseVerdict(phase, evals) {
     if (evals.some((e) => e.comparison.verdict === 'not measured')) return 'not measured';
     const [primary, ...guards] = evals;
     if (phase === 'decision') return primary.comparison.verdict;
-    const worse = primary.comparison.verdict === 'worse' || guards.some((g) => g.comparison.verdict === 'worse' || g.comparison.worse.length);
+    // A guard eval may not lose a single case; a measure read from the main
+    // eval's cases (rule 'interval') may not get worse beyond its interval.
+    const guardWorse = (g) => g.comparison.verdict === 'worse' || (g.rule !== 'interval' && g.comparison.worse.length > 0);
+    const worse = primary.comparison.verdict === 'worse' || guards.some(guardWorse);
     return worse ? 'regression' : 'no regression';
 }
 
@@ -252,12 +273,14 @@ function decide(phases, versions) {
     if (Object.values(phases).some((p) => p.verdict === 'not measured')) return { decision: 'not measured', reason: 'an eval did not measure on both sides' };
     const reg = phases.regression;
     if (reg && reg.verdict === 'regression') {
-        const which = reg.evals.filter((e) => e.comparison.verdict === 'worse' || (e.role === 'guard' && e.comparison.worse.length));
+        const which = reg.evals.filter((e) => e.comparison.verdict === 'worse' || (e.role === 'guard' && e.rule !== 'interval' && e.comparison.worse.length));
         return { decision: 'does not ship', reason: `it broke something: ${which.map((e) => `${e.id}${e.comparison.worse.length ? ` (${e.comparison.worse.length} case${e.comparison.worse.length === 1 ? '' : 's'} worse)` : ''}`).join(', ')}` };
     }
     const dec = phases.decision;
     if (!dec) return { decision: 'no regression', reason: 'nothing got worse on the controlled set; the decision phase, on the extended set, decides an improvement' };
     const primary = dec.evals[0];
+    const decWorse = dec.evals.filter((e) => e.role === 'guard' && e.comparison.verdict === 'worse');
+    if (decWorse.length) return { decision: 'does not ship', reason: `on the extended set, ${decWorse.map((e) => e.id).join(', ')} got worse beyond its interval` };
     if (dec.verdict === 'better') return { decision: 'ships', reason: `nothing got worse, and ${primary.id} is better on the extended set beyond its interval` };
     const tokens = (side) => (primary.sides[side].usage.in || 0) + (primary.sides[side].usage.out || 0);
     if (dec.verdict === 'tie' && tokens('candidate') < tokens('base')) return { decision: 'ships', reason: `nothing got worse, ${primary.id} ties and the candidate uses fewer tokens` };
@@ -408,6 +431,25 @@ function main() {
                         runValues: { base: r.base.map((x) => x?.metric?.value ?? null), candidate: r.candidate.map((x) => x?.metric?.value ?? null) },
                     };
                 });
+                const primaryRuns = results[plan.primary.id];
+                for (const d of plan.primary.derived || []) {
+                    const base = deriveRuns(primaryRuns.base, d);
+                    const candidate = deriveRuns(primaryRuns.candidate, d);
+                    evals.splice(1, 0, {
+                        id: d.id,
+                        label: d.label,
+                        role: 'guard',
+                        rule: 'interval',
+                        question: d.question,
+                        metric: d.question,
+                        comparison: comparisonOf(base, candidate),
+                        sides: evals[0].sides,
+                        runValues: {
+                            base: base.map((r) => (r ? compare([r], [r]).base : null)),
+                            candidate: candidate.map((r) => (r ? compare([r], [r]).base : null)),
+                        },
+                    });
+                }
                 return [phase, { question: PHASES[phase].question, set: PHASES[phase].set, verdict: phaseVerdict(phase, evals), evals }];
             }),
         );
@@ -448,6 +490,7 @@ function main() {
                     eval: e.id,
                     label: e.label,
                     role: e.role,
+                    rule: e.rule || null,
                     question: e.question,
                     metric: e.metric,
                     model,
@@ -495,4 +538,4 @@ function main() {
 
 if (require.main === module) process.exit(main());
 
-module.exports = { main, compare, comparisonOf, perCase, decide, phaseVerdict, affectedSteps, PHASES, STEP_EVALS };
+module.exports = { main, compare, comparisonOf, deriveRuns, perCase, decide, phaseVerdict, affectedSteps, PHASES, STEP_EVALS };

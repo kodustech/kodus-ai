@@ -79,7 +79,7 @@ To change more, commit and run it again.
 
 Each eval runs `--runs` times per side (2 by default), alternating. Per case, paired: each side's pooled metric, the difference with a 95% bootstrap interval over the cases, and the cases that got worse or better. A difference counts only when its interval clears zero.
 
-**It ships when**, fixed before the run: the step's code changed (its step version differs), every eval measured on both sides (at most 5% of cases unmeasured), nothing got worse in question 1 (the main eval not worse beyond its interval, no case of a must-not-get-worse eval worse), and question 2 is better beyond its interval or ties with fewer tokens. With question 1 alone, the answer is "no regression", never "ships".
+**It ships when**, fixed before the run: the step's code changed (its step version differs), every eval measured on both sides (at most 5% of cases unmeasured), nothing got worse in question 1 (the main eval not worse beyond its interval, no case of a must-not-get-worse eval worse), and question 2 is better beyond its interval or ties with fewer tokens. A measure read from the main eval's own cases (`derived` in `STEP_EVALS`: for the dedup, how many of its merges were right) may not get worse beyond its interval in either question, so a change cannot win by merging everything. With question 1 alone, the answer is "no regression", never "ships".
 
 ### What it records
 

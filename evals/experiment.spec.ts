@@ -134,3 +134,25 @@ describe('evals/experiment.js comparisonOf', () => {
         expect(comparisonOf([ok, ok], [better, null])).toMatchObject({ verdict: 'not measured', missingRuns: { base: 0, candidate: 1 } });
     });
 });
+
+describe('evals/experiment.js derived measures', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { deriveRuns, STEP_EVALS } = require('./experiment');
+    const precision = STEP_EVALS.dedup.primary.derived[0];
+
+    it("reads the dedup's merges that were right from its cases", () => {
+        const [run] = deriveRuns([{ cases: [{ id: 'a', checks: 'x', hits: 3, total: 4, merged: 5, falseMerges: 1 }, { id: 'b', unmeasured: true, hits: 0, total: 0 }] }], precision);
+        expect(run.cases).toEqual([{ id: 'a', checks: precision.question, hits: 4, total: 5 }]);
+    });
+
+    it('a derived measure fails a phase only beyond its interval, not on one case', () => {
+        const primary = { id: 'p', role: 'primary', comparison: { verdict: 'better', worse: [] } };
+        const oneCaseWorse = { id: 'pair-precision', role: 'guard', rule: 'interval', comparison: { verdict: 'tie', worse: [{ id: 'a' }] } };
+        expect(phaseVerdict('regression', [primary, oneCaseWorse])).toBe('no regression');
+        expect(phaseVerdict('regression', [primary, { ...oneCaseWorse, comparison: { verdict: 'worse', worse: [] } }])).toBe('regression');
+        const changed = { base: { step: 'x' }, candidate: { step: 'y' } };
+        const sides = { base: { usage: { in: 1 } }, candidate: { usage: { in: 1 } } };
+        const decision = { verdict: 'better', evals: [{ ...primary, sides }, { ...oneCaseWorse, comparison: { verdict: 'worse', worse: [] } }] };
+        expect(decide({ regression: { verdict: 'no regression', evals: [primary] }, decision }, changed).decision).toBe('does not ship');
+    });
+});
