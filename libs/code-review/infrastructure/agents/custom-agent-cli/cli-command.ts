@@ -238,6 +238,49 @@ export function buildInstallScript(params: {
 }
 
 /**
+ * IPv4 ranges a CLI may never reach, even when an allowed domain resolves
+ * there: loopback, private (RFC 1918), link-local (cloud metadata), CGNAT,
+ * benchmarking, documentation, multicast and reserved space.
+ */
+export const NON_PUBLIC_IPV4_CIDRS = [
+    '0.0.0.0/8',
+    '10.0.0.0/8',
+    '100.64.0.0/10',
+    '127.0.0.0/8',
+    '169.254.0.0/16',
+    '172.16.0.0/12',
+    '192.0.0.0/24',
+    '192.0.2.0/24',
+    '192.168.0.0/16',
+    '198.18.0.0/15',
+    '198.51.100.0/24',
+    '203.0.113.0/24',
+    '224.0.0.0/4',
+    '240.0.0.0/4',
+] as const;
+
+/** awk program over one dotted quad: exits 0 when the address is public and
+ *  1 when it is not (or is not an IPv4 address at all). Mirrors
+ *  NON_PUBLIC_IPV4_CIDRS. */
+const PUBLIC_IPV4_AWK = [
+    '{',
+    'if ($0 !~ /^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$/) exit 1;',
+    'split($0, o, "."); a = o[1] + 0; b = o[2] + 0; c = o[3] + 0;',
+    'if (a > 255 || b > 255 || c > 255 || o[4] + 0 > 255) exit 1;',
+    'if (a == 0 || a == 10 || a == 127 || a >= 224) exit 1;',
+    'if (a == 100 && b >= 64 && b <= 127) exit 1;',
+    'if (a == 169 && b == 254) exit 1;',
+    'if (a == 172 && b >= 16 && b <= 31) exit 1;',
+    'if (a == 192 && b == 168) exit 1;',
+    'if (a == 192 && b == 0 && (c == 0 || c == 2)) exit 1;',
+    'if (a == 198 && (b == 18 || b == 19)) exit 1;',
+    'if (a == 198 && b == 51 && c == 100) exit 1;',
+    'if (a == 203 && b == 0 && c == 113) exit 1;',
+    'exit 0',
+    '}',
+].join(' ');
+
+/**
  * Fence the CLI user's egress to its allowlist. Domains are resolved now and
  * pinned in /etc/hosts; the user's DNS, loopback and every other address are
  * rejected. Matching on the ORIGINAL destination (`--ctorigdst`) keeps the
@@ -263,11 +306,19 @@ export function buildNetworkScript(params: {
         lines.push(
             `R=$(getent ahostsv4 ${d} | awk '{print $1}' | sort -u)`,
             `[ -n "$R" ] || { echo ${shSingleQuote(`cannot resolve ${domain}`)} >&2; exit 4; }`,
+            // A domain that resolves inside the sandbox's network (metadata
+            // endpoint, loopback services, private hosts) is refused whole.
+            `for ip in $R; do echo "$ip" | awk ${shSingleQuote(PUBLIC_IPV4_AWK)} || { echo ${shSingleQuote(`${domain} resolves to a non-public address`)} "$ip" >&2; exit 4; }; done`,
             `for ip in $R; do echo "$ip ${domain} # ${tag}" | sudo -n tee -a /etc/hosts >/dev/null; IPS="$IPS $ip"; done`,
         );
     }
     lines.push(
         `$IPT -N ${chain} 2>/dev/null || $IPT -F ${chain}`,
+        // Non-public ranges are rejected before any accept, whatever DNS says.
+        ...NON_PUBLIC_IPV4_CIDRS.map(
+            (cidr) =>
+                `$IPT -A ${chain} -m conntrack --ctorigdst ${cidr} -j REJECT`,
+        ),
         `for ip in $IPS; do $IPT -A ${chain} -m conntrack --ctorigdst "$ip" -j ACCEPT; done`,
         `$IPT -A ${chain} -j REJECT`,
         `UID_=$(id -u ${user})`,
@@ -283,7 +334,9 @@ export function buildNetworkScript(params: {
 /**
  * The single line that runs one CLI call. Secrets are named in
  * `--preserve-env` and arrive through the sandbox process env, so their
- * values are never part of this string.
+ * values are never part of this string. After the call, timed out or not,
+ * every process the CLI user still owns is killed, so nothing it started
+ * (a daemon, a forked child) outlives the call; the call's exit code is kept.
  */
 export function buildRunCommand(params: {
     identity: CliSandboxIdentity;
@@ -296,7 +349,8 @@ export function buildRunCommand(params: {
     const preserve = secretEnvNames.length
         ? ` --preserve-env=${secretEnvNames.join(',')}`
         : '';
-    return `sudo -n -u ${shSingleQuote(identity.user)} -H${preserve} -- /usr/bin/env -C ${shSingleQuote(CLI_REPO_DIR)} /usr/bin/timeout -k 5 ${timeoutSec} ${shellJoin([binaryPath, ...args])}`;
+    const user = shSingleQuote(identity.user);
+    return `sudo -n -u ${user} -H${preserve} -- /usr/bin/env -C ${shSingleQuote(CLI_REPO_DIR)} /usr/bin/timeout -k 5 ${timeoutSec} ${shellJoin([binaryPath, ...args])}; rc=$?; sudo -n pkill -KILL -u ${user} >/dev/null 2>&1; exit $rc`;
 }
 
 export function resolveCliTimeoutSec(cli: Pick<CliToolConfig, 'timeoutSec'>) {
