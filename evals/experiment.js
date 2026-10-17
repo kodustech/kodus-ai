@@ -1,16 +1,23 @@
 #!/usr/bin/env node
-// An experiment: one review step on two versions of production's code, the
-// same evals, cases, model and judge on both sides (evals/README.md,
-// "Experiments"). The base is where the branch left its base ref; the
-// candidate is the branch's HEAD, committed. Each side runs every eval of the
-// step `--runs` times, alternating, and the comparison is per case, paired:
-// the difference of the pooled metric with a bootstrap interval over the
-// cases, and the cases that got worse or better.
+// An experiment: one change to a review step, production's code on two sides
+// (evals/README.md, "Experiments"): the base is where the branch left its base
+// ref, the candidate is the branch's HEAD, committed. The same evals, cases,
+// model and judge on both sides, each eval `--runs` times per side,
+// alternating, compared per case, paired: the difference of the pooled metric
+// with a bootstrap interval over the cases, and the cases that moved.
 //
-//   node evals/experiment.js --step=dedup [--base=origin/main] [--runs=2] [--set=controlled|full] [--model=<id>] [--name=<label>] [--out=<dir>]
+// It answers two questions, one after the other:
+//   regression  Did it break anything? The main eval on the controlled set and
+//               the evals that must not get worse. Fast; it catches a drop.
+//   decision    Is it better? The main eval on the extended set: enough cases
+//               for its interval to clear zero when the change is real.
+// The decision: ships when nothing regressed and the decision phase is better
+// beyond its interval (or ties and uses fewer tokens).
 //
-// --set  the set of the main eval: controlled catches a regression; full, the
-//        extended set, is where an improvement is decided (evals/README.md).
+//   node evals/experiment.js --step=dedup [--phases=regression,decision] [--base=origin/main] [--runs=2] [--model=<id>] [--name=<label>] [--out=<dir>]
+//
+// --phases  which questions to answer (both by default); a PR's check runs the
+//           regression phase only, and the result says the decision was not run.
 //
 // What each side ran is recorded, never assumed:
 //   step version     a hash of the production files the evals loaded on that
@@ -21,9 +28,9 @@
 //                    both sides, or there is nothing to compare;
 //   environment      what each eval reports of it (the dedup's embedder).
 //
-// Writes, under --out: experiment.json, rows.json (experiments.<step>.<eval>.<name>,
-// for the quality panel), summary.md (the same in a table: the job summary in
-// CI) and each run's result. Exit: 0 compared, 2 could not.
+// Writes, under --out: experiment.json, rows.json
+// (experiments.<step>.<phase>.<eval>.<name>, for the quality panel), summary.md
+// (the job summary in CI) and each run's result. Exit: 0 compared, 2 could not.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -39,6 +46,12 @@ const STEP_EVALS = {
         primary: { id: 'dedup-groups', label: 'Duplicate pairs joined', run: ['evals/dedup-groups/run.js'], question: 'Does the dedup join the suggestions that report the same problem, and only those?' },
         guards: [{ id: 'funnel-dedup', label: 'Known bugs kept', run: ['evals/funnel/dedup/run.js', '--set=full'], question: 'Of the known bugs reaching the dedup in a real review, how many does it keep?' }],
     },
+};
+
+// The two questions an experiment answers, in order.
+const PHASES = {
+    regression: { set: 'controlled', question: 'Did it break anything?', guards: true },
+    decision: { set: 'full', question: 'Is it better?', guards: false },
 };
 
 const parseArgs = (argv) =>
@@ -204,36 +217,52 @@ function runEval(entry, { side, dir, model, out, round, trace }) {
     return { result: readJson(output), exit: r.status ?? 2, traceDir };
 }
 
-function decide(step, primary, guards, sides, versions) {
-    if (versions.base.step === versions.candidate.step) return { decision: 'no change in this step', reason: 'the branch did not change a production file this step loads' };
-    const guardWorse = guards.filter((g) => g.comparison.verdict === 'worse' || g.comparison.worse.length);
-    if (primary.comparison.verdict === 'not measured' || guards.some((g) => g.comparison.verdict === 'not measured')) return { decision: 'not measured', reason: 'an eval did not measure on both sides' };
-    if (guardWorse.length) return { decision: 'does not ship', reason: `${guardWorse.map((g) => `${g.id}: ${g.comparison.worse.length} case${g.comparison.worse.length === 1 ? '' : 's'} worse`).join('; ')}` };
-    if (primary.comparison.verdict === 'better') return { decision: 'ships', reason: `${primary.id} is better beyond its interval, and no guard got worse` };
-    const cheaper = (sides.candidate.usage.in || 0) + (sides.candidate.usage.out || 0) < (sides.base.usage.in || 0) + (sides.base.usage.out || 0);
-    if (primary.comparison.verdict === 'tie' && cheaper) return { decision: 'ships', reason: `${primary.id} ties and the candidate uses fewer tokens` };
-    return { decision: 'does not ship', reason: primary.comparison.verdict === 'worse' ? `${primary.id} is worse beyond its interval` : `${primary.id} ties and the candidate is not cheaper` };
+// A phase's answer: regression → 'no regression' | 'regression'; decision →
+// the main eval's verdict ('better' | 'tie' | 'worse'). 'not measured' when an
+// eval did not measure on both sides.
+function phaseVerdict(phase, evals) {
+    if (evals.some((e) => e.comparison.verdict === 'not measured')) return 'not measured';
+    const [primary, ...guards] = evals;
+    if (phase === 'decision') return primary.comparison.verdict;
+    const worse = primary.comparison.verdict === 'worse' || guards.some((g) => g.comparison.verdict === 'worse' || g.comparison.worse.length);
+    return worse ? 'regression' : 'no regression';
 }
 
-// The experiment in one table, for a job summary or a PR.
+function decide(phases, versions) {
+    if (versions.base.step === versions.candidate.step) return { decision: 'no change in this step', reason: 'the branch did not change a production file this step loads' };
+    if (Object.values(phases).some((p) => p.verdict === 'not measured')) return { decision: 'not measured', reason: 'an eval did not measure on both sides' };
+    const reg = phases.regression;
+    if (reg && reg.verdict === 'regression') {
+        const which = reg.evals.filter((e) => e.comparison.verdict === 'worse' || (e.role === 'guard' && e.comparison.worse.length));
+        return { decision: 'does not ship', reason: `it broke something: ${which.map((e) => `${e.id}${e.comparison.worse.length ? ` (${e.comparison.worse.length} case${e.comparison.worse.length === 1 ? '' : 's'} worse)` : ''}`).join(', ')}` };
+    }
+    const dec = phases.decision;
+    if (!dec) return { decision: 'no regression', reason: 'nothing got worse on the controlled set; the decision phase, on the extended set, decides an improvement' };
+    const primary = dec.evals[0];
+    if (dec.verdict === 'better') return { decision: 'ships', reason: `nothing got worse, and ${primary.id} is better on the extended set beyond its interval` };
+    const tokens = (side) => (primary.sides[side].usage.in || 0) + (primary.sides[side].usage.out || 0);
+    if (dec.verdict === 'tie' && tokens('candidate') < tokens('base')) return { decision: 'ships', reason: `nothing got worse, ${primary.id} ties and the candidate uses fewer tokens` };
+    return { decision: 'does not ship', reason: dec.verdict === 'worse' ? `${primary.id} is worse on the extended set beyond its interval` : `${primary.id} is not better on the extended set, and the candidate is not cheaper` };
+}
+
+// The experiment in one table per phase, for a job summary or a PR.
 function summaryMarkdown(x, { pct, pp }) {
     const lines = [
         `### Experiment: ${x.step} · ${x.name}`,
         '',
-        `${x.branch} \`${x.candidate.sha.slice(0, 9)}\` against where it left ${x.baseRef} \`${x.base.sha.slice(0, 9)}\` · ${x.model} · ${x.set} set · ${x.runs} runs each side`,
+        `${x.branch} \`${x.candidate.sha.slice(0, 9)}\` against where it left ${x.baseRef} \`${x.base.sha.slice(0, 9)}\` · ${x.model} · ${x.runs} runs each side`,
         '',
         `**${x.decision.decision}**: ${x.decision.reason}`,
         '',
         `Step version \`${x.base.version.step}\` → \`${x.candidate.version.step}\`${x.changedFiles.length ? ` (${x.changedFiles.map((f) => `\`${f}\``).join(', ')})` : ', the same'}`,
-        '',
-        '| Eval | Base | Candidate | Difference (95%) | Verdict | Worse / better cases |',
-        '|---|---|---|---|---|---|',
-        ...x.evals.map((e) => {
-            const c = e.comparison;
-            return `| ${e.role === 'primary' ? '**' + e.id + '**' : e.id} | ${pct(c.base)} | ${pct(c.candidate)} | ${pp(c.diff)} pp [${pp(c.ci?.[0])}, ${pp(c.ci?.[1])}] | ${c.verdict} | ${c.worse.length} / ${c.better.length} |`;
-        }),
-        '',
     ];
+    for (const [phase, p] of Object.entries(x.phases)) {
+        lines.push('', `**${PHASES[phase].question}** (${PHASES[phase].set} set): ${p.verdict}`, '', '| Eval | Base | Candidate | Difference (95%) | Verdict | Worse / better cases |', '|---|---|---|---|---|---|');
+        for (const e of p.evals) {
+            const c = e.comparison;
+            lines.push(`| ${e.role === 'primary' ? `**${e.id}**` : e.id} | ${pct(c.base)} | ${pct(c.candidate)} | ${pp(c.diff)} pp [${pp(c.ci?.[0])}, ${pp(c.ci?.[1])}] | ${c.verdict} | ${c.worse.length} / ${c.better.length} |`);
+        }
+    }
     return `${lines.join('\n')}\n`;
 }
 
@@ -247,9 +276,10 @@ function main() {
     }
     const model = args.model || 'deepseek-v4-flash@fireworks';
     const runs = Math.max(1, Number(args.runs) || 2);
-    const set = args.set ? String(args.set) : null;
-    if (set && !['controlled', 'full'].includes(set)) {
-        console.error(`unknown --set=${set}: controlled or full`);
+    const phaseIds = args.phases ? String(args.phases).split(',') : Object.keys(PHASES);
+    const unknownPhase = phaseIds.find((p) => !PHASES[p]);
+    if (unknownPhase || !phaseIds.length) {
+        console.error(`unknown --phases=${args.phases}: ${Object.keys(PHASES).join(', ')}`);
         return 2;
     }
     const baseRef = args.base || 'origin/main';
@@ -276,7 +306,7 @@ function main() {
     const trace = path.join(out, 'trace');
     const baseDir = path.join(out, 'base-tree');
     fs.mkdirSync(out, { recursive: true });
-    console.log(`experiment ${step} · ${name}: base ${baseSha.slice(0, 9)} (${baseRef}) vs candidate ${head.slice(0, 9)} (${branch}) · ${model} · ${set || 'controlled'} set · ${runs} runs each · ${out}`);
+    console.log(`experiment ${step} · ${name}: base ${baseSha.slice(0, 9)} (${baseRef}) vs candidate ${head.slice(0, 9)} (${branch}) · ${model} · ${phaseIds.join(' + ')} · ${runs} runs each · ${out}`);
 
     git(['worktree', 'add', '--detach', baseDir, baseSha]);
     try {
@@ -285,39 +315,49 @@ function main() {
         const ee = 'libs/ee/configs/environment/environment.ts';
         if (fs.existsSync(path.join(ROOT, ee))) fs.copyFileSync(path.join(ROOT, ee), path.join(baseDir, ee));
 
-        const entries = [{ ...plan.primary, run: [...plan.primary.run, ...(set ? [`--set=${set}`] : [])] }, ...plan.guards];
-        const results = Object.fromEntries(entries.map((e) => [e.id, { base: [], candidate: [] }]));
         const traces = { base: new Set(), candidate: new Set() };
         const exits = [];
-        for (let round = 1; round <= runs; round++) {
-            for (const side of ['base', 'candidate']) {
-                for (const entry of entries) {
-                    const r = runEval(entry, { side, dir: side === 'base' ? baseDir : ROOT, model, out, round, trace });
-                    exits.push({ side, eval: entry.id, round, exit: r.exit });
-                    results[entry.id][side].push(r.result && r.exit !== 2 ? r.result : null);
-                    for (const f of readTraces(r.traceDir)) traces[side].add(f);
+        const measured = {};
+        for (const phase of phaseIds) {
+            const def = PHASES[phase];
+            const entries = [{ ...plan.primary, role: 'primary', run: [...plan.primary.run, `--set=${def.set}`] }, ...(def.guards ? plan.guards.map((g) => ({ ...g, role: 'guard' })) : [])];
+            const results = Object.fromEntries(entries.map((e) => [e.id, { base: [], candidate: [] }]));
+            console.log(`${def.question} (${phase}, ${def.set} set)`);
+            for (let round = 1; round <= runs; round++) {
+                for (const side of ['base', 'candidate']) {
+                    for (const entry of entries) {
+                        const r = runEval(entry, { side, dir: side === 'base' ? baseDir : ROOT, model, out: path.join(out, phase), round, trace: path.join(trace, phase) });
+                        exits.push({ phase, side, eval: entry.id, round, exit: r.exit });
+                        results[entry.id][side].push(r.result && r.exit !== 2 ? r.result : null);
+                        for (const f of readTraces(r.traceDir)) traces[side].add(f);
+                    }
                 }
             }
+            measured[phase] = { entries, results };
         }
 
         const versions = { base: versionOf(baseSha, traces.base), candidate: versionOf(head, traces.candidate) };
         const allProd = [...new Set([...versions.base.prodBlobs.keys(), ...versions.candidate.prodBlobs.keys()])];
         const changedFiles = allProd.filter((f) => versions.base.prodBlobs.get(f) !== versions.candidate.prodBlobs.get(f)).sort();
-        const evalsOut = entries.map((entry, k) => {
-            const r = results[entry.id];
-            return {
-                id: entry.id,
-                label: entry.label,
-                role: k === 0 ? 'primary' : 'guard',
-                question: entry.question,
-                metric: (r.candidate.find(Boolean) || r.base.find(Boolean) || {}).metric?.name || null,
-                comparison: compare(r.base.filter(Boolean), r.candidate.filter(Boolean)),
-                sides: { base: sideSummary(r.base), candidate: sideSummary(r.candidate) },
-                runValues: { base: r.base.map((x) => x?.metric?.value ?? null), candidate: r.candidate.map((x) => x?.metric?.value ?? null) },
-            };
-        });
-        const [primary, ...guards] = evalsOut;
-        const decision = decide(step, primary, guards, primary.sides, versions);
+        const phases = Object.fromEntries(
+            Object.entries(measured).map(([phase, { entries, results }]) => {
+                const evals = entries.map((entry) => {
+                    const r = results[entry.id];
+                    return {
+                        id: entry.id,
+                        label: entry.label,
+                        role: entry.role,
+                        question: entry.question,
+                        metric: (r.candidate.find(Boolean) || r.base.find(Boolean) || {}).metric?.name || null,
+                        comparison: compare(r.base.filter(Boolean), r.candidate.filter(Boolean)),
+                        sides: { base: sideSummary(r.base), candidate: sideSummary(r.candidate) },
+                        runValues: { base: r.base.map((x) => x?.metric?.value ?? null), candidate: r.candidate.map((x) => x?.metric?.value ?? null) },
+                    };
+                });
+                return [phase, { question: PHASES[phase].question, set: PHASES[phase].set, verdict: phaseVerdict(phase, evals), evals }];
+            }),
+        );
+        const decision = decide(phases, versions);
         const strip = ({ prodBlobs: _blobs, ...v }) => v;
         const experiment = {
             step,
@@ -326,58 +366,66 @@ function main() {
             baseRef,
             model,
             runs,
-            set: set || 'controlled',
             createdAt: new Date().toISOString(),
             base: { sha: baseSha, version: strip(versions.base) },
             candidate: { sha: head, version: strip(versions.candidate) },
             changedFiles,
-            evals: evalsOut,
+            phases,
             decision,
             exits,
         };
         fs.writeFileSync(path.join(out, 'experiment.json'), `${JSON.stringify(experiment, null, 2)}\n`);
         const STATUS = { better: 'green', tie: 'yellow', worse: 'red', 'not measured': 'infra' };
-        const rows = evalsOut.map((e) => ({
-            name: `experiments.${slug(step)}.${slug(e.id)}.${name}`,
-            status: STATUS[e.comparison.verdict] || 'infra',
-            value: e.comparison.diff,
-            unit: 'ratio',
-            meta: {
-                stage: step,
-                experiment: name,
-                branch,
-                eval: e.id,
-                label: e.label,
-                role: e.role,
-                question: e.question,
-                metric: e.metric,
-                model,
-                runs,
-                set: set || 'controlled',
-                base: { sha: baseSha, ref: baseRef, step_version: versions.base.step },
-                candidate: { sha: head, step_version: versions.candidate.step },
-                eval_version: versions.candidate.eval,
-                dataset_version: versions.candidate.dataset,
-                changed_files: changedFiles,
-                comparison: { ...e.comparison, worse: e.comparison.worse.slice(0, 20), better: e.comparison.better.slice(0, 20), worseCount: e.comparison.worse.length, betterCount: e.comparison.better.length },
-                sides: e.sides,
-                run_values: e.runValues,
-                decision: decision.decision,
-                decision_reason: decision.reason,
-            },
-        }));
+        const rows = Object.entries(phases).flatMap(([phase, p]) =>
+            p.evals.map((e) => ({
+                name: `experiments.${slug(step)}.${phase}.${slug(e.id)}.${name}`,
+                status: STATUS[e.comparison.verdict] || 'infra',
+                value: e.comparison.diff,
+                unit: 'ratio',
+                meta: {
+                    stage: step,
+                    experiment: name,
+                    branch,
+                    phase,
+                    phase_question: p.question,
+                    phase_verdict: p.verdict,
+                    phases: Object.keys(phases),
+                    eval: e.id,
+                    label: e.label,
+                    role: e.role,
+                    question: e.question,
+                    metric: e.metric,
+                    model,
+                    runs,
+                    set: p.set,
+                    base: { sha: baseSha, ref: baseRef, step_version: versions.base.step },
+                    candidate: { sha: head, step_version: versions.candidate.step },
+                    eval_version: versions.candidate.eval,
+                    dataset_version: versions.candidate.dataset,
+                    changed_files: changedFiles,
+                    comparison: { ...e.comparison, worse: e.comparison.worse.slice(0, 20), better: e.comparison.better.slice(0, 20), worseCount: e.comparison.worse.length, betterCount: e.comparison.better.length },
+                    sides: e.sides,
+                    run_values: e.runValues,
+                    decision: decision.decision,
+                    decision_reason: decision.reason,
+                },
+            })),
+        );
         fs.writeFileSync(path.join(out, 'rows.json'), `${JSON.stringify(rows, null, 2)}\n`);
 
         const pct = (x) => (Number.isFinite(x) ? `${(x * 100).toFixed(1)}%` : 'n/a');
         const pp = (x) => (Number.isFinite(x) ? `${x >= 0 ? '+' : ''}${(x * 100).toFixed(1)}` : 'n/a');
         fs.writeFileSync(path.join(out, 'summary.md'), summaryMarkdown(experiment, { pct, pp }));
         console.log(`\nstep version: base ${versions.base.step}, candidate ${versions.candidate.step}${changedFiles.length ? ` (${changedFiles.length} files changed: ${changedFiles.slice(0, 4).join(', ')}${changedFiles.length > 4 ? ', …' : ''})` : ' — the same'}`);
-        for (const e of evalsOut) {
-            const c = e.comparison;
-            console.log(`${e.role === 'primary' ? '★' : '·'} ${e.id}: base ${pct(c.base)} → candidate ${pct(c.candidate)}, ${pp(c.diff)} pp [${pp(c.ci?.[0])}, ${pp(c.ci?.[1])}] over ${c.cases} cases · ${c.verdict} · ${c.worse.length} worse, ${c.better.length} better · runs base ${e.runValues.base.map(pct).join('/')} candidate ${e.runValues.candidate.map(pct).join('/')}`);
+        for (const [phase, p] of Object.entries(phases)) {
+            console.log(`${p.question} (${phase}, ${p.set} set): ${p.verdict}`);
+            for (const e of p.evals) {
+                const c = e.comparison;
+                console.log(`  ${e.role === 'primary' ? '★' : '·'} ${e.id}: base ${pct(c.base)} → candidate ${pct(c.candidate)}, ${pp(c.diff)} pp [${pp(c.ci?.[0])}, ${pp(c.ci?.[1])}] over ${c.cases} cases · ${c.verdict} · ${c.worse.length} worse, ${c.better.length} better · runs base ${e.runValues.base.map(pct).join('/')} candidate ${e.runValues.candidate.map(pct).join('/')}`);
+            }
         }
         console.log(`\ndecision: ${decision.decision} — ${decision.reason}\n${path.join(out, 'experiment.json')}`);
-        return experiment.evals.every((e) => e.comparison.verdict !== 'not measured') ? 0 : 2;
+        return Object.values(phases).every((p) => p.verdict !== 'not measured') ? 0 : 2;
     } finally {
         try {
             git(['worktree', 'remove', '--force', baseDir]);
@@ -389,4 +437,4 @@ function main() {
 
 if (require.main === module) process.exit(main());
 
-module.exports = { compare, perCase, decide, STEP_EVALS };
+module.exports = { compare, perCase, decide, phaseVerdict, PHASES, STEP_EVALS };

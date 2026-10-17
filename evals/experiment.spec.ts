@@ -1,5 +1,5 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { compare, decide } = require('./experiment');
+const { compare, decide, phaseVerdict } = require('./experiment');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { pairsOf, scoreCase } = require('./dedup-groups/run');
 
@@ -34,16 +34,37 @@ describe('evals/experiment.js compare', () => {
         expect(r.candidate).toBe(1);
     });
 
-    it('lists a case that got worse, and a guard with one blocks the decision', () => {
+    it('lists a case that got worse, and a guard with one is a regression', () => {
         const base = [run([c('a', 2, 2), c('b', 1, 1)])];
         const cand = [run([c('a', 1, 2), c('b', 1, 1)])];
-        const guard = compare(base, cand);
-        expect(guard.worse.map((x: { id: string }) => x.id)).toEqual(['a']);
-        const primary = { id: 'p', comparison: { verdict: 'better', worse: [] } };
-        const usage = { usage: { in: 1, out: 1 } };
-        expect(decide('dedup', primary, [{ id: 'g', comparison: guard }], { base: usage, candidate: usage }, { base: { step: 'x' }, candidate: { step: 'y' } }).decision).toBe('does not ship');
-        expect(decide('dedup', primary, [], { base: usage, candidate: usage }, { base: { step: 'x' }, candidate: { step: 'x' } }).decision).toBe('no change in this step');
-        expect(decide('dedup', primary, [], { base: usage, candidate: usage }, { base: { step: 'x' }, candidate: { step: 'y' } }).decision).toBe('ships');
+        const guard = { id: 'g', role: 'guard', comparison: compare(base, cand) };
+        expect(guard.comparison.worse.map((x: { id: string }) => x.id)).toEqual(['a']);
+        const primaryTie = { id: 'p', role: 'primary', comparison: { verdict: 'tie', worse: [] } };
+        expect(phaseVerdict('regression', [primaryTie, guard])).toBe('regression');
+        expect(phaseVerdict('regression', [primaryTie, { ...guard, comparison: { verdict: 'tie', worse: [] } }])).toBe('no regression');
+        expect(phaseVerdict('decision', [{ ...primaryTie, comparison: { verdict: 'better', worse: [] } }])).toBe('better');
+    });
+});
+
+describe('evals/experiment.js decide', () => {
+    const changed = { base: { step: 'x' }, candidate: { step: 'y' } };
+    const usage = (n: number) => ({ usage: { in: n, out: 0 } });
+    const primary = (verdict: string, base = 10, cand = 10) => ({ id: 'p', role: 'primary', comparison: { verdict, worse: [] }, sides: { base: usage(base), candidate: usage(cand) } });
+    const phase = (verdict: string, evals: unknown[]) => ({ verdict, evals });
+
+    it('ships only when nothing regressed and the decision phase is better, or ties for fewer tokens', () => {
+        expect(decide({ regression: phase('no regression', [primary('tie')]), decision: phase('better', [primary('better')]) }, changed).decision).toBe('ships');
+        expect(decide({ regression: phase('no regression', [primary('tie')]), decision: phase('tie', [primary('tie', 10, 5)]) }, changed).decision).toBe('ships');
+        expect(decide({ regression: phase('no regression', [primary('tie')]), decision: phase('tie', [primary('tie', 10, 20)]) }, changed).decision).toBe('does not ship');
+        expect(decide({ regression: phase('regression', [primary('worse')]), decision: phase('better', [primary('better')]) }, changed).decision).toBe('does not ship');
+    });
+
+    it('says no regression, not ships, when only the regression phase ran', () => {
+        expect(decide({ regression: phase('no regression', [primary('better')]) }, changed)).toMatchObject({ decision: 'no regression' });
+    });
+
+    it('says nothing changed when the step version is the same on both sides', () => {
+        expect(decide({ regression: phase('no regression', [primary('tie')]) }, { base: { step: 'x' }, candidate: { step: 'x' } }).decision).toBe('no change in this step');
     });
 });
 

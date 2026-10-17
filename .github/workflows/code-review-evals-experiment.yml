@@ -16,12 +16,12 @@ on:
                 description: "The review step (evals/experiment.js STEP_EVALS), e.g. dedup"
                 required: true
                 type: string
-            set:
-                description: "The main eval's set: full decides an improvement, controlled catches a regression"
+            phases:
+                description: "Did it break anything (regression, controlled set), and is it better (decision, extended set)"
                 required: false
-                default: "full"
+                default: "regression,decision"
                 type: choice
-                options: [full, controlled]
+                options: ["regression,decision", "regression"]
             runs:
                 description: "Runs per side"
                 required: false
@@ -72,7 +72,7 @@ jobs:
             - name: Run the experiment
               env:
                   STEP: ${{ inputs.step }}
-                  SET: ${{ inputs.set }}
+                  PHASES: ${{ inputs.phases }}
                   RUNS: ${{ inputs.runs }}
                   MODEL: ${{ inputs.model }}
                   NAME: ${{ github.ref_name }}
@@ -85,7 +85,7 @@ jobs:
                   # The platform's OpenAI key, under production's name: the
                   # review's embedder (the dedup's semantic tier) reads it.
                   API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
-              run: node evals/experiment.js --step="$STEP" --base=origin/main --set="$SET" --runs="$RUNS" --model="$MODEL" --name="$NAME" --out=experiment
+              run: node evals/experiment.js --step="$STEP" --base=origin/main --phases="$PHASES" --runs="$RUNS" --model="$MODEL" --name="$NAME" --out=experiment
             - name: Job summary
               if: always() && hashFiles('experiment/summary.md') != ''
               run: cat experiment/summary.md >> "$GITHUB_STEP_SUMMARY"
