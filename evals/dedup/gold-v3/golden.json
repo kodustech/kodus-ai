@@ -36,6 +36,9 @@
      ],
      "sonnet-5.5@cc": [
       "S3"
+     ],
+     "opus-5.5@api": [
+      "S7"
      ]
     },
     "reason_opus": "AuthzClientCryptoProvider.java:114-115 create encoders and write r/s, discarding the results; the return at :117-121 re-encodes them. Dead code with no behaviour effect.",
@@ -70,6 +73,9 @@
      ],
      "sonnet-5.5@cc": [
       "S2"
+     ],
+     "opus-5.5@api": [
+      "S3"
      ]
     },
     "reason_opus": "CryptoProvider.java:39-44 adds abstract int order() to the public interface and CryptoIntegration.detectProvider now calls CryptoProvider::order on every ServiceLoader provider; any implementation compiled against the old interface fails with AbstractMethodError.",
@@ -102,6 +108,13 @@
       "S2",
       "S6",
       "S3",
+      "S10"
+     ],
+     "opus-5.5@api": [
+      "S1",
+      "S6",
+      "S8",
+      "S9",
       "S10"
      ]
     },
@@ -234,6 +247,10 @@
      ],
      "sonnet-5.5@cc": [
       "S6"
+     ],
+     "opus-5.5@api": [
+      "S2",
+      "S5"
      ]
     },
     "reason_opus": "ECDSAAlgorithmTest.java:39-43 generates one default EC key pair (P-256) and reuses it for ES384/ES512, so those tests only pad 32-byte r/s values and never exercise 48/66-byte components.",
@@ -273,6 +290,9 @@
      ],
      "sonnet-5.5@cc": [
       "S5"
+     ],
+     "opus-5.5@api": [
+      "S4"
      ]
     },
     "reason_opus": "ECDSAAlgorithmTest.java:52-56 asserts only that asn1derToConcatenatedRS(concatenatedRSToASN1DER(x)) equals x, never comparing asn1Des to the original sign or verifying the signature, so symmetric bugs (e.g. swapped r/s) pass.",
@@ -1048,6 +1068,10 @@
      "sonnet-5.5@cc": [
       "S1",
       "S5"
+     ],
+     "opus-5.5@api": [
+      "S2",
+      "S5"
      ]
     },
     "reason_opus": "blocked_email.rb:12 looks up BlockedEmail.where(email: email).first with exact, case-sensitive matching and nothing downcases the stored or submitted email (User.new_from_params assigns params[:email] as-is), so Block@x.org bypasses an entry for block@x.org.",
@@ -1104,6 +1128,11 @@
      "sonnet-5.5@cc": [
       "S2",
       "S3"
+     ],
+     "opus-5.5@api": [
+      "S1",
+      "S3",
+      "S4"
      ]
     },
     "reason_opus": "blocked_email.rb:12-17 increments match_count and saves inside should_block?, which EmailValidator calls during validation (email_validator.rb:13); UsersController#create calls user.valid? and then user.save, so one signup attempt is counted twice, and the read-modify-write is not atomic.",
@@ -1185,6 +1214,9 @@
      ],
      "gpt-6.1-sol@e2b": [
       "S5"
+     ],
+     "opus-5.5@api": [
+      "S6"
      ]
     },
     "reason_opus": "email_validator.rb:18-22 builds Regexp.new(\"@(#{domains})\", true) with no end anchor, so whitelist gmail.com matches user@gmail.com.evil.com; the PR moves and rewrites this method into the new EmailValidator.",
@@ -1240,6 +1272,10 @@
       "S1",
       "S4",
       "S7"
+     ],
+     "opus-5.5@api": [
+      "S1",
+      "S9"
      ]
     },
     "reason_opus": "GroupPermissionsV2.java:70 canManage() returns hasPermission(null, VIEW, MANAGE), whereas canManage(GroupModel) at :79 requires MANAGE; a view-only all-groups grant passes requireManage() and can create groups.",
@@ -1293,6 +1329,15 @@
       "S4",
       "S8",
       "S10"
+     ],
+     "opus-5.5@api": [
+      "S2",
+      "S6",
+      "S7",
+      "S8",
+      "S10",
+      "S11",
+      "S12"
      ]
     },
     "reason_opus": "GroupPermissionsV2.java:121-124 passes groupResource.getId() to hasPermission, which does findByName (:141), while V2 resources are named by group id (AdminPermissionsSchema.resolveGroup); it also adds the resource id, not the group id, to the returned set used as UserModel.GROUPS.",
@@ -1383,6 +1428,9 @@
      ],
      "sonnet-5.5@cc": [
       "S6"
+     ],
+     "opus-5.5@api": [
+      "S4"
      ]
     },
     "reason_opus": "GroupPermissionEvaluator.java:132-135 Javadoc for requireManageMembers references canManageMembership(GroupModel) instead of canManageMembers(GroupModel).",
@@ -1418,6 +1466,9 @@
       "S6"
      ],
      "sonnet-5.5@cc": [
+      "S5"
+     ],
+     "opus-5.5@api": [
       "S5"
      ]
     },
@@ -2655,6 +2706,10 @@
      ],
      "gpt-6.1-sol@e2b": [
       "S1"
+     ],
+     "opus-5.5@api": [
+      "S1",
+      "S2"
      ]
     },
     "reason_opus": "testFeatureNotEnabled only calls cliResult.assertError(...) and never asserts exitCode() == CompatibilityResult.FEATURE_DISABLED, the new exit code added by the PR.",
@@ -2663,6 +2718,75 @@
     "subclass_opus_inicial": "nit",
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#oph-01",
+    "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+    "comment": "testMissingOptionOnSave only asserts a message is absent, so it would still pass if --features=rolling-updates were not honoured and the command failed with the feature-disabled error.",
+    "commentOpus": "testMissingOptionOnSave only asserts a message is absent, so it would still pass if --features=rolling-updates were not honoured and the command failed with the feature-disabled error.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S3"
+     ]
+    },
+    "reason_opus": "UpdateCommandDistTest.java:58-62 testMissingOptionOnSave only does assertNoMessage(\"Missing required argument\"), so it would also pass if the feature gate rejected the command. The PR changed this launch line to add ENABLE_FEATURE, but testCompatible (line 71-75) already asserts \"Metadata:\" and exit code 0 with the flag, so the feature path is covered elsewhere; this is a weak-assertion tidy-up.",
+    "reason_astra": "The PR changes UpdateCommandDistTest.java:59 to enable rolling-updates, but line 61 only checks for absent output; CLIResult.java:92-94 checks neither errors nor exit status. UpdateCompatibilityMetadata.java:46-49 exits early when the feature is disabled, and CLITestExtension.java:112-114,149-155 performs no automatic exit-code assertion for distribution tests, so that failure would still pass this test.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "oph",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "texto": "UpdateCommandDistTest.java:58-62 testMissingOptionOnSave only does assertNoMessage(\"Missing required argument\"), so it would also pass if the feature gate rejected the command. The PR changed this launch line to add ENABLE_FEATURE, but testCompatible (line 71-75) already asserts \"Metadata:\" and exit code 0 with the flag, so the feature path is covered elsewhere; this is a weak-assertion tidy-up."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "The PR changes UpdateCommandDistTest.java:59 to enable rolling-updates, but line 61 only checks for absent output; CLIResult.java:92-94 checks neither errors nor exit status. UpdateCompatibilityMetadata.java:46-49 exits early when the feature is disabled, and CLITestExtension.java:112-114,149-155 performs no automatic exit-code assertion for distribution tests, so that failure would still pass this test."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "texto": "Keep TP nit. The absence-only assertion is not new: the PR only appends ENABLE_FEATURE to the @Launch at UpdateCommandDistTest.java:59; `cliResult.assertNoMessage(\"Missing required argument\")` (:61) was already the whole test, and it still checks what it was written for (output option is optional on save). The feature-gate path the comment worries about is verified elsewhere in the same PR: :73-74 `result.assertMessage(\"Metadata:\"); assertEquals(0, result.exitCode());` with ENABLE_FEATURE, plus the new testFeatureNotEnabled asserting the disabled error. Adding a positive assertion here is test tidying."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "I retain TP: the changed launch exercises the newly gated command, but assertNoMessage checks only stdout, and the distribution extension does not assert successful exit. The new feature-disabled branch returns an error without that stdout message, so this test passes without executing metadata generation. testCompatible supplies --file and therefore does not verify successful execution with the output option omitted. Although the weak assertion predates this PR, the PR changes this test’s invocation and introduces the early-return path it fails to detect; this is a behavioral test gap, not merely tidying."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "texto": "Keep TP nit. The test's subject is picocli option parsing: \"Missing required argument\" is a parse-time error raised before any run() executes. The PR's gate lives inside run() (UpdateCompatibilityMetadata.java:45-49: isFeatureEnabled check -> printFeatureDisabled; picocli.exit(FEATURE_DISABLED); return), i.e. after parsing, and --file is declared optional at :39-41 with no required=true. So whether or not the gate fires, assertNoMessage(\"Missing required argument\") at UpdateCommandDistTest.java:61 still verifies exactly what the test was written for: save accepts an omitted --file. The gate cannot mask the behaviour under test; it only means the test does not also check metadata generation, which it never claimed to. The PR changed only the @Launch args (:59), not the assertion; the gated path is positively verified by testFeatureNotEnabled (:46-50) and testCompatible (:73-74 Metadata: + exitCode 0). A stronger positive assertion is test tidying, not a test that fails to verify its behaviour."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "texto": "I change to TP/nit. The assertion can pass on feature-disabled failure, but Picocli parses arguments before the gate in run(), so that gate cannot mask a missing-required-option parsing failure. This test targets omission of --file; testCompatible separately verifies enabled metadata execution with output and exit-code assertions. Adding a success assertion here is test strengthening rather than a newly broken behavioral check. Severity remains medium when rating the test gap as the comment states it."
+     }
+    ],
+    "class": "TP",
+    "subclass": "nit",
+    "status": "agreed_after_debate",
+    "severity": "medium",
+    "category": "test_gap"
    }
   ],
   "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
@@ -2717,6 +2841,13 @@
       "S3",
       "S4",
       "S6"
+     ],
+     "opus-5.5@api": [
+      "S5",
+      "S9",
+      "S10",
+      "S12",
+      "S17"
      ]
     },
     "reason_opus": "viewer/slots.ts:141-142 computes end from slotStartTime, identical to start, so the `end > workingHour.endTime` check ignores the event length.",
@@ -2769,6 +2900,11 @@
       "S2",
       "S5",
       "S7"
+     ],
+     "opus-5.5@api": [
+      "S2",
+      "S13",
+      "S16"
      ]
     },
     "reason_opus": "viewer/slots.ts:114 compares two newly created dayjs objects with ===, which is always false, so the start==end (unavailable-day) override branch never fires.",
@@ -2806,6 +2942,9 @@
       "S5",
       "S6",
       "S7"
+     ],
+     "opus-5.5@api": [
+      "S1"
      ]
     },
     "reason_opus": "viewer/slots.ts:133-135 returns true when a date override matches the day, before the busy.every check at :153, so existing bookings within the override window are ignored.",
@@ -2841,6 +2980,10 @@
      ],
      "sonnet-5.5@cc": [
       "S8"
+     ],
+     "opus-5.5@api": [
+      "S6",
+      "S18"
      ]
     },
     "reason_opus": "viewer/slots.ts:138-147 rejects a slot if any workingHours entry for that weekday does not contain it (find), so with split schedules on the same day every slot is rejected by the other interval.",
@@ -2872,6 +3015,10 @@
      "gpt-6.1-sol@e2b": [
       "S3",
       "S12"
+     ],
+     "opus-5.5@api": [
+      "S3",
+      "S11"
      ]
     },
     "reason_opus": "viewer/slots.ts:123 checks slotStartTime.isAfter(override end), so a slot that starts before the override end but finishes after it is accepted.",
@@ -2902,6 +3049,9 @@
      ],
      "gpt-6.1-sol@e2b": [
       "S4"
+     ],
+     "opus-5.5@api": [
+      "S8"
      ]
     },
     "reason_opus": "lib/slots.ts:212-224 converts override start/end to minutes using only hour()/minute() after the offset, dropping day rollover, and activeOverrides are bucketed by UTC day (:206-207) before shifting; overrides crossing invitee midnight become reversed ranges or land on the wrong day.",
@@ -2934,6 +3084,81 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-01",
+    "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+    "comment": "checkIfIsAvailable's date-override check never rejects a slot that starts before the override start (only one that ends before it), so slots partly outside the override hours are treated as available.",
+    "commentOpus": "checkIfIsAvailable's date-override check never rejects a slot that starts before the override start (only one that ends before it), so slots partly outside the override hours are treated as available.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S4"
+     ]
+    },
+    "reason_opus": "slots.ts:117-125 rejects the slot only when slotEndTime is at or before the override start or slotStartTime is after the override end; a slot starting before the override start and ending inside it passes, and the function then returns true at line 135 (dateOverrideExist). Fixed hosts can be offered slots partly outside their override window.",
+    "reason_astra": "packages/trpc/server/routers/viewer/slots.ts:118-124 checks the slot end against the override start, allowing a slot that starts before the override and ends inside it. Slots generated from another host's availability can reach this check for every fixed host at slots.ts:483-493, so the missing start-bound check affects returned availability.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "oph",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug"
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-02",
+    "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+    "comment": "The override day is computed with local-time dayjs(date.start) while the slot day is formatted in UTC, so on a server not running in UTC overrides near midnight are applied to the wrong day or skipped.",
+    "commentOpus": "The override day is computed with local-time dayjs(date.start) while the slot day is formatted in UTC, so on a server not running in UTC overrides near midnight are applied to the wrong day or skipped.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S7"
+     ]
+    },
+    "reason_opus": "slots.ts:110-111 formats dayjs(date.start).add(utcOffset) in the server's local timezone while slotStartTime is a UTC dayjs (line 100). On a non-UTC server the YYYY MM DD comparison drifts for overrides near midnight, so overrides are matched to the wrong day.",
+    "reason_astra": "packages/trpc/server/routers/viewer/slots.ts:100 makes slotStartTime UTC, but slots.ts:110 formats the adjusted override using server-local dayjs. Overrides originate as UTC-constructed Dates in packages/core/getUserAvailability.ts:218-222, so a non-UTC server can produce a different calendar date and incorrectly skip or apply the new override check.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "oph",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug"
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-03",
+    "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+    "comment": "With several date-override ranges on the same day, a slot is rejected as soon as it falls outside any one of them, so slots inside the other ranges become unavailable.",
+    "commentOpus": "With several date-override ranges on the same day, a slot is rejected as soon as it falls outside any one of them, so slots inside the other ranges become unavailable.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S14"
+     ]
+    },
+    "reason_opus": "slots.ts:105-131 uses dateOverrides.find(...) and returns false (unavailable) as soon as any single override on the slot's day has the slot outside its range. With two override ranges on one day, a slot inside the second range is rejected because it is outside the first.",
+    "reason_astra": "packages/trpc/server/routers/viewer/slots.ts:105-130 rejects a slot when any matching-date override excludes it. Consequently, a 14:00 slot generated from the afternoon range in packages/lib/slots.ts:211-245 is rejected by a separate 09:00–11:00 override, even though it fits a valid range.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "oph",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "high",
+    "category": "bug"
    }
   ],
   "advanced-query-processing-architecture-grafana-codex": [
@@ -2967,6 +3192,10 @@
       "S1"
      ],
      "sonnet-5.5@cc": [
+      "S1",
+      "S2"
+     ],
+     "opus-5.5@api": [
       "S1",
       "S2"
      ]
@@ -3016,6 +3245,9 @@
     "foundBy": {
      "deepseek-v4.1-flash": [
       "S5"
+     ],
+     "opus-5.5@api": [
+      "S3"
      ]
     },
     "reason_opus": "shardQuerySplitting.ts:49-52 now filters on the raw expr before applyTemplateVariables, whereas base interpolated first; only a target whose whole expr is a variable resolving to '' now survives as a blank query, an unusual misconfiguration case.",
@@ -3050,6 +3282,83 @@
     "subclass_opus_inicial": "nit",
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": "nit"
+   },
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+    "caseId": "advanced-sql-analytics-framework-grafana-codex",
+    "comment": "enableSqlExpressions returns false on both branches, so ReadQuery rejects every SQL expression query as not implemented even when the sqlExpressions feature flag is enabled.",
+    "commentOpus": "enableSqlExpressions returns false on both branches, so ReadQuery rejects every SQL expression query as not implemented even when the sqlExpressions feature flag is enabled.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S1",
+      "S3",
+      "S4",
+      "S5",
+      "S7"
+     ]
+    },
+    "reason_opus": "reader.go:194-200 enableSqlExpressions returns false on both branches, and ReadQuery (reader.go:129-132) returns 'sqlExpressions is not implemented' when it is false. Every SQL expression query is rejected even when FlagSqlExpressions is enabled; the flag lookup is dead.",
+    "reason_astra": "pkg/expr/reader.go:194-199 performs a redundant flag check because both branches return false. Disabling SQL is intentional: this PR also replaces the database implementation with error-returning stubs at pkg/expr/sql/db.go:12-21, consistent with its commit message. The redundant check is a nit; severity reflects the comments’ claimed feature failure, assuming it were unintended.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "nit",
+    "rodada": "oph",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "reader.go:194-200 enableSqlExpressions returns false on both branches, and ReadQuery (reader.go:129-132) returns 'sqlExpressions is not implemented' when it is false. Every SQL expression query is rejected even when FlagSqlExpressions is enabled; the flag lookup is dead."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "high",
+      "texto": "pkg/expr/reader.go:194-199 performs a redundant flag check because both branches return false. Disabling SQL is intentional: this PR also replaces the database implementation with error-returning stubs at pkg/expr/sql/db.go:12-21, consistent with its commit message. The redundant check is a nit; severity reflects the comments’ claimed feature failure, assuming it were unintended."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "high",
+      "texto": "Concede. Disabling SQL expressions is deliberate: the PR drops github.com/scottlepp/go-duck from go.mod and replaces it with stubs, pkg/expr/sql/db.go:20-21 `func (db *DB) QueryFramesInto(...) error { return errors.New(\"not implemented\") }`, and sql_command.go now calls `db := sql.NewInMemoryDB()`. With the flag on, the query would fail at execution anyway, so reader.go:129-131 rejecting it early is intended. What remains is the dead, inverted flag lookup at reader.go:194-199 `enabled := !h.features.IsEnabledGlobally(...)` with both branches `return false`: a nit."
+     }
+    ],
+    "class": "TP",
+    "subclass": "nit",
+    "status": "agreed_after_debate",
+    "severity": "high",
+    "category": "bug"
+   },
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-02",
+    "caseId": "advanced-sql-analytics-framework-grafana-codex",
+    "comment": "The variable `enabled` in enableSqlExpressions holds the negated flag value, so it is true when SQL expressions are disabled and the name states the opposite of its value.",
+    "commentOpus": "The variable `enabled` in enableSqlExpressions holds the negated flag value, so it is true when SQL expressions are disabled and the name states the opposite of its value.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S2"
+     ]
+    },
+    "reason_opus": "reader.go:195 assigns enabled := !IsEnabledGlobally(FlagSqlExpressions), so the variable is true when the feature is disabled; the name contradicts its value. Misleading naming only, since both branches return false anyway.",
+    "reason_astra": "pkg/expr/reader.go:195 assigns the negated feature flag to `enabled`, so the name describes the opposite of its value. Both branches return false at lines 197 and 199, making this a naming issue without behavioral impact.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "nit",
+    "rodada": "oph",
+    "class": "TP",
+    "subclass": "nit",
+    "status": "agreed",
+    "severity": "low",
+    "category": "style"
    }
   ],
   "anonymous-add-configurable-device-limit-grafana-codex": [
@@ -3425,6 +3734,13 @@
       "S4",
       "S5",
       "S6"
+     ],
+     "opus-5.5@api": [
+      "S2",
+      "S3",
+      "S4",
+      "S5",
+      "S6"
      ]
     },
     "reason_opus": "The PR turns the callbacks into async in bookings.tsx:553 and vital/lib/reschedule.ts:125 (and wipemycalother) with await getCalendar inside forEach; forEach discards the promises, so calendar/video deletions are fire-and-forget, getCalendar/import failures become unhandled rejections outside the surrounding try/catch, and the handler continues before cleanup.",
@@ -3443,6 +3759,9 @@
     "martianRef": [],
     "foundBy": {
      "sonnet-5.5@cc": [
+      "S1"
+     ],
+     "opus-5.5@api": [
       "S1"
      ]
     },
@@ -3501,6 +3820,13 @@
      ],
      "sonnet-5.5@cc": [
       "S1"
+     ],
+     "opus-5.5@api": [
+      "S3",
+      "S7",
+      "S8",
+      "S9",
+      "S10"
      ]
     },
     "reason_opus": "cache.go:30-32 builds userPermDenialCacheKey as namespace+\".perm_\"+uid+\"_\"+action+\"_\"+name+\"_\"+parent; dashboard/folder UIDs may contain '_', so (name=a_b,parent=c) and (name=a,parent=b_c) share a key and Check (service.go:116-121) returns a cached denial for the wrong resource.",
@@ -3548,6 +3874,10 @@
      "sonnet-5.5@cc": [
       "S2",
       "S3"
+     ],
+     "opus-5.5@api": [
+      "S5",
+      "S6"
      ]
     },
     "reason_opus": "service_test.go:981-982 seeds permCache with {\"dashboards:uid:dash1\": false} despite the comment 'Allow access ... to prove this is not checked'; the normal path also denies, so the 'Should deny on explicit cache deny entry' test passes even if the permDenialCache check (service.go:116-121) is removed.",
@@ -3571,6 +3901,9 @@
     "martianRef": [],
     "foundBy": {
      "gpt-6.1-sol": [
+      "S2"
+     ],
+     "opus-5.5@api": [
       "S2"
      ]
     },
@@ -3643,6 +3976,10 @@
      "gpt-6.1-sol@e2b": [
       "S3",
       "S6"
+     ],
+     "opus-5.5@api": [
+      "S1",
+      "S2"
      ]
     },
     "reason_opus": "handleCancelBooking.ts:487-492, bookings.tsx:488-494 and workflows.tsx call the async deleteScheduledEmailReminder/deleteScheduledSMSReminder inside forEach without awaiting; the PR removed the awaited prisma deleteMany, so the DB cancellation/deletion now runs in floating promises.",
@@ -3681,6 +4018,10 @@
       "S5"
      ],
      "sonnet-5.5@cc": [
+      "S6"
+     ],
+     "opus-5.5@api": [
+      "S3",
       "S6"
      ]
     },
@@ -3831,6 +4172,9 @@
      ],
      "sonnet-5.5@cc": [
       "S3"
+     ],
+     "opus-5.5@api": [
+      "S5"
      ]
     },
     "reason_opus": "emailReminderManager.ts:197-232: default path only sets cancelled:true and the immediateDelete path only posts a SendGrid cancel; neither deletes, so the names are misleading. Naming only.",
@@ -3929,6 +4273,14 @@
       "S3",
       "S4",
       "S6"
+     ],
+     "opus-5.5@api": [
+      "S1",
+      "S5",
+      "S6",
+      "S7",
+      "S9",
+      "S12"
      ]
     },
     "reason_opus": "xorm_store.go:534-537, :554-557 and :576-579 call r.log.Error on every cleanup batch for normal progress, including the full ids slice (up to the batch size) and a nil err.",
@@ -3983,6 +4335,10 @@
      ],
      "sonnet-5.5": [
       "S6"
+     ],
+     "opus-5.5@api": [
+      "S3",
+      "S10"
      ]
     },
     "reason_opus": "xorm_store.go:614-618 binds one placeholder per id for all non-SQLite engines with no cap; MySQL and Postgres reject more than 65535 bind parameters, so an AnnotationCleanupJobBatchSize above that fails every batch. Requires an unusually large configured batch size.",
@@ -4036,6 +4392,9 @@
      ],
      "gpt-6.1-sol@e2b": [
       "S1"
+     ],
+     "opus-5.5@api": [
+      "S4"
      ]
     },
     "reason_opus": "xorm_store.go:608-613 builds the SQLite IN list with repeated fmt.Sprintf(\"%s, %d\", values, v), quadratic in batch size; only hit on SQLite with batch size > 999 in a background job.",
@@ -4086,6 +4445,10 @@
      "sonnet-5.5@cc": [
       "S2",
       "S7"
+     ],
+     "opus-5.5@api": [
+      "S2",
+      "S11"
      ]
     },
     "reason_opus": "cleanup.go:77 changes the ticker from time.Minute * 10 to time.Minute * 1, running the whole cleanup service (temp files, annotations, snapshots, versions, etc.) ten times as often with no stated reason.",
@@ -4094,6 +4457,31 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#oph-01",
+    "caseId": "database-performance-optimizations-grafana-codex",
+    "comment": "The 'running the max count delete again' test case no longer runs cleanup a second time after the PR's per-subtest seeding and cleanup, so it does not verify that a repeated max-count cleanup deletes nothing.",
+    "commentOpus": "The 'running the max count delete again' test case no longer runs cleanup a second time after the PR's per-subtest seeding and cleanup, so it does not verify that a repeated max-count cleanup deletes nothing.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S8"
+     ]
+    },
+    "reason_opus": "cleanup_test.go:83-96 together with the per-subtest seeding and t.Cleanup added at :116-128: each case now creates fresh annotations and wipes the tables, so the case 'running the max count delete again should not remove any annotations' calls cleaner.Run only once, on 9 annotations with MaxCount=3. It no longer checks that a second run is a no-op, which is the behaviour the case is named for.",
+    "reason_astra": "The repeat-cleanup case seeds nine annotations with MaxCount=3 per type (pkg/services/annotations/annotationsimpl/cleanup_test.go:83–95). Each subtest now creates fresh data and clears both tables afterward (lines 116–127), and calls cleaner.Run only once (line 132). This PR therefore removes the previous second-run coverage, leaving the intended idempotency behavior untested.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "oph",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "test_gap"
    }
   ],
   "dual-storage-architecture-grafana-codex": [
@@ -5439,6 +5827,12 @@
       "S8",
       "S11",
       "S12"
+     ],
+     "opus-5.5@api": [
+      "S3",
+      "S5",
+      "S8",
+      "S13"
      ]
     },
     "reason_opus": "When enable_advanced_features and cursor.offset < 0, OptimizedCursorPaginator.get_result slices queryset[cursor.offset:stop] directly (paginator.py:877-882) under a comment claiming the ORM 'properly handles negative slicing'; Django querysets reject negative indices, so such cursors raise instead of paginating.",
@@ -5478,6 +5872,9 @@
      ],
      "sonnet-5.5@cc": [
       "S9"
+     ],
+     "opus-5.5@api": [
+      "S6"
      ]
     },
     "reason_opus": "The new comment in BasePaginator.get_result (paginator.py:179-181) says negative offsets are allowed and safe because the queryset handles boundaries, but line 182 clamps non-prev offsets to 0 and passes prev offsets through exactly as before; behaviour for prev cursors is unchanged, only the comment is wrong.",
@@ -5552,6 +5949,13 @@
       "S7",
       "S8",
       "S10"
+     ],
+     "opus-5.5@api": [
+      "S1",
+      "S7",
+      "S10",
+      "S11",
+      "S14"
      ]
     },
     "reason_opus": "OptimizedCursorPaginator.get_item_key applies math.floor/math.ceil to getattr(item, self.key) (paginator.py:838-840), and value_from_cursor returns the raw cursor value, but the only caller uses order_by='-datetime' (organization_auditlogs.py:76-82); math.floor on a datetime raises TypeError while building the cursor for any non-empty page.",
@@ -5589,6 +5993,9 @@
      ],
      "sonnet-5.5@cc": [
       "S3"
+     ],
+     "opus-5.5@api": [
+      "S4"
      ]
     },
     "reason_opus": "organization_auditlogs.py:71 evaluates organization_context.member.has_global_access unconditionally for non-superusers, but RpcUserOrganizationContext.member can be None for org auth token / API key requests, so the endpoint raises AttributeError even when optimized_pagination is not requested.",
@@ -5657,6 +6064,10 @@
      "sonnet-5.5@cc": [
       "S2",
       "S6"
+     ],
+     "opus-5.5@api": [
+      "S9",
+      "S15"
      ]
     },
     "reason_opus": "paginator.py:182 clamps the offset only when not cursor.is_prev and passes a negative offset unchanged into queryset[start_offset:stop] for prev cursors; Cursor accepts any int offset (cursors.py:28). Django rejects negative slicing, so a crafted prev cursor returns a 500, and the PR's added comment (lines 179-181) wrongly claims this is safe.",
@@ -5696,6 +6107,32 @@
     "status": "agreed",
     "severity": "low",
     "category": "doc_defect"
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#oph-01",
+    "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+    "comment": "OptimizedCursorPaginator.value_from_cursor returns the raw integer cursor value, which is then compared against the datetime column, so next/prev cursor pagination of audit logs breaks.",
+    "commentOpus": "OptimizedCursorPaginator.value_from_cursor returns the raw integer cursor value, which is then compared against the datetime column, so next/prev cursor pagination of audit logs breaks.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S2",
+      "S12"
+     ]
+    },
+    "reason_opus": "paginator.py:842-843: OptimizedCursorPaginator.value_from_cursor returns cursor.value, the integer millisecond timestamp, and BasePaginator.build_queryset uses it in the '-datetime' filter. DateTimePaginator.value_from_cursor at :238-241 converts it back to a UTC datetime. As a result, following a cursor on the audit-log endpoint filters on the wrong value or fails.",
+    "reason_astra": "The PR selects OptimizedCursorPaginator with order_by=\"-datetime\" in src/sentry/api/endpoints/organization_auditlogs.py:79-80. Its value_from_cursor returns the numeric value unchanged (src/sentry/api/paginator.py:842-843), which build_queryset inserts directly into the SQL comparison at lines 119-125 against AuditLogEntry's DateTimeField (src/sentry/models/auditlogentry.py:69). Thus timestamp cursors produce an invalid datetime-versus-integer comparison; the required conversion exists in DateTimePaginator at src/sentry/api/paginator.py:238-241.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "oph",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "high",
+    "category": "bug"
    }
   ],
   "feat-2fa-backup-codes-cal-com": [
@@ -6328,6 +6765,12 @@
      ],
      "sonnet-5.5@cc": [
       "S1"
+     ],
+     "opus-5.5@api": [
+      "S1",
+      "S5",
+      "S6",
+      "S9"
      ]
     },
     "reason_opus": "CalendarService.ts:1024 calls updateManyByCredentialId(this.credential.id, {}), which forwards data unchanged to prisma.selectedCalendar.updateMany (selectedCalendar.ts:400-405); with empty data no column is written, so the @updatedAt SelectedCalendar.updatedAt is not bumped as the comment intends.",
@@ -6361,6 +6804,9 @@
      ],
      "gpt-6.1-sol@e2b": [
       "S1"
+     ],
+     "opus-5.5@api": [
+      "S2"
      ]
     },
     "reason_opus": "CredentialActionsDropdown.tsx:42-50 deleteCacheMutation only calls onSuccess?.() and never invalidates viewer.calendars.connectedCalendars, unlike disconnectMutation (:61-64). The settings page passes an onChanged that invalidates, but EventAdvancedTab renders SelectedCalendarsSettingsWebWrapper without onChanged, so there the deleted cache status stays visible.",
@@ -6408,6 +6854,9 @@
      "sonnet-5.5@cc": [
       "S4",
       "S5"
+     ],
+     "opus-5.5@api": [
+      "S7"
      ]
     },
     "reason_opus": "CredentialActionsDropdown.tsx:89-92 formats cacheUpdatedAt with new Intl.DateTimeFormat(\"en-US\", ...) while the label is translated via t() from useLocale, so non-US users see US date order.",
@@ -6431,6 +6880,9 @@
     "martianRef": [],
     "foundBy": {
      "gpt-6.1-sol": [
+      "S8"
+     ],
+     "opus-5.5@api": [
       "S8"
      ]
     },
@@ -6574,6 +7026,9 @@
      ],
      "sonnet-5.5@cc": [
       "S3"
+     ],
+     "opus-5.5@api": [
+      "S4"
      ]
     },
     "reason_opus": "scripts/test-gcal-webhooks.sh:68 uses sed -i '' -E ..., the BSD/macOS form; GNU sed treats '' as the script and fails, so on Linux GOOGLE_WEBHOOK_URL is not updated while the script still prints that it was.",
@@ -6605,6 +7060,9 @@
     "foundBy": {
      "sonnet-5.5@cc": [
       "S2"
+     ],
+     "opus-5.5@api": [
+      "S3"
      ]
     },
     "reason_opus": "deleteCache.handler.ts:24-26 throws new Error(\"Credential not found or access denied\"), which tRPC maps to INTERNAL_SERVER_ERROR (500) instead of a TRPCError with NOT_FOUND/FORBIDDEN.",
@@ -6903,6 +7361,11 @@
      "gpt-6.1-sol@e2b": [
       "S3",
       "S4"
+     ],
+     "opus-5.5@api": [
+      "S1",
+      "S4",
+      "S6"
      ]
     },
     "reason_opus": "error_upsampling.py:100-103 returns True when the raw request query contains the substring `event.type:error`, so `!event.type:error` or `event.type:error OR event.type:transaction` on the discover dataset gets count() rewritten to upsampled_count(); it also ignores the query actually passed to _get_event_stats.",
@@ -7157,6 +7620,10 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S3"
+     ],
+     "opus-5.5@api": [
+      "S2",
+      "S5"
      ]
     },
     "reason_opus": "With transformAliasToInputFormat=1, QueryBuilder.process_results (builder/base.py:1566-1580) renames result column `count` to the FunctionDetails field string 'upsampled_count() as count', while the serializer resolves the axis via resolve_axis_column('count()') (bases/organization_events.py:75-78), so the value is not found under the requested key.",
@@ -7235,6 +7702,9 @@
     "foundBy": {
      "deepseek-v4.1-flash": [
       "S9"
+     ],
+     "opus-5.5@api": [
+      "S3"
      ]
     },
     "reason_opus": "tests/sentry/api/helpers/test_error_upsampling.py:48-52: options.get is still mocked to [] when calling with project_ids=[], so the `if not allowlist` branch returns False and the `if not project_ids` guard (needed because all([]) is True) is never exercised.",
@@ -7305,6 +7775,10 @@
      ],
      "sonnet-5.5@cc": [
       "S2"
+     ],
+     "opus-5.5@api": [
+      "S4",
+      "S14"
      ]
     },
     "reason_opus": "queue_consumer.py:86-105: the scan stops at a missing offset only until the lower offset is committed; mark_committed (line 105) drops offsets <= committed, so the next cycle starts at max(last_committed+1, min_offset)=next received offset and commits past the gap. Gaps delay the commit by one cycle, they never block it permanently.",
@@ -7352,6 +7826,9 @@
       "S5",
       "S7",
       "S13"
+     ],
+     "opus-5.5@api": [
+      "S6"
      ]
     },
     "reason_opus": "OrderedQueueWorker.run calls offset_tracker.complete_offset in the finally block (queue_consumer.py:144-149) even when result_processor raised, so the commit loop commits past a failed message; the strategy docstring (line 254) promises 'Only commits offsets after successful processing'.",
@@ -7389,6 +7866,9 @@
      ],
      "sonnet-5.5@cc": [
       "S10"
+     ],
+     "opus-5.5@api": [
+      "S9"
      ]
     },
     "reason_opus": "test_results_consumer.py:1874-1922: the docstring says errors don't block commits for other messages, but the test asserts len(committed_offsets)==0 or partition not in committed_offsets, i.e. that nothing was committed; it passes only because it asserts before the 1s commit loop fires.",
@@ -7461,6 +7941,10 @@
      "sonnet-5.5@cc": [
       "S3",
       "S4"
+     ],
+     "opus-5.5@api": [
+      "S3",
+      "S7"
      ]
     },
     "reason_opus": "FixedQueuePool creates queue.Queue() with no maxsize (queue_consumer.py:185) and submit/poll never block or raise MessageRejected (lines 204-212, 327-333), despite the docstring promising 'Natural backpressure when queues fill up' (line 253). A slow worker lets the queue grow without bound.",
@@ -7494,6 +7978,9 @@
      "gpt-6.1-sol@e2b": [
       "S2",
       "S15"
+     ],
+     "opus-5.5@api": [
+      "S5"
      ]
     },
     "reason_opus": "FixedQueuePool.shutdown sets worker.shutdown=True before q.shutdown(immediate=False) (queue_consumer.py:233-238), and the worker loop checks 'while not self.shutdown' (line 129), so workers exit after the current item and abandon queued work; close() also stops the commit thread before the pool (lines 335-338), so completed work is never committed.",
@@ -7544,6 +8031,12 @@
       "S5",
       "S6",
       "S8"
+     ],
+     "opus-5.5@api": [
+      "S1",
+      "S8",
+      "S13",
+      "S16"
      ]
     },
     "reason_opus": "ResultsStrategyFactory creates one FixedQueuePool in __init__ and passes self.queue_pool to every strategy (result_consumer.py:131-137, 254-259), while SimpleQueueProcessingStrategy.close/terminate/join shut that pool down (queue_consumer.py:335-345). After a rebalance the new strategy reuses a shut-down pool; put() raises and submit's except marks the offset complete, so messages are committed unprocessed.",
@@ -7568,6 +8061,10 @@
     "foundBy": {
      "sonnet-5.5": [
       "S5"
+     ],
+     "opus-5.5@api": [
+      "S2",
+      "S17"
      ]
     },
     "reason_opus": "_commit_loop runs in a separate daemon thread (queue_consumer.py:270-289) and calls commit_function, which invokes Arroyo's commit callback (result_consumer.py:249-252) outside submit/poll on the consumer thread; Arroyo's consumer is not thread-safe, so commits can race with polling and rebalance.",
@@ -7628,6 +8125,9 @@
      ],
      "gpt-6.1-sol@e2b": [
       "S10"
+     ],
+     "opus-5.5@api": [
+      "S12"
      ]
     },
     "reason_opus": "test_concurrent_processing_across_groups (test_queue_consumer.py:137-173) only asserts 6 items processed and 3 groups seen, and test_thread_queue_parallel_concurrent_subscriptions (test_results_consumer.py:1780-1820) only asserts call_count==2; a serial implementation passes both.",
@@ -7655,6 +8155,9 @@
      ],
      "gpt-6.1-sol@e2b": [
       "S9"
+     ],
+     "opus-5.5@api": [
+      "S10"
      ]
     },
     "reason_opus": "test_preserves_order_within_group (test_queue_consumer.py:302-312) submits five identical sub1 messages and asserts only len(processed_results)==5, so out-of-order processing would still pass.",
@@ -7682,6 +8185,9 @@
      ],
      "gpt-6.1-sol@e2b": [
       "S12"
+     ],
+     "opus-5.5@api": [
+      "S11"
      ]
     },
     "reason_opus": "test_thread_queue_parallel_graceful_shutdown (test_results_consumer.py:1987-2005) only asserts factory.queue_pool is None, which factory.shutdown sets unconditionally (result_consumer.py:183-185); it never checks that submitted work completed or workers stopped.",
@@ -7835,6 +8341,54 @@
     "status": "agreed_after_debate",
     "severity": "medium",
     "category": "test_gap"
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#oph-01",
+    "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+    "comment": "The per-worker queue_depth gauge is tagged only with identifier, so all queues report into one series and the metric shows whichever queue reported last.",
+    "commentOpus": "The per-worker queue_depth gauge is tagged only with identifier, so all queues report into one series and the metric shows whichever queue reported last.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S15"
+     ]
+    },
+    "reason_opus": "queue_consumer.py:150-156: each OrderedQueueWorker emits the gauge remote_subscriptions.queue_worker.queue_depth with its own queue's qsize() and only the identifier tag, so the 20 workers overwrite one series. The fact is real, but it only affects a metric's tags and does not change how the consumer behaves.",
+    "reason_astra": "The new pool creates separate queues and workers sharing one identifier (src/sentry/remote_subscriptions/consumers/queue_consumer.py:184-194), while each worker gauges its own qsize() with only that identifier (same file:150-156). Their readings therefore collide in one gauge series, allowing an empty queue to overwrite a backlogged queue's depth and mislead operators.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "oph",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "texto": "queue_consumer.py:150-156: each OrderedQueueWorker emits the gauge remote_subscriptions.queue_worker.queue_depth with its own queue's qsize() and only the identifier tag, so the 20 workers overwrite one series. The fact is real, but it only affects a metric's tags and does not change how the consumer behaves."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "The new pool creates separate queues and workers sharing one identifier (src/sentry/remote_subscriptions/consumers/queue_consumer.py:184-194), while each worker gauges its own qsize() with only that identifier (same file:150-156). Their readings therefore collide in one gauge series, allowing an empty queue to overwrite a backlogged queue's depth and mislead operators."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Concede. The gauge is introduced by this PR and does not measure what its name says: FixedQueuePool creates num_queues=20 workers with the same identifier (queue_consumer.py:184-194), and each emits queue_consumer.py:150-155 `metrics.gauge(\"remote_subscriptions.queue_worker.queue_depth\", self.work_queue.qsize(), tags={\"identifier\": self.identifier})`, so an empty queue overwrites a backlogged one in the same series. A backlog metric that hides backlog misleads operators; worth a comment, so TP medium rather than a log-field nit."
+     }
+    ],
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "medium",
+    "category": "style"
    }
   ],
   "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
@@ -9226,6 +9780,9 @@
      ],
      "sonnet-5.5@cc": [
       "S2"
+     ],
+     "opus-5.5@api": [
+      "S3"
      ]
     },
     "reason_opus": "config/routes.rb:441-442 add GET t/:slug/:topic_id/unsubscribe and t/:topic_id/unsubscribe, and TopicsController#unsubscribe (topics_controller.rb:98-116) changes notification_level and calls tu.save! on that GET with check_xhr skipped; Rails CSRF protection does not cover GET, so a cross-site request from a logged-in user changes their topic notification level.",
@@ -9281,6 +9838,11 @@
       "S1",
       "S3",
       "S4"
+     ],
+     "opus-5.5@api": [
+      "S1",
+      "S5",
+      "S8"
      ]
     },
     "reason_opus": "topics_controller.rb:105-107 does tu = TopicUser.find_by(user_id:, topic_id:) and then tu.notification_level without a nil check; TopicView.new does not create the topic_users row, so a user without a row (e.g. notified via category watching without visiting) gets NoMethodError and a 500.",
@@ -9381,6 +9943,9 @@
      ],
      "gpt-6.1-sol@e2b": [
       "S4"
+     ],
+     "opus-5.5@api": [
+      "S7"
      ]
     },
     "reason_opus": "client.en.yml:985 says 'You will stop receiving notifications', but topics_controller.rb:107-111 drops watching/tracking users to regular, which still notifies on mentions/replies. Message wording only.",
@@ -9461,6 +10026,9 @@
      ],
      "gpt-6.1-sol@e2b": [
       "S6"
+     ],
+     "opus-5.5@api": [
+      "S4"
      ]
     },
     "reason_opus": "routes/topic-unsubscribe.js.es6 only loads the topic view; the unsubscribe itself is performed by the server-rendered GET (topics_controller.rb#unsubscribe) reached from the email link, and nothing in the app links to this route for an in-app transition.",
@@ -9496,6 +10064,31 @@
     "subclass_opus_inicial": "nit",
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": "nit"
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-01",
+    "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+    "comment": "The topic unsubscribe GET endpoint is not idempotent: each visit steps the notification level down again, so reloading the link moves a topic from regular to muted.",
+    "commentOpus": "The topic unsubscribe GET endpoint is not idempotent: each visit steps the notification level down again, so reloading the link moves a topic from regular to muted.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S2"
+     ]
+    },
+    "reason_opus": "topics_controller.rb:105-111: unsubscribe lowers the level one step each time it is called, from tracking or watching to regular and from regular to muted, and the change is triggered by a GET. A second visit or a reload of the unsubscribe link therefore mutes the topic, which the user did not ask for.",
+    "reason_astra": "config/routes.rb:440 exposes unsubscribe through GET, and app/controllers/topics_controller.rb:107-113 saves regular for watching/tracking but muted for regular. Reloading the authenticated unsubscribe page therefore changes the saved preference again, unintentionally suppressing additional notifications.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "oph",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug"
    }
   ],
   "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
@@ -11739,6 +12332,9 @@
       "S2",
       "S3",
       "S4"
+     ],
+     "opus-5.5@api": [
+      "S9"
      ]
     },
     "reason_opus": "BackwardsCompatibilityUserStorage.isValid returns generatedKeys.stream().anyMatch(key.equals(input)) (BackwardsCompatibilityUserStorage.java:326-340) without removing the matched code, so a code can be reused. This is a testsuite provider; production consumption is the provider's responsibility.",
@@ -11779,6 +12375,9 @@
      ],
      "muse-spark-1.3": [
       "S1"
+     ],
+     "opus-5.5@api": [
+      "S8"
      ]
     },
     "reason_opus": "getCredentials builds the model with RecoveryAuthnCodesCredentialModel.createFromValues (BackwardsCompatibilityUserStorage.java:237-242), which never sets an id (RecoveryAuthnCodesCredentialModel.java:58-85), although updateCredential assigned one (KeycloakModelUtils.generateId()). Callers using the id, e.g. RecoveryAuthnCodesFormAuthenticator removeStoredCredentialById(model.getId()), receive null.",
@@ -11806,6 +12405,9 @@
      ],
      "gpt-6.1-sol@e2b": [
       "S1"
+     ],
+     "opus-5.5@api": [
+      "S2"
      ]
     },
     "reason_opus": "When updateCredential succeeds in external storage, createRecoveryCodesCredential skips the local provider's createCredential (CredentialHelper.java:125-129), so an existing local recovery-codes credential is not replaced; UserCredentialManager.isValid falls back to local validators for inputs the storage rejects (UserCredentialManager.java:66-79), so old local codes keep working.",
@@ -11836,6 +12438,10 @@
      "sonnet-5.5@cc": [
       "S2",
       "S4"
+     ],
+     "opus-5.5@api": [
+      "S4",
+      "S6"
      ]
     },
     "reason_opus": "RecoveryAuthnCodesUtils.getCredential now prefers federated credentials, but exhausted codes are still removed with removeStoredCredentialById (RecoveryAuthnCodesFormAuthenticator.java:80-88), which only targets local storage. A federated exhausted credential is never removed and stays configured.",
@@ -11844,6 +12450,79 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-01",
+    "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+    "comment": "Looking up recovery codes now always queries the federated provider first, which for LDAP users adds an LDAP round-trip and can throw IllegalStateException, failing recovery-code login with a 500.",
+    "commentOpus": "Looking up recovery codes now always queries the federated provider first, which for LDAP users adds an LDAP round-trip and can throw IllegalStateException, failing recovery-code login with a 500.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S1"
+     ]
+    },
+    "reason_opus": "RecoveryAuthnCodesUtils.java:56-62 does query getFederatedCredentialsStream first, and for LDAP users this reaches LDAPStorageProvider.getCredentials (:1211-1217), which throws only when the LDAP object is missing. Federated LDAP users are already loaded and validated against LDAP during login, so that state is not reached in the recovery-code step. What remains is one extra lookup, not a failure.",
+    "reason_astra": "RecoveryAuthnCodesUtils.java:56-61 queries federated credentials before local storage, and UserCredentialManager.java:138-141 delegates directly to the provider. LDAPStorageProvider.java:1212-1216 performs an LDAP lookup and throws when the object is missing, preventing the local fallback and breaking the newly changed recovery-page lookup.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "oph",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "RecoveryAuthnCodesUtils.java:56-62 does query getFederatedCredentialsStream first, and for LDAP users this reaches LDAPStorageProvider.getCredentials (:1211-1217), which throws only when the LDAP object is missing. Federated LDAP users are already loaded and validated against LDAP during login, so that state is not reached in the recovery-code step. What remains is one extra lookup, not a failure."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "RecoveryAuthnCodesUtils.java:56-61 queries federated credentials before local storage, and UserCredentialManager.java:138-141 delegates directly to the provider. LDAPStorageProvider.java:1212-1216 performs an LDAP lookup and throws when the object is missing, preventing the local fallback and breaking the newly changed recovery-page lookup."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Concede. My 'state not reachable' argument does not hold: UserCacheSession.java:315-338 (validateCache) returns a cached UserAdapter without calling LDAPStorageProvider.validate, so a cached LDAP user whose entry was removed can reach the recovery-code step (e.g. after a non-password first factor). There RecoveryAuthnCodesUtils.java:57-58 `.getFederatedCredentialsStream()` runs first and LDAPStorageProvider.java:1215-1217 `throw new IllegalStateException(\"LDAP object not found...` aborts before the `.or(() -> ...getStoredCredentialsByTypeStream(...))` local fallback, where before the PR only local storage was read. Edge-case regression: TP, medium."
+     }
+    ],
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "medium",
+    "category": null
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-03",
+    "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+    "comment": "An error log in the test user storage hard-codes the credential type as 'recovery-codes' instead of using RecoveryAuthnCodesCredentialModel.TYPE ('recovery-authn-codes').",
+    "commentOpus": "An error log in the test user storage hard-codes the credential type as 'recovery-codes' instead of using RecoveryAuthnCodesCredentialModel.TYPE ('recovery-authn-codes').",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S5"
+     ]
+    },
+    "reason_opus": "BackwardsCompatibilityUserStorage.java:244 logs 'Could not deserialize  credential of type: recovery-codes', while RecoveryAuthnCodesCredentialModel.TYPE is 'recovery-authn-codes' (RecoveryAuthnCodesCredentialModel.java:21). The fact is real, but it is only log wording in a test provider.",
+    "reason_astra": "The testsuite provider BackwardsCompatibilityUserStorage.java:244 logs 'recovery-codes', while RecoveryAuthnCodesCredentialModel.java:21 defines 'recovery-authn-codes'. This is a minor diagnostic wording mismatch in test infrastructure with no authentication behavior change.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "nit",
+    "rodada": "oph",
+    "class": "TP",
+    "subclass": "nit",
+    "status": "agreed",
+    "severity": "low",
+    "category": "style"
    }
   ],
   "notification-rule-processing-engine-grafana-codex": [
@@ -13073,6 +13752,9 @@
      "sonnet-5.5@cc": [
       "S1",
       "S3"
+     ],
+     "opus-5.5@api": [
+      "S2"
      ]
     },
     "reason_opus": "zunionstore at add-buffer.lua:47 and :53 uses default AGGREGATE SUM, so a duplicate payload present in both set_key and the merged key gets its end-timestamp score doubled. The score is only used for zpopmin eviction (add-buffer.lua:62-64), so the effect is a duplicate span being biased against eviction in segments over 1000 spans; flushing ignores scores (buffer.py zscan values discarded).",
@@ -13113,6 +13795,11 @@
      ],
      "sonnet-5.5@cc": [
       "S4"
+     ],
+     "opus-5.5@api": [
+      "S1",
+      "S7",
+      "S9"
      ]
     },
     "reason_opus": "Segment keys switch from SET to ZSET (buffer.py:197-199 zadd, flush zscan, Lua zcard/zunionstore) without renaming the span-buf:s: namespace. Keys written by the previous release live up to redis_ttl/set_timeout, so during deploy ZADD/ZCARD/ZSCAN on an existing SET key raise WRONGTYPE, failing the pipeline and the consumer batch.",
@@ -13255,6 +13942,13 @@
      ],
      "sonnet-5.5@cc": [
       "S6"
+     ],
+     "opus-5.5@api": [
+      "S3",
+      "S5",
+      "S6",
+      "S8",
+      "S10"
      ]
     },
     "reason_opus": "The span-count guard on max_segment_spans was removed from flush (buffer.py:446-449) and the cap is now a hardcoded 1000 in add-buffer.lua:62; the max_segment_spans constructor parameter (buffer.py:150, default 1001) is still accepted but no longer used. Dead/misleading configuration; insert-time eviction bounds the set after every insert.",
@@ -13369,6 +14063,9 @@
     "foundBy": {
      "sonnet-5.5@cc": [
       "S2"
+     ],
+     "opus-5.5@api": [
+      "S4"
      ]
     },
     "reason_opus": "add-buffer.lua:30 does lower the redirect-walk loop from 10000 to 1000 and drops the comment. This is part of the PR's insertion-cost optimisation: the same script now caps each set at 1000 spans with zpopmin (lines 62-64). Bounding the per-insert redirect walk is a deliberate tradeoff for pathological traces, not an accidental change.",
@@ -14225,6 +14922,13 @@
       "S19",
       "S23",
       "S27"
+     ],
+     "opus-5.5@api": [
+      "S1",
+      "S8",
+      "S12",
+      "S16",
+      "S17"
      ]
     },
     "reason_opus": "desktop/topic-post.scss:291 changed `scale-color($primary, $lightness: 30%)` to `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))`, so the light-theme argument went from 30% to 70% (inverted), visibly lightening the reply author link in the existing light theme.",
@@ -14280,6 +14984,14 @@
       "S18",
       "S22",
       "S26"
+     ],
+     "opus-5.5@api": [
+      "S2",
+      "S6",
+      "S9",
+      "S13",
+      "S15",
+      "S18"
      ]
     },
     "reason_opus": "mobile/modal.scss:102 changed `scale-color($primary, $lightness: 70%)` to `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`; the light value went from 70% to 30% and differs from desktop/modal.scss which keeps 70/30.",
@@ -14326,6 +15038,11 @@
       "S20",
       "S25",
       "S29"
+     ],
+     "opus-5.5@api": [
+      "S4",
+      "S11",
+      "S20"
      ]
     },
     "reason_opus": "desktop/user.scss:522 changed .name from `scale-color($primary, $lightness: 30%)` to `dark-light-choose(scale-color($primary, $lightness: 50%), ...50%)`, altering the light-theme color, unlike the other rules that keep the original primary value.",
@@ -14366,6 +15083,9 @@
      ],
      "sonnet-5.5@cc": [
       "S4"
+     ],
+     "opus-5.5@api": [
+      "S5"
      ]
     },
     "reason_opus": "mobile/user.scss:497 changed .name from `scale-color($primary, $lightness: 30%)` to `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))`, changing the light-theme color.",
@@ -14415,6 +15135,13 @@
       "S21",
       "S24",
       "S28"
+     ],
+     "opus-5.5@api": [
+      "S3",
+      "S7",
+      "S10",
+      "S14",
+      "S19"
      ]
     },
     "reason_opus": "mobile/topic-post.scss:182 changed a.star h3 from `scale-color($primary, $lightness: 20%)` to `dark-light-choose(scale-color($primary, $lightness: 50%), ...50%)`, while desktop/topic-post.scss:321 kept 20%/80%; the mobile light-theme heading becomes lighter.",
@@ -15793,6 +16520,9 @@
      ],
      "sonnet-5.5@cc": [
       "S2"
+     ],
+     "opus-5.5@api": [
+      "S3"
      ]
     },
     "reason_opus": "user_serializer.rb:144-146 treats two hosts with the same label count as the same domain when everything after the first label matches, so forum.co.uk vs example.co.uk or a.github.io vs b.github.io show the full path for an unrelated site, contrary to the feature's rule.",
@@ -15875,6 +16605,9 @@
      ],
      "sonnet-5.5@cc": [
       "S1"
+     ],
+     "opus-5.5@api": [
+      "S1"
      ]
     },
     "reason_opus": "website is in untrusted_attributes (user_serializer.rb:105-111), whose include_website? returns false when scope.restrict_user_fields?(object) (:25-31), but the new :website_name attribute (:43) is not, so a TL0 user's hidden website host (and path) is still sent to anonymous viewers.",
@@ -15935,6 +16668,13 @@
      "muse-spark-1.3": [
       "S1",
       "S3"
+     ],
+     "opus-5.5@api": [
+      "S2",
+      "S4",
+      "S5",
+      "S6",
+      "S7"
      ]
     },
     "reason_opus": "user_serializer.rb:153 defines include_website_name without '?', while AMS 0.8.3 calls include_<attr>? (cf. include_email? :117), so the guard is dead and website_name is always serialized; when website is blank it is just nil, so there is no visible effect (the TL0 leak is the separate untrusted-attribute issue).",
@@ -15953,6 +16693,7 @@
   "muse-spark-1.3",
   "gpt-6.1-sol@e2b",
   "sonnet-5.5@cc",
+  "opus-5.5@api",
   "opus-5.5@api"
  ],
  "classificadores": [

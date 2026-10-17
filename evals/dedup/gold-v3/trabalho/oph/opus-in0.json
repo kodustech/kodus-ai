@@ -1,0 +1,1421 @@
+{
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "d38c4d5f7443223c81529c22470293771baf9f38",
+  "base": "7554b5e3c458dc79b591d5e874e79ab10cf30c2f",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/assets/stylesheets/desktop/topic-post.scss",
+    "lines": [
+     291,
+     291
+    ],
+    "texto": "WHAT: The light-theme argument was changed from `$lightness: 30%` to `70%`, and the dark argument was flipped to `$secondary 30%`. WHY: Because dark-light-choose returns its first argument for light themes, the bold reply-to link in topic-meta-data h5 is now much lighter and low-contrast in the default theme, and on dark themes it gets the wrong shade too. HOW: Keep the original value: light 30%, dark 70%."
+   },
+   {
+    "id": "S2",
+    "file": "app/assets/stylesheets/mobile/modal.scss",
+    "lines": [
+     102,
+     102
+    ],
+    "texto": "WHAT: `.custom-message-length` now uses `$primary 30%` for light themes and `$secondary 70%` for dark themes, the reverse of the original 70% and of the desktop version. WHY: On mobile light themes the hint text becomes much darker than before, and dark themes get the wrong shade. HOW: Use `scale-color($primary, $lightness: 70%)` and `scale-color($secondary, $lightness: 30%)`, matching desktop/modal.scss."
+   },
+   {
+    "id": "S3",
+    "file": "app/assets/stylesheets/mobile/topic-post.scss",
+    "lines": [
+     182,
+     182
+    ],
+    "texto": "WHAT: The light-theme color for the topic-map `h3` was changed from `$lightness: 20%` to `50%`. WHY: Mobile light themes get noticeably lighter headings, which is a visual regression this PR was not meant to cause; desktop/topic-post.scss:321 keeps 20%/80%. HOW: Use `scale-color($primary, $lightness: 20%)` and `scale-color($secondary, $lightness: 80%)`."
+   },
+   {
+    "id": "S4",
+    "file": "app/assets/stylesheets/desktop/user.scss",
+    "lines": [
+     522,
+     522
+    ],
+    "texto": "WHAT: The `.name` color was changed from `$lightness: 30%` to `50%` in the light-theme branch. WHY: The light theme now shows the name at the same dimmer shade as `.title`, so the two no longer contrast. HOW: Use `scale-color($primary, $lightness: 30%)` and `scale-color($secondary, $lightness: 70%)`."
+   },
+   {
+    "id": "S5",
+    "file": "app/assets/stylesheets/mobile/user.scss",
+    "lines": [
+     497,
+     497
+    ],
+    "texto": "WHAT: The `.name` color was changed from `$lightness: 30%` to `50%` in the light-theme branch. WHY: Mobile light themes render the user name lighter than before, so it can no longer be told apart from `.title`. HOW: Use `scale-color($primary, $lightness: 30%)` and `scale-color($secondary, $lightness: 70%)`."
+   },
+   {
+    "id": "S6",
+    "file": "app/assets/stylesheets/mobile/modal.scss",
+    "lines": [
+     102,
+     102
+    ],
+    "texto": "In mobile/modal.scss, `.custom-message-length` passes (primary 30%, secondary 70%), the reverse of desktop/modal.scss, which uses (primary 70%, secondary 30%). Both files used primary 70% before this PR. As a result, the light-theme hint text on mobile turns much darker and no longer matches desktop or the original faded look."
+   },
+   {
+    "id": "S7",
+    "file": "app/assets/stylesheets/mobile/topic-post.scss",
+    "lines": [
+     182,
+     182
+    ],
+    "texto": "The mobile topic-map `h3` changed from primary 20% to 50%, while the matching `h3` in desktop/topic-post.scss keeps 20%/80%. This lightens the mobile light-theme heading for no apparent reason and makes it differ from desktop."
+   },
+   {
+    "id": "S8",
+    "file": "app/assets/stylesheets/desktop/topic-post.scss",
+    "lines": [
+     291,
+     291
+    ],
+    "texto": "The lightness pair is swapped. The light-theme argument is now primary 70% instead of the original 30%, so this bold link becomes much paler in the default theme. Use primary 30% for light and secondary 70% for dark, matching the pattern used everywhere else."
+   },
+   {
+    "id": "S9",
+    "file": "app/assets/stylesheets/mobile/modal.scss",
+    "lines": [
+     102,
+     102
+    ],
+    "texto": "The original light value was primary 70%, but the light argument is now 30% and the dark argument is 70%, so the pair is reversed. This changes the existing light-theme look, and it does not match the desktop version of the same rule."
+   },
+   {
+    "id": "S10",
+    "file": "app/assets/stylesheets/mobile/topic-post.scss",
+    "lines": [
+     182,
+     182
+    ],
+    "texto": "The original value was primary 20%, but the light argument is now 50%, which changes the light-theme heading color. The desktop version of this rule correctly uses 20%/80%."
+   },
+   {
+    "id": "S11",
+    "file": "app/assets/stylesheets/desktop/user.scss",
+    "lines": [
+     522,
+     522
+    ],
+    "texto": "The original value was primary 30%, but the light argument is now 50%, which lightens user names in the default theme. The light value should stay at 30%, with secondary 70% for dark."
+   },
+   {
+    "id": "S12",
+    "file": "desktop/topic-post.scss",
+    "lines": [
+     291,
+     291
+    ],
+    "texto": "The new color value here is inconsistent with the other new color values, which is a visual regression. The reviewer considered this outside their assigned scope (execution breaks and invariant violations) and did not formally report it."
+   },
+   {
+    "id": "S13",
+    "file": "mobile/modal.scss",
+    "lines": [
+     102,
+     102
+    ],
+    "texto": "The new color value here is inconsistent with the other new color values, which is a visual regression. The reviewer considered this outside their assigned scope (execution breaks and invariant violations) and did not formally report it."
+   },
+   {
+    "id": "S14",
+    "file": "mobile/topic-post.scss",
+    "lines": [
+     182,
+     182
+    ],
+    "texto": "The new color value here is inconsistent with the other new color values, which is a visual regression. The reviewer considered this outside their assigned scope (execution breaks and invariant violations) and did not formally report it."
+   },
+   {
+    "id": "S15",
+    "file": "app/assets/stylesheets/mobile/modal.scss",
+    "lines": [
+     102,
+     102
+    ],
+    "texto": "`dark-light-choose` takes the light-theme value first, and the old light value here was `scale-color($primary, $lightness: 70%)`. The new call passes 30% for light and 70% for dark, so the light theme now gets a much darker `.custom-message-length` colour than before. It also no longer matches desktop/modal.scss."
+   },
+   {
+    "id": "S16",
+    "file": "app/assets/stylesheets/desktop/topic-post.scss",
+    "lines": [
+     291,
+     291
+    ],
+    "texto": "The old light-theme colour was `scale-color($primary, $lightness: 30%)`, but the new light argument is 70% and the dark argument is 30%. In the light theme these bold username links now render much paler than before. The pattern used everywhere else in this PR is (primary 30%, secondary 70%)."
+   },
+   {
+    "id": "S17",
+    "file": "app/assets/stylesheets/desktop/topic-post.scss",
+    "lines": [
+     291,
+     291
+    ],
+    "texto": "The original light-theme color was scale-color($primary, $lightness: 30%), but the new light argument uses 70% and the dark argument uses 30%. The values look swapped, so light-theme links become much paler. They should be 30% for primary and 70% for secondary, as in every other conversion in this PR."
+   },
+   {
+    "id": "S18",
+    "file": "app/assets/stylesheets/mobile/modal.scss",
+    "lines": [
+     102,
+     102
+    ],
+    "texto": "The original was scale-color($primary, $lightness: 70%), but the light-theme argument is now 30% and the dark argument is 70%. The values are inverted, which darkens the hint in the light theme. It also no longer matches desktop/modal.scss:94, which uses 70%/30%."
+   },
+   {
+    "id": "S19",
+    "file": "app/assets/stylesheets/mobile/topic-post.scss",
+    "lines": [
+     182,
+     182
+    ],
+    "texto": "The original light-theme color was scale-color($primary, $lightness: 20%), but the replacement uses 50%. This lightens the heading, and it no longer matches desktop/topic-post.scss:321, which uses 20%/80%."
+   },
+   {
+    "id": "S20",
+    "file": "app/assets/stylesheets/desktop/user.scss",
+    "lines": [
+     522,
+     522
+    ],
+    "texto": "The original was scale-color($primary, $lightness: 30%), but the light-theme argument is now 50%. This changes the light theme so the name looks the same as the .title below it. It should be 30% for primary and 70% for secondary."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+    "descricao": "In .topic-meta-data h5 a, the light-theme color changed from scale-color($primary, 30%) to 70% because the dark-light-choose arguments were inverted, making the link much paler in light themes.",
+    "textoGolden": "In .topic-meta-data h5 a, the original code had color: scale-color($primary, $lightness: 30%) but was changed to dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%)). The lightness for the light theme changed from 30% to 70%, which is a dramatic inversion",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/desktop/topic-post.scss",
+      "lines": [
+       291,
+       291
+      ],
+      "texto": "The light-theme argument was changed from the original lightness. WHAT: the original was `scale-color($primary, $lightness: 30%)`, but the new value uses `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))` \u2014 the first (light-theme) argument is now 70%, not 30%. WHY: this silently darkens the light-theme color for `.topic-meta-data h5 a` (post-author link) from a 30% to a 70% tint, a light-theme regression outside the PR's dark-theme-only intent; the values also are inverted relative to the (X, 100\u2212X) convention used everywhere else (should be 30/70). HOW: use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/topic-post.scss",
+      "lines": [
+       291,
+       291
+      ],
+      "texto": "The original value was scale-color($primary, $lightness: 30%). After conversion the light-mode argument became $primary:70% and dark-mode $secondary:30% \u2014 both inverted away from the original 30%. Should be dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%)). As written the light-mode color is dramatically lighter than intended."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/topic-post.scss",
+      "lines": [
+       291,
+       291
+      ],
+      "texto": "This bold link inside `.reply`/`nav.post-controls` was originally `scale-color($primary, $lightness: 30%)`. The rewrite uses 70% as the light-theme argument, inverting the intended value (the complementary pair should be 30/70, not 70/30). The light theme now shows this link far lighter than before; the first argument must remain the original 30%."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+    "descricao": "In mobile .custom-message-length the light-theme lightness changed from 70% to 30% (inverted pair), making the hint text much darker than before and than desktop.",
+    "textoGolden": "In topic-post.css the original code used $lightness: 70% but the replacement uses $lightness: 30% for the light theme. This makes the text significantly darker than intended.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/mobile/modal.scss",
+      "lines": [
+       102,
+       102
+      ],
+      "texto": "The light-theme argument was changed from the original lightness. WHAT: the original was `scale-color($primary, $lightness: 70%)`, but the new value is `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))` \u2014 the first argument is now 30%, not 70%. WHY: this changes the light-theme color of `.custom-message-length` from a 70% to a 30% tint (a light-theme regression), and the pair is inverted vs. the (X, 100\u2212X) convention; the desktop counterpart at desktop/modal.scss:94 correctly kept 70/30. HOW: use `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/modal.scss",
+      "lines": [
+       102,
+       102
+      ],
+      "texto": "The original `.custom-message-length` color was `scale-color($primary, $lightness: 70%)`. The refactor changed the light-theme argument to 30%, so the light theme now renders this hint much darker than before (a 40-point lightness jump). It also no longer matches its desktop counterpart (desktop/modal.scss keeps `70%, 30%`). The first argument must stay at the original 70%: `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/modal.scss",
+      "lines": [
+       100,
+       102
+      ],
+      "texto": "`.custom-message-length` now contradicts the desktop rule for the same class. desktop/modal.scss (line 94) converted the original `scale-color($primary, $lightness: 70%)` to `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))` (keeping 70%), while this hunk produced `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`, flipping the primary lightness 70\u219230. Both files started from 70%, so mobile should be 70/30 to agree with desktop and preserve the original value."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+    "descricao": "In desktop/user.scss .name the light-theme lightness was changed from 30% to 50%, lightening the name in light themes instead of only adding a dark-theme value.",
+    "textoGolden": "This change for desktop/user.css changes $primary from 30% to 50% for the light theme; most other changes preserve the original $primary value and move the complement to $secondary for dark. Consider reviewing this (also applies to a similar .name change in the mobile variant).",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The `.name` color was `scale-color($primary, $lightness: 30%)` and is now `50%` in the light branch. This changes the light-theme color. Use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The .name color was scale-color($primary, $lightness: 30%) but the light argument was changed to 50%, so the light theme loses its contrast. Use dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The .name light value was changed from primary 30% to 50%, which lightens the text in light mode. Use dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+    "descricao": "In mobile/user.scss .name the light-theme lightness was changed from 30% to 50% instead of preserving 30% with a 70% secondary for dark themes.",
+    "textoGolden": "In mobile/user.scss line 497, the lightness value for dark themes should be inverted to 70% instead of being changed to 50%. This change may lead to unintended visual regressions in light themes.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The light-theme value no longer matches the original. WHAT: `.group-member-info .name` was `scale-color($primary, $lightness: 30%)` and now is `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` (30% \u2192 50%). WHY: this lightens the name link in the light theme, an unintended light-theme change; the equivalent rule in common/base/user.scss:124 correctly preserved 30% (30/70). HOW: use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/user.scss",
+      "lines": [
+       497,
+       497
+      ],
+      "texto": "The light-theme value no longer matches the original. WHAT: `.group-member-info .name` was `scale-color($primary, $lightness: 30%)` and now is `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` (30% \u2192 50%). WHY: this lightens the name link in the light theme, an unintended light-theme change inconsistent with the mobile/desktop counterpart that preserved 30%; desktop/user.scss:522 has the same defect. HOW: use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": ".group-member-info .name originally used scale-color($primary, $lightness: 30%). The conversion changed the light-mode argument to 50% (making it 50/50), altering the intended color. Should preserve the original: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+    "descricao": "In mobile topic-post a.star h3 the light-theme lightness changed from 20% to 50%, fading the heading and diverging from the desktop 20%/80% conversion.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/mobile/topic-post.scss",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "The light-theme value no longer matches the original. WHAT: `.topic-map h3` was `scale-color($primary, $lightness: 20%)` and now is `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` (20% \u2192 50%). WHY: this visibly lightens the topic-map heading in the light theme; the desktop counterpart at desktop/topic-post.scss:321 correctly kept 20% (20/80), so mobile diverged. HOW: use `dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/topic-post.scss",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "Original was scale-color($primary, $lightness: 20%). The conversion changed it to 50%/50%, but the desktop mirror of this rule (desktop/topic-post.scss h3) uses 20%/80%. The two files must agree; should be dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%))."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/topic-post.scss",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "This `h3` was originally `scale-color($primary, $lightness: 20%)`. The rewrite changed the light-theme argument to 50%, so the light theme renders the heading lighter than before; the correct pair is 20/80, not 50/50. The first argument must keep the original 20%."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#07",
+    "descricao": "The comment describing the topic-list cell default color still names a plain scale-color($primary, 50%) rule that the PR replaced with dark-light-choose.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/base/discourse.scss",
+      "lines": [
+       72,
+       76
+      ],
+      "texto": "The comment at lines 72-74 states \"the default for table cells in topic list is scale-color($primary, $lightness: 50%)\", but the rule it documents was converted by this PR to `dark-light-choose(scale-color($primary, $lightness: X%), scale-color($secondary, $lightness: 100-X%))` (here for coldmap-high/med/low and in common/base/_topic-list.scss th/td). The prose still names a single `$primary` expression, so it no longer describes the code: a reader comparing the two will look for a plain `$primary` 50% rule that no longer exists. Update the comment to describe the dark-light-choose baseline (e.g. \"is dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))\")."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#08",
+    "descricao": "In dark themes the notification badge background becomes a lightened $secondary while its text stays $secondary, giving dark text on a dark background with poor contrast.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/components/badges.css.scss",
+      "lines": [
+       239,
+       239
+      ],
+      "texto": "The dark-theme notification badge background now uses a lightened $secondary while its text still uses the unmodified $secondary. This puts dark text on a dark background for plain badges such as category unread counts in site-map.hbs:73; with $secondary black, the foreground is #000 and the background is approximately #4d4d4d (about 2.5:1 contrast), making the small count text difficult to read. Set the default badge foreground, including its &[href] rule, to a contrasting dark-theme color such as $primary when selecting this dark background."
+     }
+    ]
+   }
+  ]
+ },
+ "database-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "04cfa3bfd469c035ff8b35f9a66867c4e8d5dcf4",
+  "base": "a886bd3c79a417a70b51509384d1f1ec3e87e96b",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     534,
+     538
+    ],
+    "texto": "WHAT: Debug log calls fire at Error level on every cleanup batch, including successful ones, and print the full list of IDs (up to AnnotationCleanupJobBatchSize entries). WHY: Normal cleanup runs flood the logs with fake errors and huge payloads, which can set off error-based alerts and hide real failures. HOW: Remove these calls, or switch them to r.log.Debug and log only the counts."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/cleanup/cleanup.go",
+    "lines": [
+     77,
+     77
+    ],
+    "texto": "WHAT: The cleanup ticker interval went from 10 minutes to 1 minute, but clean() still uses a 9-minute timeout sized for the 10-minute interval. WHY: Every cleanup job (snapshots, dashboard versions, images, annotations) now runs 10x more often against the DB, and runs back-to-back whenever a pass takes more than a minute. This looks like a debugging change left in. HOW: Restore the 10-minute interval."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     614,
+     618
+    ],
+    "texto": "WHAT: On every database except SQLite, deleteByIDs binds one placeholder per ID, so the parameter count equals AnnotationCleanupJobBatchSize. WHY: MySQL and Postgres cap a statement at 65535 placeholders, so a batch size above that now fails every cleanup run; the old subquery version had no bind parameters and worked. HOW: Split ids into chunks under the driver limit before building placeholders, or inline the int64 values for every dialect."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     609,
+     612
+    ],
+    "texto": "WHAT: The SQLite inline IN list is built by calling fmt.Sprintf on the growing string once per ID. That is O(n\u00b2) copying and allocation in the batch size. WHY: At batch sizes like the 32767 used in the new test, each batch copies gigabytes of string data, which slows cleanup and puts heavy pressure on the GC. HOW: Build the list with strings.Builder and strconv.AppendInt."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     534,
+     534
+    ],
+    "texto": "On every normal cleanup batch, this leftover debug statement writes the full list of annotation IDs (up to AnnotationCleanupJobBatchSize, e.g. 32767) and the raw SQL condition to the error log. That leaks internal row identifiers and query text into production logs. Log only the count, at Debug level."
+   },
+   {
+    "id": "S6",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     554,
+     554
+    ],
+    "texto": "In the MaxCount path, every batch writes the full slice of annotation IDs and the SQL condition (including the LIMIT/OFFSET) to the error log, even when nothing went wrong. This exposes internal identifiers and query structure in production logs. Log only the count, at Debug level."
+   },
+   {
+    "id": "S7",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     576,
+     576
+    ],
+    "texto": "CleanOrphanedAnnotationTags writes every annotation_tag ID in each batch, plus the raw subquery condition, to the error log on every cleanup cycle. This puts internal DB data into production logs where it doesn't belong. Log only the count, at Debug level."
+   },
+   {
+    "id": "S8",
+    "file": "pkg/services/annotations/annotationsimpl/cleanup_test.go",
+    "lines": [
+     83,
+     96
+    ],
+    "texto": "Each subtest now seeds fresh annotations (line 116) and wipes the tables in t.Cleanup, so this case never runs the max-count cleanup a second time. It only checks that 3 annotations per type with MaxCount=3 deletes nothing. If a second run over-deleted, the case would still pass. Keep the name's meaning by running cleaner.Run twice in this case and asserting that the second run affects 0 rows."
+   },
+   {
+    "id": "S9",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     534,
+     537
+    ],
+    "texto": "These batch-progress messages (\"Annotations to clean by time\", \"cleaned annotations by time\", and the same pairs for the count and tag cleanups) are logged with r.log.Error on every successful batch. They also include an `err` field that is always nil because the error was already returned above. Operators will see error-level entries, including full ID lists, for normal operation; log these at Debug and drop the meaningless err field."
+   },
+   {
+    "id": "S10",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     605,
+     618
+    ],
+    "texto": "deleteByIDs binds one parameter per ID on every database except SQLite, but MySQL and PostgreSQL reject statements with more than 65535 bound parameters. `cleanupjob_batchsize` is user-configurable with no upper bound, and the old single-statement SQL used no parameters, so a large batch size now makes every delete fail and annotation cleanup never progresses. Inline the IDs (or split them into chunks) whenever the batch size exceeds the database's parameter limit, not only on SQLite."
+   },
+   {
+    "id": "S11",
+    "file": "pkg/services/cleanup/cleanup.go",
+    "lines": [
+     77,
+     77
+    ],
+    "texto": "The cleanup loop now fires every minute, but each run is still allowed up to 9 minutes (`const timeout = 9 * time.Minute`), which was sized for a 10-minute interval. This looks like a debug change left in, and it makes every cleanup job run 10x more often against the database. Restore the 10-minute interval."
+   },
+   {
+    "id": "S12",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     534,
+     537
+    ],
+    "texto": "Each batch of a normal, successful cleanup is logged with `r.log.Error`, so healthy runs are reported as errors (the same pattern appears in the by-count and tag cleanup paths). The `err` field logged before the delete is always nil, and dumping full ID lists of up to the batch size floods the logs. Use Debug level and drop the ID list."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#04",
+    "descricao": "Leftover debug logs in the annotation cleanup emit Error-level entries with the full ID list on every batch, flooding error logs during normal operation.",
+    "textoGolden": "The code uses Error log level for what appears to be debugging information. This will pollute error logs in production. Consider using Debug or Info level instead.",
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       528,
+       538
+      ],
+      "texto": "WHAT: Leftover debug logging calls r.log.Error on every cleanup batch (also duplicated at lines 554-557 and 576-579) dumping full ids slice, cond, and nil err at Error level. WHY: Fires Error-level log per batch and serializes up to AnnotationCleanupJobBatchSize IDs (32767 in new test), spamming error logs/monitoring on every normal cleanup run. HOW: Downgrade to Debug or remove; do not log full ids at Error."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       534,
+       537
+      ],
+      "texto": "WHAT: Leftover debug logging calls `r.log.Error(\"Annotations to clean by time\", \"count\", len(ids), \"ids\", ids, ...)` (and the identical Error-level logs for 'by count' and 'Tags to clean', lines 554/557/576/579) run on every batch in production. WHY: These log the full ID slice (up to AnnotationCleanupJobBatchSize, e.g. 32767 elements) at Error severity on every cleanup iteration, flooding logs with false error noise and large payloads for a normal successful operation, and can trigger error-based alerting. HOW: Remove these log lines, or downgrade to Debug and drop the full `ids` slice (log only the count)."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       534,
+       579
+      ],
+      "texto": "Avoid using Error-level logging on the normal cleanup path. The new r.log.Error calls emit count, ids, cond, and err at lines 534/537, 554/557, and 576/579 during non-error execution, creating log noise; consider downgrading or removing these logs on the normal path."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#05",
+    "descricao": "The comment states SQLite's parameter limit is 999, which is only true for SQLite versions before 3.32.0.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       605,
+       607
+      ],
+      "texto": "The comment states that SQLite has a parameter limit of 999, but SQLite >= 3.32.0 defaults to 32766 (as the added integration test also recognizes). This branch is choosing a conservative compatibility threshold, not expressing the limit of every SQLite database. Document 999 as the older-version/compatibility threshold so maintainers do not mistake this constant for the actual limit on modern SQLite."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#06",
+    "descricao": "On MySQL and Postgres, deleteByIDs binds one placeholder per ID without limit, so a cleanup batch size above 65535 makes every DELETE fail.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       605,
+       618
+      ],
+      "texto": "The bind-parameter workaround only handles SQLite's limit; the placeholder branch is used for every other engine with len(ids) placeholders and no bound. The previous implementation had no bind parameters, so this path is new. Postgres (extended protocol) and MySQL both cap bind parameters at 65535, so a configured AnnotationCleanupJobBatchSize larger than that makes this DELETE fail at Exec with a parameter-limit error instead of cleaning anything. Clamp the number of ids per DELETE (e.g. chunk into <=1000/<=65535 id sub-batches) for all dialects, not just SQLite."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       614,
+       618
+      ],
+      "texto": "On Postgres and MySQL, deleteByIDs binds one placeholder per ID with no cap. A configured AnnotationCleanupJobBatchSize above the driver's bind-parameter limit (65535) makes every cleanup batch fail, and the cleanup job then never finishes. Split the IDs into chunks below the limit, or inline the integer IDs as the SQLite branch does."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#07",
+    "descricao": "The SQLite inline ID list is built with repeated fmt.Sprintf concatenation, which is quadratic in batch size.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       608,
+       613
+      ],
+      "texto": "WHAT: SQLite large-batch IN-list built with repeated fmt.Sprintf(\"%s, %d\", values, v) in a loop over ids. WHY: Quadratic string copying on large batches (e.g. 32767 IDs in added test) during cleanup, a background job path. HOW: Build with strings.Builder or strings.Join."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       609,
+       612
+      ],
+      "texto": "The SQLite literal-ID path rebuilds the entire accumulated string for every ID, making SQL construction quadratic in batch size. Large batches explicitly supported by this PR, including the 32,767 setting in the integration test, generate substantial repeated copying and allocation before each delete, consuming cleanup time and memory. Build the list with strings.Builder and append each formatted ID once."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#08",
+    "descricao": "The cleanup service ticker was changed from 10 minutes to 1 minute, running every cleanup job ten times as often and increasing database load.",
+    "textoGolden": "The cleanup job ticker was changed from 10 minutes to 1 minute, which can lead to increased database load and contention due to more frequent execution of cleanup tasks. This change should be reviewed to ensure it aligns with performance expectations.",
+    "comentarios": [
+     {
+      "file": "pkg/services/cleanup/cleanup.go",
+      "lines": [
+       74,
+       78
+      ],
+      "texto": "WHAT: Cleanup ticker changed from 10 minutes to 1 minute with no justification. WHY: Runs all 8 cleanup jobs including the new multi-query (SELECT+DELETE per batch) annotation cleanup 10x more often, multiplying DB load. HOW: Revert to 10 minutes or justify the frequency change separately."
+     },
+     {
+      "file": "pkg/services/cleanup/cleanup.go",
+      "lines": [
+       77,
+       77
+      ],
+      "texto": "WHAT: The cleanup job ticker interval was changed from `time.Minute * 10` to `time.Minute * 1`. WHY: This runs all cleanup jobs (annotations, expired snapshots/versions/images, short URLs, query history) 10\u00d7 more frequently, multiplying background DB load and lock contention \u2014 the opposite of the deadlock mitigation this PR targets \u2014 and appears to be a debug leftover unrelated to the described change. HOW: Restore the ticker to `time.Minute * 10`."
+     },
+     {
+      "file": "pkg/services/cleanup/cleanup.go",
+      "lines": [
+       76,
+       77
+      ],
+      "texto": "The cleanup ticker was changed from `time.Minute * 10` to `time.Minute * 1`, a 10x increase in how often the entire cleanup job runs. This job also drives the annotation/tag cleanup path changed in this PR, which now fetches ID batches into memory and emits Error-level logs per batch, so running it every minute substantially increases DB load and log volume with no functional benefit. Unless a 1-minute cadence is explicitly intended, this should stay at 10 minutes (it reads like a leftover from testing)."
+     }
+    ]
+   }
+  ]
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "79d11c4890cc4792e3dc3535af59e4e5f7a2739d",
+  "base": "10aca5552314d6e5c9226f3c6d0107861c38c693",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+    "lines": [
+     56,
+     71
+    ],
+    "texto": "WHAT: The fail-fast exception for multiple crypto providers was replaced by sorting on order(), but DefaultCryptoProvider, FIPS1402Provider and WildFlyElytronProvider all return 200. A tie between them is now settled by ServiceLoader discovery order, and the loser is only logged at debug level. WHY: A FIPS deployment that accidentally also has the default (non-FIPS BouncyCastle) provider on the classpath used to fail at startup; now it can silently run with the non-FIPS provider. HOW: Keep throwing IllegalStateException when the two highest-ordered providers have the same order() value."
+   },
+   {
+    "id": "S2",
+    "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+    "lines": [
+     39,
+     50
+    ],
+    "texto": "WHAT: The test creates one EC key pair with the default KeyPairGenerator settings (a 256-bit curve) and uses it for ES256, ES384 and ES512. WHY: The ES384 and ES512 cases never produce 48- or 66-byte r/s values or a DER sequence longer than 127 bytes, so the long-form length branches in ASN1Encoder.writeLength and ASN1Decoder.readLength are never tested and a bug there would go unnoticed. HOW: Generate a key pair on the matching curve (secp256r1, secp384r1, secp521r1) for each algorithm."
+   },
+   {
+    "id": "S3",
+    "file": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java",
+    "lines": [
+     39,
+     44
+    ],
+    "texto": "WHAT: `int order()` is added to the public CryptoProvider SPI as an abstract method with no default. WHY: Any CryptoProvider implementation outside this repository stops compiling, and an already compiled one fails with AbstractMethodError when detectProvider calls CryptoProvider::order. HOW: Declare it as a default method that returns a base value, for example `default int order() { return 0; }`."
+   },
+   {
+    "id": "S4",
+    "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+    "lines": [
+     52,
+     56
+    ],
+    "texto": "The test only checks that R||S matches after a DER\u2192RS\u2192DER\u2192RS round trip, so the two conversions are only compared with each other. If asn1derToConcatenatedRS swapped r and s or used the wrong offsets, the round trip would reproduce the same wrong bytes and the test would still pass. Verify the re-encoded DER with Signature.verify against the public key, and check rsConcat against the r/s values decoded independently from the JDK signature."
+   },
+   {
+    "id": "S5",
+    "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+    "lines": [
+     41,
+     43
+    ],
+    "texto": "The single key pair comes from KeyPairGenerator.getInstance(\"EC\") with no curve set, which defaults to P-256, and is reused for ES384 and ES512. Those tests therefore never handle 48-byte or 66-byte (P-521) r/s values and only test zero-padding of 32-byte integers. A size-specific bug in integerToBytes or the length handling would not be caught. Generate a key pair on secp256r1, secp384r1 or secp521r1 to match each algorithm."
+   },
+   {
+    "id": "S6",
+    "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+    "lines": [
+     56,
+     71
+    ],
+    "texto": "Default, FIPS and Elytron providers all return order() 200, so after the stable sort, foundProviders.get(0) is whichever one ServiceLoader finds first, i.e. it depends on classpath order. Before this change, having several providers threw an error. Now, if both FIPS and default BouncyCastle providers are on the classpath, one is picked silently and the debug log is the only sign of it. A FIPS deployment could end up running the non-FIPS provider. Keep the error for providers tied at the top order value."
+   },
+   {
+    "id": "S7",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+    "lines": [
+     114,
+     115
+    ],
+    "texto": "These two statements DER-encode r and s and then discard the encoders. The returned value is built from new encoders on lines 117-121, so this is dead computation, likely left over from copy-paste. Remove both lines."
+   },
+   {
+    "id": "S8",
+    "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+    "lines": [
+     57,
+     71
+    ],
+    "texto": "detectProvider() used to throw when more than one CryptoProvider was found, and callers relied on that to catch misconfiguration. Now Default, Elytron and FIPS all return order 200, so if two of them are present the winner depends on classpath order and the others are only mentioned in a debug log, which could mean a non-FIPS provider runs in a FIPS deployment. Keep the fail-fast error when the top providers have the same order, and only resolve by order when the orders differ."
+   },
+   {
+    "id": "S9",
+    "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+    "lines": [
+     56,
+     71
+    ],
+    "texto": "The check that threw on multiple providers was removed, and DefaultCryptoProvider, FIPS1402Provider and WildFlyElytronProvider all return order 200. When two of them are on the classpath, classpath/ServiceLoader order decides which one wins, so a FIPS deployment can quietly end up on the non-FIPS BouncyCastle provider, with the others only logged at debug. If the top-ranked providers have the same order, keep throwing the IllegalStateException."
+   },
+   {
+    "id": "S10",
+    "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+    "lines": [
+     57,
+     71
+    ],
+    "texto": "The old code refused to start when several crypto providers were on the classpath. The new code sorts by order() and keeps the first, but DefaultCryptoProvider, FIPS1402Provider and WildFlyElytronProvider all return 200, so a tie is settled by ServiceLoader/classpath order and only a debug log mentions the ignored providers. A FIPS deployment that accidentally also includes crypto/default could end up on the non-FIPS provider with no error. Keep the fail-fast check when the top two providers have the same order."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+    "descricao": "concatenatedRSToASN1DER encodes r and s into two throwaway ASN1Encoder instances before re-encoding them in the return statement.",
+    "textoGolden": "Dead code exists where ASN1Encoder instances are created and written to, but their results are immediately discarded. The actual encoding is performed by new ASN1Encoder instances created in the subsequent return statement, rendering the earlier operations useless.",
+    "comentarios": [
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       114,
+       115
+      ],
+      "texto": "Dead computation: the two ASN1Encoder.create().write(...) calls allocate encoders and encode rBigInteger/sBigInteger, but their results are discarded \u2014 the returned DER comes entirely from the expression at lines 117-121, which re-encodes the same BigIntegers. These two statements have no effect and should be removed (they are a leftover from an earlier formulation)."
+     },
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       114,
+       115
+      ],
+      "texto": "Remove these two discarded encoder writes. Each allocates an encoder and encodes a BigInteger, but neither result participates in the returned signature; lines 119\u2013120 repeat both writes on fresh encoders. This performs redundant encoding and allocations on every concatenated-signature conversion."
+     },
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       114,
+       115
+      ],
+      "texto": "The two statements `ASN1Encoder.create().write(rBigInteger);` and `ASN1Encoder.create().write(sBigInteger);` encode values and discard the results. The return expression re-encodes the same values, so these lines are dead computation left over from a copy-paste or refactor. Remove them."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#04",
+    "descricao": "order() is added to CryptoProvider as an abstract method, breaking source and binary compatibility for existing third-party CryptoProvider implementations.",
+    "textoGolden": "Abstract order() method on CryptoProvider may break backward compatibility with existing implementations",
+    "comentarios": [
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java",
+      "lines": [
+       39,
+       44
+      ],
+      "texto": "order() was added as an abstract method to the public CryptoProvider interface. CryptoIntegration.detectProvider now invokes order() on every ServiceLoader-discovered CryptoProvider via Comparator.comparingInt(CryptoProvider::order). Any CryptoProvider implementation compiled against the previous interface (an external or separately built provider jar on the classpath) will throw AbstractMethodError at detection time, i.e. during AuthzClient.create()/server bootstrap, before any provider is usable. Giving order() a default implementation (e.g. default int order() { return 0; }) avoids the binary-incompatibility."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+    "descricao": "detectProvider no longer fails when several crypto providers are present; with Default, FIPS and Elytron all at order 200, ties are resolved by classpath order and a FIPS deployment can silently run with the non-FIPS provider.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+      "lines": [
+       54,
+       72
+      ],
+      "texto": "WHAT: detectProvider sorts by order() reversed and silently picks index 0, removing the previous multiple-providers error. WHY: Default/FIPS/Elytron all return order 200, so ambiguous classpath (e.g. default+FIPS) now nondeterministically picks one by ServiceLoader order instead of failing fast, risking wrong FIPS vs non-FIPS crypto. HOW: only auto-ignore lower-order providers; throw when the top two have equal order()."
+     },
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+      "lines": [
+       56,
+       62
+      ],
+      "texto": "Reject ambiguous highest-priority providers rather than silently taking the first. Both DefaultCryptoProvider and FIPS1402Provider return order 200 in this PR, so when both are present the stable sort leaves the decision to ServiceLoader discovery order. A deployment expecting FIPS can therefore initialize the ordinary Bouncy Castle provider without an error; previously this mixed classpath failed closed. Preserve the error for tied highest-priority providers (or require an explicit security-mode/provider choice), while still allowing the lower-priority authz-client fallback."
+     },
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+      "lines": [
+       56,
+       72
+      ],
+      "texto": "detectProvider() no longer fails fast when multiple CryptoProviders are present and instead silently picks the first after sorting by order() descending. All Keycloak providers return the same order (DefaultCryptoProvider, FIPS1402Provider, WildFlyElytronProvider all return 200), so a tie between two providers is broken by the non-deterministic ServiceLoader iteration order rather than the intended priority. The previous code threw an IllegalStateException forcing the classpath to be corrected; now a deployment with two provider jars (exactly the 'multiple providers on classpath' scenario this PR enables) can silently select the unintended provider \u2014 e.g. a non-FIPS/strict provider when FIPS is required \u2014 with no error. Use a stable tie-breaker (delegate to the provider name/type) or reject equal top orders instead of relying on ServiceLoader order."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#07",
+    "descricao": "Claims a wrong-length JOSE signature causes an unchecked exception in concatenatedRSToASN1DER; verifiers catch it and report verification failure, as with the existing providers.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       103,
+       122
+      ],
+      "texto": "WHAT: concatenatedRSToASN1DER splits signature without validating signature.length==signLength. WHY: short JOSE input throws ArrayIndexOutOfBoundsException and long input is silently truncated to signLength, breaking the ECDSACryptoProvider contract (IOException on malformed) used by verifier contexts. HOW: check length upfront and throw IOException."
+     },
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       103,
+       112
+      ],
+      "texto": "concatenatedRSToASN1DER never validates signature.length == signLength before System.arraycopy(signature,0,r,1,len) / (signature,len,s,1,len). A short JWS signature throws unchecked ArrayIndexOutOfBoundsException instead of the declared IOException, breaking verification on attacker-controlled input. Validate length and throw IOException."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#10",
+    "descricao": "The ES384 and ES512 tests sign with the same default P-256 key, so the converter is never tested with real P-384 or P-521 signatures.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       39,
+       43
+      ],
+      "texto": "Single default EC keypair reused for ES256/ES384/ES512: testES384/testES512 names claim larger curves but body signs with the same P-256 key and only pads to larger signLength, so full-width 384/521-bit handling is never exercised. Generate a per-algorithm keypair with the correct curve (e.g. secp256r1/secp384r1/secp521r1) before signing."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       41,
+       42
+      ],
+      "texto": "Every case generates a default EC key rather than a key on the curve associated with the named algorithm. On the standard JDK this is P-256, so testES384 and testES512 just pad P-256 signature components to larger lengths. A converter that discards nonzero high bytes beyond 32 bytes would still pass all three cases. Initialize the key generator with the appropriate curve per case (P-256, P-384, and P-521) so the larger-component conversions are actually tested."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       41,
+       42
+      ],
+      "texto": "Generate a key on the curve corresponding to each tested algorithm rather than using the provider's default EC curve for all three tests. On the standard JDK this generates a P-256 key even for testES384 and testES512, so those tests merely pad P-256 integers to larger output lengths and never exercise actual P-384/P-521 signature encoding (including P-521's long-form sequence length)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#11",
+    "descricao": "The test only checks a round trip between the two new converters and never verifies the re-encoded DER against the original signature or with Signature.verify, so mutually consistent bugs go undetected.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       46,
+       57
+      ],
+      "texto": "Tautological round-trip assertion: rsConcat2 is derived from rsConcat via encode+decode that are inverses if self-consistent, so assertArrayEquals(rsConcat,rsConcat2) passes even if both directions are wrong. Verify against external oracle: Signature.initVerify + verify(asn1Des) and/or compare rsConcat to expected split, not just to itself."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       52,
+       56
+      ],
+      "texto": "The test only checks self-consistency: it asserts asn1derToConcatenatedRS(g(asn1derToConcatenatedRS(sign))) == asn1derToConcatenatedRS(sign), i.e. that concatenatedRSToASN1DER is a right inverse of asn1derToConcatenatedRS. It never compares against the original DER `sign`, never verifies the ECDSA signature, and never asserts the emvider output is canonical DER. Because the decoder it reads back with (ASN1Decoder.readLength) accepts non-canonical long-form lengths (e.g. 0x81) and validates only tag numbers, a regression in ASN1Encoder.writeLength that always emitted long form would still round-trip and the test would still pass, even though the produced signature would no longer be valid DER and would be rejected by the Keycloak server / a JDK Signature.verify. Assert the encoded signature is valid DER (e.g. verify it with a JDK Signature, or compare asn1derToConcatenatedRS(sign) against a known-good width-padded r||s and assert its length equals algorithm.getSignatureLength())."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       53,
+       56
+      ],
+      "texto": "The assertion only establishes agreement between the two new conversion routines, not correctness of the converted signature. For example, swapping r and s in both routines makes this entire round trip pass, although the DER result no longer verifies the signed data. Verify `asn1Des` with the public key and original data (or compare against an independently specified encoding) so mutually compensating conversion defects fail the test."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02",
+    "descricao": "getBouncyCastleProvider in AuthzClientCryptoProvider returns the JDK default KeyStore provider instead of BouncyCastle, contrary to the CryptoProvider contract.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "ce2dcc537b4b1f98a335e88cfe8e0b804483252a",
+  "base": "85737f52b59aa2e3403c9b8e48acf71ccc5bfae3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "server-spi/src/main/java/org/keycloak/models/utils/RecoveryAuthnCodesUtils.java",
+    "lines": [
+     56,
+     62
+    ],
+    "texto": "WHAT: getCredential always calls getFederatedCredentialsStream first. For LDAP-federated users this runs LDAPStorageProvider.getCredentials, which queries LDAP and throws IllegalStateException when the LDAP object is not found. WHY: recovery-code login and the RecoveryAuthnCodeInputLoginBean page now fail with a 500 (and pay an LDAP round-trip on every call) for federated users whose recovery codes are stored locally, where before only local storage was read. HOW: check local stored credentials first and only fall back to the federated stream, or only consult the federated provider when it supports the recovery-codes type."
+   },
+   {
+    "id": "S2",
+    "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+    "lines": [
+     125,
+     130
+    ],
+    "texto": "WHAT: when user storage accepts the new recovery codes, the local `createCredential` is skipped, and that call is the only place an existing local recovery-codes credential gets deleted. WHY: UserCredentialManager.isValid still runs the local RecoveryAuthnCodesCredentialProvider, so codes the user meant to replace by regenerating still authenticate. HOW: when userStorageCreated is true, remove any existing local recovery-codes credential."
+   },
+   {
+    "id": "S3",
+    "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+    "lines": [
+     117,
+     123
+    ],
+    "texto": "WHAT: the user-storage path serializes the raw plaintext recovery codes (`generatedCodes`) into the UserCredentialModel, while the local path stores only the hashed codes from credentialModel. WHY: any user storage provider receives and may persist plaintext recovery codes, so a leak of the external store exposes working second-factor codes. HOW: pass the hashed credential data (credentialModel.getCredentialData()) to the user storage instead of the raw codes."
+   },
+   {
+    "id": "S4",
+    "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+    "lines": [
+     80,
+     80
+    ],
+    "texto": "WHAT: the credential can now come from user storage, but when all codes are used it is still deleted with `removeStoredCredentialById(recoveryCodeCredentialModel.getId())`, which only acts on the local store. WHY: a federated credential (whose id may be null when built via createFromValues) is never removed from the user storage, so the exhausted credential stays configured. HOW: when the credential has a federation link or came from the federated stream, remove it through the storage provider (e.g. disableCredentialType) instead of removeStoredCredentialById."
+   },
+   {
+    "id": "S5",
+    "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+    "lines": [
+     244,
+     244
+    ],
+    "texto": "The error log hard-codes the credential type as \"recovery-codes\", but RecoveryAuthnCodesCredentialModel.TYPE is \"recovery-authn-codes\". Anyone reading the log or searching for the type will be pointed at a type that does not exist. Use the constant so the message stays correct."
+   },
+   {
+    "id": "S6",
+    "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+    "lines": [
+     80,
+     88
+    ],
+    "texto": "`RecoveryAuthnCodesUtils.getCredential` can now return a credential from user storage (federated), but once all codes are used the authenticator still deletes it with `removeStoredCredentialById`. That call only removes credentials from the local Keycloak DB, so the federated credential stays in user storage and the user is still treated as configured for recovery codes. Remove it through a path that handles federated credentials too, e.g. `credentialManager().removeStoredCredentialById` only when the credential is local, and `updateCredential`/`disableCredentialType` against user storage when it is federated."
+   },
+   {
+    "id": "S7",
+    "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+    "lines": [
+     326,
+     340
+    ],
+    "texto": "isValid returns true if the input matches any generated code (anyMatch), but the login page asks for one specific code number (getNextRecoveryAuthnCode). A user can enter any of their codes instead of the requested one and still pass, so this does not behave like the local provider. The check should compare the input only against the code at the expected (next unused) index."
+   },
+   {
+    "id": "S8",
+    "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+    "lines": [
+     237,
+     242
+    ],
+    "texto": "getCredentials builds a new model with createFromValues instead of returning the stored CredentialModel, so the id generated in updateCredential is not passed through. Anything downstream that relies on the credential id gets a different or null id, for example removeStoredCredentialById in RecoveryAuthnCodesFormAuthenticator or account credential listing. Set the id on the rebuilt model from myUser.recoveryCodes.getId()."
+   },
+   {
+    "id": "S9",
+    "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+    "lines": [
+     326,
+     340
+    ],
+    "texto": "`RecoveryAuthnCodesFormAuthenticator` and `RecoveryAuthnCodeInputLoginBean` now read the federated credential through `RecoveryAuthnCodesUtils.getCredential`. They assume a successful `isValid` uses up the accepted code, so the next requested code number moves forward and `allCodesUsed()` can eventually be true. This `isValid` accepts any stored code and never removes it, so every login asks for code #0, codes can be replayed, and regeneration is never triggered. After a successful match, check the input against the requested next code and remove it from the stored JSON list."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+    "descricao": "The test user-storage provider validates recovery codes without consuming the used code, so the same code can be replayed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       326,
+       340
+      ],
+      "texto": "WHAT: The new recovery-codes branch of isValid only checks whether the submitted code appears in the stored list and never removes the consumed entry. WHY: Unlike the local RecoveryAuthnCodesCredentialProvider.isValid (which calls removeRecoveryAuthnCode()+updateStoredCredential), the federated path never consumes a code and allCodesUsed() can never become true, so a used recovery code remains valid and can be replayed indefinitely. HOW: On a successful match, remove that entry from the stored codes (rewrite recoveryCodes.credentialData), mirroring the local provider's consume-on-success semantics."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       340,
+       340
+      ],
+      "texto": "The new recovery-code validator accepts any code in the original list without consuming the accepted code. Repeating a successful login with the same code succeeds indefinitely, while getCredentials reconstructs all original codes so the login form never advances or detects exhaustion. Validate the next unused code and persist its consumption before returning success."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       340,
+       340
+      ],
+      "texto": "The new federated recovery-code validator accepts any code in the original list but never removes a successfully used code from myUser.recoveryCodes. Consequently the same recovery code remains valid on subsequent logins, and getCredentials reconstructs the full original set every time. Consume and persist the successfully validated code (and test a second login/replay), so federated recovery codes retain their one-time semantics."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#02",
+    "descricao": "getCredentials rebuilds the recovery-codes credential without copying the stored credential id, so the returned federated credential has a null id and cannot be targeted by id-based removal.",
+    "textoGolden": "After creating the RecoveryAuthnCodesCredentialModel, consider setting its id from the stored credential (e.g., myUser.recoveryCodes.getId()); otherwise getId() will be null and downstream removal by id (e.g., removeStoredCredentialById in the authenticator flow) may not work.",
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       237,
+       242
+      ],
+      "texto": "WHAT: getCredentials builds the RecoveryAuthnCodesCredentialModel via createFromValues but never sets its id from the stored myUser.recoveryCodes.getId() (createFromValues does not populate id). WHY: The returned federated model has a null id, so callers that identify/delete the credential by id \u2014 e.g. RecoveryAuthnCodesFormAuthenticator.removeStoredCredentialById(recoveryCodeCredentialModel.getId()) when all codes are used, or federated-credential deletion via getFederatedCredentialsStream \u2014 cannot target the actual credential. HOW: call model.setId(myUser.recoveryCodes.getId()) after createFromValues."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       237,
+       242
+      ],
+      "texto": "getCredentials rebuilds the recovery-code model without copying the ID assigned during updateCredential. createFromValues does not assign an ID, so the exposed federated credential has a null ID and CredentialDeleteHelper cannot resolve it by the stored credential ID for account deletion. Copy myUser.recoveryCodes.getId() to the reconstructed model before returning it."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       237,
+       242
+      ],
+      "texto": "The CredentialModel returned from getCredentials for recovery codes is built with createFromValues and never gets the stored credential's id (myUser.recoveryCodes.getId()). RecoveryAuthnCodesFormAuthenticator later calls removeStoredCredentialById(model.getId()) once all codes are used, and this would pass a null id. Fix: call model.setId(myUser.recoveryCodes.getId()) after creating the model."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
+    "descricao": "Creating recovery codes in external storage does not remove a previously stored local recovery-codes credential, and validation falls back to local storage, so the replaced codes still authenticate.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+      "lines": [
+       125,
+       129
+      ],
+      "texto": "Successful recovery-code creation in external storage leaves any existing locally stored recovery-code credential active. For a federated user who previously stored codes locally and now has an external provider supporting this type, regeneration no longer calls RecoveryAuthnCodesCredentialProvider.createCredential's replacement cleanup; UserCredentialManager.isValid falls back to the local validator when external validation rejects an old code, so the supposedly replaced codes still authenticate. Remove the previous local recovery-code credential after successful external creation."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+    "descricao": "Exhausted recovery codes are removed with removeStoredCredentialById, which only covers local storage, so a federated recovery-codes credential is never removed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+      "lines": [
+       80,
+       88
+      ],
+      "texto": "RecoveryAuthnCodesUtils.getCredential() can now return a credential from user storage (federated), but this code still calls removeStoredCredentialById() on it once all codes are used. That removal only targets local stored credentials, so a federated credential may not be removed. The user could then be left with an exhausted credential in user storage. Remove federated credentials through the federated path, or confirm the removal reaches user storage."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+      "lines": [
+       80,
+       88
+      ],
+      "texto": "RecoveryAuthnCodesUtils.getCredential can now return a credential from user storage, but exhausted codes are cleaned up with removeStoredCredentialById, which only targets the local DB. For a federated credential (possibly with a null id), the exhausted credential is never removed or the call misbehaves, so the user keeps a dead credential. Remove federated credentials through a path that covers user storage, for example by checking where the credential came from."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+      "lines": [
+       80,
+       89
+      ],
+      "texto": "RecoveryAuthnCodesUtils.getCredential can now return a federated credential. The authenticator still removes an exhausted one with removeStoredCredentialById(getId()), which only deletes from the local store, and the federated model's id may be null. Remove the credential through the path that matches where it was found, for example by checking whether it came from the federated stream and using the federated removal."
+     }
+    ]
+   }
+  ]
+ },
+ "advanced-sql-analytics-framework-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "f3317b329b4eb8fd96f99dd86525bc4a22d20248",
+  "base": "cbe1e7d63f098e306058c0fbcab2f5c30602fa7d",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "WHAT: enableSqlExpressions assigns `enabled := !IsEnabledGlobally(FlagSqlExpressions)` and returns false on both branches, so the flag lookup is dead code and the variable name means the opposite of its value. WHY: the code looks like a flag gate but ignores the flag; if someone changes the final `return false` to restore flag behavior, the inverted `enabled` makes the flag work backwards. HOW: make the kill switch explicit with a single `return false` and a comment, and drop the misleading flag lookup."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     195,
+     198
+    ],
+    "texto": "`enabled` is assigned `!h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`, so it is true exactly when SQL expressions are disabled. The name therefore states the opposite of its value, and `if enabled { return false }` reads as disabling the feature when it is enabled. Rename it to `disabled`, or drop the negation, so the identifier matches what it holds."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "enableSqlExpressions returns false on both branches, so ReadQuery rejects every SQL expression query as \"not implemented\" even when FlagSqlExpressions is enabled globally. The feature flag can no longer turn the feature on. Return the flag's value instead."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "Both branches of enableSqlExpressions return false, so ReadQuery rejects every SQL expression even when the sqlExpressions flag is on. Callers that enabled the flag used to get SQL queries parsed. Now they always get 'sqlExpressions is not implemented'. Return the flag value directly."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "enableSqlExpressions computes the negated value of FlagSqlExpressions, but both branches return false, so the flag check is dead code. As a result, ReadQuery rejects SQL expressions even when the flag is enabled. The function should return the flag's value directly."
+   },
+   {
+    "id": "S6",
+    "file": "pkg/expr/sql/parser.go",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "TablesList now calls a stub that always returns an error, so existing parser tests (pkg/expr/sql/parser_test.go) would break."
+   },
+   {
+    "id": "S7",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "enableSqlExpressions always returns false, which disables SQL expressions and would break existing tests."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#06",
+    "descricao": "The variable in TablesList is still named duckDB although it no longer holds a DuckDB instance.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/expr/sql/parser.go",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "After replacing `duck.NewInMemoryDB()` with local `NewInMemoryDB()` and removing the duck import, the local `duckDB` still carries the old implementation name though it is no longer a duck DB. Rename to `db`/`sqlDB` (as done in sql_command.go) so identifier matches code."
+     }
+    ]
+   }
+  ]
+ },
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "71826eb08fc7ea35a5925ad223296feadd5c5e29",
+  "base": "e805e472f4a80017957e2fbec975ea78c6ee45ed",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/api/helpers/error_upsampling.py",
+    "lines": [
+     100,
+     105
+    ],
+    "texto": "WHAT: _is_error_focused_query uses a plain substring check, so a query like '!event.type:error' or 'event.type:error OR event.type:transaction' is treated as errors-only. WHY: for allowlisted projects on the discover dataset, count() is rewritten to upsampled_count() for queries that exclude errors or include transactions, and the returned counts are wrong. HOW: parse the query with the event search parser and only return True when there is one positive, non-negated event.type:error filter with no OR branches."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/api/helpers/error_upsampling.py",
+    "lines": [
+     58,
+     60
+    ],
+    "texto": "WHAT: count() is rewritten to 'upsampled_count() as count', which always produces a result column named 'count'. With transformAliasToInputFormat=1, the serializer instead looks for the column 'count()', because resolve_axis_column uses the original query_columns in organization_events.py. WHY: for allowlisted error queries that use transformAliasToInputFormat, the series lookup misses and the endpoint returns empty or zero-filled data instead of the upsampled counts. HOW: make the alias of the rewritten column match whatever resolve_axis_column will look up, for example alias it to the original column name when transform_alias_to_input_format is enabled."
+   },
+   {
+    "id": "S3",
+    "file": "tests/sentry/api/helpers/test_error_upsampling.py",
+    "lines": [
+     47,
+     52
+    ],
+    "texto": "The 'no project IDs provided' check runs while the mocked allowlist is still `[]`, so the function returns False through the empty-allowlist check and never reaches the `if not project_ids` guard. If that guard were removed, `all()` over an empty list would return True and every query with no projects would be upsampled, yet this test would still pass. Set a non-empty allowlist before this check."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/api/helpers/error_upsampling.py",
+    "lines": [
+     100,
+     105
+    ],
+    "texto": "`_is_error_focused_query` uses a plain substring check, so the negated query `!event.type:error` also matches. That query means \"exclude errors\", but upsampling still turns on. On the discover dataset, count() then becomes `upsampled_count()` for a query that selects only non-error events (for example, transactions), so the counts returned are wrong. Parse the query, or at least require that the match is not preceded by `!`, before reporting the query as error-focused."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/api/endpoints/organization_events_stats.py",
+    "lines": [
+     218,
+     223
+    ],
+    "texto": "`final_columns` replaces `count()` with `upsampled_count() as count`, so the query result series is now keyed `count` (or an `upsampled_count` alias) rather than `count()`. The response serialization (`get_event_stats_data`, which handles multi-yAxis and top-events grouping) still uses the original `query_columns` to look up each series. As a result, multi-axis or top-events responses can drop the upsampled series or put it under the wrong key. Make the transformed column keep the alias that consumers expect (for example the `count()` result key), or map the results back to the original column names before returning."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/api/helpers/error_upsampling.py",
+    "lines": [
+     100,
+     105
+    ],
+    "texto": "`_is_error_focused_query` uses a substring test, so `!event.type:error` (and `event.type:error OR event.type:transaction`) also count as error-only queries. On the discover dataset this applies the `upsampled_count()` / `sample_weight` transform to non-error events, which breaks the rule that the transform only applies to errors. Match the filter as a whole, non-negated token instead of a substring."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+    "descricao": "The upsampling decision is evaluated against the request's dataset instead of the scoped_dataset actually queried, so in the dashboard discover-split path (metrics dataset) error queries run against discover skip upsampling even when all projects are allowlisted.",
+    "textoGolden": "The upsampling eligibility check passes the outer dataset instead of the actual dataset used by scoped_dataset. In paths where the query ultimately runs against discover (e.g., dashboard split) while the original dataset is metrics, upsampling may be skipped even when all projects are allowlisted.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_events_stats.py",
+      "lines": [
+       218,
+       223
+      ],
+      "texto": "The upsampling decision uses the closure variable `dataset` while the transformed `final_columns` are executed against `scoped_dataset`. In the dashboard-split path `_get_event_stats` is deliberately invoked with a different dataset (e.g. `_get_event_stats(discover, ...)` at lines 351, 365, 406, 423) than the request's `dataset`, so the `_should_apply_sample_weight_transform` branch can be evaluated against the wrong dataset and apply/skip `sum(sample_weight)` for a dataset that was never queried. Base the decision on the dataset actually being queried (`scoped_dataset`) so the transform matches the target of the query."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+    "descricao": "_is_error_focused_query uses a substring match for `event.type:error` on the request query, so negated or mixed (OR transaction) discover queries are treated as error-only and get the sample_weight sum instead of count().",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       100,
+       103
+      ],
+      "texto": "`_is_error_focused_query` decides whether to apply `upsampled_count()` by doing a naive substring search for `event.type:error` in the raw request query. A query that excludes errors (e.g. `!event.type:error`) or the discover-split query `({query}) AND event.type:transaction` still contains the literal `event.type:error`, so the transform is applied to a non-error / transactions query, summing `sample_weight` where it should be a plain `count()` and producing wrong bucket values. It also ignores the actual `query` passed to `_get_event_stats`, so the decision can differ from the query that is really executed. Match on a parsed/negation-aware condition (or pass the resolved query string) instead of a raw substring test."
+     },
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       100,
+       103
+      ],
+      "texto": "The substring check treats `!event.type:error` and `event.type:error OR event.type:transaction` as error-only queries. For allowlisted projects this rewrites count() to an aggregation over sample_weight even when the Discover query includes transactions, violating the error-only restriction and potentially failing against a transaction-backed query. Determine the event-type restriction from the parsed query rather than the presence of a substring."
+     },
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       100,
+       103
+      ],
+      "texto": "Substring matching does not establish that the Discover query selects only errors. For example, `!event.type:error` and `event.type:error OR event.type:transaction` both return True here, causing count() to be replaced with the sample-weight aggregation for non-error or mixed results in allowlisted projects. This contradicts the error-only guard and can produce incorrect counts. Parse the query and establish an error-only restriction (including negation and Boolean structure), or conservatively skip transformation when that restriction cannot be proven."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#05",
+    "descricao": "test_error_upsampling_with_transaction_events cannot detect upsampling being applied to transaction queries, because the transaction has no sample_weight and upsampled_count() equals count() for it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+      "lines": [
+       3654,
+       3697
+      ],
+      "texto": "test_error_upsampling_with_transaction_events would still pass if upsampling were wrongly applied to transaction queries. The transaction event has no sample_weight, and upsampled_count uses ifNull(sample_weight, 1), so the result is still 1 and 0. Give the transaction a non-default sample rate or weight so an upsampled count would differ from a plain count, or assert that the transform was not applied."
+     },
+     {
+      "file": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+      "lines": [
+       3654,
+       3697
+      ],
+      "texto": "test_error_upsampling_with_transaction_events cannot falsify over-application of upsampling: the stored transaction has no sample_weight so upsampled_count() (sum(ifNull(sample_weight,1))) returns 1, same as count(). Give the transaction a sample_weight/client_sample_rate that would diverge (e.g. count 10 if upsampled vs 1 if not), or assert via mock that transform_query_columns_for_error_upsampling was not called / yAxes were not rewritten."
+     },
+     {
+      "file": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+      "lines": [
+       3655,
+       3697
+      ],
+      "texto": "test_error_upsampling_with_transaction_events cannot detect upsampling being wrongly applied to transaction queries. The stored transaction event has no error_sampling context, so sample_weight is null, and upsampled_count = toInt64(sum(ifNull(sample_weight,1))) evaluates to 1 for it \u2014 identical to count(). If _should_apply_sample_weight_transform/_is_error_focused_query were broken so that a discover query with event.type:transaction gets upsampled, the assertion count==1 (and 0 in the empty bucket) would still pass. Add an event with a known non-1 sample_weight (or assert the emitted query uses count() and not upsampled_count) so the test actually fails when the transaction exclusion is bypassed."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#06",
+    "descricao": "The test factory helper's docstring promises a valid client sample rate but it copies any truthy float-convertible value (negative, >1, strings), unlike production validation.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/testutils/factories.py",
+      "lines": [
+       344,
+       357
+      ],
+      "texto": "WHAT: _set_sample_rate_from_error_sampling uses `if client_sample_rate: float(...)` with no type/range check, unlike production _derive_client_error_sampling_rate which requires isinstance(int,float) and 0<rate<=1. WHY: string '0.1', bool True, or out-of-range 5.0 get stored as sample_rate in fixtures while production drops them, making upsampling tests diverge from prod. HOW: mirror production validation before assigning sample_rate."
+     },
+     {
+      "file": "src/sentry/testutils/factories.py",
+      "lines": [
+       345,
+       345
+      ],
+      "texto": "The new docstring says the client sample rate must be 'present and valid', but the implementation only checks truthiness and float conversion. Negative rates, rates greater than 1, and float-convertible non-finite values are all accepted and written to sample_rate. This falsely tells test authors that this helper enforces sample-rate validity. Either document that it merely copies truthy float-convertible values, or validate the supported sample-rate range and finiteness before setting the field."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#08",
+    "descricao": "With upsampling active, top-events queries pick and order the top N groups by raw count() (selected_columns/orderby are not transformed) while the plotted series use upsampled_count(), so ranking can disagree with the displayed weighted counts.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_events_stats.py",
+      "lines": [
+       242,
+       248
+      ],
+      "texto": "Only timeseries_columns are upsampled while selected_columns and orderby used to select the Top N remain based on raw count(). discover.top_events_timeseries first queries those unchanged selected columns to choose groups, so a group with fewer retained events but a higher weighted count is omitted in favor of a lower-volume group. Apply the weighted-count transformation consistently to Top N selection and its ordering as well as the displayed timeseries."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#09",
+    "descricao": "_are_all_projects_error_upsampled and its caller take an organization argument that is never read.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       28,
+       44
+      ],
+      "texto": "`_are_all_projects_error_upsampled` takes an `organization` argument \u2014 also threaded in from the public `is_errors_query_for_error_upsampled_projects` \u2014 but never reads it: the body uses only `project_ids` and the global option `issues.client_error_sampling.project_allowlist`. The declared parameter is dead. Either the allowlist check is meant to be organization-scoped (the body must actually consult `organization`) or the parameter should be removed from both functions; as written the signature advertises an organization-scoped decision the implementation never makes."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14",
+    "descricao": "Claims only bare count() is rewritten, so aliased count, eps(), epm(), count_unique() etc. stay un-upsampled.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       54,
+       64
+      ],
+      "texto": "WHAT: transform_query_columns_for_error_upsampling only rewrites exact bare `count()` and passes everything else through unchanged. WHY: yAxes like `count() as foo`, `eps()`, `epm()`, `count_unique()`, `count_if()` keep raw counts while should_upsample is true, returning under-counted timeseries. HOW: parse/normalize the function (strip alias, match function name with args) and rewrite all count-equivalent aggs or explicitly fall back to no-upsampling."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#15",
+    "descricao": "Rewriting count() to `upsampled_count() as count` breaks responses for transformAliasToInputFormat=1: the result column is translated to the rewritten field string while the serializer still reads `count()`.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       58,
+       60
+      ],
+      "texto": "Replacing count() with `upsampled_count() as count` breaks requests using transformAliasToInputFormat=1. QueryBuilder.process_results translates the count alias to the replacement field string, but the endpoint serializer still resolves the original axis as `count()`, so it cannot read the weighted count from the returned rows. Preserve the original public field name in the result mapping when rewriting the internal aggregation."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#16",
+    "descricao": "upsampled_count truncates the weighted sum with toInt64 instead of rounding, under-counting the estimate by up to one per bucket.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/search/events/datasets/discover.py",
+      "lines": [
+       1044,
+       1049
+      ],
+      "texto": "`upsampled_count` wraps the sum in `toInt64`, which truncates toward zero: `sum(ifNull(sample_weight, 1))` of e.g. 1.5 or 3.33 yields 1 or 3 instead of the nearest integer, systematically under-counting the upsampled estimate (worst when weights are just below an integer). Use a rounding aggregation (e.g. `toInt64(round(sum(...)))`) so the reconstructed count reflects the intended estimate rather than a floored value."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#18",
+    "descricao": "The 'no project IDs' test case runs with an empty allowlist mock, so it passes via the empty-allowlist branch and does not verify the empty project_ids guard.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/api/helpers/test_error_upsampling.py",
+      "lines": [
+       51,
+       52
+      ],
+      "texto": "The 'no project IDs provided' case does not exercise the `if not project_ids: return False` guard. mock_options.get.return_value was set to [] just above (line 48), so removing the project_ids guard still returns False via the `if not allowlist` branch, and this assertion passes either way. Re-mock options.get to return a non-empty allowlist (e.g. self.project_ids) before calling with project_ids=[], so the empty-project guard is actually falsifiable."
+     }
+    ]
+   }
+  ]
+ }
+}

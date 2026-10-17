@@ -1,0 +1,26 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "items": [
+  {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "pkg/expr/reader.go:194-199 performs a redundant flag check because both branches return false. Disabling SQL is intentional: this PR also replaces the database implementation with error-returning stubs at pkg/expr/sql/db.go:12-21, consistent with its commit message. The redundant check is a nit; severity reflects the comments\u2019 claimed feature failure, assuming it were unintended.",
+   "severity": "high"
+  },
+  {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-02",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "pkg/expr/reader.go:195 assigns the negated feature flag to `enabled`, so the name describes the opposite of its value. Both branches return false at lines 197 and 199, making this a naming issue without behavioral impact.",
+   "severity": "low"
+  },
+  {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-03",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "pkg/expr/sql/parser.go:23-29 does call the error-returning stub in pkg/expr/sql/db.go:16-17. However, every test in pkg/expr/sql/parser_test.go immediately calls t.Skip() (for example, lines 10, 19 and 29), so the claimed existing-test failures cannot occur.",
+   "severity": "medium"
+  }
+ ]
+}

@@ -1293,6 +1293,79 @@
     "status": "agreed",
     "severity": "critical",
     "category": null
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#oph-01",
+    "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+    "comment": "GroupPermissionsV2.canView(group) does not fall back to canView(), and the PR dropped the canViewGlobal short-circuit, so an admin with an all-groups VIEW permission is denied (and the group filtered out of listings) for any group that has its own permission resource lacking VIEW.",
+    "commentOpus": "GroupPermissionsV2.canView(group) does not fall back to canView(), and the PR dropped the canViewGlobal short-circuit, so an admin with an all-groups VIEW permission is denied (and the group filtered out of listings) for any group that has its own permission resource lacking VIEW.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S3"
+     ]
+    },
+    "reason_opus": "GroupPermissionsV2.java:56-62 canView(group) checks only admin roles then hasPermission(group.getId(),...), which evaluates the per-group resource when one exists (line 141); that resource is created without a type (AdminPermissionsSchema.getOrCreateResource), so DefaultPolicyEvaluator.java:73 never pulls the all-groups type permissions. The PR also removed the canViewGlobal short-circuit in GroupsResource/GroupResource, so an all-groups VIEW grant is ignored for groups that have their own permission resource.",
+    "reason_astra": "GroupPermissionsV2.java:142–153 deliberately uses all-groups permissions only when no group-specific resource exists, matching the V2 fallback logic in UserPermissionsV2.java:105–118. UserResourceTypeEvaluationTest.java:101–113 explicitly verifies that a specific permission overrides an all-resources grant. Adding the proposed canView() shortcut would bypass that precedence; the V1 behavior does not establish a V2 defect.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "oph",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "GroupPermissionsV2.java:56-62 canView(group) checks only admin roles then hasPermission(group.getId(),...), which evaluates the per-group resource when one exists (line 141); that resource is created without a type (AdminPermissionsSchema.getOrCreateResource), so DefaultPolicyEvaluator.java:73 never pulls the all-groups type permissions. The PR also removed the canViewGlobal short-circuit in GroupsResource/GroupResource, so an all-groups VIEW grant is ignored for groups that have their own permission resource."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "GroupPermissionsV2.java:142–153 deliberately uses all-groups permissions only when no group-specific resource exists, matching the V2 fallback logic in UserPermissionsV2.java:105–118. UserResourceTypeEvaluationTest.java:101–113 explicitly verifies that a specific permission overrides an all-resources grant. Adding the proposed canView() shortcut would bypass that precedence; the V1 behavior does not establish a V2 defect."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "Concede. GroupPermissionsV2.hasPermission (:139-148) consults the all-groups resource only when no group-specific resource exists, the same precedence UserPermissionsV2.java:107-115 already uses (`if (resource == null) { // check if there is permission for \"all-users\"`), and the users test asserts that a specific permission overrides an all-users grant. canView(group) not short-circuiting on canView() is the V2 model, not an oversight; the canViewGlobal removal in GroupsResource/GroupResource is consistent with it (V1 GroupPermissions.canView(group) :255 still checks canView() itself, so V1 is unaffected)."
+     }
+    ],
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "high",
+    "category": null
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#oph-02",
+    "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+    "comment": "Claims GroupResource management-permissions endpoints call GroupPermissionsV2 methods that throw UnsupportedOperationException, causing 500s when V2 is active.",
+    "commentOpus": "Claims GroupResource management-permissions endpoints call GroupPermissionsV2 methods that throw UnsupportedOperationException, causing 500s when V2 is active.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S13"
+     ]
+    },
+    "reason_opus": "GroupPermissionsV2.java:167-210 does throw UnsupportedOperationException, but the GroupResource management/permissions endpoints (GroupResource.java:322,353) first call ProfileHelper.requireFeature(ADMIN_FINE_GRAINED_AUTHZ), the V1 feature, which shares its key with V2 and cannot be enabled together (Profile.java:56-58); the PR also guards the removal listener with the V1 flag (AdminPermissions.java:74). The endpoints cannot reach the throwing methods when V2 is active, so the claimed 500 is impossible.",
+    "reason_astra": "GroupResource.java:322 and :355 guard both endpoints with the V1 ADMIN_FINE_GRAINED_AUTHZ feature before calling permission-management methods. Profile.java:283–306 prevents simultaneous feature versions, and ProfileHelper.java:30–32 returns HTTP 501 when the required feature is disabled. Consequently, V2 requests cannot reach the claimed UnsupportedOperationException.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "oph",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "high",
+    "category": null
    }
   ],
   "add-guest-management-functionality-to-existing-bookings-cal-com": [
@@ -1675,6 +1748,31 @@
     "rodada": "sncc",
     "class": "FP",
     "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-04",
+    "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+    "comment": "Claims the selected-slots availability call site passes only the user's timezone, so dateOverrides and workingHours fall back to [] and slots are checked only against busy times.",
+    "commentOpus": "Claims the selected-slots availability call site passes only the user's timezone, so dateOverrides and workingHours fall back to [] and slots are checked only against busy times.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S15"
+     ]
+    },
+    "reason_opus": "slots.ts:579-586 does pass only busy and availabilityCheckProps (eventLength, currentSeats), so dateOverrides/workingHours default to []. But this pass runs on availableTimeSlots that were already filtered against each host's overrides and working hours at lines 483-523; it only removes slots for reserved selectedSlots, so omitting the schedule here admits no extra slots.",
+    "reason_astra": "The call at packages/trpc/server/routers/viewer/slots.ts:581-586 does omit schedule fields, but fixed hosts already passed the full schedule check at slots.ts:483-499 and loose-host IDs were filtered using their schedules at slots.ts:502-522. This later selected-slot pass only removes surviving users and slots at slots.ts:565-590; it cannot restore availability rejected by those earlier checks.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "oph",
+    "class": "FP",
+    "subclass": null,
     "status": "agreed",
     "severity": "medium",
     "category": null
@@ -2147,6 +2245,31 @@
     "subclass": null,
     "status": "agreed_after_debate",
     "severity": "high",
+    "category": null
+   },
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-03",
+    "caseId": "advanced-sql-analytics-framework-grafana-codex",
+    "comment": "Claims TablesList now calls a stub that always errors, so existing parser tests in pkg/expr/sql/parser_test.go would break.",
+    "commentOpus": "Claims TablesList now calls a stub that always errors, so existing parser tests in pkg/expr/sql/parser_test.go would break.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S6"
+     ]
+    },
+    "reason_opus": "TablesList now calls the stub NewInMemoryDB whose RunCommands always errors (db.go), but every test in pkg/expr/sql/parser_test.go starts with t.Skip(), and they were already skipped at the base commit. No existing parser test breaks.",
+    "reason_astra": "pkg/expr/sql/parser.go:23-29 does call the error-returning stub in pkg/expr/sql/db.go:16-17. However, every test in pkg/expr/sql/parser_test.go immediately calls t.Skip() (for example, lines 10, 19 and 29), so the claimed existing-test failures cannot occur.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "oph",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "medium",
     "category": null
    }
   ],
@@ -2844,6 +2967,86 @@
     "subclass_opus_inicial": "hallucination",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination"
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+    "caseId": "authzservice-improve-authz-caching-grafana-codex",
+    "comment": "Claims the new denial cache is checked before any permission source and never invalidated, so a Check that ran before a resource was created or a grant was added keeps returning Allowed:false for the whole short cache TTL.",
+    "commentOpus": "Claims the new denial cache is checked before any permission source and never invalidated, so a Check that ran before a resource was created or a grant was added keeps returning Allowed:false for the whole short cache TTL.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S1"
+     ]
+    },
+    "reason_opus": "service.go:116-121 does short-circuit on permDenialCache and line 153-155 sets it on deny with shortCacheTTL (30s, service.go:32), never invalidated. This is the PR's deliberate denial cache bounded by the same 30s TTL the permission cache already had before the PR, when a stale cached permission map also denied for up to 30s; it is an intended trade-off, not a regression.",
+    "reason_astra": "The newly added denial-cache hit returns false before checking permissions or refetching them (pkg/services/authz/rbac/service.go:116-139), and every unsuccessful permission check populates it (service.go:153-154). Its TTL is 30 seconds (service.go:32,85), with no invalidation path, so a subsequent grant cannot take effect for the same request until expiration.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "oph",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "service.go:116-121 does short-circuit on permDenialCache and line 153-155 sets it on deny with shortCacheTTL (30s, service.go:32), never invalidated. This is the PR's deliberate denial cache bounded by the same 30s TTL the permission cache already had before the PR, when a stale cached permission map also denied for up to 30s; it is an intended trade-off, not a regression."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "The newly added denial-cache hit returns false before checking permissions or refetching them (pkg/services/authz/rbac/service.go:116-139), and every unsuccessful permission check populates it (service.go:153-154). Its TTL is 30 seconds (service.go:32,85), with no invalidation path, so a subsequent grant cannot take effect for the same request until expiration."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Keep FP. The stale-deny window is not new. Before the PR, getUserPermissions returned the cached map (removed lines `if cached, ok := s.permCache.Get(ctx, userPermKey); ok { ... return cached, nil }`) for shortCacheTTL, so a grant or a newly created resource was also denied until expiry, with no invalidation. The PR keeps that bound: service.go:85 `permDenialCache: newCacheWrap[bool](cache, logger, shortCacheTTL)` is the same 30s TTL as permCache, and service.go:153-154 only caches a deny after a fresh DB fetch also denied. A denial cache with the existing TTL is the intended design of an 'improve caching' PR; it never denies longer than base did, so there is no regression to report."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "I change my classification to FP. The base implementation already reused permission maps for 30 seconds without invalidation, so grants and newly created resources could encounter stale denials. The new denial entry is populated only after fetching permissions and checking them again, and uses the same TTL; the added explicit-denial-cache test also establishes that short-circuiting is intentional. The comment identifies a retained caching trade-off, without establishing a defect in that intended behavior."
+     }
+    ],
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "medium",
+    "category": null
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#oph-02",
+    "caseId": "authzservice-improve-authz-caching-grafana-codex",
+    "comment": "Claims the remote authz client still wraps results in a 30s LocalCache, so in remote deployments new dashboards, folders and grants stay invisible for up to 30s.",
+    "commentOpus": "Claims the remote authz client still wraps results in a 30s LocalCache, so in remote deployments new dashboards, folders and grants stay invisible for up to 30s.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S4"
+     ]
+    },
+    "reason_opus": "rbac.go:160-167 newRemoteRBACClient still uses a 30s authzlib LocalCache, but that configuration is unchanged from the base: the PR only inlined the former newRBACClient helper into it and switched the in-proc client to NoopCache. The remote caching behaviour pre-exists in code the PR does not change.",
+    "reason_astra": "The remote client retains the 30-second LocalCache at pkg/services/authz/rbac.go:160-167. However, the base already used exactly this configuration through newRBACClient (base rbac.go:156-167); this PR merely inlines that construction while disabling caching for the in-process client at head rbac.go:101-105, so the reported remote-cache behavior is pre-existing.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "oph",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
    }
   ],
   "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
@@ -3318,6 +3521,79 @@
       "subclass": "hallucination",
       "severity": "high",
       "texto": "Concede. I misread the cron: scheduleEmailReminders.ts:34-41 deletes every EMAIL reminder with `scheduledDate: { lte: now }` regardless of `cancelled`. Rows left by the immediateDelete branch (emailReminderManager.ts:213-222) are removed once their date passes, and workflow/step deletes cascade (schema.prisma:643). The 'permanent orphan' premise is false."
+     }
+    ],
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed_after_debate",
+    "severity": "high",
+    "category": null
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#oph-01",
+    "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+    "comment": "The reschedule path cancels SendGrid email reminders immediately (immediateDelete=true) instead of flagging them cancelled for the cron, which supposedly accumulates cancelled batches.",
+    "commentOpus": "The reschedule path cancels SendGrid email reminders immediately (immediateDelete=true) instead of flagging them cancelled for the cron, which supposedly accumulates cancelled batches.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S4"
+     ]
+    },
+    "reason_opus": "handleNewBooking.ts:966-972 does pass immediateDelete=true, and emailReminderManager.ts:213-222 then cancels the SendGrid batch right away. That is a deliberate path for reschedules. Nothing in the code shows that immediate cancels fail or that accumulated cancelled batches cause harm, so the claim rests on an outside SendGrid-limit argument, not on a defect in the code.",
+    "reason_astra": "Immediate cancellation is necessary here: handleNewBooking.ts:978 calls EventManager.reschedule(), which deletes the old booking at packages/core/EventManager.ts:290-297. The onDelete: Cascade relation at packages/prisma/schema.prisma:637 deletes its reminders, so merely setting cancelled would remove the cron’s cancellation record before it could process it; requestReschedule instead retains the booking.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "oph",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#oph-02",
+    "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+    "comment": "When an email reminder is cancelled immediately on reschedule, its WorkflowReminder row is never deleted or marked cancelled, so stale scheduled reminder rows are left in the database.",
+    "commentOpus": "When an email reminder is cancelled immediately on reschedule, its WorkflowReminder row is never deleted or marked cancelled, so stale scheduled reminder rows are left in the database.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S7"
+     ]
+    },
+    "reason_opus": "emailReminderManager.ts:213-222: the immediateDelete branch posts the SendGrid cancel and returns without deleting or flagging the WorkflowReminder row. The PR removed the old deleteMany calls, and the reschedule caller at handleNewBooking.ts:968 is the only one that passes true, so those rows stay scheduled:true for a send that will never happen. The cron at scheduleEmailReminders.ts:43-77 cleans up only rows with cancelled:true.",
+    "reason_astra": "The claim that no cascade removes these rows is false: packages/core/EventManager.ts:290-297 deletes the old booking during rescheduling, and packages/prisma/schema.prisma:637 cascades that deletion to WorkflowReminder. Although emailReminderManager.ts:213-222 does not explicitly delete the row, the successful reschedule removes it.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "oph",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "emailReminderManager.ts:213-222: the immediateDelete branch posts the SendGrid cancel and returns without deleting or flagging the WorkflowReminder row. The PR removed the old deleteMany calls, and the reschedule caller at handleNewBooking.ts:968 is the only one that passes true, so those rows stay scheduled:true for a send that will never happen. The cron at scheduleEmailReminders.ts:43-77 cleans up only rows with cancelled:true."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "texto": "The claim that no cascade removes these rows is false: packages/core/EventManager.ts:290-297 deletes the old booking during rescheduling, and packages/prisma/schema.prisma:637 cascades that deletion to WorkflowReminder. Although emailReminderManager.ts:213-222 does not explicitly delete the row, the successful reschedule removes it."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "texto": "Concede. The claim that no cascade removes the rows is false. handleNewBooking.ts:968-977 calls deleteScheduledEmailReminder(..., true) and then eventManager.reschedule, and EventManager.ts:290-297 unconditionally runs `prisma.booking.delete({ where: { id: booking.id } })` on the old booking; schema.prisma:637 `booking Booking? @relation(fields: [bookingUid], references: [uid], onDelete: Cascade)` deletes its WorkflowReminder rows. No row is left scheduled:true."
      }
     ],
     "class": "FP",
@@ -5915,6 +6191,31 @@
     "status": "agreed",
     "severity": "medium",
     "category": null
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-02",
+    "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+    "comment": "The unsubscribe_link string now requires unsubscribe_url, so any MessageBuilder caller that sets add_unsubscribe_link without it would raise a missing-interpolation error.",
+    "commentOpus": "The unsubscribe_link string now requires unsubscribe_url, so any MessageBuilder caller that sets add_unsubscribe_link without it would raise a missing-interpolation error.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S6"
+     ]
+    },
+    "reason_opus": "server.en.yml:1852-1855 does interpolate %{unsubscribe_url}, and message_builder.rb:67/90 call I18n.t('unsubscribe_link', template_args). However, the only caller that sets add_unsubscribe_link (user_notifications.rb:294-295) also passes unsubscribe_url, and RejectionMailer forbids the key. No code path in the repository builds the string without unsubscribe_url.",
+    "reason_astra": "Although config/locales/server.en.yml:1855 requires unsubscribe_url and lib/email/message_builder.rb:24-28 supplies no default, the only production caller enabling add_unsubscribe_link also supplies unsubscribe_url at app/mailers/user_notifications.rb:294-295. The corresponding spec supplies it at spec/components/email/message_builder_spec.rb:169-172, so no existing caller reaches the claimed missing-argument failure.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "oph",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "high",
+    "category": null
    }
   ],
   "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
@@ -7607,6 +7908,86 @@
     "subclass": null,
     "status": "agreed",
     "severity": "high",
+    "category": null
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-02",
+    "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+    "comment": "Recovery codes are sent to user storage providers in plaintext instead of hashed, so a provider may persist working second-factor codes.",
+    "commentOpus": "Recovery codes are sent to user storage providers in plaintext instead of hashed, so a provider may persist working second-factor codes.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S3"
+     ]
+    },
+    "reason_opus": "CredentialHelper.java:117-123 does pass the raw generatedCodes to user.credentialManager().updateCredential. This follows the existing user-storage SPI contract, which also sends plaintext passwords and leaves hashing and storage to the provider, and the provider needs the raw value to validate input. This is intended design, not a leak introduced here.",
+    "reason_astra": "CredentialHelper.java:119-125 passes raw codes to the credential updater, but UserCredentialManager.java:90-92 dispatches only to a provider supporting that type; hashing and persistence belong to that trusted provider, as illustrated by BackwardsCompatibilityUserStorage.java:146-155 for passwords. Passing plaintext input does not establish insecure external persistence, and the suggested getCredentialData() replacement contains metadata rather than hashes (RecoveryAuthnCodesCredentialModel.java:65-74).",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "oph",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "high",
+    "category": null
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-04",
+    "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+    "comment": "The test user storage accepts any of the user's recovery codes rather than the specific requested code number, unlike the local provider.",
+    "commentOpus": "The test user storage accepts any of the user's recovery codes rather than the specific requested code number, unlike the local provider.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@api": [
+      "S7"
+     ]
+    },
+    "reason_opus": "BackwardsCompatibilityUserStorage.java:326-340 accepts the input if it matches any stored code (anyMatch). This class is a test fixture that simplifies validation on purpose, just as it accepts the hard-coded OTP '123456' at :306. It is not the production recovery-code validator, so there is no product defect.",
+    "reason_astra": "The testsuite provider BackwardsCompatibilityUserStorage.java:332-340 accepts any stored recovery code, whereas RecoveryAuthnCodeInputLoginBean.java:21 requests the next specific code. RecoveryAuthnCodesCredentialProvider.java:106-112 validates only that next code, so the newly added test provider fails to enforce the behavior it represents.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "oph",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "low",
+      "texto": "BackwardsCompatibilityUserStorage.java:326-340 accepts the input if it matches any stored code (anyMatch). This class is a test fixture that simplifies validation on purpose, just as it accepts the hard-coded OTP '123456' at :306. It is not the production recovery-code validator, so there is no product defect."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "The testsuite provider BackwardsCompatibilityUserStorage.java:332-340 accepts any stored recovery code, whereas RecoveryAuthnCodeInputLoginBean.java:21 requests the next specific code. RecoveryAuthnCodesCredentialProvider.java:106-112 validates only that next code, so the newly added test provider fails to enforce the behavior it represents."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "low",
+      "texto": "Keep FP. BackwardsCompatibilityUserStorage is a testsuite fixture that simplifies validation on purpose: the same isValid accepts a hard-coded OTP at :313 `if (\"123456\".equals(otpCredential.getValue())) { return true; }`. The recovery branch :340 `generatedKeys.stream().anyMatch(key -> key.equals(input.getChallengeResponse()))` does not weaken any test: BackwardsCompatibilityUserStorageTest asserts the requested number (`assertEquals(\"Incorrect code presented to login\", expectedCode, requestedCode)`) and enters exactly `generatedRecoveryAuthnCodes.get(requestedCode)`. Production validation (RecoveryAuthnCodesCredentialProvider) is untouched; a lenient mock is not a product defect nor a test that fails to verify its behaviour."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "low",
+      "texto": "I change my classification to FP. The anyMatch validation exists, but it belongs to a test fixture that also explicitly accepts a hard-coded OTP. testRecoveryKeysSetupAndLogin verifies external-storage setup and successful login, and its helper asserts the requested code number before submitting that exact code. The permissive fixture does not invalidate those assertions, and production validation still checks only the next recovery code."
+     }
+    ],
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "low",
     "category": null
    }
   ],
@@ -9719,6 +10100,7 @@
   "muse-spark-1.3",
   "gpt-6.1-sol@e2b",
   "sonnet-5.5@cc",
+  "opus-5.5@api",
   "opus-5.5@api"
  ],
  "classificadores": [

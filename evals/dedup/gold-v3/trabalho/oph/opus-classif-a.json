@@ -1,0 +1,98 @@
+{
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#oph-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "GroupPermissionsV2.java:56-62 canView(group) checks only admin roles then hasPermission(group.getId(),...), which evaluates the per-group resource when one exists (line 141); that resource is created without a type (AdminPermissionsSchema.getOrCreateResource), so DefaultPolicyEvaluator.java:73 never pulls the all-groups type permissions. The PR also removed the canViewGlobal short-circuit in GroupsResource/GroupResource, so an all-groups VIEW grant is ignored for groups that have their own permission resource.",
+    "category": "bug",
+    "comment": "GroupPermissionsV2.canView(group) does not fall back to canView(), and the PR dropped the canViewGlobal short-circuit, so an admin with an all-groups VIEW permission is denied (and the group filtered out of listings) for any group that has its own permission resource lacking VIEW.",
+    "severity": "high"
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#oph-02": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "GroupPermissionsV2.java:167-210 does throw UnsupportedOperationException, but the GroupResource management/permissions endpoints (GroupResource.java:322,353) first call ProfileHelper.requireFeature(ADMIN_FINE_GRAINED_AUTHZ), the V1 feature, which shares its key with V2 and cannot be enabled together (Profile.java:56-58); the PR also guards the removal listener with the V1 flag (AdminPermissions.java:74). The endpoints cannot reach the throwing methods when V2 is active, so the claimed 500 is impossible.",
+    "category": null,
+    "comment": "Claims GroupResource management-permissions endpoints call GroupPermissionsV2 methods that throw UnsupportedOperationException, causing 500s when V2 is active.",
+    "severity": "high"
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#oph-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "UpdateCommandDistTest.java:58-62 testMissingOptionOnSave only does assertNoMessage(\"Missing required argument\"), so it would also pass if the feature gate rejected the command. The PR changed this launch line to add ENABLE_FEATURE, but testCompatible (line 71-75) already asserts \"Metadata:\" and exit code 0 with the flag, so the feature path is covered elsewhere; this is a weak-assertion tidy-up.",
+    "category": "test_gap",
+    "comment": "testMissingOptionOnSave only asserts a message is absent, so it would still pass if --features=rolling-updates were not honoured and the command failed with the feature-disabled error.",
+    "severity": "medium"
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "slots.ts:117-125 rejects the slot only when slotEndTime is at or before the override start or slotStartTime is after the override end; a slot starting before the override start and ending inside it passes, and the function then returns true at line 135 (dateOverrideExist). Fixed hosts can be offered slots partly outside their override window.",
+    "category": "bug",
+    "comment": "checkIfIsAvailable's date-override check never rejects a slot that starts before the override start (only one that ends before it), so slots partly outside the override hours are treated as available.",
+    "severity": "medium"
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-02": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "slots.ts:110-111 formats dayjs(date.start).add(utcOffset) in the server's local timezone while slotStartTime is a UTC dayjs (line 100). On a non-UTC server the YYYY MM DD comparison drifts for overrides near midnight, so overrides are matched to the wrong day.",
+    "category": "bug",
+    "comment": "The override day is computed with local-time dayjs(date.start) while the slot day is formatted in UTC, so on a server not running in UTC overrides near midnight are applied to the wrong day or skipped.",
+    "severity": "medium"
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-03": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "slots.ts:105-131 uses dateOverrides.find(...) and returns false (unavailable) as soon as any single override on the slot's day has the slot outside its range. With two override ranges on one day, a slot inside the second range is rejected because it is outside the first.",
+    "category": "bug",
+    "comment": "With several date-override ranges on the same day, a slot is rejected as soon as it falls outside any one of them, so slots inside the other ranges become unavailable.",
+    "severity": "high"
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-04": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "slots.ts:579-586 does pass only busy and availabilityCheckProps (eventLength, currentSeats), so dateOverrides/workingHours default to []. But this pass runs on availableTimeSlots that were already filtered against each host's overrides and working hours at lines 483-523; it only removes slots for reserved selectedSlots, so omitting the schedule here admits no extra slots.",
+    "category": null,
+    "comment": "Claims the selected-slots availability call site passes only the user's timezone, so dateOverrides and workingHours fall back to [] and slots are checked only against busy times.",
+    "severity": "medium"
+  },
+  "advanced-sql-analytics-framework-grafana-codex#oph-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "reader.go:194-200 enableSqlExpressions returns false on both branches, and ReadQuery (reader.go:129-132) returns 'sqlExpressions is not implemented' when it is false. Every SQL expression query is rejected even when FlagSqlExpressions is enabled; the flag lookup is dead.",
+    "category": "bug",
+    "comment": "enableSqlExpressions returns false on both branches, so ReadQuery rejects every SQL expression query as not implemented even when the sqlExpressions feature flag is enabled.",
+    "severity": "high"
+  },
+  "advanced-sql-analytics-framework-grafana-codex#oph-02": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "reader.go:195 assigns enabled := !IsEnabledGlobally(FlagSqlExpressions), so the variable is true when the feature is disabled; the name contradicts its value. Misleading naming only, since both branches return false anyway.",
+    "category": "style",
+    "comment": "The variable `enabled` in enableSqlExpressions holds the negated flag value, so it is true when SQL expressions are disabled and the name states the opposite of its value.",
+    "severity": "low"
+  },
+  "advanced-sql-analytics-framework-grafana-codex#oph-03": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "TablesList now calls the stub NewInMemoryDB whose RunCommands always errors (db.go), but every test in pkg/expr/sql/parser_test.go starts with t.Skip(), and they were already skipped at the base commit. No existing parser test breaks.",
+    "category": null,
+    "comment": "Claims TablesList now calls a stub that always errors, so existing parser tests in pkg/expr/sql/parser_test.go would break.",
+    "severity": "medium"
+  },
+  "authzservice-improve-authz-caching-grafana-codex#oph-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "service.go:116-121 does short-circuit on permDenialCache and line 153-155 sets it on deny with shortCacheTTL (30s, service.go:32), never invalidated. This is the PR's deliberate denial cache bounded by the same 30s TTL the permission cache already had before the PR, when a stale cached permission map also denied for up to 30s; it is an intended trade-off, not a regression.",
+    "category": null,
+    "comment": "Claims the new denial cache is checked before any permission source and never invalidated, so a Check that ran before a resource was created or a grant was added keeps returning Allowed:false for the whole short cache TTL.",
+    "severity": "medium"
+  },
+  "authzservice-improve-authz-caching-grafana-codex#oph-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "rbac.go:160-167 newRemoteRBACClient still uses a 30s authzlib LocalCache, but that configuration is unchanged from the base: the PR only inlined the former newRBACClient helper into it and switched the in-proc client to NoopCache. The remote caching behaviour pre-exists in code the PR does not change.",
+    "category": null,
+    "comment": "Claims the remote authz client still wraps results in a 30s LocalCache, so in remote deployments new dashboards, folders and grants stay invisible for up to 30s.",
+    "severity": "medium"
+  }
+}

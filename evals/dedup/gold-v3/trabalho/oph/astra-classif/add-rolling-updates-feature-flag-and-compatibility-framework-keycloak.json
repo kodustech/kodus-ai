@@ -1,0 +1,12 @@
+{
+ "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+ "items": [
+  {
+   "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#oph-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The PR changes UpdateCommandDistTest.java:59 to enable rolling-updates, but line 61 only checks for absent output; CLIResult.java:92-94 checks neither errors nor exit status. UpdateCompatibilityMetadata.java:46-49 exits early when the feature is disabled, and CLITestExtension.java:112-114,149-155 performs no automatic exit-code assertion for distribution tests, so that failure would still pass this test.",
+   "severity": "medium"
+  }
+ ]
+}

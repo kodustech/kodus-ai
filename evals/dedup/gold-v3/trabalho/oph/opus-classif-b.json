@@ -1,0 +1,90 @@
+{
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#oph-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "handleNewBooking.ts:966-972 does pass immediateDelete=true, and emailReminderManager.ts:213-222 then cancels the SendGrid batch right away. That is a deliberate path for reschedules. Nothing in the code shows that immediate cancels fail or that accumulated cancelled batches cause harm, so the claim rests on an outside SendGrid-limit argument, not on a defect in the code.",
+    "category": null,
+    "comment": "The reschedule path cancels SendGrid email reminders immediately (immediateDelete=true) instead of flagging them cancelled for the cron, which supposedly accumulates cancelled batches.",
+    "severity": "medium"
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#oph-02": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "emailReminderManager.ts:213-222: the immediateDelete branch posts the SendGrid cancel and returns without deleting or flagging the WorkflowReminder row. The PR removed the old deleteMany calls, and the reschedule caller at handleNewBooking.ts:968 is the only one that passes true, so those rows stay scheduled:true for a send that will never happen. The cron at scheduleEmailReminders.ts:43-77 cleans up only rows with cancelled:true.",
+    "category": "data",
+    "comment": "When an email reminder is cancelled immediately on reschedule, its WorkflowReminder row is never deleted or marked cancelled, so stale scheduled reminder rows are left in the database.",
+    "severity": "medium"
+  },
+  "database-performance-optimizations-grafana-codex#oph-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "cleanup_test.go:83-96 together with the per-subtest seeding and t.Cleanup added at :116-128: each case now creates fresh annotations and wipes the tables, so the case 'running the max count delete again should not remove any annotations' calls cleaner.Run only once, on 9 annotations with MaxCount=3. It no longer checks that a second run is a no-op, which is the behaviour the case is named for.",
+    "category": "test_gap",
+    "comment": "The 'running the max count delete again' test case no longer runs cleanup a second time after the PR's per-subtest seeding and cleanup, so it does not verify that a repeated max-count cleanup deletes nothing.",
+    "severity": "medium"
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#oph-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "paginator.py:842-843: OptimizedCursorPaginator.value_from_cursor returns cursor.value, the integer millisecond timestamp, and BasePaginator.build_queryset uses it in the '-datetime' filter. DateTimePaginator.value_from_cursor at :238-241 converts it back to a UTC datetime. As a result, following a cursor on the audit-log endpoint filters on the wrong value or fails.",
+    "category": "bug",
+    "comment": "OptimizedCursorPaginator.value_from_cursor returns the raw integer cursor value, which is then compared against the datetime column, so next/prev cursor pagination of audit logs breaks.",
+    "severity": "high"
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#oph-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "queue_consumer.py:150-156: each OrderedQueueWorker emits the gauge remote_subscriptions.queue_worker.queue_depth with its own queue's qsize() and only the identifier tag, so the 20 workers overwrite one series. The fact is real, but it only affects a metric's tags and does not change how the consumer behaves.",
+    "category": "style",
+    "comment": "The per-worker queue_depth gauge is tagged only with identifier, so all queues report into one series and the metric shows whichever queue reported last.",
+    "severity": "medium"
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "topics_controller.rb:105-111: unsubscribe lowers the level one step each time it is called, from tracking or watching to regular and from regular to muted, and the change is triggered by a GET. A second visit or a reload of the unsubscribe link therefore mutes the topic, which the user did not ask for.",
+    "category": "bug",
+    "comment": "The topic unsubscribe GET endpoint is not idempotent: each visit steps the notification level down again, so reloading the link moves a topic from regular to muted.",
+    "severity": "medium"
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "server.en.yml:1852-1855 does interpolate %{unsubscribe_url}, and message_builder.rb:67/90 call I18n.t('unsubscribe_link', template_args). However, the only caller that sets add_unsubscribe_link (user_notifications.rb:294-295) also passes unsubscribe_url, and RejectionMailer forbids the key. No code path in the repository builds the string without unsubscribe_url.",
+    "category": null,
+    "comment": "The unsubscribe_link string now requires unsubscribe_url, so any MessageBuilder caller that sets add_unsubscribe_link without it would raise a missing-interpolation error.",
+    "severity": "high"
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "RecoveryAuthnCodesUtils.java:56-62 does query getFederatedCredentialsStream first, and for LDAP users this reaches LDAPStorageProvider.getCredentials (:1211-1217), which throws only when the LDAP object is missing. Federated LDAP users are already loaded and validated against LDAP during login, so that state is not reached in the recovery-code step. What remains is one extra lookup, not a failure.",
+    "category": null,
+    "comment": "Looking up recovery codes now always queries the federated provider first, which for LDAP users adds an LDAP round-trip and can throw IllegalStateException, failing recovery-code login with a 500.",
+    "severity": "high"
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "CredentialHelper.java:117-123 does pass the raw generatedCodes to user.credentialManager().updateCredential. This follows the existing user-storage SPI contract, which also sends plaintext passwords and leaves hashing and storage to the provider, and the provider needs the raw value to validate input. This is intended design, not a leak introduced here.",
+    "category": null,
+    "comment": "Recovery codes are sent to user storage providers in plaintext instead of hashed, so a provider may persist working second-factor codes.",
+    "severity": "high"
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-03": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "BackwardsCompatibilityUserStorage.java:244 logs 'Could not deserialize  credential of type: recovery-codes', while RecoveryAuthnCodesCredentialModel.TYPE is 'recovery-authn-codes' (RecoveryAuthnCodesCredentialModel.java:21). The fact is real, but it is only log wording in a test provider.",
+    "category": "style",
+    "comment": "An error log in the test user storage hard-codes the credential type as 'recovery-codes' instead of using RecoveryAuthnCodesCredentialModel.TYPE ('recovery-authn-codes').",
+    "severity": "low"
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-04": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "BackwardsCompatibilityUserStorage.java:326-340 accepts the input if it matches any stored code (anyMatch). This class is a test fixture that simplifies validation on purpose, just as it accepts the hard-coded OTP '123456' at :306. It is not the production recovery-code validator, so there is no product defect.",
+    "category": null,
+    "comment": "The test user storage accepts any of the user's recovery codes rather than the specific requested code number, unlike the local provider.",
+    "severity": "low"
+  }
+}

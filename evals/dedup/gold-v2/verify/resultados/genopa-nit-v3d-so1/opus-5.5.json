@@ -1337,6 +1337,796 @@
     "reasoning": 0,
     "ms": 4927
    }
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure: if any of the app imports, which all run as soon as the module loads, rejects, Node gets an unhandled rejection that can crash the process, and eager loading also defeats the PR's lazy-loading goal.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 14882,
+    "cacheRead": 3801,
+    "output": 315,
+    "reasoning": 0,
+    "ms": 6133
+   }
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete failure: one failed SendGrid cancel inside the shared try/catch stops the loop and skips the deletes, so later cancelled reminders are never cancelled and their emails are sent.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "It names a concrete failure: passing immediateDelete=true on the frequent reschedule path sends an immediate SendGrid cancel and leaves the reminder row neither flagged nor deleted, which adds to the cancelled-batch buildup the PR says breaks cancellations.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 35528,
+    "cacheRead": 7602,
+    "output": 670,
+    "reasoning": 0,
+    "ms": 5896
+   }
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure: on override days the early return skips the busy check, so slots that are already booked are shown as available and can be double-booked.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong result: comparing Dayjs objects with === means day-off overrides (start equals end) are never detected, so a slot starting exactly at that time stays bookable.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "It names a concrete wrong result: because the check uses slotStartTime instead of slotEndTime against the override end, slots that run past the override (e.g. a 60-minute slot at 10:30 in a 10:00-11:00 override) are wrongly accepted as available.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete wrong result: a slot that starts before the override window and ends inside it is marked available, so fixed hosts can be booked partly outside their override hours.",
+     "passos": 0
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "It names a concrete wrong result: because `end` is computed from slotStartTime, slots that run past the end of working hours are still marked available.",
+     "passos": 0
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong result: when a user has more than one working-hours range on the same day, every slot falls outside at least one range, so the check rejects all of them and no slots are offered.",
+     "passos": 0
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete wrong result: on a server not running in UTC, the override date is compared against a UTC-formatted slot date, so overrides near midnight land on the wrong day or get skipped.",
+     "passos": 0
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete case (an override crossing the invitee's midnight) where the hour*60+minute calculation wraps so endTime is less than startTime, giving missing or wrong slots.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 8,
+    "input": 82168,
+    "cacheRead": 30408,
+    "output": 1906,
+    "reasoning": 0,
+    "ms": 10006
+   }
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "It names a concrete failure: validations run twice in UsersController#create, so the side effect inside should_block? counts each blocked attempt twice and corrupts the match_count stats this PR adds.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "It names a concrete security bypass: the case-sensitive match lets a blocked address sign up just by changing its letter case.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete race: two simultaneous signups with the same blocked email both read match_count, add one in Ruby and save, so one increment is lost and the stored statistic is wrong.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 30319,
+    "cacheRead": 11400,
+    "output": 762,
+    "reasoning": 0,
+    "ms": 6386
+   }
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "It names a concrete failure: the empty data object means Prisma never bumps SelectedCalendar.updatedAt, so the intended refresh timestamp never changes and the code's stated behavior is wrong.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong result: with no onChanged prop, nothing refreshes connectedCalendars after a cache delete, so the UI keeps showing a stale timestamp and a delete option for cache that no longer exists.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "Switching the plain Error to a TRPCError with NOT_FOUND only changes the status code and logging; access is still denied and the client shows the same error toast.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "It names a specific failure: on GNU/Linux, `sed -i ''` errors out and GOOGLE_WEBHOOK_URL is never updated in the env file.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 69386,
+    "cacheRead": 15204,
+    "output": 1041,
+    "reasoning": 0,
+    "ms": 8784
+   }
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment names concrete inputs (a user with no topic_users row, or a NULL notification_level) that make `tu.notification_level >` raise a NoMethodError and return a 500 instead of unsubscribing.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure: every GET of the unsubscribe URL lowers the notification level one more step, so a reload, prefetch or mail scanner hit mutes the topic against the user's intent.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment names a specific CSRF attack: the GET unsubscribe endpoint changes a logged-in user's notification level, so an embedded image tag can mute a victim's topics.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "It names a concrete failure: with in-app navigation the client route never calls the server unsubscribe action, so the page says notifications will stop while the server state stays the same.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 59036,
+    "cacheRead": 15200,
+    "output": 1003,
+    "reasoning": 0,
+    "ms": 9495
+   }
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "grupos": [],
+   "uso": null
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete regression: in the default light theme the reply-to link now renders at 70% lightness instead of 30%, which makes it noticeably low-contrast.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete wrong result: the mobile `.custom-message-length` colour is inverted (30%/70% instead of 70%/30%), so light themes get much darker hint text than before and dark themes get the wrong shade.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment identifies a concrete visual regression: the mobile topic-map h3 light-theme color changes from 20% to 50% lightness, so users on mobile light themes see lighter headings than intended.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 69603,
+    "cacheRead": 11400,
+    "output": 880,
+    "reasoning": 0,
+    "ms": 7044
+   }
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete security hole: website_name is not gated like website, so anonymous visitors can see TL0 users' website host and path, which defeats the anti-spam restriction.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "reason": "Because the include method is misnamed, users without a website get an extra `website_name: null` in the JSON instead of no key, which nothing reads differently, so the only issue is dead code.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 15390,
+    "cacheRead": 7600,
+    "output": 803,
+    "reasoning": 0,
+    "ms": 8077
+   }
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "reason": "The function always returns false as the PR intends, so the comment is only about dead code, a misleading variable name and a possible future mistake, with no current failure.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 11775,
+    "cacheRead": 3800,
+    "output": 241,
+    "reasoning": 0,
+    "ms": 5227
+   }
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "It names a concrete failure: the denial cache is checked first and is never invalidated, so a user who is granted access, or a resource created after a denied Check, keeps getting Allowed:false until the cache TTL expires.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "It describes a specific performance regression introduced by the PR: a cached permission map that doesn't allow the resource now triggers a database permission query for every distinct denied resource, so list/search checks cause O(N) queries where there used to be none.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment names concrete colliding inputs to `userPermDenialCacheKey` and a specific wrong result: a different resource is wrongly denied access until the cache entry expires.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong result: remote clients serve stale cached Check/List decisions for up to 30 seconds, hiding new resources and grants and bypassing the new server-side cache-refetch logic.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 57357,
+    "cacheRead": 15200,
+    "output": 1351,
+    "reasoning": 0,
+    "ms": 14478
+   }
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "reason": "The comment is about log level and how much each log line prints; cleanup still runs correctly, so ignoring it causes no crash, wrong result, data loss or broken caller.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete behavioral regression, not a style preference: the ticker change makes every cleanup job hit the DB 10x as often and leaves the 9-minute timeout mismatched with the interval.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment names a specific failure: on MySQL and Postgres, a batch size above the 65535 placeholder limit makes every cleanup run error out, which the old subquery version did not do.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "reason": "Building the SQLite IN list with repeated Sprintf is slow but still produces the correct DELETE statement, so ignoring the comment costs only speed and GC load, not correctness or data.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 57218,
+    "cacheRead": 15200,
+    "output": 1407,
+    "reasoning": 0,
+    "ms": 10870
+   }
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete security regression: providers that tie at order 200 (e.g. FIPS and default BouncyCastle) are now picked by classpath discovery order without any error, so a FIPS deployment that used to fail at startup can run on the non-FIPS provider.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "reason": "It asks for better test coverage of the long-form length branches, which are only speculatively buggy, and names no concrete failure that would happen if the comment were ignored.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete break: outside CryptoProvider implementations stop compiling, and already compiled ones throw AbstractMethodError when detectProvider calls order().",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 61644,
+    "cacheRead": 11403,
+    "output": 947,
+    "reasoning": 0,
+    "ms": 8821
+   }
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete privilege-escalation path: canManage() accepts the VIEW scope, so a view-only admin passes requireManage() and can create groups.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "It describes a concrete wrong result: resource IDs are used where group IDs are expected, so the per-group permission check misses and user search and count filter by the wrong IDs.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete case where an admin with VIEW permission on all groups is wrongly denied access to, and loses from listings, any group that has its own permission resource without the VIEW scope, which is a wrong authorization result.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 67703,
+    "cacheRead": 11403,
+    "output": 670,
+    "reasoning": 0,
+    "ms": 7649
+   }
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "reason": "The comment asks for exit-code assertions in the tests without naming any concrete bug in the code being changed.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 12823,
+    "cacheRead": 3801,
+    "output": 130,
+    "reasoning": 0,
+    "ms": 5228
+   }
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment names a specific path where checking federated credentials first runs an LDAP query that throws IllegalStateException, so recovery-code login returns a 500 for LDAP users.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "It names a concrete security failure: when user storage accepts new recovery codes, the old local recovery codes are never deleted and still authenticate through the local provider.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "It names a concrete security hole: the plaintext recovery codes go to the user storage provider and may be persisted there, while the local path stores only hashed codes, so a leak of the external store exposes working second-factor codes.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "It names a specific failure: an exhausted recovery-codes credential that came from federated user storage is never removed, because removeStoredCredentialById only acts on the local store, so the user keeps a used-up credential configured.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 82335,
+    "cacheRead": 15204,
+    "output": 933,
+    "reasoning": 0,
+    "ms": 7916
+   }
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment names a specific crash: math.floor/math.ceil on the datetime key raises a TypeError, so every non-empty optimized_pagination request returns a 500.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "It names a specific way this breaks: an integer cursor value compared to a datetime column, which breaks next/prev cursor pagination.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "It names a specific input (a negative cursor offset like `0:-5:0`) that makes the Django QuerySet slice throw, which `paginate()` doesn't catch, so the request crashes with an unhandled 500.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete crash: when organization_context.member is None for a non-member principal, reading .has_global_access on every request raises AttributeError and returns a 500, even when the default paginator would have been used.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 36783,
+    "cacheRead": 15200,
+    "output": 877,
+    "reasoning": 0,
+    "ms": 4972
+   }
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment names concrete queries (such as '!event.type:error') that the substring check wrongly treats as error-only, which makes the discover dataset return wrong upsampled counts.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete wrong result: with transformAliasToInputFormat enabled, the serializer looks up 'count()' but the column is aliased 'count', so the endpoint returns empty or zero-filled series.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 31310,
+    "cacheRead": 7600,
+    "output": 497,
+    "reasoning": 0,
+    "ms": 6539
+   }
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "It names a concrete data-loss path: after a rebalance closes the shared queue pool, new messages hit shut-down queues and their offsets are committed without being processed.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "The comment names a specific failure: the arroyo commit callback runs on a background thread against a KafkaConsumer that isn't thread-safe while the main thread polls it, which can cause lost commits or commits during a rebalance.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete failure: unbounded queues with no MessageRejected backpressure let memory grow without limit when processing falls behind, which can exhaust memory, and the docstring's backpressure promise is false.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment names a specific failure: a Kafka offset that is never delivered (transaction marker or compaction) permanently stops commits for that partition and makes all_offsets grow without bound.",
+     "passos": 0
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "reason": "The comment describes a concrete failure: setting worker.shutdown before the queue shutdown makes workers exit with items still queued, so those items are dropped at shutdown and processed again on restart.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 104925,
+    "cacheRead": 19000,
+    "output": 1456,
+    "reasoning": 0,
+    "ms": 12343
+   }
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "reason": "The comment describes a specific crash: Redis returns a WRONGTYPE error when ZCARD/ZUNIONSTORE hits a segment key that the previous version created with SADD, so EVALSHA fails and the consumer batch fails during or after a deploy.",
+     "passos": 0
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "reason": "It names a concrete bug: without AGGREGATE, ZUNIONSTORE adds the scores of duplicate members, which corrupts the end-timestamp scores and makes ZPOPMIN evict the wrong spans.",
+     "passos": 0
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "reason": "No caller sets max_segment_spans, so the comment points out an unused parameter and asks for the hardcoded 1000 to be configurable, which is optional and causes no failure if ignored.",
+     "passos": 0
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "reason": "The comment names a concrete wrong result: redirect chains deeper than 1000 now stop resolving early, so their spans are split into separate segments instead of joined.",
+     "passos": 0
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 63824,
+    "cacheRead": 27907,
+    "output": 1434,
+    "reasoning": 0,
+    "ms": 10749
+   }
   }
  }
 }

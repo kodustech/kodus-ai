@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#oph-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The new pool creates separate queues and workers sharing one identifier (src/sentry/remote_subscriptions/consumers/queue_consumer.py:184-194), while each worker gauges its own qsize() with only that identifier (same file:150-156). Their readings therefore collide in one gauge series, allowing an empty queue to overwrite a backlogged queue's depth and mislead operators.",
+   "severity": "medium"
+  }
+ ]
+}

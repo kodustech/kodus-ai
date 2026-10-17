@@ -1,0 +1,12 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "issueId": "database-performance-optimizations-grafana-codex#oph-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The repeat-cleanup case seeds nine annotations with MaxCount=3 per type (pkg/services/annotations/annotationsimpl/cleanup_test.go:83\u201395). Each subtest now creates fresh data and clears both tables afterward (lines 116\u2013127), and calls cleaner.Run only once (line 132). This PR therefore removes the previous second-run coverage, leaving the intended idempotency behavior untested.",
+   "severity": "medium"
+  }
+ ]
+}

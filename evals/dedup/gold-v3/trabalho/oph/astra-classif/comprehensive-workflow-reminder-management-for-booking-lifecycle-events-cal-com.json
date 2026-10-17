@@ -1,0 +1,19 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "items": [
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#oph-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "Immediate cancellation is necessary here: handleNewBooking.ts:978 calls EventManager.reschedule(), which deletes the old booking at packages/core/EventManager.ts:290-297. The onDelete: Cascade relation at packages/prisma/schema.prisma:637 deletes its reminders, so merely setting cancelled would remove the cron\u2019s cancellation record before it could process it; requestReschedule instead retains the booking.",
+   "severity": "high"
+  },
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#oph-02",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The claim that no cascade removes these rows is false: packages/core/EventManager.ts:290-297 deletes the old booking during rescheduling, and packages/prisma/schema.prisma:637 cascades that deletion to WorkflowReminder. Although emailReminderManager.ts:213-222 does not explicitly delete the row, the successful reschedule removes it.",
+   "severity": "high"
+  }
+ ]
+}

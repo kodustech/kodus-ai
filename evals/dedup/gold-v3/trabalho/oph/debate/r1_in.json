@@ -1,0 +1,335 @@
+{
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "85737f52b59aa2e3403c9b8e48acf71ccc5bfae3",
+  "head": "ce2dcc537b4b1f98a335e88cfe8e0b804483252a",
+  "issues": {
+   "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-01": {
+    "comentarios": [
+     {
+      "gid": "opus-api:S1",
+      "file": "server-spi/src/main/java/org/keycloak/models/utils/RecoveryAuthnCodesUtils.java",
+      "lines": [
+       56,
+       62
+      ],
+      "texto": "WHAT: getCredential always calls getFederatedCredentialsStream first. For LDAP-federated users this runs LDAPStorageProvider.getCredentials, which queries LDAP and throws IllegalStateException when the LDAP object is not found. WHY: recovery-code login and the RecoveryAuthnCodeInputLoginBean page now fail with a 500 (and pay an LDAP round-trip on every call) for federated users whose recovery codes are stored locally, where before only local storage was read. HOW: check local stored credentials first and only fall back to the federated stream, or only consult the federated provider when it supports the recovery-codes type."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "RecoveryAuthnCodesUtils.java:56-62 does query getFederatedCredentialsStream first, and for LDAP users this reaches LDAPStorageProvider.getCredentials (:1211-1217), which throws only when the LDAP object is missing. Federated LDAP users are already loaded and validated against LDAP during login, so that state is not reached in the recovery-code step. What remains is one extra lookup, not a failure."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "RecoveryAuthnCodesUtils.java:56-61 queries federated credentials before local storage, and UserCredentialManager.java:138-141 delegates directly to the provider. LDAPStorageProvider.java:1212-1216 performs an LDAP lookup and throws when the object is missing, preventing the local fallback and breaking the newly changed recovery-page lookup."
+     }
+    ]
+   },
+   "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-04": {
+    "comentarios": [
+     {
+      "gid": "opus-api:S7",
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       326,
+       340
+      ],
+      "texto": "isValid returns true if the input matches any generated code (anyMatch), but the login page asks for one specific code number (getNextRecoveryAuthnCode). A user can enter any of their codes instead of the requested one and still pass, so this does not behave like the local provider. The check should compare the input only against the code at the expected (next unused) index."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "low",
+      "text": "BackwardsCompatibilityUserStorage.java:326-340 accepts the input if it matches any stored code (anyMatch). This class is a test fixture that simplifies validation on purpose, just as it accepts the hard-coded OTP '123456' at :306. It is not the production recovery-code validator, so there is no product defect."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The testsuite provider BackwardsCompatibilityUserStorage.java:332-340 accepts any stored recovery code, whereas RecoveryAuthnCodeInputLoginBean.java:21 requests the next specific code. RecoveryAuthnCodesCredentialProvider.java:106-112 validates only that next code, so the newly added test provider fails to enforce the behavior it represents."
+     }
+    ]
+   }
+  }
+ },
+ "advanced-sql-analytics-framework-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "cbe1e7d63f098e306058c0fbcab2f5c30602fa7d",
+  "head": "f3317b329b4eb8fd96f99dd86525bc4a22d20248",
+  "issues": {
+   "advanced-sql-analytics-framework-grafana-codex#oph-01": {
+    "comentarios": [
+     {
+      "gid": "opus-api:S1",
+      "file": "pkg/expr/reader.go",
+      "lines": [
+       194,
+       200
+      ],
+      "texto": "WHAT: enableSqlExpressions assigns `enabled := !IsEnabledGlobally(FlagSqlExpressions)` and returns false on both branches, so the flag lookup is dead code and the variable name means the opposite of its value. WHY: the code looks like a flag gate but ignores the flag; if someone changes the final `return false` to restore flag behavior, the inverted `enabled` makes the flag work backwards. HOW: make the kill switch explicit with a single `return false` and a comment, and drop the misleading flag lookup."
+     },
+     {
+      "gid": "opus-api:S3",
+      "file": "pkg/expr/reader.go",
+      "lines": [
+       194,
+       200
+      ],
+      "texto": "enableSqlExpressions returns false on both branches, so ReadQuery rejects every SQL expression query as \"not implemented\" even when FlagSqlExpressions is enabled globally. The feature flag can no longer turn the feature on. Return the flag's value instead."
+     },
+     {
+      "gid": "opus-api:S4",
+      "file": "pkg/expr/reader.go",
+      "lines": [
+       194,
+       200
+      ],
+      "texto": "Both branches of enableSqlExpressions return false, so ReadQuery rejects every SQL expression even when the sqlExpressions flag is on. Callers that enabled the flag used to get SQL queries parsed. Now they always get 'sqlExpressions is not implemented'. Return the flag value directly."
+     },
+     {
+      "gid": "opus-api:S5",
+      "file": "pkg/expr/reader.go",
+      "lines": [
+       194,
+       200
+      ],
+      "texto": "enableSqlExpressions computes the negated value of FlagSqlExpressions, but both branches return false, so the flag check is dead code. As a result, ReadQuery rejects SQL expressions even when the flag is enabled. The function should return the flag's value directly."
+     },
+     {
+      "gid": "opus-api:S7",
+      "file": "pkg/expr/reader.go",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "enableSqlExpressions always returns false, which disables SQL expressions and would break existing tests."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "reader.go:194-200 enableSqlExpressions returns false on both branches, and ReadQuery (reader.go:129-132) returns 'sqlExpressions is not implemented' when it is false. Every SQL expression query is rejected even when FlagSqlExpressions is enabled; the flag lookup is dead."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "high",
+      "text": "pkg/expr/reader.go:194-199 performs a redundant flag check because both branches return false. Disabling SQL is intentional: this PR also replaces the database implementation with error-returning stubs at pkg/expr/sql/db.go:12-21, consistent with its commit message. The redundant check is a nit; severity reflects the comments\u2019 claimed feature failure, assuming it were unintended."
+     }
+    ]
+   }
+  }
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+  "head": "7355f05e6aafe2a7acc6434fb40c686665416606",
+  "issues": {
+   "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#oph-01": {
+    "comentarios": [
+     {
+      "gid": "opus-api:S3",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       56,
+       62
+      ],
+      "texto": "WHAT: canView(GroupModel) does not check canView() (the all-groups VIEW/MANAGE permission), and GroupsResource/GroupResource no longer short-circuit with canViewGlobal. When a group has its own resource, hasPermission evaluates only that resource. WHY: an admin with an all-groups VIEW permission is denied view (and the group is filtered out of listings) for any group that has a specific permission resource without the VIEW scope. HOW: return true early when canView() is true, as V1 does."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "GroupPermissionsV2.java:56-62 canView(group) checks only admin roles then hasPermission(group.getId(),...), which evaluates the per-group resource when one exists (line 141); that resource is created without a type (AdminPermissionsSchema.getOrCreateResource), so DefaultPolicyEvaluator.java:73 never pulls the all-groups type permissions. The PR also removed the canViewGlobal short-circuit in GroupsResource/GroupResource, so an all-groups VIEW grant is ignored for groups that have their own permission resource."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "GroupPermissionsV2.java:142\u2013153 deliberately uses all-groups permissions only when no group-specific resource exists, matching the V2 fallback logic in UserPermissionsV2.java:105\u2013118. UserResourceTypeEvaluationTest.java:101\u2013113 explicitly verifies that a specific permission overrides an all-resources grant. Adding the proposed canView() shortcut would bypass that precedence; the V1 behavior does not establish a V2 defect."
+     }
+    ]
+   }
+  }
+ },
+ "authzservice-improve-authz-caching-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "5634ca44f799a82161f0401dadc286452f3bdbf8",
+  "head": "7562f37880367411a62304bcdcdc178bced23906",
+  "issues": {
+   "authzservice-improve-authz-caching-grafana-codex#oph-01": {
+    "comentarios": [
+     {
+      "gid": "opus-api:S1",
+      "file": "pkg/services/authz/rbac/service.go",
+      "lines": [
+       116,
+       121
+      ],
+      "texto": "WHAT: The denial cache is checked before any permission source and is never invalidated when permissions change or a resource is created. WHY: If a Check on a UID runs before the dashboard/folder is created or before access is granted, the user keeps getting `Allowed:false` for the whole shortCacheTTL, even though the new permCache-miss database fallback would now allow it. That is the stale-deny behaviour this PR is meant to fix. HOW: Don't short-circuit on the denial entry when the database has never confirmed the resource exists. Or, simpler, drop the denial-cache short-circuit and rely on the refetch path, possibly with a much shorter TTL for denials."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "service.go:116-121 does short-circuit on permDenialCache and line 153-155 sets it on deny with shortCacheTTL (30s, service.go:32), never invalidated. This is the PR's deliberate denial cache bounded by the same 30s TTL the permission cache already had before the PR, when a stale cached permission map also denied for up to 30s; it is an intended trade-off, not a regression."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The newly added denial-cache hit returns false before checking permissions or refetching them (pkg/services/authz/rbac/service.go:116-139), and every unsuccessful permission check populates it (service.go:153-154). Its TTL is 30 seconds (service.go:32,85), with no invalidation path, so a subsequent grant cannot take effect for the same request until expiration."
+     }
+    ]
+   }
+  }
+ },
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "d1440bb5d2f2190ad7ae1d26c165f970055b5370",
+  "head": "6048e2a86b50e81e1e3b1b467dfea5a895add3dc",
+  "issues": {
+   "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#oph-02": {
+    "comentarios": [
+     {
+      "gid": "opus-api:S7",
+      "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+      "lines": [
+       213,
+       223
+      ],
+      "texto": "When `immediateDelete` is true, the function cancels the SendGrid scheduled send and returns, so the WorkflowReminder row is never deleted. On reschedule (handleNewBooking.ts:968) no cascade removes these rows, so they stay as `scheduled: true` with no `cancelled` flag, even though the email will never be sent. Delete the row after the cancel request succeeds."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "emailReminderManager.ts:213-222: the immediateDelete branch posts the SendGrid cancel and returns without deleting or flagging the WorkflowReminder row. The PR removed the old deleteMany calls, and the reschedule caller at handleNewBooking.ts:968 is the only one that passes true, so those rows stay scheduled:true for a send that will never happen. The cron at scheduleEmailReminders.ts:43-77 cleans up only rows with cancelled:true."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "text": "The claim that no cascade removes these rows is false: packages/core/EventManager.ts:290-297 deletes the old booking during rescheduling, and packages/prisma/schema.prisma:637 cascades that deletion to WorkflowReminder. Although emailReminderManager.ts:213-222 does not explicitly delete the row, the successful reschedule removes it."
+     }
+    ]
+   }
+  }
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+  "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+  "issues": {
+   "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#oph-01": {
+    "comentarios": [
+     {
+      "gid": "opus-api:S15",
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       150,
+       156
+      ],
+      "texto": "Each worker emits remote_subscriptions.queue_worker.queue_depth using only its own queue's qsize() and only the identifier tag. The gauge ends up showing whichever queue reported last, not a meaningful depth. Add a worker_id tag so each queue gets its own series."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "text": "queue_consumer.py:150-156: each OrderedQueueWorker emits the gauge remote_subscriptions.queue_worker.queue_depth with its own queue's qsize() and only the identifier tag, so the 20 workers overwrite one series. The fact is real, but it only affects a metric's tags and does not change how the consumer behaves."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The new pool creates separate queues and workers sharing one identifier (src/sentry/remote_subscriptions/consumers/queue_consumer.py:184-194), while each worker gauges its own qsize() with only that identifier (same file:150-156). Their readings therefore collide in one gauge series, allowing an empty queue to overwrite a backlogged queue's depth and mislead operators."
+     }
+    ]
+   }
+  }
+ },
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "8671f860469d6d95e54df3e13f77ebc401249489",
+  "head": "62bf98939eda58f0d0a1a41a58aa6d4ecdc24dba",
+  "issues": {
+   "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#oph-01": {
+    "comentarios": [
+     {
+      "gid": "opus-api:S3",
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       58,
+       62
+      ],
+      "texto": "This test only asserts that a message is absent, so it would still pass if `--features=rolling-updates` were not honoured and the command stopped with the feature-disabled error. Add a positive assertion that the metadata command actually ran, such as `assertMessage(\"Metadata:\")` or an exit-code check of 0."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "text": "UpdateCommandDistTest.java:58-62 testMissingOptionOnSave only does assertNoMessage(\"Missing required argument\"), so it would also pass if the feature gate rejected the command. The PR changed this launch line to add ENABLE_FEATURE, but testCompatible (line 71-75) already asserts \"Metadata:\" and exit code 0 with the flag, so the feature path is covered elsewhere; this is a weak-assertion tidy-up."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The PR changes UpdateCommandDistTest.java:59 to enable rolling-updates, but line 61 only checks for absent output; CLIResult.java:92-94 checks neither errors nor exit status. UpdateCompatibilityMetadata.java:46-49 exits early when the feature is disabled, and CLITestExtension.java:112-114,149-155 performs no automatic exit-code assertion for distribution tests, so that failure would still pass this test."
+     }
+    ]
+   }
+  }
+ }
+}

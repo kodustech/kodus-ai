@@ -1,0 +1,246 @@
+{
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "d1440bb5d2f2190ad7ae1d26c165f970055b5370",
+  "head": "6048e2a86b50e81e1e3b1b467dfea5a895add3dc",
+  "prTitle": "Comprehensive workflow reminder management for booking lifecycle events",
+  "issues": [
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#oph-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S4",
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       966,
+       972
+      ],
+      "texto": "WHAT: The reschedule path calls deleteScheduledEmailReminder with immediateDelete=true. That sends the SendGrid cancel right away and does not flag or delete the reminder row. WHY: The PR says immediate SendGrid cancels are what stopped working because cancelled batches accumulate. Rescheduling is a frequent path, so it keeps filling that list, while requestReschedule uses the deferred `cancelled` flag for the same case. HOW: Drop the `true` argument so the reminder is flagged `cancelled` and the cron cancels it."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#oph-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S7",
+      "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+      "lines": [
+       213,
+       223
+      ],
+      "texto": "When `immediateDelete` is true, the function cancels the SendGrid scheduled send and returns, so the WorkflowReminder row is never deleted. On reschedule (handleNewBooking.ts:968) no cascade removes these rows, so they stay as `scheduled: true` with no `cancelled` flag, even though the email will never be sent. Delete the row after the cancel request succeeds."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "database-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "a886bd3c79a417a70b51509384d1f1ec3e87e96b",
+  "head": "04cfa3bfd469c035ff8b35f9a66867c4e8d5dcf4",
+  "prTitle": "Database Performance Optimizations",
+  "issues": [
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#oph-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S8",
+      "file": "pkg/services/annotations/annotationsimpl/cleanup_test.go",
+      "lines": [
+       83,
+       96
+      ],
+      "texto": "Each subtest now seeds fresh annotations (line 116) and wipes the tables in t.Cleanup, so this case never runs the max-count cleanup a second time. It only checks that 3 annotations per type with MaxCount=3 deletes nothing. If a second run over-deleted, the case would still pass. Keep the name's meaning by running cleaner.Run twice in this case and asserting that the second run affects 0 rows."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "a5d290951def84afdcc4c88d2f1f20023fc36e2a",
+  "head": "8ab88145113dd23a930e23b9cbbcf8b30e4c0b17",
+  "prTitle": "Enhanced Pagination Performance for High-Volume Audit Logs",
+  "issues": [
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#oph-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S2",
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       842,
+       843
+      ],
+      "texto": "WHAT: value_from_cursor returns the raw integer cursor value, and build_queryset puts it directly into a `datetime <= %s` filter for the '-datetime' key. WHY: Comparing an integer millisecond timestamp to a datetime column either fails in the database or filters the wrong rows, so following any next/prev cursor is broken. HOW: Convert the cursor value back to a UTC datetime, as DateTimePaginator.value_from_cursor does."
+     },
+     {
+      "gid": "opus-api:S12",
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       842,
+       843
+      ],
+      "texto": "value_from_cursor returns the integer cursor value unchanged, and build_queryset compares it against the `datetime` column. Following pages are then filtered on a wrong or invalid value instead of the timestamp the cursor encodes. Convert the cursor value back into a datetime the same way DateTimePaginator.value_from_cursor does."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+  "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+  "prTitle": "feat(uptime): Add ability to use queues to manage parallelism",
+  "issues": [
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#oph-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S15",
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       150,
+       156
+      ],
+      "texto": "Each worker emits remote_subscriptions.queue_worker.queue_depth using only its own queue's qsize() and only the identifier tag. The gauge ends up showing whichever queue reported last, not a meaningful depth. Add a worker_id tag so each queue gets its own series."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "56abd247e1829cb6de82dfcc8ce04deb5f0d1e91",
+  "head": "6669a2d94d76eea3b99b8c476d12b1eb66726b07",
+  "prTitle": "FEATURE: per-topic unsubscribe option in emails",
+  "issues": [
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S2",
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       107,
+       111
+      ],
+      "texto": "WHAT: Each GET of the unsubscribe URL lowers the level one more step (watching/tracking to regular, then regular to muted), so the action is not idempotent. WHY: A reload, a browser prefetch, or a mail security scanner fetching the link before the user clicks it ends up muting the topic, which the user did not ask for. HOW: Always set one fixed target level, for example muted or regular, instead of stepping down from whatever the current level is."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S6",
+      "file": "lib/email/message_builder.rb",
+      "lines": [
+       24,
+       28
+      ],
+      "texto": "The English `unsubscribe_link` string now interpolates `%{unsubscribe_url}`, but `@template_args` only gets that key when a caller passes it explicitly. Any MessageBuilder caller that sets `add_unsubscribe_link: true` without `unsubscribe_url` now raises I18n::MissingInterpolationArgument from `I18n.t('unsubscribe_link', template_args)`, so building the email fails where it used to succeed. The updated spec shows this: it had to add `unsubscribe_url` to keep passing. Either provide a default for `unsubscribe_url`, or make the topic-specific sentence conditional so the string works when the key is missing."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "85737f52b59aa2e3403c9b8e48acf71ccc5bfae3",
+  "head": "ce2dcc537b4b1f98a335e88cfe8e0b804483252a",
+  "prTitle": "Implement recovery key support for user storage providers",
+  "issues": [
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S1",
+      "file": "server-spi/src/main/java/org/keycloak/models/utils/RecoveryAuthnCodesUtils.java",
+      "lines": [
+       56,
+       62
+      ],
+      "texto": "WHAT: getCredential always calls getFederatedCredentialsStream first. For LDAP-federated users this runs LDAPStorageProvider.getCredentials, which queries LDAP and throws IllegalStateException when the LDAP object is not found. WHY: recovery-code login and the RecoveryAuthnCodeInputLoginBean page now fail with a 500 (and pay an LDAP round-trip on every call) for federated users whose recovery codes are stored locally, where before only local storage was read. HOW: check local stored credentials first and only fall back to the federated stream, or only consult the federated provider when it supports the recovery-codes type."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S3",
+      "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+      "lines": [
+       117,
+       123
+      ],
+      "texto": "WHAT: the user-storage path serializes the raw plaintext recovery codes (`generatedCodes`) into the UserCredentialModel, while the local path stores only the hashed codes from credentialModel. WHY: any user storage provider receives and may persist plaintext recovery codes, so a leak of the external store exposes working second-factor codes. HOW: pass the hashed credential data (credentialModel.getCredentialData()) to the user storage instead of the raw codes."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-03",
+    "comentarios": [
+     {
+      "gid": "opus-api:S5",
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       244,
+       244
+      ],
+      "texto": "The error log hard-codes the credential type as \"recovery-codes\", but RecoveryAuthnCodesCredentialModel.TYPE is \"recovery-authn-codes\". Anyone reading the log or searching for the type will be pointed at a type that does not exist. Use the constant so the message stays correct."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-04",
+    "comentarios": [
+     {
+      "gid": "opus-api:S7",
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       326,
+       340
+      ],
+      "texto": "isValid returns true if the input matches any generated code (anyMatch), but the login page asks for one specific code number (getNextRecoveryAuthnCode). A user can enter any of their codes instead of the requested one and still pass, so this does not behave like the local provider. The check should compare the input only against the code at the expected (next unused) index."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ }
+}

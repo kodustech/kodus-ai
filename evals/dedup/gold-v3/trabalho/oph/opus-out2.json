@@ -1,0 +1,412 @@
+{
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+    {
+      "id": "S1",
+      "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+      "newGroup": null,
+      "reason": "Strategy close() shuts down the factory-owned shared pool; after rebalance submissions fail and offsets are committed unprocessed."
+    },
+    {
+      "id": "S2",
+      "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#12",
+      "newGroup": null,
+      "reason": "Commit callback invoked from background thread instead of consumer thread."
+    },
+    {
+      "id": "S3",
+      "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+      "newGroup": null,
+      "reason": "Unbounded queues and no MessageRejected, so no backpressure and memory grows."
+    },
+    {
+      "id": "S4",
+      "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+      "newGroup": null,
+      "reason": "Contiguity scan requires every integer offset, so Kafka offset gaps block commits forever."
+    },
+    {
+      "id": "S5",
+      "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+      "newGroup": null,
+      "reason": "Shutdown sets worker flag before draining, so queued items are dropped."
+    },
+    {
+      "id": "S6",
+      "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+      "newGroup": null,
+      "reason": "complete_offset in finally commits failed messages, contradicting docstring guarantee."
+    },
+    {
+      "id": "S7",
+      "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+      "newGroup": null,
+      "reason": "Docstring promises backpressure but queues are unbounded."
+    },
+    {
+      "id": "S8",
+      "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+      "newGroup": null,
+      "reason": "Shared pool shut down by strategy close/terminate; post-rebalance messages dropped but committed."
+    },
+    {
+      "id": "S9",
+      "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#04",
+      "newGroup": null,
+      "reason": "Error-handling test docstring says errors must not block commits but asserts nothing committed."
+    },
+    {
+      "id": "S10",
+      "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#17",
+      "newGroup": null,
+      "reason": "Ordering test only checks count, cannot detect out-of-order processing."
+    },
+    {
+      "id": "S11",
+      "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#18",
+      "newGroup": null,
+      "reason": "Graceful-shutdown test only asserts queue_pool is None, which shutdown always sets."
+    },
+    {
+      "id": "S12",
+      "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#16",
+      "newGroup": null,
+      "reason": "Concurrency test only checks item count; serial implementation would pass."
+    },
+    {
+      "id": "S13",
+      "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+      "newGroup": null,
+      "reason": "Strategy close/terminate shuts down factory-owned pool; rebalance leads to committed-unprocessed messages."
+    },
+    {
+      "id": "S14",
+      "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+      "newGroup": null,
+      "reason": "Commit scan requires every integer offset; skipped Kafka offsets block commits."
+    },
+    {
+      "id": "S15",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Queue depth gauge lacks per-worker tag; no golden issue covers metrics."
+    },
+    {
+      "id": "S16",
+      "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+      "newGroup": null,
+      "reason": "Shared pool shut down by strategy; after rebalance offsets committed for unprocessed messages."
+    },
+    {
+      "id": "S17",
+      "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#12",
+      "newGroup": null,
+      "reason": "Commit function called from daemon thread racing with consumer thread."
+    }
+  ],
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+    {
+      "id": "S1",
+      "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+      "newGroup": null,
+      "reason": "get_item_key uses math.floor/ceil on datetime key, raising TypeError."
+    },
+    {
+      "id": "S2",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "value_from_cursor returns raw int compared against datetime column; different code from get_item_key TypeError."
+    },
+    {
+      "id": "S3",
+      "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+      "newGroup": null,
+      "reason": "Negative cursor offset passed to Django queryset slicing raises."
+    },
+    {
+      "id": "S4",
+      "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+      "newGroup": null,
+      "reason": "organization_context.member dereferenced unconditionally; None member crashes."
+    },
+    {
+      "id": "S5",
+      "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+      "newGroup": null,
+      "reason": "Negative-offset branch with false comment that Django handles negative slicing; clamping fixes issue."
+    },
+    {
+      "id": "S6",
+      "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02",
+      "newGroup": null,
+      "reason": "BasePaginator comment claims negative offsets are safely handled, which misdescribes behaviour."
+    },
+    {
+      "id": "S7",
+      "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+      "newGroup": null,
+      "reason": "Optimized paginator numeric key handling with -datetime order raises TypeError; broader, includes the issue."
+    },
+    {
+      "id": "S8",
+      "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+      "newGroup": null,
+      "reason": "Negative cursor offset sliced into queryset in the optimized branch raises a 500."
+    },
+    {
+      "id": "S9",
+      "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+      "newGroup": null,
+      "reason": "Prev cursors with negative offset are not clamped in BasePaginator and Django rejects the slice."
+    },
+    {
+      "id": "S10",
+      "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+      "newGroup": null,
+      "reason": "math.floor/ceil on datetime raises TypeError; broader comment also covers value_from_cursor."
+    },
+    {
+      "id": "S11",
+      "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+      "newGroup": null,
+      "reason": "math.floor/ceil on datetime key raises TypeError when building cursor."
+    },
+    {
+      "id": "S12",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "value_from_cursor raw integer used in datetime filter."
+    },
+    {
+      "id": "S13",
+      "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+      "newGroup": null,
+      "reason": "Negative offset slicing on Django queryset raises an error."
+    },
+    {
+      "id": "S14",
+      "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+      "newGroup": null,
+      "reason": "math.floor/ceil on datetime key raises TypeError in build_cursor."
+    },
+    {
+      "id": "S15",
+      "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+      "newGroup": null,
+      "reason": "is_prev cursors left unclamped; negative offset reaches queryset slice."
+    }
+  ],
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+    {
+      "id": "S1",
+      "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+      "newGroup": null,
+      "reason": "Set to sorted-set type change under same key names causes WRONGTYPE during rollout."
+    },
+    {
+      "id": "S2",
+      "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+      "newGroup": null,
+      "reason": "ZUNIONSTORE default SUM doubles scores of duplicate payloads."
+    },
+    {
+      "id": "S3",
+      "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+      "newGroup": null,
+      "reason": "max_segment_spans parameter ignored; hardcoded 1000 in Lua."
+    },
+    {
+      "id": "S4",
+      "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+      "newGroup": null,
+      "reason": "Redirect loop limit cut from 10000 to 1000."
+    },
+    {
+      "id": "S5",
+      "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+      "newGroup": null,
+      "reason": "max_segment_spans no longer read; real cap hardcoded in Lua."
+    },
+    {
+      "id": "S6",
+      "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+      "newGroup": null,
+      "reason": "Configured max_segment_spans has no effect; hardcoded 1000."
+    },
+    {
+      "id": "S7",
+      "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+      "newGroup": null,
+      "reason": "Old plain-set keys cause WRONGTYPE with Z* commands after deploy."
+    },
+    {
+      "id": "S8",
+      "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+      "newGroup": null,
+      "reason": "Configured max_segment_spans ignored; Lua hardcodes 1000."
+    },
+    {
+      "id": "S9",
+      "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+      "newGroup": null,
+      "reason": "Old SADD keys make ZCARD/ZUNIONSTORE/ZSCAN fail with WRONGTYPE during rollout."
+    },
+    {
+      "id": "S10",
+      "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+      "newGroup": null,
+      "reason": "max_segment_spans never applied; hardcoded cap 1000."
+    }
+  ],
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+    {
+      "id": "S1",
+      "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+      "newGroup": null,
+      "reason": "TopicUser.find_by nil not handled, NoMethodError/500; broader with NULL level."
+    },
+    {
+      "id": "S2",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Each GET steps the level down further, non-idempotent; prefetch can mute topic."
+    },
+    {
+      "id": "S3",
+      "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+      "newGroup": null,
+      "reason": "GET route mutates notification level without CSRF protection."
+    },
+    {
+      "id": "S4",
+      "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#10",
+      "newGroup": null,
+      "reason": "Client route never calls server unsubscribe on in-app transition."
+    },
+    {
+      "id": "S5",
+      "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+      "newGroup": null,
+      "reason": "find_by returns nil for users without topic_users row, causing 500."
+    },
+    {
+      "id": "S6",
+      "match": "new",
+      "newGroup": "N2",
+      "reason": "unsubscribe_link string requires unsubscribe_url interpolation; callers without it raise MissingInterpolationArgument."
+    },
+    {
+      "id": "S7",
+      "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#08",
+      "newGroup": null,
+      "reason": "Confirmation text says notifications stop, but watching/tracking only drop to regular."
+    },
+    {
+      "id": "S8",
+      "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+      "newGroup": null,
+      "reason": "Nil TopicUser causes NoMethodError instead of unsubscribing."
+    }
+  ],
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+    {
+      "id": "S1",
+      "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+      "newGroup": null,
+      "reason": "website_name not in untrusted_attributes, exposing TL0 website to anonymous viewers."
+    },
+    {
+      "id": "S2",
+      "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+      "newGroup": null,
+      "reason": "include_website_name missing ? suffix, never called."
+    },
+    {
+      "id": "S3",
+      "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04",
+      "newGroup": null,
+      "reason": "Label-based domain comparison misclassifies public suffixes (co.uk, TLD) as same domain."
+    },
+    {
+      "id": "S4",
+      "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+      "newGroup": null,
+      "reason": "include_website_name lacks ?, guard never applied."
+    },
+    {
+      "id": "S5",
+      "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+      "newGroup": null,
+      "reason": "include_website_name lacks ?, never called."
+    },
+    {
+      "id": "S6",
+      "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+      "newGroup": null,
+      "reason": "Missing ? on include_website_name; serializer ignores it."
+    },
+    {
+      "id": "S7",
+      "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+      "newGroup": null,
+      "reason": "Missing ? on include_website_name makes it a dead predicate."
+    }
+  ],
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+    {
+      "id": "S1",
+      "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+      "newGroup": null,
+      "reason": "should_block? mutates match_count during validation; double validation inflates counter."
+    },
+    {
+      "id": "S2",
+      "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+      "newGroup": null,
+      "reason": "Case-sensitive blocked email lookup allows bypass by changing case."
+    },
+    {
+      "id": "S3",
+      "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+      "newGroup": null,
+      "reason": "Non-atomic match_count increment in should_block? loses concurrent updates."
+    },
+    {
+      "id": "S4",
+      "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+      "newGroup": null,
+      "reason": "Read-modify-write increment loses concurrent increments."
+    },
+    {
+      "id": "S5",
+      "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+      "newGroup": null,
+      "reason": "Case-sensitive exact match lets blocked address bypass via letter case."
+    },
+    {
+      "id": "S6",
+      "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08",
+      "newGroup": null,
+      "reason": "Domain regex not end-anchored, whitelist bypass via suffix domain."
+    }
+  ],
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+    {
+      "id": "S1",
+      "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#04",
+      "newGroup": null,
+      "reason": "Disabled-feature test checks only message, not FEATURE_DISABLED exit code; broader incl. testWrongVersions."
+    },
+    {
+      "id": "S2",
+      "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#04",
+      "newGroup": null,
+      "reason": "testFeatureNotEnabled does not assert exit code 4."
+    },
+    {
+      "id": "S3",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Feature-enabled test only asserts absence of a message; no positive assertion the command ran."
+    }
+  ]
+}

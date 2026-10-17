@@ -1,0 +1,12 @@
+{
+ "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+ "items": [
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#oph-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The PR selects OptimizedCursorPaginator with order_by=\"-datetime\" in src/sentry/api/endpoints/organization_auditlogs.py:79-80. Its value_from_cursor returns the numeric value unchanged (src/sentry/api/paginator.py:842-843), which build_queryset inserts directly into the SQL comparison at lines 119-125 against AuditLogEntry's DateTimeField (src/sentry/models/auditlogentry.py:69). Thus timestamp cursors produce an invalid datetime-versus-integer comparison; the required conversion exists in DateTimePaginator at src/sentry/api/paginator.py:238-241.",
+   "severity": "high"
+  }
+ ]
+}

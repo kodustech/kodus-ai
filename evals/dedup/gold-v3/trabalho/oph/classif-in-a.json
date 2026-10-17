@@ -1,0 +1,282 @@
+{
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+  "head": "7355f05e6aafe2a7acc6434fb40c686665416606",
+  "prTitle": "Add Groups resource type and scopes to authorization schema",
+  "issues": [
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#oph-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S3",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       56,
+       62
+      ],
+      "texto": "WHAT: canView(GroupModel) does not check canView() (the all-groups VIEW/MANAGE permission), and GroupsResource/GroupResource no longer short-circuit with canViewGlobal. When a group has its own resource, hasPermission evaluates only that resource. WHY: an admin with an all-groups VIEW permission is denied view (and the group is filtered out of listings) for any group that has a specific permission resource without the VIEW scope. HOW: return true early when canView() is true, as V1 does."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#oph-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S13",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       167,
+       175
+      ],
+      "texto": "`MgmtPermissionsV2.groups()` now returns `GroupPermissionsV2`, but `GroupResource` still calls `isPermissionsEnabled`, `resource`, `getPermissions` and `setPermissionsEnabled` (lines 326\u2013359) from its management-permissions endpoints. Those methods now throw `UnsupportedOperationException`, so the endpoints fail with an unhandled exception, likely a 500, when V2 is active. Return a safe value (for example `false` from `isPermissionsEnabled`), or have the endpoints check for V2 and return a client error instead."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "8671f860469d6d95e54df3e13f77ebc401249489",
+  "head": "62bf98939eda58f0d0a1a41a58aa6d4ecdc24dba",
+  "prTitle": "Add rolling-updates feature flag and compatibility framework",
+  "issues": [
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#oph-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S3",
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       58,
+       62
+      ],
+      "texto": "This test only asserts that a message is absent, so it would still pass if `--features=rolling-updates` were not honoured and the command stopped with the feature-disabled error. Add a positive assertion that the metadata command actually ran, such as `assertMessage(\"Metadata:\")` or an exit-code check of 0."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "93cb21f55a2a40d9116c014741f5679fbeff5fd9",
+  "head": "ee38fd295fd294b9fc787eba482bde24bbfea69b",
+  "prTitle": "Advanced date override handling and timezone compatibility improvements",
+  "issues": [
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S4",
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       117,
+       122
+      ],
+      "texto": "WHAT: The start-bound check only rejects slots that end at or before the override start; it never checks whether the slot starts before the override. WHY: A slot that begins before the override window and ends inside it is treated as available, so fixed hosts can be booked partly outside their override hours. HOW: Reject the slot when slotStartTime is before the override start."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S7",
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       110,
+       111
+      ],
+      "texto": "WHAT: The override date is formatted with `dayjs(...)`, which uses the server's local timezone, while the slot date is formatted in UTC. WHY: On a server not running in UTC, the day comparison is off for overrides near midnight, so overrides get applied to the wrong day or skipped. HOW: Use dayjs.utc(date.start) before adding the offset and formatting."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-03",
+    "comentarios": [
+     {
+      "gid": "opus-api:S14",
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       105,
+       131
+      ],
+      "texto": "The `find` returns true, which makes the slot unavailable, as soon as the slot falls outside any single override on that date. With several override ranges on one day (e.g. 9-11 and 14-16), a 14:00 slot is rejected because it is outside the 9-11 range. The slot should be rejected only when it fits in none of that day's override ranges."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-04",
+    "comentarios": [
+     {
+      "gid": "opus-api:S15",
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       579,
+       586
+      ],
+      "texto": "This PR makes checkIfIsAvailable reject slots outside the user's date overrides and working hours. This call site looks up userSchedule but passes only its timeZone, so dateOverrides and workingHours fall back to []. Slots for this user are then checked only against busy times, unlike the other two call sites, which spread the user's schedule."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "advanced-sql-analytics-framework-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "cbe1e7d63f098e306058c0fbcab2f5c30602fa7d",
+  "head": "f3317b329b4eb8fd96f99dd86525bc4a22d20248",
+  "prTitle": "Advanced SQL Analytics Framework",
+  "issues": [
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S1",
+      "file": "pkg/expr/reader.go",
+      "lines": [
+       194,
+       200
+      ],
+      "texto": "WHAT: enableSqlExpressions assigns `enabled := !IsEnabledGlobally(FlagSqlExpressions)` and returns false on both branches, so the flag lookup is dead code and the variable name means the opposite of its value. WHY: the code looks like a flag gate but ignores the flag; if someone changes the final `return false` to restore flag behavior, the inverted `enabled` makes the flag work backwards. HOW: make the kill switch explicit with a single `return false` and a comment, and drop the misleading flag lookup."
+     },
+     {
+      "gid": "opus-api:S3",
+      "file": "pkg/expr/reader.go",
+      "lines": [
+       194,
+       200
+      ],
+      "texto": "enableSqlExpressions returns false on both branches, so ReadQuery rejects every SQL expression query as \"not implemented\" even when FlagSqlExpressions is enabled globally. The feature flag can no longer turn the feature on. Return the flag's value instead."
+     },
+     {
+      "gid": "opus-api:S4",
+      "file": "pkg/expr/reader.go",
+      "lines": [
+       194,
+       200
+      ],
+      "texto": "Both branches of enableSqlExpressions return false, so ReadQuery rejects every SQL expression even when the sqlExpressions flag is on. Callers that enabled the flag used to get SQL queries parsed. Now they always get 'sqlExpressions is not implemented'. Return the flag value directly."
+     },
+     {
+      "gid": "opus-api:S5",
+      "file": "pkg/expr/reader.go",
+      "lines": [
+       194,
+       200
+      ],
+      "texto": "enableSqlExpressions computes the negated value of FlagSqlExpressions, but both branches return false, so the flag check is dead code. As a result, ReadQuery rejects SQL expressions even when the flag is enabled. The function should return the flag's value directly."
+     },
+     {
+      "gid": "opus-api:S7",
+      "file": "pkg/expr/reader.go",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "enableSqlExpressions always returns false, which disables SQL expressions and would break existing tests."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S2",
+      "file": "pkg/expr/reader.go",
+      "lines": [
+       195,
+       198
+      ],
+      "texto": "`enabled` is assigned `!h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`, so it is true exactly when SQL expressions are disabled. The name therefore states the opposite of its value, and `if enabled { return false }` reads as disabling the feature when it is enabled. Rename it to `disabled`, or drop the negation, so the identifier matches what it holds."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-03",
+    "comentarios": [
+     {
+      "gid": "opus-api:S6",
+      "file": "pkg/expr/sql/parser.go",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "TablesList now calls a stub that always returns an error, so existing parser tests (pkg/expr/sql/parser_test.go) would break."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "authzservice-improve-authz-caching-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "5634ca44f799a82161f0401dadc286452f3bdbf8",
+  "head": "7562f37880367411a62304bcdcdc178bced23906",
+  "prTitle": "AuthZService: improve authz caching",
+  "issues": [
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+    "comentarios": [
+     {
+      "gid": "opus-api:S1",
+      "file": "pkg/services/authz/rbac/service.go",
+      "lines": [
+       116,
+       121
+      ],
+      "texto": "WHAT: The denial cache is checked before any permission source and is never invalidated when permissions change or a resource is created. WHY: If a Check on a UID runs before the dashboard/folder is created or before access is granted, the user keeps getting `Allowed:false` for the whole shortCacheTTL, even though the new permCache-miss database fallback would now allow it. That is the stale-deny behaviour this PR is meant to fix. HOW: Don't short-circuit on the denial entry when the database has never confirmed the resource exists. Or, simpler, drop the denial-cache short-circuit and rely on the refetch path, possibly with a much shorter TTL for denials."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#oph-02",
+    "comentarios": [
+     {
+      "gid": "opus-api:S4",
+      "file": "pkg/services/authz/rbac.go",
+      "lines": [
+       160,
+       167
+      ],
+      "texto": "WHAT: newRemoteRBACClient still wraps the remote authz client in a 30s authzlib LocalCache, while only the in-proc client was switched to NoopCache. WHY: In standalone/remote deployments, Check and List results are still served from the client cache. Newly created dashboards and folders and fresh grants stay invisible for up to 30s, so the server-side refetch logic never runs. HOW: Use NoopCache for the remote client too, or a cache that does not store denied results."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ }
+}

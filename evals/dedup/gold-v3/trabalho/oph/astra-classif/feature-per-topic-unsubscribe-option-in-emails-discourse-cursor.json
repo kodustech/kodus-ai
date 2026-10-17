@@ -1,0 +1,19 @@
+{
+ "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "config/routes.rb:440 exposes unsubscribe through GET, and app/controllers/topics_controller.rb:107-113 saves regular for watching/tracking but muted for regular. Reloading the authenticated unsubscribe page therefore changes the saved preference again, unintentionally suppressing additional notifications.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "Although config/locales/server.en.yml:1855 requires unsubscribe_url and lib/email/message_builder.rb:24-28 supplies no default, the only production caller enabling add_unsubscribe_link also supplies unsubscribe_url at app/mailers/user_notifications.rb:294-295. The corresponding spec supplies it at spec/components/email/message_builder_spec.rb:169-172, so no existing caller reaches the claimed missing-argument failure.",
+   "severity": "high"
+  }
+ ]
+}

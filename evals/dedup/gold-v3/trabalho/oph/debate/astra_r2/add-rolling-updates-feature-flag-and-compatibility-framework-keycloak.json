@@ -1,0 +1,12 @@
+{
+ "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+ "items": [
+  {
+   "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#oph-01",
+   "class": "TP",
+   "subclass": "nit",
+   "severity": "medium",
+   "reply": "I change to TP/nit. The assertion can pass on feature-disabled failure, but Picocli parses arguments before the gate in run(), so that gate cannot mask a missing-required-option parsing failure. This test targets omission of --file; testCompatible separately verifies enabled metadata execution with output and exit-code assertions. Adding a success assertion here is test strengthening rather than a newly broken behavioral check. Severity remains medium when rating the test gap as the comment states it."
+  }
+ ]
+}

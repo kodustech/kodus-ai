@@ -1,0 +1,19 @@
+{
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "items": [
+  {
+   "issueId": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The newly added denial-cache hit returns false before checking permissions or refetching them (pkg/services/authz/rbac/service.go:116-139), and every unsuccessful permission check populates it (service.go:153-154). Its TTL is 30 seconds (service.go:32,85), with no invalidation path, so a subsequent grant cannot take effect for the same request until expiration.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "authzservice-improve-authz-caching-grafana-codex#oph-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The remote client retains the 30-second LocalCache at pkg/services/authz/rbac.go:160-167. However, the base already used exactly this configuration through newRBACClient (base rbac.go:156-167); this PR merely inlines that construction while disabling caching for the in-process client at head rbac.go:101-105, so the reported remote-cache behavior is pre-existing.",
+   "severity": "medium"
+  }
+ ]
+}

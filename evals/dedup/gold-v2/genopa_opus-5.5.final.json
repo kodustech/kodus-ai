@@ -1445,6 +1445,824 @@
     "relevantLinesEnd": 168,
     "suggestionContent": "WHAT: get_monitor_environment_context builds `config` with a readable schedule_type, but the return value uses the raw `monitor_environment.monitor.config`, so that copy is never used. WHY: the monitor context sent with each occurrence contains the numeric schedule_type instead of its display value. HOW: return `config` instead of `monitor_environment.monitor.config`."
    }
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+    "relevantLinesStart": 133,
+    "relevantLinesEnd": 135,
+    "suggestionContent": "WHAT: When a date override exists for the slot's day and the slot falls inside it, checkIfIsAvailable returns true right away and never runs the busy check. WHY: Existing bookings and calendar busy times are ignored on override days, so already-booked slots are offered and can be double-booked. HOW: Remove the early return so the busy.every check still runs; use dateOverrideExist only to skip the working-hours check."
+   },
+   "S2": {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+    "relevantLinesStart": 114,
+    "relevantLinesEnd": 116,
+    "suggestionContent": "WHAT: Two different Dayjs instances are compared with ===, which is reference equality and always false. WHY: A day-off override (start equals end) is never detected, so a slot starting exactly at the override time passes the later range checks and stays bookable. HOW: Use `.isSame()` to compare the two times."
+   },
+   "S3": {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+    "relevantLinesStart": 123,
+    "relevantLinesEnd": 125,
+    "suggestionContent": "WHAT: The end-bound check uses slotStartTime.isAfter(override end) instead of checking the slot's end time. WHY: A slot that starts inside the override but runs past its end (e.g. a 60-minute slot at 10:30 for a 10:00-11:00 override) is accepted, so a host can be booked outside their override hours. HOW: Reject the slot when slotEndTime is after the override end."
+   },
+   "S4": {
+    "id": "S4",
+    "finderIndex": 3,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+    "relevantLinesStart": 117,
+    "relevantLinesEnd": 122,
+    "suggestionContent": "WHAT: The start-bound check only rejects slots that end at or before the override start; it never checks whether the slot starts before the override. WHY: A slot that begins before the override window and ends inside it is treated as available, so fixed hosts can be booked partly outside their override hours. HOW: Reject the slot when slotStartTime is before the override start."
+   },
+   "S5": {
+    "id": "S5",
+    "finderIndex": 4,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+    "relevantLinesStart": 142,
+    "relevantLinesEnd": 142,
+    "suggestionContent": "WHAT: `end` is computed from slotStartTime instead of slotEndTime, so it always equals `start`. WHY: Slots that start inside working hours but end after them (e.g. a 60-minute slot at 16:30 when work ends at 17:00) are not rejected. HOW: Compute `end` from slotEndTime."
+   },
+   "S6": {
+    "id": "S6",
+    "finderIndex": 5,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+    "relevantLinesStart": 138,
+    "relevantLinesEnd": 151,
+    "suggestionContent": "WHAT: The working-hours check marks a slot unavailable if ANY working-hours range on that weekday does not contain it. WHY: Users with split availability (e.g. 9-12 and 13-17 on the same day) have every slot rejected, because each slot falls outside at least one range, so no slots are offered at all. HOW: Mark the slot unavailable only when no range for that day contains it (use some/every over the ranges for that day)."
+   },
+   "S7": {
+    "id": "S7",
+    "finderIndex": 6,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+    "relevantLinesStart": 110,
+    "relevantLinesEnd": 111,
+    "suggestionContent": "WHAT: The override date is formatted with `dayjs(...)`, which uses the server's local timezone, while the slot date is formatted in UTC. WHY: On a server not running in UTC, the day comparison is off for overrides near midnight, so overrides get applied to the wrong day or skipped. HOW: Use dayjs.utc(date.start) before adding the offset and formatting."
+   },
+   "S8": {
+    "id": "S8",
+    "finderIndex": 7,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/lib/slots.ts",
+    "relevantLinesStart": 216,
+    "relevantLinesEnd": 224,
+    "suggestionContent": "WHAT: After the timezone offset is added, startTime/endTime are computed as hour*60+minute, which wraps at midnight. WHY: For overrides that cross the invitee's midnight (e.g. 20:00-23:00 UTC shown to a +6:00 invitee), endTime ends up smaller than startTime, so buildSlots produces no slots or slots in the wrong part of the day. HOW: Compute minutes relative to the start of the invitee's day (e.g. diff in minutes from startOfInviteeDay) instead of taking hour/minute of the shifted time."
+   }
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/app-store/index.ts",
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 31,
+    "suggestionContent": "WHAT: Each `import()` in the appStore object literal runs as soon as the module loads, so all 28 app packages are fetched and evaluated immediately, and each one creates a promise with no rejection handler until some caller happens to await that key. WHY: Nothing is lazily loaded, so cold-start cost is unchanged. If any app module fails to load (missing env-dependent dependency, top-level throw), Node reports an unhandled rejection, which can crash the process even when that app is never used. HOW: Store loader functions (`applecalendar: () => import(\"./applecalendar\")`) and call them at lookup sites (`await appStore[key]?.()`)."
+   },
+   "S2": {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/trpc/server/routers/viewer/bookings.tsx",
+    "relevantLinesStart": 553,
+    "relevantLinesEnd": 556,
+    "suggestionContent": "WHAT: The forEach callback is now async and awaits getCalendar, so getCalendar errors and deleteEvent errors become rejected promises that forEach drops. WHY: Before, a synchronous getCalendar throw failed the requestReschedule mutation. Now it surfaces as an unhandled rejection after the response, and calendar deletions run detached and are never awaited. HOW: Use `await Promise.all(bookingRefsFiltered.map(async (bookingRef) => {...}))`.",
+    "grupo": "S3"
+   },
+   "S3": {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/app-store/vital/lib/reschedule.ts",
+    "relevantLinesStart": 125,
+    "relevantLinesEnd": 128,
+    "suggestionContent": "WHAT: Turning the forEach callback async moves the awaited getCalendar call out of the surrounding try/catch, because forEach discards the promise the callback returns. WHY: getCalendar failures that `logger.error` used to catch now become unhandled promise rejections, and the deletes are never awaited. The same change exists in wipemycalother/lib/reschedule.ts. HOW: Replace the forEach with `await Promise.all(bookingRefsFiltered.map(async (bookingRef) => {...}))` inside the try.",
+    "grupo": "S3"
+   }
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/features/bookings/lib/handleCancelBooking.ts",
+    "relevantLinesStart": 484,
+    "relevantLinesEnd": 495,
+    "suggestionContent": "WHAT: The reminder cancel/delete calls inside forEach are now fire-and-forget async calls. The old code awaited the prisma deletes through prismaPromises. WHY: The handler can respond before the reminder rows are flagged `cancelled` or deleted, and in a serverless runtime that work can be dropped, so the reminders of a cancelled booking still go out. HOW: Collect the promises returned by deleteScheduledEmailReminder/deleteScheduledSMSReminder and add them to the Promise.all that is already awaited.",
+    "grupo": "S1"
+   },
+   "S2": {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/trpc/server/routers/viewer/bookings.tsx",
+    "relevantLinesStart": 487,
+    "relevantLinesEnd": 494,
+    "suggestionContent": "WHAT: requestReschedule no longer awaits reminder cancellation (`await Promise.all(remindersToDelete)` was removed), and the async delete helpers are called without await inside forEach. WHY: The mutation can finish before the old booking's reminders are flagged `cancelled` or deleted, so reminders for the rescheduled booking can still be sent. HOW: Map the reminders to the returned promises and `await Promise.all(...)` them.",
+    "grupo": "S1"
+   },
+   "S3": {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+    "relevantLinesStart": 53,
+    "relevantLinesEnd": 77,
+    "suggestionContent": "WHAT: All SendGrid cancel requests run inside one try, so the first failing `client.request` throws out of the loop and `Promise.all(workflowRemindersToDelete)` never runs. WHY: No cancelled reminder is deleted in that run, and the same failing reminder comes back on every later run, so the reminders after it are never cancelled and those emails are sent. HOW: Put the try/catch around each reminder so one failure does not block the rest."
+   },
+   "S4": {
+    "id": "S4",
+    "finderIndex": 3,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/features/bookings/lib/handleNewBooking.ts",
+    "relevantLinesStart": 966,
+    "relevantLinesEnd": 972,
+    "suggestionContent": "WHAT: The reschedule path calls deleteScheduledEmailReminder with immediateDelete=true. That sends the SendGrid cancel right away and does not flag or delete the reminder row. WHY: The PR says immediate SendGrid cancels are what stopped working because cancelled batches accumulate. Rescheduling is a frequent path, so it keeps filling that list, while requestReschedule uses the deferred `cancelled` flag for the same case. HOW: Drop the `true` argument so the reminder is flagged `cancelled` and the cron cancels it."
+   }
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "relevantLinesStart": 1023,
+    "relevantLinesEnd": 1024,
+    "suggestionContent": "WHAT: updateManyByCredentialId is called with an empty data object `{}`, and Prisma does not write @updatedAt when no field is being updated. WHY: SelectedCalendar.updatedAt is never bumped after the cache refresh, so the intended 'last refreshed' signal for this credential's calendars never changes. HOW: Pass an explicit timestamp, e.g. `{ updatedAt: new Date() }`."
+   },
+   "S2": {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+    "relevantLinesStart": 42,
+    "relevantLinesEnd": 50,
+    "suggestionContent": "WHAT: After a successful cache delete, the component does not invalidate `viewer.calendars.connectedCalendars`. It only calls the optional `onSuccess` prop, which SelectedCalendarsSettingsWebWrapper forwards from an optional `props.onChanged`. WHY: When the parent does not pass onChanged, the dropdown keeps showing the old 'Last updated' timestamp and the delete option for cache that is already gone, until the page reloads. HOW: Add `onSettled` to invalidate `utils.viewer.calendars.connectedCalendars`, as the disconnect mutation already does."
+   },
+   "S3": {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts",
+    "relevantLinesStart": 24,
+    "relevantLinesEnd": 26,
+    "suggestionContent": "WHAT: When the credential is missing or not owned, the handler throws a plain `Error` instead of a `TRPCError`. WHY: tRPC maps it to INTERNAL_SERVER_ERROR (500), so an expected authorization or not-found case shows up as a server failure and is logged as one. HOW: Throw `new TRPCError({ code: \"NOT_FOUND\", message: ... })`."
+   },
+   "S4": {
+    "id": "S4",
+    "finderIndex": 3,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "scripts/test-gcal-webhooks.sh",
+    "relevantLinesStart": 67,
+    "relevantLinesEnd": 68,
+    "suggestionContent": "WHAT: `sed -i '' -E ...` uses BSD/macOS in-place syntax. WHY: On GNU sed (Linux), `''` is read as the sed script and the real expression as a filename, so the command fails and GOOGLE_WEBHOOK_URL is never updated when the key already exists. HOW: Use a portable form such as `sed -i.bak -E \"...\" \"$ENV_FILE\" && rm -f \"$ENV_FILE.bak\"`."
+   }
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "lib/validators/email_validator.rb",
+    "relevantLinesStart": 13,
+    "relevantLinesEnd": 15,
+    "suggestionContent": "WHAT: EmailValidator calls BlockedEmail.should_block?, which increments match_count and saves, but UsersController#create runs validations twice (user.valid? at line 168, then user.save at line 172). WHY: every blocked signup attempt is counted twice, so the match_count stats this PR adds are wrong. HOW: don't write to the database from inside validation. Have the validator call a side-effect-free check and record the match once, e.g. after save fails or only on the save path."
+   },
+   "S2": {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "security",
+    "relevantFile": "app/models/blocked_email.rb",
+    "relevantLinesStart": 12,
+    "relevantLinesEnd": 12,
+    "suggestionContent": "WHAT: should_block? matches the email with an exact, case-sensitive where(email: email), and User does not normalize the email's case before validating. WHY: a blocked address can still sign up by changing its case (e.g. 'Bad@Spammers.org' when 'bad@spammers.org' is blocked). HOW: downcase emails when storing BlockedEmail records and when looking them up, e.g. where('lower(email) = ?', email.to_s.downcase)."
+   },
+   "S3": {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "app/models/blocked_email.rb",
+    "relevantLinesStart": 14,
+    "relevantLinesEnd": 16,
+    "suggestionContent": "WHAT: match_count is incremented as read, +1 in Ruby, then save, which is not atomic. WHY: when signup attempts for the same email run at the same time, both read the same value and one increment is lost. HOW: do an atomic SQL update, e.g. BlockedEmail.where(id: record.id).update_all(['match_count = match_count + 1, last_match_at = ?', Time.zone.now])."
+   }
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "app/controllers/topics_controller.rb",
+    "relevantLinesStart": 105,
+    "relevantLinesEnd": 113,
+    "suggestionContent": "WHAT: `TopicUser.find_by` can return nil, or a row whose `notification_level` is NULL, and the code then calls `tu.notification_level >` without a guard. WHY: A user with no topic_users row for the topic, or with a NULL level (the `tracking` scope's COALESCE shows NULL is valid), gets a NoMethodError/500 instead of being unsubscribed. HOW: Read the current level with a fallback to regular and write it through `TopicUser.change`, which creates the row if needed."
+   },
+   "S2": {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "app/controllers/topics_controller.rb",
+    "relevantLinesStart": 107,
+    "relevantLinesEnd": 111,
+    "suggestionContent": "WHAT: Each GET of the unsubscribe URL lowers the level one more step (watching/tracking to regular, then regular to muted), so the action is not idempotent. WHY: A reload, a browser prefetch, or a mail security scanner fetching the link before the user clicks it ends up muting the topic, which the user did not ask for. HOW: Always set one fixed target level, for example muted or regular, instead of stepping down from whatever the current level is."
+   },
+   "S3": {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "security",
+    "relevantFile": "config/routes.rb",
+    "relevantLinesStart": 440,
+    "relevantLinesEnd": 441,
+    "suggestionContent": "WHAT: `topics#unsubscribe` is routed as GET but changes the current user's notification_level, and it is not protected by a CSRF token. WHY: Any external page or email can embed `<img src=\"https://forum/t/x/ID/unsubscribe\">` and silently lower or mute notifications on any topic for a logged-in victim. HOW: Require a per-user signed token in the email link, or have the GET page confirm and do the change through a CSRF-protected PUT/POST."
+   },
+   "S4": {
+    "id": "S4",
+    "finderIndex": 3,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6",
+    "relevantLinesStart": 4,
+    "relevantLinesEnd": 10,
+    "suggestionContent": "WHAT: The client route's model hook only loads the topic view JSON and never calls the server `unsubscribe` action. WHY: If the user reaches /t/slug/id/unsubscribe by in-app navigation instead of a full page load, the page says notifications will stop, but nothing changes on the server."
+   }
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "app/assets/stylesheets/desktop/topic-post.scss",
+    "relevantLinesStart": 291,
+    "relevantLinesEnd": 291,
+    "suggestionContent": "WHAT: The light-theme argument was changed from `$lightness: 30%` to `70%`, and the dark argument was flipped to `$secondary 30%`. WHY: Because dark-light-choose returns its first argument for light themes, the bold reply-to link in topic-meta-data h5 is now much lighter and low-contrast in the default theme, and on dark themes it gets the wrong shade too. HOW: Keep the original value: light 30%, dark 70%."
+   },
+   "S2": {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "app/assets/stylesheets/mobile/modal.scss",
+    "relevantLinesStart": 102,
+    "relevantLinesEnd": 102,
+    "suggestionContent": "WHAT: `.custom-message-length` now uses `$primary 30%` for light themes and `$secondary 70%` for dark themes, the reverse of the original 70% and of the desktop version. WHY: On mobile light themes the hint text becomes much darker than before, and dark themes get the wrong shade. HOW: Use `scale-color($primary, $lightness: 70%)` and `scale-color($secondary, $lightness: 30%)`, matching desktop/modal.scss."
+   },
+   "S3": {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "app/assets/stylesheets/mobile/topic-post.scss",
+    "relevantLinesStart": 182,
+    "relevantLinesEnd": 182,
+    "suggestionContent": "WHAT: The light-theme color for the topic-map `h3` was changed from `$lightness: 20%` to `50%`. WHY: Mobile light themes get noticeably lighter headings, which is a visual regression this PR was not meant to cause; desktop/topic-post.scss:321 keeps 20%/80%. HOW: Use `scale-color($primary, $lightness: 20%)` and `scale-color($secondary, $lightness: 80%)`."
+   },
+   "S4": {
+    "id": "S4",
+    "finderIndex": 3,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "app/assets/stylesheets/desktop/user.scss",
+    "relevantLinesStart": 522,
+    "relevantLinesEnd": 522,
+    "suggestionContent": "WHAT: The `.name` color was changed from `$lightness: 30%` to `50%` in the light-theme branch. WHY: The light theme now shows the name at the same dimmer shade as `.title`, so the two no longer contrast. HOW: Use `scale-color($primary, $lightness: 30%)` and `scale-color($secondary, $lightness: 70%)`.",
+    "grupo": "S4"
+   },
+   "S5": {
+    "id": "S5",
+    "finderIndex": 4,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "app/assets/stylesheets/mobile/user.scss",
+    "relevantLinesStart": 497,
+    "relevantLinesEnd": 497,
+    "suggestionContent": "WHAT: The `.name` color was changed from `$lightness: 30%` to `50%` in the light-theme branch. WHY: Mobile light themes render the user name lighter than before, so it can no longer be told apart from `.title`. HOW: Use `scale-color($primary, $lightness: 30%)` and `scale-color($secondary, $lightness: 70%)`.",
+    "grupo": "S4"
+   }
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "security",
+    "relevantFile": "app/serializers/user_serializer.rb",
+    "relevantLinesStart": 43,
+    "relevantLinesEnd": 43,
+    "suggestionContent": "WHAT: `website_name` is added as a plain attribute but not to `untrusted_attributes`, so the `scope.restrict_user_fields?(object)` check that hides `website` for TL0 users seen by anonymous visitors never runs for it. WHY: anonymous visitors get the TL0 user's website host and path through `website_name`, and user.hbs renders it, which defeats the anti-spam hiding of new users' websites. HOW: add `:website_name` to the `untrusted_attributes` list (and delete the custom include method) so it is gated exactly like `website`."
+   },
+   "S2": {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "app/serializers/user_serializer.rb",
+    "relevantLinesStart": 153,
+    "relevantLinesEnd": 155,
+    "suggestionContent": "WHAT: `include_website_name` has no trailing `?`, so ActiveModel::Serializers, which looks for `include_<attr>?`, never calls it. WHY: the intended condition is dead code and `website_name` is always serialized, as nil when the user has no website. HOW: rename it to `include_website_name?`."
+   }
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "public/app/plugins/datasource/loki/querySplitting.ts",
+    "relevantLinesStart": 296,
+    "relevantLinesEnd": 299,
+    "suggestionContent": "WHAT: Targets are now run through applyTemplateVariables (with request.filters) before splitting, and they go through it again later. Each split sub-request (`{ ...request, targets }`) is sent through datasource.runQuery -> DataSourceWithBackend.query, which calls applyTemplateVariables again with the same scopedVars and filters (DataSourceWithBackend.ts:185). WHY: addFilterAsLabelFilter (modifyQuery.ts:511) does not check for duplicates, so ad hoc filters on parsed or structured-metadata labels are added twice (e.g. `{app=\"x\"} | json | level=`info` | level=`info``), and variable values containing `$` are expanded a second time. The non-split path interpolates only once, so the two paths now send different queries. HOW: Clear the ad hoc filters on the sub-requests (e.g. build them with `filters: undefined`) or skip the second interpolation, so each query is interpolated exactly once.",
+    "grupo": "S1"
+   },
+   "S2": {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "public/app/plugins/datasource/loki/shardQuerySplitting.ts",
+    "relevantLinesStart": 49,
+    "relevantLinesEnd": 52,
+    "suggestionContent": "WHAT: runShardSplitQuery now applies applyTemplateVariables(query, scopedVars, request.filters) up front, but the sharded sub-requests keep request.filters/scopedVars. datasource.runQuery -> DataSourceWithBackend.query then calls applyTemplateVariables on them again. WHY: Ad hoc filters on non-indexed labels are appended twice by addFilterAsLabelFilter, which does not check for duplicates, and `$` sequences inside already-interpolated values are re-expanded, so sharded queries differ from what the user built. HOW: Remove `filters` from the sub-requests passed to runQuery, or make sure the backend-layer interpolation is not applied a second time.",
+    "grupo": "S1"
+   }
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "pkg/expr/reader.go",
+    "relevantLinesStart": 194,
+    "relevantLinesEnd": 200,
+    "suggestionContent": "WHAT: enableSqlExpressions assigns `enabled := !IsEnabledGlobally(FlagSqlExpressions)` and returns false on both branches, so the flag lookup is dead code and the variable name means the opposite of its value. WHY: the code looks like a flag gate but ignores the flag; if someone changes the final `return false` to restore flag behavior, the inverted `enabled` makes the flag work backwards. HOW: make the kill switch explicit with a single `return false` and a comment, and drop the misleading flag lookup."
+   }
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "pkg/services/authz/rbac/service.go",
+    "relevantLinesStart": 116,
+    "relevantLinesEnd": 121,
+    "suggestionContent": "WHAT: The denial cache is checked before any permission source and is never invalidated when permissions change or a resource is created. WHY: If a Check on a UID runs before the dashboard/folder is created or before access is granted, the user keeps getting `Allowed:false` for the whole shortCacheTTL, even though the new permCache-miss database fallback would now allow it. That is the stale-deny behaviour this PR is meant to fix. HOW: Don't short-circuit on the denial entry when the database has never confirmed the resource exists. Or, simpler, drop the denial-cache short-circuit and rely on the refetch path, possibly with a much shorter TTL for denials."
+   },
+   "S2": {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "performance",
+    "relevantFile": "pkg/services/authz/rbac/service.go",
+    "relevantLinesStart": 123,
+    "relevantLinesEnd": 139,
+    "suggestionContent": "WHAT: When the cached permission map exists but does not allow the resource, Check now ignores it and calls getIdentityPermissions, which always runs permissionStore.GetUserPermissions against the database. WHY: Each distinct denied resource (per user and action, per TTL window) now costs a full permission query, where before it cost none. Per-item checks over search/list results the user cannot access therefore cause O(N) database queries, and singleflight only merges concurrent calls with the same key. HOW: Refetch at most once per user+action within a short window, for example with a 'recently refreshed' marker on userPermCacheKey, instead of once per denied resource."
+   },
+   "S3": {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "pkg/services/authz/rbac/cache.go",
+    "relevantLinesStart": 30,
+    "relevantLinesEnd": 32,
+    "suggestionContent": "WHAT: userPermDenialCacheKey joins name and parent with '_', and resource UIDs can contain '_', so different (name, parent) pairs produce the same key (e.g. name='a_b',parent='' and name='a',parent='b_'). WHY: A cached denial for one resource is returned for a different resource, wrongly denying access for the TTL. HOW: Use a separator that cannot appear in UIDs, or length-prefix or encode each component."
+   },
+   "S4": {
+    "id": "S4",
+    "finderIndex": 3,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "pkg/services/authz/rbac.go",
+    "relevantLinesStart": 160,
+    "relevantLinesEnd": 167,
+    "suggestionContent": "WHAT: newRemoteRBACClient still wraps the remote authz client in a 30s authzlib LocalCache, while only the in-proc client was switched to NoopCache. WHY: In standalone/remote deployments, Check and List results are still served from the client cache. Newly created dashboards and folders and fresh grants stay invisible for up to 30s, so the server-side refetch logic never runs. HOW: Use NoopCache for the remote client too, or a cache that does not store denied results."
+   }
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "relevantLinesStart": 534,
+    "relevantLinesEnd": 538,
+    "suggestionContent": "WHAT: Debug log calls fire at Error level on every cleanup batch, including successful ones, and print the full list of IDs (up to AnnotationCleanupJobBatchSize entries). WHY: Normal cleanup runs flood the logs with fake errors and huge payloads, which can set off error-based alerts and hide real failures. HOW: Remove these calls, or switch them to r.log.Debug and log only the counts."
+   },
+   "S2": {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "pkg/services/cleanup/cleanup.go",
+    "relevantLinesStart": 77,
+    "relevantLinesEnd": 77,
+    "suggestionContent": "WHAT: The cleanup ticker interval went from 10 minutes to 1 minute, but clean() still uses a 9-minute timeout sized for the 10-minute interval. WHY: Every cleanup job (snapshots, dashboard versions, images, annotations) now runs 10x more often against the DB, and runs back-to-back whenever a pass takes more than a minute. This looks like a debugging change left in. HOW: Restore the 10-minute interval."
+   },
+   "S3": {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "relevantLinesStart": 614,
+    "relevantLinesEnd": 618,
+    "suggestionContent": "WHAT: On every database except SQLite, deleteByIDs binds one placeholder per ID, so the parameter count equals AnnotationCleanupJobBatchSize. WHY: MySQL and Postgres cap a statement at 65535 placeholders, so a batch size above that now fails every cleanup run; the old subquery version had no bind parameters and worked. HOW: Split ids into chunks under the driver limit before building placeholders, or inline the int64 values for every dialect."
+   },
+   "S4": {
+    "id": "S4",
+    "finderIndex": 3,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "performance",
+    "relevantFile": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "relevantLinesStart": 609,
+    "relevantLinesEnd": 612,
+    "suggestionContent": "WHAT: The SQLite inline IN list is built by calling fmt.Sprintf on the growing string once per ID. That is O(n²) copying and allocation in the batch size. WHY: At batch sizes like the 32767 used in the new test, each batch copies gigabytes of string data, which slows cleanup and puts heavy pressure on the GC. HOW: Build the list with strings.Builder and strconv.AppendInt."
+   }
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "security",
+    "relevantFile": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+    "relevantLinesStart": 56,
+    "relevantLinesEnd": 71,
+    "suggestionContent": "WHAT: The fail-fast exception for multiple crypto providers was replaced by sorting on order(), but DefaultCryptoProvider, FIPS1402Provider and WildFlyElytronProvider all return 200. A tie between them is now settled by ServiceLoader discovery order, and the loser is only logged at debug level. WHY: A FIPS deployment that accidentally also has the default (non-FIPS BouncyCastle) provider on the classpath used to fail at startup; now it can silently run with the non-FIPS provider. HOW: Keep throwing IllegalStateException when the two highest-ordered providers have the same order() value."
+   },
+   "S2": {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+    "relevantLinesStart": 39,
+    "relevantLinesEnd": 50,
+    "suggestionContent": "WHAT: The test creates one EC key pair with the default KeyPairGenerator settings (a 256-bit curve) and uses it for ES256, ES384 and ES512. WHY: The ES384 and ES512 cases never produce 48- or 66-byte r/s values or a DER sequence longer than 127 bytes, so the long-form length branches in ASN1Encoder.writeLength and ASN1Decoder.readLength are never tested and a bug there would go unnoticed. HOW: Generate a key pair on the matching curve (secp256r1, secp384r1, secp521r1) for each algorithm."
+   },
+   "S3": {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java",
+    "relevantLinesStart": 39,
+    "relevantLinesEnd": 44,
+    "suggestionContent": "WHAT: `int order()` is added to the public CryptoProvider SPI as an abstract method with no default. WHY: Any CryptoProvider implementation outside this repository stops compiling, and an already compiled one fails with AbstractMethodError when detectProvider calls CryptoProvider::order. HOW: Declare it as a default method that returns a base value, for example `default int order() { return 0; }`."
+   }
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "security",
+    "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "relevantLinesStart": 65,
+    "relevantLinesEnd": 71,
+    "suggestionContent": "WHAT: canManage() returns true when the caller has only the VIEW scope on all groups, because it passes AdminPermissionsSchema.VIEW to hasPermission. WHY: GroupsResource (line 181) uses auth.groups().requireManage() to guard top-level group creation, so an admin granted only all-groups VIEW can create groups (privilege escalation). HOW: check only the MANAGE scope."
+   },
+   "S2": {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "relevantLinesStart": 121,
+    "relevantLinesEnd": 125,
+    "suggestionContent": "WHAT: getGroupIdsWithViewPermission looks up and returns groupResource.getId() (the internal resource id), but group resources are named by group id (AdminPermissionsSchema.resolveGroup) and hasPermission resolves them with findByName. WHY: the lookup always misses and falls back to the all-groups resource, and the returned set holds resource ids. JpaUserProvider then uses that set as a group-id filter, so user search and count return the wrong users, or none. HOW: pass and collect groupResource.getName(), as ClientPermissionsV2 does."
+   },
+   "S3": {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "relevantLinesStart": 56,
+    "relevantLinesEnd": 62,
+    "suggestionContent": "WHAT: canView(GroupModel) does not check canView() (the all-groups VIEW/MANAGE permission), and GroupsResource/GroupResource no longer short-circuit with canViewGlobal. When a group has its own resource, hasPermission evaluates only that resource. WHY: an admin with an all-groups VIEW permission is denied view (and the group is filtered out of listings) for any group that has a specific permission resource without the VIEW scope. HOW: return true early when canView() is true, as V1 does."
+   }
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+    "relevantLinesStart": 46,
+    "relevantLinesEnd": 50,
+    "suggestionContent": "WHAT: The PR renumbers the exit codes (RECREATE_UPGRADE_EXIT_CODE 4→3, and 4 is reused for FEATURE_DISABLED), but testFeatureNotEnabled and testWrongVersions only check messages, not exit codes. WHY: The exit code is the documented contract for automation scripts, so a wrong or swapped value (for example, feature-disabled reported as recreate) would pass the suite. HOW: Assert `assertEquals(CompatibilityResult.FEATURE_DISABLED, cliResult.exitCode())` in testFeatureNotEnabled and `assertEquals(CompatibilityResult.RECREATE_UPGRADE_EXIT_CODE, result.exitCode())` after each incompatible check in testWrongVersions."
+   }
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "server-spi/src/main/java/org/keycloak/models/utils/RecoveryAuthnCodesUtils.java",
+    "relevantLinesStart": 56,
+    "relevantLinesEnd": 62,
+    "suggestionContent": "WHAT: getCredential always calls getFederatedCredentialsStream first. For LDAP-federated users this runs LDAPStorageProvider.getCredentials, which queries LDAP and throws IllegalStateException when the LDAP object is not found. WHY: recovery-code login and the RecoveryAuthnCodeInputLoginBean page now fail with a 500 (and pay an LDAP round-trip on every call) for federated users whose recovery codes are stored locally, where before only local storage was read. HOW: check local stored credentials first and only fall back to the federated stream, or only consult the federated provider when it supports the recovery-codes type."
+   },
+   "S2": {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "security",
+    "relevantFile": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+    "relevantLinesStart": 125,
+    "relevantLinesEnd": 130,
+    "suggestionContent": "WHAT: when user storage accepts the new recovery codes, the local `createCredential` is skipped, and that call is the only place an existing local recovery-codes credential gets deleted. WHY: UserCredentialManager.isValid still runs the local RecoveryAuthnCodesCredentialProvider, so codes the user meant to replace by regenerating still authenticate. HOW: when userStorageCreated is true, remove any existing local recovery-codes credential."
+   },
+   "S3": {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "security",
+    "relevantFile": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+    "relevantLinesStart": 117,
+    "relevantLinesEnd": 123,
+    "suggestionContent": "WHAT: the user-storage path serializes the raw plaintext recovery codes (`generatedCodes`) into the UserCredentialModel, while the local path stores only the hashed codes from credentialModel. WHY: any user storage provider receives and may persist plaintext recovery codes, so a leak of the external store exposes working second-factor codes. HOW: pass the hashed credential data (credentialModel.getCredentialData()) to the user storage instead of the raw codes."
+   },
+   "S4": {
+    "id": "S4",
+    "finderIndex": 3,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+    "relevantLinesStart": 80,
+    "relevantLinesEnd": 80,
+    "suggestionContent": "WHAT: the credential can now come from user storage, but when all codes are used it is still deleted with `removeStoredCredentialById(recoveryCodeCredentialModel.getId())`, which only acts on the local store. WHY: a federated credential (whose id may be null when built via createFromValues) is never removed from the user storage, so the exhausted credential stays configured. HOW: when the credential has a federation link or came from the federated stream, remove it through the storage provider (e.g. disableCredentialType) instead of removeStoredCredentialById."
+   }
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "src/sentry/api/paginator.py",
+    "relevantLinesStart": 838,
+    "relevantLinesEnd": 840,
+    "suggestionContent": "WHAT: OptimizedCursorPaginator.get_item_key calls math.floor/math.ceil on getattr(item, self.key), but the audit log endpoint uses it with order_by='-datetime', so the value is a datetime. WHY: build_cursor calls this key on the result rows and math.floor(datetime) raises TypeError, so every non-empty optimized_pagination request returns a 500. HOW: Convert datetimes to epoch milliseconds, as DateTimePaginator.get_item_key does, or subclass DateTimePaginator."
+   },
+   "S2": {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "src/sentry/api/paginator.py",
+    "relevantLinesStart": 842,
+    "relevantLinesEnd": 843,
+    "suggestionContent": "WHAT: value_from_cursor returns the raw integer cursor value, and build_queryset puts it directly into a `datetime <= %s` filter for the '-datetime' key. WHY: Comparing an integer millisecond timestamp to a datetime column either fails in the database or filters the wrong rows, so following any next/prev cursor is broken. HOW: Convert the cursor value back to a UTC datetime, as DateTimePaginator.value_from_cursor does."
+   },
+   "S3": {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "src/sentry/api/paginator.py",
+    "relevantLinesStart": 877,
+    "relevantLinesEnd": 882,
+    "suggestionContent": "WHAT: When enable_advanced_features is set, a client-supplied negative cursor offset is passed straight to queryset[start_offset:stop]. WHY: Django QuerySets reject negative indexing with ValueError/AssertionError, and paginate() only catches BadPaginationError, so a cursor like `0:-5:0` gives an unhandled 500. HOW: Reject negative offsets by raising BadPaginationError, or clamp them to 0."
+   },
+   "S4": {
+    "id": "S4",
+    "finderIndex": 3,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "src/sentry/api/endpoints/organization_auditlogs.py",
+    "relevantLinesStart": 70,
+    "relevantLinesEnd": 71,
+    "suggestionContent": "WHAT: enable_advanced dereferences organization_context.member.has_global_access on every request, and member can be None for non-superuser principals that pass OrganizationAuditPermission without an org membership. WHY: Because the line runs before the use_optimized check, those requests now raise AttributeError and return a 500 even when the default paginator would have been used. HOW: Check use_optimized first and guard against a missing member."
+   }
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "src/sentry/api/helpers/error_upsampling.py",
+    "relevantLinesStart": 100,
+    "relevantLinesEnd": 105,
+    "suggestionContent": "WHAT: _is_error_focused_query uses a plain substring check, so a query like '!event.type:error' or 'event.type:error OR event.type:transaction' is treated as errors-only. WHY: for allowlisted projects on the discover dataset, count() is rewritten to upsampled_count() for queries that exclude errors or include transactions, and the returned counts are wrong. HOW: parse the query with the event search parser and only return True when there is one positive, non-negated event.type:error filter with no OR branches."
+   },
+   "S2": {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "src/sentry/api/helpers/error_upsampling.py",
+    "relevantLinesStart": 58,
+    "relevantLinesEnd": 60,
+    "suggestionContent": "WHAT: count() is rewritten to 'upsampled_count() as count', which always produces a result column named 'count'. With transformAliasToInputFormat=1, the serializer instead looks for the column 'count()', because resolve_axis_column uses the original query_columns in organization_events.py. WHY: for allowlisted error queries that use transformAliasToInputFormat, the series lookup misses and the endpoint returns empty or zero-filled data instead of the upsampled counts. HOW: make the alias of the rewritten column match whatever resolve_axis_column will look up, for example alias it to the original column name when transform_alias_to_input_format is enabled."
+   }
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "src/sentry/remote_subscriptions/consumers/result_consumer.py",
+    "relevantLinesStart": 244,
+    "relevantLinesEnd": 259,
+    "suggestionContent": "WHAT: Every strategy built by create_thread_queue_parallel_worker reuses the single factory-level self.queue_pool, but SimpleQueueProcessingStrategy.close()/join()/terminate() call queue_pool.shutdown() on that shared pool. WHY: After the first partition rebalance, the next strategy submits into shut-down queues. queue.put raises ShutDown, the except in submit() marks the offset complete, and messages are committed without ever being processed. HOW: Create a new FixedQueuePool per create_with_partitions call, or stop shutting down the shared pool in close() and only shut it down in factory.shutdown()."
+   },
+   "S2": {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "relevantLinesStart": 273,
+    "relevantLinesEnd": 291,
+    "suggestionContent": "WHAT: _commit_loop calls the arroyo Commit callback from a background daemon thread instead of from the strategy's submit/poll on the main thread. WHY: arroyo's commit changes StreamProcessor state and commits offsets on the KafkaConsumer, which is not thread-safe, while the main thread is polling the same consumer at the same time. This can cause races, lost commits, or commits landing during a rebalance. HOW: Have the background thread (or poll()) compute committable offsets, then call self.commit_function inside poll() on the main thread."
+   },
+   "S3": {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "performance",
+    "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "relevantLinesStart": 184,
+    "relevantLinesEnd": 186,
+    "suggestionContent": "WHAT: Work queues are created as unbounded queue.Queue(), and SimpleQueueProcessingStrategy.submit never raises MessageRejected, so arroyo gets no backpressure. WHY: When processing falls behind (the slow-item case this PR targets), the consumer keeps pulling messages and buffering full Message objects in memory without limit, which can exhaust memory and cause a huge redelivery after a crash. HOW: Give each queue a maxsize and, in submit, use put_nowait and raise MessageRejected on queue.Full so arroyo retries the message."
+   },
+   "S4": {
+    "id": "S4",
+    "finderIndex": 3,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "relevantLinesStart": 86,
+    "relevantLinesEnd": 96,
+    "suggestionContent": "WHAT: get_committable_offsets stops advancing at the first offset in range(start, max+1) that was never added to all_offsets. WHY: Kafka offsets can be non-contiguous (transaction control markers, compacted topics), so a single offset that is never delivered stops commits for that partition forever while all_offsets keeps growing. HOW: Walk the sorted list of seen offsets above last_committed and stop only at the first one that is still outstanding, instead of requiring every integer to be present."
+   },
+   "S5": {
+    "id": "S5",
+    "finderIndex": 4,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "relevantLinesStart": 231,
+    "relevantLinesEnd": 243,
+    "suggestionContent": "WHAT: FixedQueuePool.shutdown sets worker.shutdown=True before calling q.shutdown(immediate=False), so each worker exits its while loop after its current item instead of draining the queue. WHY: Items still in the queues are dropped at shutdown, which defeats the graceful drain that immediate=False is meant to provide and forces reprocessing on restart. HOW: Do not set worker.shutdown; let workers drain until get() raises queue.ShutDown."
+   }
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "S1": {
+    "id": "S1",
+    "finderIndex": 0,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "src/sentry/scripts/spans/add-buffer.lua",
+    "relevantLinesStart": 46,
+    "relevantLinesEnd": 53,
+    "suggestionContent": "WHAT: The script now runs ZCARD/ZUNIONSTORE on segment keys that consumers on the previous version created with SADD as plain sets, and those keys live for up to redis_ttl (3600s). WHY: During a rolling deploy, or for up to an hour after it, Redis returns WRONGTYPE for these keys, so the EVALSHA fails and p.execute() in process_spans raises, crashing the consumer batch. HOW: Use a new key prefix for the sorted-set buffers (e.g. `span-buf:z:`) so old and new data never collide, or check the key with TYPE and migrate or skip legacy sets."
+   },
+   "S2": {
+    "id": "S2",
+    "finderIndex": 1,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "src/sentry/scripts/spans/add-buffer.lua",
+    "relevantLinesStart": 47,
+    "relevantLinesEnd": 53,
+    "suggestionContent": "WHAT: ZUNIONSTORE is called without AGGREGATE, so it defaults to SUM and adds the scores of a payload that appears in both sets. WHY: A duplicate span (e.g. a Kafka redelivery) ends up with a score of about twice its end timestamp, so ZPOPMIN never evicts it and the eviction no longer follows end time. HOW: Pass `AGGREGATE MAX` (or MIN) so a duplicate member keeps its real timestamp."
+   },
+   "S3": {
+    "id": "S3",
+    "finderIndex": 2,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "src/sentry/spans/buffer.py",
+    "relevantLinesStart": 449,
+    "relevantLinesEnd": 449,
+    "suggestionContent": "WHAT: The max_segment_spans check was removed from _load_segment_data and the limit is now hardcoded as 1000 in add-buffer.lua, so the SpansBuffer `max_segment_spans` parameter (default 1001) is never read. WHY: Any caller or config that sets max_segment_spans is silently ignored, and the effective limit (1000) also differs from the documented default. HOW: Pass self.max_segment_spans to the script as an ARGV value and use it instead of the literal 1000."
+   },
+   "S4": {
+    "id": "S4",
+    "finderIndex": 3,
+    "producedBy": "generalist-base",
+    "technique": "G",
+    "label": "bug",
+    "relevantFile": "src/sentry/scripts/spans/add-buffer.lua",
+    "relevantLinesStart": 30,
+    "relevantLinesEnd": 30,
+    "suggestionContent": "WHAT: The redirect-resolution loop bound was cut from 10000 to 1000 iterations, and the comment explaining the limit was removed. WHY: Segment trees whose redirect chains are deeper than ~1000 now stop resolving early and get split into separate segments instead of being joined. HOW: Keep the previous 10000 bound unless the lower depth is an intended limit."
+   }
   }
  }
 }

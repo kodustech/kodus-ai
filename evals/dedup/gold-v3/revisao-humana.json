@@ -8,6 +8,7 @@
   "muse-spark-1.3",
   "gpt-6.1-sol@e2b",
   "sonnet-5.5@cc",
+  "opus-5.5@api",
   "opus-5.5@api"
  ],
  "classificadores": [

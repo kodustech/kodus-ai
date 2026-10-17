@@ -1,0 +1,33 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "RecoveryAuthnCodesUtils.java:56-61 queries federated credentials before local storage, and UserCredentialManager.java:138-141 delegates directly to the provider. LDAPStorageProvider.java:1212-1216 performs an LDAP lookup and throws when the object is missing, preventing the local fallback and breaking the newly changed recovery-page lookup.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "CredentialHelper.java:119-125 passes raw codes to the credential updater, but UserCredentialManager.java:90-92 dispatches only to a provider supporting that type; hashing and persistence belong to that trusted provider, as illustrated by BackwardsCompatibilityUserStorage.java:146-155 for passwords. Passing plaintext input does not establish insecure external persistence, and the suggested getCredentialData() replacement contains metadata rather than hashes (RecoveryAuthnCodesCredentialModel.java:65-74).",
+   "severity": "high"
+  },
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-03",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "The testsuite provider BackwardsCompatibilityUserStorage.java:244 logs 'recovery-codes', while RecoveryAuthnCodesCredentialModel.java:21 defines 'recovery-authn-codes'. This is a minor diagnostic wording mismatch in test infrastructure with no authentication behavior change.",
+   "severity": "low"
+  },
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-04",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The testsuite provider BackwardsCompatibilityUserStorage.java:332-340 accepts any stored recovery code, whereas RecoveryAuthnCodeInputLoginBean.java:21 requests the next specific code. RecoveryAuthnCodesCredentialProvider.java:106-112 validates only that next code, so the newly added test provider fails to enforce the behavior it represents.",
+   "severity": "medium"
+  }
+ ]
+}

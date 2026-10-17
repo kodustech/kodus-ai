@@ -1,0 +1,33 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "items": [
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "packages/trpc/server/routers/viewer/slots.ts:118-124 checks the slot end against the override start, allowing a slot that starts before the override and ends inside it. Slots generated from another host's availability can reach this check for every fixed host at slots.ts:483-493, so the missing start-bound check affects returned availability.",
+   "severity": "high"
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-02",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "packages/trpc/server/routers/viewer/slots.ts:100 makes slotStartTime UTC, but slots.ts:110 formats the adjusted override using server-local dayjs. Overrides originate as UTC-constructed Dates in packages/core/getUserAvailability.ts:218-222, so a non-UTC server can produce a different calendar date and incorrectly skip or apply the new override check.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-03",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "packages/trpc/server/routers/viewer/slots.ts:105-130 rejects a slot when any matching-date override excludes it. Consequently, a 14:00 slot generated from the afternoon range in packages/lib/slots.ts:211-245 is rejected by a separate 09:00\u201311:00 override, even though it fits a valid range.",
+   "severity": "high"
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-04",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The call at packages/trpc/server/routers/viewer/slots.ts:581-586 does omit schedule fields, but fixed hosts already passed the full schedule check at slots.ts:483-499 and loose-host IDs were filtered using their schedules at slots.ts:502-522. This later selected-slot pass only removes surviving users and slots at slots.ts:565-590; it cannot restore availability rejected by those earlier checks.",
+   "severity": "high"
+  }
+ ]
+}

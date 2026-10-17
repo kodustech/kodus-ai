@@ -259,7 +259,7 @@
      "etapa1": true,
      "etapa2": {
       "kind": "contradicts",
-      "reason": "The evidence quotes repository code: CalendarManager.updateEvent catches provider errors and returns success:false rather than throwing, and EventManager.updateCalendarAttendees/updateAllCalendarEvents only collect these results inside a try/catch. That makes the comment's claim false: a calendar provider failure does not make updateCalendarAttendees reject, so the mutation does not error out before emails are sent."
+      "reason": "The evidence quotes repository code (CalendarManager.updateEvent catching provider errors and returning success:false; updateAllCalendarEvents wrapped in try/catch). This shows updateCalendarAttendees does not reject when the provider fails, which makes the comment's claim that the client gets an error false."
      }
     },
     {
@@ -366,9 +366,9 @@
     "chamadas": 1,
     "input": 1387,
     "cacheRead": 0,
-    "output": 152,
+    "output": 117,
     "reasoning": 0,
-    "ms": 4050
+    "ms": 3794
    }
   },
   "sms-workflow-reminder-retry-count-tracking-cal-com": {
@@ -598,7 +598,7 @@
      "etapa1": true,
      "etapa2": {
       "kind": "argues",
-      "reason": "The rebuttal rests on how the ERB/Erubi compiler turns the blank line and indent into a separate append statement that becomes the dangling `if` condition. That is template-engine behavior, not something the quoted repository lines show by themselves."
+      "reason": "The checker quotes the template lines, but its conclusion depends on how ERB compiles the blank line and indentation into a separate append statement. That is framework compilation behavior, not a fact the repository code itself shows."
      }
     },
     {
@@ -635,7 +635,7 @@
      "etapa1": true,
      "etapa2": {
       "kind": "contradicts",
-      "reason": "The evidence quotes this repository's discourse_expires_in, which returns early unless can_cache_content? (no current_user) is true. A logged-in user's response is therefore never marked publicly cacheable, so the comment's claim that the logged-in TopicView can be served from a shared cache is false."
+      "reason": "The evidence quotes this repository's own discourse_expires_in, which returns early unless can_cache_content? holds (i.e. no current_user). So for a logged-in user the response is never marked publicly cacheable. That makes false the comment's premise that the call may cache the user-specific TopicView for other visitors."
      }
     },
     {
@@ -694,9 +694,9 @@
     "chamadas": 2,
     "input": 2506,
     "cacheRead": 0,
-    "output": 382,
+    "output": 377,
     "reasoning": 0,
-    "ms": 5608
+    "ms": 6750
    }
   },
   "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
@@ -800,7 +800,7 @@
      "etapa1": true,
      "etapa2": {
       "kind": "contradicts",
-      "reason": "The evidence quotes store.js.es6:222, which shows _hydrateEmbedded runs only when root.__rest_serializer === \"1\". The repository sets that flag only for controllers passing rest_serializer: true (application_controller.rb:244-245), and none of the serializers with _ids attributes are rendered that way. This refutes the comment's factual claim that the _ids branch runs on every hydrated model."
+      "reason": "The evidence quotes store.js.es6:222. There, _hydrateEmbedded is called only when root.__rest_serializer === \"1\". That flag is set only by controllers that pass rest_serializer: true, and the serializers that carry _ids attributes are not among them. This shows the comment's claim that the branch runs on every hydrated model is false in this repository."
      }
     },
     {
@@ -818,9 +818,9 @@
     "chamadas": 1,
     "input": 1402,
     "cacheRead": 0,
-    "output": 152,
+    "output": 135,
     "reasoning": 0,
-    "ms": 4015
+    "ms": 3607
    }
   },
   "feature-automatically-downsize-large-images-discourse-cursor": {
@@ -1048,7 +1048,7 @@
      "etapa1": true,
      "etapa2": {
       "kind": "contradicts",
-      "reason": "The evidence quotes this repository's MySQL DSN in sqlstore.go:287, which sets clientFoundRows=true on the connection that the anonstore UPDATE uses. That repository configuration falsifies the comment's premise that RowsAffected reports changed rows rather than matched rows."
+      "reason": "The evidence quotes this repository's MySQL DSN in sqlstore.go:287, which sets clientFoundRows=true. That is a repository configuration applied to the same database path updateDevice uses. It falsifies the comment's premise that RowsAffected reports changed rows rather than matched rows in this codebase."
      }
     },
     {
@@ -1107,9 +1107,9 @@
     "chamadas": 1,
     "input": 1315,
     "cacheRead": 0,
-    "output": 273,
+    "output": 262,
     "reasoning": 0,
-    "ms": 4711
+    "ms": 4642
    }
   },
   "unified-storage-performance-optimizations-grafana-codex": {
@@ -1547,7 +1547,7 @@
      "etapa1": true,
      "etapa2": {
       "kind": "contradicts",
-      "reason": "The checker quotes repository code showing that addComposites calls requireManage (canConfigure) and then, as a separate step, requireMapComposite (canMapCompositeRoles -> hasPermission MAP_ROLES_COMPOSITE). This contradicts the comment's factual claim that the call can succeed through CONFIGURE alone."
+      "reason": "The evidence quotes repository code: addComposites calls requireManage (canConfigure) and also requireMapComposite (canMapCompositeRoles -> hasPermission MAP_ROLES_COMPOSITE). The two checks are separate and both must pass, so CONFIGURE alone cannot make the call succeed. This makes the comment's claim that addComposites could succeed through CONFIGURE false."
      }
     },
     {
@@ -1566,7 +1566,7 @@
      "etapa1": true,
      "etapa2": {
       "kind": "argues",
-      "reason": "The evidence does quote a repository guard: ClientResource calls requireFeature(ADMIN_FINE_GRAINED_AUTHZ) before any permissions.clients() call. But whether that guard rejects requests under V2 depends on Keycloak enabling only one version of a feature at a time. The checker admits this was not traced in Profile. Because the rebuttal rests on unverified framework behavior rather than code that directly shows the comment's claim is false, it argues rather than contradicts."
+      "reason": "The evidence does quote the requireFeature(ADMIN_FINE_GRAINED_AUTHZ) guards in ClientResource. But it only contradicts the comment if enabling V2 disables V1, and the checker admits that one-version-at-a-time behavior was not traced in Profile. Because the conclusion rests on an unverified assumption, this falls under the 'when unsure' default."
      }
     },
     {
@@ -1604,9 +1604,9 @@
     "chamadas": 2,
     "input": 2943,
     "cacheRead": 0,
-    "output": 489,
+    "output": 549,
     "reasoning": 0,
-    "ms": 5875
+    "ms": 6074
    }
   },
   "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
@@ -1721,11 +1721,11 @@
        "reason": "The comment says a report with a timestamp and age=0 passes validation. It does not: age=0 is still present, so DRF runs validate_age, which raises because the non-zero timestamp is truthy. Likewise timestamp=0 with a non-zero age is rejected by validate_timestamp. Each validator covers the other's falsy case, so the mutual-exclusion rule only fails in the narrow case where both fields are 0, not the scenario the comment describes."
       }
      ],
-     "nit": false,
+     "nit": true,
      "etapa1": true,
      "etapa2": {
-      "kind": "argues",
-      "reason": "The rebuttal depends on how Django REST Framework behaves: it assumes DRF still calls validate_age when age=0 is supplied, so validate_age raises on the truthy timestamp. The quoted repository code only shows each validator checking the other field's truthiness. Whether the reported case is rejected rests on that framework behavior, not on a fact the code itself states."
+      "kind": "contradicts",
+      "reason": "The evidence quotes the repository's own validate_age (lines 56-59), which raises when timestamp is truthy. A report with a non-zero timestamp and age=0 is therefore rejected, which makes the comment's claim that it passes validation false. The reverse case is covered the same way by validate_timestamp."
      }
     }
    ],
@@ -1733,9 +1733,9 @@
     "chamadas": 1,
     "input": 1333,
     "cacheRead": 0,
-    "output": 331,
+    "output": 602,
     "reasoning": 0,
-    "ms": 5685
+    "ms": 8247
    }
   },
   "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
@@ -1839,7 +1839,7 @@
      "etapa1": true,
      "etapa2": {
       "kind": "contradicts",
-      "reason": "The evidence quotes this repository's holds_bad_pickle_object in src/sentry/celery.py, which SentryTask.apply_async calls on the enqueue path. That function rejects only Django models and classes from sentry/getsentry modules. A datetime matches neither, so the comment's factual claim that the bad-pickle check will raise at enqueue is false for this repository's code."
+      "reason": "The checker quotes src/sentry/celery.py:29-58, the bad-pickle check that the comment names. That check only flags Django models and objects whose type module starts with sentry./getsentry. A datetime matches neither condition, so this repository's own code shows the comment's claim that the check would raise at enqueue is false."
      }
     },
     {
@@ -1858,9 +1858,9 @@
     "chamadas": 1,
     "input": 1379,
     "cacheRead": 0,
-    "output": 141,
+    "output": 120,
     "reasoning": 0,
-    "ms": 3787
+    "ms": 4151
    }
   },
   "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
@@ -1931,7 +1931,7 @@
      "etapa1": true,
      "etapa2": {
       "kind": "contradicts",
-      "reason": "The checkers quote the enum definitions in this repository: in types.py, the non-OK DetectorPriorityLevel members are assigned directly from PriorityLevel.LOW/MEDIUM/HIGH, which group.py sets to 25/50/75. They also quote detector.py, where PriorityLevel(new_status) is only called when new_status is not OK. This repository code shows the suspected value mismatch does not exist."
+      "reason": "The evidence quotes this repository's enum definitions: types.py:8-12 defines DetectorPriorityLevel's LOW, MEDIUM and HIGH directly from PriorityLevel's members, which group.py:63-66 sets to 25, 50 and 75. It also quotes detector.py:290-301, which calls PriorityLevel(new_status) only for non-OK values. Together these show the suspected mismatch the comment rests on does not exist in the code."
      }
     },
     {
@@ -1950,9 +1950,9 @@
     "chamadas": 1,
     "input": 1352,
     "cacheRead": 0,
-    "output": 264,
+    "output": 379,
     "reasoning": 0,
-    "ms": 4503
+    "ms": 5607
    }
   },
   "github-oauth-security-enhancement-sentry": {
@@ -2009,7 +2009,7 @@
      "etapa1": true,
      "etapa2": {
       "kind": "contradicts",
-      "reason": "The checker quotes base.py showing `pipeline.signature` is a fixed MD5 of the pipeline's view class names, the same for every user. It also shows integration.py already sends this value in plain text in the redirect. This disproves the comment's factual premise that the value is a secret per-pipeline CSRF token."
+      "reason": "The checker quotes base.py:132-133, which sets `pipeline.signature` to a fixed MD5 of the pipeline's view class names. It also cites integration.py:402,408, where that value is sent in plain text in the redirect. This shows from the repository's own code that the value is not the secret per-pipeline CSRF token the comment says it is."
      }
     },
     {
@@ -2039,9 +2039,1119 @@
     "chamadas": 1,
     "input": 1271,
     "cacheRead": 0,
-    "output": 300,
+    "output": 273,
     "reasoning": 0,
-    "ms": 5050
+    "ms": 6650
+   }
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S2",
+      "S3",
+      "S4",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S13",
+      "S16"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S5",
+      "S9",
+      "S12",
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S18"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5",
+      "S6",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S2",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/assets/stylesheets/desktop/topic-post.scss:291 is `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))`. It follows the same rule as the other new values (light-theme X% on $primary, dark-theme (100-X)% on $secondary): 60/40 at lines 278 and 294, 50/50 at line 34, 75/25 at line 84, and the identical 70/30 pair at lines 896 and 958.",
+       "reason": "The comment depends on line 291 being inconsistent with the other new color values. The code shows it uses the same $secondary-based complementary pattern as every other new value, and the same 70/30 pair appears elsewhere in the file, so the claimed inconsistency does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes line 291 and the other new color values in the same file. They follow the same light X% on $primary / dark (100-X)% on $secondary pattern, and the identical 70/30 pair also appears at lines 896 and 958. This directly shows the comment's claim that line 291 is inconsistent is false."
+     }
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S8",
+      "S16",
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6",
+      "S9",
+      "S15",
+      "S18"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S7",
+      "S10",
+      "S14",
+      "S19"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S5",
+      "S11",
+      "S20"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1248,
+    "cacheRead": 0,
+    "output": 119,
+    "reasoning": 0,
+    "ms": 3010
+   }
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S3",
+      "S7",
+      "S9",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S1",
+      "S5",
+      "S6",
+      "S7",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6",
+      "S8",
+      "S9",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "GroupResource.java:322 and :355 call ProfileHelper.requireFeature(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ) before calling permissions.groups().isPermissionsEnabled / setPermissionsEnabled. ProfileHelper.java:30-33 throws WebApplicationException(NOT_IMPLEMENTED) when that feature is disabled. Profile.java:56-58 defines ADMIN_FINE_GRAINED_AUTHZ as version 1 and ADMIN_FINE_GRAINED_AUTHZ_V2 as version 2 of the same feature, and only one version can be enabled at a time.",
+       "reason": "The comment says the GroupResource management-permissions endpoints hit the throwing V2 methods when V2 is active. When V2 is active, V1 ADMIN_FINE_GRAINED_AUTHZ is disabled, so requireFeature returns a 501 before any groups().* call runs. The UnsupportedOperationException path the comment describes is never reached."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes code in this repository that falsifies the comment's claim that the endpoints reach the throwing V2 methods. GroupResource.java:322 and :355 call requireFeature(ADMIN_FINE_GRAINED_AUTHZ) before any groups().* call. ProfileHelper throws a 501 when that feature is disabled. Profile.java makes V1 and V2 mutually exclusive versions of the same feature, so when V2 is active the endpoints return 501 and never call the methods that throw UnsupportedOperationException."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11",
+      "S2",
+      "S6",
+      "S7",
+      "S8",
+      "S10",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1503,
+    "cacheRead": 0,
+    "output": 198,
+    "reasoning": 0,
+    "ms": 3858
+   }
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S1",
+      "S2",
+      "S10",
+      "S11",
+      "S12",
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S3",
+      "S5",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15",
+      "S6",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S1",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S3",
+      "S6",
+      "S8",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16",
+      "S1",
+      "S8",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S14"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:86 `start = max(last_committed + 1, min_offset)`; :105 mark_committed sets `all_offsets[partition] = {o for o in ... if o > offset}`; :287-289 commit loop calls mark_committed for each committed offset.",
+       "reason": "The comment says one missing offset stops commits for the partition forever. In fact the loop commits up to the gap, mark_committed drops offsets at or below the committed one, and on the next pass min_offset is above the gap, so `start` jumps past it. A gap delays commits by at most one commit-loop pass."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes this repository's code: `start = max(last_committed + 1, min_offset)` at line 86, mark_committed at line 105 dropping offsets at or below the committed offset, and the commit loop at lines 287-289. Together these show that once commits reach the gap, the next pass starts past it. That makes the comment's factual claim false that a single missing offset stops commits for the partition forever."
+     }
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1313,
+    "cacheRead": 0,
+    "output": 146,
+    "reasoning": 0,
+    "ms": 3269
    }
   }
  },

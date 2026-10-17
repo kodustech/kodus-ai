@@ -1,0 +1,19 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#oph-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "GroupPermissionsV2.java:142\u2013153 deliberately uses all-groups permissions only when no group-specific resource exists, matching the V2 fallback logic in UserPermissionsV2.java:105\u2013118. UserResourceTypeEvaluationTest.java:101\u2013113 explicitly verifies that a specific permission overrides an all-resources grant. Adding the proposed canView() shortcut would bypass that precedence; the V1 behavior does not establish a V2 defect.",
+   "severity": "high"
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#oph-02",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "GroupResource.java:322 and :355 guard both endpoints with the V1 ADMIN_FINE_GRAINED_AUTHZ feature before calling permission-management methods. Profile.java:283\u2013306 prevents simultaneous feature versions, and ProfileHelper.java:30\u201332 returns HTTP 501 when the required feature is disabled. Consequently, V2 requests cannot reach the claimed UnsupportedOperationException.",
+   "severity": "high"
+  }
+ ]
+}

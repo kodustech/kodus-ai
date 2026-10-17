@@ -1,0 +1,12 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-04",
+   "class": "FP",
+   "subclass": "none",
+   "severity": "low",
+   "reply": "I change my classification to FP. The anyMatch validation exists, but it belongs to a test fixture that also explicitly accepts a hard-coded OTP. testRecoveryKeysSetupAndLogin verifies external-storage setup and successful login, and its helper asserts the requested code number before submitting that exact code. The permissive fixture does not invalidate those assertions, and production validation still checks only the next recovery code."
+  }
+ ]
+}

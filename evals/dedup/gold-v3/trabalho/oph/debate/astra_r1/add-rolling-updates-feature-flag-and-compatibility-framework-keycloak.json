@@ -1,0 +1,12 @@
+{
+ "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+ "items": [
+  {
+   "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#oph-01",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "I retain TP: the changed launch exercises the newly gated command, but assertNoMessage checks only stdout, and the distribution extension does not assert successful exit. The new feature-disabled branch returns an error without that stdout message, so this test passes without executing metadata generation. testCompatible supplies --file and therefore does not verify successful execution with the output option omitted. Although the weak assertion predates this PR, the PR changes this test\u2019s invocation and introduces the early-return path it fails to detect; this is a behavioral test gap, not merely tidying."
+  }
+ ]
+}

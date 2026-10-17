@@ -1,0 +1,12 @@
+{
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "items": [
+  {
+   "issueId": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+   "class": "FP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "I change my classification to FP. The base implementation already reused permission maps for 30 seconds without invalidation, so grants and newly created resources could encounter stale denials. The new denial entry is populated only after fetching permissions and checking them again, and uses the same TTL; the added explicit-denial-cache test also establishes that short-circuiting is intentional. The comment identifies a retained caching trade-off, without establishing a defect in that intended behavior."
+  }
+ ]
+}

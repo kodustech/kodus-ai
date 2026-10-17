@@ -1,0 +1,398 @@
+{
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Light-theme lightness inverted 30%->70% for .topic-meta-data h5 a in desktop/topic-post.scss:291."
+  },
+  {
+   "id": "S2",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Mobile .custom-message-length light value changed 70%->30% (inverted pair) in mobile/modal.scss:102."
+  },
+  {
+   "id": "S3",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Mobile topic-map h3 light lightness changed 20%->50%, diverging from desktop 20%/80%."
+  },
+  {
+   "id": "S4",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "desktop/user.scss .name light lightness changed 30%->50%."
+  },
+  {
+   "id": "S5",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "mobile/user.scss .name light lightness changed 30%->50%."
+  },
+  {
+   "id": "S6",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Mobile .custom-message-length light value changed 70%->30% (inverted pair) in mobile/modal.scss:102."
+  },
+  {
+   "id": "S7",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Mobile topic-map h3 light lightness changed 20%->50%, diverging from desktop 20%/80%."
+  },
+  {
+   "id": "S8",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Light-theme lightness inverted 30%->70% for .topic-meta-data h5 a in desktop/topic-post.scss:291."
+  },
+  {
+   "id": "S9",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Mobile .custom-message-length light value changed 70%->30% (inverted pair) in mobile/modal.scss:102."
+  },
+  {
+   "id": "S10",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Mobile topic-map h3 light lightness changed 20%->50%, diverging from desktop 20%/80%."
+  },
+  {
+   "id": "S11",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "desktop/user.scss .name light lightness changed 30%->50%."
+  },
+  {
+   "id": "S12",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Light-theme lightness inverted 30%->70% for .topic-meta-data h5 a in desktop/topic-post.scss:291."
+  },
+  {
+   "id": "S13",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Mobile .custom-message-length light value changed 70%->30% (inverted pair) in mobile/modal.scss:102."
+  },
+  {
+   "id": "S14",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Mobile topic-map h3 light lightness changed 20%->50%, diverging from desktop 20%/80%."
+  },
+  {
+   "id": "S15",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Mobile .custom-message-length light value changed 70%->30% (inverted pair) in mobile/modal.scss:102."
+  },
+  {
+   "id": "S16",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Light-theme lightness inverted 30%->70% for .topic-meta-data h5 a in desktop/topic-post.scss:291."
+  },
+  {
+   "id": "S17",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Light-theme lightness inverted 30%->70% for .topic-meta-data h5 a in desktop/topic-post.scss:291."
+  },
+  {
+   "id": "S18",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Mobile .custom-message-length light value changed 70%->30% (inverted pair) in mobile/modal.scss:102."
+  },
+  {
+   "id": "S19",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Mobile topic-map h3 light lightness changed 20%->50%, diverging from desktop 20%/80%."
+  },
+  {
+   "id": "S20",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "desktop/user.scss .name light lightness changed 30%->50%."
+  }
+ ],
+ "database-performance-optimizations-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Leftover Error-level debug logs with full ID lists on every cleanup batch; fix (Debug level, counts only) is the same."
+  },
+  {
+   "id": "S2",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Cleanup ticker changed from 10 minutes to 1 minute."
+  },
+  {
+   "id": "S3",
+   "match": "database-performance-optimizations-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Non-SQLite deleteByIDs binds one placeholder per ID; batch above 65535 fails on MySQL/Postgres."
+  },
+  {
+   "id": "S4",
+   "match": "database-performance-optimizations-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Quadratic fmt.Sprintf concatenation building the SQLite inline ID list."
+  },
+  {
+   "id": "S5",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Leftover Error-level debug logs with full ID lists on every cleanup batch; fix (Debug level, counts only) is the same."
+  },
+  {
+   "id": "S6",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Leftover Error-level debug logs with full ID lists on every cleanup batch; fix (Debug level, counts only) is the same."
+  },
+  {
+   "id": "S7",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Leftover Error-level debug logs with full ID lists on every cleanup batch; fix (Debug level, counts only) is the same."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Test case no longer runs max-count cleanup twice; not a golden issue."
+  },
+  {
+   "id": "S9",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Leftover Error-level debug logs with full ID lists on every cleanup batch; fix (Debug level, counts only) is the same."
+  },
+  {
+   "id": "S10",
+   "match": "database-performance-optimizations-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Non-SQLite deleteByIDs binds one placeholder per ID; batch above 65535 fails on MySQL/Postgres."
+  },
+  {
+   "id": "S11",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Cleanup ticker changed from 10 minutes to 1 minute."
+  },
+  {
+   "id": "S12",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Leftover Error-level debug logs with full ID lists on every cleanup batch; fix (Debug level, counts only) is the same."
+  }
+ ],
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+   "newGroup": null,
+   "reason": "detectProvider drops the multiple-provider error; tie at order 200 resolved by classpath, FIPS may silently use non-FIPS provider."
+  },
+  {
+   "id": "S2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#10",
+   "newGroup": null,
+   "reason": "ES384/ES512 tests reuse the default P-256 key, so larger curves are never exercised."
+  },
+  {
+   "id": "S3",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#04",
+   "newGroup": null,
+   "reason": "Abstract order() added to CryptoProvider breaks existing implementations."
+  },
+  {
+   "id": "S4",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#11",
+   "newGroup": null,
+   "reason": "Round-trip test only checks the two converters against each other, no independent verification."
+  },
+  {
+   "id": "S5",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#10",
+   "newGroup": null,
+   "reason": "ES384/ES512 tests reuse the default P-256 key, so larger curves are never exercised."
+  },
+  {
+   "id": "S6",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+   "newGroup": null,
+   "reason": "detectProvider drops the multiple-provider error; tie at order 200 resolved by classpath, FIPS may silently use non-FIPS provider."
+  },
+  {
+   "id": "S7",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Dead ASN1Encoder writes whose results are discarded in concatenatedRSToASN1DER."
+  },
+  {
+   "id": "S8",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+   "newGroup": null,
+   "reason": "detectProvider drops the multiple-provider error; tie at order 200 resolved by classpath, FIPS may silently use non-FIPS provider."
+  },
+  {
+   "id": "S9",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+   "newGroup": null,
+   "reason": "detectProvider drops the multiple-provider error; tie at order 200 resolved by classpath, FIPS may silently use non-FIPS provider."
+  },
+  {
+   "id": "S10",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+   "newGroup": null,
+   "reason": "detectProvider drops the multiple-provider error; tie at order 200 resolved by classpath, FIPS may silently use non-FIPS provider."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Federated credentials queried first in getCredential causing LDAP errors/round-trips; no golden issue covers this."
+  },
+  {
+   "id": "S2",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
+   "newGroup": null,
+   "reason": "External-storage recovery code creation leaves the old local credential active, so replaced codes still authenticate."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Plaintext recovery codes passed to user storage; not a golden issue."
+  },
+  {
+   "id": "S4",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+   "newGroup": null,
+   "reason": "Exhausted federated recovery credential removed via removeStoredCredentialById which only covers local storage."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Log message hard-codes wrong credential type string; not a golden issue."
+  },
+  {
+   "id": "S6",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+   "newGroup": null,
+   "reason": "Exhausted federated recovery credential removed via removeStoredCredentialById which only covers local storage."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Test provider accepts any code instead of the requested index; distinct from not consuming the used code (#01), fixing it would still allow replay."
+  },
+  {
+   "id": "S8",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#02",
+   "newGroup": null,
+   "reason": "getCredentials rebuilds the recovery-codes model without copying the stored id."
+  },
+  {
+   "id": "S9",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+   "newGroup": null,
+   "reason": "Test provider isValid never removes the accepted code, so codes can be replayed."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "enableSqlExpressions returns false on both branches, so the flag lookup is dead and SQL expressions are always disabled; #06 is about the duckDB variable name."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Variable enabled holds the negated flag value (inverted name); distinct from the duckDB naming issue #06."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "enableSqlExpressions returns false on both branches, so the flag lookup is dead and SQL expressions are always disabled; #06 is about the duckDB variable name."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "enableSqlExpressions returns false on both branches, so the flag lookup is dead and SQL expressions are always disabled; #06 is about the duckDB variable name."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "enableSqlExpressions returns false on both branches, so the flag lookup is dead and SQL expressions are always disabled; #06 is about the duckDB variable name."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "TablesList calls a stub that always errors, breaking parser tests; #06 is only the leftover duckDB variable name."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "enableSqlExpressions returns false on both branches, so the flag lookup is dead and SQL expressions are always disabled; #06 is about the duckDB variable name."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Substring match on event.type:error treats negated/OR queries as error-only."
+  },
+  {
+   "id": "S2",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#15",
+   "newGroup": null,
+   "reason": "Rewritten count() alias breaks lookup for transformAliasToInputFormat=1."
+  },
+  {
+   "id": "S3",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#18",
+   "newGroup": null,
+   "reason": "No-project-IDs test runs with empty allowlist so the project_ids guard is never exercised."
+  },
+  {
+   "id": "S4",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Substring match on event.type:error treats negated/OR queries as error-only."
+  },
+  {
+   "id": "S5",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#15",
+   "newGroup": null,
+   "reason": "Rewritten column alias no longer matches the original count() key the serializer looks up; fixing the alias mapping also fixes the transformAliasToInputFormat breakage."
+  },
+  {
+   "id": "S6",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Substring match on event.type:error treats negated/OR queries as error-only."
+  }
+ ]
+}

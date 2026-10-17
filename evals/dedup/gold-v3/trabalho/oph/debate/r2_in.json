@@ -1,0 +1,55 @@
+{
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "8671f860469d6d95e54df3e13f77ebc401249489",
+  "head": "62bf98939eda58f0d0a1a41a58aa6d4ecdc24dba",
+  "issues": {
+   "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#oph-01": {
+    "comentarios": [
+     {
+      "gid": "opus-api:S3",
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       58,
+       62
+      ],
+      "texto": "This test only asserts that a message is absent, so it would still pass if `--features=rolling-updates` were not honoured and the command stopped with the feature-disabled error. Add a positive assertion that the metadata command actually ran, such as `assertMessage(\"Metadata:\")` or an exit-code check of 0."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "text": "UpdateCommandDistTest.java:58-62 testMissingOptionOnSave only does assertNoMessage(\"Missing required argument\"), so it would also pass if the feature gate rejected the command. The PR changed this launch line to add ENABLE_FEATURE, but testCompatible (line 71-75) already asserts \"Metadata:\" and exit code 0 with the flag, so the feature path is covered elsewhere; this is a weak-assertion tidy-up."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The PR changes UpdateCommandDistTest.java:59 to enable rolling-updates, but line 61 only checks for absent output; CLIResult.java:92-94 checks neither errors nor exit status. UpdateCompatibilityMetadata.java:46-49 exits early when the feature is disabled, and CLITestExtension.java:112-114,149-155 performs no automatic exit-code assertion for distribution tests, so that failure would still pass this test."
+     },
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "text": "Keep TP nit. The absence-only assertion is not new: the PR only appends ENABLE_FEATURE to the @Launch at UpdateCommandDistTest.java:59; `cliResult.assertNoMessage(\"Missing required argument\")` (:61) was already the whole test, and it still checks what it was written for (output option is optional on save). The feature-gate path the comment worries about is verified elsewhere in the same PR: :73-74 `result.assertMessage(\"Metadata:\"); assertEquals(0, result.exitCode());` with ENABLE_FEATURE, plus the new testFeatureNotEnabled asserting the disabled error. Adding a positive assertion here is test tidying.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "I retain TP: the changed launch exercises the newly gated command, but assertNoMessage checks only stdout, and the distribution extension does not assert successful exit. The new feature-disabled branch returns an error without that stdout message, so this test passes without executing metadata generation. testCompatible supplies --file and therefore does not verify successful execution with the output option omitted. Although the weak assertion predates this PR, the PR changes this test\u2019s invocation and introduces the early-return path it fails to detect; this is a behavioral test gap, not merely tidying."
+     }
+    ]
+   }
+  }
+ }
+}

@@ -1,0 +1,58 @@
+{
+ "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-01": {
+  "class": "TP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede. My 'state not reachable' argument does not hold: UserCacheSession.java:315-338 (validateCache) returns a cached UserAdapter without calling LDAPStorageProvider.validate, so a cached LDAP user whose entry was removed can reach the recovery-code step (e.g. after a non-password first factor). There RecoveryAuthnCodesUtils.java:57-58 `.getFederatedCredentialsStream()` runs first and LDAPStorageProvider.java:1215-1217 `throw new IllegalStateException(\"LDAP object not found...` aborts before the `.or(() -> ...getStoredCredentialsByTypeStream(...))` local fallback, where before the PR only local storage was read. Edge-case regression: TP, medium."
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-04": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "low",
+  "concede": false,
+  "text": "Keep FP. BackwardsCompatibilityUserStorage is a testsuite fixture that simplifies validation on purpose: the same isValid accepts a hard-coded OTP at :313 `if (\"123456\".equals(otpCredential.getValue())) { return true; }`. The recovery branch :340 `generatedKeys.stream().anyMatch(key -> key.equals(input.getChallengeResponse()))` does not weaken any test: BackwardsCompatibilityUserStorageTest asserts the requested number (`assertEquals(\"Incorrect code presented to login\", expectedCode, requestedCode)`) and enters exactly `generatedRecoveryAuthnCodes.get(requestedCode)`. Production validation (RecoveryAuthnCodesCredentialProvider) is untouched; a lenient mock is not a product defect nor a test that fails to verify its behaviour."
+ },
+ "advanced-sql-analytics-framework-grafana-codex#oph-01": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "high",
+  "concede": true,
+  "text": "Concede. Disabling SQL expressions is deliberate: the PR drops github.com/scottlepp/go-duck from go.mod and replaces it with stubs, pkg/expr/sql/db.go:20-21 `func (db *DB) QueryFramesInto(...) error { return errors.New(\"not implemented\") }`, and sql_command.go now calls `db := sql.NewInMemoryDB()`. With the flag on, the query would fail at execution anyway, so reader.go:129-131 rejecting it early is intended. What remains is the dead, inverted flag lookup at reader.go:194-199 `enabled := !h.features.IsEnabledGlobally(...)` with both branches `return false`: a nit."
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#oph-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "high",
+  "concede": true,
+  "text": "Concede. GroupPermissionsV2.hasPermission (:139-148) consults the all-groups resource only when no group-specific resource exists, the same precedence UserPermissionsV2.java:107-115 already uses (`if (resource == null) { // check if there is permission for \"all-users\"`), and the users test asserts that a specific permission overrides an all-users grant. canView(group) not short-circuiting on canView() is the V2 model, not an oversight; the canViewGlobal removal in GroupsResource/GroupResource is consistent with it (V1 GroupPermissions.canView(group) :255 still checks canView() itself, so V1 is unaffected)."
+ },
+ "authzservice-improve-authz-caching-grafana-codex#oph-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "Keep FP. The stale-deny window is not new. Before the PR, getUserPermissions returned the cached map (removed lines `if cached, ok := s.permCache.Get(ctx, userPermKey); ok { ... return cached, nil }`) for shortCacheTTL, so a grant or a newly created resource was also denied until expiry, with no invalidation. The PR keeps that bound: service.go:85 `permDenialCache: newCacheWrap[bool](cache, logger, shortCacheTTL)` is the same 30s TTL as permCache, and service.go:153-154 only caches a deny after a fresh DB fetch also denied. A denial cache with the existing TTL is the intended design of an 'improve caching' PR; it never denies longer than base did, so there is no regression to report."
+ },
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#oph-02": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "high",
+  "concede": true,
+  "text": "Concede. The claim that no cascade removes the rows is false. handleNewBooking.ts:968-977 calls deleteScheduledEmailReminder(..., true) and then eventManager.reschedule, and EventManager.ts:290-297 unconditionally runs `prisma.booking.delete({ where: { id: booking.id } })` on the old booking; schema.prisma:637 `booking Booking? @relation(fields: [bookingUid], references: [uid], onDelete: Cascade)` deletes its WorkflowReminder rows. No row is left scheduled:true."
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#oph-01": {
+  "class": "TP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede. The gauge is introduced by this PR and does not measure what its name says: FixedQueuePool creates num_queues=20 workers with the same identifier (queue_consumer.py:184-194), and each emits queue_consumer.py:150-155 `metrics.gauge(\"remote_subscriptions.queue_worker.queue_depth\", self.work_queue.qsize(), tags={\"identifier\": self.identifier})`, so an empty queue overwrites a backlogged one in the same series. A backlog metric that hides backlog misleads operators; worth a comment, so TP medium rather than a log-field nit."
+ },
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#oph-01": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "medium",
+  "concede": false,
+  "text": "Keep TP nit. The absence-only assertion is not new: the PR only appends ENABLE_FEATURE to the @Launch at UpdateCommandDistTest.java:59; `cliResult.assertNoMessage(\"Missing required argument\")` (:61) was already the whole test, and it still checks what it was written for (output option is optional on save). The feature-gate path the comment worries about is verified elsewhere in the same PR: :73-74 `result.assertMessage(\"Metadata:\"); assertEquals(0, result.exitCode());` with ENABLE_FEATURE, plus the new testFeatureNotEnabled asserting the disabled error. Adding a positive assertion here is test tidying."
+ }
+}

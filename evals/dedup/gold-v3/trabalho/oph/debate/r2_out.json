@@ -1,0 +1,9 @@
+{
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#oph-01": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "medium",
+  "concede": false,
+  "text": "Keep TP nit. The test's subject is picocli option parsing: \"Missing required argument\" is a parse-time error raised before any run() executes. The PR's gate lives inside run() (UpdateCompatibilityMetadata.java:45-49: isFeatureEnabled check -> printFeatureDisabled; picocli.exit(FEATURE_DISABLED); return), i.e. after parsing, and --file is declared optional at :39-41 with no required=true. So whether or not the gate fires, assertNoMessage(\"Missing required argument\") at UpdateCommandDistTest.java:61 still verifies exactly what the test was written for: save accepts an omitted --file. The gate cannot mask the behaviour under test; it only means the test does not also check metadata generation, which it never claimed to. The PR changed only the @Launch args (:59), not the assertion; the gated path is positively verified by testFeatureNotEnabled (:46-50) and testCompatible (:73-74 Metadata: + exitCode 0). A stronger positive assertion is test tidying, not a test that fails to verify its behaviour."
+ }
+}
