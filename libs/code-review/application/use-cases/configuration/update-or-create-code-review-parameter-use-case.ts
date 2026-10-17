@@ -1,4 +1,9 @@
 import { CreateOrUpdateParametersUseCase } from '@libs/organization/application/use-cases/parameters/create-or-update-use-case';
+import { encrypt } from '@libs/common/utils/crypto';
+import {
+    CliSecretMissingError,
+    sealCliSecrets,
+} from '@libs/code-review/infrastructure/agents/custom-agent-cli/cli-secrets';
 import {
     BadRequestException,
     ForbiddenException,
@@ -213,6 +218,17 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             const codeReviewConfigs = await this.getCodeReviewConfigs(
                 organizationAndTeamData,
             );
+
+            // Custom agent CLI secrets arrive in plaintext (or as the mask,
+            // meaning "keep") and are stored only as ciphertext.
+            try {
+                sealCliSecrets(configValue, codeReviewConfigs, encrypt);
+            } catch (error) {
+                if (error instanceof CliSecretMissingError) {
+                    throw new BadRequestException(error.message);
+                }
+                throw error;
+            }
             const codeRepositories = await this.getFormattedRepositories(
                 organizationAndTeamData,
             );
@@ -562,7 +578,8 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
      */
     private async stripLinkedRepositoriesIfPlanNotAllowed(
         organizationAndTeamData: OrganizationAndTeamData,
-        configValue: CreateOrUpdateCodeReviewParameterDto['configValue'] | undefined,
+        configValue:
+            CreateOrUpdateCodeReviewParameterDto['configValue'] | undefined,
     ): Promise<void> {
         if (!configValue) return;
         const links = (configValue as { linkedRepositories?: unknown })

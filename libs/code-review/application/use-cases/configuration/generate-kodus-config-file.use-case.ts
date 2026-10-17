@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import * as yaml from 'js-yaml';
+import { maskCliSecrets } from '@libs/code-review/infrastructure/agents/custom-agent-cli/cli-secrets';
 
 import { createLogger } from '@libs/core/log/logger';
 import {
@@ -81,8 +82,7 @@ export class GenerateKodusConfigFileUseCase {
 
             if (repositoryId === 'global') {
                 config = codeReviewConfigs.configValue.configs as
-                    | KodusConfigFile
-                    | undefined;
+                    KodusConfigFile | undefined;
             } else if (repositoryId && directoryId) {
                 const repo = codeReviewConfigs.configValue.repositories?.find(
                     (repository) => repository.id === repositoryId,
@@ -126,7 +126,7 @@ export class GenerateKodusConfigFileUseCase {
         let yamlString: string;
 
         if (configObject && !this.isEmptyObject(configObject)) {
-            yamlString = yaml.dump(configObject);
+            yamlString = yaml.dump(maskCliSecrets(configObject));
         } else if (configObject && this.isEmptyObject(configObject)) {
             yamlString = '';
         } else {

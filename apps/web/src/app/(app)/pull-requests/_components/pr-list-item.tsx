@@ -1233,6 +1233,7 @@ const WARNING_KIND_LABEL: Record<ReviewWarningKind, string> = {
         "Findings dropped (file not in the pull request)",
     KODY_RULES_PARTIAL: "Some Kody Rules checks failed to run",
     VERIFY_UNAVAILABLE: "Findings not posted (verification failed to run)",
+    CLI_INSTALL_FAILED: "Custom agent ran without a CLI (install failed)",
 };
 
 /**

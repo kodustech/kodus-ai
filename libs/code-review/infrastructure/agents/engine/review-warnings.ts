@@ -43,7 +43,10 @@ export type ReviewWarningKind =
     /** Some Kody Rules checks failed to run; the others still posted. */
     | 'KODY_RULES_PARTIAL'
     /** A finding's verify run failed, so it was not published (#2171). */
-    | 'VERIFY_UNAVAILABLE';
+    | 'VERIFY_UNAVAILABLE'
+    /** A custom agent's CLI could not be installed or fenced in the sandbox,
+     *  so the agent ran without that tool. */
+    | 'CLI_INSTALL_FAILED';
 
 export type ReviewWarningReason =
     | 'small_context_window'
@@ -65,7 +68,9 @@ export type ReviewWarningReason =
     /** The prompt did not fit the single-batch budget on a large PR. */
     | 'large_pr'
     /** The verifier's model call failed (provider error, 429, abort). */
-    | 'verify_failed';
+    | 'verify_failed'
+    /** A custom agent CLI failed its install or network fence. */
+    | 'cli_install_failed';
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;
@@ -184,6 +189,21 @@ export function buildVerifyUnavailableWarning(params: {
         contextWindowTokens: 0,
         modelName: params.modelName,
         detail: `${params.agentName}: ${params.count} finding(s) not posted because their verification failed to run`,
+        agentName: params.agentName,
+    };
+}
+
+export function buildCliInstallFailedWarning(params: {
+    agentName: string;
+    cliName: string;
+    reason: string;
+}): ReviewWarning {
+    return {
+        kind: 'CLI_INSTALL_FAILED',
+        reason: 'cli_install_failed',
+        contextWindowTokens: 0,
+        modelName: '',
+        detail: `${params.agentName}: CLI "${params.cliName}" unavailable (${params.reason}); the agent ran without it`,
         agentName: params.agentName,
     };
 }
