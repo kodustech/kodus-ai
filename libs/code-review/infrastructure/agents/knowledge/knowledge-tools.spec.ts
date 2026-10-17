@@ -173,6 +173,17 @@ describe('knowledge tools', () => {
         expect(reader.reads).toContain(`${SKILL_DIR}/references/codes.md`);
     });
 
+    it('readSkillFile points SKILL.md back to loadSkill', async () => {
+        const { tool } = await setup();
+
+        const result = await tool('readSkillFile').execute(
+            { skill: 'ledger-errors', path: 'SKILL.md' },
+            ctx,
+        );
+
+        expect(result.output).toContain('loadSkill');
+    });
+
     it('readSkillFile shows a script as text and never runs it', async () => {
         const { tool } = await setup();
 

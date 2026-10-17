@@ -94,6 +94,12 @@ export function buildKnowledgeTools(
             }
             const full = resolveInsideFolder(skill.folder, input?.path ?? '');
             const relative = full?.slice(skill.folder.length + 1);
+            if (relative === 'SKILL.md') {
+                return {
+                    output: `SKILL.md is the skill itself: call loadSkill with "${skill.name}" to read it.`,
+                    isError: true,
+                };
+            }
             if (!full || !relative || !skill.files.includes(relative)) {
                 return {
                     output: `"${input?.path}" is not a file of skill "${skill.name}". Files: ${skill.files.join(', ') || '(none)'}`,
