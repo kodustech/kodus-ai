@@ -7,6 +7,7 @@ import {
     IsEnum,
     IsIn,
     IsInt,
+    IsNotEmpty,
     IsNumber,
     IsObject,
     IsOptional,
@@ -442,6 +443,7 @@ class CliToolConfigDto {
     @IsArray()
     @ArrayMinSize(1)
     @IsString({ each: true })
+    @IsNotEmpty({ each: true })
     allowedPrefixes: string[];
 
     @IsString()
@@ -450,8 +452,20 @@ class CliToolConfigDto {
     @IsBoolean()
     runsProjectCode: boolean;
 
+    /** Never set when `runsProjectCode`: project code must not see secrets. */
     @IsOptional()
     @IsArray()
+    @ValidateBy({
+        name: 'noSecretsWhenRunningProjectCode',
+        validator: {
+            validate: (secrets: unknown, args) =>
+                !(args?.object as CliToolConfigDto)?.runsProjectCode ||
+                !Array.isArray(secrets) ||
+                secrets.length === 0,
+            defaultMessage: () =>
+                'secrets are not allowed on a CLI that runs project code',
+        },
+    })
     @ValidateNested({ each: true })
     @Type(() => CliToolSecretDto)
     secrets?: CliToolSecretDto[];
@@ -552,9 +566,11 @@ class CustomAgentPresentationDto {
 
 class CustomAgentConfigDto {
     @IsString()
+    @IsNotEmpty()
     id: string;
 
     @IsString()
+    @IsNotEmpty()
     name: string;
 
     @IsBoolean()
@@ -828,6 +844,17 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @IsOptional()
     @IsArray()
     @ArrayMaxSize(CUSTOM_AGENT_LIMITS.maxAgents)
+    @ValidateBy({
+        name: 'uniqueCustomAgentIds',
+        validator: {
+            validate: (agents: unknown) => {
+                if (!Array.isArray(agents)) return true;
+                const ids = agents.map((a) => a?.id);
+                return new Set(ids).size === ids.length;
+            },
+            defaultMessage: () => 'customAgents ids must be unique',
+        },
+    })
     @ValidateNested({ each: true })
     @Type(() => CustomAgentConfigDto)
     @ApiPropertyOptional({

@@ -222,4 +222,52 @@ describe('CreateOrUpdateCodeReviewParameterDto — custom agents', () => {
         });
         expect(flat).toContain('isKnowledgeLinkTarget');
     });
+
+    it('rejects an empty allowed prefix, which would allow any command', async () => {
+        const flat = await validateConfig({
+            customAgents: [
+                agent({ tools: { cli: [cli({ allowedPrefixes: [''] })] } }),
+            ],
+        });
+        expect(flat).toContain('"property":"allowedPrefixes"');
+    });
+
+    it('rejects secrets on a CLI that runs project code', async () => {
+        const secrets = [{ env: 'LEDGER_TOKEN', ciphertext: 'c' }];
+        const flat = await validateConfig({
+            customAgents: [
+                agent({
+                    tools: {
+                        cli: [cli({ runsProjectCode: true, secrets })],
+                    },
+                }),
+            ],
+        });
+        expect(flat).toContain('"property":"secrets"');
+        expect(
+            await validateConfig({
+                customAgents: [
+                    agent({
+                        tools: {
+                            cli: [cli({ runsProjectCode: true, secrets: [] })],
+                        },
+                    }),
+                ],
+            }),
+        ).toBe('[]');
+    });
+
+    it('rejects two agents with the same id', async () => {
+        const flat = await validateConfig({
+            customAgents: [agent(), agent({ name: 'Ledger reviewer 2' })],
+        });
+        expect(flat).toContain('uniqueCustomAgentIds');
+    });
+
+    it('rejects an empty agent id', async () => {
+        const flat = await validateConfig({
+            customAgents: [agent({ id: '' })],
+        });
+        expect(flat).toContain('"property":"id"');
+    });
 });
