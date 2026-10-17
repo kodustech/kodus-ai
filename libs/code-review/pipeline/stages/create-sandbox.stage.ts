@@ -262,7 +262,11 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
         if (
             sandbox.type !== 'e2b' ||
             !this.featureGate ||
-            !agents.some((agent) => agent?.enabled && agent.tools?.cli?.length)
+            !agents.some(
+                (agent) =>
+                    (agent?.enabled || context.onlyCustomAgent) &&
+                    agent?.tools?.cli?.length,
+            )
         ) {
             return undefined;
         }
@@ -286,6 +290,7 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
             const provisioning = await provisionCustomAgentClis({
                 sandbox,
                 agents,
+                onlyCustomAgent: context.onlyCustomAgent,
                 changedFiles: (context.changedFiles ?? [])
                     .map((file) => file?.filename)
                     .filter(Boolean),

@@ -121,6 +121,29 @@ describe('provisionCustomAgentClis', () => {
         expect(sb.run).not.toHaveBeenCalled();
     });
 
+    it('installs the CLIs of a disabled agent asked for by `@kody -v`', async () => {
+        const sb = sandbox('e2b');
+        const result = await provisionCustomAgentClis({
+            sandbox: sb,
+            agents: [agent({ enabled: false })],
+            changedFiles: ['src/ledger/post.ts'],
+            onlyCustomAgent: 'ledger-reviewer',
+        });
+        expect(result.byAgentId['agent-1']).toHaveLength(1);
+    });
+
+    it('installs nothing for the other agents on a `@kody -v` run', async () => {
+        const sb = sandbox('e2b');
+        const result = await provisionCustomAgentClis({
+            sandbox: sb,
+            agents: [agent()],
+            changedFiles: ['src/ledger/post.ts'],
+            onlyCustomAgent: 'another-agent',
+        });
+        expect(result.byAgentId).toEqual({});
+        expect(sb.run).not.toHaveBeenCalled();
+    });
+
     it('installs, fences and returns the CLI with its own user and binary', async () => {
         const sb = sandbox('e2b');
         const result = await provisionCustomAgentClis({

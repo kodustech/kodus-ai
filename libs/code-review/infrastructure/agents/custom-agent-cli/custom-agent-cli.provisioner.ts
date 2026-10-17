@@ -12,7 +12,10 @@
  * egress is exactly what the allowlist exists to prevent.
  */
 import { createLogger } from '@libs/core/log/logger';
-import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
+import {
+    filesInAgentScope,
+    selectCustomAgents,
+} from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import type {
     CliToolConfig,
     CustomAgentConfig,
@@ -64,12 +67,20 @@ export function customAgentMatchesFiles(
     changedFiles: readonly string[],
 ): boolean {
     if (!agent?.enabled) return false;
-    const include = agent.scope?.include?.filter(Boolean) ?? [];
-    const exclude = agent.scope?.exclude?.filter(Boolean) ?? [];
-    return changedFiles.some(
-        (file) =>
-            (!include.length || isFileMatchingGlob(file, include)) &&
-            !(exclude.length && isFileMatchingGlob(file, exclude)),
+    return touchesAgentScope(agent, changedFiles);
+}
+
+/** At least one changed file is in the agent's scope (same rule as the
+ *  orchestrator's dispatch). */
+function touchesAgentScope(
+    agent: Pick<CustomAgentConfig, 'scope'>,
+    changedFiles: readonly string[],
+): boolean {
+    return (
+        filesInAgentScope(
+            agent,
+            changedFiles.map((filename) => ({ filename })),
+        ).length > 0
     );
 }
 
@@ -121,15 +132,22 @@ export async function provisionCustomAgentClis(params: {
     sandbox: SandboxInstance | undefined;
     agents: readonly CustomAgentConfig[] | undefined;
     changedFiles: readonly string[];
+    /** `@kody -v <slug>`: only that agent runs, enabled or not. */
+    onlyCustomAgent?: string;
 }): Promise<CustomAgentCliProvisioning> {
     const result: CustomAgentCliProvisioning = { byAgentId: {}, warnings: [] };
     const { sandbox } = params;
     if (!sandbox || sandbox.type !== 'e2b') return result;
 
-    const candidates = (params.agents ?? []).filter(
+    // The agents the orchestrator will dispatch: the same selection, so a
+    // CLI is installed exactly for an agent that runs.
+    const candidates = selectCustomAgents(
+        params.agents,
+        params.onlyCustomAgent,
+    ).filter(
         (agent) =>
             agent?.tools?.cli?.length &&
-            customAgentMatchesFiles(agent, params.changedFiles),
+            touchesAgentScope(agent, params.changedFiles),
     );
     if (!candidates.length) return result;
 

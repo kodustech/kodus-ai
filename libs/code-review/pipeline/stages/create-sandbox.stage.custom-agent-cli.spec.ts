@@ -82,6 +82,16 @@ describe('CreateSandboxStage custom agent CLIs', () => {
         expect(result.customAgentClis.byAgentId['agent-1']).toHaveLength(1);
     });
 
+    it('installs for a disabled agent asked for by `@kody -v`', async () => {
+        const { stage, context } = build({ sandboxType: 'e2b', flag: true });
+        context.codeReviewConfig.customAgents = [{ ...agent, enabled: false }];
+        context.onlyCustomAgent = 'lint';
+        await (stage as any).executeStage(context);
+        expect(provision).toHaveBeenCalledWith(
+            expect.objectContaining({ onlyCustomAgent: 'lint' }),
+        );
+    });
+
     it('never installs on the local sandbox', async () => {
         const { stage, context, featureGate } = build({
             sandboxType: 'local',
