@@ -121,6 +121,7 @@ export class AutomationCodeReviewService implements Omit<
             triggerCommentId,
             reviewDirective,
             heavy,
+            onlyCustomAgent,
             userGitId,
             signal,
         } = payload as Record<string, any>;
@@ -317,6 +318,7 @@ export class AutomationCodeReviewService implements Omit<
                     signal, // parentSignal — forwarded to pipeline context
                     reviewDirective, // @kody review <directive> steering text
                     heavy, // @kody review --heavy — extra critic pass
+                    onlyCustomAgent, // @kody -v <slug> — that custom agent only
                 );
 
             await this._handleExecutionCompletion(

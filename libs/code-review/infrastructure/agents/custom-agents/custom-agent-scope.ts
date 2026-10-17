@@ -60,24 +60,6 @@ export function selectCustomAgents(
         .slice(0, CUSTOM_AGENT_LIMITS.maxAgents);
 }
 
-/** Reserved `-v` targets that are not custom agents. */
-const RESERVED_VALIDATION_TARGETS = new Set(['business-logic']);
-
-/**
- * The agent slug in `@kody -v <slug>`, or undefined when the comment is not
- * that command (or names a built-in validation such as `business-logic`).
- */
-export function parseCustomAgentCommand(
-    text: string | undefined | null,
-): string | undefined {
-    if (!text) {
-        return undefined;
-    }
-    const firstLine = text.trim().split(/\r?\n/)[0];
-    const match = firstLine.match(/^@kody\s+-v\s+([a-z0-9][a-z0-9-]*)\s*$/i);
-    if (!match) {
-        return undefined;
-    }
-    const slug = match[1].toLowerCase();
-    return RESERVED_VALIDATION_TARGETS.has(slug) ? undefined : slug;
-}
+// The `@kody -v <slug>` parser lives with the other PR comment commands; the
+// webhook handlers read it there.
+export { parseCustomAgentCommand } from '@libs/common/utils/codeManagement/codeCommentMarkers';
