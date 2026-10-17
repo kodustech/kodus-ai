@@ -122,7 +122,7 @@ const buildUseCase = (
             .configs;
     };
 
-    return { save, eventEmitter };
+    return { save, eventEmitter, useCase, createOrUpdateParametersUseCase };
 };
 
 describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
@@ -239,5 +239,28 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
         expect(audit).not.toContain('iv:stored');
         expect(audit).not.toContain('ledger-s3cret');
         expect(audit).not.toMatch(/"ciphertext":"(?!••••)[^"]+"/);
+    });
+
+    it('logs a failed save without the submitted configuration', async () => {
+        const { save, useCase, createOrUpdateParametersUseCase } =
+            buildUseCase();
+        createOrUpdateParametersUseCase.execute.mockRejectedValueOnce(
+            new Error('write failed'),
+        );
+        const errorLog = jest
+            .spyOn((useCase as any).logger, 'error')
+            .mockImplementation(() => undefined);
+
+        await expect(
+            save({
+                customAgents: [ledgerAgent([])],
+                summary: { customInstructions: 'Internal ledger notes' },
+            }),
+        ).rejects.toThrow();
+
+        const logged = JSON.stringify(errorLog.mock.calls);
+        expect(logged).not.toContain('Every posting must balance');
+        expect(logged).not.toContain('Internal ledger notes');
+        expect(logged).toContain('customAgents');
     });
 });

@@ -1622,7 +1622,9 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             error: error,
             metadata: {
                 parametersKey: ParametersKey.CODE_REVIEW_CONFIG,
-                configValue: maskCliSecrets(body.configValue),
+                // Only which settings were sent: their values carry prompts,
+                // instructions and other content written by the customer.
+                configKeys: Object.keys(body.configValue ?? {}),
                 organizationAndTeamData: body.organizationAndTeamData,
             },
         });
