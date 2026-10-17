@@ -51,3 +51,15 @@ A test passes or fails the same on every run: unit tests, and contract tests tha
 - **Nightly "oscilou":** the confirming run passed. Nothing to do.
 - **Nightly "caiu abaixo do piso":** the message lists the PRs, the bugs lost and the commits. Re-run before and after the suspect commit; an intended trade-off recalibrates in the PR that made it.
 - **Weekly 🔴 `model` step:** confirmed below that model's floor; a per-model decision, not a reason to stop the release. **⚠️:** it did not measure: its key or quota.
+
+## Experiments
+
+Is a change to a step better than what main has? `node evals/experiment.js --step=<step>` answers it on your machine (`evals/experiment.js` `STEP_EVALS` lists each step's evals: one that says whether it is better, and the ones that must not get worse).
+
+- **The two sides:** the candidate is your branch's HEAD, committed (the run refuses uncommitted changes); the base is where the branch left `--base` (main by default). The evals must be the same on both sides: land an eval change on main first.
+- **What it runs:** every eval of the step on each side, `--runs` times (2 by default), alternating, with the same cases, model and judge.
+- **How it compares:** per case, paired. The pooled metric of each side, the difference with a 95% bootstrap interval over the cases, the cases that got worse or better, and how far each side moved between its own runs. A difference counts only when its interval clears zero.
+- **What it records:** each side's step version, a hash of the production files its evals loaded at their committed content (the same on both sides means the branch did not change this step), the files that differ, the eval and dataset versions, and what each eval reports of its environment.
+- **The decision**, fixed before the run: it ships when the main eval is better beyond its interval, or ties with fewer tokens, and no case of a guard eval got worse.
+- **Where it shows:** `experiment.json` and `rows.json` (`experiments.<step>.<eval>.<name>`) under `--out`; the quality panel shows the rows on the step's page, next to the nightly, without replacing it.
+- **A dataset is tied to what produced it.** `evals/dedup-groups` scores the dedup on suggestions from the lean finder of #1821; its numbers say how a dedup groups that finder's output, not today's.
