@@ -10,8 +10,8 @@ name: "Evals: wiring smoke (PR)"
 # suite was eventually switched off.
 #
 # Quality is not measured on PRs. It is measured by:
-#   code-review-evals-nightly.yml  DeepSeek on 30 PRs, nightly, when the engine changed
-#   code-review-evals-tier0.yml    one review per tier-0 model, Friday with the release train
+#   code-review-evals-nightly.yml  DeepSeek on the controlled set, nightly, when the engine changed
+#   code-review-evals-weekly.yml   every tier-0 model's controlled set and DeepSeek's full set, Friday with the release train
 #
 # Secrets: none. Safe for fork PRs.
 

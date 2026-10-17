@@ -7,6 +7,7 @@ const ok = {
     model: 'deepseek-v4-flash@fireworks',
     metric: { name: 'occurrence recall', value: 0.9 },
     cases: [{ id: 'a', checks: 'Flags every line that breaks "x" in r#1', hits: 3, total: 4 }],
+    tokens: { in: 1200, cacheRead: 300, cacheWrite: 0, out: 80, calls: 2, ms: 900, callMs: [400, 500] },
 };
 
 describe('evals/shared/eval-result', () => {
@@ -22,6 +23,14 @@ describe('evals/shared/eval-result', () => {
         expect(resultProblems({ ...ok, cases: [{ id: 'a', hits: 5, total: 4 }] })).toEqual(['case a: no checks sentence', 'case a: hits/total 5/4']);
         expect(resultProblems({ ...ok, cases: [] })).toEqual(['no cases']);
         expect(resultProblems({ ...ok, cases: 14 })).toEqual(['no cases']);
+    });
+
+    it('asks every result for its tokens in, cached and out, its calls and their time', () => {
+        expect(resultProblems({ ...ok, tokens: undefined })).toEqual(['missing tokens']);
+        // what the memories eval wrote before it counted calls
+        expect(resultProblems({ ...ok, tokens: { in: 10, out: 2, cacheRead: 0 } })).toEqual(['missing tokens.cacheWrite', 'missing tokens.calls', 'missing tokens.ms', 'missing tokens.callMs']);
+        // an eval with no model call records zeros
+        expect(resultProblems({ ...ok, tokens: { in: 0, cacheRead: 0, cacheWrite: 0, out: 0, calls: 0, ms: 0, callMs: [] } })).toEqual([]);
     });
 
     it('pools two runs by case id: counts summed, an item ok only when ok in both', () => {

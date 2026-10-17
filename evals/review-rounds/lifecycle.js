@@ -6,6 +6,7 @@ const { execFileSync } = require('child_process');
 const { once, instrumentVerifier, engineSnapshot, orgRoute } = require('./run');
 const { cases } = require('./cases');
 const { loadJudgeKey, JUDGE_MODEL } = require('../investigation/recall-judge');
+const { countTokens, tokensUsed } = require('../shared/eval-kit');
 require('ts-node/register/transpile-only');
 require('tsconfig-paths/register');
 const { toRecord, toRecordFromPrLevel } = require('../../libs/code-review/infrastructure/adapters/services/pr-decision-store.service.ts');
@@ -240,6 +241,7 @@ async function main() {
     // a missing key, and leaves the platform's embedder key alone.
     orgRoute();
     instrumentVerifier();
+    countTokens();
     const engine = engineSnapshot();
     const selected = sequences().filter((s) => !only || s.id === only);
     if (!selected.length) throw new Error('Unknown sequence');
@@ -249,7 +251,7 @@ async function main() {
         fs.writeFileSync(
             output,
             JSON.stringify(
-                { model, judge: JUDGE_MODEL, engine, complete, reps, runs },
+                { model, judge: JUDGE_MODEL, engine, complete, reps, runs, tokens: tokensUsed() },
                 null,
                 2,
             ),

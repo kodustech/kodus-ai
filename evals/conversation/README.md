@@ -1,7 +1,7 @@
 # conversation
 
 > - **Answers:** When a developer answers a Kody comment, does Kody's reply get the code right — a fix that landed or did not, a decline that holds or does not — in the team's language, without acting on something nobody asked for?
-> - **Runs:** nightly when the agent or its cases change (`evals/nightly-evals.js`), Friday on every tier-0 model, and on every PR in `evals/wiring-smoke.js` against the scripted model.
+> - **Runs:** nightly when the agent or its cases change (`evals/nightly-evals.js`), weekly on every tier-0 model against its floor (`evals/weekly.js`), and on every PR in `evals/wiring-smoke.js` against the scripted model.
 > - **Run it:** `node evals/conversation/run.js --model=<id> [--show]`
 > - **Gate:** `--gate` fails below the model's floor in `evals/conversation/targets.json`.
 > - **Cost:** one conversation agent run per case (9), plus one judge call each.

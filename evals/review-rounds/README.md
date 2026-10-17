@@ -1,7 +1,7 @@
 # review-rounds — what reaches the PR across rounds and sandbox failures
 
 > - **Answers:** When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, revisions linked, nothing already sent posted again?
-> - **Runs:** every engine PR on the scripted model (`evals/wiring-smoke.js`, one case); nightly on DeepSeek, `sets.nightly` of `targets.json` (`evals/nightly-evals.js`); the full set on demand.
+> - **Runs:** every engine PR on the scripted model (`evals/wiring-smoke.js`, one case); nightly on DeepSeek, `sets.nightly` of `targets.json` (`evals/nightly-evals.js`) and weekly on every tier-0 model against its floor (`evals/weekly.js`); the full set on demand.
 > - **Run it:** `node evals/review-rounds/run.js --model=deepseek-v4-flash@fireworks --byok-reasoning=none --reps=5` · `node evals/review-rounds/run.js --model=eval-fake --case=R2,K1`
 > - **Gate:** `--gate` with `--set=nightly`: the share of claims handled right against the model's floor in `targets.json`, which holds only for its set, judge and `--byok-reasoning`.
 > - **Cost:** one review per selected case in `cases.js` and rep, plus one judge call per delivered finding and claim.

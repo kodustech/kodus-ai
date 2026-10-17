@@ -30,6 +30,11 @@ const cases = CASES.slice(0, args.limit ? Number(args.limit) : undefined);
 if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
 process.env.RECALL_MODEL = MODEL;
 const Provider = require('../investigation/agent-provider');
+// Tokens and time of every model call, read like billing (evals/shared/eval-kit.js).
+// After agent-provider, so its TypeScript hook is the one loaded.
+const { countTokens, tokensUsed } = require('../shared/eval-kit');
+
+countTokens();
 
 const norm = (f) => String(f || '').replace(/\\/g, '/').replace(/^\.?\/+/, '');
 
@@ -80,7 +85,6 @@ function score(c, findings) {
 async function main() {
     const provider = new Provider({ config: { label: `memories-${MODEL}`, provider: 'tier0', model: MODEL } });
     const results = new Array(cases.length);
-    const tokens = { in: 0, out: 0, cacheRead: 0 };
     let errored = 0;
     let next = 0;
     const worker = async () => {
@@ -91,9 +95,6 @@ async function main() {
             try {
                 const r = await provider.callApi(JSON.stringify(vars), { vars }, {});
                 if (!r.output) throw new Error(String(r.error || 'the finder returned no output').slice(0, 200));
-                tokens.in += r.tokenUsage?.prompt ?? 0;
-                tokens.out += r.tokenUsage?.completion ?? 0;
-                tokens.cacheRead += r.tokenUsage?.cached ?? 0;
                 const detail = score(c, JSON.parse(r.output).findings || []);
                 results[i] = { id: c.id, checks: c.checks, hits: detail.filter((d) => d.ok).length, total: detail.length, detail };
             } catch (error) {
@@ -114,7 +115,7 @@ async function main() {
         runs: 1,
         metric: { name: 'of memory cases the review got right', value: total ? hits / total : null, floor: TARGET.floor ?? null, baseline: TARGET.observed ?? null },
         cases: results,
-        tokens,
+        tokens: tokensUsed(),
         infra: { errored, total: cases.length },
     };
     if (args.output) {

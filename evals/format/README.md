@@ -1,7 +1,7 @@
 # format
 
 > - **Answers:** Does the formatter turn each finding into prose the reader can act on — no WHAT/WHY/HOW labels, its code names kept, in the team's language and length?
-> - **Runs:** nightly when the formatter or its cases change (`evals/nightly-evals.js`), Friday on every tier-0 model, and on every PR in `evals/wiring-smoke.js` against the scripted model.
+> - **Runs:** nightly when the formatter or its cases change (`evals/nightly-evals.js`), weekly on every tier-0 model against its floor (`evals/weekly.js`), and on every PR in `evals/wiring-smoke.js` against the scripted model.
 > - **Run it:** `node evals/format/run.js --model=<id>`
 > - **Gate:** `--gate` fails below the model's floor in `evals/format/targets.json`.
 > - **Cost:** one formatter call per case (155), the batch of one review each.

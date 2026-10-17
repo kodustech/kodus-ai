@@ -1,121 +1,112 @@
-// The evals the nightly measures on a real model through its shared job
-// (code-review-evals-nightly.yml, `measure-evals`). Adding an entry is how an
-// eval gets measured every night one of its files changes. Each one:
+// How each eval runs on a real model: the nightly's shared job
+// (code-review-evals-nightly.yml, `measure-evals`) and the weekly run
+// (evals/weekly.js). Adding an entry is how an eval gets measured. Each one:
 //   - writes the shared result with --output (evals/shared/eval-result.js),
-//     its metric's floor read from its own targets file;
+//     its metric's floor read from its own targets file for the model and set;
 //   - exits 1 below that floor with --gate, 2 when it did not measure;
-//   - measures one stage of evals/stages.js, whose `nightly` is 'shared';
+//   - measures one stage of evals/stages.js, whose eval's `nightly` is 'shared';
 //   - has a wiring smoke step of the same id, whose trace lists its files.
-// The shared job measures again below the floor and pools both runs
-// (evals/shared/nightly-verdict.js), so every entry alerts the same way.
+// A run below the floor is measured again and both are pooled before anyone is
+// alerted (evals/shared/nightly-verdict.js), so every entry alerts the same way.
 //
-// The finder and kody-rules keep their own jobs.
-//
-// Every Friday, each entry also runs on every tier-0 model, on a few of its
-// cases (evals/tier0-smoke.js): the nightly asks whether a change broke it,
-// Friday whether it still runs on each model.
+// When it runs (evals/README.md):
+//   nightly  one model (DeepSeek), the controlled set, when one of its files changed
+//   weekly   every tier-0 model on the controlled set, and DeepSeek on the full set
 //
 //   id     — the eval, and its wiring smoke step
 //   stage  — the evals/stages.js stage it measures
 //   run    — the command, without --model, --output and --gate
+//   sets   — what selects each set: `controlled` (nightly and weekly), `full`
+//            (DeepSeek's weekly run), null when the controlled set is all there is
 //   files  — what changes its verdict without being loaded by the one-case run
-//   friday — what cuts `run` down to a few cases for the Friday check
 const NIGHTLY_EVALS = [
     {
         id: 'reply-addressing',
         stage: 'reply-addressing',
-        run: ['evals/reply-addressing/run.js', '--dataset=cases', '--repeats=1'],
+        run: ['evals/reply-addressing/run.js', '--repeats=1'],
+        sets: { controlled: ['--dataset=cases'], full: ['--dataset=repo-cases'] },
         files: ['evals/reply-addressing/targets.json'],
-        friday: ['--limit=16'],
     },
     {
         id: 'review-rounds',
         stage: 'review-rounds',
         // The BYOK route with reasoning off, where the reposts were measured
         // (#2097), judged by the model the floor was calibrated with.
-        run: [
-            'evals/review-rounds/run.js',
-            '--set=nightly',
-            '--reps=2',
-            '--byok-reasoning=none',
-            '--judge=gemini-3-flash-preview',
-            '--concurrency=6',
-        ],
-        files: [
-            'evals/review-rounds/targets.json',
-            'evals/review-rounds/cases.js',
-            'evals/review-rounds/prod-shapes/build.js',
-        ],
-        // A Kody Rules repost with a new site, a bug repost and a revision.
-        friday: ['--limit=3'],
-    },
-    {
-        id: 'parse',
-        stage: 'parse',
-        run: ['evals/parse/run.js'],
-        files: ['evals/parse/targets.json'],
-        // The cases that call the model: findings written as prose.
-        friday: ['--limit=4', '--prose'],
+        run: ['evals/review-rounds/run.js', '--reps=2', '--byok-reasoning=none', '--judge=gemini-3-flash-preview', '--concurrency=6'],
+        sets: { controlled: ['--set=nightly'], full: null },
+        files: ['evals/review-rounds/targets.json', 'evals/review-rounds/cases.js', 'evals/review-rounds/prod-shapes/build.js'],
     },
     {
         id: 'format',
         stage: 'format',
         run: ['evals/format/run.js'],
+        sets: { controlled: [], full: null },
         files: ['evals/format/targets.json'],
-        // One case of each configuration (five).
-        friday: ['--limit=5'],
-    },
-    {
-        id: 'pr-summary',
-        stage: 'pr-summary',
-        run: ['evals/pr-summary/run.js'],
-        files: ['evals/pr-summary/targets.json'],
-        // Every case (one call each where a summary is asked for), gated: the
-        // routing and posting contract is what died for one model in prod.
-        friday: ['--limit=15', '--gate'],
     },
     {
         id: 'conversation',
         stage: 'conversation',
         run: ['evals/conversation/run.js'],
+        sets: { controlled: [], full: null },
         files: ['evals/conversation/targets.json'],
-        friday: ['--limit=4'],
     },
     // Offers are reported beside the number, not gated (evals/thread-actions).
     ...['rule', 'memory'].map((kind) => ({
         id: `thread-${kind}`,
         stage: `thread-${kind}`,
         run: ['evals/thread-actions/run.js', `--kind=${kind}`],
+        sets: { controlled: [], full: null },
         files: ['evals/thread-actions/targets.json'],
-        // A pair asking for nothing but offers, and a pair asking Kody to act.
-        friday: ['--limit=4'],
     })),
-    // The stages after the finder, on its frozen candidates (evals/funnel):
-    // ungated until the relabeled dataset lands (#2114).
-    ...['anchoring', 'dedup', 'severity', 'verify'].map((stage) => ({
+    // The stages after the finder, on a production review's frozen findings (evals/funnel).
+    ...['dedup', 'severity', 'verify'].map((stage) => ({
         id: `funnel-${stage}`,
         stage,
         run: [`evals/funnel/${stage}/run.js`],
+        sets: { controlled: ['--set=controlled'], full: ['--set=full'] },
         files: [`evals/funnel/${stage}/targets.json`, 'evals/funnel/known-bugs.js'],
-        friday: ['--limit=4'],
     })),
     {
         id: 'business-logic',
         stage: 'business-logic',
         run: ['evals/business-logic/run.js'],
+        sets: { controlled: [], full: null },
         files: ['evals/business-logic/targets.json', 'evals/business-logic/cases.json'],
-        // A gap and a pass: the two that reach the analyzer.
-        friday: ['--limit=2'],
     },
     {
         id: 'memories',
         stage: 'memories',
         run: ['evals/memories/run.js'],
+        sets: { controlled: [], full: null },
         files: ['evals/memories/targets.json'],
-        friday: ['--limit=4'],
     },
 ];
 
+// The finder and Kody Rules keep their own nightly jobs (their own verdicts:
+// evals/investigation/confirm-gate.js, evals/kody-rules/nightly-verdict.js);
+// the weekly run measures them beside the rest. `verdict` names how a run below
+// the floor is confirmed.
+const WEEKLY_EVALS = [
+    {
+        id: 'finder-recall',
+        stage: 'finder',
+        run: ['evals/investigation/run-recall.js', '--concurrency=6'],
+        sets: { controlled: ['--set=controlled'], full: ['--set=full'] },
+        verdict: 'finder',
+    },
+    {
+        id: 'kody-rules',
+        stage: 'kody-rules',
+        run: ['evals/kody-rules/real-agent.js', '--dataset=github-cases', '--runs=1'],
+        sets: { controlled: [], full: null },
+        verdict: 'kody-rules',
+    },
+    ...NIGHTLY_EVALS.map((e) => ({ ...e, verdict: 'shared' })),
+];
+
+// The nightly's command for an entry: its run on the controlled set.
+const nightlyCommand = (e) => [...e.run, ...e.sets.controlled];
+
 const byId = (id) => NIGHTLY_EVALS.find((e) => e.id === id) || null;
 
-module.exports = { NIGHTLY_EVALS, byId };
+module.exports = { NIGHTLY_EVALS, WEEKLY_EVALS, nightlyCommand, byId };

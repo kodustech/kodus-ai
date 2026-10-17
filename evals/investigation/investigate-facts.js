@@ -60,7 +60,7 @@ function renderFindings(findings) {
 
 function buildFacts({ tonight, tonightSubmission, lastGreen, lastGreenSubmission, commits, engineChanges, targets }) {
     const comparison = lastGreen ? compareNights(tonight, lastGreen) : null;
-    const noise = nightNoise(targets, 'light', tonight.model);
+    const noise = nightNoise(targets, 'controlled', tonight.model);
     const gate = tonight.gate || {};
     const rowsNow = new Map((tonight.rows || []).map((r) => [r.caseId, r]));
     const rowsBefore = new Map((lastGreen?.rows || []).map((r) => [r.caseId, r]));
@@ -78,7 +78,7 @@ function buildFacts({ tonight, tonightSubmission, lastGreen, lastGreenSubmission
         out.push('No last green night to compare with; only the floor.');
     }
     if (noise) {
-        out.push(`Noise: one night's 30-PR mean moves about ±${Math.round(noise * 100)}pp (1σ) with no code change, from two calibration runs. A single PR can swing 50pp+ on its own; judge causes by patterns across PRs, not one PR.`);
+        out.push(`Noise: one night's mean over the controlled set moves about ±${Math.round(noise * 100)}pp (1σ) with no code change, from two calibration runs. A single PR can swing 50pp+ on its own; judge causes by patterns across PRs, not one PR.`);
     }
     const nowRows = [...rowsNow.values()].filter((r) => r.metadata);
     const beforeRows = [...rowsBefore.values()].filter((r) => r.metadata);

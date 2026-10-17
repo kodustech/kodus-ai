@@ -82,7 +82,8 @@ function preflight({ strictCoverage }) {
 
     const requiredFiles = [
         'evals/wiring-smoke.js',
-        'evals/tier0-smoke.js',
+        'evals/weekly.js',
+        'evals/stage-tests.js',
         'evals/ci-report.js',
         'evals/shared/fake-llm-server.js',
         'evals/shared/trace-loaded.js',

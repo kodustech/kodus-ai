@@ -9,7 +9,7 @@ const SOURCE = 'evals/investigation/datasets/<case>.json goldenComments';
 const DATASETS = path.join(__dirname, '..', 'investigation', 'datasets');
 
 // A case's dataset vars. Most files are named after their case; a few are not,
-// so the rest are indexed by the caseId they hold (as evals/tier0-smoke.js does).
+// so the rest are indexed by the caseId they hold.
 let index = null;
 function datasetFor(caseId) {
     const read = (file) => {

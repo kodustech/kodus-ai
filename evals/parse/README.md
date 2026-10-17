@@ -1,7 +1,7 @@
 # parse
 
 > - **Answers:** Of the findings a model writes at the end of a finder run, does the parse keep every one that can be posted?
-> - **Runs:** nightly when the parse or its recorded runs change (`evals/nightly-evals.js`), Friday on every tier-0 model (prose recovery only), and on every PR in `evals/wiring-smoke.js` against the scripted model.
+> - **Runs:** as a test (`evals/stages.js`): on every PR in `evals/wiring-smoke.js` against the scripted model (every recorded run, scripted recovery). On a real model only by hand.
 > - **Run it:** `node evals/parse/run.js --model=<id>` (the runs recorded on that model) · `--model=eval-fake` (every recorded run, scripted recovery)
 > - **Gate:** `--gate` fails below the model's floor in `evals/parse/targets.json`.
 > - **Cost:** one prose recovery call per case whose findings the structured parse lost; the rest replays recorded output. Recording runs again (`capture.js`) is one finder run per PR and model.

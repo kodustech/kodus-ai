@@ -8,6 +8,8 @@
  * Default: the PR-balanced set (8 cases / 38 goldens). Override:
  *   RECALL_SET=smoke                   → 5 high-signal cases / 25 goldens
  *   RECALL_SET=pr                      → 8 PR-gate cases / 38 goldens
+ *   RECALL_SET=controlled              → the nightly and every model's weekly run: 15 PRs
+ *   RECALL_SET=full                    → DeepSeek's weekly run: every per-PR case
  *   RECALL_ALL=1                       → every per-PR case
  *   RECALL_CASES=caseId1,caseId2,...   → an explicit subset
  */
@@ -74,15 +76,42 @@ const LIGHT_CASES = [
     'ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry',
 ];
 
+// The controlled set (evals/README.md, "When it runs"): the nightly, and every
+// tier-0 model's weekly run. Three PRs of each repository of the light set, the
+// three with the most known bugs (ties by id): 15 PRs, 61 of the light set's 95
+// bugs. The sentry fork's PR counts as sentry's.
+const CONTROLLED_CASES = [
+    'add-guest-management-functionality-to-existing-bookings-cal-com',
+    'fix-handle-collective-multiple-host-on-destinationcalendar-cal-com',
+    'oauth-credential-sync-and-app-integration-enhancements-cal-com',
+    'enhance-embed-url-handling-and-validation-system-discourse-cursor',
+    'feature-can-edit-category-host-relationships-for-embedding-discourse-cursor',
+    'feature-automatically-downsize-large-images-discourse-cursor',
+    'anonymous-add-configurable-device-limit-grafana-codex',
+    'dual-storage-architecture-grafana-codex',
+    'frontend-asset-optimization-grafana-codex',
+    'add-html-sanitizer-for-translated-message-resources-keycloak',
+    'implement-access-token-context-encoding-framework-keycloak',
+    'add-client-resource-type-and-scopes-to-authorization-schema-keycloak',
+    'span-buffer-multiprocess-enhancement-with-health-monitoring-sentry',
+    'feat-ecosystem-implement-cross-system-issue-synchronization-sentry',
+    'github-oauth-security-enhancement-sentry',
+];
+
+// Every per-PR dataset (`full`, DeepSeek's weekly run), listed by its file.
+const FULL_CASES = null;
+
 const CASE_SETS = {
     smoke: SMOKE_CASES,
     pr: PR_CASES,
     light: LIGHT_CASES,
+    controlled: CONTROLLED_CASES,
+    full: FULL_CASES,
 };
 
 module.exports = async () => {
-    const all = process.env.RECALL_ALL === '1';
     const setName = process.env.RECALL_SET || 'pr';
+    const all = process.env.RECALL_ALL === '1' || (setName in CASE_SETS && CASE_SETS[setName] === FULL_CASES);
     const selectedSet = CASE_SETS[setName] || CASE_SETS.pr;
     const only = (process.env.RECALL_CASES || '')
         .split(',')

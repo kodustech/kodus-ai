@@ -1,9 +1,9 @@
 # funnel
 
 > - **Answers:** Of the known bugs the finder finds, where in the stages after it is each one lost?
-> - **Runs:** each stage nightly (`evals/nightly-evals.js`, `funnel-<stage>`), ungated until the relabeled dataset lands; `snapshot.js` by hand.
-> - **Run it:** `node evals/funnel/<anchoring|dedup|severity|verify>/run.js --model=<id>`
-> - **Gate:** none yet: every stage's `targets.json` is empty, so the nightly reports `ungated`.
+> - **Runs:** dedup, severity and verify nightly on the controlled set (`evals/nightly-evals.js`, `funnel-<stage>`) and weekly on every tier-0 model (`evals/weekly.js`); anchoring's control pair as a test on every PR; `snapshot.js` by hand.
+> - **Run it:** `node evals/funnel/<anchoring|dedup|severity|verify>/run.js --model=<id> [--set=controlled|full]`
+> - **Gate:** each stage's `targets.json`, per set (`controlled`: the finder's controlled PRs of the snapshot; `full`: all of them) and per model.
 > - **Cost:** see each stage; `snapshot.js` is one production review per nightly PR plus judge calls.
 
 The steps after the agents' finders (verify, anchoring, dedup, severity) are
@@ -19,7 +19,7 @@ does:
   the nightly's prompt). `snapshot/<model>.json` is committed.
 - `known-bugs.js` is the one place the known bugs come from. Today it reads the
   datasets' `goldenComments`; the relabeled dataset (#2114) is a change there,
-  then a new snapshot and two calibration runs per stage set the floors.
+  then a new snapshot and two calibration runs per stage recalibrate the floors.
 - `stage-run.js` hands each step its frozen input through the step's
   production function, with what the step reads besides (changed files,
   config, routed model, the agent's runner and tools) rebuilt by production's

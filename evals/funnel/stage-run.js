@@ -6,9 +6,13 @@
 // PR's data (evals/shared/review-stage.js). Then the stage's control pair
 // (controls.js) the same way.
 //
-//   node evals/funnel/<stage>/run.js [--model=<id>] [--snapshot=<model>] [--gate] [--output=<file>] [--limit=N] [--cases=<id,id>] [--concurrency=N] [--controls]
+//   node evals/funnel/<stage>/run.js [--model=<id>] [--set=controlled|full] [--snapshot=<model>] [--gate] [--output=<file>] [--limit=N] [--cases=<id,id>] [--concurrency=N] [--controls]
 //
 // --model     the model an LLM stage runs on (the nightly model by default)
+// --set       controlled (default): the snapshot's PRs of the finder's controlled
+//             set (evals/investigation/recall-tests.js), what the nightly and every
+//             model's weekly run measure; full: every snapshot PR. Each set has
+//             its own floors (targets.json `sets.<set>.models`)
 // --snapshot  whose frozen input to read (snapshot/<id>.json)
 // --controls  the control pair only: a repository written for it, no GitHub
 //
@@ -25,6 +29,13 @@ const { evalQuestion, resultProblems } = require('../shared/eval-result');
 const { knownBugs, datasetFor } = require('./known-bugs');
 const { caseSentence } = require('./catalog');
 const { CONTROLS, CONTROL_PR, scoreControl } = require('./controls');
+const { CASE_SETS } = require('../investigation/recall-tests');
+
+// Which snapshot PRs each set reads.
+const SETS = {
+    controlled: (caseId) => CASE_SETS.controlled.includes(caseId),
+    full: () => true,
+};
 
 const parseArgs = (argv) =>
     Object.fromEntries(
@@ -54,8 +65,13 @@ async function runStage(stage) {
     const args = parseArgs(process.argv.slice(2));
     const MODEL = args.model || 'deepseek-v4-flash@fireworks';
     const SNAPSHOT = args.snapshot || 'deepseek-v4-flash@fireworks';
+    const SET = args.set || 'controlled';
+    if (!SETS[SET]) {
+        console.error(`unknown --set=${SET}: ${Object.keys(SETS).join(' or ')}`);
+        process.exit(2);
+    }
     const dir = path.join(__dirname, stage.id);
-    const TARGET = (require(path.join(dir, 'targets.json')).models || {})[MODEL] || {};
+    const TARGET = ((require(path.join(dir, 'targets.json')).sets || {})[SET]?.models || {})[MODEL] || {};
     // libs/common/utils/crypto.ts reads API_CRYPTO_KEY at import time; CI has no .env.
     if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
     process.env.RECALL_MODEL = MODEL;
@@ -69,7 +85,8 @@ async function runStage(stage) {
     // eslint-disable-next-line global-require, import/no-dynamic-require
     const snapshot = require(path.join(__dirname, 'snapshot', `${SNAPSHOT.replace(/[^\w.@-]+/g, '-')}.json`));
     const only = args.cases ? new Set(String(args.cases).split(',')) : null;
-    const cases = args.controls ? [] : snapshot.cases.filter((c) => !only || only.has(c.caseId)).slice(0, args.limit ? Number(args.limit) : undefined);
+    const inSet = SETS[SET];
+    const cases = args.controls ? [] : snapshot.cases.filter((c) => inSet(c.caseId) && (!only || only.has(c.caseId))).slice(0, args.limit ? Number(args.limit) : undefined);
     const controls = CONTROLS[stage.id] || [];
     const run = async (vars, frozen) => {
         const { result, errors } = await withCallErrors(() =>
@@ -130,6 +147,7 @@ async function runStage(stage) {
         eval: `funnel/${stage.id}`,
         question: evalQuestion(`evals/funnel/${stage.id}`),
         model: MODEL,
+        set: SET,
         snapshot: { model: snapshot.model, builtOn: snapshot.builtOn, judge: snapshot.judge },
         runs: 1,
         metric: { name: `of known bugs reaching ${stage.id} kept, and of its control checks right`, value: total ? hits / total : null, floor: TARGET.floor ?? null, baseline: TARGET.observed ?? null },

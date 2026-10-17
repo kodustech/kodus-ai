@@ -2,7 +2,7 @@
 // What the deterministic analyzers find on the security benchmark, through
 // production's RunAnalyzersStage.
 //
-//   node evals/security-analyzers/run-stage.js [--tranche=vuln|noise] [--ids=<id prefix>] [--limit=N] [--gate] [--output=<result.json>]
+//   node scripts/security-benchmark/stage/run-stage.js [--tranche=vuln|noise] [--ids=<id prefix>] [--limit=N] [--gate] [--output=<result.json>]
 //
 // Each sample is a published vulnerability (scripts/security-benchmark/
 // dataset.json): the repository at its vulnerable commit, the diff the review
@@ -20,11 +20,11 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { registerTs } = require('../shared/eval-kit');
-const { evalQuestion } = require('../shared/eval-result');
+const { registerTs } = require('../../../evals/shared/eval-kit');
+const { evalQuestion } = require('../../../evals/shared/eval-result');
 
 registerTs();
-const lib = (p) => require(path.join(__dirname, '../../libs', p));
+const lib = (p) => require(path.join(__dirname, '../../../libs', p));
 const args = Object.fromEntries(process.argv.slice(2).map((a) => { const m = a.match(/^--([^=]+)(?:=(.*))?$/); return m ? [m[1], m[2] ?? true] : [a, true]; }));
 
 function notMeasured(reason) {
@@ -34,7 +34,7 @@ function notMeasured(reason) {
 
 // The scanner production ships, at the version its image pins: another
 // version is another scanner.
-const SHIPPED = (fs.readFileSync(path.join(__dirname, '../../docker/Dockerfile'), 'utf8').match(/ARG BETTERLEAKS_VERSION=(\S+)/) || [])[1];
+const SHIPPED = (fs.readFileSync(path.join(__dirname, '../../../docker/Dockerfile'), 'utf8').match(/ARG BETTERLEAKS_VERSION=(\S+)/) || [])[1];
 let installed = '';
 try {
     installed = (String(execFileSync('betterleaks', ['--version'])).match(/(\d+\.\d+\.\d+)/) || [])[1] || '';
@@ -46,7 +46,7 @@ if (!SHIPPED || installed !== SHIPPED) notMeasured(`betterleaks ${installed} is 
 process.env.BETA_FEATURES = 'true';
 if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
 
-const dataset = require('../../scripts/security-benchmark/dataset.json');
+const dataset = require('../dataset.json');
 const TARGETS = (() => { try { return require('./targets.json').tranches || {}; } catch (e) { if (e.code === 'MODULE_NOT_FOUND') return {}; throw e; } })();
 const tranche = args.tranche || 'vuln';
 // --ids=<prefix> picks samples by id prefix (the planted secrets are `secret-*`).
@@ -159,7 +159,7 @@ async function main() {
     if (args.output) {
         const result = {
             eval: 'security-analyzers',
-            question: evalQuestion('evals/security-analyzers'),
+            question: evalQuestion('scripts/security-benchmark/stage'),
             model: 'none',
             runs: 1,
             metric: { name: tranche === 'noise' ? 'of noise samples left quiet' : 'of vulnerabilities flagged by an analyzer', value, floor: target.floor ?? null, baseline: target.observed ?? null },
@@ -172,9 +172,9 @@ async function main() {
     if (errored > samples.length * 0.05) notMeasured(`${errored} of ${samples.length} samples failed (see above)`);
     // The floor is for the whole tranche; a cut (--limit, --ids) is not judged.
     if (args.gate) {
-        if (args.limit || args.ids || target.floor == null) notMeasured(`no floor for this run (evals/security-analyzers/targets.json holds whole tranches)`);
+        if (args.limit || args.ids || target.floor == null) notMeasured(`no floor for this run (scripts/security-benchmark/stage/targets.json holds whole tranches)`);
         if (value < target.floor) {
-            console.error(`GATE FAILED: ${(value * 100).toFixed(1)}% below the ${tranche} floor in evals/security-analyzers/targets.json`);
+            console.error(`GATE FAILED: ${(value * 100).toFixed(1)}% below the ${tranche} floor in scripts/security-benchmark/stage/targets.json`);
             process.exit(1);
         }
     }

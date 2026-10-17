@@ -97,5 +97,5 @@ update its entry. The accepted, non-gating entries and their status:
 Semantic correctness of a well-formed answer — recall / false negatives. A model
 that returns a schema-valid `{codeSuggestions:[]}` on a PR that *does* have bugs
 passes every check here. That needs a golden set + a live model (the nightly and
-the Friday runs, `evals/README.md`), not a deterministic gate. The largest prod bucket (empty
+the weekly runs, `evals/README.md`), not a deterministic gate. The largest prod bucket (empty
 responses, ~27%) is likewise a model/transport question, not a shape one.

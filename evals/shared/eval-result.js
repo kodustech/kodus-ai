@@ -47,6 +47,18 @@ function resultProblems(result) {
         if (!c.checks) problems.push(`case ${c.id}: no checks sentence`);
         if (!Number.isInteger(c.hits) || !Number.isInteger(c.total) || c.hits < 0 || c.hits > c.total) problems.push(`case ${c.id}: hits/total ${c.hits}/${c.total}`);
     }
+    problems.push(...tokensProblems(result.tokens));
+    return problems;
+}
+
+// What every eval records of its model calls (evals/README.md): the tokens in,
+// read from cache, written to cache and out, the calls and their time. An eval
+// with no model call records zeros (eval-kit.js tokensUsed before any call).
+const TOKEN_FIELDS = ['in', 'cacheRead', 'cacheWrite', 'out', 'calls', 'ms'];
+function tokensProblems(tokens) {
+    if (!tokens || typeof tokens !== 'object') return ['missing tokens'];
+    const problems = TOKEN_FIELDS.filter((k) => !Number.isFinite(tokens[k])).map((k) => `missing tokens.${k}`);
+    if (!Array.isArray(tokens.callMs)) problems.push('missing tokens.callMs');
     return problems;
 }
 
@@ -110,16 +122,18 @@ function requireTs(file) {
 }
 
 // What an eval tests, without running it: every case it runs, each with one
-// sentence on what it checks. Each stage with an eval names a catalog module
-// (evals/stages.js `catalog`) exporting `catalog()`; it reads the eval's own
-// data, so the list cannot drift from the cases. Large evals return one entry
-// per group of cases.
+// sentence on what it checks. Each eval has a catalog module (its folder's
+// catalog.js, or evals/stages.js `eval.catalog`) exporting `catalog()`; it reads
+// the eval's own data, so the list cannot drift from the cases. `<file>#<name>`
+// reads the export <name>'s catalog() (one eval measuring two stages). Large
+// evals return one entry per group of cases.
 const MAX_CATALOG = 60;
 function loadCatalog(catalogPath) {
     if (!catalogPath) return null;
+    const [file, member] = String(catalogPath).split('#');
     // eslint-disable-next-line global-require, import/no-dynamic-require
-    const entries = require(path.join(ROOT, catalogPath)).catalog();
-    return entries;
+    const mod = require(path.join(ROOT, file));
+    return (member ? mod[member] : mod).catalog();
 }
 
 function catalogProblems(entries) {
@@ -142,4 +156,4 @@ function signalCatalog(entries = []) {
     return entries.slice(0, MAX_CATALOG).map((e) => ({ id: String(e.id), checks: String(e.checks).slice(0, MAX_TEXT), ...(e.group ? { group: String(e.group) } : {}), ...(Number.isInteger(e.count) ? { count: e.count } : {}) }));
 }
 
-module.exports = { evalQuestion, resultProblems, poolCases, poolTokens, signalCases, requireTs, loadCatalog, catalogProblems, signalCatalog, MAX_DETAIL, MAX_CATALOG, MAX_TEXT };
+module.exports = { evalQuestion, resultProblems, tokensProblems, poolCases, poolTokens, signalCases, requireTs, loadCatalog, catalogProblems, signalCatalog, MAX_DETAIL, MAX_CATALOG, MAX_TEXT };

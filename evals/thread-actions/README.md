@@ -1,7 +1,7 @@
 # thread-actions
 
 > - **Answers:** In a PR thread, does Kody offer the memory or Kody Rule the thread calls for, take it when the developer asks, and write nothing nobody asked for?
-> - **Runs:** nightly when the agent or its cases change (`evals/nightly-evals.js`, once per `--kind`: stages `thread-rule` and `thread-memory`), Friday on every tier-0 model, and on every PR in `evals/wiring-smoke.js` against the scripted model.
+> - **Runs:** nightly when the agent or its cases change (`evals/nightly-evals.js`, once per `--kind`: stages `thread-rule` and `thread-memory`), weekly on every tier-0 model against its floor (`evals/weekly.js`), and on every PR in `evals/wiring-smoke.js` against the scripted model.
 > - **Run it:** `node evals/thread-actions/run.js --model=<id> [--kind=rule|memory] [--show]`
 > - **Gate:** `--gate` fails below the model's floor for the `--kind` in `evals/thread-actions/targets.json`; it reads the write checks only. Offers are reported, never gated.
 > - **Cost:** one conversation agent run per case (16 in all: 10 rule, 6 memory), plus one judge call for each case that is not a request to act.

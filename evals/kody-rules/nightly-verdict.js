@@ -13,6 +13,7 @@
 //   regression   the pooled rates are below a floor, and the last measured night
 //                was not, or it got worse by more than WORSE (mentions people)
 //   still-red    below, as the last measured night already was (no mention)
+//   ungated      measured, but the model has no floor to compare with
 //   infra        a run did not measure (key, quota, crash): never a quality result
 //
 // Writes the final result (with `verdict`), the state the next night compares
@@ -64,6 +65,8 @@ function nextState(verdict, final, previous) {
 
 function decide({ first, confirm, previous }) {
     if (!measured(first)) return { verdict: 'infra', final: first || null, mention: false };
+    // A model with no calibrated floor: measured, not compared (as the shared verdict does).
+    if (!Number.isFinite(first.metric?.floor)) return { verdict: 'ungated', final: first, mention: false };
     if (!belowFloor(first)) return { verdict: 'pass', final: first, mention: false };
     if (!measured(confirm)) return { verdict: 'infra', final: first, mention: false };
     const final = pool(first, confirm);
@@ -84,6 +87,7 @@ function message(verdict, final) {
         oscillation: { status: 'success', title: '🟡 Kody Rules dipped below the floor, the second run passed', description: line },
         infra: { status: 'cancelled', title: '⚪ Kody Rules not measured', description: 'A run did not measure (key, quota or crash); see the run log. Not a quality result.' },
         pass: { status: 'success', title: '🟢 Kody Rules above the floor', description: line },
+        ungated: { status: 'success', title: '🟡 Kody Rules measured, no floor for this model', description: line },
     }[verdict];
 }
 

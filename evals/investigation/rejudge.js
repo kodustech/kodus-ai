@@ -61,7 +61,7 @@ async function main() {
     const submission = new Map(readJson(submissionFile).results.map((r) => [r.caseId, r]));
     const vars = datasetVars();
     // PRs the source run couldn't measure stay unmeasured here, so the output
-    // describes the same 30 PRs as the run it re-scores.
+    // describes the same PRs as the run it re-scores.
     const rows = (original.rows || []).filter((row) => row.status === 'infra').map((row) => ({ caseId: row.caseId, status: 'infra', reason: `infra in the source run: ${row.reason || 'unknown'}` }));
     let infraFailures = rows.length;
     const queue = (original.rows || []).filter((row) => row.status !== 'infra');

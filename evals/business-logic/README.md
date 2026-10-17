@@ -1,7 +1,7 @@
 # Business-logic validation eval
 
 > - **Answers:** Does the business-logic stage report what a PR leaves out of the Jira ticket it closes, pass a PR that does all of it, and stay quiet when it cannot read the ticket?
-> - **Runs:** nightly on one real model when a file it loads changed (`evals/nightly-evals.js`), ungated on it for now; every engine PR against the scripted model (`evals/wiring-smoke.js`).
+> - **Runs:** nightly on one real model when a file it loads changed (`evals/nightly-evals.js`), ungated on it for now; weekly on every tier-0 model (`evals/weekly.js`); every engine PR against the scripted model (`evals/wiring-smoke.js`).
 > - **Run it:** `node evals/business-logic/run.js [--model=<tier-0 id>] [--gate] [--verify]`
 > - **Gate:** `--gate` uses the per-model floor in `evals/business-logic/targets.json`; the nightly model has none until the cases can tell a broken stage from a good one (the reason is there), so it reports ungated.
 > - **Cost:** per case, the analyzer call (and the verify call with `--verify`); three cases.

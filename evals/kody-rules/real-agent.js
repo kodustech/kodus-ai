@@ -43,6 +43,8 @@ const KODY_TARGETS = (() => {
 const MODEL_TARGET = KODY_TARGETS[MODELKEY] || {};
 const OCC_MIN = +(args['occ-min'] ?? MODEL_TARGET.occMin ?? 0);
 const SPEC_MIN = +(args['spec-min'] ?? MODEL_TARGET.specMin ?? 95);
+// A model with no calibrated floor writes none (ungated), never the 0 above.
+const CALIBRATED = args['occ-min'] !== undefined || MODEL_TARGET.occMin !== undefined;
 
 const allCases = require('./' + DATASET);
 const { evalQuestion } = require('../shared/eval-result');
@@ -280,12 +282,12 @@ async function main() {
             metric: {
                 name: 'occurrence recall',
                 value: ratio(occCaught, occTotal),
-                floor: OCC_MIN / 100,
+                floor: CALIBRATED ? OCC_MIN / 100 : null,
                 baseline: observed ? observed.occ / 100 : null,
             },
             specificity: {
                 value: cleanFiles ? (cleanFiles - falseAlarmFiles) / cleanFiles : null,
-                floor: SPEC_MIN / 100,
+                floor: CALIBRATED ? SPEC_MIN / 100 : null,
                 baseline: observed ? observed.spec / 100 : null,
             },
             linePrecision: ratio(flaggedTotal - lineNoiseTotal, flaggedTotal),

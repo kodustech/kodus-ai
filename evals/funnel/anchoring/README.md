@@ -1,7 +1,7 @@
 # funnel/anchoring
 
 > - **Answers:** Of the known bugs a review's verified findings reach anchoring with, how many survive the path check and the line snap to the diff?
-> - **Runs:** nightly when anchoring or the snapshot changes (`evals/nightly-evals.js`), ungated until the relabeled dataset lands; Friday on every tier-0 model.
+> - **Runs:** its control pair as a test on every PR (`evals/wiring-smoke.js`); the snapshot's PRs by hand. No model decides here (`evals/stages.js`).
 > - **Run it:** `node evals/funnel/anchoring/run.js`
 > - **Gate:** none yet (`targets.json`): the value is reported as ungated.
 > - **Cost:** none: no model call.

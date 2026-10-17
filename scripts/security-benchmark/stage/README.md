@@ -1,9 +1,11 @@
-# Static analyzers eval
+# Static analyzers benchmark
+
+Not an eval: no model decides anything in this stage. It measures what the scanners production ships catch, and runs by hand (evals/stages.js lists the stage with its unit tests).
 
 > - **Answers:** What do the analyzers production ships flag on published vulnerabilities and planted credentials, and do they stay quiet on code that only looks dangerous?
 > - **Runs:** on demand, not scheduled: it needs the betterleaks version `docker/Dockerfile` pins, and the vuln tranche clones each advisory's repository.
-> - **Run it:** `node evals/security-analyzers/run-stage.js --tranche=vuln|noise [--gate] [--output=<result.json>]`
-> - **Gate:** `--gate` uses the per-tranche floors in `evals/security-analyzers/targets.json` (whole tranches only).
+> - **Run it:** `node scripts/security-benchmark/stage/run-stage.js --tranche=vuln|noise [--gate] [--output=<result.json>]`
+> - **Gate:** `--gate` uses the per-tranche floors in `scripts/security-benchmark/stage/targets.json` (whole tranches only).
 > - **Cost:** no model calls; one checkout and one scan per sample.
 
 It runs production's `RunAnalyzersStage` (`run-stage.js`) on each sample of

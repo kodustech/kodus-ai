@@ -1,9 +1,9 @@
 # funnel/verify
 
 > - **Answers:** Of the known bugs among the finder's candidates, how many does the verifier keep?
-> - **Runs:** nightly when the verifier or the snapshot changes (`evals/nightly-evals.js`), ungated until the relabeled dataset lands; Friday on every tier-0 model.
-> - **Run it:** `node evals/funnel/verify/run.js --model=<id>`
-> - **Gate:** none yet (`targets.json`): the value is reported as ungated.
+> - **Runs:** nightly on the controlled set when the verifier or the snapshot changes (`evals/nightly-evals.js`); weekly on every tier-0 model's controlled set and DeepSeek's full set (`evals/weekly.js`); its control pair on every PR (`evals/wiring-smoke.js`).
+> - **Run it:** `node evals/funnel/verify/run.js --model=<id> [--set=controlled|full]`
+> - **Gate:** `--gate` fails below the floor for the model and set in `targets.json` (`sets.<set>.models`); a model with none reports ungated.
 > - **Cost:** one verifier run per candidate (a second for those the evidence gate re-checks) of a PR that has a known bug among them.
 
 Runs production's verify step, `verifyFindings` (`finder.agent.ts`), on what

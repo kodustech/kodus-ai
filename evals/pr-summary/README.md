@@ -1,7 +1,7 @@
-# PR-summary eval
+# PR-summary contract test
 
 > - **Answers:** Is the PR summary generated, posted, sent to the configured model, composed as the team configured, and about what the diff does?
-> - **Runs:** nightly when the summary path or its cases change (`evals/nightly-evals.js`), Friday on every tier-0 model, and on every PR in `evals/wiring-smoke.js` against the scripted model.
+> - **Runs:** as a test (`evals/stages.js`): on every PR in `evals/wiring-smoke.js` against the scripted model, and weekly on every tier-0 model, gated (`evals/weekly.js --tests`). Not an eval yet: whether a summary is a good one is not measured.
 > - **Run it:** `node evals/pr-summary/run.js --model=<id>`
 > - **Gate:** `--gate` fails below the model's floor in `evals/pr-summary/targets.json`; a model with none is gated on the contract alone, where any failed check fails it.
 > - **Cost:** one model call per case that asks for a summary; none mocked.
@@ -87,9 +87,8 @@ network errors — "not measured", never a silent green).
 - **PR** → `code-review-evals-pr.yml` runs it against the scripted local model
   (`evals/wiring-smoke.js`): the real stage, routing and posting, no key, so a
   harness break fails the PR that caused it.
-- **Nightly** → `evals/nightly-evals.js`, on the nightly model, gated on its floor.
-- **Friday** → `code-review-evals-tier0.yml` runs it on every tier-0 model with
-  the release train (`evals/tier0-smoke.js`), so one model degrading can't hide
+- **Weekly** → `code-review-evals-weekly.yml` runs it on every tier-0 model with
+  the release train (`evals/weekly.js --tests`), so one model degrading can't hide
   behind a healthy one.
 
 ## Floors
@@ -98,7 +97,7 @@ Most checks are **binary property assertions** on the contract — routing,
 posting, composition — that hold or do not, whatever the model writes. The
 diff check (item 6) reads the model's prose, so a model is gated on it only
 with a floor of its own in `targets.json`, calibrated from runs (the nightly
-model). A model with none (the other tier-0 models on Friday) is gated on the
+model). A model with none (another tier-0 model in the weekly run) is gated on the
 contract alone, where any failed check fails it; its diff check is reported,
 not gated. Add cases to `datasets/cases.json`; keep every behaviour
 (`replace`/`concatenate`/`complement`) represented (the harness preflight

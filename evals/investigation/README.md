@@ -1,8 +1,8 @@
 # Finder recall
 
 > - **Answers:** Of a PR's known bugs, how many does the review ship? (finder-recall)
-> - **Runs:** nightly, gated (`.github/workflows/code-review-evals-nightly.yml`) · every engine PR, against the scripted model (`evals/wiring-smoke.js`) · Friday, one PR per tier-0 model (`evals/tier0-smoke.js`).
-> - **Run it:** `pnpm eval:nightly` · `node evals/investigation/run-recall.js --model=<tier-0 id> --set=light`
+> - **Runs:** nightly on the controlled set, gated (`.github/workflows/code-review-evals-nightly.yml`) · weekly on every tier-0 model's controlled set and DeepSeek's full set, each gated on its own floor (`.github/workflows/code-review-evals-weekly.yml`) · every engine PR, against the scripted model (`evals/wiring-smoke.js`).
+> - **Run it:** `pnpm eval:nightly` · `node evals/investigation/run-recall.js --model=<tier-0 id> --set=controlled`
 > - **Gate:** run mean against the floors in `evals/investigation/targets.json`, only under the judge recorded there.
 > - **Cost:** one production review per PR plus the judge on every PR in the set.
 
@@ -46,9 +46,10 @@ PR, which trip when the engine breaks rather than when recall wobbles.
 
 ## Sets and options
 
-- `--set=light` (30 PRs, the nightly) · `pr` (8) · `smoke` (5) · `--all` ·
+- `--set=controlled` (15 PRs: the nightly, and every model's weekly run) ·
+  `full` (all 50: DeepSeek's weekly run) · `light` (30) · `pr` (8) · `smoke` (5) ·
   `--cases=<id,id>`. The sets are in `recall-tests.js`; `catalog.js` names the
-  nightly's PRs.
+  controlled set's PRs. Each set has its own floors in `targets.json`.
 - `RECALL_CATEGORIES=bug,security`: the team's category toggles.
 - `RECALL_REASONING_EFFORT=<effort>`: the model through a stored BYOK config with
   that effort.
@@ -63,8 +64,9 @@ release gate), and a model not in `evals/shared/tier0-models.js`.
 
 A dataset in `datasets/` carries the PR's `benchmarkSourceUrl`, its title and
 body, and its `goldenComments`. `node evals/investigation/fetch-pr-data.js
---cases=<caseId>` records the platform data. To put it in the nightly, add it to
-the `light` set and recalibrate the floor (`evals/README.md`, rule 9).
+--cases=<caseId>` records the platform data. It joins the `full` set on its own;
+to put it in the controlled set, add it there and recalibrate every model's
+floor (`evals/README.md`, rule 9).
 
 ## The nightly's tools
 

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // Confirms a nightly that went below its floor before anyone is alerted.
 //
-// One 30-PR run can land under the floor by noise alone. When the first run
+// One run can land under the floor by noise alone. When the first run
 // fails the gate, the nightly measures the same commit again and this script
 // decides on the MEAN of the two runs: false alarms nearly vanish, and a real
 // drop still shows. It writes one combined result in run-recall's shape, so
 // the report and the investigation read it like any other night.
 //
-//   node evals/investigation/confirm-gate.js <first.json> <second.json> --out=<combined.json> [--set=light]
+//   node evals/investigation/confirm-gate.js <first.json> <second.json> --out=<combined.json> [--set=controlled]
 //
 // Exit: 0 the drop did not hold (oscillation) / 1 confirmed below the floor /
 // 2 the confirmation could not measure (infra), so nothing is confirmed.
@@ -115,7 +115,7 @@ function main() {
         console.error(`confirmation did not measure: ${reason}`);
         return 2;
     }
-    const setName = (process.argv.find((a) => a.startsWith('--set=')) || '--set=light').slice(6);
+    const setName = (process.argv.find((a) => a.startsWith('--set=')) || '--set=controlled').slice(6);
     const combined = combineRuns(first, second, (summary, rows) => evaluateGate(summary, rows, first.model, setName));
     // The confirmation scored none of the PRs the first run scored (every case
     // failed to parse, say). There is nothing to confirm WITH, and deciding on
