@@ -1,30 +1,31 @@
 ---
-title: "How to import rules from Cursor, Copilot, or Claude"
-description: "Sync your existing AI coding tool rules into Kodus so the same standards apply in your IDE and in code review."
+title: "How to use your Cursor, Copilot, or Claude instructions in code review"
+description: "Let Kody check pull requests against the instructions your team already wrote for coding agents, and keep the conventions you want enforced as Kody Rules."
 ---
 
-If you already have rules defined in Cursor, GitHub Copilot, Claude, or other AI coding tools, you can import them into Kodus so the same conventions are enforced during code review.
+If your team already keeps instructions for Cursor, GitHub Copilot, Claude or other coding agents, Kody can read them during code review and point out changes that break them.
 
 ## How it works
 
-Kodus detects rule files in your repository and syncs them as Kody Rules. Supported file formats include:
+Kody reads the instruction files that cover the files a pull request changes. Supported files include:
 
-- `.cursorrules` (Cursor)
-- `.github/copilot-instructions.md` (GitHub Copilot)
+- `.cursorrules` and `.cursor/rules/**/*.mdc` (Cursor)
+- `.github/copilot-instructions.md` and `.github/instructions/**/*.instructions.md` (GitHub Copilot)
 - `CLAUDE.md` (Claude)
-- Other AI tool configuration files
+- `AGENTS.md` and `.agents/rules/**` (agents.md convention)
+
+A change that breaks one of them is reported with the **Repo Instruction** label, quoting the instruction and the file it comes from. The files are never turned into Kody Rules, so they can't silently change your review policy.
 
 ## Setting it up
 
-1. Pick the repository in the scope picker at the top of the **Code review** group in the sidebar, open **Kody Rules**, and click **Configuration**
-2. Turn on **Auto-sync rules from repo**. The first time, Kodus asks whether to scan the repository right away (**Sync now**) or **Skip initial scan**
-3. Kodus imports the rule files it finds as Kody Rules (origin **Auto-sync**) and keeps them in sync from then on
-4. Imported rules are enforced during code review right away. To review them first, turn on **Kody knowledge approval** in the same **Configuration** sheet: imported rules then wait in the **Pending review** section until you **Approve** or **Discard** them
+1. Pick **Global** or a repository in the scope picker at the top of the **Code review** group in the sidebar, open **Kody Rules**, and click **Configuration**
+2. Turn on **Use coding-agent instructions in reviews**
+3. The next pull request reviewed in that scope is checked against the instruction files that cover its changes
 
-## Why this matters
+New workspaces are asked this during onboarding, with the list of coding-agent files found in each repository.
 
-Without syncing, your IDE and code review tools enforce different standards. A developer following Cursor's rules might still get flagged during review for something their IDE didn't catch — or vice versa.
+## Enforcing a convention on every review
 
-Importing ensures **one source of truth** for coding standards across your entire workflow.
+Coding-agent instructions are context: Kody reports a broken one only when it clearly applies to the changed lines. For a convention you want enforced like any other review rule, write it as a [Repository Rule](/en/how_to_use/code_review/configs/repository_rules) in `.kody/rules`. Rule files sync on merge, one file per rule, exactly as written.
 
-For details, see [Sync IDE Rules](/en/how_to_use/code_review/configs/rules_file_detection).
+For details, see [Coding-Agent Instructions](/en/how_to_use/code_review/configs/rules_file_detection).

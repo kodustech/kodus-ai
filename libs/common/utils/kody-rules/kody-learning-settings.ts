@@ -3,7 +3,7 @@ import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReview
 import { CodeReviewParameter } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
 
 export type KodyLearningSettings = {
-    ideRulesSyncEnabled: boolean;
+    repoInstructionsEnabled: boolean;
     kodyRulesGeneratorEnabled: boolean;
     kodyLearningExcludedReviewers: string[];
 };
@@ -14,7 +14,7 @@ type CodeReviewConfigLike =
 /**
  * Resolves the learning settings repositories actually run with: default →
  * global → repository. Directory-level values are ignored on purpose, because
- * rule generation and IDE rule-file sync both work per repository.
+ * rule generation and coding-agent instructions both work per repository.
  *
  * The defaults and the global level are merged once, so callers resolving
  * many repositories should build one resolver and reuse it.
@@ -41,7 +41,7 @@ export function createKodyLearningSettingsResolver(
         );
 
         return {
-            ideRulesSyncEnabled: resolved.ideRulesSyncEnabled === true,
+            repoInstructionsEnabled: resolved.repoInstructionsEnabled === true,
             kodyRulesGeneratorEnabled:
                 resolved.kodyRulesGeneratorEnabled === true,
             kodyLearningExcludedReviewers: Array.isArray(

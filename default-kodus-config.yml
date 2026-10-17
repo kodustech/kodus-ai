@@ -1167,7 +1167,7 @@ summary:
     customInstructions: ''
 
 # kody rules
-ideRulesSyncEnabled: false
+repoInstructionsEnabled: false # read CLAUDE.md / AGENTS.md / .cursor/rules during review; never imported as rules
 kodyRulesGeneratorEnabled: true
 kodyLearningExcludedReviewers: []
 kodyKnowledgeApproval:

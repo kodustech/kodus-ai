@@ -163,6 +163,28 @@ const STAGES = [
         },
     },
     {
+        id: 'repo-instructions',
+        name: 'Agent instructions',
+        short: "Checks the repo's coding-agent instructions",
+        group: 'The agents, side by side',
+        does: "Inside the finder, when the team turns it on: lists the CLAUDE.md, AGENTS.md, .cursor/rules and Copilot instructions that govern the changed files, reads them from the target branch, and reports a change that breaks one, quoting it.",
+        pipeline: ['AgentReviewStage'],
+        tests: [
+            {
+                kind: 'unit',
+                name: 'Which files govern the change, the read tool, the quote check',
+                specs: [
+                    'libs/code-review/infrastructure/agents/collaborators/repo-instructions.spec.ts',
+                    'libs/code-review/infrastructure/agents/adapters/repo-instruction-tool.spec.ts',
+                    'libs/code-review/infrastructure/agents/core/finder-with-verify.spec.ts',
+                ],
+            },
+            { kind: 'contract', name: "A scripted model reads the CLAUDE.md through the tool and the verifier gets it", wiring: ['repo-instructions'] },
+        ],
+        eval: null,
+        note: 'Floor calibrated per model (evals/repo-instructions/targets.json); runs by hand: pnpm eval:repo-instructions.',
+    },
+    {
         id: 'parse',
         name: 'Output parsing',
         short: "Turns the finder's output into findings",

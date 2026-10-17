@@ -3,15 +3,16 @@ title: "Fuentes Globales de Reglas"
 description: "Convierte un repositorio conectado en fuente de Kody Rules para toda la organización, aplicando un único conjunto de estándares de arquitectura y código en todos los repositorios durante la revisión."
 ---
 
-Las Fuentes Globales de Reglas te permiten apuntar Kodus a uno o más repositorios conectados e importar sus archivos de reglas como Kody Rules **globales**. A diferencia de las [Reglas de Repositorio](/es/how_to_use/code_review/configs/repository_rules) — que solo aplican al repositorio donde viven — las reglas importadas desde una fuente global aplican a **todos** los repositorios durante la revisión de código.
+Las Fuentes Globales de Reglas te permiten apuntar Kodus a uno o más repositorios conectados e importar sus archivos de Kody Rules como Kody Rules **globales**. A diferencia de las [Reglas de Repositorio](/es/how_to_use/code_review/configs/repository_rules) — que solo aplican al repositorio donde viven — las reglas importadas desde una fuente global aplican a **todos** los repositorios durante la revisión de código.
 
 Úsalo cuando un equipo mantiene sus estándares de arquitectura y código en un repositorio dedicado de "standards" y quiere que se apliquen en todas partes, sin copiar archivos de reglas a cada proyecto.
 
 ## Cómo funciona
 
 - Seleccionas repositorios conectados para que actúen como **fuentes**.
-- Kodus escanea cada repositorio fuente en busca de archivos de reglas usando los mismos patrones que la [Detección de Archivos de Reglas](/es/how_to_use/code_review/configs/rules_file_detection) (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/**`, `.kody/rules/**`, etc.).
+- Kodus escanea cada repositorio fuente en busca de archivos de Kody Rules, en las mismas ubicaciones y con la misma plantilla que las [Reglas de Repositorio](/es/how_to_use/code_review/configs/repository_rules) (`.kody/rules/**`, `rules/**/*.md`, …).
 - Cada archivo de reglas descubierto se importa al **ámbito global** y se etiqueta con el repositorio fuente del que proviene.
+- Las instrucciones escritas para agentes de código (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/**`) no se importan. Las reglas globales importadas desde ellas antes de este cambio se conservan pero ya no se actualizan; consulta [Instrucciones para Agentes de Código](/es/how_to_use/code_review/configs/rules_file_detection).
 - Durante la revisión de cualquier repositorio, estas reglas globales se aplican junto con las reglas propias de ese repositorio (sujetas a la [herencia](/es/how_to_use/code_review/configs/rules_inheritance)).
 
 <Info>
@@ -67,5 +68,5 @@ En el plan Trial, al importar, Kodus importa las **5 primeras reglas que encuent
 ## Relacionados
 
 - [Reglas de Repositorio](/es/how_to_use/code_review/configs/repository_rules) — reglas versionadas con alcance de un único repositorio.
-- [Detección de Archivos de Reglas](/es/how_to_use/code_review/configs/rules_file_detection) — los patrones de archivo que Kodus escanea.
+- [Reglas de Repositorio](/es/how_to_use/code_review/configs/repository_rules) — las ubicaciones y la plantilla de los archivos de reglas que Kodus importa.
 - [Herencia de Reglas](/es/how_to_use/code_review/configs/rules_inheritance) — cómo se combinan las reglas globales, de repositorio y de directorio durante la revisión.

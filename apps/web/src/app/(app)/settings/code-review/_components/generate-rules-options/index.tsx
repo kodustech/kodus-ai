@@ -4,17 +4,14 @@ import { Button } from "@components/ui/button";
 import { Card, CardHeader } from "@components/ui/card";
 import { InlineCode } from "@components/ui/inline-code";
 import { Link } from "@components/ui/link";
-import { magicModal } from "@components/ui/magic-modal";
 import { Section } from "@components/ui/section";
 import { Switch } from "@components/ui/switch";
 import { toast } from "@components/ui/toaster/use-toast";
 import { useAsyncAction } from "@hooks/use-async-action";
 import { useReactQueryInvalidateQueries } from "@hooks/use-invalidate-queries";
+import { useConfig } from "@providers/ConfigProvider";
 import { KODY_RULES_PATHS } from "@services/kodyRules";
-import {
-    getImportedKodyRulesCount,
-    syncIDERules,
-} from "@services/kodyRules/fetch";
+import { syncIDERules } from "@services/kodyRules/fetch";
 import { useSuspenseKodyRulesCheckSyncStatus } from "@services/kodyRules/hooks";
 import { PARAMETERS_PATHS } from "@services/parameters";
 import { createOrUpdateCodeReviewParameter } from "@services/parameters/fetch";
@@ -24,18 +21,12 @@ import {
 } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { useConfig } from "@providers/ConfigProvider";
 import { OverrideIndicator } from "src/app/(app)/settings/code-review/_components/override";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
 import { useCodeReviewConfig } from "../../../_components/context";
 import { useCodeReviewRouteParams } from "../../../_hooks";
-import {
-    DisableIdeSyncModal,
-    type DisableIdeSyncAction,
-} from "./disable-ide-sync-modal";
-import { SyncFromIDEFilesFirstTimeModal } from "./sync-from-ide-files-modal";
 import { ExcludedReviewersPicker } from "./excluded-reviewers-picker";
 
 export const GenerateRulesOptions = () => {
@@ -45,8 +36,7 @@ export const GenerateRulesOptions = () => {
     const { repositoryId } = useCodeReviewRouteParams();
     // At global level these toggles are the default every repository without
     // its own value follows. A global flip runs no one-off work: the weekly
-    // cron backfills newly enabled generators, and rule files import as
-    // they change.
+    // cron backfills newly enabled generators.
     const isGlobal = repositoryId === "global";
     const { invalidateQueries, generateQueryKey } =
         useReactQueryInvalidateQueries();
@@ -158,45 +148,13 @@ export const GenerateRulesOptions = () => {
         }
     });
 
-    const [handleIDESyncToggle, { loading: isLoadingIDESyncToggle }] =
+    const [handleAgentInstructionsToggle, { loading: isLoadingAgentToggle }] =
         useAsyncAction(async () => {
             try {
-                const newValue = !config?.ideRulesSyncEnabled?.value;
-
-                // When turning the toggle OFF, ask the user what should happen
-                // to the rules already imported from IDE files for this repo.
-                // If there are none active, fall through with the safe default
-                // ("keep") and don't bother showing the modal.
-                let ideSyncDisableAction: DisableIdeSyncAction = "keep";
-                if (newValue === false && repositoryId) {
-                    const counts = await getImportedKodyRulesCount({
-                        repositoryId,
-                        teamId,
-                    });
-
-                    if (counts.active > 0) {
-                        const picked = await magicModal.show(() => (
-                            <DisableIdeSyncModal
-                                counts={counts}
-                                isGlobal={isGlobal}
-                            />
-                        ));
-                        if (!picked) {
-                            // User cancelled — do not flip the toggle.
-                            return;
-                        }
-                        ideSyncDisableAction =
-                            picked as DisableIdeSyncAction;
-                    }
-                }
+                const newValue = !config?.repoInstructionsEnabled?.value;
 
                 const mutationResult = await createOrUpdateCodeReviewParameter(
-                    {
-                        ideRulesSyncEnabled: newValue,
-                        ...(newValue === false && {
-                            ideSyncDisableAction,
-                        }),
-                    },
+                    { repoInstructionsEnabled: newValue },
                     teamId,
                     repositoryId,
                 );
@@ -222,13 +180,6 @@ export const GenerateRulesOptions = () => {
 
                 invalidateQueries({
                     queryKey: generateQueryKey(
-                        KODY_RULES_PATHS.CHECK_SYNC_STATUS,
-                        { params: { teamId, repositoryId } },
-                    ),
-                });
-
-                invalidateQueries({
-                    queryKey: generateQueryKey(
                         PARAMETERS_PATHS.GET_CODE_REVIEW_PARAMETER,
                         {
                             params: { teamId },
@@ -236,42 +187,7 @@ export const GenerateRulesOptions = () => {
                     ),
                 });
 
-                // Toggle off → backend may have flipped imported rules to
-                // DELETED or PAUSED. The Kody Rules tab caches its rule
-                // list separately, so without these invalidations the
-                // user sees stale rows until they manually refresh.
-                invalidateQueries({
-                    queryKey: generateQueryKey(
-                        KODY_RULES_PATHS.FIND_BY_ORGANIZATION_ID_AND_FILTER,
-                        { params: { repositoryId } },
-                    ),
-                });
-                invalidateQueries({
-                    queryKey: generateQueryKey(
-                        KODY_RULES_PATHS.GET_INHERITED_RULES,
-                        { params: { teamId, repositoryId } },
-                    ),
-                });
-                invalidateQueries({
-                    queryKey: generateQueryKey(
-                        KODY_RULES_PATHS.COUNT_IMPORTED_KODY_RULES,
-                        { params: { repositoryId } },
-                    ),
-                });
-
                 toast({ description: "Settings saved", variant: "success" });
-
-                if (
-                    !isGlobal &&
-                    syncStatus.ideRulesSyncEnabledFirstTime &&
-                    newValue
-                ) {
-                    const response = await magicModal.show(() => (
-                        <SyncFromIDEFilesFirstTimeModal />
-                    ));
-
-                    if (response) syncIDERules({ teamId, repositoryId });
-                }
             } catch (error) {
                 console.error("Error saving settings:", error);
 
@@ -284,10 +200,32 @@ export const GenerateRulesOptions = () => {
             }
         });
 
-    const enabledCount = [
-        config?.kodyRulesGeneratorEnabled?.value,
-        config?.ideRulesSyncEnabled?.value,
-    ].filter(Boolean).length;
+    const [handleImportRuleFiles, { loading: isImportingRuleFiles }] =
+        useAsyncAction(async () => {
+            try {
+                await syncIDERules({ teamId, repositoryId });
+                toast({
+                    variant: "info",
+                    title: "Importing rule files",
+                    description:
+                        "Kody is reading this repository's .kody/rules files. Imported rules will appear on this page in a minute.",
+                });
+                invalidateQueries({
+                    queryKey: generateQueryKey(
+                        KODY_RULES_PATHS.FIND_BY_ORGANIZATION_ID_AND_FILTER,
+                        { params: { repositoryId } },
+                    ),
+                });
+            } catch (error) {
+                console.error("Error importing rule files:", error);
+                toast({
+                    title: "Error",
+                    description:
+                        "We couldn't start the import. Please try again.",
+                    variant: "danger",
+                });
+            }
+        });
 
     return (
         <div className="flex flex-col gap-2">
@@ -296,7 +234,7 @@ export const GenerateRulesOptions = () => {
                 variant="helper"
                 className="w-full justify-between p-0"
                 disabled={!canEdit}
-                onClick={() => handleIDESyncToggle()}>
+                onClick={() => handleAgentInstructionsToggle()}>
                 <Card color="none" className="w-full">
                     <CardHeader>
                         <div className="flex items-center justify-between gap-20">
@@ -304,19 +242,20 @@ export const GenerateRulesOptions = () => {
                                 <Section.Header>
                                     <div className="flex items-center gap-2">
                                         <Section.Title>
-                                            Auto-sync rules from repo
+                                            Use coding-agent instructions in
+                                            reviews
                                         </Section.Title>
-                                        {config?.ideRulesSyncEnabled && (
+                                        {config?.repoInstructionsEnabled && (
                                             <OverrideIndicator
                                                 initialState={
-                                                    config.ideRulesSyncEnabled
+                                                    config.repoInstructionsEnabled
                                                 }
                                                 currentValue={
-                                                    config.ideRulesSyncEnabled
+                                                    config.repoInstructionsEnabled
                                                         .value
                                                 }
                                                 handleRevert={
-                                                    handleIDESyncToggle
+                                                    handleAgentInstructionsToggle
                                                 }
                                             />
                                         )}
@@ -325,33 +264,25 @@ export const GenerateRulesOptions = () => {
 
                                 <Section.Content>
                                     <Section.Description>
-                                        When enabled, Kody will automatically
-                                        import rule files{" "}
+                                        Kody reads the files your team writes
+                                        for coding agents{" "}
                                         <InlineCode className="bg-card-lv1">
-                                            (.cursorrules, CLAUDE.md, etc...)
+                                            (CLAUDE.md, AGENTS.md,
+                                            .cursor/rules)
                                         </InlineCode>{" "}
-                                        {isGlobal ? (
-                                            <>
-                                                found in each repository as that
-                                                repository&apos;s rules, and
-                                                keep them in sync. This is the
-                                                default for every repository
-                                                that doesn&apos;t set its own.
-                                            </>
-                                        ) : (
-                                            <>
-                                                found in this repository and
-                                                keep them in sync.
-                                            </>
-                                        )}
+                                        that cover the changed files, and points
+                                        out changes that break what they say.
+                                        They are never turned into Kody Rules.
+                                        {isGlobal &&
+                                            " This is the default for every repository that doesn't set its own."}
                                     </Section.Description>
                                 </Section.Content>
                             </Section.Root>
 
                             <Switch
                                 decorative
-                                loading={isLoadingIDESyncToggle}
-                                checked={config?.ideRulesSyncEnabled?.value}
+                                loading={isLoadingAgentToggle}
+                                checked={config?.repoInstructionsEnabled?.value}
                             />
                         </div>
                     </CardHeader>
@@ -360,10 +291,23 @@ export const GenerateRulesOptions = () => {
 
             <span className="text-text-secondary -mt-1 mb-2 ml-2 text-xs">
                 <span>
-                    For a detailed list of rule files that can be scanned,{" "}
+                    Rule files in{" "}
+                    <InlineCode className="bg-card-lv1">.kody/rules</InlineCode>{" "}
+                    are always kept in sync, whatever this setting.{" "}
                 </span>
-                <Link href={cfg.ruleFilesDocs || ""}>check the docs</Link>
-                .
+                <Link href={cfg.ruleFilesDocs || ""}>Check the docs</Link>
+                {!isGlobal && canEdit && (
+                    <>
+                        {" · "}
+                        <button
+                            type="button"
+                            className="text-primary-light hover:underline disabled:opacity-50"
+                            disabled={isImportingRuleFiles}
+                            onClick={() => handleImportRuleFiles()}>
+                            Import rule files now
+                        </button>
+                    </>
+                )}
             </span>
 
             <Button

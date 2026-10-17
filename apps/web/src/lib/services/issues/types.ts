@@ -13,7 +13,8 @@ export type IssueCategory =
     | "documentation_and_comments"
     | "kody_rules"
     | "breaking_changes"
-    | "deterministic";
+    | "deterministic"
+    | "repo_instruction";
 
 export type IssueListItem = {
     createdAt: string;

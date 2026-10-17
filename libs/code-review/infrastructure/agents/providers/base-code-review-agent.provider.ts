@@ -23,6 +23,7 @@ import {
 import {
     buildSystemPrompt as buildSystemPromptFor,
     buildUserPrompt as buildUserPromptFor,
+    listsRepoInstructions,
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
@@ -38,6 +39,7 @@ import {
     type ReviewAgentInput,
     type ReviewAgentOutput,
     type AgentProgressEvent,
+    type ReviewFindingLabel,
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { CoverageTier } from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
 import {
@@ -112,7 +114,7 @@ export abstract class BaseCodeReviewAgentProvider {
 
     protected getAllowedSuggestionLabels(
         _input: ReviewAgentInput,
-    ): Array<'bug' | 'security' | 'performance'> {
+    ): ReviewFindingLabel[] {
         const category = this.getCategoryLabel();
         if (
             category === 'bug' ||
@@ -593,6 +595,16 @@ export abstract class BaseCodeReviewAgentProvider {
                     // built field-by-field, so without this line the verifier
                     // never sees prior-round decisions.
                     previousDecisions: input.previousDecisions,
+                    // Same reason: the verifier judges repo_instruction
+                    // findings against these.
+                    repoInstructions: input.repoInstructions,
+                    // The finder reads the listed files through
+                    // readRepoInstruction; only an agent whose prompt lists
+                    // them gets it.
+                    listsRepoInstructions: listsRepoInstructions(
+                        input.repoInstructions,
+                        this.getAllowedSuggestionLabels(input),
+                    ),
                     // HEAVY opt-in (`--heavy`) — forwarded explicitly, same reason
                     // as skipHeavyPasses above: loopParams is built field-by-field,
                     // so without this line the resample passes never run.

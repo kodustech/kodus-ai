@@ -70,6 +70,7 @@ function createMocks() {
 
     const codeManagementService = {
         getTypeIntegration: jest.fn().mockResolvedValue(null),
+        getDefaultBranch: jest.fn().mockResolvedValue('develop'),
     };
 
     const useCase = new ExecuteCliReviewUseCase(
@@ -193,6 +194,66 @@ describe('ExecuteCliReviewUseCase', () => {
                     { remote: 'https://gitlab.acme.com/group/repo.git' },
                     false,
                 ),
+            ).resolves.toBeUndefined();
+        });
+    });
+
+    describe('resolveInstructionsBaseRef', () => {
+        const org = { organizationId: 'org-1', teamId: 'team-1' };
+        const resolve = (
+            useCase: any,
+            config: any,
+            repoId: string,
+            isTrialMode = false,
+        ) =>
+            useCase.resolveInstructionsBaseRef(
+                org,
+                config,
+                { id: repoId, name: 'api' },
+                isTrialMode,
+            );
+
+        it('asks the git host nothing for anonymous trial traffic', async () => {
+            const { useCase, codeManagementService } = createMocks();
+
+            await expect(
+                resolve(useCase, { repoInstructionsEnabled: true }, 'repo-1', true),
+            ).resolves.toBeUndefined();
+            expect(codeManagementService.getDefaultBranch).not.toHaveBeenCalled();
+        });
+
+        it("reads the repository's real default branch when instructions are on", async () => {
+            const { useCase, codeManagementService } = createMocks();
+
+            await expect(
+                resolve(useCase, { repoInstructionsEnabled: true }, 'repo-1'),
+            ).resolves.toBe('develop');
+            expect(codeManagementService.getDefaultBranch).toHaveBeenCalledWith({
+                organizationAndTeamData: org,
+                repository: { id: 'repo-1', name: 'api' },
+            });
+        });
+
+        it('asks the git host nothing when instructions are off or the repository is unknown', async () => {
+            const { useCase, codeManagementService } = createMocks();
+
+            await expect(
+                resolve(useCase, { repoInstructionsEnabled: false }, 'repo-1'),
+            ).resolves.toBeUndefined();
+            await expect(
+                resolve(useCase, { repoInstructionsEnabled: true }, 'global'),
+            ).resolves.toBeUndefined();
+            expect(codeManagementService.getDefaultBranch).not.toHaveBeenCalled();
+        });
+
+        it('gives no branch when the lookup fails, so the review skips them and says why', async () => {
+            const { useCase, codeManagementService } = createMocks();
+            codeManagementService.getDefaultBranch.mockRejectedValue(
+                new Error('404'),
+            );
+
+            await expect(
+                resolve(useCase, { repoInstructionsEnabled: true }, 'repo-1'),
             ).resolves.toBeUndefined();
         });
     });
@@ -518,6 +579,41 @@ describe('ExecuteCliReviewUseCase', () => {
                 kodyRulesValidationService.filterKodyRules,
             ).toHaveBeenCalledWith([globalRule, repoRule], '123');
         });
+
+        it.each([
+            ['the repository opted in', {}, { repoInstructionsEnabled: true }, true],
+            ['the repository opted out under a global on', { repoInstructionsEnabled: true }, { repoInstructionsEnabled: false }, false],
+            ['only the global level opted in', { repoInstructionsEnabled: true }, {}, true],
+        ])(
+            'resolves coding-agent instructions per repository like PR reviews: %s',
+            async (_label, globalConfigs, repoConfigs, expected) => {
+                const { useCase, parametersService, kodyRulesService } =
+                    createMocks();
+                parametersService.findByKey.mockResolvedValue({
+                    toObject: () => ({
+                        configValue: {
+                            configs: globalConfigs,
+                            repositories: [
+                                {
+                                    id: '123',
+                                    name: 'my-repo',
+                                    http_url: 'https://github.com/org/my-repo',
+                                    configs: repoConfigs,
+                                },
+                            ],
+                        },
+                    }),
+                });
+                kodyRulesService.findByOrganizationId.mockResolvedValue(null);
+
+                const result = await (useCase as any).loadUserConfigWithRules(
+                    orgAndTeam,
+                    { remote: 'https://github.com/org/my-repo.git' },
+                );
+
+                expect(result.config.repoInstructionsEnabled).toBe(expected);
+            },
+        );
 
         it('should use "global" repositoryId when no git context', async () => {
             const {

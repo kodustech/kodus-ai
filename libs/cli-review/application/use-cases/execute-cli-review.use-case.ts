@@ -37,6 +37,7 @@ import {
 } from '@libs/automation/domain/teamAutomation/contracts/team-automation.service';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { deepMerge } from '@libs/common/utils/deep';
+import { resolveKodyLearningSettings } from '@libs/common/utils/kody-rules/kody-learning-settings';
 import {
     IKodyRulesService,
     KODY_RULES_SERVICE_TOKEN,
@@ -201,6 +202,13 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 isTrialMode,
             );
 
+            const instructionsBaseRef = await this.resolveInstructionsBaseRef(
+                organizationAndTeamData,
+                effectiveConfig,
+                { id: resolvedRepoId, name: resolvedRepoName },
+                isTrialMode,
+            );
+
             const context: CliReviewPipelineContext = {
                 // CLI-specific fields
                 isFastMode,
@@ -239,7 +247,14 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                     title: 'CLI Review',
                     base: {
                         repo: { fullName: 'cli/cli-review' },
-                        ref: 'main',
+                        // With instructions on, an unresolved branch stays
+                        // unknown so the review skips them and logs why,
+                        // instead of reading another branch's files.
+                        ref:
+                            instructionsBaseRef ??
+                            (effectiveConfig?.repoInstructionsEnabled
+                                ? undefined
+                                : 'main'),
                     },
                     repository: {} as any,
                     isDraft: false,
@@ -375,6 +390,49 @@ export class ExecuteCliReviewUseCase implements IUseCase {
      * including kody rules resolved for the repository matched by git remote.
      */
     /**
+     * The branch the review reads coding-agent instructions from. A CLI review
+     * has no pull request, so it is the repository's default branch, asked of
+     * the git host; `undefined` (instructions skipped, with the stage's log)
+     * when the setting is off, the repository is unknown or the lookup fails.
+     */
+    private async resolveInstructionsBaseRef(
+        organizationAndTeamData: OrganizationAndTeamData,
+        config: { repoInstructionsEnabled?: boolean } | undefined,
+        repository: { id: string; name?: string | null },
+        isTrialMode?: boolean,
+    ): Promise<string | undefined> {
+        if (
+            config?.repoInstructionsEnabled !== true ||
+            isTrialMode ||
+            !repository.id ||
+            repository.id === 'global'
+        ) {
+            return undefined;
+        }
+
+        try {
+            return (
+                (await this.codeManagementService.getDefaultBranch({
+                    organizationAndTeamData,
+                    repository: { id: repository.id, name: repository.name },
+                })) || undefined
+            );
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not resolve the default branch for coding-agent instructions in the CLI review',
+                context: ExecuteCliReviewUseCase.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository.id,
+                },
+            });
+            return undefined;
+        }
+    }
+
+    /**
      * Platform backing this CLI review.
      *
      * The CLI infers it from the remote's hostname, which only works for the
@@ -507,6 +565,12 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                             : 'en-US',
                     kodyRules: standardRules,
                     kodyMemoryRules: memoryRules,
+                    // Resolved default → global → repository, as PR reviews
+                    // do; the rest of this config is global only.
+                    repoInstructionsEnabled: resolveKodyLearningSettings(
+                        paramObj.configValue,
+                        repositoryId,
+                    ).repoInstructionsEnabled,
                 } as any as CodeReviewConfig,
                 repositoryId,
                 repositoryName,

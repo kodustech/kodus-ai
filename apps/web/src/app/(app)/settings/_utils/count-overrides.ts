@@ -31,12 +31,11 @@ const CODE_REVIEW_ROUTE_OVERRIDE_PATH_PREFIXES: Record<string, string[]> = {
     "output": ["v2PromptOverrides.generation", "summary"],
     "pr-summary": ["summary"],
     "kody-rules": [
-        // `ideRulesSyncEnabled` is intentionally NOT counted: it's an
-        // import action toggle ("am I auto-syncing right now?"), not a
-        // rule-shaping configuration. Counting it as an override made
-        // the Kody Rules nav badge show "1" on repos that hadn't actually
-        // customised any rule policy, which read as "1 custom rule" to
-        // users.
+        // `repoInstructionsEnabled` is intentionally NOT counted: it says
+        // whether reviews read the repo's coding-agent files, not how rules
+        // behave. Counting it made the Kody Rules nav badge show "1" on
+        // repos that hadn't customised any rule policy, which read as
+        // "1 custom rule" to users.
         "kodyKnowledgeApproval",
         "kodyRulesGeneratorEnabled",
         "kodyLearningExcludedReviewers",

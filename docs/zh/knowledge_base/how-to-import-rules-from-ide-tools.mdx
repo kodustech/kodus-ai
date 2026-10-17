@@ -1,30 +1,31 @@
 ---
-title: "如何从 Cursor、Copilot 或 Claude 导入规则"
-description: "将现有 AI 编码工具规则同步到 Kodus，使相同的标准在 IDE 和代码审查中都得到执行。"
+title: "如何在代码审查中使用您的 Cursor、Copilot 或 Claude 指令"
+description: "让 Kody 根据团队已经为编码代理编写的指令检查拉取请求，并把想要强制执行的约定保留为 Kody 规则。"
 ---
 
-如果您已经在 Cursor、GitHub Copilot、Claude 或其他 AI 编码工具中定义了规则，可以将它们导入 Kodus，使相同的约定在代码审查中得到执行。
+如果您的团队已经为 Cursor、GitHub Copilot、Claude 或其他编码代理编写了指令，Kody 可以在代码审查期间读取它们，并指出违反这些指令的更改。
 
 ## 工作原理
 
-Kodus 检测代码库中的规则文件并将其同步为 Kody 规则。支持的文件格式包括：
+Kody 读取覆盖拉取请求所更改文件的指令文件。支持的文件包括：
 
-- `.cursorrules`（Cursor）
-- `.github/copilot-instructions.md`（GitHub Copilot）
+- `.cursorrules` 和 `.cursor/rules/**/*.mdc`（Cursor）
+- `.github/copilot-instructions.md` 和 `.github/instructions/**/*.instructions.md`（GitHub Copilot）
 - `CLAUDE.md`（Claude）
-- 其他 AI 工具配置文件
+- `AGENTS.md` 和 `.agents/rules/**`（agents.md 约定）
+
+违反其中某条指令的更改会以 **Repo Instruction** 标签报告，并引用该指令及其所在文件。这些文件从不会变成 Kody 规则，因此不会悄悄改变您的审查策略。
 
 ## 设置
 
-1. 在侧边栏 **Code review** 分组顶部的范围选择器中选择代码库，打开 **Kody Rules**，然后点击 **Configuration**
-2. 开启 **Auto-sync rules from repo**。首次开启时，Kodus 会询问是立即扫描代码库（**Sync now**）还是 **Skip initial scan**
-3. Kodus 将找到的规则文件导入为 Kody 规则（来源为 **Auto-sync**），并从此保持同步
-4. 导入的规则会立即在代码审查期间执行。如果想先审查，请在同一个 **Configuration** 面板中开启 **Kody knowledge approval**：导入的规则随后会在 **Pending review** 部分等待，直到您 **Approve** 或 **Discard** 它们
+1. 在侧边栏 **Code review** 分组顶部的范围选择器中选择 **Global** 或某个代码库，打开 **Kody Rules**，然后点击 **Configuration**
+2. 开启 **Use coding-agent instructions in reviews**
+3. 该范围内下一个被审查的拉取请求会根据覆盖其更改的指令文件进行检查
 
-## 为什么这很重要
+新的工作区会在入门引导中被询问此项，并附上在每个代码库中找到的编码代理文件列表。
 
-如果不同步，您的 IDE 和代码审查工具会执行不同的标准。开发者遵循 Cursor 的规则可能仍然在审查期间被标记 — 反之亦然。
+## 在每次审查中强制执行某个约定
 
-导入确保整个工作流中**统一的编码标准来源**。
+编码代理指令只是上下文：只有当某条指令明确适用于被更改的行时，Kody 才会报告违反情况。对于希望像其他审查规则一样强制执行的约定，请在 `.kody/rules` 中把它写成[代码库规则](/zh/how_to_use/code_review/configs/repository_rules)。规则文件在合并时同步，每个文件一条规则，完全按原样导入。
 
-更多详情，请参阅[同步 IDE 规则](/zh/how_to_use/code_review/configs/rules_file_detection)。
+更多详情，请参阅[编码代理指令](/zh/how_to_use/code_review/configs/rules_file_detection)。

@@ -4,27 +4,28 @@ description: "Create custom Kody Rules directly in your repository using markdow
 ---
 
 <Info>
-Repository Rules use the same auto-sync mechanism as IDE rule file detection. Enable **Auto-sync rules from repo** (on **Code review → Kody Rules** at repository scope, under **Configuration**) to activate both features. See <a href="/en/how_to_use/code_review/configs/rules_file_detection">Rules File Detection</a> for setup.
+Repository Rules are always kept in sync: there is no setting to turn on. They are the only files in a repository that become Kody Rules. Instructions written for coding agents (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules`) are handled separately, see <a href="/en/how_to_use/code_review/configs/rules_file_detection">Coding-Agent Instructions</a>.
 </Info>
 
 ## How to Use
 You can create custom Kody Rules directly in your repository by placing structured markdown files in specific directories. This allows you to version control your rules alongside your code and share them across your team.
 
 <Info>
-Repository rule files are imported **verbatim** — no LLM conversion. The frontmatter is parsed as-is, the markdown body becomes the rule's instructions exactly as you wrote it (identifiers, formatting and wording preserved), and the Bad/Good examples are imported structurally. Each file produces one rule. Files that don't parse as the template (missing frontmatter or `title`) fall back to the LLM importer used for free-form files.
+Repository rule files are imported **verbatim** — no LLM conversion. The frontmatter is parsed as-is, the markdown body becomes the rule's instructions exactly as you wrote it (identifiers, formatting and wording preserved), and the Bad/Good examples are imported structurally. Each file produces one rule. A file that doesn't parse as the template (missing frontmatter, `title` or body) is skipped, and the sync logs it; nothing is generated from it.
 </Info>
 
 ### Synchronization
-- **Automatic Detection**: Repository rules are automatically detected and synchronized when enabled
-- **Manual Sync**: Add `@kody-sync` to any rule file to sync it individually (works even with auto-sync disabled)
-- **Web Application**: Synchronized rules appear on the repository's **Code review → Kody Rules** page, with the **Auto-sync** origin
-- **Real-time Updates**: Changes to rule files are synced when Pull Requests are closed
+- **Automatic Detection**: Repository rules are detected and synchronized in every connected repository; there is nothing to enable
+- **Import now**: On the repository's **Kody Rules → Configuration** sheet, **Import rule files now** reads every rule file on the default branch
+- **Web Application**: Synchronized rules appear on the repository's **Code review → Kody Rules** page, with the **Auto-sync** origin (rules imported from coding-agent files before they stopped converting show **Agent file** instead)
+- **Real-time Updates**: Changes to rule files are synced when Pull Requests are merged
 
 ## File Location
 
-Place your rule files in one of these directories:
+Place your rule files in one of these directories, at the repository root or in any subdirectory:
 - `.kody/rules/**/*.md`
 - `rules/**/*.md`
+- `.rules/**` and `docs/coding-standards/**` (only files that follow the template)
 
 ## Rule Template
 
@@ -159,18 +160,30 @@ Added new endpoint `/api/users/profile` with corresponding test file `tests/api/
 
 ## Setup Requirements
 
-To use Repository Rules, you have two options:
+1. **Create rule files**: Place `.md` files that follow the template in `.kody/rules/**` or `rules/**`. Files in `.rules/**` and `docs/coding-standards/**` that follow the template are imported too.
+2. **Merge them**: A rule file syncs when a Pull Request that adds, changes, renames or removes it is merged. Removing the file removes its rule.
+3. **Existing files**: To import rule files that are already on the default branch, use **Import rule files now** in the repository's **Kody Rules → Configuration** sheet.
 
-### Option 1: Enable Auto-Sync (Recommended)
-1. **Enable Rules File Detection**: Pick the repository in the **Code review** scope picker, open **Kody Rules → Configuration**, and turn on **Auto-sync rules from repo**
-2. **Create rule files**: Place `.md` files in `.kody/rules/**` or `rules/**` directories
-3. **Automatic sync**: All rule files sync when PRs are closed
-
-### Option 2: Manual Sync (Selective)
-1. **Create rule files**: Place `.md` files in `.kody/rules/**` or `rules/**` directories
-2. **Add sync marker**: Include `@kody-sync` anywhere in the rule file
-3. **Commit changes**: Only marked files will sync (auto-sync toggle stays off)
+New rules land active, or in **Pending review** when **Kody knowledge approval** is on.
 
 <Tip>
-Repository Rules use the same synchronization mechanism as [Rules File Detection](/en/how_to_use/code_review/configs/rules_file_detection). Use manual sync (`@kody-sync`) to selectively sync specific rules without enabling automatic synchronization.
+Add `@kody-ignore` anywhere in a rule file to keep it in the repository without syncing it. Its existing rule is removed on the next sync.
 </Tip>
+
+## Verifying sync and rule evaluation (self-hosted)
+
+On self-hosted deployments the API logs carry grep-able markers for debugging:
+
+- `[kody-rules-sync]` — per-run sync summary: which files were imported, skipped (with the reason) or removed.
+- `[kody-rules-eval]` — per-file evaluation trace during a review: exactly which rules (uuid + title) were selected into the prompt for each reviewed file.
+
+```bash
+docker logs kodus_api 2>&1 | grep "kody-rules-sync"
+docker logs kodus_api 2>&1 | grep "kody-rules-eval"
+```
+
+If a rule shows as active in the UI but never appears in `[kody-rules-eval]` for the files you expect, check its **Path** glob — a rule only runs on files matching its path.
+
+## Rule limits
+
+Organizations on the cloud **Free** plan (or whose subscription was canceled or expired) and self-hosted instances running **without a valid license** (Community Edition) evaluate at most **10 active rules** per review (oldest first). Rules beyond the cap stay in the list as **Locked** and are skipped on every PR; a banner on **Code review → Kody Rules** says how many are skipped. Paid cloud plans and licensed self-hosted instances have no such limit. If rules beyond the 10th don't fire, this limit is why.

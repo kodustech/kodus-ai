@@ -48,7 +48,7 @@ import { GenerateKodyRulesUseCase } from '../application/use-cases/generate-kody
 import { GenerateInitialKodyRulesUseCase } from '../application/use-cases/generate-initial-kody-rules.use-case';
 import { GetInheritedRulesKodyRulesUseCase } from '../application/use-cases/get-inherited-kody-rules.use-case';
 import { GetRulesLimitStatusUseCase } from '../application/use-cases/get-rules-limit-status.use-case';
-import { ImportFastKodyRulesUseCase } from '../application/use-cases/import-fast-kody-rules.use-case';
+import { ListAgentInstructionFilesUseCase } from '../application/use-cases/list-agent-instruction-files.use-case';
 import { ManageImportedKodyRulesUseCase } from '../application/use-cases/manage-imported-kody-rules.use-case';
 import { ResyncRulesFromIdeUseCase } from '../application/use-cases/resync-rules-from-ide.use-case';
 import { ValidateRuleFileReferencesUseCase } from '../application/use-cases/validate-rule-file-references.use-case';
@@ -158,7 +158,7 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         FindSuggestionsByRuleUseCase,
         GetInheritedRulesKodyRulesUseCase,
         GetRulesLimitStatusUseCase,
-        ImportFastKodyRulesUseCase,
+        ListAgentInstructionFilesUseCase,
         ResyncRulesFromIdeUseCase,
         ValidateRuleFileReferencesUseCase,
         RemoveRuleLikeUseCase,
@@ -204,7 +204,7 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         FindSuggestionsByRuleUseCase,
         GetInheritedRulesKodyRulesUseCase,
         GetRulesLimitStatusUseCase,
-        ImportFastKodyRulesUseCase,
+        ListAgentInstructionFilesUseCase,
         ResyncRulesFromIdeUseCase,
         ValidateRuleFileReferencesUseCase,
         RemoveRuleLikeUseCase,

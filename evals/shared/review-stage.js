@@ -231,19 +231,38 @@ async function teamStore({ language, memories = [], rules = [], codeReviewConfig
  * The platform as production's code-management service answers for a public
  * GitHub repository: connected, its default branch, no Kodus config file in the
  * repository, the PR's files and commits as the GitHub adapter maps them.
+ *
+ * `targetBranchFiles`: { path: text } the PR's target branch holds for the
+ * listing and reads the review does there (the coding-agent instructions a case
+ * gives); without it that branch lists nothing.
  */
-function platform({ baseRef, prFiles, prCommits, content }) {
+function platform({ baseRef, prFiles, prCommits, content, targetBranchFiles = {} }) {
+    const onTarget = (ref) => ref === baseRef;
     return {
-        // The file at the PR's head (the finder's context reads it); the
+        // A read on the target branch answers from targetBranchFiles; any other
+        // is the file at the PR's head (the finder's context reads it). The
         // repository holds no Kodus config file.
-        getRepositoryContentFile: async ({ file }) =>
-            /(^|\/)\.?kodus-config\.ya?ml$/.test(String(file?.filename || file?.path || '')) ? null : content(file?.filename || file?.path),
+        getRepositoryContentFile: async ({ file, pullRequest }) => {
+            const filePath = String(file?.filename || file?.path || '');
+            if (onTarget(pullRequest?.head?.ref) && filePath in targetBranchFiles) {
+                return { data: { content: targetBranchFiles[filePath], encoding: 'utf-8' } };
+            }
+            return /(^|\/)\.?kodus-config\.ya?ml$/.test(filePath) ? null : content(file?.filename || file?.path);
+        },
         getRepositoryContentBatch: async () => null,
         verifyConnection: async () => ({ hasConnection: true, isSetupComplete: true }),
         getTypeIntegration: async () => 'GITHUB',
         getDefaultBranch: async () => baseRef,
         getFilesByPullRequestId: async () => prFiles,
         getCommitsForPullRequestForCodeReview: async () => prCommits,
+        // Only when the case gives the target branch files: a review that lists
+        // nothing there behaves as before this listing existed.
+        ...(Object.keys(targetBranchFiles).length
+            ? {
+                  getRepositoryAllFiles: async ({ filters } = {}) =>
+                      onTarget(filters?.branch) ? Object.keys(targetBranchFiles).map((filePath) => ({ path: filePath })) : [],
+              }
+            : {}),
     };
 }
 
@@ -429,7 +448,9 @@ async function teamContext({ team = {}, route, permissionService }) {
  * leave. `pr` is the platform's data:
  *   { repo, number, title, body, headRef, headSha, baseRef, baseSha, files, commits,
  *     repoFiles?, repoBase? (a repository written for the eval, its head and
- *     base trees, instead of `repo`; `files` then come from filesBetween) }
+ *     base trees, instead of `repo`; `files` then come from filesBetween),
+ *     targetBranchFiles? (files the target branch holds for the review's reads
+ *     there, see platform) }
  * `team`: { language, memories, rules, codeReviewConfig } as the team set them (rules as the save path stores them).
  * Returns the context, the repository to check out, the platform, and the
  * cleanup of a repository written for the eval.
@@ -460,6 +481,7 @@ async function prepareReview({ pr, team = {}, route, permissionService, previous
             prFiles,
             prCommits: pr.commits || [],
             content: (file) => contentAt(repo.cloneUrl, repo.head, file),
+            targetBranchFiles: pr.targetBranchFiles,
         });
         const codeReviewConfig = await routedTeamConfig({
             team,

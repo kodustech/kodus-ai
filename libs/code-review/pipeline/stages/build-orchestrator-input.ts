@@ -40,6 +40,9 @@ export type OrchestratorInputComputed = Pick<
     // without the service (specs, degraded paths) fall back to the raw config
     // rules — the context itself is never mutated (it is frozen).
     kodyRules?: OrchestratorInput['kodyRules'];
+    // The repository's coding-agent instructions that govern the changed
+    // files, collected by the stage when the repository opted in.
+    repoInstructions?: OrchestratorInput['repoInstructions'];
 };
 
 /**
@@ -120,6 +123,7 @@ export function buildOrchestratorInput(
         ciEvidence: context.ciEvidence,
         analyzerFindings: context.analyzerFindings,
         kodyRules: computed.kodyRules ?? context.codeReviewConfig?.kodyRules,
+        repoInstructions: computed.repoInstructions,
         reviewOptions: computed.reviewOptions,
         onAgentProgress: computed.onAgentProgress,
         gitHubToken: computed.gitHubToken,

@@ -115,11 +115,9 @@ export type CodeReviewGlobalConfig = {
         tools?: Partial<Record<DeterministicToolId, DeterministicToolMode>>;
     };
     codeReviewVersion?: "legacy" | "v2" | "v3-agent";
-    ideRulesSyncEnabled: boolean;
-    /** Only consulted on a true→false transition of `ideRulesSyncEnabled`.
-     *  Picks what happens to the rules previously imported from IDE files.
-     *  Default on the backend is `keep` (least destructive) when omitted. */
-    ideSyncDisableAction?: "keep" | "pause" | "delete";
+    /** Reviews read the repo's coding-agent instructions (CLAUDE.md,
+     *  AGENTS.md, .cursor/rules). Never imports them as Kody Rules. */
+    repoInstructionsEnabled: boolean;
     v2PromptOverrides?: {
         categories?: {
             descriptions?: {

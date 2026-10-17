@@ -36,15 +36,15 @@ automatedReviewActive: true
 
 这为您提供具有合理严重性阈值的自动审查。根据反馈在一周后调整。
 
-## 步骤 3 — 从 IDE 工具导入现有规则
+## 步骤 3 — 使用您已经为编码代理编写的指令
 
-如果团队已经使用 Cursor、Copilot 或 Claude 规则：
+如果团队已经维护了 Cursor、Copilot、Claude 或 `AGENTS.md` 指令：
 
-1. 在侧边栏中，通过 **Code review** 分组顶部的范围选择器选择代码库，打开 **Kody Rules**，点击 **Configuration**，并开启 **Auto-sync rules from repo**
-2. Kodus 检测 `.cursorrules`、`.github/copilot-instructions.md` 和 `.claude` 文件
-3. 审查导入的规则，保留对代码审查有意义的规则
+1. 在侧边栏中，通过 **Code review** 分组顶部的范围选择器选择 **Global** 或某个代码库，打开 **Kody Rules**，点击 **Configuration**，并开启 **Use coding-agent instructions in reviews**
+2. Kody 读取覆盖每个拉取请求所更改文件的指令文件，并指出违反这些指令的更改
+3. 对于希望在每次审查中强制执行的约定，请在 `.kody/rules` 中把它写成规则文件
 
-这避免了从头重写规则。
+这些指令文件从不会变成 Kody 规则，因此不会悄悄改变您的审查策略。
 
 ## 步骤 4 — 教授前 5 个约定
 
