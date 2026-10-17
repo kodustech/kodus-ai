@@ -10,8 +10,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+    buildInstallScript,
     buildNetworkScript,
     buildRunCommand,
+    CLI_BINARY_MARKER,
     cliSandboxIdentity,
 } from './cli-command';
 
@@ -167,6 +169,72 @@ describe('runCli command', () => {
             );
             expect(envCall).toBeGreaterThanOrEqual(0);
             expect(killCall).toBeGreaterThan(envCall);
+        });
+    });
+});
+
+describe('scripts on a sandbox shell whose exit hook fails (E2B)', () => {
+    // E2B runs commands in a bash whose exit hook returns non-zero; under
+    // `set -e` that turned the script's own `exit 0` into exit 1.
+    const onE2bShell = (script: string) => `trap false EXIT\n${script}`;
+    const identity = cliSandboxIdentity('agent-1', 'semver');
+
+    it('an install that found its binary exits 0', () => {
+        withStubs(
+            {
+                chmod: 'exit 0',
+                useradd: 'exit 0',
+                env: 'exit 0',
+                test: 'exit 0',
+            },
+            (dir) => {
+                const result = runBash(
+                    dir,
+                    onE2bShell(
+                        buildInstallScript({
+                            identity,
+                            argv: ['npm', 'i', '-g', 'semver@7.6.3'],
+                            binary: 'semver',
+                        }),
+                    ),
+                );
+                expect(result.stdout).toContain(CLI_BINARY_MARKER);
+                expect(result.status).toBe(0);
+            },
+        );
+    });
+
+    it('an install whose binary is missing still exits with its own code', () => {
+        withStubs(
+            {
+                chmod: 'exit 0',
+                useradd: 'exit 0',
+                env: 'exit 0',
+                test: 'exit 1',
+            },
+            (dir) => {
+                const result = runBash(
+                    dir,
+                    onE2bShell(
+                        buildInstallScript({
+                            identity,
+                            argv: ['npm', 'i', '-g', 'semver@7.6.3'],
+                            binary: 'semver',
+                        }),
+                    ),
+                );
+                expect(result.status).toBe(3);
+            },
+        );
+    });
+
+    it('a fence with no domains exits 0', () => {
+        withStubs({}, (dir) => {
+            const result = runBash(
+                dir,
+                onE2bShell(buildNetworkScript({ identity, domains: [] })),
+            );
+            expect(result.status).toBe(0);
         });
     });
 });

@@ -195,6 +195,15 @@ export const CLI_BINARY_MARKER = 'KODUS_CLI_BINARY=';
  * the user's home. Prints the resolved absolute binary path after the marker.
  * No secret exists in the sandbox at this point.
  */
+/**
+ * A `set -e` script run in a subshell, so its `exit` code is what the
+ * sandbox command reports. E2B's shell runs an exit hook that fails, and
+ * under `set -e` that hook turned the script's own `exit 0` into exit 1.
+ */
+function inSubshell(lines: readonly string[]): string {
+    return ['(', ...lines, ')'].join('\n');
+}
+
 export function buildInstallScript(params: {
     identity: CliSandboxIdentity;
     argv: readonly string[];
@@ -220,7 +229,7 @@ export function buildInstallScript(params: {
         `CARGO_INSTALL_ROOT=${h}/.local`,
     ];
     const candidates = cliBinaryCandidates(h).map(shSingleQuote).join(' ');
-    return [
+    return inSubshell([
         'set -eu',
         // The review user's home holds the proxy config and the checkout: the
         // CLI user may traverse to the repo, never list or read the rest.
@@ -234,7 +243,7 @@ export function buildInstallScript(params: {
         'done',
         `echo ${shSingleQuote(`binary ${binary} not found after install`)} >&2`,
         'exit 3',
-    ].join('\n');
+    ]);
 }
 
 /**
@@ -328,7 +337,7 @@ export function buildNetworkScript(params: {
         'fi',
         `$IPT -C OUTPUT -m owner --uid-owner "$UID_" -j ${chain}`,
     );
-    return lines.join('\n');
+    return inSubshell(lines);
 }
 
 /**
