@@ -74,6 +74,7 @@ export interface ICommentManagerService {
         linkedRepositoriesMetadata?: import('@libs/ee/linked-repositories').LinkedRepositoriesReviewMetadata,
         reviewWarnings?: import('@libs/code-review/infrastructure/agents/engine/review-warnings').ReviewWarning[],
         customAgentsSection?: string,
+        singleAgentRun?: boolean,
     ): Promise<void>;
 
     updateSummarizationInPR(

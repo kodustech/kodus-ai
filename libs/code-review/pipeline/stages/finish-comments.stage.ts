@@ -358,6 +358,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 context.linkedRepositoriesMetadata,
                 context.reviewWarnings,
                 formatCustomAgentsSummary(context.customAgentRuns),
+                !!context.onlyCustomAgent,
             );
             return context;
         }
@@ -430,6 +431,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 context.linkedRepositoriesMetadata,
                 context.reviewWarnings,
                 formatCustomAgentsSummary(context.customAgentRuns),
+                !!context.onlyCustomAgent,
             );
             return context;
         }

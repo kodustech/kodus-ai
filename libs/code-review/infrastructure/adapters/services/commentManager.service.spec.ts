@@ -817,6 +817,45 @@ describe('CommentManagerService — pure helpers', () => {
         });
     });
 
+    describe('generatePullRequestFinishSummaryMarkdown — a single custom agent run (#2172)', () => {
+        const summary = (singleAgentRun: boolean) =>
+            (
+                new CommentManagerService(
+                    {} as any,
+                    { processTemplate: async () => '' } as any,
+                    {} as any,
+                    {} as any,
+                    {} as any,
+                ) as any
+            ).generatePullRequestFinishSummaryMarkdown(
+                { organizationId: 'org' },
+                42,
+                [], // no new comments
+                { languageResultPrompt: LanguageValue.ENGLISH },
+                [],
+                false,
+                undefined,
+                false,
+                undefined,
+                undefined,
+                undefined,
+                '\n\n<details><summary>Custom agents</summary></details>',
+                singleAgentRun,
+            );
+
+        it('never claims the pull request has no issues when only one agent ran', async () => {
+            const body = await summary(true);
+
+            expect(body).not.toContain('No issues were found');
+            expect(body).toContain('Code Review Completed');
+            expect(body).toContain('Custom agents');
+        });
+
+        it('keeps the no-issues summary for a full review', async () => {
+            expect(await summary(false)).toContain('No issues were found');
+        });
+    });
+
     describe('generatePullRequestFinishSummaryMarkdown — skipped rules reach the PR body (KRC-16)', () => {
         // messageProcessor is constructor arg #2; the config block calls it.
         const withProcessor = () =>

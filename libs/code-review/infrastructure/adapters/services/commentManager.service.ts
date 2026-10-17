@@ -1065,6 +1065,8 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         reviewWarnings?: ReviewWarning[],
         /** End-review section on custom agents (#2172); empty when none ran. */
         customAgentsSection?: string,
+        /** `@kody -v <agent>`: one agent re-checked the pull request. */
+        singleAgentRun?: boolean,
     ): Promise<void> {
         try {
             // When the review failed, we cannot honor a customer-configured
@@ -1088,6 +1090,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     linkedRepositoriesMetadata,
                     reviewWarnings,
                     customAgentsSection,
+                    singleAgentRun,
                 );
             } else {
                 // Custom end-review template is rendering — the default
@@ -1176,6 +1179,8 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         reviewWarnings?: ReviewWarning[],
         /** End-review section on custom agents (#2172); empty when none ran. */
         customAgentsSection?: string,
+        /** `@kody -v <agent>`: one agent re-checked the pull request. */
+        singleAgentRun?: boolean,
     ): Promise<string> {
         let commentBody = await this.generatePullRequestFinishSummaryMarkdown(
             organizationAndTeamData,
@@ -1190,6 +1195,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             linkedRepositoriesMetadata,
             reviewWarnings,
             customAgentsSection,
+            singleAgentRun,
         );
 
         commentBody = this.sanitizeBitbucketMarkdown(commentBody, platformType);
@@ -1908,6 +1914,8 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         reviewWarnings?: ReviewWarning[],
         /** End-review section on custom agents (#2172); empty when none ran. */
         customAgentsSection?: string,
+        /** `@kody -v <agent>`: one agent re-checked the pull request. */
+        singleAgentRun?: boolean,
     ): Promise<string> {
         try {
             const language =
@@ -1982,9 +1990,13 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                 // explaining why auto-approve didn't fire — otherwise the
                 // user sees "review completed" + no approval and thinks
                 // approve is broken.
-                resultText = hasComments
-                    ? translation.withComments
-                    : translation.withoutComments;
+                // One agent re-checking the pull request is told not to repeat
+                // what is already posted, so "no new comment" says nothing
+                // about the comments still open: never announce no issues.
+                resultText =
+                    hasComments || singleAgentRun
+                        ? translation.withComments
+                        : translation.withoutComments;
 
                 if (reviewHasPartialErrors) {
                     const notice = this.resolvePartialErrorsNotice(language);
