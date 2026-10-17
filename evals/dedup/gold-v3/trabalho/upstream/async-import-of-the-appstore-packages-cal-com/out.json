@@ -1,0 +1,37 @@
+{
+  "caseId": "async-import-of-the-appstore-packages-cal-com",
+  "prOriginal": {
+    "numero": 8087,
+    "url": "https://github.com/calcom/cal.diy/pull/8087",
+    "mergedAt": "2023-04-05",
+    "nota": "Found via gh api commits/<head>/pulls; PR headRefOid equals the benchmark head 820d7fa87e; merge commit e043a5efd8 has an identical diff. calcom/cal.com now redirects to calcom/cal.diy (same history)."
+  },
+  "tps": {
+    "async-import-of-the-appstore-packages-cal-com#02": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2023-08-26",
+        "pr": 10157,
+        "commit": "c1bcfcfa3ddf989e5c99609202a81ac7a0522918",
+        "url": "https://github.com/calcom/cal.diy/pull/10157"
+      },
+      "removidoEm": null,
+      "diasNoAr": 143,
+      "reason": "PR #10157 'fix: replace all async foreach callbacks' replaced the forEach(async ...) loops in vital/lib/reschedule.ts, wipemycalother/lib/reschedule.ts and the trpc requestReschedule handler (where bookings.tsx's reschedule moved) with map(async ...) plus await Promise.all / Promise.allSettled, so getCalendar failures are awaited and caught. Today both reschedule.ts files still use const promises = bookingRefsFiltered.map(async ...) followed by await Promise.all(promises) inside try/catch.",
+      "astra": []
+    },
+    "async-import-of-the-appstore-packages-cal-com#sncc-01": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2023-05-09",
+        "pr": 8419,
+        "commit": "d6fb0df64fc2227b06a4ef59b2fb9fc703d69849",
+        "url": "https://github.com/calcom/cal.diy/pull/8419"
+      },
+      "removidoEm": null,
+      "diasNoAr": 34,
+      "reason": "PR #8419 (commit message item 'Lazy load apps from appstore') changed every appStore entry in packages/app-store/index.ts from an eager import(\"./x\") to a thunk () => import(\"./x\") and updated getCalendar to call appStore[...](), so modules load only when selected. The thunk form persisted (later wrapped in createCachedImport, #19519) until index.ts was removed in #23449 'refactor: Remove app store index' (2025-08-29).",
+      "astra": []
+    }
+  }
+}

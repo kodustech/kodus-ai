@@ -1,0 +1,18 @@
+{
+ "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+ "prTitle": "feat(ecosystem): Implement cross-system issue synchronization",
+ "upstream": "getsentry/sentry",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/sentry",
+ "base": "bb5a6837cb5b3d8d3b174e17d42ec14486ef8738",
+ "head": "9501091c52ae94e8d916f79b35d21975b3f9cadb",
+ "tps": [
+  {
+   "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "severity": "medium",
+   "category": "concurrency",
+   "bug": "The AssignmentSource dataclass uses queued: datetime = timezone.now() as a default field value, which evaluates timezone.now() once at class definition time and shares that single datetime instance across all objects.",
+   "evidenciaOpus": "assignment_source.py:18 `queued: datetime = timezone.now()` is evaluated once at import, and from_integration (:21-25) never passes queued, so every AssignmentSource carries the process import time instead of the queue time.",
+   "evidenciaAstra": "src/sentry/integrations/services/assignment_source.py:18 evaluates timezone.now() at class definition, and from_integration at line 22 omits queued, reusing that timestamp. The new to_dict implementation at line 28 therefore returns stale queue-time data for later assignments."
+  }
+ ]
+}

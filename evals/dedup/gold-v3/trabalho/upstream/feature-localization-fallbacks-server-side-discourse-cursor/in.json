@@ -1,0 +1,26 @@
+{
+ "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+ "prTitle": "FEATURE: Localization fallbacks (server-side)",
+ "upstream": "discourse/discourse",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/discourse",
+ "base": "728845d008f06828630a632e5c7d67e11bf15deb",
+ "head": "ecfa17b5a79dfdc91e7a4d50b42ae78a35d0a293",
+ "tps": [
+  {
+   "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "severity": "high",
+   "category": "bug",
+   "bug": "Fallback locale catalogs are only loaded in the controller's set_locale filter, while translate loads just the current locale, so translations outside requests (jobs, mailers) cannot fall back to the site default or English.",
+   "evidenciaOpus": "Fallback locales are loaded only by I18n.fallbacks.ensure_loaded! in ApplicationController#set_locale (application_controller.rb:159); I18n.translate still loads only config.locale (translate_accelerator.rb:67-68), and Backend::Simple only returns loaded translations, so in jobs/mailers a missing key cannot fall back to the site default or :en and the missing result is cached.",
+   "evidenciaAstra": "lib/freedom_patches/translate_accelerator.rb:68 loads only config.locale, while full-chain loading occurs in app/controllers/application_controller.rb:159. Jobs set the locale directly at app/jobs/base.rb:151, so translations outside controllers can miss unloaded fallback catalogs and cache an incorrect result at lib/freedom_patches/translate_accelerator.rb:74."
+  },
+  {
+   "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#06",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The translation cache key does not include the site or its default locale, but fallback results now depend on SiteSetting.default_locale, so multisite processes or a changed default locale serve stale fallback translations.",
+   "evidenciaOpus": "The fallback chain now depends on SiteSetting.default_locale (config/initializers/i18n.rb:17), but the accelerator's cache key is key + config.locale + backend id (translate_accelerator.rb:72) with no site or default-locale component, so in multisite or after changing the default locale a cached fallback translation from another site/setting is served.",
+   "evidenciaAstra": "config/initializers/i18n.rb:17 makes translation results depend on SiteSetting.default_locale, but lib/freedom_patches/translate_accelerator.rb:72 keys the shared cache only by translation key, current locale, and backend identity. Site-setting changes clear other caches at lib/site_setting_extension.rb:344, leaving these cached fallback results reusable across sites or after default-locale changes."
+  }
+ ]
+}

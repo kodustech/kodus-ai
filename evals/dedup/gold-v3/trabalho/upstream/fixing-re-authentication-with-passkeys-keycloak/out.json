@@ -1,0 +1,19 @@
+{
+ "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+ "prOriginal": {
+  "numero": 41249,
+  "url": "https://github.com/keycloak/keycloak/pull/41249",
+  "mergedAt": "2025-07-22",
+  "nota": "Found via gh pr list --search with the title; head 25bf964a is exactly the PR headRefOid (2 commits), merged via merge commit 57972d85 (closes #41242, #41008). Merged code matches the benchmark head."
+ },
+ "tps": {
+  "fixing-re-authentication-with-passkeys-keycloak#03": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 452,
+   "reason": "On main today PasswordForm.configuredFor still returns true via isConditionalPasskeysEnabled(user) and authenticate still fills webauthn data, but base/login/login-password.ftl renders only the password form with no passkeys import or conditionalUIData macro. The legacy keycloak login theme (parent=base) still has no login-password.ftl override, and neither the base template nor PasswordForm.java has a functional change since the merge (only an import-order commit a2c1055 on PasswordForm).",
+   "astra": []
+  }
+ }
+}

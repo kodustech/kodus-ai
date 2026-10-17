@@ -1,0 +1,18 @@
+{
+ "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+ "prTitle": "Fixing Re-authentication with passkeys",
+ "upstream": "keycloak/keycloak",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/keycloak",
+ "base": "744e031019af8dbaacf407e792fbb3756364e2b4",
+ "head": "25bf964a844ea0bc64dc838bff038345048cb1fa",
+ "tps": [
+  {
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#03",
+   "severity": "high",
+   "category": "bug",
+   "bug": "PasswordForm now accepts passkey-only users, but only the keycloak.v2 login-password.ftl renders the passkeys conditional UI; the base template (used by the legacy keycloak theme) does not, so a passkey-only user is shown a password-only form they cannot complete.",
+   "evidenciaOpus": "Only keycloak.v2/login/login-password.ftl got the passkeys import and <@passkeys.conditionalUIData/>; base/login/login-password.ftl has no passkeys UI and the legacy 'keycloak' theme (parent=base, no login-password override) uses it. With PasswordForm.configuredFor now true for passkey-only users (PasswordForm.java:63), those users get a password-only page with no way to use their passkey on the legacy/base theme.",
+   "evidenciaAstra": "PasswordForm.java:63 newly accepts passkey-only users, but themes/src/main/resources/theme/base/login/login-password.ftl:8-49 renders only password controls without the passkey macro. The legacy keycloak/login/theme.properties:1 inherits base, whereas the required macro invocation was added only to keycloak.v2/login/login-password.ftl:18, leaving the legacy password challenge unusable for these users."
+  }
+ ]
+}

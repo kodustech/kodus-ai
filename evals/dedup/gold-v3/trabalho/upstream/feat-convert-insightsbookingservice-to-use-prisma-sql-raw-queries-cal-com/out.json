@@ -1,0 +1,24 @@
+{
+  "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+  "prOriginal": {
+    "numero": 22345,
+    "url": "https://github.com/calcom/cal.diy/pull/22345",
+    "mergedAt": "2025-07-15",
+    "nota": "Found via gh api commits/<head>/pulls; PR headRefOid equals the benchmark head da09bc0808; squash commit 967442892a has no diff vs head in packages/lib/server/service/. calcom/cal.com now redirects to calcom/cal.diy."
+  },
+  "tps": {
+    "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#03": {
+      "status": "descontinuado",
+      "corrigidoEm": null,
+      "removidoEm": {
+        "data": "2026-04-15",
+        "pr": 28903,
+        "commit": "ab21c7f805",
+        "url": "https://github.com/calcom/cal.diy/pull/28903"
+      },
+      "diasNoAr": 274,
+      "reason": "The test 'should combine authorization and filter conditions' kept the same shape after the merge: it moved to InsightsBookingService.integration-test.ts (#22790) and then packages/features/insights/services/ (#24399), and its last version (after #24668, 2025-10-28) still creates one user booking that satisfies both the auth and the eventTypeId filter, asserting that single row. The file and the whole insights feature were then deleted by #28903 'refactor: Cal.diy' (EE removal), which does not target the gap.",
+      "astra": []
+    }
+  }
+}

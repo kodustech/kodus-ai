@@ -1,0 +1,26 @@
+{
+ "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+ "prTitle": "feat(workflow_engine): Add in hook for producing occurrences from the stateful detector",
+ "upstream": "getsentry/sentry",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/sentry",
+ "base": "bdd229e3f22e307fe40b30ef99e92ff3f6723da4",
+ "head": "8422030ef456e3a898415e96475b4d8ddfc7640f",
+ "tps": [
+  {
+   "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "severity": "high",
+   "category": "api",
+   "bug": "MetricAlertDetectorHandler inherits from StatefulDetectorHandler but only contains pass, failing to implement its required abstract methods: counter_names (property), get_dedupe_value(), get_group_key_values(), and build_occurrence_and_event_data(). This will cause a TypeError at runtime when the class is instantiated.",
+   "evidenciaOpus": "grouptype.py:11-12 makes MetricAlertDetectorHandler a StatefulDetectorHandler with only `pass`; StatefulDetectorHandler declares abstract counter_names, get_dedupe_value, get_group_key_values and build_occurrence_and_event_data (processors/detector.py:142-170), so Detector.detector_handler (models/detector.py:86) raises TypeError when instantiating it for metric alert detectors.",
+   "evidenciaAstra": "src/sentry/incidents/grouptype.py:11-12 replaces the concrete handler with an empty StatefulDetectorHandler subclass, leaving the abstract members at src/sentry/workflow_engine/processors/detector.py:142-170 unimplemented. src/sentry/workflow_engine/models/detector.py:86 instantiates the registered handler directly, so metric-alert handler construction now raises TypeError; this is an introduced bug."
+  },
+  {
+   "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#04",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "Wrong value `6` passed for `group_2` occurrence \u2014 the data packet specifies `\"group_2\": 10`. Should be `10` to accurately reflect the test scenario, which will ensure the test produces the correct occurrence data.",
+   "evidenciaOpus": "test_detector.py:244 build_mock_occurrence_and_event takes `value` but never uses it, and it also implements MockDetectorStateHandler.build_occurrence_and_event_data (line 39); test_state_results_multi_group builds group_2's expected occurrence with 6 (line 191) while the packet has 10 (line 177) and still passes, so value forwarding to the new hook is never verified.",
+   "evidenciaAstra": "tests/sentry/workflow_engine/processors/test_detector.py:244-275 never uses value, and the mock hook delegates to this helper at line 39. The multi-group test supplies 10 at line 177 but builds its expectation with 6 at line 191, so its occurrence assertions cannot detect incorrect measurement forwarding through the newly added hook; this is a test_gap."
+  }
+ ]
+}

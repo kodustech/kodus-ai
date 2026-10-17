@@ -1,0 +1,18 @@
+{
+ "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+ "prTitle": "ref(crons): Reorganize incident creation / issue occurrence logic",
+ "upstream": "getsentry/sentry",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/sentry",
+ "base": "0cfc28e76ddc986d2d89dd9b9f63ee916a18a5f9",
+ "head": "dcdcadb771128e79259cc9eff9c70c38fc597976",
+ "tps": [
+  {
+   "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "severity": "low",
+   "category": "bug",
+   "bug": "The function modifies the config variable to include display values but then returns the original monitor.config instead of the modified version.",
+   "evidenciaOpus": "incident_occurrence.py:160-168 copies config and replaces schedule_type with get_schedule_type_display(), but the returned dict uses monitor_environment.monitor.config, so the occurrence's monitor context shows the raw schedule_type; this code is re-added by the PR.",
+   "evidenciaAstra": "src/sentry/monitors/logic/incident_occurrence.py:160-162 converts schedule_type in a copied config, but line 168 returns the original config. The relocated helper therefore discards the display conversion, and line 89 includes the raw value in the emitted occurrence context."
+  }
+ ]
+}

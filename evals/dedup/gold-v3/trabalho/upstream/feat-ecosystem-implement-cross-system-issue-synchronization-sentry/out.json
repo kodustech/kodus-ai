@@ -1,0 +1,19 @@
+{
+ "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+ "prOriginal": {
+  "numero": 77754,
+  "url": "https://github.com/getsentry/sentry/pull/77754",
+  "mergedAt": "2024-10-04",
+  "nota": "Benchmark title differs from upstream ('fix(ecosystem): Breaks issue sync cycles', branch gv/fix-jira-cyclic-sync); found via the file history of assignment_source.py, whose first commit is the squash merge f9919d7894. Its +/- lines are identical to the benchmark base..head diff."
+ },
+ "tps": {
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 743,
+   "reason": "On master today src/sentry/integrations/services/assignment_source.py still declares 'queued: datetime = timezone.now()' as a dataclass default, evaluated once at import, and from_integration still builds AssignmentSource without passing queued. The only later change to the file, PR #90496 (2025-04-28), only made to_dict/from_dict serialize queued as an ISO string; it did not touch the default.",
+   "astra": []
+  }
+ }
+}

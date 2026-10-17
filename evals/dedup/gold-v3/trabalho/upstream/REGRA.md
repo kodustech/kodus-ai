@@ -53,4 +53,4 @@ For a follow-up, send a new call carrying the previous exchange.
       }
     }
 
-Every `issueId` of the input appears exactly once. Write it with a Python script and check that. Use temp files only inside the PR's folder, named `tmp_*`, and delete them at the end.
+Every `issueId` of the input appears exactly once. Write it with a Python script and check that. Use temp files only inside the PR's folder, named `tmp_*`, and delete them at the end. Never write scripts or files anywhere else (not in a shared scratchpad, not in /tmp): other agents run in parallel and would overwrite them.

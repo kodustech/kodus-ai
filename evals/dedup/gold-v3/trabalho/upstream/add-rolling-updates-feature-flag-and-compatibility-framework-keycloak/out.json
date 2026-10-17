@@ -1,0 +1,43 @@
+{
+ "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+ "prOriginal": {
+  "numero": 36882,
+  "url": "https://github.com/keycloak/keycloak/pull/36882",
+  "mergedAt": "2025-02-06",
+  "nota": "Title differs ('Feature flag: rolling-updates'); found by searching the benchmark head SHA. PR headRefOid equals the benchmark head 62bf9893 (merge commit 0f91e67b); the benchmark diff vs base also carries unrelated main-branch changes, but the PR's own files match."
+ },
+ "tps": {
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#03": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-02-10",
+    "pr": 36946,
+    "commit": "c6509842673fb1fba0abfa1bcfa943c06b6a7979",
+    "url": "https://github.com/keycloak/keycloak/pull/36946"
+   },
+   "diasNoAr": 4,
+   "reason": "PR #36946 removed the separate feature guards from UpdateCompatibilityCheck.run() and UpdateCompatibilityMetadata.run() and put a single guard in the shared AbstractUpdatesCommand.run(), so the independent untested check-subcommand guard no longer existed and the metadata test exercised the shared guard; testFeatureNotEnabled itself was not changed. PR #46133 (2026-02-16) later deleted the guard and the test entirely; today UpdateCommandDistTest is gone from that path and there is no feature guard.",
+   "astra": [
+    {
+     "pergunta": "Descontinuado, and is the removal #36946 (guard consolidated into shared base run()) or #46133 (guard removed entirely)?",
+     "resposta": "Descontinuado with #36946: it removed the independent check guard and replaced both copies with one inherited run() whose guard the metadata test exercises; #46133 came after the gap had already ceased.",
+     "veredito": "descontinuado, removal #36946 2025-02-10"
+    }
+   ]
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#04": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2026-02-16",
+    "pr": 46133,
+    "commit": "f92c27e26d5bd195af15e64d5ea4c71ef9305b1d",
+    "url": "https://github.com/keycloak/keycloak/pull/46133"
+   },
+   "diasNoAr": 375,
+   "reason": "Through every revision until 2026-02 (including #38661 'ensuring exit codes are handled consistently'), testFeatureNotEnabled only called cliResult.assertError(...) and never asserted the FEATURE_DISABLED exit code (4). PR #46133 made rolling-updates:v2 a default/essential feature and deleted the feature-disabled guard, its exit code and testFeatureNotEnabled, without adding an exit-code assertion, so the behaviour under test no longer exists.",
+   "astra": []
+  }
+ }
+}

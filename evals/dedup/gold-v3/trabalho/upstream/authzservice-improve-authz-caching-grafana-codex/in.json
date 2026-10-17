@@ -1,0 +1,34 @@
+{
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "prTitle": "AuthZService: improve authz caching",
+ "upstream": "grafana/grafana",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/grafana",
+ "base": "5634ca44f799a82161f0401dadc286452f3bdbf8",
+ "head": "7562f37880367411a62304bcdcdc178bced23906",
+ "tps": [
+  {
+   "issueId": "authzservice-improve-authz-caching-grafana-codex#01",
+   "severity": "medium",
+   "category": "data",
+   "bug": "The cache key construction in `userPermDenialCacheKey` uses simple string concatenation with underscores, which can lead to ambiguous keys and collision risks when any component contains underscores or is empty. This could result in incorrect denial cache hits, affecting user permissions.",
+   "evidenciaOpus": "cache.go:30-32 builds userPermDenialCacheKey as namespace+\".perm_\"+uid+\"_\"+action+\"_\"+name+\"_\"+parent; dashboard/folder UIDs may contain '_', so (name=a_b,parent=c) and (name=a,parent=b_c) share a key and Check (service.go:116-121) returns a cached denial for the wrong resource.",
+   "evidenciaAstra": "pkg/services/authz/rbac/cache.go:31 produces identical keys for the two stated name/parent tuples, and underscores are valid UID characters (pkg/util/shortid_generator.go:33). The unconditional denial at pkg/services/authz/rbac/service.go:117-120 therefore lets one resource's denial override another resource's valid permissions."
+  },
+  {
+   "issueId": "authzservice-improve-authz-caching-grafana-codex#04",
+   "severity": "medium",
+   "category": "doc_defect",
+   "bug": "The test comment says the cached permissions 'allow access', but the map stores false for dashboards:uid:dash1, so checkPermission will still treat this scope as not allowed.",
+   "evidenciaOpus": "service_test.go:981-982 seeds permCache with {\"dashboards:uid:dash1\": false} despite the comment 'Allow access ... to prove this is not checked'; the normal path also denies, so the 'Should deny on explicit cache deny entry' test passes even if the permDenialCache check (service.go:116-121) is removed.",
+   "evidenciaAstra": "pkg/services/authz/rbac/service_test.go:982 seeds false, and checkPermission reads that boolean at pkg/services/authz/rbac/service.go:558. The default fake store also supplies no permissions (service_test.go:1328 and 1394), so the assertion at line 994 still passes without the denial-cache branch and fails to verify its intended behavior."
+  },
+  {
+   "issueId": "authzservice-improve-authz-caching-grafana-codex#05",
+   "severity": "medium",
+   "category": "perf",
+   "bug": "A cached permission set that denies a resource always triggers a full DB permission reload, so checks over many inaccessible dashboards issue one query per resource instead of being served from cache.",
+   "evidenciaOpus": "When cached permissions deny, Check falls through to getIdentityPermissions (service.go:123-139), whose permCache lookup was removed (diff in getUserPermissions), so each distinct denied resource triggers a full permission query; previously cached denials were answered from permCache.",
+   "evidenciaAstra": "pkg/services/authz/rbac/service.go:123-139 reloads permissions whenever the cached map does not authorize a request, while the denial key at line 116 is resource-specific. Sequential checks of different denied resources therefore each execute the action-wide query and cache rewrite at lines 400-406; singleflight at line 380 only coalesces concurrent calls."
+  }
+ ]
+}

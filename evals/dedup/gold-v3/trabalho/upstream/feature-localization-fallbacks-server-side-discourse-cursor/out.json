@@ -1,0 +1,43 @@
+{
+ "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+ "prOriginal": {
+  "numero": 3609,
+  "url": "https://github.com/discourse/discourse/pull/3609",
+  "mergedAt": "2015-07-30",
+  "nota": "Found via gh search prs 'Localization fallbacks'. Merged with a regular merge: the benchmark head ecfa17b5 is the 2nd of 7 PR commits and is on upstream history. Later PR commits (650eb86 'Disable in development (server)') made the FallbackLocaleList production-only, but the translate/cache code and set_locale ensure_loaded! of the benchmark head were merged unchanged."
+ },
+ "tps": {
+  "feature-localization-fallbacks-server-side-discourse-cursor#01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2015-09-18",
+    "pr": 3786,
+    "commit": "619d5b1bc1b23a8422a5f601de889c19c0eb959f",
+    "url": "https://github.com/discourse/discourse/pull/3786"
+   },
+   "removidoEm": null,
+   "diasNoAr": 50,
+   "reason": "PR #3786 'FIX: Load fallback locales in Sidekiq jobs' added I18n.fallbacks.ensure_loaded! right after I18n.locale = SiteSetting.default_locale in Jobs::Base#perform, so jobs (and the mailers they run) load the fallback catalogs. Today app/jobs/base.rb still calls I18n.ensure_all_loaded! after setting the locale, and execute_reload in translate_accelerator.rb also calls ensure_all_loaded!.",
+   "astra": []
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor#06": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2020-05-06",
+    "pr": null,
+    "commit": "ec2f3169ff43a440250bc54f7c6c43d64fcc8263",
+    "url": "https://github.com/discourse/discourse/commit/ec2f3169ff43a440250bc54f7c6c43d64fcc8263"
+   },
+   "removidoEm": null,
+   "diasNoAr": 1742,
+   "reason": "The cache key in translate_no_override is still key+locale+backend id today, but commit ec2f3169 ('FIX: Using the default_locale in locale fallbacks caused problems', citing multisite missing translations) removed SiteSetting.default_locale from FallbackLocaleList; the chain is now locale, its static LocaleSiteSetting.fallback_locale chain, then :en, so cached fallback results no longer depend on any site setting. The dependency had been dropped by the 2015-11-13 refactor 3720783 and re-added on 2018-01-22 (ce060e2) before this final removal.",
+   "astra": [
+    {
+     "pergunta": "confirmado by ec2f3169 (2020-05-06) or descontinuado (3720783 refactor 2015 / ec2f3169)?",
+     "resposta": "confirmado - ec2f3169 deliberately removed site-dependent default_locale fallbacks, eliminating the mismatch; the 2015 refactor was only temporary since the behaviour returned in 2018.",
+     "veredito": "confirmado"
+    }
+   ]
+  }
+ }
+}

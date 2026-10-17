@@ -1,0 +1,34 @@
+{
+ "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+ "prTitle": "Optimize header layout performance with flexbox mixins",
+ "upstream": "discourse/discourse",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/discourse",
+ "base": "98fa098e6fade3097a11fe7f99a98a4e6ffb4728",
+ "head": "5b229316ee4c661836ed1161139692a3e8527444",
+ "tps": [
+  {
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#01",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The flex-item styles target the inner .extra-info-wrapper instead of the component's root div, so in the flexbox header a long topic title keeps its full width and pushes the navigation panel out instead of being truncated.",
+   "evidenciaOpus": "header.scss now makes .contents a flex container, but header-extra-info is an Ember component whose root div has no class (header.hbs:94, components/header-extra-info.hbs:1), so the flex item is that outer div with min-width:auto; the overflow/ellipsis rules sit on the inner .extra-info-wrapper (desktop/topic-post.scss:518-537), so a long nowrap title cannot shrink and pushes the panel out, and order(2) on .extra-info-wrapper (topic.scss:30) has no effect.",
+   "evidenciaAstra": "header-extra-info.js.es6:1 creates a default Ember component wrapper, while templates/components/header-extra-info.hbs:1 places .extra-info-wrapper inside it. common/base/header.scss:17 makes the outer wrapper a flex item without overriding its automatic minimum width; desktop/topic-post.scss:532-537 applies nowrap and ellipsis only to the descendant link. Consequently, long titles can force the header to overflow instead of shrinking and truncating."
+  },
+  {
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#02",
+   "severity": "medium",
+   "category": "style",
+   "bug": "The align-items mixin emits no -moz-box-align, so on old Firefox versions using the display:-moz-box fallback the advertised vertical centering is not applied.",
+   "evidenciaOpus": "The align-items mixin (mixins.scss:117-123) omits -moz-box-align although flexbox() emits display:-moz-box; this only matters on pre-flexbox Firefox versions that pick -moz-box, a negligible audience.",
+   "evidenciaAstra": "common/foundation/mixins.scss:102 emits display: -moz-box, but its alignment mixin at lines 117-122 omits -moz-box-align, the [Mozilla legacy alignment property](https://www-archive.mozilla.org/projects/xul/layout). The new center calls in common/base/header.scss:18 and common/base/topic-post.scss:265 therefore fail to center children in that fallback, relevant to the Firefox 16+ support declared in README.md:45."
+  },
+  {
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#05",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Mixing float: left with flexbox causes layout issues. Further this PR removes the float-based right alignment for .d-header .panel, which may cause the login panel in the non-Ember/noscript header (where .panel is nested inside .row and not a flex item) to stack under the title instead of remaining right-aligned.",
+   "evidenciaOpus": "The PR removes float:right from .d-header .panel and float:left from .title (header.scss:16-39); in the server-rendered header (_header.html.erb) .panel is a block inside .row next to the floated .title.span13, not a flex item, so the login button sits after the title instead of right-aligned. Only the no-JS/crawler header's appearance changes.",
+   "evidenciaAstra": "app/views/application/_header.html.erb:3-17 nests the login panel inside .row, whereas common/base/header.scss:14-18 makes only .contents a flex container. Removing the panel's float:right and substituting margin-left:auto/order at common/base/header.scss:35-39 therefore loses right alignment in this header, which is used by layouts/no_ember.html.erb:22 and layouts/application.html.erb:39-40; the generic claim that floats inherently conflict with flexbox is unnecessary to this real regression."
+  }
+ ]
+}

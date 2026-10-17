@@ -1,0 +1,34 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "prTitle": "Unified Storage Performance Optimizations",
+ "upstream": "grafana/grafana",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/grafana",
+ "base": "871af07203177ce59a24e742107119409274f48a",
+ "head": "26fed312840cd76b766cbd2158e17a7e6c0ec548",
+ "tps": [
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#01",
+   "severity": "medium",
+   "category": "concurrency",
+   "bug": "A race condition in BuildIndex allows multiple goroutines to concurrently build the same expensive index for the same key. This is caused by moving the b.cacheMu lock from protecting the entire function to only protecting the final cache assignment. ",
+   "evidenciaOpus": "bleve.go BuildIndex no longer holds cacheMu for the whole build, only around b.cache[key] = idx (bleve.go:137-139). getOrCreateIndex (search.go:287-307) does GetIndex then build without re-checking, so concurrent searches/events for the same uncached key now each build the index (previously GetIndex blocked on the build lock), wasting work and leaking the overwritten index.",
+   "evidenciaAstra": "pkg/storage/unified/search/bleve.go:96-138 creates and populates an index before acquiring cacheMu, allowing concurrent builds to overwrite the same cache entry. Both searches and events reach the unguarded lookup/build sequence at pkg/storage/unified/resource/search.go:292-298, so updates can land on an index subsequently displaced from the cache."
+  },
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#02",
+   "severity": "high",
+   "category": "concurrency",
+   "bug": "Calling s.search.TotalDocs() here may race with concurrent index creation: TotalDocs iterates b.cache without synchronization, and the event watcher goroutine started just above could trigger BuildIndex writes concurrently, potentially causing a concurrent map read/write panic.",
+   "evidenciaOpus": "search.go:216 adds s.search.TotalDocs() after the watch-event goroutine is started (:207-213); bleveBackend.TotalDocs ranges over b.cache without cacheMu (bleve.go:144-150) while handleEvent -> getOrCreateIndex -> BuildIndex can write the map, risking a concurrent map iteration/write fatal error.",
+   "evidenciaAstra": "pkg/storage/unified/resource/search.go:207-216 starts event processing before the new TotalDocs call; event handling can create an index through getOrCreateIndex at line 237. TotalDocs iterates the cache without locking at pkg/storage/unified/search/bleve.go:146, concurrently with the cache assignment at line 138."
+  },
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#sncc-01",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The PR skips the storage-server module integration test on postgres instead of fixing the failure, removing coverage of the new eager initialization on postgres.",
+   "evidenciaOpus": "module_server_test.go:35-38 (added by this PR) skips TestIntegrationWillRunInstrumentationServerWhenTargetHasNoHttpServer on postgres ('not working in Drone'). The same PR makes NewResourceServer call Init eagerly (server.go:258-262). The integration test therefore no longer exercises storage-server startup on postgres, and a regression from that change would go unnoticed there.",
+   "evidenciaAstra": "pkg/server/module_server_test.go:36-37 unconditionally skips PostgreSQL before the storage-server startup and metrics assertions at lines 47-63. This removes PostgreSQL integration coverage while pkg/storage/unified/resource/server.go:258 changes startup initialization, creating a real test coverage gap without establishing what caused the Drone failure."
+  }
+ ]
+}

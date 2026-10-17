@@ -1,0 +1,45 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "prOriginal": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/5f8a130277dbddc95d133cd2832be639baf89213",
+  "mergedAt": "2013-07-29",
+  "nota": "No upstream PR: the benchmark head commit 5f8a130277 itself is on discourse/discourse main (compare status 'ahead', behind_by=0), pushed directly on 2013-07-29 (committer date) with no associated pull request (commits/{sha}/pulls empty; PR searches by title and BlockedEmail found nothing). Merged code is identical to the benchmark head."
+ },
+ "tps": {
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2014-07-16",
+    "pr": null,
+    "commit": "01a68f8cc7ccc5f9df0828e97fe8bbe0e71548f8",
+    "url": "https://github.com/discourse/discourse/commit/01a68f8cc7ccc5f9df0828e97fe8bbe0e71548f8"
+   },
+   "removidoEm": null,
+   "diasNoAr": 352,
+   "reason": "After the rename to ScreenedEmail (86647f0a54, 2013-08-14) should_block? still did an exact ScreenedEmail.where(email: email) lookup. Commit 'Emails are case insensitive' (01a68f8cc7, 2014-07-16) added before_save :downcase_email to ScreenedEmail, before_validation :downcase_email to User, and compares se.email.downcase with email.downcase in should_block?. Today's screened_email.rb still downcases on save and canonical() downcases the input, so casing no longer bypasses a block.",
+   "astra": []
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 4828,
+   "reason": "On main today ScreenedEmail.should_block? still calls screened_email.record_match! on a match, and ScreeningModel#record_match! (lib/screening_model.rb) still does self.match_count += 1, sets last_match_at and calls save: a non-atomic read-modify-write run from EmailValidator during validation. The history of screened_email.rb and screening_model.rb after the merge shows no change to this side effect (only refactors, the levenshtein lookup and annotations).",
+   "astra": []
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2018-01-17",
+    "pr": null,
+    "commit": "2a22b90538441f3124f2fccd98fbc1b90aba9c82",
+    "url": "https://github.com/discourse/discourse/commit/2a22b90538441f3124f2fccd98fbc1b90aba9c82"
+   },
+   "removidoEm": null,
+   "diasNoAr": 1633,
+   "reason": "The unanchored Regexp.new(\"@(#{domains})\", true) stayed (later \"@(.+\\\\.)?(#{domains})\" in PR #3463 and 69ad0358c2, 2015) with no end anchor, so gmail.com.evil.com matched. Commit 'SECURITY: email domain whitelist could be bypassed' (2a22b90538, 2018-01-17) appended $ to the regex, with a spec for email.computers.are.evil.com; today's EmailValidator.email_in_restriction_setting? still uses \"@(.+\\\\.)?(#{domains})$\". Subdomain matching (evil.example.com for example.com) is intended behaviour upstream since 2015; the suffix bypass is what was fixed.",
+   "astra": []
+  }
+ }
+}

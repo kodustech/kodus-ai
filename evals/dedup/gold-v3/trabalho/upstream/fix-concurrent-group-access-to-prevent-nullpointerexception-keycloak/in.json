@@ -1,0 +1,34 @@
+{
+ "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+ "prTitle": "Fix concurrent group access to prevent NullPointerException",
+ "upstream": "keycloak/keycloak",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/keycloak",
+ "base": "c834e7473c02f11451216b3fbf355f953cfd95e9",
+ "head": "4def149a50c4b9b2c24fbb753ac60fe4f4df0cac",
+ "tps": [
+  {
+   "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+   "severity": "medium",
+   "category": "api",
+   "bug": "Returning null from getSubGroupsCount() violates the GroupModel contract (Javadoc says it never returns null) and may lead to NPEs in callers that expect a non-null count.",
+   "evidenciaOpus": "infinispan GroupAdapter.java:274-275 now returns null when modelSupplier.get() is null, while GroupModel.getSubGroupsCount javadoc (GroupModel.java:296) says it never returns null and the JPA adapter always returns a count; GroupUtils.java:90 forwards the null into the representation.",
+   "evidenciaAstra": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java:275 now explicitly returns null when the delegate is missing, violating the non-null contract in server-spi/src/main/java/org/keycloak/models/GroupModel.java:296. services/src/main/java/org/keycloak/utils/GroupUtils.java:90 propagates that null into the representation; this caller does not unbox it, but the contract violation is real."
+  },
+  {
+   "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "severity": "medium",
+   "category": "concurrency",
+   "bug": "The reader thread isn\u2019t waited for; flipping deletedAll to true and asserting immediately can race and miss exceptions added just after the flag change, making this test flaky.",
+   "evidenciaOpus": "GroupTest.java:139-157 starts the reader thread without keeping a reference or joining it; after deletedAll.set(true) the assertion on caughtExceptions runs immediately, so in-flight reads that fail later, or a reader that never read, still let the test pass.",
+   "evidenciaAstra": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:139 starts the reader without retaining or joining it, and line 157 asserts immediately after setting the stop flag. An in-flight request at line 143 can record an exception after the assertion, or the reader can observe the stop flag before performing any reads, allowing a false pass."
+  },
+  {
+   "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#03",
+   "severity": "low",
+   "category": "test_gap",
+   "bug": "The reader thread's stop flag is set only after all deletions succeed, so a failing delete leaves a non-daemon thread polling indefinitely.",
+   "evidenciaOpus": "GroupTest.java:152-155 sets deletedAll only after all removes succeed, with no finally; if a remove throws, the non-daemon reader thread loops forever. Only affects the test when it already fails.",
+   "evidenciaAstra": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:153 performs deletion before the stop flag is set at line 155, with no finally block. If deletion throws, the reader loop at line 140 remains active and catches request failures at lines 144\u2013146 without exiting, leaking the thread and potentially preventing JVM termination."
+  }
+ ]
+}

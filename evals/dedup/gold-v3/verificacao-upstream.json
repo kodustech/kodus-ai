@@ -1,5 +1,5 @@
 {
- "versao": "v2",
+ "versao": "v3",
  "geradoEm": "2026-10-17",
  "regra": "trabalho/upstream/REGRA.md",
  "prs": {
@@ -276,6 +276,58 @@
      "removidoEm": null,
      "diasNoAr": 392,
      "reason": "PR #46967 'Fix deny unsupported FGAPv2 token-exchange audience checks' (closes #46718) changed ClientPermissionsV2.canExchangeTo from throwing UnsupportedOperationException to `return false`, explicitly because V1 token exchange audience validation failed with HTTP 500 under FGAP V2. Main today still returns false.",
+     "astra": []
+    }
+   }
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "prTitle": "Add comprehensive email validation for blocked users",
+   "upstream": "discourse/discourse",
+   "prOriginal": {
+    "numero": null,
+    "url": "https://github.com/discourse/discourse/commit/5f8a130277dbddc95d133cd2832be639baf89213",
+    "mergedAt": "2013-07-29",
+    "nota": "No upstream PR: the benchmark head commit 5f8a130277 itself is on discourse/discourse main (compare status 'ahead', behind_by=0), pushed directly on 2013-07-29 (committer date) with no associated pull request (commits/{sha}/pulls empty; PR searches by title and BlockedEmail found nothing). Merged code is identical to the benchmark head."
+   },
+   "tps": {
+    "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04": {
+     "bug": "The case-sensitive email lookup in `BlockedEmail.should_block?` creates a bypass risk, allowing 'User@Example.com' to bypass a block on 'user@example.com'. This can lead to unauthorized access to blocked users.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2014-07-16",
+      "pr": null,
+      "commit": "01a68f8cc7ccc5f9df0828e97fe8bbe0e71548f8",
+      "url": "https://github.com/discourse/discourse/commit/01a68f8cc7ccc5f9df0828e97fe8bbe0e71548f8"
+     },
+     "removidoEm": null,
+     "diasNoAr": 352,
+     "reason": "After the rename to ScreenedEmail (86647f0a54, 2013-08-14) should_block? still did an exact ScreenedEmail.where(email: email) lookup. Commit 'Emails are case insensitive' (01a68f8cc7, 2014-07-16) added before_save :downcase_email to ScreenedEmail, before_validation :downcase_email to User, and compares se.email.downcase with email.downcase in should_block?. Today's screened_email.rb still downcases on save and canonical() downcases the input, so casing no longer bypasses a block.",
+     "astra": []
+    },
+    "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05": {
+     "bug": "BlockedEmail.should_block_email? method has side effects during a read operation - it updates statistics even when just checking if an email should be blocked. This could cause race conditions in concurrent environments and makes the method name misleading.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 4828,
+     "reason": "On main today ScreenedEmail.should_block? still calls screened_email.record_match! on a match, and ScreeningModel#record_match! (lib/screening_model.rb) still does self.match_count += 1, sets last_match_at and calls save: a non-atomic read-modify-write run from EmailValidator during validation. The history of screened_email.rb and screening_model.rb after the merge shows no change to this side effect (only refactors, the levenshtein lookup and annotations).",
+     "astra": []
+    },
+    "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08": {
+     "bug": "The regex pattern @(#{domains}) in email_in_restriction_setting? method only matches domain suffixes, not full domains with proper boundary anchoring. An attacker can register evil.example.com to bypass a whitelist entry for example.com.",
+     "severity": "high",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2018-01-17",
+      "pr": null,
+      "commit": "2a22b90538441f3124f2fccd98fbc1b90aba9c82",
+      "url": "https://github.com/discourse/discourse/commit/2a22b90538441f3124f2fccd98fbc1b90aba9c82"
+     },
+     "removidoEm": null,
+     "diasNoAr": 1633,
+     "reason": "The unanchored Regexp.new(\"@(#{domains})\", true) stayed (later \"@(.+\\\\.)?(#{domains})\" in PR #3463 and 69ad0358c2, 2015) with no end anchor, so gmail.com.evil.com matched. Commit 'SECURITY: email domain whitelist could be bypassed' (2a22b90538, 2018-01-17) appended $ to the regex, with a spec for email.computers.are.evil.com; today's EmailValidator.email_in_restriction_setting? still uses \"@(.+\\\\.)?(#{domains})$\". Subdomain matching (evil.example.com for example.com) is intended behaviour upstream since 2015; the suffix bypass is what was fixed.",
      "astra": []
     }
    }
@@ -627,6 +679,54 @@
     }
    }
   },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "prTitle": "Add rolling-updates feature flag and compatibility framework",
+   "upstream": "keycloak/keycloak",
+   "prOriginal": {
+    "numero": 36882,
+    "url": "https://github.com/keycloak/keycloak/pull/36882",
+    "mergedAt": "2025-02-06",
+    "nota": "Title differs ('Feature flag: rolling-updates'); found by searching the benchmark head SHA. PR headRefOid equals the benchmark head 62bf9893 (merge commit 0f91e67b); the benchmark diff vs base also carries unrelated main-branch changes, but the PR's own files match."
+   },
+   "tps": {
+    "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#03": {
+     "bug": "testFeatureNotEnabled only covers the metadata subcommand, so the feature guard in the check subcommand is untested.",
+     "severity": "medium",
+     "status": "descontinuado",
+     "corrigidoEm": null,
+     "removidoEm": {
+      "data": "2025-02-10",
+      "pr": 36946,
+      "commit": "c6509842673fb1fba0abfa1bcfa943c06b6a7979",
+      "url": "https://github.com/keycloak/keycloak/pull/36946"
+     },
+     "diasNoAr": 4,
+     "reason": "PR #36946 removed the separate feature guards from UpdateCompatibilityCheck.run() and UpdateCompatibilityMetadata.run() and put a single guard in the shared AbstractUpdatesCommand.run(), so the independent untested check-subcommand guard no longer existed and the metadata test exercised the shared guard; testFeatureNotEnabled itself was not changed. PR #46133 (2026-02-16) later deleted the guard and the test entirely; today UpdateCommandDistTest is gone from that path and there is no feature guard.",
+     "astra": [
+      {
+       "pergunta": "Descontinuado, and is the removal #36946 (guard consolidated into shared base run()) or #46133 (guard removed entirely)?",
+       "resposta": "Descontinuado with #36946: it removed the independent check guard and replaced both copies with one inherited run() whose guard the metadata test exercises; #46133 came after the gap had already ceased.",
+       "veredito": "descontinuado, removal #36946 2025-02-10"
+      }
+     ]
+    },
+    "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#04": {
+     "bug": "The disabled-feature test checks only the error message, not that the command exits with FEATURE_DISABLED (4).",
+     "severity": "medium",
+     "status": "descontinuado",
+     "corrigidoEm": null,
+     "removidoEm": {
+      "data": "2026-02-16",
+      "pr": 46133,
+      "commit": "f92c27e26d5bd195af15e64d5ea4c71ef9305b1d",
+      "url": "https://github.com/keycloak/keycloak/pull/46133"
+     },
+     "diasNoAr": 375,
+     "reason": "Through every revision until 2026-02 (including #38661 'ensuring exit codes are handled consistently'), testFeatureNotEnabled only called cliResult.assertError(...) and never asserted the FEATURE_DISABLED exit code (4). PR #46133 made rolling-updates:v2 a default/essential feature and deleted the feature-disabled guard, its exit code and testFeatureNotEnabled, without adding an exit-code assertion, so the behaviour under test no longer exists.",
+     "astra": []
+    }
+   }
+  },
   "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
    "prTitle": "Advanced date override handling and timezone compatibility improvements",
    "upstream": "calcom/cal.com",
@@ -899,6 +999,50 @@
     }
    }
   },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "prTitle": "Advanced Query Processing Architecture",
+   "upstream": "grafana/grafana",
+   "prOriginal": {
+    "numero": 107534,
+    "url": "https://github.com/grafana/grafana/pull/107534",
+    "mergedAt": "2025-07-04",
+    "nota": "Found via `gh api repos/grafana/grafana/commits/<sha>/pulls` on the benchmark commits; its last commit is the benchmark head 1cab4143d4 (squash merge 3ba2457a70), title 'Query splitting: Interpolate queries at the start of the process'. Loki plugin later moved out of grafana/grafana by #129092 (2026-07-27) to grafana/grafana-loki-datasource; today's code was read there."
+   },
+   "tps": {
+    "advanced-query-processing-architecture-grafana-codex#01": {
+     "bug": "Loki split/shard queries are now interpolated with applyTemplateVariables before splitting and again on execution, so ad hoc filters are applied twice and already-substituted values are re-interpolated.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 470,
+     "reason": "In grafana/grafana the lines stayed unchanged until PR #129092 (2026-07-27) moved the Loki plugin to the official grafana/grafana-loki-datasource repo, still bundled with Grafana. There, on main today, runSplitQuery and runShardSplitQuery still map targets through applyTemplateVariables (templateSrv.replace + addAdHocFilters), sub-requests still carry request.filters into datasource.runQuery -> super.query, and DataSourceWithBackend.query in grafana main still calls applyTemplateVariables again, so the double interpolation and ad hoc filters remain. A move, not a fix or a removal of the behaviour.",
+     "astra": [
+      {
+       "pergunta": "grafana/grafana#129092 (2026-07-27) deleted the Loki core plugin and moved it to the official grafana/grafana-loki-datasource repo (still bundled with Grafana), where runSplitQuery/runShardSplitQuery are byte-identical to the benchmark head. Pendente or descontinuado?",
+       "resposta": "Pendente for both: #129092 moved the plugin to its official successor, still bundled, rather than eliminating the behaviour; both bugs persist there unchanged.",
+       "veredito": "pendente"
+      }
+     ]
+    },
+    "advanced-query-processing-architecture-grafana-codex#05": {
+     "bug": "runShardSplitQuery now filters empty/hidden targets before interpolation, so an expr that interpolates to an empty string is no longer dropped.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 470,
+     "reason": "runShardSplitQuery on grafana-loki-datasource main (the successor of the deleted grafana/grafana file, moved by #129092 on 2026-07-27) still filters `query.expr` and `!query.hide` on the raw targets before `.map(applyTemplateVariables)`, exactly as at the benchmark head. No commit after the merge touched this order in either repo.",
+     "astra": [
+      {
+       "pergunta": "grafana/grafana#129092 (2026-07-27) deleted the Loki core plugin and moved it to the official grafana/grafana-loki-datasource repo (still bundled with Grafana), where runSplitQuery/runShardSplitQuery are byte-identical to the benchmark head. Pendente or descontinuado?",
+       "resposta": "Pendente for both: #129092 moved the plugin to its official successor, still bundled, rather than eliminating the behaviour; both bugs persist there unchanged.",
+       "veredito": "pendente"
+      }
+     ]
+    }
+   }
+  },
   "anonymous-add-configurable-device-limit-grafana-codex": {
    "prTitle": "Anonymous: Add configurable device limit",
    "upstream": "grafana/grafana",
@@ -977,6 +1121,90 @@
      "removidoEm": null,
      "diasNoAr": 1040,
      "reason": "On main, TagDevice still begins with 'if deviceID == \"\" { return nil }', and Anonymous.Authenticate in client.go only fails on ErrDeviceLimitReached, otherwise returning an anonymous identity. A request without the X-Grafana-Device-Id header is therefore still authenticated anonymously regardless of device_limit; none of the later impl.go/client.go commits changed this.",
+     "astra": []
+    }
+   }
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "prTitle": "Async import of the appStore packages",
+   "upstream": "calcom/cal.com",
+   "prOriginal": {
+    "numero": 8087,
+    "url": "https://github.com/calcom/cal.diy/pull/8087",
+    "mergedAt": "2023-04-05",
+    "nota": "Found via gh api commits/<head>/pulls; PR headRefOid equals the benchmark head 820d7fa87e; merge commit e043a5efd8 has an identical diff. calcom/cal.com now redirects to calcom/cal.diy (same history)."
+   },
+   "tps": {
+    "async-import-of-the-appstore-packages-cal-com#02": {
+     "bug": "The code uses forEach with async callbacks, which causes asynchronous operations (e.g., calendar/video event deletions, payment refunds) to run concurrently without being awaited. This 'fire-and-forget' behavior leads to unhandled promise rejections, race conditions, and incomplete cleanup, as surrounding try-catch blocks cannot properly handle errors from these unawaited promises. Replace forEach with for...of loops or Promise.all() with map() to ensure proper sequential execution and error handling.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2023-08-26",
+      "pr": 10157,
+      "commit": "c1bcfcfa3ddf989e5c99609202a81ac7a0522918",
+      "url": "https://github.com/calcom/cal.diy/pull/10157"
+     },
+     "removidoEm": null,
+     "diasNoAr": 143,
+     "reason": "PR #10157 'fix: replace all async foreach callbacks' replaced the forEach(async ...) loops in vital/lib/reschedule.ts, wipemycalother/lib/reschedule.ts and the trpc requestReschedule handler (where bookings.tsx's reschedule moved) with map(async ...) plus await Promise.all / Promise.allSettled, so getCalendar failures are awaited and caught. Today both reschedule.ts files still use const promises = bookingRefsFiltered.map(async ...) followed by await Promise.all(promises) inside try/catch.",
+     "astra": []
+    },
+    "async-import-of-the-appstore-packages-cal-com#sncc-01": {
+     "bug": "Each import(...) in the appStore object literal runs when app-store/index.ts is imported, so all integrations still load at startup instead of lazily, while every entry becomes a promise.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2023-05-09",
+      "pr": 8419,
+      "commit": "d6fb0df64fc2227b06a4ef59b2fb9fc703d69849",
+      "url": "https://github.com/calcom/cal.diy/pull/8419"
+     },
+     "removidoEm": null,
+     "diasNoAr": 34,
+     "reason": "PR #8419 (commit message item 'Lazy load apps from appstore') changed every appStore entry in packages/app-store/index.ts from an eager import(\"./x\") to a thunk () => import(\"./x\") and updated getCalendar to call appStore[...](), so modules load only when selected. The thunk form persisted (later wrapped in createCachedImport, #19519) until index.ts was removed in #23449 'refactor: Remove app store index' (2025-08-29).",
+     "astra": []
+    }
+   }
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "prTitle": "AuthZService: improve authz caching",
+   "upstream": "grafana/grafana",
+   "prOriginal": {
+    "numero": 103633,
+    "url": "https://github.com/grafana/grafana/pull/103633",
+    "mergedAt": "2025-04-09",
+    "nota": "Found by title search; PR headRefOid equals the benchmark head 7562f378 (merge commit d9dc93c4), so merged code matches the benchmark."
+   },
+   "tps": {
+    "authzservice-improve-authz-caching-grafana-codex#01": {
+     "bug": "The cache key construction in `userPermDenialCacheKey` uses simple string concatenation with underscores, which can lead to ambiguous keys and collision risks when any component contains underscores or is empty. This could result in incorrect denial cache hits, affecting user permissions.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 556,
+     "reason": "On main today pkg/services/authz/rbac/cache.go userPermDenialCacheKey still ends with + \"_\" + name + \"_\" + parent; the action segment now goes through permCacheActionPart (action + \"!\" + digest), but name and parent are still joined with bare underscores, so (name=a_b,parent=c) and (name=a,parent=b_c) still collide. Check() in service.go still returns deny on any denial-cache hit for that key.",
+     "astra": []
+    },
+    "authzservice-improve-authz-caching-grafana-codex#04": {
+     "bug": "The test comment says the cached permissions 'allow access', but the map stores false for dashboards:uid:dash1, so checkPermission will still treat this scope as not allowed.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 556,
+     "reason": "The test 'Should deny on explicit cache deny entry' still exists on main in service_test.go with the comment 'Allow access to the dashboard to prove this is not checked' and still seeds permCache with map[string]bool{\"dashboards:uid:dash1\": false}, so it would pass without the denial-cache branch.",
+     "astra": []
+    },
+    "authzservice-improve-authz-caching-grafana-codex#05": {
+     "bug": "A cached permission set that denies a resource always triggers a full DB permission reload, so checks over many inaccessible dashboards issue one query per resource instead of being served from cache.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 556,
+     "reason": "On main, Check() still falls through to getIdentityPermissions whenever the cached permission map does not allow, and getUserPermissions has no permCache lookup (only singleflight then a DB query and permCache.Set); the denial cache is still keyed per resource name/parent, so each distinct denied resource still triggers a full permission reload.",
      "astra": []
     }
    }
@@ -1756,6 +1984,55 @@
     }
    }
   },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "prTitle": "feat: convert InsightsBookingService to use Prisma.sql raw queries",
+   "upstream": "calcom/cal.com",
+   "prOriginal": {
+    "numero": 22345,
+    "url": "https://github.com/calcom/cal.diy/pull/22345",
+    "mergedAt": "2025-07-15",
+    "nota": "Found via gh api commits/<head>/pulls; PR headRefOid equals the benchmark head da09bc0808; squash commit 967442892a has no diff vs head in packages/lib/server/service/. calcom/cal.com now redirects to calcom/cal.diy."
+   },
+   "tps": {
+    "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#03": {
+     "bug": "The getBaseConditions test uses a single booking matching both auth and filter conditions, so it would pass even if the conditions were not combined.",
+     "severity": "medium",
+     "status": "descontinuado",
+     "corrigidoEm": null,
+     "removidoEm": {
+      "data": "2026-04-15",
+      "pr": 28903,
+      "commit": "ab21c7f805",
+      "url": "https://github.com/calcom/cal.diy/pull/28903"
+     },
+     "diasNoAr": 274,
+     "reason": "The test 'should combine authorization and filter conditions' kept the same shape after the merge: it moved to InsightsBookingService.integration-test.ts (#22790) and then packages/features/insights/services/ (#24399), and its last version (after #24668, 2025-10-28) still creates one user booking that satisfies both the auth and the eventTypeId filter, asserting that single row. The file and the whole insights feature were then deleted by #28903 'refactor: Cal.diy' (EE removal), which does not target the gap.",
+     "astra": []
+    }
+   }
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "prTitle": "feat(ecosystem): Implement cross-system issue synchronization",
+   "upstream": "getsentry/sentry",
+   "prOriginal": {
+    "numero": 77754,
+    "url": "https://github.com/getsentry/sentry/pull/77754",
+    "mergedAt": "2024-10-04",
+    "nota": "Benchmark title differs from upstream ('fix(ecosystem): Breaks issue sync cycles', branch gv/fix-jira-cyclic-sync); found via the file history of assignment_source.py, whose first commit is the squash merge f9919d7894. Its +/- lines are identical to the benchmark base..head diff."
+   },
+   "tps": {
+    "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01": {
+     "bug": "The AssignmentSource dataclass uses queued: datetime = timezone.now() as a default field value, which evaluates timezone.now() once at class definition time and shares that single datetime instance across all objects.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 743,
+     "reason": "On master today src/sentry/integrations/services/assignment_source.py still declares 'queued: datetime = timezone.now()' as a dataclass default, evaluated once at import, and from_integration still builds AssignmentSource without passing queued. The only later change to the file, PR #90496 (2025-04-28), only made to_dict/from_dict serialize queued as an ISO string; it did not touch the default.",
+     "astra": []
+    }
+   }
+  },
   "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
    "prTitle": "feat(upsampling) - Support upsampled error count with performance optimizations",
    "upstream": "getsentry/sentry",
@@ -2068,6 +2345,48 @@
     }
    }
   },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "prTitle": "feat(workflow_engine): Add in hook for producing occurrences from the stateful detector",
+   "upstream": "getsentry/sentry",
+   "prOriginal": {
+    "numero": 80168,
+    "url": "https://github.com/getsentry/sentry/pull/80168",
+    "mergedAt": "2024-11-05",
+    "nota": "Found by exact title search (branch danf/we-occurrences-hook); squash-merged as de60b7fb01. Its +/- lines are identical to the benchmark base..head diff."
+   },
+   "tps": {
+    "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02": {
+     "bug": "MetricAlertDetectorHandler inherits from StatefulDetectorHandler but only contains pass, failing to implement its required abstract methods: counter_names (property), get_dedupe_value(), get_group_key_values(), and build_occurrence_and_event_data(). This will cause a TypeError at runtime when the class is instantiated.",
+     "severity": "high",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2024-12-13",
+      "pr": 81975,
+      "commit": "fcda2c8ae919fca322cd6ce9e64756d8ba2d47d0",
+      "url": "https://github.com/getsentry/sentry/pull/81975"
+     },
+     "removidoEm": null,
+     "diasNoAr": 38,
+     "reason": "After #80168 MetricAlertDetectorHandler(StatefulDetectorHandler) stayed a bare 'pass' through #80486 and #81701 (import move). PR #81975 (Adding support for process_workflows in the IssuePlatform) replaced 'pass' with implementations of build_occurrence_and_event_data, counter_names, get_dedupe_value and get_group_key_values, so the class is instantiable.",
+     "astra": []
+    },
+    "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#04": {
+     "bug": "Wrong value `6` passed for `group_2` occurrence — the data packet specifies `\"group_2\": 10`. Should be `10` to accurately reflect the test scenario, which will ensure the test produces the correct occurrence data.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2025-04-18",
+      "pr": 89923,
+      "commit": "93911bd7152a430cae7be92ee8e9de9ea7e83dbc",
+      "url": "https://github.com/getsentry/sentry/pull/89923"
+     },
+     "removidoEm": null,
+     "diasNoAr": 164,
+     "reason": "The wrong 'group_2', 6 expectation in test_state_results_multi_group survived until PR #89923 (return DetectorOccurrence from build_occurrence_and_event_data), which rewrote the test: the expected IssueOccurrence for group_2 is now built by detector_to_issue_occurrence(..., value=10, ...), and that helper puts value into evidence_data, so the assertion checks the forwarded measurement. Today's test_detector.py still builds group_2 with value=10.",
+     "astra": []
+    }
+   }
+  },
   "feature-automatically-downsize-large-images-discourse-cursor": {
    "prTitle": "FEATURE: automatically downsize large images",
    "upstream": "discourse/discourse",
@@ -2326,6 +2645,54 @@
     }
    }
   },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "prTitle": "FEATURE: Localization fallbacks (server-side)",
+   "upstream": "discourse/discourse",
+   "prOriginal": {
+    "numero": 3609,
+    "url": "https://github.com/discourse/discourse/pull/3609",
+    "mergedAt": "2015-07-30",
+    "nota": "Found via gh search prs 'Localization fallbacks'. Merged with a regular merge: the benchmark head ecfa17b5 is the 2nd of 7 PR commits and is on upstream history. Later PR commits (650eb86 'Disable in development (server)') made the FallbackLocaleList production-only, but the translate/cache code and set_locale ensure_loaded! of the benchmark head were merged unchanged."
+   },
+   "tps": {
+    "feature-localization-fallbacks-server-side-discourse-cursor#01": {
+     "bug": "Fallback locale catalogs are only loaded in the controller's set_locale filter, while translate loads just the current locale, so translations outside requests (jobs, mailers) cannot fall back to the site default or English.",
+     "severity": "high",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2015-09-18",
+      "pr": 3786,
+      "commit": "619d5b1bc1b23a8422a5f601de889c19c0eb959f",
+      "url": "https://github.com/discourse/discourse/pull/3786"
+     },
+     "removidoEm": null,
+     "diasNoAr": 50,
+     "reason": "PR #3786 'FIX: Load fallback locales in Sidekiq jobs' added I18n.fallbacks.ensure_loaded! right after I18n.locale = SiteSetting.default_locale in Jobs::Base#perform, so jobs (and the mailers they run) load the fallback catalogs. Today app/jobs/base.rb still calls I18n.ensure_all_loaded! after setting the locale, and execute_reload in translate_accelerator.rb also calls ensure_all_loaded!.",
+     "astra": []
+    },
+    "feature-localization-fallbacks-server-side-discourse-cursor#06": {
+     "bug": "The translation cache key does not include the site or its default locale, but fallback results now depend on SiteSetting.default_locale, so multisite processes or a changed default locale serve stale fallback translations.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2020-05-06",
+      "pr": null,
+      "commit": "ec2f3169ff43a440250bc54f7c6c43d64fcc8263",
+      "url": "https://github.com/discourse/discourse/commit/ec2f3169ff43a440250bc54f7c6c43d64fcc8263"
+     },
+     "removidoEm": null,
+     "diasNoAr": 1742,
+     "reason": "The cache key in translate_no_override is still key+locale+backend id today, but commit ec2f3169 ('FIX: Using the default_locale in locale fallbacks caused problems', citing multisite missing translations) removed SiteSetting.default_locale from FallbackLocaleList; the chain is now locale, its static LocaleSiteSetting.fallback_locale chain, then :en, so cached fallback results no longer depend on any site setting. The dependency had been dropped by the 2015-11-13 refactor 3720783 and re-added on 2018-01-22 (ce060e2) before this final removal.",
+     "astra": [
+      {
+       "pergunta": "confirmado by ec2f3169 (2020-05-06) or descontinuado (3720783 refactor 2015 / ec2f3169)?",
+       "resposta": "confirmado - ec2f3169 deliberately removed site-dependent default_locale fallbacks, eliminating the mismatch; the 2015 refactor was only temporary since the behaviour returned in 2018.",
+       "veredito": "confirmado"
+      }
+     ]
+    }
+   }
+  },
   "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
    "prTitle": "FEATURE: per-topic unsubscribe option in emails",
    "upstream": "discourse/discourse",
@@ -2445,6 +2812,48 @@
      },
      "diasNoAr": 978,
      "reason": "Through the last version (9353ae4b5d^), a second GET still stepped the level down again: watching/tracking -> regular, otherwise TopicUser.change(..., muted), so revisiting from regular muted the topic. The GET action was removed with the obsolete per-topic page on 2018-04-16, not by a fix for idempotency.",
+     "astra": []
+    }
+   }
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "prTitle": "Fix concurrent group access to prevent NullPointerException",
+   "upstream": "keycloak/keycloak",
+   "prOriginal": {
+    "numero": 40940,
+    "url": "https://github.com/keycloak/keycloak/pull/40940",
+    "mergedAt": "2025-07-08",
+    "nota": "Found by searching the linked issue #40368 / commit title 'Fix NPE when accessing group concurrently'. The PR's single commit is the benchmark head 4def149a50; merged into main as 332c9b6e4a. Backports #41021 (26.3) and #41020 (26.2)."
+   },
+   "tps": {
+    "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01": {
+     "bug": "Returning null from getSubGroupsCount() violates the GroupModel contract (Javadoc says it never returns null) and may lead to NPEs in callers that expect a non-null count.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 466,
+     "reason": "On keycloak main today, infinispan GroupAdapter.getSubGroupsCount() still reads `GroupModel model = modelSupplier.get(); return model == null ? null : model.getSubGroupsCount();`, identical to the benchmark head, while GroupModel.getSubGroupsCount() Javadoc still says 'Never returns null'. Later commits to GroupAdapter (import order, organization groups, SCIM) did not touch this method.",
+     "astra": []
+    },
+    "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02": {
+     "bug": "The reader thread isn’t waited for; flipping deletedAll to true and asserting immediately can race and miss exceptions added just after the flag change, making this test flaky.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 466,
+     "reason": "The test createMultiDeleteMultiReadMulti on main still starts the reader with `new Thread(...).start()` without keeping or joining it, and asserts caughtExceptions immediately after deletedAll.set(true). Later commits only added @DatabaseTest/@DisabledForDatabases(\"mssql\") annotations and import changes; the race is unchanged.",
+     "astra": []
+    },
+    "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#03": {
+     "bug": "The reader thread's stop flag is set only after all deletions succeed, so a failing delete leaves a non-daemon thread polling indefinitely.",
+     "severity": "low",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 466,
+     "reason": "On main the deletes still run in a plain forEach followed by deletedAll.set(true), with no try/finally, so a failing remove() leaves the non-daemon reader thread looping. No later commit to GroupTest.java changed this test body.",
      "astra": []
     }
    }
@@ -2788,6 +3197,28 @@
      "removidoEm": null,
      "diasNoAr": 1624,
      "reason": "GroupsController#members got a negative check in 982df3c1 'FIX: return status 400 for invalid member params' (2018-06-29: limit < 0 raises InvalidParameters) and an upper bound in 704c5795 'FIX: do not allow unbound membership lookups' (2019-06-17: limit > 1000 raises InvalidParameters). Main today uses fetch_limit_from_params(default:, max: MEMBERS_MAX_PAGE_SIZE). The fix date is when both halves were in place.",
+     "astra": []
+    }
+   }
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "prTitle": "Fixing Re-authentication with passkeys",
+   "upstream": "keycloak/keycloak",
+   "prOriginal": {
+    "numero": 41249,
+    "url": "https://github.com/keycloak/keycloak/pull/41249",
+    "mergedAt": "2025-07-22",
+    "nota": "Found via gh pr list --search with the title; head 25bf964a is exactly the PR headRefOid (2 commits), merged via merge commit 57972d85 (closes #41242, #41008). Merged code matches the benchmark head."
+   },
+   "tps": {
+    "fixing-re-authentication-with-passkeys-keycloak#03": {
+     "bug": "PasswordForm now accepts passkey-only users, but only the keycloak.v2 login-password.ftl renders the passkeys conditional UI; the base template (used by the legacy keycloak theme) does not, so a passkey-only user is shown a password-only form they cannot complete.",
+     "severity": "high",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 452,
+     "reason": "On main today PasswordForm.configuredFor still returns true via isConditionalPasskeysEnabled(user) and authenticate still fills webauthn data, but base/login/login-password.ftl renders only the password form with no passkeys import or conditionalUIData macro. The legacy keycloak login theme (parent=base) still has no login-password.ftl override, and neither the base template nor PasswordForm.java has a functional change since the merge (only an import-order commit a2c1055 on PasswordForm).",
      "astra": []
     }
    }
@@ -3296,6 +3727,81 @@
     }
    }
   },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "prTitle": "Optimize header layout performance with flexbox mixins",
+   "upstream": "discourse/discourse",
+   "prOriginal": {
+    "numero": 3641,
+    "url": "https://github.com/discourse/discourse/pull/3641",
+    "mergedAt": "2015-08-04",
+    "nota": "Found via gh api commits/<head>/pulls; PR headRefOid equals the benchmark head 5b229316ee, merged as-is (commit is an ancestor of main). Reverted in full the same day by Jeff Atwood (2b2ae4bfe7)."
+   },
+   "tps": {
+    "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#01": {
+     "bug": "The flex-item styles target the inner .extra-info-wrapper instead of the component's root div, so in the flexbox header a long topic title keeps its full width and pushes the navigation panel out instead of being truncated.",
+     "severity": "high",
+     "status": "descontinuado",
+     "corrigidoEm": null,
+     "removidoEm": {
+      "data": "2015-08-04",
+      "pr": null,
+      "commit": "2b2ae4bfe79937ba1ee7143da92e5278abef7557",
+      "url": "https://github.com/discourse/discourse/commit/2b2ae4bfe79937ba1ee7143da92e5278abef7557"
+     },
+     "diasNoAr": 0,
+     "reason": "The flex container on .d-header .contents and the flex-item rules on .extra-info-wrapper were introduced by PR #3641 and removed the same day by commit 2b2ae4bfe7, an exact revert of 5b229316ee across all 5 files. The header returned to the float layout, so the long-title overflow caused by the flex item never persisted. Later flexbox attempts (PR #3732, closed unmerged; 2016 widget header rewrite) are separate code. Reclassified as descontinuado for consistency: a whole-PR revert with no stated reason does not target this bug (same rule as the other reverted PRs).",
+     "astra": [
+      {
+       "pergunta": "PR #3641 was merged 2015-08-04 and fully reverted by Jeff Atwood ~1.5h later (commit 2b2ae4bfe7, no reason stated). Does an unexplained full revert count as confirmado or descontinuado for #01, #02, #05?",
+       "resposta": "All three confirmado: the revert undid the flex layout (#01), removed the defective mixin and its uses (#02) and restored float:right (#05). Under 'any way of fixing counts', a full rollback of the introducing change is a fix; the missing justification only means upstream did not acknowledge each bug.",
+       "veredito": "confirmado"
+      }
+     ]
+    },
+    "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#02": {
+     "bug": "The align-items mixin emits no -moz-box-align, so on old Firefox versions using the display:-moz-box fallback the advertised vertical centering is not applied.",
+     "severity": "medium",
+     "status": "descontinuado",
+     "corrigidoEm": null,
+     "removidoEm": {
+      "data": "2015-08-04",
+      "pr": null,
+      "commit": "2b2ae4bfe79937ba1ee7143da92e5278abef7557",
+      "url": "https://github.com/discourse/discourse/commit/2b2ae4bfe79937ba1ee7143da92e5278abef7557"
+     },
+     "diasNoAr": 0,
+     "reason": "The align-items mixin without -moz-box-align was added to common/foundation/mixins.scss by PR #3641 and deleted, with all its call sites, by the same-day exact revert 2b2ae4bfe7. Nothing of this mixin remained on the default branch. Reclassified as descontinuado for consistency: a whole-PR revert with no stated reason does not target this bug (same rule as the other reverted PRs).",
+     "astra": [
+      {
+       "pergunta": "PR #3641 was merged 2015-08-04 and fully reverted by Jeff Atwood ~1.5h later (commit 2b2ae4bfe7, no reason stated). Does an unexplained full revert count as confirmado or descontinuado for #01, #02, #05?",
+       "resposta": "All three confirmado: the revert undid the flex layout (#01), removed the defective mixin and its uses (#02) and restored float:right (#05). Under 'any way of fixing counts', a full rollback of the introducing change is a fix; the missing justification only means upstream did not acknowledge each bug.",
+       "veredito": "confirmado"
+      }
+     ]
+    },
+    "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#05": {
+     "bug": "Mixing float: left with flexbox causes layout issues. Further this PR removes the float-based right alignment for .d-header .panel, which may cause the login panel in the non-Ember/noscript header (where .panel is nested inside .row and not a flex item) to stack under the title instead of remaining right-aligned.",
+     "severity": "medium",
+     "status": "descontinuado",
+     "corrigidoEm": null,
+     "removidoEm": {
+      "data": "2015-08-04",
+      "pr": null,
+      "commit": "2b2ae4bfe79937ba1ee7143da92e5278abef7557",
+      "url": "https://github.com/discourse/discourse/commit/2b2ae4bfe79937ba1ee7143da92e5278abef7557"
+     },
+     "diasNoAr": 0,
+     "reason": "PR #3641 removed float:right from .d-header .panel; commit 2b2ae4bfe7 reverted the whole change the same day, restoring float:right and the previous header layout, so the server-rendered/noscript header was right-aligned again. Reclassified as descontinuado for consistency: a whole-PR revert with no stated reason does not target this bug (same rule as the other reverted PRs).",
+     "astra": [
+      {
+       "pergunta": "PR #3641 was merged 2015-08-04 and fully reverted by Jeff Atwood ~1.5h later (commit 2b2ae4bfe7, no reason stated). Does an unexplained full revert count as confirmado or descontinuado for #01, #02, #05?",
+       "resposta": "All three confirmado: the revert undid the flex layout (#01), removed the defective mixin and its uses (#02) and restored float:right (#05). Under 'any way of fixing counts', a full rollback of the introducing change is a fix; the missing justification only means upstream did not acknowledge each bug.",
+       "veredito": "confirmado"
+      }
+     ]
+    }
+   }
+  },
   "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
    "prTitle": "Optimize spans buffer insertion with eviction during insert",
    "upstream": "getsentry/sentry",
@@ -3383,6 +3889,28 @@
        "veredito": "descontinuado"
       }
      ]
+    }
+   }
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "prTitle": "ref(crons): Reorganize incident creation / issue occurrence logic",
+   "upstream": "getsentry/sentry",
+   "prOriginal": {
+    "numero": 80528,
+    "url": "https://github.com/getsentry/sentry/pull/80528",
+    "mergedAt": "2024-11-11",
+    "nota": "Found by the file history of incident_occurrence.py on master (squash commit c3b32a7bab, same title). PR headRefOid equals the benchmark head dcdcadb771; the merged function is identical to the benchmark head. The bug predates the PR (moved from mark_failed.py)."
+   },
+   "tps": {
+    "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02": {
+     "bug": "The function modifies the config variable to include display values but then returns the original monitor.config instead of the modified version.",
+     "severity": "low",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 705,
+     "reason": "On master today src/sentry/monitors/logic/incident_occurrence.py still defines get_monitor_environment_context, which copies monitor.config into config and replaces schedule_type with get_schedule_type_display(), but still returns \"config\": monitor_environment.monitor.config (the original). The only change to the function since the merge is the removal of the \"type\" key (#88496); it is still used for the occurrence's monitor context. None of the later commits on the file touch the returned config.",
+     "astra": []
     }
    }
   },
@@ -3848,6 +4376,69 @@
      "removidoEm": null,
      "diasNoAr": 481,
      "reason": "submit() on master still loops `for buffer in self.buffers.values(): memory_infos.extend(buffer.get_memory_info())`, and SpansBuffer.get_memory_info still returns iter_cluster_memory_usage(self.client) where every buffer's client is the same get_redis_client() cluster. The cluster-wide INFO is still repeated once per flusher process buffer.",
+     "astra": []
+    }
+   }
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "prTitle": "Unified Storage Performance Optimizations",
+   "upstream": "grafana/grafana",
+   "prOriginal": {
+    "numero": 97529,
+    "url": "https://github.com/grafana/grafana/pull/97529",
+    "mergedAt": "2024-12-10",
+    "nota": "Found by head branch 'unified-storage-dont-lazy-init' (benchmark head is a merge commit on that branch). Upstream title: 'Unified Storage: Init at startup, fix traces, and speed up indexing', squash-merged as d762a96436. The squash diff's +/- lines are identical to the benchmark base..head diff."
+   },
+   "tps": {
+    "unified-storage-performance-optimizations-grafana-codex#01": {
+     "bug": "A race condition in BuildIndex allows multiple goroutines to concurrently build the same expensive index for the same key. This is caused by moving the b.cacheMu lock from protecting the entire function to only protecting the final cache assignment. ",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2025-07-10",
+      "pr": 107886,
+      "commit": "8fd5739576ea91c0b4685e5356b75ee22e00f34e",
+      "url": "https://github.com/grafana/grafana/pull/107886"
+     },
+     "removidoEm": null,
+     "diasNoAr": 212,
+     "reason": "After #97529 getOrCreateIndex did GetIndex then build with a '// TODO??? We want to block while building the index ... for the same key' comment and no dedupe, while BuildIndex only locked the final cache assignment. PR #107886 added a singleflight.Group (buildIndex.Do keyed by key.String()) with a recheck of GetIndex inside, so concurrent callers for the same key share one build. Today getOrCreateIndex still uses s.buildIndex.DoChan with the recheck.",
+     "astra": []
+    },
+    "unified-storage-performance-optimizations-grafana-codex#02": {
+     "bug": "Calling s.search.TotalDocs() here may race with concurrent index creation: TotalDocs iterates b.cache without synchronization, and the event watcher goroutine started just above could trigger BuildIndex writes concurrently, potentially causing a concurrent map read/write panic.",
+     "severity": "high",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2025-06-17",
+      "pr": 106842,
+      "commit": "b48337a7c83a28aafb40492eda6274103b271689",
+      "url": "https://github.com/grafana/grafana/pull/106842"
+     },
+     "removidoEm": null,
+     "diasNoAr": 189,
+     "reason": "TotalDocs kept ranging over the plain b.cache map without cacheMu until PR #106842 replaced the map+RWMutex with localcache.CacheService and TotalDocs iterated b.cache.Items(), a copy taken under the cache's lock, removing the unsynchronized map read. The PR targeted a TTL cache, not the race, but the TotalDocs loop survived and became safe. Today TotalDocs iterates GetOpenIndexes() (keys copied under cacheMx.RLock) and getCachedIndex (RLock), so the race is still gone.",
+     "astra": [
+      {
+       "pergunta": "TotalDocs race became safe via #106842 (map -> mutex-protected localcache, Items() copy), a change targeting TTL caching, not the bug: confirmado or descontinuado?",
+       "resposta": "#106842 fixed the behaviour by replacing the map with a mutex-protected cache whose Items() returns a copy under lock; by the definition any way of fixing counts even without intent, so not descontinuado; the later return to a locked map does not change the milestone.",
+       "veredito": "confirmado"
+      }
+     ]
+    },
+    "unified-storage-performance-optimizations-grafana-codex#sncc-01": {
+     "bug": "The PR skips the storage-server module integration test on postgres instead of fixing the failure, removing coverage of the new eager initialization on postgres.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2025-04-08",
+      "pr": 103520,
+      "commit": "56b4e5670d0a0cb36dc6c0999ab42a482119766c",
+      "url": "https://github.com/grafana/grafana/pull/103520"
+     },
+     "removidoEm": null,
+     "diasNoAr": 119,
+     "reason": "PR #103520 (fix graceful termination for grafana target servers) rewrote TestIntegrationWillRunInstrumentationServerWhenTargetHasNoHttpServer: it removed the GRAFANA_TEST_DB/postgres skip ('test not working with postgres in Drone') and now only skips SQLite, using require.Eventually instead of a fixed sleep. Today's module_server_test.go has no postgres skip, so storage-server startup is again covered on postgres.",
      "astra": []
     }
    }

@@ -1,0 +1,35 @@
+{
+ "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+ "prOriginal": {
+  "numero": 40940,
+  "url": "https://github.com/keycloak/keycloak/pull/40940",
+  "mergedAt": "2025-07-08",
+  "nota": "Found by searching the linked issue #40368 / commit title 'Fix NPE when accessing group concurrently'. The PR's single commit is the benchmark head 4def149a50; merged into main as 332c9b6e4a. Backports #41021 (26.3) and #41020 (26.2)."
+ },
+ "tps": {
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 466,
+   "reason": "On keycloak main today, infinispan GroupAdapter.getSubGroupsCount() still reads `GroupModel model = modelSupplier.get(); return model == null ? null : model.getSubGroupsCount();`, identical to the benchmark head, while GroupModel.getSubGroupsCount() Javadoc still says 'Never returns null'. Later commits to GroupAdapter (import order, organization groups, SCIM) did not touch this method.",
+   "astra": []
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 466,
+   "reason": "The test createMultiDeleteMultiReadMulti on main still starts the reader with `new Thread(...).start()` without keeping or joining it, and asserts caughtExceptions immediately after deletedAll.set(true). Later commits only added @DatabaseTest/@DisabledForDatabases(\"mssql\") annotations and import changes; the race is unchanged.",
+   "astra": []
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#03": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 466,
+   "reason": "On main the deletes still run in a plain forEach followed by deletedAll.set(true), with no try/finally, so a failing remove() leaves the non-daemon reader thread looping. No later commit to GroupTest.java changed this test body.",
+   "astra": []
+  }
+ }
+}

@@ -1,0 +1,35 @@
+{
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "prOriginal": {
+  "numero": 103633,
+  "url": "https://github.com/grafana/grafana/pull/103633",
+  "mergedAt": "2025-04-09",
+  "nota": "Found by title search; PR headRefOid equals the benchmark head 7562f378 (merge commit d9dc93c4), so merged code matches the benchmark."
+ },
+ "tps": {
+  "authzservice-improve-authz-caching-grafana-codex#01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 556,
+   "reason": "On main today pkg/services/authz/rbac/cache.go userPermDenialCacheKey still ends with + \"_\" + name + \"_\" + parent; the action segment now goes through permCacheActionPart (action + \"!\" + digest), but name and parent are still joined with bare underscores, so (name=a_b,parent=c) and (name=a,parent=b_c) still collide. Check() in service.go still returns deny on any denial-cache hit for that key.",
+   "astra": []
+  },
+  "authzservice-improve-authz-caching-grafana-codex#04": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 556,
+   "reason": "The test 'Should deny on explicit cache deny entry' still exists on main in service_test.go with the comment 'Allow access to the dashboard to prove this is not checked' and still seeds permCache with map[string]bool{\"dashboards:uid:dash1\": false}, so it would pass without the denial-cache branch.",
+   "astra": []
+  },
+  "authzservice-improve-authz-caching-grafana-codex#05": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 556,
+   "reason": "On main, Check() still falls through to getIdentityPermissions whenever the cached permission map does not allow, and getUserPermissions has no permCache lookup (only singleflight then a DB query and permCache.Set); the denial cache is still keyed per resource name/parent, so each distinct denied resource still triggers a full permission reload.",
+   "astra": []
+  }
+ }
+}

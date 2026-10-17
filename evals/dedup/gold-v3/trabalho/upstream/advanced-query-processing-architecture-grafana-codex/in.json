@@ -1,0 +1,26 @@
+{
+ "caseId": "advanced-query-processing-architecture-grafana-codex",
+ "prTitle": "Advanced Query Processing Architecture",
+ "upstream": "grafana/grafana",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/grafana",
+ "base": "d9a8253640464014aa3662c91131278990cfb828",
+ "head": "1cab4143d443c33079566f6ca36931eb8468159f",
+ "tps": [
+  {
+   "issueId": "advanced-query-processing-architecture-grafana-codex#01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Loki split/shard queries are now interpolated with applyTemplateVariables before splitting and again on execution, so ad hoc filters are applied twice and already-substituted values are re-interpolated.",
+   "evidenciaOpus": "querySplitting.ts:299 now runs datasource.applyTemplateVariables on each target, and the split requests still go through runQuery -> super.query, which applies applyTemplateVariables again; runShardSplitQuery (shardQuerySplitting.ts:52) interpolates first and then delegates to runSplitQuery (the test now expects 5 calls for one target). Ad hoc filters get re-added (duplicated label filters after parsers) and interpolated values containing '$' are re-expanded.",
+   "evidenciaAstra": "public/app/plugins/datasource/loki/querySplitting.ts:299 adds interpolation before execution, while datasource.ts:352 delegates to DataSourceWithBackend.ts:185, which interpolates again; shardQuerySplitting.ts:52 adds another pass. template_srv.ts:299 rescans variable tokens on each call, and modifyQuery.ts:537 appends pipeline filters without deduplication, so substituted literal variable tokens can change query results."
+  },
+  {
+   "issueId": "advanced-query-processing-architecture-grafana-codex#05",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "runShardSplitQuery now filters empty/hidden targets before interpolation, so an expr that interpolates to an empty string is no longer dropped.",
+   "evidenciaOpus": "shardQuerySplitting.ts:49-52 now filters on the raw expr before applyTemplateVariables, whereas base interpolated first; only a target whose whole expr is a variable resolving to '' now survives as a blank query, an unusual misconfiguration case.",
+   "evidenciaAstra": "public/app/plugins/datasource/loki/shardQuerySplitting.ts:49\u201352 now filters before interpolation, allowing expressions that become empty into the group created at line 246. Alongside valid shardable targets, this can create an empty-expression-only group: querySplitting.ts:298 removes its target, then line 96 dereferences a nonexistent partition and fails."
+  }
+ ]
+}

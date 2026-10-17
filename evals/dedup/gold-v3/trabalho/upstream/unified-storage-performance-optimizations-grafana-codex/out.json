@@ -1,0 +1,56 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "prOriginal": {
+  "numero": 97529,
+  "url": "https://github.com/grafana/grafana/pull/97529",
+  "mergedAt": "2024-12-10",
+  "nota": "Found by head branch 'unified-storage-dont-lazy-init' (benchmark head is a merge commit on that branch). Upstream title: 'Unified Storage: Init at startup, fix traces, and speed up indexing', squash-merged as d762a96436. The squash diff's +/- lines are identical to the benchmark base..head diff."
+ },
+ "tps": {
+  "unified-storage-performance-optimizations-grafana-codex#01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-07-10",
+    "pr": 107886,
+    "commit": "8fd5739576ea91c0b4685e5356b75ee22e00f34e",
+    "url": "https://github.com/grafana/grafana/pull/107886"
+   },
+   "removidoEm": null,
+   "diasNoAr": 212,
+   "reason": "After #97529 getOrCreateIndex did GetIndex then build with a '// TODO??? We want to block while building the index ... for the same key' comment and no dedupe, while BuildIndex only locked the final cache assignment. PR #107886 added a singleflight.Group (buildIndex.Do keyed by key.String()) with a recheck of GetIndex inside, so concurrent callers for the same key share one build. Today getOrCreateIndex still uses s.buildIndex.DoChan with the recheck.",
+   "astra": []
+  },
+  "unified-storage-performance-optimizations-grafana-codex#02": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-06-17",
+    "pr": 106842,
+    "commit": "b48337a7c83a28aafb40492eda6274103b271689",
+    "url": "https://github.com/grafana/grafana/pull/106842"
+   },
+   "removidoEm": null,
+   "diasNoAr": 189,
+   "reason": "TotalDocs kept ranging over the plain b.cache map without cacheMu until PR #106842 replaced the map+RWMutex with localcache.CacheService and TotalDocs iterated b.cache.Items(), a copy taken under the cache's lock, removing the unsynchronized map read. The PR targeted a TTL cache, not the race, but the TotalDocs loop survived and became safe. Today TotalDocs iterates GetOpenIndexes() (keys copied under cacheMx.RLock) and getCachedIndex (RLock), so the race is still gone.",
+   "astra": [
+    {
+     "pergunta": "TotalDocs race became safe via #106842 (map -> mutex-protected localcache, Items() copy), a change targeting TTL caching, not the bug: confirmado or descontinuado?",
+     "resposta": "#106842 fixed the behaviour by replacing the map with a mutex-protected cache whose Items() returns a copy under lock; by the definition any way of fixing counts even without intent, so not descontinuado; the later return to a locked map does not change the milestone.",
+     "veredito": "confirmado"
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex#sncc-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-04-08",
+    "pr": 103520,
+    "commit": "56b4e5670d0a0cb36dc6c0999ab42a482119766c",
+    "url": "https://github.com/grafana/grafana/pull/103520"
+   },
+   "removidoEm": null,
+   "diasNoAr": 119,
+   "reason": "PR #103520 (fix graceful termination for grafana target servers) rewrote TestIntegrationWillRunInstrumentationServerWhenTargetHasNoHttpServer: it removed the GRAFANA_TEST_DB/postgres skip ('test not working with postgres in Drone') and now only skips SQLite, using require.Eventually instead of a fixed sleep. Today's module_server_test.go has no postgres skip, so storage-server startup is again covered on postgres.",
+   "astra": []
+  }
+ }
+}

@@ -1,0 +1,37 @@
+{
+ "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+ "prOriginal": {
+  "numero": 80168,
+  "url": "https://github.com/getsentry/sentry/pull/80168",
+  "mergedAt": "2024-11-05",
+  "nota": "Found by exact title search (branch danf/we-occurrences-hook); squash-merged as de60b7fb01. Its +/- lines are identical to the benchmark base..head diff."
+ },
+ "tps": {
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2024-12-13",
+    "pr": 81975,
+    "commit": "fcda2c8ae919fca322cd6ce9e64756d8ba2d47d0",
+    "url": "https://github.com/getsentry/sentry/pull/81975"
+   },
+   "removidoEm": null,
+   "diasNoAr": 38,
+   "reason": "After #80168 MetricAlertDetectorHandler(StatefulDetectorHandler) stayed a bare 'pass' through #80486 and #81701 (import move). PR #81975 (Adding support for process_workflows in the IssuePlatform) replaced 'pass' with implementations of build_occurrence_and_event_data, counter_names, get_dedupe_value and get_group_key_values, so the class is instantiable.",
+   "astra": []
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#04": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-04-18",
+    "pr": 89923,
+    "commit": "93911bd7152a430cae7be92ee8e9de9ea7e83dbc",
+    "url": "https://github.com/getsentry/sentry/pull/89923"
+   },
+   "removidoEm": null,
+   "diasNoAr": 164,
+   "reason": "The wrong 'group_2', 6 expectation in test_state_results_multi_group survived until PR #89923 (return DetectorOccurrence from build_occurrence_and_event_data), which rewrote the test: the expected IssueOccurrence for group_2 is now built by detector_to_issue_occurrence(..., value=10, ...), and that helper puts value into evidence_data, so the assertion checks the forwarded measurement. Today's test_detector.py still builds group_2 with value=10.",
+   "astra": []
+  }
+ }
+}

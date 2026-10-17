@@ -1,0 +1,26 @@
+{
+ "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+ "prTitle": "Add rolling-updates feature flag and compatibility framework",
+ "upstream": "keycloak/keycloak",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/keycloak",
+ "base": "8671f860469d6d95e54df3e13f77ebc401249489",
+ "head": "62bf98939eda58f0d0a1a41a58aa6d4ecdc24dba",
+ "tps": [
+  {
+   "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#03",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "testFeatureNotEnabled only covers the metadata subcommand, so the feature guard in the check subcommand is untested.",
+   "evidenciaOpus": "UpdateCommandDistTest.testFeatureNotEnabled launches only UpdateCompatibilityMetadata; the identical guard added in UpdateCompatibilityCheck.run() has no disabled-feature test. Missing coverage for a trivial guard.",
+   "evidenciaAstra": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java:46-50 exercises only metadata with the feature disabled, while its check invocations at lines 65, 81, 96 and 105 explicitly enable it. Consequently, the independent disabled-feature guard in quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityCheck.java:46-49 has no regression coverage."
+  },
+  {
+   "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#04",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The disabled-feature test checks only the error message, not that the command exits with FEATURE_DISABLED (4).",
+   "evidenciaOpus": "testFeatureNotEnabled only calls cliResult.assertError(...) and never asserts exitCode() == CompatibilityResult.FEATURE_DISABLED, the new exit code added by the PR.",
+   "evidenciaAstra": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java:48-49 asserts only the diagnostic, and quarkus/tests/junit5/src/main/java/org/keycloak/it/junit5/extension/CLIResult.java:78-80 checks only stderr text. CLITestExtension.java:112-113 captures the distribution result without asserting its status, so an incorrect disabled-feature exit code would pass this test."
+  }
+ ]
+}

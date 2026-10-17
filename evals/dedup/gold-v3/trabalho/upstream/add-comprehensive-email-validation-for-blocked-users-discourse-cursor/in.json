@@ -1,0 +1,34 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "prTitle": "Add comprehensive email validation for blocked users",
+ "upstream": "discourse/discourse",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/discourse",
+ "base": "e25638dab0d4b98f99c8fe8976ccaae8f4fb9db3",
+ "head": "5f8a130277dbddc95d133cd2832be639baf89213",
+ "tps": [
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "severity": "medium",
+   "category": "security",
+   "bug": "The case-sensitive email lookup in `BlockedEmail.should_block?` creates a bypass risk, allowing 'User@Example.com' to bypass a block on 'user@example.com'. This can lead to unauthorized access to blocked users.",
+   "evidenciaOpus": "blocked_email.rb:12 looks up BlockedEmail.where(email: email).first with exact, case-sensitive matching and nothing downcases the stored or submitted email (User.new_from_params assigns params[:email] as-is), so Block@x.org bypasses an entry for block@x.org.",
+   "evidenciaAstra": "app/models/blocked_email.rb:12 uses exact equality, and its only callback defaults action_type at line 22 without normalizing email. Signup preserves submitted casing at app/models/user.rb:87, so changing domain casing bypasses an existing block, although lib/email.rb:21 recognizes domain-case equivalence elsewhere."
+  },
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "severity": "medium",
+   "category": "concurrency",
+   "bug": "BlockedEmail.should_block_email? method has side effects during a read operation - it updates statistics even when just checking if an email should be blocked. This could cause race conditions in concurrent environments and makes the method name misleading.",
+   "evidenciaOpus": "blocked_email.rb:12-17 increments match_count and saves inside should_block?, which EmailValidator calls during validation (email_validator.rb:13); UsersController#create calls user.valid? and then user.save, so one signup attempt is counted twice, and the read-modify-write is not atomic.",
+   "evidenciaAstra": "app/models/blocked_email.rb:14-16 performs an unsynchronized read-modify-write, allowing concurrent validations to overwrite increments. lib/validators/email_validator.rb:13 also invokes this mutation during validation, and app/controllers/users_controller.rb:168 and :172 both trigger validation, although transaction rollback can affect whether the second update persists."
+  },
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The regex pattern @(#{domains}) in email_in_restriction_setting? method only matches domain suffixes, not full domains with proper boundary anchoring. An attacker can register evil.example.com to bypass a whitelist entry for example.com.",
+   "evidenciaOpus": "email_validator.rb:18-22 builds Regexp.new(\"@(#{domains})\", true) with no end anchor, so whitelist gmail.com matches user@gmail.com.evil.com; the PR moves and rewrites this method into the new EmailValidator.",
+   "evidenciaAstra": "lib/validators/email_validator.rb:19-21 constructs an unanchored expression, so a gmail.com whitelist accepts victim@gmail.com.evil.com. This defect survives in the validator code relocated by this PR; the golden's reverse example, evil.example.com matching example.com, is incorrect."
+  }
+ ]
+}

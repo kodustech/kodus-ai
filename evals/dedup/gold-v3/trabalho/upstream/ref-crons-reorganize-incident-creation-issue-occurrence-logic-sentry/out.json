@@ -1,0 +1,19 @@
+{
+ "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+ "prOriginal": {
+  "numero": 80528,
+  "url": "https://github.com/getsentry/sentry/pull/80528",
+  "mergedAt": "2024-11-11",
+  "nota": "Found by the file history of incident_occurrence.py on master (squash commit c3b32a7bab, same title). PR headRefOid equals the benchmark head dcdcadb771; the merged function is identical to the benchmark head. The bug predates the PR (moved from mark_failed.py)."
+ },
+ "tps": {
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 705,
+   "reason": "On master today src/sentry/monitors/logic/incident_occurrence.py still defines get_monitor_environment_context, which copies monitor.config into config and replaces schedule_type with get_schedule_type_display(), but still returns \"config\": monitor_environment.monitor.config (the original). The only change to the function since the merge is the removal of the \"type\" key (#88496); it is still used for the occurrence's monitor context. None of the later commits on the file touch the returned config.",
+   "astra": []
+  }
+ }
+}

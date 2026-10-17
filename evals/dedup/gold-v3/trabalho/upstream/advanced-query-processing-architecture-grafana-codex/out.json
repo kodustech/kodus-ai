@@ -1,0 +1,39 @@
+{
+ "caseId": "advanced-query-processing-architecture-grafana-codex",
+ "prOriginal": {
+  "numero": 107534,
+  "url": "https://github.com/grafana/grafana/pull/107534",
+  "mergedAt": "2025-07-04",
+  "nota": "Found via `gh api repos/grafana/grafana/commits/<sha>/pulls` on the benchmark commits; its last commit is the benchmark head 1cab4143d4 (squash merge 3ba2457a70), title 'Query splitting: Interpolate queries at the start of the process'. Loki plugin later moved out of grafana/grafana by #129092 (2026-07-27) to grafana/grafana-loki-datasource; today's code was read there."
+ },
+ "tps": {
+  "advanced-query-processing-architecture-grafana-codex#01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 470,
+   "reason": "In grafana/grafana the lines stayed unchanged until PR #129092 (2026-07-27) moved the Loki plugin to the official grafana/grafana-loki-datasource repo, still bundled with Grafana. There, on main today, runSplitQuery and runShardSplitQuery still map targets through applyTemplateVariables (templateSrv.replace + addAdHocFilters), sub-requests still carry request.filters into datasource.runQuery -> super.query, and DataSourceWithBackend.query in grafana main still calls applyTemplateVariables again, so the double interpolation and ad hoc filters remain. A move, not a fix or a removal of the behaviour.",
+   "astra": [
+    {
+     "pergunta": "grafana/grafana#129092 (2026-07-27) deleted the Loki core plugin and moved it to the official grafana/grafana-loki-datasource repo (still bundled with Grafana), where runSplitQuery/runShardSplitQuery are byte-identical to the benchmark head. Pendente or descontinuado?",
+     "resposta": "Pendente for both: #129092 moved the plugin to its official successor, still bundled, rather than eliminating the behaviour; both bugs persist there unchanged.",
+     "veredito": "pendente"
+    }
+   ]
+  },
+  "advanced-query-processing-architecture-grafana-codex#05": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 470,
+   "reason": "runShardSplitQuery on grafana-loki-datasource main (the successor of the deleted grafana/grafana file, moved by #129092 on 2026-07-27) still filters `query.expr` and `!query.hide` on the raw targets before `.map(applyTemplateVariables)`, exactly as at the benchmark head. No commit after the merge touched this order in either repo.",
+   "astra": [
+    {
+     "pergunta": "grafana/grafana#129092 (2026-07-27) deleted the Loki core plugin and moved it to the official grafana/grafana-loki-datasource repo (still bundled with Grafana), where runSplitQuery/runShardSplitQuery are byte-identical to the benchmark head. Pendente or descontinuado?",
+     "resposta": "Pendente for both: #129092 moved the plugin to its official successor, still bundled, rather than eliminating the behaviour; both bugs persist there unchanged.",
+     "veredito": "pendente"
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,26 @@
+{
+ "caseId": "async-import-of-the-appstore-packages-cal-com",
+ "prTitle": "Async import of the appStore packages",
+ "upstream": "calcom/cal.com",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/cal.com",
+ "base": "ba9688a04a8398c9a8332ee7061bfae2f2efd524",
+ "head": "820d7fa87e0c824c5dee8082a33efadb1a2566f7",
+ "tps": [
+  {
+   "issueId": "async-import-of-the-appstore-packages-cal-com#02",
+   "severity": "medium",
+   "category": "concurrency",
+   "bug": "The code uses forEach with async callbacks, which causes asynchronous operations (e.g., calendar/video event deletions, payment refunds) to run concurrently without being awaited. This 'fire-and-forget' behavior leads to unhandled promise rejections, race conditions, and incomplete cleanup, as surrounding try-catch blocks cannot properly handle errors from these unawaited promises. Replace forEach with for...of loops or Promise.all() with map() to ensure proper sequential execution and error handling.",
+   "evidenciaOpus": "The PR turns the callbacks into async in bookings.tsx:553 and vital/lib/reschedule.ts:125 (and wipemycalother) with await getCalendar inside forEach; forEach discards the promises, so calendar/video deletions are fire-and-forget, getCalendar/import failures become unhandled rejections outside the surrounding try/catch, and the handler continues before cleanup.",
+   "evidenciaAstra": "packages/app-store/vital/lib/reschedule.ts:125-135 and packages/app-store/wipemycalother/lib/reschedule.ts:125-135 discard the newly async callbacks, so getCalendar failures now bypass the surrounding catch. packages/trpc/server/routers/viewer/bookings.tsx:553-570 likewise proceeds without awaiting cleanup; although deletion promises were already discarded before, this PR additionally defers calendar initialization and loses its synchronous error handling."
+  },
+  {
+   "issueId": "async-import-of-the-appstore-packages-cal-com#sncc-01",
+   "severity": "medium",
+   "category": "perf",
+   "bug": "Each import(...) in the appStore object literal runs when app-store/index.ts is imported, so all integrations still load at startup instead of lazily, while every entry becomes a promise.",
+   "evidenciaOpus": "packages/app-store/index.ts:1-31 builds the appStore object with eager `import(\"./x\")` calls, so every app module starts loading as soon as the file is imported; only the result type changes to promises. The lazy-loading goal of the PR is not achieved.",
+   "evidenciaAstra": "packages/app-store/index.ts:3-30 invokes all 28 active dynamic imports during module initialization, so loading is not deferred until an integration is selected. The lookup at packages/app-store/_utils/getCalendar.ts:15 only awaits an already-started import; unused integrations still load dependencies such as googleapis (packages/app-store/googlecalendar/lib/CalendarService.ts:3). This affects the loading mechanism rewritten by this PR, although eager loading also occurred before and dynamic imports can still create separate bundle chunks."
+  }
+ ]
+}

@@ -1,0 +1,68 @@
+{
+ "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+ "prOriginal": {
+  "numero": 3641,
+  "url": "https://github.com/discourse/discourse/pull/3641",
+  "mergedAt": "2015-08-04",
+  "nota": "Found via gh api commits/<head>/pulls; PR headRefOid equals the benchmark head 5b229316ee, merged as-is (commit is an ancestor of main). Reverted in full the same day by Jeff Atwood (2b2ae4bfe7)."
+ },
+ "tps": {
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#01": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2015-08-04",
+    "pr": null,
+    "commit": "2b2ae4bfe79937ba1ee7143da92e5278abef7557",
+    "url": "https://github.com/discourse/discourse/commit/2b2ae4bfe79937ba1ee7143da92e5278abef7557"
+   },
+   "diasNoAr": 0,
+   "reason": "The flex container on .d-header .contents and the flex-item rules on .extra-info-wrapper were introduced by PR #3641 and removed the same day by commit 2b2ae4bfe7, an exact revert of 5b229316ee across all 5 files. The header returned to the float layout, so the long-title overflow caused by the flex item never persisted. Later flexbox attempts (PR #3732, closed unmerged; 2016 widget header rewrite) are separate code. Reclassified as descontinuado for consistency: a whole-PR revert with no stated reason does not target this bug (same rule as the other reverted PRs).",
+   "astra": [
+    {
+     "pergunta": "PR #3641 was merged 2015-08-04 and fully reverted by Jeff Atwood ~1.5h later (commit 2b2ae4bfe7, no reason stated). Does an unexplained full revert count as confirmado or descontinuado for #01, #02, #05?",
+     "resposta": "All three confirmado: the revert undid the flex layout (#01), removed the defective mixin and its uses (#02) and restored float:right (#05). Under 'any way of fixing counts', a full rollback of the introducing change is a fix; the missing justification only means upstream did not acknowledge each bug.",
+     "veredito": "confirmado"
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#02": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2015-08-04",
+    "pr": null,
+    "commit": "2b2ae4bfe79937ba1ee7143da92e5278abef7557",
+    "url": "https://github.com/discourse/discourse/commit/2b2ae4bfe79937ba1ee7143da92e5278abef7557"
+   },
+   "diasNoAr": 0,
+   "reason": "The align-items mixin without -moz-box-align was added to common/foundation/mixins.scss by PR #3641 and deleted, with all its call sites, by the same-day exact revert 2b2ae4bfe7. Nothing of this mixin remained on the default branch. Reclassified as descontinuado for consistency: a whole-PR revert with no stated reason does not target this bug (same rule as the other reverted PRs).",
+   "astra": [
+    {
+     "pergunta": "PR #3641 was merged 2015-08-04 and fully reverted by Jeff Atwood ~1.5h later (commit 2b2ae4bfe7, no reason stated). Does an unexplained full revert count as confirmado or descontinuado for #01, #02, #05?",
+     "resposta": "All three confirmado: the revert undid the flex layout (#01), removed the defective mixin and its uses (#02) and restored float:right (#05). Under 'any way of fixing counts', a full rollback of the introducing change is a fix; the missing justification only means upstream did not acknowledge each bug.",
+     "veredito": "confirmado"
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#05": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2015-08-04",
+    "pr": null,
+    "commit": "2b2ae4bfe79937ba1ee7143da92e5278abef7557",
+    "url": "https://github.com/discourse/discourse/commit/2b2ae4bfe79937ba1ee7143da92e5278abef7557"
+   },
+   "diasNoAr": 0,
+   "reason": "PR #3641 removed float:right from .d-header .panel; commit 2b2ae4bfe7 reverted the whole change the same day, restoring float:right and the previous header layout, so the server-rendered/noscript header was right-aligned again. Reclassified as descontinuado for consistency: a whole-PR revert with no stated reason does not target this bug (same rule as the other reverted PRs).",
+   "astra": [
+    {
+     "pergunta": "PR #3641 was merged 2015-08-04 and fully reverted by Jeff Atwood ~1.5h later (commit 2b2ae4bfe7, no reason stated). Does an unexplained full revert count as confirmado or descontinuado for #01, #02, #05?",
+     "resposta": "All three confirmado: the revert undid the flex layout (#01), removed the defective mixin and its uses (#02) and restored float:right (#05). Under 'any way of fixing counts', a full rollback of the introducing change is a fix; the missing justification only means upstream did not acknowledge each bug.",
+     "veredito": "confirmado"
+    }
+   ]
+  }
+ }
+}

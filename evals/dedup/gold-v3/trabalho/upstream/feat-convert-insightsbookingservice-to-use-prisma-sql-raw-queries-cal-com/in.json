@@ -1,0 +1,18 @@
+{
+ "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+ "prTitle": "feat: convert InsightsBookingService to use Prisma.sql raw queries",
+ "upstream": "calcom/cal.com",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/cal.com",
+ "base": "c9a47dd0cebd121ff73f24e1f8c1829579daf8e3",
+ "head": "da09bc0808e7c6df1bc10e00d5acf764d94c7cc7",
+ "tps": [
+  {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#03",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The getBaseConditions test uses a single booking matching both auth and filter conditions, so it would pass even if the conditions were not combined.",
+   "evidenciaOpus": "insightsBooking.integration-test.ts:480-491 creates one booking that satisfies both the user auth condition and the eventTypeId filter, so auth-only, filter-only and the AND combination all return the same row; the test named 'should combine authorization and filter conditions' cannot detect a broken combination.",
+   "evidenciaAstra": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:445-476 creates a personal booking satisfying both predicates, while the helper's team booking at lines 54-74 satisfies neither. The rewritten assertion at lines 480-491 therefore passes with authorization alone, filters alone, or their conjunction, leaving a real test gap."
+  }
+ ]
+}
