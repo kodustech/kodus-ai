@@ -528,7 +528,15 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
     // `sandbox`: 'none' runs the review with no sandbox, as production does when
     // none could be created; `wrapSandbox(handle)` makes it fail the way a dead
     // one does (its tools throw), around production's own.
-    const sandbox = sandboxMode === 'none' ? null : await checkout(repo);
+    let sandbox = null;
+    if (sandboxMode !== 'none') {
+        try {
+            sandbox = await checkout(repo);
+        } catch (error) {
+            await repo.cleanup();
+            throw error;
+        }
+    }
     try {
         const stage = buildAgentReviewStage({ permissionService, codeManagement, previousDecisionsUseCase: decisionsUseCase });
         const store = { loops: [], agentLoop, steps: observeSteps ? {} : undefined };
