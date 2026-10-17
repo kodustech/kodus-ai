@@ -162,3 +162,23 @@ describe("createUrl", () => {
         });
     });
 });
+
+describe("codeReviewConfigRemovePropertiesNotInType", () => {
+    const { codeReviewConfigRemovePropertiesNotInType } =
+        require("./helpers") as typeof import("./helpers");
+
+    it("keeps custom agents and the skills and docs they link", () => {
+        const customAgents = [{ id: "security", name: "Security" }];
+        const knowledge = [
+            { path: "docs/auth.md", kind: "doc", linkedTo: [] },
+        ];
+
+        const kept = codeReviewConfigRemovePropertiesNotInType({
+            customAgents,
+            knowledge,
+        } as never) as Record<string, unknown>;
+
+        expect(kept.customAgents).toEqual(customAgents);
+        expect(kept.knowledge).toEqual(knowledge);
+    });
+});
