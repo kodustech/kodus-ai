@@ -183,9 +183,7 @@ describe('ResolveCustomAgentUseCase', () => {
             organizationAndTeamData,
             repositoryId: 'global',
             agent: ledgerAgent(),
-            knowledge: [
-                { path: 'docs/ledger.md', kind: 'doc', linkedTo: [] },
-            ],
+            knowledge: [{ path: 'docs/ledger.md', kind: 'doc', linkedTo: [] }],
             discover: true,
         });
 
@@ -489,6 +487,32 @@ describe('GetCustomAgentsStatusUseCase', () => {
         ]);
     });
 
+    it('weights each grouped row by its finding count', () => {
+        expect(
+            summarizeCustomAgentSuggestions([
+                {
+                    agentId: 'ledger-agent',
+                    prNumber: 7,
+                    deliveryStatus: 'sent',
+                    count: 3,
+                },
+                {
+                    agentId: 'ledger-agent',
+                    prNumber: 7,
+                    priorityStatus: 'discarded-by-safeguard',
+                    count: 2,
+                },
+            ]),
+        ).toEqual([
+            {
+                agentId: 'ledger-agent',
+                pullRequests: 1,
+                posted: 3,
+                dropped: 2,
+            },
+        ]);
+    });
+
     it('reads file and PR-level findings of the repository over 30 days', async () => {
         const aggregate = jest
             .fn()
@@ -529,6 +553,21 @@ describe('GetCustomAgentsStatusUseCase', () => {
                 dropped: 0,
             },
         ]);
+        // Mongo groups the findings per agent, PR and status, so the rows
+        // read into memory are bounded by those, not by finding volume.
+        const pipeline = aggregate.mock.calls[0][0];
+        expect(pipeline.find((stage) => stage.$group)).toEqual({
+            $group: expect.objectContaining({
+                _id: {
+                    agentId: expect.any(String),
+                    prNumber: expect.any(String),
+                    deliveryStatus: expect.any(String),
+                    priorityStatus: expect.any(String),
+                },
+                count: { $sum: 1 },
+            }),
+        });
+        expect(aggregate.mock.calls[0][1]).toEqual({ allowDiskUse: true });
         const [firstMatch] = aggregate.mock.calls[0][0];
         expect(firstMatch.$match).toEqual({
             'organizationId': 'org-1',

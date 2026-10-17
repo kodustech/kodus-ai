@@ -8,12 +8,16 @@ import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/del
 
 export const CUSTOM_AGENT_STATUS_WINDOW_DAYS = 30;
 
-/** One stored finding of a custom agent, as the status reads it. */
+/**
+ * Stored findings of a custom agent sharing a pull request and statuses, as
+ * the status reads them. `count` defaults to one finding.
+ */
 export type CustomAgentSuggestionRow = {
     agentId: string;
     prNumber: number;
     deliveryStatus?: string;
     priorityStatus?: string;
+    count?: number;
 };
 
 export type CustomAgentStatus = {
@@ -43,10 +47,11 @@ export function summarizeCustomAgentSuggestions(
             prs: new Set<number>(),
         };
         status.prs.add(row.prNumber);
+        const count = row.count ?? 1;
         if (row.deliveryStatus === DeliveryStatus.SENT) {
-            status.posted += 1;
+            status.posted += count;
         } else if (isDropped(row)) {
-            status.dropped += 1;
+            status.dropped += count;
         }
         byAgent.set(row.agentId, status);
     }
@@ -72,6 +77,28 @@ const suggestionRowsPipeline = (
             prNumber: '$number',
             deliveryStatus: `$${path}.deliveryStatus`,
             priorityStatus: `$${path}.priorityStatus`,
+        },
+    },
+    // One row per agent, PR and status pair instead of one per finding.
+    {
+        $group: {
+            _id: {
+                agentId: '$agentId',
+                prNumber: '$prNumber',
+                deliveryStatus: '$deliveryStatus',
+                priorityStatus: '$priorityStatus',
+            },
+            count: { $sum: 1 },
+        },
+    },
+    {
+        $project: {
+            _id: 0,
+            agentId: '$_id.agentId',
+            prNumber: '$_id.prNumber',
+            deliveryStatus: '$_id.deliveryStatus',
+            priorityStatus: '$_id.priorityStatus',
+            count: 1,
         },
     },
 ];
@@ -105,10 +132,17 @@ export class GetCustomAgentsStatusUseCase {
         const collection = this.pullRequestsRepository.getNativeCollection();
         const [fileRows, prLevelRows] = await Promise.all([
             collection
-                .aggregate(suggestionRowsPipeline(match, 'files.suggestions'))
+                .aggregate(suggestionRowsPipeline(match, 'files.suggestions'), {
+                    allowDiskUse: true,
+                })
                 .toArray(),
             collection
-                .aggregate(suggestionRowsPipeline(match, 'prLevelSuggestions'))
+                .aggregate(
+                    suggestionRowsPipeline(match, 'prLevelSuggestions'),
+                    {
+                        allowDiskUse: true,
+                    },
+                )
                 .toArray(),
         ]);
 
