@@ -41,8 +41,8 @@ const useGlobalCustomMessagesOverrideCount = (enabled: boolean) => {
  * How many settings a scope overrides across some pages: the config values
  * set at that level, plus the start/end review messages (they live under
  * "What Kody writes") and the scope's own Kody Rules. The requests behind the
- * last two are shared per repository, so a row per scope costs no more
- * fetches than one.
+ * last two are shared across repositories, so adding scope rows does not add
+ * per-repository requests.
  */
 export const OverrideCount = ({
     config,

@@ -90,6 +90,11 @@ export const useCodeReviewSettingsMutation = (params: {
     };
 
     const invalidateRelatedQueries = () => {
+        queryClient.invalidateQueries({
+            queryKey: generateQueryKey(PARAMETERS_PATHS.CODE_REVIEW_SCOPES, {
+                params: { teamId },
+            }),
+        });
         // Use "all" instead of "inactive" so the active query refetches
         // from the backend after save. The backend's formatLevel() computes
         // overriddenValue/overriddenLevel correctly — the optimistic cache

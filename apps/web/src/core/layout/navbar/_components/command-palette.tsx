@@ -377,14 +377,7 @@ export const CommandPalette = ({
         staleTime: 60_000,
     });
 
-    const repositories = useMemo(
-        () =>
-            scopes.filter(
-                (scope) =>
-                    scope.isSelected || (scope.directories?.length ?? 0) > 0,
-            ),
-        [scopes],
-    );
+    const repositories = scopes;
 
     // Repository ids the settings shell can actually open, and their names.
     const scopeNames = useMemo(
