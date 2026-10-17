@@ -89,6 +89,7 @@ function stageMeta(stage) {
         name: stage.name,
         group: stage.group,
         order: index >= 0 ? index + 1 : null,
+        short: stage.short,
         does: stage.does,
         pipeline: stage.pipeline,
         ...(stage.note ? { note: stage.note } : {}),

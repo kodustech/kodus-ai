@@ -37,6 +37,7 @@
 //                   there is. Each reads after "<model> reviews"
 //         nightly   how evals/stage-signals.js reads its result (READERS)
 //         caveat    what a green number does not prove
+//   short — what it does in a few words, for the panel's overview (`does` says it in full)
 //   note — shown beside the step when something about it needs saying
 const GROUPS = ['Before the agents', 'The agents, side by side', 'After the agents', 'On the PR', 'Where rules and memories come from', 'Conversation with Kody'];
 
@@ -50,6 +51,7 @@ const STAGES = [
     {
         id: 'business-logic',
         name: 'Business logic',
+        short: 'Checks the PR against its linked task',
         group: 'Before the agents',
         does: 'Before the agents run, reads the task the PR links (a Jira ticket, say) and the diff, and comments on what the PR leaves out of the task.',
         pipeline: ['BusinessLogicValidationStage'],
@@ -79,6 +81,7 @@ const STAGES = [
     {
         id: 'analyzers',
         name: 'Static analyzers',
+        short: 'Static scanners on the changed lines',
         group: 'Before the agents',
         does: 'Before the agents run, scans the changed lines with static tools (a secret scanner, a dependency CVE scanner) and hands what they flag to the review. Beta, and off unless a repository turns it on.',
         pipeline: ['RunAnalyzersStage'],
@@ -103,6 +106,7 @@ const STAGES = [
     {
         id: 'finder',
         name: 'Finder',
+        short: 'Finds the bugs in the PR',
         group: 'The agents, side by side',
         does: 'The agent that looks for bugs. It reads the PR and the repository with tools (opening files, searching, running commands in a sandbox) and writes down each problem it finds, with its lines and a fix. Verify then checks each one.',
         pipeline: ['AgentReviewStage'],
@@ -134,6 +138,7 @@ const STAGES = [
     {
         id: 'memories',
         name: 'Following memories',
+        short: "Follows the team's memories",
         group: 'The agents, side by side',
         does: "Inside the finder: follows the team's memories (conventions the team saved). Stays quiet on code a memory says is intended, flags code a memory says is wrong.",
         pipeline: ['AgentReviewStage'],
@@ -154,6 +159,7 @@ const STAGES = [
     {
         id: 'parse',
         name: 'Output parsing',
+        short: "Turns the finder's output into findings",
         group: 'The agents, side by side',
         does: "Turns what the finder writes at the end of each run into findings, and recovers the ones a model wrote as prose instead of the schema.",
         pipeline: ['AgentReviewStage'],
@@ -175,6 +181,7 @@ const STAGES = [
     {
         id: 'verify',
         name: 'Verify',
+        short: 'Drops findings the code does not confirm',
         group: 'The agents, side by side',
         does: 'Checks each bug the finder proposes against the code, with its own tools, and drops the ones the code does not confirm: claims the code contradicts, hallucinations, nits. What it keeps moves on toward the PR.',
         pipeline: ['AgentReviewStage'],
@@ -203,6 +210,7 @@ const STAGES = [
     {
         id: 'kody-rules',
         name: 'Finding violations',
+        short: "Flags every break of the team's rules",
         group: 'The agents, side by side',
         does: "The Kody Rules agent, beside the finder: checks the PR against each of the team's rules and flags every place the code breaks one. A mechanical rule becomes a pattern search whose hits the AI confirms.",
         pipeline: ['AgentReviewStage'],
@@ -230,6 +238,7 @@ const STAGES = [
     {
         id: 'anchoring',
         name: 'Anchoring',
+        short: 'Places each finding on its diff lines',
         group: 'After the agents',
         does: 'Places each finding on the file and lines of the diff: drops one whose file is not in the PR, and moves its lines onto the changed lines it is about.',
         pipeline: ['AgentReviewStage'],
@@ -251,6 +260,7 @@ const STAGES = [
     {
         id: 'review-rounds',
         name: 'Later rounds',
+        short: 'Posts nothing twice on a later push',
         group: 'After the agents',
         does: 'On a new push to a PR Kody already reviewed, decides what to post again: no repost of a comment the PR already has or the developer declined, and no new problem or revision lost.',
         pipeline: ['AgentReviewStage'],
@@ -281,6 +291,7 @@ const STAGES = [
     {
         id: 'dedup',
         name: 'Dedup',
+        short: 'Merges findings about the same bug',
         group: 'After the agents',
         does: 'Merges findings that describe the same problem into one comment, so the developer does not read the same bug twice, without merging two different bugs.',
         pipeline: ['AgentReviewStage'],
@@ -303,6 +314,7 @@ const STAGES = [
     {
         id: 'severity',
         name: 'Severity',
+        short: 'Rates each finding, drops the minor ones',
         group: 'After the agents',
         does: "Gives each finding a severity (critical, high, medium or low); the team's minimum (medium by default) then drops what falls below it. A real bug rated too low is dropped here without anyone seeing it.",
         pipeline: ['AgentReviewStage'],
@@ -324,6 +336,7 @@ const STAGES = [
     {
         id: 'format',
         name: 'Formatting',
+        short: 'Writes the comment the developer reads',
         group: 'After the agents',
         does: "Rewrites each finding into the comment the developer reads: plain prose in the team's language and length, with its code names kept and no WHAT/WHY/HOW labels.",
         pipeline: ['AgentReviewStage'],
@@ -346,6 +359,7 @@ const STAGES = [
     {
         id: 'pr-comments',
         name: 'PR-level comments',
+        short: 'Posts the findings with no diff line',
         group: 'On the PR',
         does: 'Posts the findings that have no line in the diff as one comment on the PR.',
         pipeline: ['CreatePrLevelCommentsStage'],
@@ -355,6 +369,7 @@ const STAGES = [
     {
         id: 'posting',
         name: 'Posting',
+        short: 'Validates and posts each comment',
         group: 'On the PR',
         does: 'Checks each comment is valid for the code host, then posts it on its file and line.',
         pipeline: ['ValidateSuggestionsStage', 'CreateFileCommentsStage'],
@@ -376,6 +391,7 @@ const STAGES = [
     {
         id: 'pr-summary',
         name: 'PR summary',
+        short: 'Writes the PR description',
         group: 'On the PR',
         does: "Writes the PR description Kody posts when a PR opens or gets a new commit, the way the team configured it: replacing the author's, added to it, or complementing it.",
         pipeline: ['UpdateCommentsAndGenerateSummaryStage'],
@@ -394,6 +410,7 @@ const STAGES = [
     {
         id: 'approval',
         name: 'Approval',
+        short: 'Approves or requests changes',
         group: 'On the PR',
         does: 'Approves the PR or requests changes, when the team turned it on.',
         pipeline: ['RequestChangesOrApproveStage'],
@@ -409,6 +426,7 @@ const STAGES = [
     {
         id: 'rules-learned',
         name: 'Learned from reviews',
+        short: 'Writes rules from past reviews',
         group: 'Where rules and memories come from',
         does: "Writes Kody Rules from what the team's reviewers said on past PRs.",
         pipeline: null,
@@ -425,6 +443,7 @@ const STAGES = [
     {
         id: 'rules-from-files',
         name: 'From repo files',
+        short: 'Imports rules from repository files',
         group: 'Where rules and memories come from',
         does: 'Imports rules from files in the repository (.kody/rules, AGENTS.md, IDE rule files) and keeps them in sync.',
         pipeline: null,
@@ -448,6 +467,7 @@ const STAGES = [
     {
         id: 'thread-rule',
         name: 'Rule from a thread',
+        short: 'Creates or narrows a rule from a thread',
         group: 'Where rules and memories come from',
         does: 'In a PR thread, offers to create a Kody Rule, or to narrow one the thread shows is too broad, and does it when the developer asks.',
         pipeline: null,
@@ -471,6 +491,7 @@ const STAGES = [
     {
         id: 'thread-memory',
         name: 'Memory from a thread',
+        short: 'Saves a memory from a thread',
         group: 'Where rules and memories come from',
         does: 'In a PR thread that shows a team convention, offers to save it as a memory, and saves it when the developer asks.',
         pipeline: null,
@@ -494,6 +515,7 @@ const STAGES = [
     {
         id: 'reply-addressing',
         name: 'Thread replies',
+        short: 'Decides if a reply is meant for Kody',
         group: 'Conversation with Kody',
         does: 'When someone replies in a thread Kody started without writing @kody, decides whether the reply is meant for Kody (and answers it) or for another person (and stays out).',
         pipeline: null,
@@ -522,6 +544,7 @@ const STAGES = [
     {
         id: 'conversation',
         name: 'Conversation replies',
+        short: 'Answers a developer from the code',
         group: 'Conversation with Kody',
         does: "Answers a developer who replies to a Kody comment, from the code: whether a claimed fix landed, whether a decline holds, or the answer to a question, in the team's language.",
         pipeline: null,

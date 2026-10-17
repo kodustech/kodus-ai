@@ -11,7 +11,7 @@ const { costUpperBound, catalogIdFor } = require('./investigation/nightly-compar
 const { loadCatalog, catalogProblems } = require('./shared/eval-result');
 
 type Test = { kind: string; name: string; specs?: string[]; wiring?: string[]; weekly?: string[]; scenario?: string; signal?: string };
-type Stage = { id: string; name: string; group: string; does: string; pipeline: string[] | null; tests: Test[]; eval: { path: string; nightly: string; sets: { controlled: string; full: string | null } } | null; note?: string };
+type Stage = { id: string; name: string; group: string; short: string; does: string; pipeline: string[] | null; tests: Test[]; eval: { path: string; nightly: string; sets: { controlled: string; full: string | null } } | null; note?: string };
 type Row = { name: string; status: string; value: number | null; meta: Record<string, any> };
 
 // Steps of evals/wiring-smoke.js that check the harness, not a review stage.
@@ -51,6 +51,7 @@ describe('evals/stages.js', () => {
             expect(stage.name.length).toBeLessThanOrEqual(20);
             expect(GROUPS).toContain(stage.group);
             expect([stage.id, stage.does.length > 20]).toEqual([stage.id, true]);
+            expect([stage.id, stage.short.length > 0 && stage.short.length <= 44]).toEqual([stage.id, true]);
         }
         const runs = stages.map((s) => s.group).filter((g, i, all) => g !== all[i - 1]);
         expect(runs).toEqual(GROUPS);
