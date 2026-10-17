@@ -40,7 +40,24 @@ type CaseVars = {
     benchmarkBaseRef?: string;
     benchmarkHeadRef?: string;
     changedFiles?: string | Array<{ filename: string }>;
+    changedFilesFull?: string | Array<{ filename: string }>;
 };
+
+type ChangedFiles = CaseVars['changedFiles'];
+
+const filenames = (files: ChangedFiles): string[] =>
+    (typeof files === 'string'
+        ? (JSON.parse(files) as Array<{ filename: string }>)
+        : (files ?? [])
+    ).map((f) => f.filename);
+
+/**
+ * The files a review of the case sees: the PR's whole diff when the dataset
+ * has it (what the finder eval reviews), else the corpus's first files.
+ */
+export function changedPaths(v: CaseVars): string[] {
+    return filenames(v.changedFilesFull ?? v.changedFiles);
+}
 
 const arg = (name: string): string | undefined =>
     process.argv
@@ -130,11 +147,7 @@ async function main(): Promise<number> {
             continue;
         }
 
-        const changed = (
-            typeof v.changedFiles === 'string'
-                ? (JSON.parse(v.changedFiles) as Array<{ filename: string }>)
-                : (v.changedFiles ?? [])
-        ).map((f) => f.filename);
+        const changed = changedPaths(v);
 
         const repoInstructions = await collectRepoInstructions({
             changedFiles: changed,
@@ -159,10 +172,12 @@ async function main(): Promise<number> {
     return 0;
 }
 
-main().then(
-    (code) => process.exit(code),
-    (error) => {
-        console.error(error instanceof Error ? error.stack : String(error));
-        process.exit(1);
-    },
-);
+if (require.main === module) {
+    main().then(
+        (code) => process.exit(code),
+        (error) => {
+            console.error(error instanceof Error ? error.stack : String(error));
+            process.exit(1);
+        },
+    );
+}
