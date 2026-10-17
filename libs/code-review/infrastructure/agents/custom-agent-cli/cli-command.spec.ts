@@ -304,4 +304,10 @@ describe('resolveCliTimeoutSec', () => {
             CLI_MAX_TIMEOUT_SEC,
         );
     });
+
+    it('falls back to the default when the configured value is not a number', () => {
+        expect(resolveCliTimeoutSec({ timeoutSec: NaN })).toBe(120);
+        expect(resolveCliTimeoutSec({ timeoutSec: Infinity })).toBe(120);
+        expect(resolveCliTimeoutSec({ timeoutSec: '30' as any })).toBe(120);
+    });
 });

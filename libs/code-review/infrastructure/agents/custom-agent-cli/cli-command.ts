@@ -364,6 +364,10 @@ export function buildRunCommand(params: {
 }
 
 export function resolveCliTimeoutSec(cli: Pick<CliToolConfig, 'timeoutSec'>) {
-    const configured = cli.timeoutSec ?? CLI_DEFAULT_TIMEOUT_SEC;
+    // A config that skipped validation (YAML) can carry NaN or a string,
+    // which would reach `timeout` as an invalid duration.
+    const configured = Number.isFinite(cli.timeoutSec)
+        ? cli.timeoutSec!
+        : CLI_DEFAULT_TIMEOUT_SEC;
     return Math.min(Math.max(1, configured), CLI_MAX_TIMEOUT_SEC);
 }
