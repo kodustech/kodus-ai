@@ -299,7 +299,8 @@ export async function runAgentLoopViaCore(
         (fu.cacheReadTokens ?? 0) + vu.cacheReadTokens + ru.cacheReadTokens;
 
     // Verify funnel made observable: before = kept + dropped, after = kept.
-    const verifiedBefore = r.kept.length + r.droppedByVerify.length;
+    const verifiedBefore =
+        r.kept.length + r.droppedByVerify.length + r.unverified.length;
     const verification: VerificationTraceSummary | null =
         verifiedBefore === 0
             ? null
@@ -307,6 +308,7 @@ export async function runAgentLoopViaCore(
                   beforeCount: verifiedBefore,
                   afterCount: r.kept.length,
                   droppedByVerifier: r.droppedByVerify.length,
+                  unverified: r.unverified.length,
                   droppedByEvidenceFilter: 0,
                   decisions: [
                       ...r.kept.map((f, i) => ({
@@ -328,8 +330,31 @@ export async function runAgentLoopViaCore(
                           rationale: d.evidence ?? '',
                           verifierEvidence: d.verifierEvidence,
                       })),
+                      ...r.unverified.map((u, i) => ({
+                          index:
+                              r.kept.length + r.droppedByVerify.length + i,
+                          relevantFile: u.finding.relevantFile,
+                          action: 'drop' as const,
+                          parseMode: 'verify-error' as const,
+                          rationale: u.error,
+                          verifierEvidence: { strongFiles: [], weakFiles: [] },
+                      })),
                   ],
               };
+
+    // A finder run that ended without submitting a result did not finish
+    // looking: it ran out of steps, or the provider cut its turn so the tools
+    // it asked for never ran (the runner records that as `tool.skipped`). A run
+    // that answered in prose is not incomplete; prose recovery owns it (#2171).
+    const submitted = r.finderState.artifacts.length > 0;
+    const incompleteReason: AgentLoopOutput['incompleteReason'] =
+        r.finderState.status === 'budget-exhausted'
+            ? 'budget-exhausted'
+            : !submitted &&
+                r.finderState.status !== 'error' &&
+                r.finderState.trace.some((e) => e.kind === 'tool.skipped')
+              ? 'truncated'
+              : undefined;
 
     // When the finder run errored (a provider/model throw the harness caught
     // and turned into an error-status result), surface the underlying message
@@ -346,6 +371,7 @@ export async function runAgentLoopViaCore(
         steps: r.finderState.steps.length,
         toolCalls,
         finishReason: r.finderState.status,
+        ...(incompleteReason && { incompleteReason }),
         ...(errorEvent && {
             errorMessage: (errorEvent.detail?.message as string) || undefined,
             errorName: (errorEvent.detail?.name as string) || undefined,
@@ -364,6 +390,7 @@ export async function runAgentLoopViaCore(
         },
         discardedBySeverity: [],
         droppedByVerify: r.droppedByVerify.map((d) => d.finding) as any,
+        unverifiedByVerify: r.unverified.map((u) => u.finding) as any,
         coverage,
         verification,
         verificationUsage: {

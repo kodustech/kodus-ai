@@ -41,7 +41,9 @@ export type ReviewWarningKind =
     /** Findings were dropped because the file they named is not in the PR. */
     | 'SUGGESTIONS_DROPPED_PATH_MISMATCH'
     /** Some Kody Rules checks failed to run; the others still posted. */
-    | 'KODY_RULES_PARTIAL';
+    | 'KODY_RULES_PARTIAL'
+    /** A finding's verify run failed, so it was not published (#2171). */
+    | 'VERIFY_UNAVAILABLE';
 
 export type ReviewWarningReason =
     | 'small_context_window'
@@ -61,7 +63,9 @@ export type ReviewWarningReason =
     /** A Kody Rules judge shard errored. */
     | 'judge_shard_failed'
     /** The prompt did not fit the single-batch budget on a large PR. */
-    | 'large_pr';
+    | 'large_pr'
+    /** The verifier's model call failed (provider error, 429, abort). */
+    | 'verify_failed';
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;
@@ -165,6 +169,21 @@ export function buildPathMismatchWarning(params: {
         contextWindowTokens: 0,
         modelName: params.modelName,
         detail: `${params.agentName}: ${params.count} finding(s) dropped because the file they named is not in the pull request`,
+        agentName: params.agentName,
+    };
+}
+
+export function buildVerifyUnavailableWarning(params: {
+    count: number;
+    modelName: string;
+    agentName: string;
+}): ReviewWarning {
+    return {
+        kind: 'VERIFY_UNAVAILABLE',
+        reason: 'verify_failed',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: `${params.agentName}: ${params.count} finding(s) not posted because their verification failed to run`,
         agentName: params.agentName,
     };
 }
