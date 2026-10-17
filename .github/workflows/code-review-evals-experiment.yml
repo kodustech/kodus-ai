@@ -102,9 +102,7 @@ jobs:
               with:
                   name: experiment-${{ inputs.step }}
                   path: |
-                      experiment/*.json
-                      experiment/*.md
-                      experiment/base/
-                      experiment/candidate/
+                      experiment/
+                      !experiment/base-tree/
                   if-no-files-found: ignore
                   retention-days: 90

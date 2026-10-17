@@ -1,5 +1,5 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { compare, decide, phaseVerdict } = require('./experiment');
+const { compare, comparisonOf, decide, phaseVerdict, affectedSteps } = require('./experiment');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { pairsOf, scoreCase } = require('./dedup-groups/run');
 
@@ -83,5 +83,54 @@ describe('evals/dedup-groups scoring', () => {
         // The dedup kept S1 with S2 merged into it, and merged S5 into S4.
         const r = scoreCase(testCase, { groups: [[0, 1], [3, 4]], kept: [0, 2, 3], status: 'success' });
         expect(r).toMatchObject({ hits: 1, total: 3, falseMerges: 1, falseMergePairs: ['S4|S5'], kept: 3, goldGroups: 3 });
+    });
+});
+
+describe('evals/experiment.js affectedSteps', () => {
+    const steps = { dedup: { smoke: ['funnel-dedup'] }, verify: { smoke: ['funnel-verify'] } };
+    const files: Record<string, string[]> = {
+        'funnel-dedup': ['libs/code-review/pipeline/stages/agent-review.stage.ts', 'evals/funnel/dedup/run.js'],
+        'funnel-verify': ['libs/code-review/infrastructure/agents/core/verifier.agent.ts'],
+    };
+    const filesOf = (name: string) => files[name] || [];
+
+    it('runs the experiment of a step whose production files the change touched', () => {
+        expect(affectedSteps(['libs/code-review/pipeline/stages/agent-review.stage.ts', 'README.md'], filesOf, steps)).toEqual(['dedup']);
+    });
+
+    it('ignores a change to the eval or to files no step loads', () => {
+        expect(affectedSteps(['evals/funnel/dedup/run.js', 'apps/web/page.tsx'], filesOf, steps)).toEqual([]);
+    });
+});
+
+describe('evals/experiment.js main refuses what it cannot compare', () => {
+    const run = (argv: string[]) => {
+        const saved = process.argv;
+        const error = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            process.argv = ['node', 'experiment.js', ...argv];
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            return { code: require('./experiment').main(), said: error.mock.calls.map((c) => String(c[0])).join('\n') };
+        } finally {
+            process.argv = saved;
+            error.mockRestore();
+        }
+    };
+
+    it('a model outside tier0-models.js', () => {
+        expect(run(['--step=dedup', '--model=gpt-unknown'])).toMatchObject({ code: 2, said: expect.stringContaining('tier0-models.js') });
+    });
+
+    it('the decision phase without the regression phase', () => {
+        expect(run(['--step=dedup', '--phases=decision'])).toMatchObject({ code: 2, said: expect.stringContaining('needs regression') });
+    });
+});
+
+describe('evals/experiment.js comparisonOf', () => {
+    it('is not measured when a requested run is missing on either side', () => {
+        const ok = { cases: [{ id: 'a', checks: 'a', hits: 1, total: 2 }] };
+        const better = { cases: [{ id: 'a', checks: 'a', hits: 2, total: 2 }] };
+        expect(comparisonOf([ok, ok], [better, better]).verdict).not.toBe('not measured');
+        expect(comparisonOf([ok, ok], [better, null])).toMatchObject({ verdict: 'not measured', missingRuns: { base: 0, candidate: 1 } });
     });
 });

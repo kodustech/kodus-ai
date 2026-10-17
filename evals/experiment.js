@@ -15,6 +15,8 @@
 // beyond its interval (or ties and uses fewer tokens).
 //
 //   node evals/experiment.js --step=dedup [--phases=regression,decision] [--base=origin/main] [--runs=2] [--model=<id>] [--name=<label>] [--out=<dir>]
+//   node evals/experiment.js --affected --files-dir=<wiring smoke --eval-files-dir> --changed=<file of changed paths>
+//                                               the steps whose production files a change touched (JSON), for a PR's check
 //
 // --phases  which questions to answer (both by default); a PR's check runs the
 //           regression phase only, and the result says the decision was not run.
@@ -30,7 +32,8 @@
 //
 // Writes, under --out: experiment.json, rows.json
 // (experiments.<step>.<phase>.<eval>.<name>, for the quality panel), summary.md
-// (the job summary in CI) and each run's result. Exit: 0 compared, 2 could not.
+// (the job summary in CI) and each run's result. Exit: 0 compared, 1 it broke
+// something (the regression phase found a drop), 2 could not compare.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -38,11 +41,19 @@ const crypto = require('crypto');
 const { spawnSync, execFileSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
+const { TIER0 } = require('./shared/tier0-models');
+// The nightly's model (evals/README.md): an experiment's default.
+const DEFAULT_MODEL = 'deepseek-v4-flash@fireworks';
+const DEFAULT_RUNS = 2;
+const MAX_RUNS = 10;
 
 // The evals an experiment on a step runs: the one that answers whether the
-// change is better, and the ones that must not get worse.
+// change is better, and the ones that must not get worse. `smoke`: the wiring
+// smoke steps that load the step's production path; a PR that changes one of
+// the files they load runs the experiment (`--affected`).
 const STEP_EVALS = {
     dedup: {
+        smoke: ['funnel-dedup'],
         primary: { id: 'dedup-groups', label: 'Duplicate pairs joined', run: ['evals/dedup-groups/run.js'], question: 'Does the dedup join the suggestions that report the same problem, and only those?' },
         guards: [{ id: 'funnel-dedup', label: 'Known bugs kept', run: ['evals/funnel/dedup/run.js', '--set=full'], question: 'Of the known bugs reaching the dedup in a real review, how many does it keep?' }],
     },
@@ -151,6 +162,14 @@ function compare(baseRuns, candidateRuns, { seed = 1 } = {}) {
         better: moved.filter((c) => c.candidate > c.base).sort((a, b) => b.candidate - b.base - (a.candidate - a.base)),
         verdict,
     };
+}
+
+// Every requested run on both sides, or 'not measured': comparing fewer runs
+// than the experiment reports would overstate it. A missing run is null.
+function comparisonOf(baseRuns, candidateRuns) {
+    const comparison = compare(baseRuns.filter(Boolean), candidateRuns.filter(Boolean));
+    const missing = { base: baseRuns.filter((x) => !x).length, candidate: candidateRuns.filter((x) => !x).length };
+    return missing.base || missing.candidate ? { ...comparison, verdict: 'not measured', missingRuns: missing } : comparison;
 }
 
 // The mean of each side's secondary metrics and model usage over its runs.
@@ -266,20 +285,46 @@ function summaryMarkdown(x, { pct, pp }) {
     return `${lines.join('\n')}\n`;
 }
 
+// The steps a change touched: those whose wiring smoke steps loaded a changed
+// production file (the smoke's per-step lists, --eval-files-dir).
+function affectedSteps(changed, filesOf, steps = STEP_EVALS) {
+    const prod = new Set(changed.filter((f) => /^(libs|apps|packages)\//.test(f)));
+    return Object.entries(steps)
+        .filter(([, plan]) => (plan.smoke || []).some((name) => filesOf(name).some((f) => prod.has(f))))
+        .map(([step]) => step);
+}
+
 function main() {
     const args = parseArgs(process.argv.slice(2));
+    if (args.affected) {
+        const lines = (file) => (file && fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean) : []);
+        const changed = lines(args.changed);
+        console.log(JSON.stringify(affectedSteps(changed, (name) => lines(path.join(String(args['files-dir'] || ''), `${name}.txt`)))));
+        return 0;
+    }
     const step = args.step;
     const plan = STEP_EVALS[step];
     if (!plan) {
         console.error(`usage: experiment.js --step=<${Object.keys(STEP_EVALS).join('|')}> [--base=origin/main] [--runs=2] [--model=<id>] [--name=<label>] [--out=<dir>]`);
         return 2;
     }
-    const model = args.model || 'deepseek-v4-flash@fireworks';
-    const runs = Math.max(1, Number(args.runs) || 2);
+    const model = String(args.model || DEFAULT_MODEL);
+    if (!TIER0[model]) {
+        console.error(`unknown --model=${model}: a model of evals/shared/tier0-models.js`);
+        return 2;
+    }
+    const asked = args.runs === undefined ? DEFAULT_RUNS : Number(args.runs);
+    const runs = Number.isInteger(asked) && asked >= 1 && asked <= MAX_RUNS ? asked : DEFAULT_RUNS;
+    if (runs !== asked) console.warn(`--runs=${args.runs} is not a whole number from 1 to ${MAX_RUNS}: running ${DEFAULT_RUNS} per side`);
     const phaseIds = args.phases ? String(args.phases).split(',') : Object.keys(PHASES);
     const unknownPhase = phaseIds.find((p) => !PHASES[p]);
     if (unknownPhase || !phaseIds.length) {
         console.error(`unknown --phases=${args.phases}: ${Object.keys(PHASES).join(', ')}`);
+        return 2;
+    }
+    // "Is it better?" means nothing until "did it break anything?" says no.
+    if (!phaseIds.includes('regression')) {
+        console.error('--phases needs regression: the decision phase runs only after it');
         return 2;
     }
     const baseRef = args.base || 'origin/main';
@@ -312,8 +357,10 @@ function main() {
     try {
         fs.symlinkSync(fs.realpathSync(path.join(ROOT, 'node_modules')), path.join(baseDir, 'node_modules'));
         // The EE config is gitignored; production code reads it at import time.
-        const ee = 'libs/ee/configs/environment/environment.ts';
-        if (fs.existsSync(path.join(ROOT, ee))) fs.copyFileSync(path.join(ROOT, ee), path.join(baseDir, ee));
+        // So are the local .env files the evals load (agent-provider.js): both sides get the same keys.
+        for (const file of ['libs/ee/configs/environment/environment.ts', '.env', '.env.local']) {
+            if (fs.existsSync(path.join(ROOT, file))) fs.copyFileSync(path.join(ROOT, file), path.join(baseDir, file));
+        }
 
         const traces = { base: new Set(), candidate: new Set() };
         const exits = [];
@@ -356,7 +403,7 @@ function main() {
                         role: entry.role,
                         question: entry.question,
                         metric: (r.candidate.find(Boolean) || r.base.find(Boolean) || {}).metric?.name || null,
-                        comparison: compare(r.base.filter(Boolean), r.candidate.filter(Boolean)),
+                        comparison: comparisonOf(r.base, r.candidate),
                         sides: { base: sideSummary(r.base), candidate: sideSummary(r.candidate) },
                         runValues: { base: r.base.map((x) => x?.metric?.value ?? null), candidate: r.candidate.map((x) => x?.metric?.value ?? null) },
                     };
@@ -435,6 +482,7 @@ function main() {
             }
         }
         console.log(`\ndecision: ${decision.decision} — ${decision.reason}\n${path.join(out, 'experiment.json')}`);
+        if (phases.regression?.verdict === 'regression') return 1;
         return Object.values(phases).every((p) => p.verdict !== 'not measured') ? 0 : 2;
     } finally {
         try {
@@ -447,4 +495,4 @@ function main() {
 
 if (require.main === module) process.exit(main());
 
-module.exports = { compare, perCase, decide, phaseVerdict, PHASES, STEP_EVALS };
+module.exports = { main, compare, comparisonOf, perCase, decide, phaseVerdict, affectedSteps, PHASES, STEP_EVALS };
