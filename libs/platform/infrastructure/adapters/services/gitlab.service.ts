@@ -136,6 +136,24 @@ const AWARD_EMOJI_CONCURRENCY = 5;
  */
 const GITLAB_MAX_PER_PAGE = 100;
 
+/**
+ * The auth mode of a GitLab record whose `authMode` predates the field: an
+ * OAuth record carries a refresh token and a PAT never does.
+ *
+ * Only the settings card reads this. `isSetupComplete` keeps treating a missing
+ * mode as OAuth (its TOKEN branch does not require repositories), and
+ * `getAuthDetails` keeps the same default because `instanceGitlabApi` uses the
+ * mode to tell a raw token from an encrypted one.
+ */
+export function deriveGitlabAuthMode(
+    authDetails?: { authMode?: AuthMode; refreshToken?: string } | null,
+): AuthMode {
+    if (authDetails?.authMode) {
+        return authDetails.authMode;
+    }
+    return authDetails?.refreshToken ? AuthMode.OAUTH : AuthMode.TOKEN;
+}
+
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.GITLAB, 'codeManagement')
 export class GitlabService implements Omit<
@@ -1873,9 +1891,21 @@ export class GitlabService implements Omit<
 
             const hasRepositories = gitlabRepositories?.length > 0;
 
-            const authMode = gitlabOrg?.authIntegration?.authDetails?.authMode
-                ? gitlabOrg?.authIntegration?.authDetails?.authMode
+            const gitlabAuthDetails = gitlabOrg?.authIntegration?.authDetails;
+
+            // Unchanged for setup, and deliberately so: the TOKEN branch below
+            // does not require repositories, so letting a derived TOKEN through
+            // would stop a legacy PAT with none from being rejected as
+            // unconfigured.
+            const authMode = gitlabAuthDetails?.authMode
+                ? gitlabAuthDetails.authMode
                 : AuthMode.OAUTH;
+
+            // What the settings card reads, and only that: its
+            // `=== AuthMode.OAUTH` check is the only thing keeping an OAuth
+            // connection away from a rotation modal that saves a PAT, which
+            // REPLACES authDetails and drops the refresh token for good.
+            const cardAuthMode = deriveGitlabAuthMode(gitlabAuthDetails);
 
             const isSetupComplete =
                 (!!hasRepositories &&
@@ -1891,6 +1921,12 @@ export class GitlabService implements Omit<
                 config: {
                     hasRepositories: hasRepositories,
                     status: gitlabRepositories?.installationStatus,
+                    host: gitlabOrg?.authIntegration?.authDetails?.host ?? '',
+                    // The settings card reads this to decide whether it may
+                    // offer the token rotation, so it carries the DERIVED mode.
+                    // The setup check above keeps its own reading of a missing
+                    // mode, on purpose.
+                    authMode: cardAuthMode,
                 },
                 category: IntegrationCategory.CODE_MANAGEMENT,
             };
@@ -1947,6 +1983,12 @@ export class GitlabService implements Omit<
 
         return {
             ...gitlabAuthDetail,
+            // Not the card's derivation: `instanceGitlabApi` reads this mode to
+            // decide whether the stored token is raw (OAuth) or encrypted
+            // (PAT), so inferring TOKEN for a record that predates the field and
+            // carries a raw token would send it to `decrypt` and break the
+            // connection. A missing mode keeps the reading this path has always
+            // had; the settings card derives its own, for the UI only.
             authMode: gitlabAuthDetail?.authMode || AuthMode.OAUTH,
         };
     }
