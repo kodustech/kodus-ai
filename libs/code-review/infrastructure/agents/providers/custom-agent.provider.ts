@@ -1,4 +1,18 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+
+import { decrypt } from '@libs/common/utils/crypto';
+import { createLogger } from '@libs/core/log/logger';
+import type {
+    MCPAdapter,
+    MCPAdapterConfig,
+} from '@libs/mcp-server/mcp-adapter';
+import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
+import {
+    buildCustomAgentTools,
+    loadCustomAgentMcpServers,
+    sandboxFileWriter,
+} from '@libs/code-review/infrastructure/agents/adapters/custom-agent-tools';
+import { buildRunCliAgentTool } from '@libs/code-review/infrastructure/agents/custom-agent-cli/run-cli.tool';
 
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import type {
@@ -15,7 +29,10 @@ import {
     type ResolvedAgentModel,
 } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
 import { customAgentSlug } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
-import { BaseCodeReviewAgentProvider } from '@libs/code-review/infrastructure/agents/providers/base-code-review-agent.provider';
+import {
+    type AgentRunToolset,
+    BaseCodeReviewAgentProvider,
+} from '@libs/code-review/infrastructure/agents/providers/base-code-review-agent.provider';
 import type {
     ReviewAgentIdentity,
     ReviewAgentInput,
@@ -46,6 +63,21 @@ ${instructions}
   </DoNotReport>`;
 }
 
+const logger = createLogger('CustomAgentProvider');
+
+/** Injection token for a replacement MCP adapter factory (tests, evals). */
+export const CUSTOM_AGENT_MCP_ADAPTER_FACTORY = Symbol.for(
+    'CustomAgentMcpAdapterFactory',
+);
+
+export type McpAdapterFactory = (config: MCPAdapterConfig) => MCPAdapter;
+
+/** What a custom agent reaches beyond its review input. */
+export interface CustomAgentToolServices {
+    mcpManager?: Pick<MCPManagerService, 'getConnections'>;
+    createMcpAdapter?: McpAdapterFactory;
+}
+
 /**
  * A team-defined reviewer (#2172). One instance per configured agent, built
  * by CustomAgentProviderFactory: the agent's config is fixed for the
@@ -62,6 +94,7 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
         observabilityService: ObservabilityService,
         documentationSearchService?: DocumentationSearchExaService,
         byokErrorCounter?: ByokErrorCounter,
+        private readonly toolServices: CustomAgentToolServices = {},
     ) {
         super(
             permissionValidationService,
@@ -70,6 +103,80 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
             byokErrorCounter,
         );
         this.slug = customAgentSlug(agent.name);
+    }
+
+    /**
+     * Its linked skills and docs. Always set, even when empty, so its
+     * findings may carry kind and source and convention findings take the
+     * quote check and the convention verifier instead of HV2.
+     */
+    protected getConventionGuides(input: ReviewAgentInput): string[] {
+        return [
+            ...(input.knowledge?.skills ?? []).map((skill) => skill.path),
+            ...(input.knowledge?.docs ?? []).map((doc) => doc.path),
+        ];
+    }
+
+    /**
+     * astGrep (with a sandbox checkout), the read-only MCP tools the agent
+     * selected, and runCli for the CLIs installed for THIS agent. A tool that
+     * cannot be built is left out; the review runs without it.
+     */
+    protected async buildAgentTools(
+        input: ReviewAgentInput,
+    ): Promise<AgentRunToolset> {
+        const tooling = input.customAgentTooling;
+        const sandbox = tooling?.sandbox;
+        const reader = input.knowledgeReader;
+        const org = input.organizationAndTeamData;
+        const mcpManager = this.toolServices.mcpManager;
+
+        const toolset = await buildCustomAgentTools(this.agent, {
+            remoteCommands: input.remoteCommands,
+            writeFile:
+                sandbox?.writeFile && sandbox.repoDir
+                    ? sandboxFileWriter(sandbox)
+                    : undefined,
+            changedFiles: (input.changedFiles ?? [])
+                .map((f) => f.filename)
+                .filter(Boolean),
+            readTargetFile: reader
+                ? async (path) => {
+                      const read = await reader.readFile(path);
+                      return read.status === 'ok' ? read.content : null;
+                  }
+                : undefined,
+            mcp:
+                mcpManager && org
+                    ? {
+                          loadServers: (integrationIds) =>
+                              loadCustomAgentMcpServers(
+                                  mcpManager,
+                                  org,
+                                  integrationIds,
+                              ),
+                          createAdapter: this.toolServices.createMcpAdapter,
+                      }
+                    : undefined,
+        }).catch((error) => {
+            logger.warn({
+                message: `Custom agent "${this.agent.name}" tools unavailable; running without them`,
+                context: CustomAgentProvider.name,
+                error,
+            });
+            return { tools: [], close: async () => {} };
+        });
+
+        const runCli = buildRunCliAgentTool({
+            sandbox,
+            installed: tooling?.installedClis?.[this.agent.id],
+            decrypt,
+        });
+
+        return {
+            tools: runCli ? [...toolset.tools, runCli] : toolset.tools,
+            close: () => toolset.close(),
+        };
     }
 
     get config(): CustomAgentConfig {
@@ -172,6 +279,11 @@ export class CustomAgentProviderFactory {
         private readonly documentationSearchService?: DocumentationSearchExaService,
         @Optional()
         private readonly byokErrorCounter?: ByokErrorCounter,
+        @Optional()
+        private readonly mcpManagerService?: MCPManagerService,
+        @Optional()
+        @Inject(CUSTOM_AGENT_MCP_ADAPTER_FACTORY)
+        private readonly createMcpAdapter?: McpAdapterFactory,
     ) {}
 
     create(agent: CustomAgentConfig): CustomAgentProvider {
@@ -181,6 +293,10 @@ export class CustomAgentProviderFactory {
             this.observabilityService,
             this.documentationSearchService,
             this.byokErrorCounter,
+            {
+                mcpManager: this.mcpManagerService,
+                createMcpAdapter: this.createMcpAdapter,
+            },
         );
     }
 }

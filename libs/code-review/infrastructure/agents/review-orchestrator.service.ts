@@ -20,6 +20,8 @@ import {
     selectCustomAgents,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import type { CustomAgentRun } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
+import type { ResolvedKnowledge } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-resolver';
+import { KNOWLEDGE_MAIN_REVIEW_TARGET } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
     ReviewAgentInput,
     ReviewAgentOutput,
@@ -38,6 +40,9 @@ export interface OrchestratorInput extends ReviewAgentInput {
     customAgents?: CustomAgentConfig[];
     /** `@kody -v <slug>`: run only that custom agent, nothing else. */
     onlyCustomAgent?: string;
+    /** Skills and docs per target: `main-review` for the built-in category
+     *  agents, a custom agent's id for that agent. Kody Rules takes none. */
+    knowledgeByTarget?: ReadonlyMap<string, ResolvedKnowledge>;
 }
 
 /** Which custom agent a failure, cut-short run or unverified set belongs to. */
@@ -144,8 +149,12 @@ export class ReviewOrchestratorService {
             kodyRules,
             customAgents,
             onlyCustomAgent,
+            knowledgeByTarget,
             ...agentInput
         } = input;
+        const mainKnowledge = knowledgeByTarget?.get(
+            KNOWLEDGE_MAIN_REVIEW_TARGET,
+        );
 
         // Determine which agents to run based on review options
         const agentTasks: Array<{
@@ -156,6 +165,8 @@ export class ReviewOrchestratorService {
             /** The files this agent reviews, when narrower than the PR. */
             changedFiles?: ReviewAgentInput['changedFiles'];
             customAgent?: OrchestratorCustomAgentRef;
+            /** Skills and docs linked to this agent's target. */
+            knowledge?: ResolvedKnowledge;
         }> = [];
         const customAgentRuns: CustomAgentRun[] = [];
         // `@kody -v <slug>` runs that agent alone: the built-in agents
@@ -175,18 +186,21 @@ export class ReviewOrchestratorService {
                 agentTasks.push({
                     name: 'bug',
                     provider: this.bugAgent,
+                    knowledge: mainKnowledge,
                 });
             }
             if (enabledCategories.includes('security')) {
                 agentTasks.push({
                     name: 'security',
                     provider: this.securityAgent,
+                    knowledge: mainKnowledge,
                 });
             }
             if (enabledCategories.includes('performance')) {
                 agentTasks.push({
                     name: 'performance',
                     provider: this.performanceAgent,
+                    knowledge: mainKnowledge,
                 });
             }
         } else if (enabledCategories.length > 0) {
@@ -199,6 +213,7 @@ export class ReviewOrchestratorService {
                             requestedCategories: enabledCategories,
                         }),
                 },
+                knowledge: mainKnowledge,
             });
         }
 
@@ -255,6 +270,7 @@ export class ReviewOrchestratorService {
                     provider,
                     changedFiles: files,
                     customAgent: { id: agent.id, mode },
+                    knowledge: knowledgeByTarget?.get(agent.id),
                 });
             }
         }
@@ -310,6 +326,7 @@ export class ReviewOrchestratorService {
                 return await task.provider.execute({
                     ...agentInputWithoutContent,
                     changedFiles,
+                    knowledge: task.knowledge,
                     maxSteps: this.getMaxStepsForAgent(
                         task.budgetKey ?? task.name,
                         agentInput.reviewMode,

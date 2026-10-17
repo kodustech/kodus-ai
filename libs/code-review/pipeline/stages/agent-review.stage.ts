@@ -48,6 +48,17 @@ import { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/c
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { ReviewOrchestratorService } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
 import { buildOrchestratorInput } from './build-orchestrator-input';
+import {
+    type BaseBranchReader,
+    createBaseBranchReader,
+    type KnowledgeCodeManagementPort,
+} from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
+import {
+    KnowledgeResolver,
+    type ResolvedKnowledge,
+    toReviewWarnings,
+} from '@libs/code-review/infrastructure/agents/knowledge/knowledge-resolver';
+import { KNOWLEDGE_MAIN_REVIEW_TARGET } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { FeatureGateService, FEATURE_KEYS } from '@libs/feature-gate';
 import {
@@ -430,20 +441,24 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         if (!wanted.length) {
             return [];
         }
+        return (await this.isCustomAgentsEnabled(context)) ? wanted : [];
+    }
+
+    /** The `custom-agents` beta gate. Fails closed: an unevaluable gate runs
+     *  no custom agent and loads no skill or doc. */
+    private async isCustomAgentsEnabled(
+        context: CodeReviewPipelineContext,
+    ): Promise<boolean> {
         const org = context.organizationAndTeamData;
         try {
             const releaseTrack = await this.organizationService.getReleaseTrack(
                 org.organizationId,
             );
-            const enabled = await this.featureGate.isEnabled(
-                FEATURE_KEYS.customAgents,
-                {
-                    identifier: org.organizationId,
-                    organizationAndTeamData: org,
-                    releaseTrack,
-                },
-            );
-            return enabled ? wanted : [];
+            return await this.featureGate.isEnabled(FEATURE_KEYS.customAgents, {
+                identifier: org.organizationId,
+                organizationAndTeamData: org,
+                releaseTrack,
+            });
         } catch (err) {
             this.logger.warn({
                 message: `[AGENT] Custom agents gate could not be evaluated, running none`,
@@ -451,7 +466,85 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 error: err,
                 metadata: { organizationId: org?.organizationId },
             });
-            return [];
+            return false;
+        }
+    }
+
+    /**
+     * Skills and docs linked to the main review and to each custom agent,
+     * read from the PR's target branch (#2172). Nothing here fails the
+     * review: problems become warnings and the review runs with what could
+     * be read.
+     */
+    private async resolveReviewKnowledge(
+        context: CodeReviewPipelineContext,
+        customAgents: CustomAgentConfig[],
+        changedFiles: Array<{ filename?: string }>,
+    ): Promise<{
+        byTarget?: Map<string, ResolvedKnowledge>;
+        reader?: BaseBranchReader;
+        warnings: ReviewWarning[];
+    }> {
+        const items = context.codeReviewConfig?.knowledge ?? [];
+        if (!items.length) return { warnings: [] };
+        // Agents already passed the gate; knowledge for the main review alone
+        // still needs it.
+        if (
+            !customAgents.length &&
+            !(await this.isCustomAgentsEnabled(context))
+        ) {
+            return { warnings: [] };
+        }
+        const baseBranch =
+            context.pullRequest?.base?.ref ||
+            context.sandboxHandle?.baseBranch ||
+            context.repository?.defaultBranch;
+        if (!baseBranch || !context.repository?.id) return { warnings: [] };
+
+        try {
+            const reader = createBaseBranchReader({
+                sandbox: context.sandboxHandle?.run
+                    ? context.sandboxHandle
+                    : null,
+                baseBranch,
+                codeManagement: this
+                    .codeManagementService as unknown as KnowledgeCodeManagementPort,
+                organizationAndTeamData: context.organizationAndTeamData,
+                repository: {
+                    id: String(context.repository.id),
+                    name: context.repository.name,
+                },
+            });
+            const byTarget = await new KnowledgeResolver(reader).resolveAll({
+                items,
+                agentIds: customAgents.map((agent) => agent.id),
+                changedFiles: changedFiles
+                    .map((file) => file.filename)
+                    .filter((name): name is string => !!name),
+            });
+            const names = new Map(customAgents.map((a) => [a.id, a.name]));
+            const warnings = [...byTarget.entries()].flatMap(
+                ([target, resolved]) =>
+                    toReviewWarnings(
+                        resolved.warnings,
+                        target === KNOWLEDGE_MAIN_REVIEW_TARGET
+                            ? undefined
+                            : names.get(target),
+                    ),
+            );
+            return { byTarget, reader, warnings };
+        } catch (err) {
+            this.logger.warn({
+                message: `[AGENT] Skills and docs could not be read; reviewing without them`,
+                context: this.stageName,
+                error: err,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    repositoryId: context.repository?.id,
+                },
+            });
+            return { warnings: [] };
         }
     }
 
@@ -774,6 +867,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const customAgents = await this.resolveCustomAgents(context);
             const customAgentsById: CustomAgentsById =
                 indexCustomAgents(customAgents);
+            const reviewKnowledge = await this.resolveReviewKnowledge(
+                context,
+                customAgents,
+                changedFiles,
+            );
+            stageWarnings.push(...reviewKnowledge.warnings);
             const result = await this.reviewOrchestrator.execute({
                 ...buildOrchestratorInput(context, {
                     changedFiles,
@@ -790,6 +889,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }),
                 customAgents,
                 onlyCustomAgent: context.onlyCustomAgent,
+                knowledgeByTarget: reviewKnowledge.byTarget,
+                knowledgeReader: reviewKnowledge.reader,
+                customAgentTooling: {
+                    sandbox: context.sandboxHandle,
+                    installedClis: context.customAgentClis?.byAgentId,
+                },
             });
 
             // Snapshot linked-repo metadata after the review so clone status

@@ -202,6 +202,169 @@ describe('CustomAgentProvider', () => {
     });
 });
 
+describe('CustomAgentProvider — knowledge and tools', () => {
+    const knowledge = {
+        ref: 'main',
+        skills: [
+            {
+                name: 'ledger-posting',
+                description: 'How the team posts journal entries.',
+                path: '.skills/ledger-posting/SKILL.md',
+                folder: '.skills/ledger-posting',
+                body: 'Post through JournalService.',
+                bodyTruncated: false,
+                files: [],
+            },
+        ],
+        docs: [
+            {
+                path: 'docs/ledger.md',
+                content: 'Debits equal credits.',
+                truncated: false,
+            },
+        ],
+        warnings: [],
+    };
+    const reader = {
+        ref: 'main',
+        readFile: jest.fn(),
+        listFiles: jest.fn(),
+        matchFiles: jest.fn(),
+    };
+
+    it('renders its linked knowledge, offers loadSkill and takes the convention pass', async () => {
+        await provider().execute(input({ knowledge, knowledgeReader: reader }));
+
+        const [loopParams, secrets] = runLoopMock.mock.calls[0];
+        expect(loopParams.systemPrompt).toContain('ledger-posting');
+        expect(loopParams.systemPrompt).toContain('Debits equal credits.');
+        expect(loopParams.conventionGuides).toEqual([
+            '.skills/ledger-posting/SKILL.md',
+            'docs/ledger.md',
+        ]);
+        expect(secrets.extraTools.map((t: any) => t.name)).toEqual(
+            expect.arrayContaining(['loadSkill', 'readSkillFile']),
+        );
+    });
+
+    it('takes the convention pass even with no linked guide', async () => {
+        await provider().execute(input());
+
+        const [loopParams] = runLoopMock.mock.calls[0];
+        expect(loopParams.conventionGuides).toEqual([]);
+    });
+
+    it('offers astGrep, its read-only MCP tools and runCli, and closes MCP after the run', async () => {
+        const close = jest.fn(async () => {});
+        const mcpManager = {
+            getConnections: jest.fn(async (_org: any, format?: boolean) =>
+                format
+                    ? [{ name: 'Tracker', url: 'https://mcp.example.test' }]
+                    : [
+                          {
+                              organizationId: 'org-1',
+                              integrationId: 'int-1',
+                              appName: 'Tracker',
+                          },
+                      ],
+            ),
+        };
+        const adapter = {
+            connect: jest.fn(async () => {}),
+            getTools: jest.fn(async () => [
+                {
+                    name: 'get_issue',
+                    description: 'Read an issue',
+                    inputSchema: { type: 'object', properties: {} },
+                    annotations: { readOnlyHint: true },
+                },
+            ]),
+            executeTool: jest.fn(),
+            disconnect: close,
+        };
+        const sandboxRun = jest.fn();
+        const sandbox = {
+            type: 'e2b',
+            run: sandboxRun,
+            repoDir: '/home/user/repo',
+            writeFile: jest.fn(),
+            remoteCommands: { exec: jest.fn() },
+        };
+        const cli = {
+            name: 'ledgerctl',
+            install: 'npm install -g ledgerctl@1.2.3',
+            binary: 'ledgerctl',
+            allowedPrefixes: ['check'],
+            usage: '',
+            runsProjectCode: false,
+            allowedDomains: [],
+        };
+        const agent = config({
+            tools: {
+                mcp: [{ integrationId: 'int-1', tools: ['get_issue'] }],
+                cli: [cli],
+            },
+        });
+        const factory = new CustomAgentProviderFactory(
+            {} as any,
+            {} as any,
+            undefined,
+            undefined,
+            mcpManager as any,
+            () => adapter as any,
+        );
+
+        await factory.create(agent).execute(
+            input({
+                remoteCommands: sandbox.remoteCommands,
+                customAgentTooling: {
+                    sandbox,
+                    installedClis: {
+                        'agent-ledger': [
+                            {
+                                agentId: 'agent-ledger',
+                                agentName: 'Ledger Rules',
+                                cli,
+                                identity: {
+                                    user: 'kcliabc',
+                                    home: '/home/kcliabc',
+                                    chain: 'KCLI_abc',
+                                    tag: 'kodus-cli:abc',
+                                },
+                                binaryPath:
+                                    '/home/kcliabc/.local/bin/ledgerctl',
+                            },
+                        ],
+                    },
+                },
+            }),
+        );
+
+        const [, secrets] = runLoopMock.mock.calls[0];
+        const names = secrets.extraTools.map((t: any) => t.name);
+        expect(names).toEqual(
+            expect.arrayContaining(['astGrep', 'Tracker__get_issue', 'runCli']),
+        );
+        expect(close).toHaveBeenCalled();
+    });
+
+    it('offers no runCli for CLIs installed for another agent', async () => {
+        await provider().execute(
+            input({
+                customAgentTooling: {
+                    sandbox: { type: 'e2b', run: jest.fn() },
+                    installedClis: { 'agent-other': [{ cli: { name: 'x' } }] },
+                },
+            }),
+        );
+
+        const [, secrets] = runLoopMock.mock.calls[0];
+        expect(
+            (secrets.extraTools ?? []).map((t: any) => t.name),
+        ).not.toContain('runCli');
+    });
+});
+
 describe('buildCustomAgentPrompt', () => {
     it("frames the agent's name as the reviewer's mission", () => {
         const prompt = buildCustomAgentPrompt(config());

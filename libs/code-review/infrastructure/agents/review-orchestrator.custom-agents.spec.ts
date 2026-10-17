@@ -115,6 +115,33 @@ describe('ReviewOrchestratorService — custom agents', () => {
         expect(out.suggestions).toHaveLength(2);
     });
 
+    it('gives the main review and each agent only the knowledge linked to it', async () => {
+        const { service, generalist, kodyRules, customCalls } = setup();
+        const main = { ref: 'main', skills: [], docs: [], warnings: [] };
+        const ledger = { ref: 'main', skills: [], docs: [], warnings: [] };
+
+        await service.execute(
+            inputFor({
+                customAgents: [
+                    agentConfig(),
+                    agentConfig({ id: 'agent-2', name: 'Api', scope: {} }),
+                ],
+                knowledgeByTarget: new Map<string, any>([
+                    ['main-review', main],
+                    ['agent-1', ledger],
+                ]),
+            }),
+        );
+
+        expect(generalist.execute.mock.calls[0][0].knowledge).toBe(main);
+        expect(kodyRules.execute.mock.calls[0][0].knowledge).toBeUndefined();
+        expect((customCalls.get('agent-1') as any).knowledge).toBe(ledger);
+        expect((customCalls.get('agent-2') as any).knowledge).toBeUndefined();
+        expect(
+            (customCalls.get('agent-1') as any).knowledgeByTarget,
+        ).toBeUndefined();
+    });
+
     it('gives an agent only the changed files its globs match', async () => {
         const { service, customCalls } = setup();
 

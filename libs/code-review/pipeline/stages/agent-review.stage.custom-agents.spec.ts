@@ -36,6 +36,17 @@ const makeStage = (
         execute: jest.fn().mockResolvedValue(orchestratorOutput),
     };
     const featureGate = { isEnabled: jest.fn().mockResolvedValue(gateEnabled) };
+    // Target-branch files the knowledge reader can see through the provider.
+    const codeManagement = {
+        getRepositories: jest.fn().mockResolvedValue([]),
+        getCloneParams: jest.fn().mockResolvedValue(null),
+        getRepositoryContentFile: jest.fn(async ({ file }: any) =>
+            file.filename === 'docs/ledger.md'
+                ? { data: { content: 'Debits equal credits.' } }
+                : null,
+        ),
+        getRepositoryAllFiles: jest.fn().mockResolvedValue([]),
+    };
     const stage = new AgentReviewStage(
         {
             findLatestStageLog: jest.fn(),
@@ -53,12 +64,9 @@ const makeStage = (
         } as any,
         featureGate as any,
         { getReleaseTrack: jest.fn().mockResolvedValue('stable') } as any,
-        {
-            getRepositories: jest.fn().mockResolvedValue([]),
-            getCloneParams: jest.fn().mockResolvedValue(null),
-        } as any,
+        codeManagement as any,
     );
-    return { stage, reviewOrchestrator, featureGate };
+    return { stage, reviewOrchestrator, featureGate, codeManagement };
 };
 
 const agent = (over: Record<string, any> = {}) => ({
@@ -357,5 +365,99 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
                 (e: any) => e.substage === 'agent:custom-agent:ledger-rules',
             )?.severity,
         ).toBe('partial');
+    });
+
+    describe('skills and docs', () => {
+        const knowledge = [
+            {
+                path: 'docs/ledger.md',
+                kind: 'doc',
+                linkedTo: ['main-review', { agentId: 'agent-ledger' }],
+            },
+            {
+                path: 'docs/missing.md',
+                kind: 'doc',
+                linkedTo: [{ agentId: 'agent-ledger' }],
+            },
+        ];
+        const withKnowledge = (over: Record<string, unknown> = {}) =>
+            makeContext([agent()], {
+                pullRequest: { number: 7, base: { ref: 'main' } },
+                codeReviewConfig: {
+                    reviewOptions: {},
+                    heavy: false,
+                    resolvedModelSlot: {
+                        provider: 'openai',
+                        model: 'gpt-4o-mini',
+                    },
+                    customAgents: [agent()],
+                    knowledge,
+                },
+                ...over,
+            });
+
+        it('reads linked docs from the target branch for the main review and each agent', async () => {
+            const { stage, reviewOrchestrator } = makeStage(output([]));
+
+            await run(stage, withKnowledge());
+
+            const call = reviewOrchestrator.execute.mock.calls[0][0];
+            const byTarget = call.knowledgeByTarget as Map<string, any>;
+            expect(byTarget.get('main-review').docs[0].content).toContain(
+                'Debits equal credits.',
+            );
+            expect(
+                byTarget.get('agent-ledger').docs.map((d: any) => d.path),
+            ).toEqual(['docs/ledger.md']);
+            expect(call.knowledgeReader?.ref).toBe('main');
+        });
+
+        it('reports a linked doc missing on the target branch as a review warning', async () => {
+            const { stage } = makeStage(output([]));
+
+            const result = await run(stage, withKnowledge());
+
+            expect(result.reviewWarnings).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        kind: 'DOC_NOT_FOUND',
+                        reason: 'knowledge',
+                    }),
+                ]),
+            );
+        });
+
+        it('reads nothing while the org lacks the beta', async () => {
+            const { stage, reviewOrchestrator, codeManagement } = makeStage(
+                output([]),
+                false,
+            );
+
+            await run(stage, withKnowledge());
+
+            expect(
+                reviewOrchestrator.execute.mock.calls[0][0].knowledgeByTarget,
+            ).toBeUndefined();
+            expect(
+                codeManagement.getRepositoryContentFile,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('hands the agents the sandbox and the CLIs installed for them', async () => {
+            const { stage, reviewOrchestrator } = makeStage(output([]));
+            const installed = {
+                'agent-ledger': [{ cli: { name: 'ledgerctl' } }],
+            };
+
+            await run(
+                stage,
+                makeContext([agent()], {
+                    customAgentClis: { byAgentId: installed, warnings: [] },
+                }),
+            );
+
+            const call = reviewOrchestrator.execute.mock.calls[0][0];
+            expect(call.customAgentTooling.installedClis).toBe(installed);
+        });
     });
 });

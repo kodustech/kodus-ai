@@ -44,6 +44,10 @@ import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
 import type { VerdictParseMode } from '@libs/agent-harness/domain/contracts/verifier.contract';
 import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 import { AnalyzerFinding } from '@libs/code-review/infrastructure/analyzers/analyzer-finding.type';
+import type { BaseBranchReader } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
+import type { ResolvedKnowledge } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-resolver';
+import type { InstalledCustomAgentCli } from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
+import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
 export type { FindingsOutput } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 
@@ -174,6 +178,25 @@ export interface ToolingContext {
      * system prompt gains a boundary-check directive. Absent = feature off.
      */
     linkedRepoAccess?: LinkedRepoAccess;
+    /**
+     * Skills and docs linked to THIS agent's target (the main review, or one
+     * custom agent), read from the PR's target branch (#2172). Rendered into
+     * the system prompt; skills open through `loadSkill` / `readSkillFile`.
+     */
+    knowledge?: ResolvedKnowledge;
+    /** Target-branch reader the knowledge tools read through. */
+    knowledgeReader?: BaseBranchReader;
+    /** What a custom agent needs to build its own tools (astGrep, runCli). */
+    customAgentTooling?: CustomAgentTooling;
+}
+
+/** Review-scoped handles a custom agent builds its tools from (#2172). */
+export interface CustomAgentTooling {
+    /** The review's sandbox: astGrep writes its config there, runCli runs
+     *  there (E2B only). */
+    sandbox?: SandboxInstance;
+    /** CLIs installed and fenced for this review, by custom agent id. */
+    installedClis?: Record<string, InstalledCustomAgentCli[]>;
 }
 
 /** Review behavior + rules the agent applies. */

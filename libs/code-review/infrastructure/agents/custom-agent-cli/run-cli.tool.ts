@@ -10,6 +10,8 @@
  */
 import { jsonSchema } from 'ai';
 
+import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contract';
+
 import { createLogger } from '@libs/core/log/logger';
 import type {
     SandboxInstance,
@@ -186,6 +188,46 @@ export function buildRunCliTool(deps: RunCliToolDeps): Record<string, any> {
             }),
             execute: (input: { cli?: unknown; args?: unknown }) =>
                 executeRunCli({ ...deps, installed }, input),
+        },
+    };
+}
+
+/**
+ * `runCli` as a harness tool (what a custom agent's run registers), or
+ * undefined when the agent has no usable CLI.
+ */
+export function buildRunCliAgentTool(
+    deps: RunCliToolDeps,
+): AgentTool<{ cli?: unknown; args?: unknown }> | undefined {
+    const { sandbox, installed } = deps;
+    if (!sandbox || sandbox.type !== 'e2b' || !installed?.length) {
+        return undefined;
+    }
+    const names = installed.map((item) => item.cli.name);
+    return {
+        name: RUN_CLI_TOOL_NAME,
+        description: describe(installed),
+        inputSchema: {
+            type: 'object',
+            properties: {
+                cli: {
+                    type: 'string',
+                    enum: names,
+                    description: 'Name of the CLI to run.',
+                },
+                args: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description:
+                        'argv tokens after the binary, starting with an allowed prefix.',
+                },
+            },
+            required: ['cli', 'args'],
+            additionalProperties: false,
+        },
+        async execute(input) {
+            const output = await executeRunCli({ ...deps, installed }, input);
+            return { output, isError: output.startsWith('Error:') };
         },
     };
 }

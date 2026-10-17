@@ -55,6 +55,17 @@ import { providerErrorFromResult } from '@libs/code-review/infrastructure/agents
 import { runAgentWithTrace } from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
 import { runChunkedReview } from '@libs/code-review/infrastructure/agents/collaborators/batch-runner';
 import { AgentProgressReporter } from '@libs/code-review/infrastructure/agents/collaborators/agent-progress-reporter';
+import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contract';
+import { renderKnowledgeSection } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-prompt';
+import { buildKnowledgeTools } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-tools';
+
+/** Tools an agent adds to its run, and how to release them afterwards. */
+export interface AgentRunToolset {
+    tools: AgentTool[];
+    close(): Promise<void>;
+}
+
+const NO_TOOLS: AgentRunToolset = { tools: [], close: async () => {} };
 
 /**
  * Hard cap on execute() → executeChunked() → execute() recursion. Set to
@@ -142,6 +153,25 @@ export abstract class BaseCodeReviewAgentProvider {
         input: ReviewAgentInput,
     ): Promise<ResolvedAgentModel & { checkByokConfig?: NormalizedModel }> {
         return resolveReviewAgentModel(input, this.permissionValidationService);
+    }
+
+    /**
+     * Team guides whose findings take the convention second pass (#2172).
+     * Unset for every built-in agent; a custom agent returns its linked
+     * skills and docs (possibly none).
+     */
+    protected getConventionGuides(
+        _input: ReviewAgentInput,
+    ): string[] | undefined {
+        return undefined;
+    }
+
+    /** Tools of this agent beyond the repository and knowledge tools. Built
+     *  per run and closed when the run ends. */
+    protected async buildAgentTools(
+        _input: ReviewAgentInput,
+    ): Promise<AgentRunToolset> {
+        return NO_TOOLS;
     }
 
     /**
@@ -540,7 +570,17 @@ export abstract class BaseCodeReviewAgentProvider {
         // Emit progress: agent started
         progress.send({ status: 'started' });
 
+        let agentTools: AgentRunToolset = NO_TOOLS;
         try {
+            agentTools = await this.buildAgentTools(input);
+            const knowledgeTools =
+                input.knowledge && input.knowledgeReader
+                    ? buildKnowledgeTools(
+                          input.knowledge,
+                          input.knowledgeReader,
+                      )
+                    : [];
+            const extraTools = [...knowledgeTools, ...agentTools.tools];
             // Secrets are passed via closure (not as tracing arg) so that
             // Langfuse span I/O never serialises API keys, tokens, or
             // NestJS service instances (which carry ConfigService with all env vars).
@@ -565,6 +605,7 @@ export abstract class BaseCodeReviewAgentProvider {
                           void byokErrorCounter.record(entry);
                       }
                     : undefined,
+                ...(extraTools.length ? { extraTools } : {}),
             };
 
             // The single agent-loop run against the one resolved model. There is
@@ -614,6 +655,7 @@ export abstract class BaseCodeReviewAgentProvider {
                     // built field-by-field, so without this line the verifier
                     // never sees prior-round decisions.
                     previousDecisions: input.previousDecisions,
+                    conventionGuides: this.getConventionGuides(input),
                     // HEAVY opt-in (`--heavy`) — forwarded explicitly, same reason
                     // as skipHeavyPasses above: loopParams is built field-by-field,
                     // so without this line the resample passes never run.
@@ -910,6 +952,8 @@ export abstract class BaseCodeReviewAgentProvider {
             // orchestrator treated as a fulfilled-with-no-findings result,
             // silently masking real crashes as legitimate "0 suggestions".
             throw error;
+        } finally {
+            await agentTools.close().catch(() => undefined);
         }
     }
 
@@ -921,6 +965,8 @@ export abstract class BaseCodeReviewAgentProvider {
             categoryLabel: this.getCategoryLabel(),
             allowedLabels: this.getAllowedSuggestionLabels(input),
             supportsMixed: this.supportsMixedLabels(),
+            conventionGuides: this.getConventionGuides(input),
+            knowledgeSection: renderKnowledgeSection(input.knowledge),
         };
     }
 

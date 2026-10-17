@@ -92,6 +92,19 @@ export interface PromptAgentMeta {
     /** Custom agents: the team guides linked to this agent. Present → the
      *  system prompt asks guide-backed findings for kind + verbatim quote. */
     conventionGuides?: string[];
+    /** Skills catalog and linked docs for this agent's target (#2172). */
+    knowledgeSection?: string;
+}
+
+/** The knowledge section goes inside the agent block, after everything the
+ *  team configured, so it reads as reference material, not as instructions
+ *  that override the review's own. */
+function withKnowledgeSection(prompt: string, section?: string): string {
+    const body = section?.trim();
+    if (!body) return prompt;
+    const close = prompt.lastIndexOf('</CodeReviewAgent>');
+    if (close === -1) return `${prompt}\n\n${body}\n`;
+    return `${prompt.slice(0, close)}${body}\n${prompt.slice(close)}`;
 }
 
 /**
@@ -491,6 +504,13 @@ ${rendered}
 }
 
 export function buildSystemPrompt(input: ReviewAgentInput, meta: PromptAgentMeta): string {
+        return withKnowledgeSection(
+            buildSystemPromptBody(input, meta),
+            meta.knowledgeSection,
+        );
+}
+
+function buildSystemPromptBody(input: ReviewAgentInput, meta: PromptAgentMeta): string {
         const isSelfContained = !input.remoteCommands;
         if (isSelfContained) {
             return buildSelfContainedSystemPrompt(input, meta);
