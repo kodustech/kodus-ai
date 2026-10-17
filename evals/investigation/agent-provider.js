@@ -876,36 +876,12 @@ function buildCurrentPrompts(caseData) {
     };
 }
 
-// The grep, read and listDir production's local sandbox (the self-hosted path)
-// hands the agent, over a prepared worktree: the same output and the same
-// errors for those three. Built by the sandbox's own method, so they cannot
-// drift from production. exec is left out for now, as in the replay, so the
-// exec-gated tools (checkTypes, findNearestProjectFile, findFile's fd/find
-// path) are not registered: a smaller tool set than production's, recorded as
-// `sandboxExec` in each row. Wrapped only to count calls for the fidelity
-// metric: a real answer, empty or not, is never an unserved call.
+// Production's local sandbox (the self-hosted path) with exec, over a prepared
+// worktree: the same grep/read/listDir/exec, and so the same exec-gated tools
+// (checkTypes, findNearestProjectFile, findFile's find path), a self-hosted
+// customer's agent gets. See evals/shared/local-sandbox.js.
 function sandboxCommands(repoDir) {
-    const { LocalSandboxService } = require(
-        path.join(
-            __dirname,
-            '../../libs/sandbox/infrastructure/providers/local-sandbox.service.ts',
-        ),
-    );
-    // buildRemoteCommands is private in TypeScript; it reads no instance
-    // state, and the constructor ignores its ConfigService.
-    const inner = new LocalSandboxService(undefined).buildRemoteCommands(
-        repoDir,
-    );
-    const commands = { calls: [], unexpectedCalls: [] };
-    for (const name of ['grep', 'read', 'listDir']) {
-        const fn = inner[name];
-        const kind = name === 'read' ? 'readFile' : name;
-        commands[name] = (...args) => {
-            commands.calls.push({ kind, actual: args, matched: true });
-            return fn(...args);
-        };
-    }
-    return commands;
+    return require('../shared/local-sandbox').comandosSandboxLocal(repoDir);
 }
 
 function assignEvalFileTiers(input) {

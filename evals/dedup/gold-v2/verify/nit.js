@@ -175,8 +175,8 @@ Do not judge whether the comment is correct. Judge only this: if what it describ
 You can check the repository at this pull request's commit with grep, readFile and listDir, for example to see whether any caller can actually produce the case the comment worries about. You have at most ${TETO} steps in total. Answer with submit.`;
 
 
-// RECALL_SANDBOX=e2b: as ferramentas que o verificador de producao recebe do
-// finder (buildAgentTools sobre o sandbox E2B), no lugar das do eval.
+// As ferramentas que o verificador de producao recebe do finder (buildAgentTools)
+// sobre o sandbox local completo (padrao) ou o E2B (RECALL_SANDBOX=e2b).
 function ferramentas(cmd) {
     if (cmd.ferramentasProducao) return cmd.ferramentasProducao;
     return ferramentasEval(cmd);
@@ -221,7 +221,7 @@ const PELO_SDK = TIER0[MODELO]?.provider === 'claude_agent_sdk';
 async function julgaSdk(s, diff, dir, schema, cmd) {
     const { carregaSdk, envDoProcesso } = require(path.join(INV, 'claude-sdk-runner'));
     const sdk = await carregaSdk();
-    const repo = require(path.join(__dirname, '..', '..', '..', 'shared', 'claude-sdk-repo')).servidorRepo(sdk, ferramentasEval(cmd));
+    const repo = require(path.join(__dirname, '..', '..', '..', 'shared', 'claude-sdk-repo')).servidorRepo(sdk, ferramentas(cmd));
     const texto = textoDe(s, diff)
         .replace('Answer with submit.', `End your answer with ONLY a JSON object matching this schema, no code fence:\n${JSON.stringify(schema)}`);
     let saida = '';
@@ -234,7 +234,7 @@ async function julgaSdk(s, diff, dir, schema, cmd) {
                 : 'You can read the repository at the pull request head with the grep, readFile and listDir tools.',
             tools: [], allowedTools: repo.allowedTools, mcpServers: repo.mcpServers,
             disallowedTools: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task'],
-            settingSources: [], cwd: dir, maxTurns: TETO + 2, env: envDoProcesso() } })) {
+            settingSources: [], cwd: dir || require('os').tmpdir(), maxTurns: TETO + 2, env: envDoProcesso() } })) {
             if (msg.type === 'assistant') for (const b of msg.message.content || []) if (b.type === 'text') saida += b.text + '\n';
             if (msg.type === 'result' && msg.result) saida += '\n' + msg.result;
             if (msg.type === 'result') registra(msg.usage);
@@ -245,7 +245,6 @@ async function julgaSdk(s, diff, dir, schema, cmd) {
 
 async function julga(model, cmd, s, diff) {
     const schema = MESA ? SCHEMA_MESA : SCHEMA;
-    if (PELO_SDK && E2B) throw new Error('RECALL_SANDBOX=e2b ainda nao suportado pelo Agent SDK');
     if (PELO_SDK && LOOP) return julgaSdk(s, diff, cmd.repoRoot, schema, cmd);
     if (!LOOP) {
         const r = await chamadaEstruturada({ model, modelId: MODELO, nome: 'submit', schema, prompt: textoDe(s, diff) });
@@ -298,7 +297,10 @@ async function julga(model, cmd, s, diff) {
                 } else if (LOOP) {
                     h = await prepareRepo(vars[cid], `${cid}-nit-${process.pid}`);
                     if (!h) throw new Error('sem repo');
-                    cmd = new LocalRepoCommands(h.dir);
+                    // Padrao: o sandbox local de producao completo (com exec) e as ferramentas
+                    // que o agente de producao recebe, como num self-hosted.
+                    const { comandosSandboxLocal, ferramentasProducao } = require(path.join(INV, '..', 'shared', 'local-sandbox'));
+                    cmd = { ferramentasProducao: ferramentasProducao(comandosSandboxLocal(h.dir), vars[cid].repositoryFullName), repoRoot: h.dir };
                 }
                 const diff = COM_DIFF ? diffDe(vars[cid]) : '';
                 let j = 0;

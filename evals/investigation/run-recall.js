@@ -279,7 +279,8 @@ function traceSummaryFromOutput(output) {
         // repository, false when the case fell back to the replay.
         repoPrepared: trace.repoPrepared ?? null,
         // false: no exec, so checkTypes, findNearestProjectFile and findFile's
-        // fd/find path were not registered (replay, and RECALL_REAL_REPO=1).
+        // fd/find path were not registered (replay; runs before 17/10/26 with
+        // RECALL_REAL_REPO=1, when the local sandbox ran without exec).
         sandboxExec: trace.sandboxExec ?? null,
         // RECALL_SANDBOX=e2b: create+clone time and tool-call latency in the sandbox.
         sandbox: trace.sandbox ?? null,

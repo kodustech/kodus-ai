@@ -400,4 +400,4 @@ function modeloFachada(modelId, opts = {}) {
     };
 }
 
-module.exports = { ClaudeSdkRunner, modeloFachada, carregaSdk, envDoProcesso };
+module.exports = { ClaudeSdkRunner, modeloFachada, carregaSdk, envDoProcesso, shapeDe };

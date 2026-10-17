@@ -1,47 +1,37 @@
 /**
  * #1821: pelo Agent SDK (Claude por assinatura) o modelo le o repositorio com as
- * MESMAS ferramentas que os outros modelos recebem no eval (grep, readFile,
- * listDir), expostas por MCP. As ferramentas nativas do Claude Code (Read, Grep,
- * Glob, Bash) nao entram em nenhum script: nao existem em producao e deixariam o
- * Claude com um conjunto diferente dos outros modelos.
+ * MESMAS ferramentas que os outros modelos recebem: as de producao (buildAgentTools)
+ * sobre o sandbox local completo, com exec (padrao), ou sobre o E2B. Expostas por
+ * MCP; as ferramentas nativas do Claude Code (Read, Grep, Glob, Bash) nao entram em
+ * nenhum script: nao existem em producao.
  *
  *   const { servidorRepo } = require('../shared/claude-sdk-repo');
- *   const repo = servidorRepo(sdk, dirOuFerramentas);
- *   sdk.query({ prompt, options: { ...REPO_SEM_NATIVAS, ...repo, ... } })
+ *   sdk.query({ prompt, options: { ...servidorRepo(sdk, dirOuFerramentas), ... } })
  *
- * dirOuFerramentas: a pasta do repositorio (worktree) ou um objeto com grep/readFile/listDir
- * (cada um com execute) ja montado pelo script.
+ * dirOuFerramentas: a pasta do repositorio (worktree) ou o mapa de ferramentas que o
+ * script ja montou (nome -> { description, inputSchema, execute }).
  */
 const path = require('path');
 
-const DESCRICAO = 'You can read the repository at the pull request head with the grep, readFile and listDir tools.';
+const DESCRICAO = 'You can read the repository at the pull request head with the tools provided.';
 
 function ferramentasDaPasta(dir) {
-    const { LocalRepoCommands } = require(path.join(__dirname, '..', 'investigation', 'local-repo-commands'));
-    const cmd = new LocalRepoCommands(dir);
-    return {
-        grep: { description: 'Search the repository for a regex pattern.', execute: async ({ pattern, path: p, glob }) => String(await cmd.grep(pattern, p, glob)).slice(0, 6000) },
-        readFile: {
-            description: 'Read a file, optionally a line range.',
-            execute: async ({ path: p, startLine, endLine }) => {
-                const t = String(await cmd.read(p, startLine, endLine));
-                const b = Number(startLine) > 0 ? Number(startLine) : 1;
-                return t.split('\n').map((l, k) => `${b + k}: ${l}`).join('\n').slice(0, 12000);
-            },
-        },
-        listDir: { description: 'List a directory of the repository.', execute: async ({ path: p, maxDepth }) => String(await cmd.listDir(p, maxDepth)).slice(0, 6000) },
-    };
+    const { comandosSandboxLocal, ferramentasProducao } = require('./local-sandbox');
+    return ferramentasProducao(comandosSandboxLocal(dir));
 }
 
 function servidorRepo(sdk, dirOuFerramentas) {
-    const f = typeof dirOuFerramentas === 'string' ? ferramentasDaPasta(dirOuFerramentas) : dirOuFerramentas;
-    const z = sdk.z;
+    const mapa = typeof dirOuFerramentas === 'string' ? ferramentasDaPasta(dirOuFerramentas) : dirOuFerramentas;
+    const { shapeDe } = require(path.join(__dirname, '..', 'investigation', 'claude-sdk-runner'));
     const txt = (t) => ({ content: [{ type: 'text', text: String(t) }] });
-    const tools = [
-        sdk.tool('grep', f.grep.description, { pattern: z.string(), path: z.string().optional(), glob: z.string().optional() }, async (a) => txt(await f.grep.execute(a))),
-        sdk.tool('readFile', f.readFile.description, { path: z.string(), startLine: z.number().optional(), endLine: z.number().optional() }, async (a) => txt(await f.readFile.execute(a))),
-        sdk.tool('listDir', f.listDir.description, { path: z.string(), maxDepth: z.number().optional() }, async (a) => txt(await f.listDir.execute(a))),
-    ];
+    const tools = Object.entries(mapa)
+        .filter(([, def]) => def && typeof def.execute === 'function')
+        .map(([nome, def]) => {
+            const schema = def.inputSchema && def.inputSchema.jsonSchema ? def.inputSchema.jsonSchema : def.inputSchema;
+            return sdk.tool(nome, def.description || nome, shapeDe(sdk.z, schema), async (a) => {
+                try { return txt(await def.execute(a)); } catch (e) { return txt(`Error: ${e?.message || e}`); }
+            });
+        });
     return {
         tools: [],
         mcpServers: { repo: sdk.createSdkMcpServer({ name: 'repo', version: '1', tools }) },

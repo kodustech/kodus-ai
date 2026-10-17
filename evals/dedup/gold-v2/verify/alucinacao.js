@@ -231,8 +231,8 @@ function normaliza(d, s) {
 }
 
 
-// RECALL_SANDBOX=e2b: as ferramentas que o verificador de producao recebe do
-// finder (buildAgentTools sobre o sandbox E2B), no lugar das do eval.
+// As ferramentas que o verificador de producao recebe do finder (buildAgentTools)
+// sobre o sandbox local completo (padrao) ou o E2B (RECALL_SANDBOX=e2b).
 function ferramentas(cmd) {
     if (cmd.ferramentasProducao) return cmd.ferramentasProducao;
     return ferramentasEval(cmd);
@@ -290,7 +290,7 @@ const PELO_SDK = require(path.join(INV, '..', 'shared', 'tier0-models')).TIER0[M
 async function julgaSdk(s, dir, cmd) {
     const { carregaSdk, envDoProcesso } = require(path.join(INV, 'claude-sdk-runner'));
     const sdk = await carregaSdk();
-    const repo = require(path.join(__dirname, '..', '..', '..', 'shared', 'claude-sdk-repo')).servidorRepo(sdk, ferramentasEval(cmd));
+    const repo = require(path.join(__dirname, '..', '..', '..', 'shared', 'claude-sdk-repo')).servidorRepo(sdk, ferramentas(cmd));
     const texto = comExtra(PROMPTS[arg('prompt', VERSAO)](s))
         .replace('Answer with submit.', `End your answer with ONLY this JSON object, no code fence: {"verdict": ${JSON.stringify(VEREDITOS.join('|'))}, "evidence": "...", "reason": "..."}`);
     const z = sdk.z;
@@ -318,7 +318,7 @@ async function julgaSdk(s, dir, cmd) {
                 tools: [], allowedTools: [...repo.allowedTools, ...extras.map((t) => `mcp__extra__${t.name}`)],
                 mcpServers: { ...repo.mcpServers, ...(extras.length ? { extra: sdk.createSdkMcpServer({ name: 'extra', version: '1', tools: extras }) } : {}) },
                 disallowedTools: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task'],
-                settingSources: [], cwd: dir, maxTurns: TETO, env: envDoProcesso(), ...(ESFORCO ? { effort: ESFORCO } : {}),
+                settingSources: [], cwd: dir || require('os').tmpdir(), maxTurns: TETO, env: envDoProcesso(), ...(ESFORCO ? { effort: ESFORCO } : {}),
             },
         })) {
             if (msg.type === 'assistant') { turnos++; for (const b of msg.message.content || []) if (b.type === 'text') saida += b.text + '\n'; }
@@ -334,7 +334,6 @@ async function julgaSdk(s, dir, cmd) {
 }
 
 async function julga(model, cmd, s, diff) {
-    if (PELO_SDK && E2B) throw new Error('RECALL_SANDBOX=e2b ainda nao suportado pelo Agent SDK');
     if (PELO_SDK) return julgaSdk(s, cmd.repoRoot, cmd);
     const schema = SCHEMA;
     let resp = null;
@@ -384,7 +383,10 @@ async function julga(model, cmd, s, diff) {
                 } else {
                     h = await prepareRepo(vars[cid], `${cid}-nit-${process.pid}`);
                     if (!h) throw new Error('sem repo');
-                    cmd = new LocalRepoCommands(h.dir);
+                    // Padrao: o sandbox local de producao completo (com exec) e as ferramentas
+                    // que o agente de producao recebe, como num self-hosted.
+                    const { comandosSandboxLocal, ferramentasProducao } = require(path.join(INV, '..', 'shared', 'local-sandbox'));
+                    cmd = { ferramentasProducao: ferramentasProducao(comandosSandboxLocal(h.dir), vars[cid].repositoryFullName), repoRoot: h.dir };
                     cmdPr = cmd;
                     if (arg('base') === '1') cmd.baseRef = vars[cid].benchmarkBaseRef;
                     if (H2) cmd.grafo = carregaGrafo(vars[cid]);
