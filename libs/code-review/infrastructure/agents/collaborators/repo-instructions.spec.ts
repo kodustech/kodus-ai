@@ -442,3 +442,124 @@ describe('quotesRepoInstruction', () => {
         ).toBe(false);
     });
 });
+
+// A CLAUDE.md or AGENTS.md often only points at the guide that holds the
+// instructions (`AI-AGENTS.md`, `@docs/guide.md`). The target is read from the
+// target branch and listed in its place, within the same budget.
+describe('collectRepoInstructions — pointers to another file', () => {
+    const guide =
+        '# Guide\n\nUse the structured logger. Never call console.log.';
+
+    it('lists the file a pure pointer names, in place of the pointer', async () => {
+        const result = await collectRepoInstructions({
+            ...files({ 'CLAUDE.md': 'AI-AGENTS.md\n', 'AI-AGENTS.md': guide }),
+            changedFiles: ['src/a.ts'],
+        });
+
+        expect(result.files.map((f) => [f.path, f.appliesTo])).toEqual([
+            ['AI-AGENTS.md', '**'],
+        ]);
+        expect(result.files[0].content).toContain('Never call console.log.');
+    });
+
+    it('lists both a file with its own instructions and the file it imports with @', async () => {
+        const result = await collectRepoInstructions({
+            ...files({
+                'CLAUDE.md':
+                    'Amounts are integer cents.\n\nSee @docs/guide.md for the rest.',
+                'docs/guide.md': guide,
+            }),
+            changedFiles: ['src/a.ts'],
+        });
+
+        expect(result.files.map((f) => f.path)).toEqual([
+            'CLAUDE.md',
+            'docs/guide.md',
+        ]);
+    });
+
+    it('resolves a pointer relative to the file that holds it, and lists a target once', async () => {
+        const result = await collectRepoInstructions({
+            ...files({
+                'CLAUDE.md': 'AI-AGENTS.md',
+                'AGENTS.md': 'AI-AGENTS.md',
+                '.github/instructions/copilot.instructions.md':
+                    '../../AI-AGENTS.md',
+                'AI-AGENTS.md': guide,
+            }),
+            changedFiles: ['src/a.ts'],
+        });
+
+        expect(result.files.map((f) => f.path)).toEqual(['AI-AGENTS.md']);
+    });
+
+    it("gives a nested pointer's target the pointer's scope", async () => {
+        const result = await collectRepoInstructions({
+            ...files({
+                'services/billing/CLAUDE.md': 'GUIDE.md',
+                'services/billing/GUIDE.md': guide,
+            }),
+            changedFiles: ['services/billing/pay.ts'],
+        });
+
+        expect(result.files.map((f) => [f.path, f.appliesTo])).toEqual([
+            ['services/billing/GUIDE.md', 'services/billing/**'],
+        ]);
+    });
+
+    it('follows a chain of pointers and stops at a cycle', async () => {
+        const repo = files({
+            'CLAUDE.md': '@a.md',
+            'a.md': 'Rule A.\n@b.md',
+            'b.md': 'Rule B.\n@a.md',
+        });
+
+        const result = await collectRepoInstructions({
+            ...repo,
+            changedFiles: ['src/x.ts'],
+        });
+
+        expect(result.files.map((f) => f.path)).toEqual(['a.md', 'b.md']);
+    });
+
+    it('never reads a target outside the repository', async () => {
+        const repo = files({ 'CLAUDE.md': '../../../etc/secrets.md' });
+
+        const result = await collectRepoInstructions({
+            ...repo,
+            changedFiles: ['src/x.ts'],
+        });
+
+        expect(repo.readFile).not.toHaveBeenCalledWith(
+            expect.stringContaining('etc/secrets.md'),
+        );
+        expect(result.files.map((f) => f.path)).toEqual(['CLAUDE.md']);
+    });
+
+    it('keeps a pointer whose target does not exist', async () => {
+        const result = await collectRepoInstructions({
+            ...files({ 'CLAUDE.md': 'MISSING.md' }),
+            changedFiles: ['src/x.ts'],
+        });
+
+        expect(result.files.map((f) => f.path)).toEqual(['CLAUDE.md']);
+    });
+
+    it('counts targets against the file budget', async () => {
+        const map: Record<string, string> = { 'CLAUDE.md': '' };
+        const targets = Array.from(
+            { length: REPO_INSTRUCTIONS_LIMITS.maxFiles + 2 },
+            (_, i) => `docs/g${i}.md`,
+        );
+        map['CLAUDE.md'] = targets.map((t) => `@${t}`).join('\n');
+        for (const t of targets) map[t] = `Rule ${t}.`;
+
+        const result = await collectRepoInstructions({
+            ...files(map),
+            changedFiles: ['src/x.ts'],
+        });
+
+        expect(result.files).toHaveLength(REPO_INSTRUCTIONS_LIMITS.maxFiles);
+        expect(result.dropped.length).toBeGreaterThan(0);
+    });
+});

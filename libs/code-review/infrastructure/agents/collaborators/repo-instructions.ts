@@ -30,6 +30,8 @@ export const REPO_INSTRUCTIONS_LIMITS = {
     minUsefulBytes: 1_000,
     /** Paths listed (not inlined) so the agent knows what else exists. */
     maxOtherFiles: 30,
+    /** Pointers followed per file (`AI-AGENTS.md`, `@docs/guide.md`). */
+    maxPointersPerFile: 10,
 } as const;
 
 export interface RepoInstructionFile {
@@ -213,6 +215,67 @@ function truncateToBytes(text: string, maxBytes: number): string {
         .replace(/�+$/, '');
 }
 
+/** A reference to another file in the repository: `@path` or a bare path. */
+const POINTER_PATH =
+    /^(?:\.{1,2}\/)*[\w@.-]+(?:\/[\w@.-]+)*\.(?:md|mdc|markdown|txt)$/i;
+const IMPORT_RE =
+    /(?:^|\s)@((?:\.{1,2}\/)*[\w.-]+(?:\/[\w.-]+)*\.(?:md|mdc|markdown|txt))(?=$|[\s),.;:])/gi;
+
+/**
+ * The files `content` points to, in order: whole lines that are a path
+ * (`AI-AGENTS.md`, `../../AI-AGENTS.md`, `@ai-agents.md`) and Claude Code's
+ * `@path` imports inside text. `pure`: the file holds nothing but pointers.
+ */
+export function pointersIn(content: string): { refs: string[]; pure: boolean } {
+    const body = content.replace(FRONTMATTER_RE, '');
+    const lines = body
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    const refs: string[] = [];
+    let pure = lines.length > 0;
+    for (const line of lines) {
+        const whole = line.replace(/^@/, '');
+        if (POINTER_PATH.test(whole)) {
+            refs.push(whole);
+            continue;
+        }
+        pure = false;
+        for (const match of line.matchAll(IMPORT_RE)) refs.push(match[1]);
+    }
+    return { refs: [...new Set(refs)], pure };
+}
+
+/** `ref` joined onto `base`; null when it climbs out of the repository. */
+function joinInside(base: string, ref: string): string | null {
+    const parts = base ? base.split('/') : [];
+    for (const segment of ref.split('/')) {
+        if (!segment || segment === '.') continue;
+        if (segment === '..') {
+            if (!parts.length) return null;
+            parts.pop();
+        } else {
+            parts.push(segment);
+        }
+    }
+    return parts.length ? parts.join('/') : null;
+}
+
+/**
+ * Where a pointer in `from` may lead, in the order tried: relative to the file
+ * that holds it, then from the repository root. Paths that leave the
+ * repository are left out.
+ */
+export function resolvePointer(ref: string, from: string): string[] {
+    const dir = from.includes('/') ? from.slice(0, from.lastIndexOf('/')) : '';
+    const out: string[] = [];
+    for (const base of [dir, '']) {
+        const path = joinInside(base, ref);
+        if (path && !out.includes(path)) out.push(path);
+    }
+    return out;
+}
+
 const errorMessage = (error: unknown): string =>
     error instanceof Error ? error.message : String(error);
 
@@ -247,28 +310,85 @@ export async function collectRepoInstructions(params: {
     let total = 0;
     let truncated = false;
 
-    for (const path of candidates) {
-        if (files.length >= limits.maxFiles || total >= limits.maxTotalBytes) {
+    // Each read once: a pointer's target is read to resolve it, then listed.
+    const contents = new Map<string, string | null>();
+    const read = async (path: string): Promise<string | null> => {
+        if (!contents.has(path)) {
+            let content: string | null = null;
+            try {
+                content = await params.readFile(path);
+            } catch (error) {
+                unreadable.push(`${path}: ${errorMessage(error)}`);
+            }
+            contents.set(path, content);
+        }
+        return contents.get(path) ?? null;
+    };
+
+    // Governing files first; a pointer's targets go right after it and take
+    // the pointer's scope.
+    const queue: Array<{ path: string; appliesTo?: string }> = candidates.map(
+        (path) => ({ path }),
+    );
+    const seen = new Set<string>(candidates);
+    const budgetFull = () =>
+        files.length >= limits.maxFiles || total >= limits.maxTotalBytes;
+
+    while (queue.length) {
+        const { path, appliesTo: inherited } = queue.shift()!;
+        if (budgetFull()) {
             dropped.push(path);
             continue;
         }
 
-        let content: string | null;
-        try {
-            content = await params.readFile(path);
-        } catch (error) {
-            unreadable.push(`${path}: ${errorMessage(error)}`);
-            continue;
-        }
+        const content = await read(path);
         if (!content?.trim()) continue;
 
-        if (loadsOnRequest(path, content)) continue;
-
-        const scope = scopeOf(path);
-        const globs = declaredGlobs(path, content);
-        if (globs && !changed.some((c) => matchesDeclared(globs, scope, c))) {
-            continue;
+        let appliesTo = inherited;
+        if (appliesTo === undefined) {
+            if (loadsOnRequest(path, content)) continue;
+            const scope = scopeOf(path);
+            const globs = declaredGlobs(path, content);
+            if (
+                globs &&
+                !changed.some((c) => matchesDeclared(globs, scope, c))
+            ) {
+                continue;
+            }
+            appliesTo = globs ? globs.join(',') : scope ? `${scope}/**` : '**';
         }
+
+        const { refs, pure } = pointersIn(content);
+        const targets: string[] = [];
+        let resolved = false;
+        for (const ref of refs.slice(0, limits.maxPointersPerFile)) {
+            const candidatesForRef = resolvePointer(ref, path);
+            const known = candidatesForRef.find((c) => seen.has(c));
+            if (known) {
+                resolved = true;
+                continue;
+            }
+            // Once the targets already found fill the budget, the rest are
+            // left out unread.
+            if (files.length + targets.length >= limits.maxFiles) {
+                if (candidatesForRef.length) dropped.push(candidatesForRef[0]);
+                continue;
+            }
+            for (const target of candidatesForRef) {
+                if ((await read(target))?.trim()) {
+                    targets.push(target);
+                    seen.add(target);
+                    resolved = true;
+                    break;
+                }
+            }
+        }
+        queue.unshift(
+            ...targets.map((target) => ({ path: target, appliesTo })),
+        );
+        // A file that only points elsewhere holds no instruction of its own:
+        // its targets are listed instead.
+        if (pure && resolved) continue;
 
         let text = truncateToBytes(content.trim(), limits.maxBytesPerFile);
         let cut = text.length < content.trim().length;
@@ -284,12 +404,7 @@ export async function collectRepoInstructions(params: {
 
         total += Buffer.byteLength(text);
         truncated = truncated || cut;
-        files.push({
-            path,
-            content: text,
-            appliesTo: globs ? globs.join(',') : scope ? `${scope}/**` : '**',
-            truncated: cut,
-        });
+        files.push({ path, content: text, appliesTo, truncated: cut });
     }
 
     const used = new Set([...files.map((f) => f.path), ...dropped]);
