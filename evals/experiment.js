@@ -22,7 +22,8 @@
 //   environment      what each eval reports of it (the dedup's embedder).
 //
 // Writes, under --out: experiment.json, rows.json (experiments.<step>.<eval>.<name>,
-// for the quality panel) and each run's result. Exit: 0 compared, 2 could not.
+// for the quality panel), summary.md (the same in a table: the job summary in
+// CI) and each run's result. Exit: 0 compared, 2 could not.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -214,6 +215,28 @@ function decide(step, primary, guards, sides, versions) {
     return { decision: 'does not ship', reason: primary.comparison.verdict === 'worse' ? `${primary.id} is worse beyond its interval` : `${primary.id} ties and the candidate is not cheaper` };
 }
 
+// The experiment in one table, for a job summary or a PR.
+function summaryMarkdown(x, { pct, pp }) {
+    const lines = [
+        `### Experiment: ${x.step} · ${x.name}`,
+        '',
+        `${x.branch} \`${x.candidate.sha.slice(0, 9)}\` against where it left ${x.baseRef} \`${x.base.sha.slice(0, 9)}\` · ${x.model} · ${x.set} set · ${x.runs} runs each side`,
+        '',
+        `**${x.decision.decision}**: ${x.decision.reason}`,
+        '',
+        `Step version \`${x.base.version.step}\` → \`${x.candidate.version.step}\`${x.changedFiles.length ? ` (${x.changedFiles.map((f) => `\`${f}\``).join(', ')})` : ', the same'}`,
+        '',
+        '| Eval | Base | Candidate | Difference (95%) | Verdict | Worse / better cases |',
+        '|---|---|---|---|---|---|',
+        ...x.evals.map((e) => {
+            const c = e.comparison;
+            return `| ${e.role === 'primary' ? '**' + e.id + '**' : e.id} | ${pct(c.base)} | ${pct(c.candidate)} | ${pp(c.diff)} pp [${pp(c.ci?.[0])}, ${pp(c.ci?.[1])}] | ${c.verdict} | ${c.worse.length} / ${c.better.length} |`;
+        }),
+        '',
+    ];
+    return `${lines.join('\n')}\n`;
+}
+
 function main() {
     const args = parseArgs(process.argv.slice(2));
     const step = args.step;
@@ -345,6 +368,7 @@ function main() {
 
         const pct = (x) => (Number.isFinite(x) ? `${(x * 100).toFixed(1)}%` : 'n/a');
         const pp = (x) => (Number.isFinite(x) ? `${x >= 0 ? '+' : ''}${(x * 100).toFixed(1)}` : 'n/a');
+        fs.writeFileSync(path.join(out, 'summary.md'), summaryMarkdown(experiment, { pct, pp }));
         console.log(`\nstep version: base ${versions.base.step}, candidate ${versions.candidate.step}${changedFiles.length ? ` (${changedFiles.length} files changed: ${changedFiles.slice(0, 4).join(', ')}${changedFiles.length > 4 ? ', …' : ''})` : ' — the same'}`);
         for (const e of evalsOut) {
             const c = e.comparison;
