@@ -109,8 +109,8 @@ async function sessaoSdk(c, diff, dir) {
             prompt: texto,
             options: {
                 model: T0.sdkModel,
-                systemPrompt: SYSTEM + '\n\nYou can read the repository with the Read, Grep and Glob tools; your working directory is the repository at the pull request head.',
-                tools: ['Read', 'Grep', 'Glob'], allowedTools: ['Read', 'Grep', 'Glob'],
+                systemPrompt: SYSTEM + '\n\nYou can read the repository at the pull request head with the grep, readFile and listDir tools.',
+                ...require(require('path').join(__dirname, '../../../shared/claude-sdk-repo')).servidorRepo(sdk, dir),
                 disallowedTools: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task'],
                 settingSources: [], cwd: dir, maxTurns: TETO, env: envDoProcesso(),
             },
@@ -119,7 +119,7 @@ async function sessaoSdk(c, diff, dir) {
                 turnos++;
                 for (const b of msg.message.content || []) {
                     if (b.type === 'text') saida += b.text + '\n';
-                    if (b.type === 'tool_use' && b.name === 'Read' && b.input?.file_path) lidos.push(path.relative(dir, path.resolve(dir, b.input.file_path)));
+                    if (b.type === 'tool_use' && b.name === 'mcp__repo__readFile' && b.input?.path) lidos.push(String(b.input.path).replace(/^\/+/, ''));
                 }
             }
             if (msg.type === 'result' && msg.result) saida += '\n' + msg.result;

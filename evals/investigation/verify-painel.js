@@ -122,7 +122,7 @@ async function p2Sdk(dir, x, diff) {
     try {
         for await (const msg of sdk.query({
             prompt: promptP2(x, diff) + '\nEnd your answer with ONLY a JSON object, no code fence: {"prevented":true|false,"evidence":{"file":"...","startLine":0,"endLine":0,"code":"..."},"reason":"..."}',
-            options: { model: TIER0[MODELO].sdkModel, systemPrompt: SYSTEM_P2 + '\n\nRead the repository with the Read, Grep and Glob tools; your working directory is the repository at the pull request head.', tools: ['Read', 'Grep', 'Glob'], allowedTools: ['Read', 'Grep', 'Glob'], disallowedTools: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task'], settingSources: [], cwd: dir, maxTurns: TETO, env: envDoProcesso() },
+            options: { model: TIER0[MODELO].sdkModel, systemPrompt: SYSTEM_P2 + '\n\nYou can read the repository at the pull request head with the grep, readFile and listDir tools.', ...require(require('path').join(__dirname, '../shared/claude-sdk-repo')).servidorRepo(sdk, dir), disallowedTools: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task'], settingSources: [], cwd: dir, maxTurns: TETO, env: envDoProcesso() },
         })) {
             if (msg.type === 'assistant') for (const b of msg.message.content || []) if (b.type === 'text') saida += b.text + '\n';
             if (msg.type === 'result' && msg.result) saida += '\n' + msg.result;

@@ -149,8 +149,8 @@ async function sessaoCorrecaoSdk(dir, todos, c, diff) {
     const texto = promptCorrecao(c, diff).replace(/Submit with submitFix: /, 'End your answer with ONLY this JSON object, no code fence: ');
     const opcoes = {
         model: require('../shared/tier0-models').TIER0[MODELO].sdkModel,
-        systemPrompt: SYSTEM_CORRECAO.replace('readFile', 'Read') + '\n\nYou can read the repository with the Read, Grep and Glob tools; your working directory is the repository at the pull request head.',
-        allowedTools: ['Read', 'Grep', 'Glob'],
+        systemPrompt: SYSTEM_CORRECAO + '\n\nYou can read the repository at the pull request head with the grep, readFile and listDir tools.',
+        ...require(require('path').join(__dirname, '../shared/claude-sdk-repo')).servidorRepo(sdk, dir),
         disallowedTools: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task'],
         settingSources: [], cwd: dir, env: envDoProcesso(),
     };
@@ -169,7 +169,7 @@ async function sessaoCorrecaoSdk(dir, todos, c, diff) {
     };
     // O resultado final repete o ultimo texto do assistente; dois JSONs colados nao parseiam.
     const le = () => jsonComCodigo(final) || jsonComCodigo(saida);
-    await corre(texto, { tools: ['Read', 'Grep', 'Glob'], maxTurns: TETO - 1 });
+    await corre(texto, { maxTurns: TETO - 1 });
     let enviado = le();
     // Passo final forcado, como no AI SDK: retoma a sessao sem ferramentas e pede so o JSON.
     if ((!enviado || typeof enviado.fixNeeded !== 'boolean') && sid) {

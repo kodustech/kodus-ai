@@ -134,8 +134,8 @@ async function sessaoSdk(dir, itens, k, diff) {
             prompt: texto,
             options: {
                 model: require('../shared/tier0-models').TIER0[MODELO].sdkModel,
-                systemPrompt: SYSTEM + '\n\nYou can read the repository with the Read, Grep and Glob tools; your working directory is the repository at the pull request head.',
-                tools: ['Read', 'Grep', 'Glob'], allowedTools: ['Read', 'Grep', 'Glob'],
+                systemPrompt: SYSTEM + '\n\nYou can read the repository at the pull request head with the grep, readFile and listDir tools.',
+                ...require(require('path').join(__dirname, '../shared/claude-sdk-repo')).servidorRepo(sdk, dir),
                 disallowedTools: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task'],
                 settingSources: [], cwd: dir, maxTurns: TETO, env: envDoProcesso(),
             },

@@ -115,15 +115,15 @@ const PELO_SDK = TIER0[MODELO]?.provider === 'claude_agent_sdk';
 async function loopSdk(model, prompt, schema, dir, teto) {
     const { carregaSdk, envDoProcesso } = require(path.join(INV, 'claude-sdk-runner'));
     const sdk = await carregaSdk();
-    const texto = prompt.replace(/grep, readFile and listDir/g, 'Grep, Read and Glob')
+    const texto = prompt
         .replace(/, and readBaseFile to read a file as it was before the pull request/g, '; the version of each changed file from before the pull request is under .pr-base/ (same relative path)')
         .replace('Answer with submit.', `End your answer with ONLY a JSON object matching this schema, no code fence:\n${JSON.stringify(schema)}`);
     let saida = '';
     try {
         for await (const msg of sdk.query({ prompt: texto, options: {
             model: TIER0[MODELO].sdkModel,
-            systemPrompt: 'You can read the repository with the Read, Grep and Glob tools; your working directory is the repository at the pull request head.',
-            tools: ['Read', 'Grep', 'Glob'], allowedTools: ['Read', 'Grep', 'Glob'],
+            systemPrompt: 'You can read the repository at the pull request head with the grep, readFile and listDir tools.',
+            ...require(require('path').join(__dirname, '../../../shared/claude-sdk-repo')).servidorRepo(sdk, dir),
             disallowedTools: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task'],
             settingSources: [], cwd: dir, maxTurns: teto + 4, env: envDoProcesso() } })) {
             if (msg.type === 'assistant') for (const b of msg.message.content || []) if (b.type === 'text') saida += b.text + '\n';

@@ -290,7 +290,7 @@ const PELO_SDK = require(path.join(INV, '..', 'shared', 'tier0-models')).TIER0[M
 async function julgaSdk(s, dir, cmd) {
     const { carregaSdk, envDoProcesso } = require(path.join(INV, 'claude-sdk-runner'));
     const sdk = await carregaSdk();
-    const repo = require('./sdk-ferramentas').servidorRepo(sdk, ferramentasEval(cmd));
+    const repo = require(path.join(__dirname, '..', '..', '..', 'shared', 'claude-sdk-repo')).servidorRepo(sdk, ferramentasEval(cmd));
     const texto = comExtra(PROMPTS[arg('prompt', VERSAO)](s))
         .replace('Answer with submit.', `End your answer with ONLY this JSON object, no code fence: {"verdict": ${JSON.stringify(VEREDITOS.join('|'))}, "evidence": "...", "reason": "..."}`);
     const z = sdk.z;

@@ -143,8 +143,8 @@ async function respondeSdk(dir, pergunta, diff) {
             prompt: promptResposta(pergunta, diff) + `\nEnd your answer with ONLY a JSON object, no code fence: {"answer":"yes|no|unknown","evidence":{"file":"...","startLine":0,"endLine":0,"code":"..."},"reason":"..."}`,
             options: {
                 model: TIER0[MODELO].sdkModel,
-                systemPrompt: SYSTEM_RESPOSTA + '\n\nRead the repository with the Read, Grep and Glob tools; your working directory is the repository at the pull request head.',
-                tools: ['Read', 'Grep', 'Glob'], allowedTools: ['Read', 'Grep', 'Glob'],
+                systemPrompt: SYSTEM_RESPOSTA + '\n\nYou can read the repository at the pull request head with the grep, readFile and listDir tools.',
+                ...require(require('path').join(__dirname, '../shared/claude-sdk-repo')).servidorRepo(sdk, dir),
                 disallowedTools: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task'],
                 settingSources: [], cwd: dir, maxTurns: TETO, env: envDoProcesso(),
             },

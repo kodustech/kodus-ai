@@ -221,7 +221,7 @@ const PELO_SDK = TIER0[MODELO]?.provider === 'claude_agent_sdk';
 async function julgaSdk(s, diff, dir, schema, cmd) {
     const { carregaSdk, envDoProcesso } = require(path.join(INV, 'claude-sdk-runner'));
     const sdk = await carregaSdk();
-    const repo = require('./sdk-ferramentas').servidorRepo(sdk, ferramentasEval(cmd));
+    const repo = require(path.join(__dirname, '..', '..', '..', 'shared', 'claude-sdk-repo')).servidorRepo(sdk, ferramentasEval(cmd));
     const texto = textoDe(s, diff)
         .replace('Answer with submit.', `End your answer with ONLY a JSON object matching this schema, no code fence:\n${JSON.stringify(schema)}`);
     let saida = '';

@@ -141,16 +141,15 @@ class ClaudeSdkRunner {
         const acima = Number(process.env.RECALL_CLAUDE_SDK_NOCAP_ACIMA || 0);
         const esc = {
             preset: finder && process.env.RECALL_CLAUDE_SDK_PRESET === '1',
-            ccTools: finder && process.env.RECALL_CLAUDE_SDK_CC_TOOLS === '1',
             // As lentes (passadas com teto) mantem a tool de submit: o prompt
             // delas manda chamar submitResult, e sem a tool o modelo chama
             // assim mesmo e gasta um passo no erro.
             submit: !finder || process.env.RECALL_CLAUDE_SDK_SUBMIT !== '0' || (acima > 0 && spec.maxSteps <= acima),
             semTeto: finder && process.env.RECALL_CLAUDE_SDK_NOCAP === '1' && spec.maxSteps > acima,
         };
-        const todas = spec.tools.list().filter((t) =>
-            esc.ccTools ? esc.submit && t.name === spec.resultToolName : esc.submit || t.name !== spec.resultToolName,
-        );
+        // Sempre as ferramentas do harness (as mesmas dos outros modelos e as de
+        // producao), por MCP; as nativas do Claude Code nunca entram.
+        const todas = spec.tools.list().filter((t) => esc.submit || t.name !== spec.resultToolName);
         const mcp = sdk.createSdkMcpServer({
             name: SERVER,
             version: '1',
@@ -230,16 +229,13 @@ class ClaudeSdkRunner {
             }
         };
 
-        const ferramentasCc = ['Read', 'Grep', 'Glob', 'Bash(git diff:*)', 'Bash(git log:*)', 'Bash(git show:*)'];
-        if (esc.ccTools) nomesMcp.push(...ferramentasCc);
         const base = {
             model: this.modelId,
             systemPrompt: esc.preset ? { type: 'preset', preset: 'claude_code', append: spec.systemPrompt } : spec.systemPrompt,
-            tools: esc.ccTools ? ['Read', 'Grep', 'Glob', 'Bash'] : [],
+            tools: [],
             ...(todas.length ? { mcpServers: { [SERVER]: mcp } } : {}),
-            ...(esc.ccTools ? { disallowedTools: ['Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task'] } : {}),
             settingSources: [],
-            cwd: esc.ccTools && this.cwd ? this.cwd : os.tmpdir(),
+            cwd: os.tmpdir(),
             env: envDoProcesso(),
             ...(this.effort ? { effort: this.effort } : {}),
         };
@@ -318,7 +314,7 @@ class ClaudeSdkRunner {
             const ferramentas = {};
             steps.forEach((st) => (st.message.toolCalls || []).forEach((tc) => { ferramentas[tc.name] = (ferramentas[tc.name] || 0) + 1; }));
             fs.appendFileSync(process.env.RECALL_CLAUDE_SDK_LOG, JSON.stringify({
-                spec: spec.id, esc, cwdRepo: !!(esc.ccTools && this.cwd), systemSha: hash(spec.systemPrompt), promptSha: hash(input.prompt),
+                spec: spec.id, esc, systemSha: hash(spec.systemPrompt), promptSha: hash(input.prompt),
                 passos: steps.length, numTurns: fim?.num_turns, ferramentas, modoEntrega, fim: fim?.subtype, erro: erro ? String(erro?.message || erro).slice(0, 200) : null,
             }) + '\n');
         }
