@@ -26,12 +26,20 @@ const REFERENCE_PATTERNS = [
     /https?:\/\/\S*\/(?:issues?|browse|tickets?|tasks?|work-items)\/\S+/i,
 ];
 
+const hasReferenceShape = (line: string) =>
+    REFERENCE_PATTERNS.some((pattern) => pattern.test(line));
+
 /**
  * Reference-carrying lines from `body`, in their original order and wording.
  * Lines inside a previous Kody summary are ignored — that text is Kody's own,
- * and preserving it would compound on every run.
+ * and preserving it would compound on every run. `isReference` lets a caller
+ * add the reader that later looks for the task (`AB#12`, tracker links); a
+ * line with a reference shape (`…/browse/PROJ-1` on any host) is kept either way.
  */
-export function extractTaskReferenceLines(body: string): string[] {
+export function extractTaskReferenceLines(
+    body: string,
+    isReference?: (line: string) => boolean,
+): string[] {
     if (typeof body !== 'string' || !body.trim()) {
         return [];
     }
@@ -47,7 +55,7 @@ export function extractTaskReferenceLines(body: string): string[] {
             !line ||
             line.length > MAX_REFERENCE_LINE_LENGTH ||
             seen.has(line) ||
-            !REFERENCE_PATTERNS.some((pattern) => pattern.test(line))
+            !(hasReferenceShape(line) || isReference?.(line))
         ) {
             continue;
         }

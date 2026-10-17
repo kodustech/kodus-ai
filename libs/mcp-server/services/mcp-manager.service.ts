@@ -477,6 +477,7 @@ export class MCPManagerService {
             // Canonical capability category from the mcp-manager registry, used
             // by skills to match required MCPs by capability (not display name).
             category: connection.category ?? null,
+            integrationId: connection.integrationId,
         };
     }
 

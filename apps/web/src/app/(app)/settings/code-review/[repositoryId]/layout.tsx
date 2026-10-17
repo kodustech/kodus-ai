@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useOptionalParameterQuery } from "@services/parameters/hooks";
 import { LanguageValue, ParametersConfigKey } from "@services/parameters/types";
@@ -17,17 +17,17 @@ import {
     shouldHydrateCodeReviewForm,
 } from "../_utils/settings-shell";
 import {
-    findFirstDirtyFieldOutsidePromptOverrides,
-    shouldBlockCodeReviewLayoutNavigation,
-} from "./_utils/layout-dirty-state";
-import { withModelOverrideField } from "./_utils/model-override-field";
-import {
     useCodeReviewConfig,
     useDefaultCodeReviewConfig,
     useInitialParameter,
     useInitialTeamId,
 } from "../../_components/context";
 import { useCodeReviewRouteParams } from "../../_hooks";
+import {
+    findFirstDirtyFieldOutsidePromptOverrides,
+    shouldBlockCodeReviewLayoutNavigation,
+} from "./_utils/layout-dirty-state";
+import { withModelOverrideField } from "./_utils/model-override-field";
 import { normalizePromptFormValues } from "./custom-prompts/_utils/custom-prompts-state";
 
 export default function Layout(props: React.PropsWithChildren) {
@@ -35,7 +35,9 @@ export default function Layout(props: React.PropsWithChildren) {
     const config = useCodeReviewConfig();
     const defaultCodeReviewConfig = useDefaultCodeReviewConfig();
     const bridgeInitialTeamId = useInitialTeamId();
-    const initialLanguage = useInitialParameter(ParametersConfigKey.LANGUAGE_CONFIG);
+    const initialLanguage = useInitialParameter(
+        ParametersConfigKey.LANGUAGE_CONFIG,
+    );
     const { directoryId } = useCodeReviewRouteParams();
     const parameters = useOptionalParameterQuery<LanguageValue>(
         ParametersConfigKey.LANGUAGE_CONFIG,
@@ -54,7 +56,12 @@ export default function Layout(props: React.PropsWithChildren) {
         repositoryId,
         directoryId,
     );
-    const language = parameters.data?.configValue ?? (teamId === bridgeInitialTeamId ? (initialLanguage?.configValue as LanguageValue) : undefined) ?? LanguageValue.ENGLISH;
+    const language =
+        parameters.data?.configValue ??
+        (teamId === bridgeInitialTeamId
+            ? (initialLanguage?.configValue as LanguageValue)
+            : undefined) ??
+        LanguageValue.ENGLISH;
     const initialFormValues = useMemo(
         () =>
             withModelOverrideField(
@@ -88,12 +95,32 @@ export default function Layout(props: React.PropsWithChildren) {
         defaultValues: initialFormValues,
         disabled: !canEdit,
     });
-    const {
-        isSubmitting: formIsSubmitting,
-        isDirty: formIsDirty,
-        isValid: formIsValid,
-        dirtyFields,
-    } = form.formState;
+    // Dirty fields come from a subscription, not from this render: undoing
+    // a change (a switch flipped on, then off) does not re-render the
+    // layout, so a value captured at render kept navigation blocked on a
+    // clean form, with Reset and Save disabled.
+    const formIsSubmitting = form.formState.isSubmitting;
+    const dirtyFieldsRef = useRef<Record<string, unknown>>({});
+    const [hasDirtyFields, setHasDirtyFields] = useState(false);
+    useEffect(
+        () =>
+            form.subscribe({
+                formState: { dirtyFields: true },
+                callback: ({ dirtyFields }) => {
+                    dirtyFieldsRef.current = (dirtyFields ?? {}) as Record<
+                        string,
+                        unknown
+                    >;
+                    setHasDirtyFields(
+                        shouldBlockCodeReviewLayoutNavigation({
+                            dirtyFields: dirtyFieldsRef.current,
+                            formIsSubmitting: false,
+                        }),
+                    );
+                },
+            }),
+        [form],
+    );
 
     useEffect(() => {
         if (
@@ -125,7 +152,7 @@ export default function Layout(props: React.PropsWithChildren) {
 
     const scrollToDirtyField = useCallback(() => {
         const dirtyKey = findFirstDirtyFieldOutsidePromptOverrides(
-            dirtyFields as Record<string, unknown>,
+            dirtyFieldsRef.current,
             "",
             ["v2PromptOverrides"],
         );
@@ -184,14 +211,11 @@ export default function Layout(props: React.PropsWithChildren) {
         }
 
         window.scrollTo({ top: 0, behavior: "smooth" });
-    }, [dirtyFields]);
+    }, []);
 
     useUnsavedChangesGuard({
         id: "code-review-settings",
-        isDirty: shouldBlockCodeReviewLayoutNavigation({
-            dirtyFields: dirtyFields as Record<string, unknown>,
-            formIsSubmitting,
-        }),
+        isDirty: hasDirtyFields || formIsSubmitting,
         onBlock: scrollToDirtyField,
     });
 

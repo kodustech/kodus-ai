@@ -29,6 +29,7 @@ import { buildReviewErrorMessage } from '@libs/llm/review-error-diagnostics';
 import { PipelineError } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-context.interface';
 import { formatLinkedReposSummaryLine } from '@libs/ee/linked-repositories';
 import { PostTracePrCommentUseCase } from '@libs/cli-review/application/use-cases/post-trace-pr-comment.use-case';
+import { resolveBusinessLogicSettings } from '@libs/agents/business-validation/settings';
 
 /**
  * `metadata.reason` tag on the `PipelineError` pushed below when
@@ -238,6 +239,9 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                         platformType,
                         lineComments,
                         context.prLevelCommentResults,
+                        resolveBusinessLogicSettings(
+                            codeReviewConfig.businessLogic,
+                        ).taskIdPattern,
                     );
 
                 await this.commentManagerService.updateSummarizationInPR(

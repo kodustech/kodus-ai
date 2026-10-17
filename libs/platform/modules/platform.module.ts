@@ -25,6 +25,9 @@ import { ForgejoPullRequestHandler } from '../infrastructure/webhooks/forgejo/fo
 import { GitHubPullRequestHandler } from '../infrastructure/webhooks/github/githubPullRequest.handler';
 import { GitLabMergeRequestHandler } from '../infrastructure/webhooks/gitlab/gitlabPullRequest.handler';
 
+import { BusinessLogicPublisher } from '../application/services/business-logic-publisher.service';
+import { BusinessLogicReplies } from '../application/services/business-logic-replies.service';
+import { BusinessLogicRecheckService } from '../application/services/business-logic-recheck.service';
 import { OrganizationMemberListService } from '../application/services/organization-member-list.service';
 import { WebhookContextService } from '../application/services/webhook-context.service';
 import { GetConnectionsUseCase } from '../application/use-cases/integrations/get-connections.use-case';
@@ -77,6 +80,9 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
         GetOrganizationLanguageUseCase,
         OrganizationMemberListService,
         WebhookContextService,
+        BusinessLogicPublisher,
+        BusinessLogicReplies,
+        BusinessLogicRecheckService,
         AzureReposPullRequestHandler,
         GitHubPullRequestHandler,
         GitLabMergeRequestHandler,
@@ -111,6 +117,8 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
         GetOrganizationLanguageUseCase,
         OrganizationMemberListService,
         WebhookContextService,
+        BusinessLogicPublisher,
+        BusinessLogicRecheckService,
         'AZURE_REPOS_WEBHOOK_HANDLER',
         'GITHUB_WEBHOOK_HANDLER',
         'GITLAB_WEBHOOK_HANDLER',

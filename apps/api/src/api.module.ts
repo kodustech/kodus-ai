@@ -81,6 +81,7 @@ import {
 import { PullRequestController } from './controllers/pullRequest.controller';
 import { PullRequestMessagesController } from './controllers/pullRequestMessages.controller';
 import { RuleLikeController } from './controllers/ruleLike.controller';
+import { BusinessLogicController } from './controllers/businessLogic.controller';
 import { SkillsController } from './controllers/skills.controller';
 import { SSOConfigController } from './controllers/ssoConfig.controller';
 import { TeamCliKeyController } from './controllers/team-cli-key.controller';
@@ -175,6 +176,7 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         ParametersController,
         OrganizationParametersController,
         SkillsController,
+        BusinessLogicController,
         TeamController,
         TeamCliKeyController,
         TeamMembersController,

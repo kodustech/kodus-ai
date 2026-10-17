@@ -5,7 +5,7 @@ import yaml from 'js-yaml';
 import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 
-import { asRecord } from './runtime/value-utils';
+import { asRecord } from '../business-validation/value-utils';
 import { SkillNotFoundError } from './skill.errors';
 
 /** A required external MCP plugin category declared in SKILL.md frontmatter. */
@@ -311,9 +311,11 @@ export class SkillLoaderService {
             ].filter((value): value is string => Boolean(value));
 
             for (const relativePath of relativePaths) {
+                // Most teams have no overlay: a missing one is not a warning.
                 const overlayPath = this.resolveSkillFilePath(
                     skillName,
                     relativePath,
+                    { optional: true },
                 );
                 if (!overlayPath) {
                     continue;
@@ -579,6 +581,7 @@ export class SkillLoaderService {
     private resolveSkillFilePath(
         skillName: string,
         fileName: string,
+        options?: { optional?: boolean },
     ): string | null {
         if (
             skillName.includes('..') ||
@@ -598,9 +601,11 @@ export class SkillLoaderService {
             }
         }
 
-        this.logger.warn(
-            `[SkillLoader] could not resolve file '${fileName}' for skill '${skillName}'.`,
-        );
+        if (!options?.optional) {
+            this.logger.warn(
+                `[SkillLoader] could not resolve file '${fileName}' for skill '${skillName}'.`,
+            );
+        }
 
         return null;
     }

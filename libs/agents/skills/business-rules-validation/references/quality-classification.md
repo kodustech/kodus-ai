@@ -1,25 +1,22 @@
 # Task Quality Classification
 
-The runtime classifies task context quality BEFORE the LLM analysis.
-Do NOT reclassify - use the provided classification.
+The runtime grades the task BEFORE you see it, as TASK_QUALITY. Do not regrade it; follow TASK_QUALITY_POLICY.
 
 ## Levels
 
 ### COMPLETE
-- Has title, description, and acceptance criteria
-- Analysis should be thorough and criterion-by-criterion against diff
+- Acceptance criteria, in a field or a section, or a description listing two or more requirements
+- Judge every criterion against the diff
 
 ### PARTIAL
-- Has title and description but no acceptance criteria
-- Run best-effort analysis from described business behavior
-- Explicitly note missing acceptance criteria
+- A description that says what to build, without a criteria list
+- Or a sub-task that says little on its own, read with its PARENT_TASK: take from the parent only what this task's title scopes it to
+- Judge each requirement the description states
 
 ### MINIMAL
-- Has only title (or very short description)
-- Be conservative and flag only obvious requirement gaps
-- Recommend adding task detail
+- A title, or a description that adds nothing to it
+- The runtime usually stops here and asks the author for criteria; if you receive it, return `needsMoreInfo = true`
 
 ### EMPTY
-- No meaningful task context found
-- Runtime should short-circuit before analyzer
-- If analyzer receives EMPTY, return `needsMoreInfo = true`
+- Nothing to judge against
+- Return `needsMoreInfo = true`

@@ -279,6 +279,67 @@
                 "required": ["repository"],
                 "additionalProperties": false
             }
+        },
+        "businessLogic": {
+            "type": "object",
+            "description": "How Kody checks each pull request against the task it references.",
+            "properties": {
+                "taskSource": {
+                    "type": "string",
+                    "default": "auto",
+                    "description": "'auto' reads from every connected task tracker; an integration id reads only from that plugin."
+                },
+                "taskSourceTool": {
+                    "type": "string",
+                    "default": "",
+                    "description": "For a custom plugin: the tool that reads one task by its id."
+                },
+                "taskIdPattern": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "default": "",
+                    "description": "A regex for task ids the built-in shapes miss (e.g. sc-(\\d+)). Its first group, when it has one, is the id."
+                },
+                "criteriaLocation": {
+                    "type": "string",
+                    "enum": ["auto", "heading", "field"],
+                    "default": "auto",
+                    "description": "Where the task's acceptance criteria live."
+                },
+                "criteriaHeading": {
+                    "type": "string",
+                    "default": "",
+                    "description": "The heading the criteria sit under, when criteriaLocation is 'heading'."
+                },
+                "criteriaField": {
+                    "type": "string",
+                    "default": "",
+                    "description": "The field the criteria live in, when criteriaLocation is 'field'."
+                },
+                "teamGuidance": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "default": "",
+                    "description": "Added to what Kody follows. It can't change the verdict format or make Kody invent requirements."
+                },
+                "commentWhenMet": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Comment when every requirement is met too; off, Kody posts nothing on a PR that meets its task."
+                },
+                "recheckOn": {
+                    "type": "string",
+                    "enum": ["failing", "push", "request"],
+                    "default": "failing",
+                    "description": "When a push re-checks a PR already checked: while its last check failed, on every push, or only on @kody -v business-logic. A re-check edits the same comment."
+                },
+                "requireTask": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "A PR that references no existing task fails instead of being skipped."
+                }
+            },
+            "additionalProperties": false
         }
     },
     "required": [

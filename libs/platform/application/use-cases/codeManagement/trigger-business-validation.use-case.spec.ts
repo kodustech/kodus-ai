@@ -18,6 +18,8 @@ describe('TriggerBusinessValidationUseCase (deterministic logic)', () => {
             {} as any,
             {} as any,
             {} as any,
+            {} as any,
+            {} as any,
         );
         target = useCase as any;
     });
@@ -262,86 +264,6 @@ describe('TriggerBusinessValidationUseCase (deterministic logic)', () => {
         });
     });
 
-    describe('detectTicketKeys', () => {
-        it('extracts uppercase ticket keys and de-duplicates preserving order', () => {
-            expect(target.detectTicketKeys('XY-1 AB-2 XY-1 done')).toEqual([
-                'XY-1',
-                'AB-2',
-            ]);
-        });
-
-        it('requires at least two uppercase letters', () => {
-            expect(target.detectTicketKeys('A-1 b-2')).toEqual([]);
-        });
-
-        it('returns an empty array when there are no matches', () => {
-            expect(target.detectTicketKeys('nothing to see')).toEqual([]);
-        });
-
-        it('matches keys with multi-digit numbers', () => {
-            expect(target.detectTicketKeys('PROJ-12345')).toEqual([
-                'PROJ-12345',
-            ]);
-        });
-    });
-
-    describe('detectTaskLinks', () => {
-        it('extracts http and https links and de-duplicates preserving order', () => {
-            expect(
-                target.detectTaskLinks(
-                    'http://a.com https://b.com http://a.com',
-                ),
-            ).toEqual(['http://a.com', 'https://b.com']);
-        });
-
-        it('stops the link at terminator characters', () => {
-            expect(target.detectTaskLinks('see (http://a.com) now')).toEqual([
-                'http://a.com',
-            ]);
-            expect(target.detectTaskLinks('"https://b.com"')).toEqual([
-                'https://b.com',
-            ]);
-        });
-
-        it('ignores non-http protocols', () => {
-            expect(target.detectTaskLinks('ftp://x.com file://y')).toEqual([]);
-        });
-
-        it('returns an empty array when there are no links', () => {
-            expect(target.detectTaskLinks('no links here')).toEqual([]);
-        });
-    });
-
-    describe('detectRequirementKeywords', () => {
-        it('detects keywords case-insensitively in canonical order', () => {
-            expect(
-                target.detectRequirementKeywords(
-                    'This REQUIREMENT includes Acceptance Criteria',
-                ),
-            ).toEqual(['requirement', 'acceptance criteria']);
-        });
-
-        it('detects gherkin keywords preserving the canonical order', () => {
-            // Input order is then/when/given but output must follow the
-            // REQUIREMENT_KEYWORDS declaration order.
-            expect(
-                target.detectRequirementKeywords('Then Y when X given Z'),
-            ).toEqual(['given', 'when', 'then']);
-        });
-
-        it('detects a user story keyword', () => {
-            expect(
-                target.detectRequirementKeywords('As a user story goes'),
-            ).toEqual(['user story']);
-        });
-
-        it('returns an empty array when no keyword is present', () => {
-            expect(target.detectRequirementKeywords('random content')).toEqual(
-                [],
-            );
-        });
-    });
-
     describe('findBestPrByUrl', () => {
         it('returns undefined for an empty list', () => {
             expect(target.findBestPrByUrl([], 'http://a')).toBeUndefined();
@@ -361,12 +283,67 @@ describe('TriggerBusinessValidationUseCase (deterministic logic)', () => {
             expect(target.findBestPrByUrl(prs, 'HTTP://B.com/2/')).toBe(prs[1]);
         });
 
-        it('falls back to the first PR when no url matches', () => {
+        it('matches by the number in the link when the urls differ', () => {
             const prs = [
-                { prURL: 'http://a.com/1' },
-                { prURL: 'http://b.com/2' },
+                { number: 1, prURL: 'http://a.com/1' },
+                {
+                    number: 12,
+                    prURL: 'http://api.gl/projects/3/mr/12',
+                    repositoryData: { name: 'acme/notes' },
+                },
             ] as any;
-            expect(target.findBestPrByUrl(prs, 'http://z.com')).toBe(prs[0]);
+            expect(
+                target.findBestPrByUrl(
+                    prs,
+                    'https://gl.com/acme/notes/-/merge_requests/12/diffs',
+                ),
+            ).toBe(prs[1]);
+        });
+
+        it('never takes the same number from another repository', () => {
+            const prs = [
+                {
+                    number: 47,
+                    prURL: 'http://api.gh/repos/acme/notes/pulls/47',
+                    repositoryData: { name: 'notes' },
+                    base: { repo: { fullName: 'acme/notes' } },
+                },
+                {
+                    number: 47,
+                    prURL: 'http://api.gh/repos/acme/web/pulls/47',
+                    repositoryData: { name: 'web' },
+                },
+            ] as any;
+            expect(
+                target.findBestPrByUrl(
+                    prs,
+                    'https://github.com/acme/other/pull/47',
+                ),
+            ).toBeUndefined();
+            expect(
+                target.findBestPrByUrl(
+                    prs,
+                    'https://github.com/acme/web/pull/47',
+                ),
+            ).toBe(prs[1]);
+        });
+
+        it('takes a PR that names no repository only when it is the only one', () => {
+            const only = [{ number: 5, prURL: 'http://x/5' }] as any;
+            const two = [...only, { number: 6, prURL: 'http://x/6' }] as any;
+            const url = 'https://dev.azure.com/o/p/_git/r/pullrequest/5';
+            expect(target.findBestPrByUrl(only, url)).toBe(only[0]);
+            expect(target.findBestPrByUrl(two, url)).toBeUndefined();
+        });
+
+        it('never picks another PR when nothing matches', () => {
+            const prs = [
+                { number: 1, prURL: 'http://a.com/1' },
+                { number: 2, prURL: 'http://b.com/2' },
+            ] as any;
+            expect(
+                target.findBestPrByUrl(prs, 'https://gh.com/a/b/pull/47'),
+            ).toBeUndefined();
         });
     });
 
@@ -466,7 +443,7 @@ describe('TriggerBusinessValidationUseCase (deterministic logic)', () => {
             expect(result.prUrl).toBe('http://f');
         });
 
-        it('prefers pr.repositoryData over pr.repositoryId and fallback for the id', () => {
+        it('prefers pr.repositoryData for the id, the configured repository for the name', () => {
             const pr = {
                 number: 1,
                 prURL: 'u',
@@ -478,7 +455,7 @@ describe('TriggerBusinessValidationUseCase (deterministic logic)', () => {
                 name: 'fname',
             });
             expect(result.repository.id).toBe('data-id');
-            expect(result.repository.name).toBe('data-name');
+            expect(result.repository.name).toBe('fname');
         });
 
         it('uses pr.repositoryId when repositoryData is absent', () => {
@@ -537,66 +514,325 @@ describe('TriggerBusinessValidationUseCase (deterministic logic)', () => {
         });
     });
 
-    describe('detectSignals', () => {
-        it('aggregates ticket keys, task links and requirement keywords with de-duplication and ordering', () => {
-            const result = target.detectSignals(
-                'Implements requirement ABC-123. See https://tracker/abc',
-                'PROJ-7',
-                'diff with XY-99 and given/when',
-                'TASK-1',
-                'https://task.url/1',
+    describe('execute (local diff)', () => {
+        it('returns the verdict as text and JSON, records the run and writes nothing to a PR (UC-41)', async () => {
+            const outcome = {
+                kind: 'validated',
+                checks: [
+                    {
+                        task: {
+                            tracker: 'Azure DevOps',
+                            id: 'AB#8',
+                            title: 'Compact density toggle',
+                        },
+                        verdict: {
+                            needsMoreInfo: false,
+                            summary: 'x',
+                            requirements: [
+                                {
+                                    requirement: 'Defaults to comfortable',
+                                    source: 'AC #2',
+                                    state: 'missing',
+                                    evidence: [
+                                        {
+                                            file: 'src/settings/density.ts',
+                                            line: 6,
+                                        },
+                                    ],
+                                    note: 'Sets "compact".',
+                                    action: 'Change it to "comfortable".',
+                                    confidence: 'high',
+                                },
+                            ],
+                            outOfScope: [],
+                        },
+                        passed: false,
+                        readAt: '2026-10-05T00:00:00.000Z',
+                    },
+                ],
+                thinTasks: [],
+                passed: false,
+                unseenFiles: [],
+            };
+            const service = {
+                validate: jest.fn().mockResolvedValue({
+                    outcome,
+                    references: [],
+                    attempts: [],
+                    trackers: ['Azure DevOps'],
+                }),
+            };
+            const publisher = {
+                settingsFor: jest.fn().mockResolvedValue({}),
+                withRepository: jest.fn((r: unknown) => r),
+                publish: jest.fn(),
+            };
+            const runs = { create: jest.fn().mockResolvedValue('run-1') };
+            const cli = new TriggerBusinessValidationUseCase(
+                {
+                    getTypeIntegration: jest.fn().mockResolvedValue('github'),
+                } as any,
+                {
+                    findIntegrationConfigFormatted: jest
+                        .fn()
+                        .mockResolvedValue([]),
+                } as any,
+                service as any,
+                publisher as any,
+                runs as any,
             );
 
-            expect(result).toEqual({
-                ticketKeys: ['TASK-1', 'PROJ-7', 'ABC-123', 'XY-99'],
-                taskLinks: ['https://task.url/1', 'https://tracker/abc'],
-                requirementKeywords: ['requirement', 'given', 'when'],
+            const result = await cli.execute({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                input: { diff: '+x', taskId: 'AB#8' },
             });
-        });
 
-        it('returns empty arrays when everything is empty/undefined', () => {
-            expect(target.detectSignals('')).toEqual({
-                ticketKeys: [],
-                taskLinks: [],
-                requirementKeywords: [],
+            expect(service.validate).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    door: 'cli',
+                    taskInput: 'AB#8',
+                    diff: '+x',
+                }),
+            );
+            expect(result.result).toContain('MISSING');
+            expect(result.result).toContain('src/settings/density.ts:6');
+            expect(result.result).toContain('status: issues_found');
+            expect(result.verdict).toMatchObject({
+                status: 'issues_found',
+                passed: false,
+                tasks: [
+                    expect.objectContaining({
+                        id: 'AB#8',
+                        requirements: [
+                            expect.objectContaining({ state: 'missing' }),
+                        ],
+                    }),
+                ],
             });
-        });
-
-        it('prepends the trimmed taskId as the first ticket key (first-wins dedup)', () => {
-            const result = target.detectSignals(
-                'contains TASK-1 and NEW-2',
-                undefined,
-                undefined,
-                '  TASK-1  ',
+            expect(runs.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    door: 'cli',
+                    outcome: 'validated',
+                    passed: false,
+                }),
             );
-            // trimmed taskId leads, and its later occurrence in the description
-            // is de-duplicated away.
-            expect(result.ticketKeys).toEqual(['TASK-1', 'NEW-2']);
+            expect(publisher.publish).not.toHaveBeenCalled();
+        });
+    });
+});
+
+describe('TriggerBusinessValidationUseCase.testOnPullRequest', () => {
+    const prUrl = 'https://github.com/acme/notes/pull/47';
+    const outcome = {
+        kind: 'validated' as const,
+        checks: [
+            {
+                task: {
+                    tracker: 'Linear',
+                    id: 'SAA-96',
+                    title: 'Sticky notes',
+                    description: 'Drag to reorder',
+                    acceptanceCriteria: ['Order persists'],
+                },
+                verdict: {
+                    needsMoreInfo: false,
+                    summary: '',
+                    requirements: [
+                        {
+                            requirement: 'Order persists',
+                            state: 'missing' as const,
+                            evidence: [],
+                            confidence: 'high' as const,
+                        },
+                    ],
+                    outOfScope: [],
+                },
+                passed: false,
+                readAt: '2026-10-07T12:00:00.000Z',
+            },
+        ],
+        thinTasks: [],
+        passed: false,
+        unseenFiles: [],
+    };
+
+    function build(prNumber = 47) {
+        const code = {
+            getTypeIntegration: jest.fn(async () => 'GITHUB'),
+            getPullRequests: jest.fn(async () => [
+                {
+                    number: prNumber,
+                    prURL: `https://github.com/acme/notes/pull/${prNumber}`,
+                    title: 'Sticky notes: drag to reorder',
+                    body: 'Closes SAA-96',
+                    repositoryData: { id: 'repo-1', name: 'acme/notes' },
+                    head: {
+                        ref: 'feat/SAA-96',
+                        repo: { fullName: 'acme/notes', name: 'notes' },
+                    },
+                    base: { ref: 'main' },
+                },
+            ]),
+        };
+        const service = {
+            validate: jest.fn(async () => ({
+                outcome,
+                references: [
+                    {
+                        kind: 'key',
+                        id: 'SAA-96',
+                        raw: 'SAA-96',
+                        source: 'body',
+                        intent: 'closes',
+                    },
+                ],
+                attempts: [
+                    {
+                        reference: 'SAA-96',
+                        tracker: 'Linear',
+                        status: 'found',
+                        tools: ['get_issue'],
+                    },
+                ],
+                trackers: ['Linear'],
+            })),
+        };
+        const publisher = {
+            settingsFor: jest.fn(),
+            withRepository: jest.fn((r: unknown) => r),
+            headShaOf: jest.fn(async () => 'abc1234'),
+            preview: jest.fn(async () => ({
+                outcome,
+                comment: { posted: true, editsExisting: false, body: 'body' },
+                check: {
+                    supported: true,
+                    conclusion: 'failure',
+                    title: '1 missing',
+                },
+            })),
+            publish: jest.fn(async () => ({ outcome, comment: 'created' })),
+        };
+        const runs = { create: jest.fn() };
+        const integrationConfig = {
+            findIntegrationConfigFormatted: jest.fn(async () => [
+                { id: 'repo-1', name: 'notes', organizationName: 'acme' },
+            ]),
+        };
+        const useCase = new TriggerBusinessValidationUseCase(
+            code as any,
+            integrationConfig as any,
+            service as any,
+            publisher as any,
+            runs as any,
+        );
+        return { useCase, service, publisher, runs };
+    }
+
+    const organizationAndTeamData = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+    };
+
+    it('runs with the settings on screen and writes nothing', async () => {
+        const { useCase, service, publisher, runs } = build();
+
+        const result = await useCase.testOnPullRequest({
+            organizationAndTeamData,
+            prUrl,
+            settings: { recheckOn: 'push' },
         });
 
-        it('prepends the trimmed taskUrl as the first task link', () => {
-            const result = target.detectSignals(
-                'refer to https://other/link',
-                undefined,
-                undefined,
-                undefined,
-                '  https://task/main  ',
-            );
-            expect(result.taskLinks).toEqual([
-                'https://task/main',
-                'https://other/link',
-            ]);
+        expect(service.validate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                pullRequest: expect.objectContaining({
+                    number: 47,
+                    body: 'Closes SAA-96',
+                }),
+                settings: expect.objectContaining({ recheckOn: 'push' }),
+            }),
+        );
+        // The list names it `acme/notes`; the diff needs the stored name.
+        expect(service.validate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                repository: expect.objectContaining({
+                    name: 'notes',
+                    owner: 'acme',
+                }),
+            }),
+        );
+        expect(result.pullRequest.repositoryName).toBe('notes');
+        expect(publisher.settingsFor).not.toHaveBeenCalled();
+        expect(publisher.publish).not.toHaveBeenCalled();
+        expect(runs.create).not.toHaveBeenCalled();
+        expect(result.attempts[0].tools).toEqual(['get_issue']);
+        expect(result.tasks[0]).toMatchObject({
+            id: 'SAA-96',
+            criteria: ['Order persists'],
+        });
+        expect(result.comment.posted).toBe(true);
+        expect(result.posted).toBeUndefined();
+    });
+
+    it('posts like the command when asked to', async () => {
+        const { useCase, publisher } = build();
+
+        const result = await useCase.testOnPullRequest({
+            organizationAndTeamData,
+            prUrl,
+            post: true,
         });
 
-        it('excludes ticket keys located beyond the max signal source length in the diff', () => {
-            const diff = 'IN-1 ' + 'x'.repeat(20_000) + ' OUT-1';
-            const result = target.detectSignals('', undefined, diff);
-            expect(result.ticketKeys).toEqual(['IN-1']);
+        expect(publisher.publish).toHaveBeenCalledWith(
+            expect.objectContaining({ trigger: 'command', headSha: 'abc1234' }),
+        );
+        expect(result.posted).toBe('created');
+    });
+
+    it('never runs on another PR than the one asked for', async () => {
+        const { useCase, service } = build(12);
+
+        await expect(
+            useCase.testOnPullRequest({ organizationAndTeamData, prUrl }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(service.validate).not.toHaveBeenCalled();
+    });
+});
+
+describe('TriggerBusinessValidationUseCase.tryReadTask', () => {
+    it("reads `#12` in the repository's namespace, not the GitLab group's display name", async () => {
+        const service = { tryRead: jest.fn(async () => ({ status: 'found' })) };
+        const integrationConfig = {
+            findIntegrationConfigFormatted: jest.fn(async () => [
+                {
+                    id: 'repo-1',
+                    name: 'acme-corp/notes',
+                    full_name: 'acme-corp/notes',
+                    organizationName: 'Acme Corp',
+                },
+            ]),
+        };
+        const useCase = new TriggerBusinessValidationUseCase(
+            {} as any,
+            integrationConfig as any,
+            service as any,
+            {} as any,
+            {} as any,
+        );
+
+        await useCase.tryReadTask({
+            organizationAndTeamData: { organizationId: 'org-1', teamId: 't' },
+            task: '#12',
+            repositoryId: 'repo-1',
         });
 
-        it('ignores an empty diff for ticket detection', () => {
-            const result = target.detectSignals('has KEY-9', undefined, '');
-            expect(result.ticketKeys).toEqual(['KEY-9']);
-        });
+        expect(service.tryRead).toHaveBeenCalledWith(
+            expect.anything(),
+            '#12',
+            expect.anything(),
+            { owner: 'acme-corp', name: 'notes' },
+        );
     });
 });

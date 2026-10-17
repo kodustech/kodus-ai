@@ -35,6 +35,7 @@ import {
     GitPullRequestIcon,
     GlobeIcon,
     KeyRoundIcon,
+    ListChecksIcon,
     LockIcon,
     MessageSquareTextIcon,
     PuzzleIcon,
@@ -221,6 +222,12 @@ const SETTINGS_TABS = [
         href: "review-scope",
         icon: ScanSearchIcon,
         keywords: "categories severity instructions",
+    },
+    {
+        label: "Business Logic",
+        href: "business-logic",
+        icon: ListChecksIcon,
+        keywords: "task tracker requirements acceptance criteria jira linear",
     },
     {
         label: "Kody Rules",

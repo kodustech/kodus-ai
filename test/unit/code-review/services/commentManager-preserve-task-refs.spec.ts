@@ -114,6 +114,37 @@ describe('CommentManagerService – task references survive a replaced descripti
         expect(result).not.toContain('Adds a per-second rate limiter.');
     });
 
+    it("keeps an id in the team's own format when the description is replaced", async () => {
+        mockCodeManagementService.getPullRequestByNumber.mockResolvedValue({
+            body: 'Story T1234\n\nSome prose.',
+        });
+        const summaryConfig = {
+            generatePRSummary: true,
+            behaviourForExistingDescription: 'replace',
+            behaviourForNewCommits: BehaviourForNewCommits.NONE,
+        };
+
+        const withPattern = await service.generateSummaryPR(
+            pullRequest,
+            repository,
+            [makeFile('a.ts')],
+            organizationAndTeamData as any,
+            'en-US',
+            summaryConfig as any,
+            undefined,
+            false,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            'T(\\d{4})',
+        );
+        expect(withPattern).toContain('Story T1234');
+
+        // Without the team's pattern no built-in shape reads it.
+        expect(await generate(summaryConfig)).not.toContain('T1234');
+    });
+
     it('keeps a jira-style key when the description is replaced', async () => {
         mockCodeManagementService.getPullRequestByNumber.mockResolvedValue({
             body: 'Implements PROJ-42\n\nSome prose.',
@@ -126,6 +157,27 @@ describe('CommentManagerService – task references survive a replaced descripti
         });
 
         expect(result).toContain('PROJ-42');
+    });
+
+    it.each([
+        ['an Azure Boards work item', 'Closes AB#12'],
+        [
+            'an Azure Boards link',
+            'Implements https://dev.azure.com/acme/web/_workitems/edit/12',
+        ],
+    ])('keeps %s when the description is replaced', async (_kind, line) => {
+        mockCodeManagementService.getPullRequestByNumber.mockResolvedValue({
+            body: `${line}\n\nSome prose.`,
+        });
+
+        const result = await generate({
+            generatePRSummary: true,
+            behaviourForExistingDescription: 'replace',
+            behaviourForNewCommits: BehaviourForNewCommits.NONE,
+        });
+
+        expect(result).toContain(line);
+        expect(result).not.toContain('Some prose.');
     });
 
     it('replaces a description that carries no reference, as before', async () => {

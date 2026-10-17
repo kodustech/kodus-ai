@@ -12,14 +12,13 @@ import {
     MongoConversationStore,
 } from '../infrastructure/persistence/mongo-conversation-store';
 
-import { BusinessRulesValidationAgentUseCase } from '../application/use-cases/business-rules-validation-agent.use-case';
 import { ConversationAgentUseCase } from '../application/use-cases/conversation-agent.use-case';
-import { BusinessRulesValidationAgentProvider } from '../infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent';
 import { ConversationAgentProvider } from '../infrastructure/services/agents/conversation/conversationAgent';
 import { SkillLoaderService } from '../skills/skill-loader.service';
-import { GenericSkillRunnerService } from '../skills/generic-skill-runner.service';
-import { CapabilityStrategyService } from '../skills/runtime/capability-strategy.service';
-import { CapabilityResourcePlanService } from '../skills/runtime/capability-resource-plan.service';
+import { BusinessValidationService } from '../business-validation/business-validation.service';
+import { BusinessValidationRunModelInstance } from '../business-validation/runs/validation-run.model';
+import { ValidationRunRepository } from '../business-validation/runs/validation-run.repository';
+import { BusinessLogicInsightsService } from '../business-validation/runs/insights.service';
 
 @Module({
     imports: [
@@ -30,31 +29,30 @@ import { CapabilityResourcePlanService } from '../skills/runtime/capability-reso
         // Provides ByokErrorCounter so conversation/business report BYOK failures
         // (byok.llm_errors_threshold) — parity with code-review.
         forwardRef(() => NotificationModule),
-        MongooseModule.forFeature([AgentSessionModelInstance]),
+        MongooseModule.forFeature([
+            AgentSessionModelInstance,
+            BusinessValidationRunModelInstance,
+        ]),
     ],
     providers: [
-        BusinessRulesValidationAgentUseCase,
         ConversationAgentUseCase,
-        BusinessRulesValidationAgentProvider,
         ConversationAgentProvider,
         SkillLoaderService,
-        GenericSkillRunnerService,
-        CapabilityStrategyService,
-        CapabilityResourcePlanService,
+        BusinessValidationService,
+        ValidationRunRepository,
+        BusinessLogicInsightsService,
         {
             provide: CONVERSATION_STORE_TOKEN,
             useClass: MongoConversationStore,
         },
     ],
     exports: [
-        BusinessRulesValidationAgentUseCase,
         ConversationAgentUseCase,
-        BusinessRulesValidationAgentProvider,
         ConversationAgentProvider,
         SkillLoaderService,
-        GenericSkillRunnerService,
-        CapabilityStrategyService,
-        CapabilityResourcePlanService,
+        BusinessValidationService,
+        ValidationRunRepository,
+        BusinessLogicInsightsService,
         CONVERSATION_STORE_TOKEN,
     ],
 })

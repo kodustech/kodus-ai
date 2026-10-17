@@ -1,4 +1,5 @@
 import type { TeamAutomation } from "@services/automations/types";
+import type { BusinessLogicSettingsValue } from "@services/business-logic/types";
 import type { LanguageValue } from "@services/parameters/types";
 import type { LiteralUnion } from "react-hook-form";
 import type { SeverityLevel } from "src/core/types";
@@ -114,6 +115,8 @@ export type CodeReviewGlobalConfig = {
         ciChecks?: boolean;
         tools?: Partial<Record<DeterministicToolId, DeterministicToolMode>>;
     };
+    /** How each PR is checked against the task it references. */
+    businessLogic?: BusinessLogicSettingsValue;
     codeReviewVersion?: "legacy" | "v2" | "v3-agent";
     ideRulesSyncEnabled: boolean;
     /** Only consulted on a true→false transition of `ideRulesSyncEnabled`.
