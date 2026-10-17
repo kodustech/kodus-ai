@@ -1063,6 +1063,8 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         reviewErrorCustomMessage?: string,
         linkedRepositoriesMetadata?: LinkedRepositoriesReviewMetadata,
         reviewWarnings?: ReviewWarning[],
+        /** End-review section on custom agents (#2172); empty when none ran. */
+        customAgentsSection?: string,
     ): Promise<void> {
         try {
             // When the review failed, we cannot honor a customer-configured
@@ -1085,6 +1087,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     reviewErrorCustomMessage,
                     linkedRepositoriesMetadata,
                     reviewWarnings,
+                    customAgentsSection,
                 );
             } else {
                 // Custom end-review template is rendering — the default
@@ -1112,6 +1115,9 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                 );
                 if (skippedNotice) {
                     commentBody = `${commentBody}${skippedNotice}`;
+                }
+                if (customAgentsSection) {
+                    commentBody = `${commentBody}${customAgentsSection}`;
                 }
             }
 
@@ -1168,6 +1174,8 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         reviewErrorCustomMessage?: string,
         linkedRepositoriesMetadata?: LinkedRepositoriesReviewMetadata,
         reviewWarnings?: ReviewWarning[],
+        /** End-review section on custom agents (#2172); empty when none ran. */
+        customAgentsSection?: string,
     ): Promise<string> {
         let commentBody = await this.generatePullRequestFinishSummaryMarkdown(
             organizationAndTeamData,
@@ -1181,6 +1189,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             reviewErrorCustomMessage,
             linkedRepositoriesMetadata,
             reviewWarnings,
+            customAgentsSection,
         );
 
         commentBody = this.sanitizeBitbucketMarkdown(commentBody, platformType);
@@ -1897,6 +1906,8 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         reviewErrorCustomMessage?: string,
         linkedRepositoriesMetadata?: LinkedRepositoriesReviewMetadata,
         reviewWarnings?: ReviewWarning[],
+        /** End-review section on custom agents (#2172); empty when none ran. */
+        customAgentsSection?: string,
     ): Promise<string> {
         try {
             const language =
@@ -2018,7 +2029,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             // Add unique tag with timestamp to identify this comment as completed
             const uniqueId = `completed-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-            return `${resultText}${linkedReposLine}\n\n${await this.generateConfigReviewMarkdown(organizationAndTeamData, prNumber, codeReviewConfig)}\n\n<!-- kody-codereview-${uniqueId} -->\n<!-- kody-codereview -->\n&#8203;`;
+            return `${resultText}${linkedReposLine}${customAgentsSection ?? ''}\n\n${await this.generateConfigReviewMarkdown(organizationAndTeamData, prNumber, codeReviewConfig)}\n\n<!-- kody-codereview-${uniqueId} -->\n<!-- kody-codereview -->\n&#8203;`;
         } catch (error) {
             this.logger.error({
                 message:

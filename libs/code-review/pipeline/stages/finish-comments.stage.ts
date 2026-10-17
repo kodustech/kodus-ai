@@ -1,3 +1,4 @@
+import { formatCustomAgentsSummary } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
 import { Injectable, Inject } from '@nestjs/common';
 import {
     COMMENT_MANAGER_SERVICE_TOKEN,
@@ -356,6 +357,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewErrorCustomMessage,
                 context.linkedRepositoriesMetadata,
                 context.reviewWarnings,
+                formatCustomAgentsSummary(context.customAgentRuns),
             );
             return context;
         }
@@ -427,6 +429,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewErrorCustomMessage,
                 context.linkedRepositoriesMetadata,
                 context.reviewWarnings,
+                formatCustomAgentsSummary(context.customAgentRuns),
             );
             return context;
         }
@@ -446,7 +449,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     PullRequestMessageStatus.ONLY_WHEN_OPENED &&
                     context.lastExecution))
         ) {
-            const finalCommentBody = endReviewMessage.content;
+            const finalCommentBody = `${endReviewMessage.content ?? ''}${formatCustomAgentsSummary(context.customAgentRuns)}`;
 
             await this.commentManagerService.createComment(
                 organizationAndTeamData,
