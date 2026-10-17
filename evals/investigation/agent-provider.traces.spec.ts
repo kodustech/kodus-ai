@@ -44,7 +44,9 @@ describe('investigation agent provider — coding-agent instructions', () => {
         caseId: 'c1',
         prFiles: [{ filename: 'src/a.ts' }],
         repoInstructions: {
-            files: [{ path: 'CLAUDE.md', content: 'Amounts are integer cents.' }],
+            files: [
+                { path: 'CLAUDE.md', content: 'Amounts are integer cents.' },
+            ],
         },
     };
 
@@ -52,6 +54,17 @@ describe('investigation agent provider — coding-agent instructions', () => {
         expect(internals.prOf(caseData).targetBranchFiles).toEqual({
             'CLAUDE.md': 'Amounts are integer cents.',
         });
+    });
+
+    it("serves the target branch's recorded files, pointers included, over the collected list", () => {
+        const targetBranchFiles = {
+            'CLAUDE.md': 'AI-AGENTS.md',
+            'AI-AGENTS.md': 'Use the repository logger.',
+        };
+        expect(
+            internals.prOf({ ...caseData, targetBranchFiles })
+                .targetBranchFiles,
+        ).toEqual(targetBranchFiles);
     });
 
     it('turns the setting on only when the case gives instruction files', () => {

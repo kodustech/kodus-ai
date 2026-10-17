@@ -163,10 +163,16 @@ module.exports = async () => {
               : selectedSet.includes(caseId);
         if (!include) continue;
 
-        const repoInstructions = instructionsByCase?.[caseId]?.repoInstructions;
+        const recorded = instructionsByCase?.[caseId];
+        const repoInstructions = recorded?.repoInstructions;
+        // targetBranchFiles: every instruction file on the target branch and
+        // every file one points to, for production's stage to select and read.
+        const targetBranchFiles = recorded?.targetBranchFiles;
         tests.push({
             description: `recall: ${caseId}`,
-            vars: repoInstructions?.files?.length ? { ...c.vars, repoInstructions } : c.vars,
+            vars: repoInstructions?.files?.length
+                ? { ...c.vars, repoInstructions, ...(targetBranchFiles ? { targetBranchFiles } : {}) }
+                : c.vars,
             assert: [{ type: 'javascript', value: 'file://recall-assertion.js' }],
         });
     }

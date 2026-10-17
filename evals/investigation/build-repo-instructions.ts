@@ -18,7 +18,11 @@ import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { collectRepoInstructions } from '../../libs/code-review/infrastructure/agents/collaborators/repo-instructions';
+import {
+    collectRepoInstructions,
+    type RepoInstructionsContext,
+} from '../../libs/code-review/infrastructure/agents/collaborators/repo-instructions';
+import { isAgentInstructionProseFile } from '../../libs/common/utils/kody-rules/file-patterns';
 
 const ROOT = path.resolve(__dirname, '../..');
 const DATASETS = path.join(__dirname, 'datasets');
@@ -59,6 +63,38 @@ const filenames = (files: ChangedFiles): string[] =>
  */
 export function changedPaths(v: CaseVars): string[] {
     return filenames(v.prFiles ?? v.changedFilesFull ?? v.changedFiles);
+}
+
+/**
+ * One case's instructions as production's collector reads them from the target
+ * branch (`repoInstructions`), and what that branch holds for the eval to
+ * serve (`targetBranchFiles`): every instruction file on it and every file the
+ * collector read, pointer targets included, so production's stage selects and
+ * resolves them itself.
+ */
+export async function collectForCase(params: {
+    index: string[];
+    readFile: (path: string) => Promise<string | null>;
+    changedFiles: string[];
+}): Promise<{
+    repoInstructions: RepoInstructionsContext;
+    targetBranchFiles: Record<string, string>;
+}> {
+    const targetBranchFiles: Record<string, string> = {};
+    const record = async (p: string): Promise<string | null> => {
+        const content = await params.readFile(p);
+        if (content != null) targetBranchFiles[p] = content;
+        return content;
+    };
+    const repoInstructions = await collectRepoInstructions({
+        changedFiles: params.changedFiles,
+        listFiles: async () => params.index,
+        readFile: record,
+    });
+    for (const p of params.index.filter((f) => isAgentInstructionProseFile(f))) {
+        if (!(p in targetBranchFiles)) await record(p);
+    }
+    return { repoInstructions, targetBranchFiles };
 }
 
 const arg = (name: string): string | undefined =>
@@ -151,10 +187,9 @@ async function main(): Promise<number> {
 
         const changed = changedPaths(v);
 
-        const repoInstructions = await collectRepoInstructions({
+        const { repoInstructions, targetBranchFiles } = await collectForCase({
             changedFiles: changed,
-            listFiles: async () =>
-                git(dir, ['ls-tree', '-r', '--name-only', ref]).split('\n').filter(Boolean),
+            index: git(dir, ['ls-tree', '-r', '--name-only', ref]).split('\n').filter(Boolean),
             readFile: async (p) => {
                 try {
                     return git(dir, ['show', `${ref}:${p}`]);
@@ -163,7 +198,7 @@ async function main(): Promise<number> {
                 }
             },
         });
-        out[caseId] = { repo: upstream, ref, repoInstructions };
+        out[caseId] = { repo: upstream, ref, repoInstructions, targetBranchFiles };
         console.log(
             `${repoInstructions.files.length ? 'HAS ' : 'none'} ${caseId} listed=${repoInstructions.files.map((f) => f.path).join(',')}`,
         );

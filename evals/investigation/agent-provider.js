@@ -99,9 +99,13 @@ function teamOf(caseData) {
 }
 
 // The coding-agent instruction files the case's target branch holds, as
-// { path: text }: from RECALL_REPO_INSTRUCTIONS (recall-tests.js) or the
-// repo-instructions eval's cases. Production's stage selects and reads them.
+// { path: text }: the recorded branch (targetBranchFiles: its instruction
+// files and the files they point to, from RECALL_REPO_INSTRUCTIONS), else the
+// collected list (the repo-instructions eval's cases). Production's stage
+// selects and reads them.
 function instructionFilesOf(caseData) {
+    const recorded = parseMaybeJson(caseData.targetBranchFiles);
+    if (recorded && Object.keys(recorded).length) return recorded;
     const files = parseMaybeJson(caseData.repoInstructions)?.files || [];
     return Object.fromEntries(files.map((f) => [f.path, f.content]));
 }

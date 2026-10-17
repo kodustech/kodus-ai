@@ -5,7 +5,8 @@ import * as path from 'path';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const buildTests = require('./recall-tests');
 
-const CASE_WITH = 'add-guest-management-functionality-to-existing-bookings-cal-com';
+const CASE_WITH =
+    'add-guest-management-functionality-to-existing-bookings-cal-com';
 const CASE_WITHOUT = 'feat-2fa-backup-codes-cal-com';
 
 const instructions = {
@@ -63,6 +64,27 @@ describe('recall-tests — RECALL_REPO_INSTRUCTIONS', () => {
 
         expect(vars[CASE_WITH].repoInstructions).toEqual(instructions);
         expect(vars[CASE_WITHOUT].repoInstructions).toBeUndefined();
+    });
+
+    it("gives a case the target branch's instruction files when they were recorded", async () => {
+        const targetBranchFiles = {
+            'CLAUDE.md': 'AI-AGENTS.md',
+            'AI-AGENTS.md': 'Use the repository logger.',
+        };
+        fs.writeFileSync(
+            file,
+            JSON.stringify({
+                [CASE_WITH]: {
+                    repoInstructions: instructions,
+                    targetBranchFiles,
+                },
+            }),
+        );
+        process.env.RECALL_REPO_INSTRUCTIONS = file;
+
+        const vars = await byCase();
+
+        expect(vars[CASE_WITH].targetBranchFiles).toEqual(targetBranchFiles);
     });
 
     it('leaves every case without instructions when unset', async () => {

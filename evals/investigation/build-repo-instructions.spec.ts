@@ -1,4 +1,4 @@
-import { changedPaths } from './build-repo-instructions';
+import { changedPaths, collectForCase } from './build-repo-instructions';
 
 // Instructions are selected for the files the review sees: the platform's
 // file list (`prFiles`), else the PR's whole diff (`changedFilesFull`), else
@@ -13,7 +13,6 @@ describe('changedPaths', () => {
             }),
         ).toEqual(['a.ts', 'web/b.tsx']);
     });
-
 
     it('selects against the whole diff when the case has it', () => {
         expect(
@@ -37,5 +36,33 @@ describe('changedPaths', () => {
             'a.ts',
         ]);
         expect(changedPaths({})).toEqual([]);
+    });
+});
+
+// What the eval serves as the target branch: its instruction files and every
+// file one points to, so production's stage selects and resolves them itself.
+describe('collectForCase', () => {
+    const tree: Record<string, string> = {
+        'CLAUDE.md': 'AI-AGENTS.md',
+        'AI-AGENTS.md': 'Use the structured logger.',
+        'docs/AGENTS.md': 'Docs only.',
+        'src/a.ts': 'export const a = 1;',
+    };
+
+    it("records the branch's instruction files and the files they point to", async () => {
+        const { repoInstructions, targetBranchFiles } = await collectForCase({
+            index: Object.keys(tree),
+            readFile: async (p: string) => tree[p] ?? null,
+            changedFiles: ['src/a.ts'],
+        });
+
+        expect(repoInstructions.files.map((f) => f.path)).toEqual([
+            'AI-AGENTS.md',
+        ]);
+        expect(targetBranchFiles).toEqual({
+            'CLAUDE.md': 'AI-AGENTS.md',
+            'AI-AGENTS.md': 'Use the structured logger.',
+            'docs/AGENTS.md': 'Docs only.',
+        });
     });
 });
