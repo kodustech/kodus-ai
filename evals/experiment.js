@@ -349,12 +349,14 @@ function measuredAlready(recorded, { phaseIds, model, runs, evalsTree }, blobsOf
     }) || null;
 }
 
-// One run, one name: the branch (or --name), the candidate commit and when the
-// run started (UTC, to the second), taken once for all its rows. A later run
-// writes rows of its own instead of overwriting some of this run's and leaving
-// the rest, even at the same commit (a regression-only check on another model
-// after a full run would otherwise mix two runs in one experiment).
-const runName = (branchOrName, head, startedAt) => `${slug(branchOrName)}-${String(head).slice(0, 9)}-${startedAt.toISOString().replace(/\D/g, '').slice(0, 14)}`;
+// One run, one name: the branch (or --name), the candidate commit, when the run
+// started (UTC, to the second) and a random suffix, taken once for all its rows.
+// A later run writes rows of its own instead of overwriting some of this run's
+// and leaving the rest, even at the same commit and second (a regression-only
+// check on another model after a full run would otherwise mix two runs in one
+// experiment).
+const runName = (branchOrName, head, startedAt, nonce = crypto.randomBytes(3).toString('hex')) =>
+    `${slug(branchOrName)}-${String(head).slice(0, 9)}-${startedAt.toISOString().replace(/\D/g, '').slice(0, 14)}-${nonce}`;
 
 async function main() {
     const args = parseArgs(process.argv.slice(2));
