@@ -440,7 +440,7 @@ jobs:
         name: Tier-0 model benchmark
         needs: [ build_push_and_open_pr, detect-engine-change ]
         # DISABLED: superseded by the replay evals (code-review-evals-nightly.yml
-        # for quality, code-review-evals-tier0.yml per model), which run the same
+        # for quality, code-review-evals-weekly.yml per model), which run the same
         # engine via deterministic tool replay without a deploy. The live benchmark stays callable via workflow_dispatch
         # as a fallback; this auto-trigger is gated off (set back to the condition
         # below to re-enable).

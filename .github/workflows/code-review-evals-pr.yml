@@ -10,8 +10,8 @@ name: "Evals: wiring smoke (PR)"
 # suite was eventually switched off.
 #
 # Quality is not measured on PRs. It is measured by:
-#   code-review-evals-nightly.yml  DeepSeek on 30 PRs, nightly, when the engine changed
-#   code-review-evals-tier0.yml    one review per tier-0 model, Friday with the release train
+#   code-review-evals-nightly.yml  DeepSeek on the controlled set, nightly, when the engine changed
+#   code-review-evals-weekly.yml   every tier-0 model's controlled set and DeepSeek's full set, Friday with the release train
 #
 # Secrets: none. Safe for fork PRs.
 
@@ -32,7 +32,20 @@ on:
             - "package.json"
             - "pnpm-lock.yaml"
             - "tsconfig*.json"
+            # The shipped defaults (writing guidelines): read by production's
+            # resolveWritingGuidelines, which evals/format runs.
+            - "default-kodus-config.yml"
+            # The mcp-manager's Kodus MCP tool list and registry: the
+            # connection the conversation eval gives its agent.
+            - "apps/mcp-manager/package.json"
+            - "apps/mcp-manager/src/clients/kodusMCP/**"
+            - "apps/mcp-manager/src/config/managed-mcp-servers.json"
+            - "apps/mcp-manager/src/modules/providers/interfaces/**"
             - ".github/workflows/code-review-evals-*.yml"
+            # What the review's sandbox finds on the runner, at the worker
+            # image's versions (bun, kodus-graph).
+            - ".github/actions/eval-sandbox/**"
+            - "docker/Dockerfile"
     workflow_dispatch:
 
 concurrency:
@@ -53,6 +66,9 @@ jobs:
                   cache: "pnpm"
             - name: Install deps
               run: pnpm install --frozen-lockfile
+            # The finder and memories steps review a repository written for the
+            # eval on production's sandbox: no GitHub clone, no mirror cache.
+            - uses: ./.github/actions/eval-sandbox
             - name: Create environment.ts (gitignored EE config)
               run: |
                   cat <<'EOF' > libs/ee/configs/environment/environment.ts

@@ -2,25 +2,22 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { STAGES, GROUPS, PLUMBING } = require('./stages');
+const { STAGES, GROUPS, PLUMBING, unitSpecs } = require('./stages');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { wiringRows, nightlyRows, READERS, catalogPath, usageMeta } = require('./stage-signals');
+const { testRows, nightlyRows, weeklyRows, weeklyTestRows, routeOf, READERS, catalogPath, usageMeta } = require('./stage-signals');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { costUpperBound, catalogIdFor } = require('./investigation/nightly-compare');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { loadCatalog, catalogProblems } = require('./shared/eval-result');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { tier0 } = require('./shared/tier0-models');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { fridayKeys, tier0Signal, FEW_CASES } = require('./tier0-smoke');
 
-type Stage = { id: string; name: string; group: string; eval: string | null; model: string; wiring: string[]; pipeline: string[] | null; nightly?: string; friday?: string; byHand?: string[] };
-type Row = { name: string; status: string; value: number | null; meta: Record<string, unknown> };
+type Test = { kind: string; name: string; specs?: string[]; spec?: string; wiring?: string[]; weekly?: string[]; scenario?: string; signal?: string };
+type Stage = { id: string; name: string; group: string; short: string; does: string; pipeline: string[] | null; tests: Test[]; eval: { path: string; nightly: string; sets: { controlled: string; full: string | null } } | null; note?: string };
+type Row = { name: string; status: string; value: number | null; meta: Record<string, any> };
 
 // Steps of evals/wiring-smoke.js that check the harness, not a review stage.
 const NOT_A_STAGE = ['preflight'];
 
-const wiringSteps = Array.from(
+const smokeSteps = Array.from(
     fs.readFileSync(path.join(__dirname, 'wiring-smoke.js'), 'utf8').matchAll(/\bname: '([a-z-]+)'/g),
     (m) => m[1],
 );
@@ -34,36 +31,58 @@ const pipelineStages = Array.from(
 );
 
 const allOk = (steps: string[]) => steps.map((step) => ({ step, ok: true, problem: null, ms: 1, calls: 1 }));
+// A jest report where every unit spec of every stage passed (one test each).
+const jestOk = (specs: string[] = unitSpecs()) => ({
+    testResults: specs.map((spec) => ({ name: path.join('/work/kodus-ai', spec), status: 'passed', assertionResults: [{ status: 'passed', fullName: `${spec} works` }] })),
+});
+const stages = STAGES as Stage[];
 
 describe('evals/stages.js', () => {
     it('gives every stage a unique id that makes a valid signal name', () => {
-        const ids = STAGES.map((s: Stage) => s.id);
+        const ids = stages.map((s) => s.id);
         expect(new Set(ids).size).toBe(ids.length);
-        for (const id of ids) expect(`evals.stage.${id}`).toMatch(/^[a-z0-9_-]+(\.[a-z0-9_-]+)+$/);
+        for (const id of ids) expect(`tests.stage.${id}`).toMatch(/^[a-z0-9_-]+(\.[a-z0-9_-]+)+$/);
     });
 
-    // The panel lists stages by group, one line each.
-    it('gives every stage a short name and a group, with each group in one run', () => {
-        for (const stage of STAGES as Stage[]) {
+    // The panel lists stages by group, one line each, and says what each does.
+    it('gives every stage a short name, a group with each group in one run, and what it does', () => {
+        for (const stage of stages) {
             expect(stage.name.length).toBeGreaterThan(0);
             expect(stage.name.length).toBeLessThanOrEqual(20);
             expect(GROUPS).toContain(stage.group);
+            expect([stage.id, stage.does.length > 20]).toEqual([stage.id, true]);
+            expect([stage.id, stage.short.length > 0 && stage.short.length <= 44]).toEqual([stage.id, true]);
         }
-        const runs = (STAGES as Stage[]).map((s) => s.group).filter((g, i, all) => g !== all[i - 1]);
+        const runs = stages.map((s) => s.group).filter((g, i, all) => g !== all[i - 1]);
         expect(runs).toEqual(GROUPS);
     });
 
-    // A new eval added to the wiring smoke without a stage would never reach the panel.
-    it('claims every wiring smoke step, and names only steps that exist', () => {
-        const claimed = STAGES.flatMap((s: Stage) => s.wiring);
-        expect(wiringSteps.length).toBeGreaterThan(5);
-        expect(wiringSteps.filter((step) => !claimed.includes(step) && !NOT_A_STAGE.includes(step))).toEqual([]);
-        expect(claimed.filter((step: string) => !wiringSteps.includes(step))).toEqual([]);
+    // Every step shows on the panel with what tests it, even when no eval measures it.
+    it('gives every stage at least one test, each of a known kind with what it runs', () => {
+        for (const stage of stages) {
+            expect([stage.id, stage.tests.length > 0]).toEqual([stage.id, true]);
+            for (const t of stage.tests) {
+                expect(['unit', 'contract', 'e2e']).toContain(t.kind);
+                expect(t.name.length).toBeGreaterThan(0);
+                if (t.kind === 'unit') expect([stage.id, (t.specs || []).length > 0]).toEqual([stage.id, true]);
+                if (t.kind === 'contract') expect([stage.id, Boolean(t.wiring?.length || t.weekly?.length || (t.signal && t.spec && fs.existsSync(path.join(__dirname, '..', t.spec))))]).toEqual([stage.id, true]);
+                if (t.kind === 'e2e') expect([stage.id, fs.existsSync(path.join(__dirname, '..', t.scenario as string)), t.signal]).toEqual([stage.id, true, expect.stringMatching(/^e2e\./)]);
+            }
+        }
+    });
+
+    it('names unit specs that exist, and wiring smoke steps that exist', () => {
+        expect(unitSpecs().filter((f: string) => !fs.existsSync(path.join(__dirname, '..', f)))).toEqual([]);
+        const claimed = stages.flatMap((s) => s.tests.flatMap((t) => t.wiring || []));
+        expect(smokeSteps.length).toBeGreaterThan(5);
+        // A new eval added to the wiring smoke without a stage would never reach the panel.
+        expect(smokeSteps.filter((step) => !claimed.includes(step) && !NOT_A_STAGE.includes(step))).toEqual([]);
+        expect(claimed.filter((step) => !smokeSteps.includes(step))).toEqual([]);
     });
 
     // Adding a pipeline stage means saying how it is tested: a stage here, or plumbing.
     it('places every review pipeline stage in a stage or in PLUMBING, and nowhere else', () => {
-        const staged = STAGES.flatMap((s: Stage) => s.pipeline || []);
+        const staged = stages.flatMap((s) => s.pipeline || []);
         const plumbing = Object.keys(PLUMBING);
         expect(pipelineStages.length).toBeGreaterThan(10);
         expect(pipelineStages.filter((c) => !staged.includes(c) && !plumbing.includes(c))).toEqual([]);
@@ -71,119 +90,110 @@ describe('evals/stages.js', () => {
         expect(plumbing.filter((c) => staged.includes(c))).toEqual([]);
     });
 
-    // The panel reads a Friday stage's outcome from this key of evals.tier0.<model>'s meta.
-    it('names, for a Friday stage, a key the Friday check writes', () => {
-        const workflow = fs.readFileSync(path.join(__dirname, '../.github/workflows/code-review-evals-tier0.yml'), 'utf8');
-        expect(workflow).toContain('tier0Signal(');
-        const keys = (STAGES as Stage[]).filter((s) => s.friday).map((s) => s.friday as string);
-        expect(keys.sort()).toEqual([...fridayKeys()].sort());
-        const result = { status: 'pass', prSummary: { status: 'pass' }, evals: FEW_CASES.map((p: { key: string }) => ({ key: p.key, status: 'pass' })) };
-        expect(Object.keys(tier0Signal(result).meta)).toEqual(expect.arrayContaining(keys));
-    });
-
-    // The nightly asks whether a change broke a stage on one model; Friday asks
-    // whether the same stages still run on every tier-0 model.
-    it('runs on Friday every stage the nightly measures', () => {
-        const missing = (STAGES as Stage[]).filter((s) => s.nightly && !s.friday).map((s) => s.id);
-        expect(missing).toEqual([]);
-    });
-
     // The panel's "What it tests": every eval lists its cases, each with what it checks.
-    it('gives every stage with an eval a catalog of its cases, read from its own data', () => {
-        for (const stage of (STAGES as Stage[]).filter((s) => s.eval)) {
+    it('gives every eval a folder, a reader and a catalog of its cases read from its own data', () => {
+        for (const stage of stages.filter((s) => s.eval)) {
+            const e = stage.eval!;
+            expect([stage.id, fs.existsSync(path.join(__dirname, '..', e.path))]).toEqual([stage.id, true]);
+            expect(Object.keys(READERS)).toContain(e.nightly);
+            expect([stage.id, typeof e.sets.controlled]).toEqual([stage.id, 'string']);
             const file = catalogPath(stage);
-            expect([stage.id, fs.existsSync(path.join(__dirname, '..', file))]).toEqual([stage.id, true]);
+            expect([stage.id, fs.existsSync(path.join(__dirname, '..', file.split('#')[0]))]).toEqual([stage.id, true]);
             expect([stage.id, catalogProblems(loadCatalog(file))]).toEqual([stage.id, []]);
         }
-        const posting = wiringRows(allOk(wiringSteps)).find((r: Row) => r.name === 'evals.stage.posting');
-        expect(posting?.meta.case_catalog).toBeUndefined();
     });
 
-    it('points every eval at a path that exists, and only "none" at no eval', () => {
-        for (const stage of STAGES as Stage[]) {
-            if (stage.model === 'none') expect(stage.eval).toBeNull();
-            else expect(fs.existsSync(path.join(__dirname, '..', stage.eval as string))).toBe(true);
-            for (const evalPath of stage.byHand ?? []) expect(fs.existsSync(path.join(__dirname, '..', evalPath))).toBe(true);
+    it('says why a stage has no eval, when a test stands in for one', () => {
+        for (const id of ['parse', 'anchoring', 'pr-summary', 'analyzers']) {
+            const stage = stages.find((s) => s.id === id)!;
+            expect([id, stage.eval, Boolean(stage.note)]).toEqual([id, null, true]);
         }
     });
 });
 
-describe('stage-signals', () => {
-    const scheduled = (STAGES as Stage[]).filter((s) => !s.nightly && s.wiring.length);
-
-    it('reports every non-nightly stage from the wiring smoke, green when its steps pass', () => {
-        const rows: Row[] = wiringRows(allOk(wiringSteps));
-        expect(rows.map((r) => r.name).sort()).toEqual(
-            (STAGES as Stage[]).filter((s) => !s.nightly).map((s) => `evals.stage.${s.id}`).sort(),
-        );
-        for (const stage of scheduled) expect(rows.find((r) => r.name === `evals.stage.${stage.id}`)?.status).toBe('green');
+describe('stage-signals: tests.stage rows', () => {
+    it('writes one row per stage, green when its unit specs and contract steps pass', () => {
+        const rows: Row[] = testRows({ wiring: allOk(smokeSteps), jest: jestOk() });
+        expect(rows.map((r) => r.name).sort()).toEqual(stages.map((s) => `tests.stage.${s.id}`).sort());
+        for (const row of rows) expect([row.name, row.status]).toEqual([row.name, 'green']);
     });
 
-    it('marks a stage with no scheduled eval as skipped, with its note', () => {
-        const rows: Row[] = wiringRows(allOk(wiringSteps));
-        const posting = rows.find((r) => r.name === 'evals.stage.posting');
-        expect(posting?.status).toBe('skipped');
-        expect(posting?.meta.note).toBe('no eval for this stage');
-        expect(posting?.meta.order).toBe(STAGES.findIndex((s: Stage) => s.id === 'posting') + 1);
-        expect(posting?.meta).toMatchObject({ name: 'Posting', group: 'On the PR' });
+    it('carries what the stage is: what it does, its tests with their outcome, and its eval', () => {
+        const rows: Row[] = testRows({ wiring: allOk(smokeSteps), jest: jestOk() });
+        const finder = rows.find((r) => r.name === 'tests.stage.finder')!;
+        expect(finder.meta).toMatchObject({ stage: 'finder', name: 'Finder', group: 'The agents, side by side', order: stages.findIndex((s) => s.id === 'finder') + 1 });
+        expect(finder.meta.does).toEqual(expect.stringContaining('looks for bugs'));
+        expect(finder.meta.tests.map((t: { kind: string; status: string }) => [t.kind, t.status])).toEqual([['unit', 'pass'], ['contract', 'pass'], ['unit', 'pass'], ['contract', 'pass'], ['contract', 'elsewhere']]);
+        expect(finder.meta.tests[4]).toMatchObject({ signal: 'contract.api', spec: 'libs/llm/trial-model-availability.contract.spec.ts' });
+        expect(finder.meta.tests[0]).toMatchObject({ passed: 5, total: 5 });
+        expect(finder.meta.eval).toMatchObject({ path: 'evals/investigation', metric: 'of known bugs found', question: expect.stringMatching(/\?/) });
+        expect(finder.meta.case_catalog.length).toBe(15);
+        // A stage tested only: no eval, its note, no catalog.
+        const parse = rows.find((r) => r.name === 'tests.stage.parse')!;
+        expect(parse.meta.eval).toBeNull();
+        expect(parse.meta.note).toEqual(expect.stringContaining('Tests only'));
+        expect(parse.meta.case_catalog).toBeUndefined();
+        // Tests another job reports keep their kind and say who reports them.
+        const summary = rows.find((r) => r.name === 'tests.stage.pr-summary')!;
+        expect(summary.meta.tests.map((t: { status: string }) => t.status)).toEqual(['pass', 'pass', 'weekly']);
+        const files = rows.find((r) => r.name === 'tests.stage.rules-from-files')!;
+        expect(files.meta.tests[1]).toMatchObject({ kind: 'e2e', status: 'elsewhere', signal: 'e2e.selfhosted.matrix' });
     });
 
-    it('turns a failed step red and a step that did not run into infra', () => {
-        const results = allOk(wiringSteps.filter((step) => step !== 'anchoring')).map((r) =>
-            r.step === 'dedup-engine' ? { ...r, ok: false, problem: 'exit 1' } : r,
-        );
-        const rows: Row[] = wiringRows(results);
-        const dedup = rows.find((r) => r.name === 'evals.stage.dedup');
-        expect(dedup?.status).toBe('red');
-        expect(dedup?.meta.reason).toBe('dedup-engine: exit 1');
-        expect(rows.find((r) => r.name === 'evals.stage.anchoring')?.status).toBe('infra');
-        expect(wiringRows(null).find((r: Row) => r.name === 'evals.stage.dedup')?.status).toBe('infra');
+    it('turns a failing unit test or contract step red, naming it, and one that did not run into infra', () => {
+        const spec = 'libs/code-review/infrastructure/agents/core/finder.agent.spec.ts';
+        const jest = jestOk();
+        const at = jest.testResults.findIndex((t) => t.name.endsWith(spec));
+        jest.testResults[at] = { ...jest.testResults[at], status: 'failed', assertionResults: [{ status: 'failed', fullName: 'finder keeps its tools' }] };
+        const red: Row = testRows({ wiring: allOk(smokeSteps), jest }).find((r: Row) => r.name === 'tests.stage.finder');
+        expect(red.status).toBe('red');
+        expect(red.meta.tests[0]).toMatchObject({ status: 'fail', failures: [{ spec, test: 'finder keeps its tools' }] });
+        expect(red.meta.reason).toEqual(expect.stringContaining('finder keeps its tools'));
+
+        const failedStep = allOk(smokeSteps).map((r) => (r.step === 'finder-recall' ? { ...r, ok: false, problem: 'exit 1' } : r));
+        const step: Row = testRows({ wiring: failedStep, jest: jestOk() }).find((r: Row) => r.name === 'tests.stage.finder');
+        expect(step.status).toBe('red');
+        expect(step.meta.tests[1]).toMatchObject({ status: 'fail', problem: 'finder-recall: exit 1' });
+
+        const noJest: Row = testRows({ wiring: allOk(smokeSteps), jest: null }).find((r: Row) => r.name === 'tests.stage.finder');
+        expect(noJest.status).toBe('infra');
+        expect(noJest.meta.tests[0]).toMatchObject({ status: 'not-run' });
+        const missingStep: Row = testRows({ wiring: allOk(smokeSteps.filter((s) => s !== 'finder-recall')), jest: jestOk() }).find((r: Row) => r.name === 'tests.stage.finder');
+        expect(missingStep.status).toBe('infra');
     });
 
-    it('turns every wired stage into infra when the smoke fails a check no stage owns', () => {
-        const results = [...allOk(wiringSteps), { step: 'pr-paths-filter', ok: false, problem: 'incomplete trace', ms: 0, calls: 0 }];
-        const rows: Row[] = wiringRows(results);
-        for (const stage of scheduled) expect(rows.find((r) => r.name === `evals.stage.${stage.id}`)?.status).toBe('infra');
-        expect(rows.find((r) => r.name === 'evals.stage.dedup')?.meta).toMatchObject({
-            reason: 'wiring smoke failed: pr-paths-filter: incomplete trace',
-            harness: 'wiring smoke failed: pr-paths-filter: incomplete trace',
-        });
-        expect(rows.find((r) => r.name === 'evals.stage.posting')?.status).toBe('skipped');
-        expect(wiringRows([...allOk(wiringSteps), { step: 'pr-paths-filter', ok: true, problem: null }]).find((r: Row) => r.name === 'evals.stage.dedup')?.status).toBe('green');
+    it('turns every stage into infra when the smoke fails a check no stage owns, keeping a red one red', () => {
+        const results = [...allOk(smokeSteps), { step: 'pr-paths-filter', ok: false, problem: 'incomplete trace', ms: 0, calls: 0 }];
+        const rows: Row[] = testRows({ wiring: results, jest: jestOk() });
+        expect(rows.find((r) => r.name === 'tests.stage.dedup')).toMatchObject({ status: 'infra', meta: { harness: 'wiring smoke failed: pr-paths-filter: incomplete trace' } });
+        const both = results.map((r) => (r.step === 'funnel-dedup' ? { ...r, ok: false, problem: 'exit 1' } : r));
+        expect(testRows({ wiring: both, jest: jestOk() }).find((r: Row) => r.name === 'tests.stage.dedup')?.status).toBe('red');
     });
+});
 
-    it("keeps a stage's own failure red on a night the smoke also failed its own check", () => {
-        const results = [
-            ...allOk(wiringSteps).map((r) => (r.step === 'dedup-engine' ? { ...r, ok: false, problem: 'exit 1' } : r)),
-            { step: 'pr-paths-filter', ok: false, problem: 'incomplete trace', ms: 0, calls: 0 },
-        ];
-        const rows: Row[] = wiringRows(results);
-        const dedup = rows.find((r) => r.name === 'evals.stage.dedup');
-        expect(dedup?.status).toBe('red');
-        expect(dedup?.meta).toMatchObject({ reason: 'dedup-engine: exit 1', failed: ['dedup-engine'], harness: 'wiring smoke failed: pr-paths-filter: incomplete trace' });
-        expect(rows.find((r) => r.name === 'evals.stage.anchoring')?.status).toBe('infra');
-    });
-
+describe('stage-signals: eval rows', () => {
     it('reports the finder from the nightly: recall against the floor, status from the verdict', () => {
         const nightly = {
             model: 'deepseek-v4-flash@fireworks',
-            cases: 30,
+            cases: 15,
             unmeasured: 0,
             metrics: { recall_mean: 0.4, precision_mean: 0.5 },
             gate: { checks: [{ name: 'recall_mean', floor: 0.24 }], observed: { recall_mean: 0.357 } },
         };
         const [finder]: Row[] = nightlyRows(nightly, 'regression');
         expect(finder).toMatchObject({ name: 'evals.stage.finder', status: 'red', value: 0.4 });
-        expect(finder.meta).toMatchObject({ floor: 0.24, baseline: 0.357, precision: 0.5 });
+        expect(finder.meta).toMatchObject({ floor: 0.24, baseline: 0.357, precision: 0.5, tier: 'nightly', set: 'controlled', stage: 'finder' });
+        expect(finder.meta.eval).toMatchObject({ path: 'evals/investigation' });
         expect(nightlyRows(nightly, 'pass')[0].status).toBe('green');
         expect(nightlyRows(null, 'infra')[0]).toMatchObject({ status: 'infra', value: null });
+        // A stage with no eval has no eval row.
+        expect(nightlyRows({ metric: { value: 1 } }, 'pass', 'parse')).toEqual([]);
     });
 
     it('reports kody-rules from its own result: occurrence recall against its floor, with specificity and its cases', () => {
         // Made-up floors and levels: the real ones live only in evals/kody-rules/kody-targets.json.
         const result = {
             eval: 'kody-rules',
-            question: 'Does the Kody Rules agent flag every place a rule is broken?',
             model: 'deepseek-v4-flash@fireworks',
             runs: 2,
             metric: { name: 'occurrence recall', value: 0.7, floor: 0.8, baseline: 0.93 },
@@ -196,20 +206,54 @@ describe('stage-signals', () => {
         };
         const [row]: Row[] = nightlyRows(result, 'regression', 'kody-rules');
         expect(row).toMatchObject({ name: 'evals.stage.kody-rules', status: 'red', value: 0.7 });
-        expect(row.meta).toMatchObject({ floor: 0.8, baseline: 0.93, specificity: 1, specificity_floor: 0.9, cases: 1, metric: 'of known rule violations flagged' });
+        expect(row.meta).toMatchObject({ floor: 0.8, baseline: 0.93, specificity: 1, specificity_floor: 0.9, cases: 1 });
+        expect(row.meta.eval).toMatchObject({ metric: 'of known rule violations flagged', caveat: expect.stringContaining('mechanical rules only') });
         expect(row.meta.case_results).toEqual([{ id: 'n8n#1::no-console', checks: 'Flags every line that breaks "No console" in n8n#1', hits: 3, total: 4, detail: [{ what: 'a.ts:3', ok: false }] }]);
-        expect(row.meta.caveat).toEqual(expect.stringContaining('mechanical rules only'));
         expect(nightlyRows(null, 'infra', 'kody-rules')[0]).toMatchObject({ status: 'infra', value: null });
         expect(nightlyRows(result, 'pass', 'finder')[0]).toMatchObject({ status: 'infra' });
     });
 
-    it('reports what the model calls cost: per review of a case, call-time percentiles, no per-call times', () => {
+    it('reports a weekly measure per stage, set and model, its id folded into the name like report-signal does', () => {
+        const result = { model: 'kimi-k2.7-code@openrouter', metric: { value: 0.9, floor: 0.85, baseline: 0.93 }, runs: 1, cases: [{ id: 'a', checks: 'Checks a', hits: 1, total: 1 }], tokens: { in: 1, out: 1 } };
+        const [row]: Row[] = weeklyRows(result, 'pass', { stageId: 'conversation', model: 'kimi-k2.7-code@openrouter', set: 'controlled' });
+        expect(row).toMatchObject({ name: 'evals.weekly.conversation.controlled.kimi-k2.7-code_openrouter', status: 'green', value: 0.9 });
+        expect(row.meta).toMatchObject({ stage: 'conversation', tier: 'weekly', set: 'controlled', model: 'kimi-k2.7-code@openrouter', floor: 0.85, verdict: 'pass' });
+        expect(row.meta.case_catalog).toBeUndefined();
+        expect(weeklyRows(result, 'ungated', { stageId: 'conversation', model: 'm', set: 'controlled' })[0].status).toBe('yellow');
+        // A model whose targets say why it has no floor carries the reason to the panel.
+        const unfloored = { ...result, model: 'gpt-6-sol', metric: { ...result.metric, floor: null } };
+        expect(weeklyRows(unfloored, 'ungated', { stageId: 'thread-memory', model: 'gpt-6-sol', set: 'controlled' })[0].meta.no_floor).toEqual(expect.stringContaining('wrote nothing'));
+        expect(weeklyRows(result, 'pass', { stageId: 'conversation', model: 'kimi-k2.7-code@openrouter', set: 'controlled' })[0].meta.no_floor).toBeUndefined();
+        expect(weeklyRows(null, 'infra', { stageId: 'finder', model: 'm', set: 'full' })[0]).toMatchObject({ name: 'evals.weekly.finder.full.m', status: 'infra' });
+        expect(weeklyRows(result, 'pass', { stageId: 'parse', model: 'm', set: 'controlled' })).toEqual([]);
+    });
+
+    it('says which provider serves each model, on the BYOK route every eval takes', () => {
+        expect(routeOf('deepseek-v4-flash@fireworks')).toEqual({ provider: 'Fireworks', route: 'byok' });
+        expect(routeOf('kimi-k2.7-code@openrouter')).toEqual({ provider: 'OpenRouter → moonshotai', route: 'byok' });
+        expect(routeOf('gpt-6-sol')).toEqual({ provider: 'OpenAI', route: 'byok' });
+        expect(routeOf('claude-sonnet-5-5')).toEqual({ provider: 'Anthropic', route: 'byok' });
+        expect(routeOf('not-a-tier0-model')).toBeNull();
+        const [row]: Row[] = weeklyRows({ model: 'gpt-6-sol', metric: { value: 1, floor: 0.9 }, cases: [] }, 'pass', { stageId: 'conversation', model: 'gpt-6-sol', set: 'controlled' });
+        expect(row.meta).toMatchObject({ provider: 'OpenAI', route: 'byok' });
+    });
+
+    it('reports a weekly contract test per model: green on exit 0, red on 1, infra otherwise', () => {
+        const at = (exit: number) => weeklyTestRows({ stageId: 'pr-summary', model: 'gpt-6-sol', exit, problem: exit ? `exit ${exit}` : null })[0];
+        expect(at(0)).toMatchObject({ name: 'tests.weekly.pr-summary.gpt-6-sol', status: 'green', meta: { stage: 'pr-summary', model: 'gpt-6-sol', tier: 'weekly', kind: 'contract' } });
+        expect(at(1)).toMatchObject({ status: 'red', meta: { reason: 'exit 1' } });
+        expect(at(2).status).toBe('infra');
+        expect(weeklyTestRows({ stageId: 'finder', model: 'm', exit: 0 })).toEqual([]);
+    });
+
+    it('reports what the model calls cost: per review of a case, cache hits, call-time percentiles, no per-call times', () => {
         const tokens = { in: 4000, out: 400, cacheRead: 1000, cacheWrite: 0, calls: 8, ms: 8000, callMs: [500, 700, 800, 900, 1000, 1100, 1300, 1700] };
         const usage = usageMeta(tokens, 4, 'eval-fake');
         expect(usage).toEqual({
-            calls: 8, in: 4000, out: 400, cacheRead: 1000, cacheWrite: 0, ms: 8000, p50Ms: 900, p95Ms: 1700, reviews: 4,
+            calls: 8, in: 4000, out: 400, cacheRead: 1000, cacheWrite: 0, cacheHit: 0.25, ms: 8000, p50Ms: 900, p95Ms: 1700, reviews: 4,
             perCase: { calls: 2, in: 1000, out: 100, cacheRead: 250, cacheWrite: 0, ms: 2000 },
             usdPerCaseMax: null,
+            efforts: null,
         });
         // Priced only from the Kodus catalog, every input token at the full rate.
         const priced = usageMeta(tokens, 4, 'deepseek-v4-flash@fireworks');
@@ -258,25 +302,11 @@ describe('stage-signals', () => {
         expect(nightlyRows(confirmed, 'pass')[0].meta.case_results[0]).toMatchObject({ hits: 2, total: 2 });
     });
 
-    it('gives every stage whose eval has a README the question that README answers', () => {
-        const rows: Row[] = wiringRows(allOk(wiringSteps));
-        for (const stage of STAGES as Stage[]) {
-            if (!stage.eval || !fs.existsSync(path.join(__dirname, '..', stage.eval, 'README.md'))) continue;
-            const meta = stage.nightly ? nightlyRows({ metrics: { recall_mean: 0.4 }, metric: { value: 0.9 } }, 'pass', stage.id)[0].meta : rows.find((r) => r.name === `evals.stage.${stage.id}`)?.meta;
-            expect([stage.id, meta?.question]).toEqual([stage.id, expect.stringMatching(/\?/)]);
+    it('gives every eval the question its README answers', () => {
+        const rows: Row[] = testRows({ wiring: allOk(smokeSteps), jest: jestOk() });
+        for (const stage of stages.filter((s) => s.eval)) {
+            const meta = rows.find((r) => r.name === `tests.stage.${stage.id}`)?.meta;
+            expect([stage.id, meta?.eval?.question]).toEqual([stage.id, expect.stringMatching(/\?/)]);
         }
-    });
-
-    it('has a reader for every nightly-measured stage', () => {
-        for (const stage of (STAGES as Stage[]).filter((s) => s.nightly)) expect(Object.keys(READERS)).toContain(stage.nightly);
-    });
-
-    it('lists the tier-0 models a Friday stage runs on, and no models for any other stage', () => {
-        const nightly = { model: 'deepseek-v4-flash@fireworks', metrics: { recall_mean: 0.4 }, gate: {} };
-        expect(nightlyRows(nightly, 'pass')[0].meta.friday).toEqual({ models: tier0(), result: 'review' });
-        const shared = { metric: { value: 1 }, cases: [] };
-        expect(nightlyRows(shared, 'pass', 'pr-summary')[0].meta.friday).toEqual({ models: tier0(), result: 'pr_summary' });
-        const rows: Row[] = wiringRows(allOk(wiringSteps));
-        expect(rows.find((r) => r.name === 'evals.stage.dedup')?.meta.friday).toBeUndefined();
     });
 });

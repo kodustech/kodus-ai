@@ -9,7 +9,8 @@
  */
 
 const EXECUTION_MODES = new Set(['replay', 'live']);
-const ACCESS_PATHS = new Set(['api', 'subscription', 'local', 'unknown']);
+// byok / managed: the finder eval's production routes (evals/investigation/run-recall.js runMetaOf).
+const ACCESS_PATHS = new Set(['api', 'subscription', 'local', 'unknown', 'byok', 'managed']);
 const SEVERITIES = new Set(['critical', 'high', 'medium', 'low', 'info']);
 const REASONING_CONFIGS = new Set(['vendor-default', 'explicit', 'disabled']);
 

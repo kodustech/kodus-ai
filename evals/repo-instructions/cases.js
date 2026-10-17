@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // Builds the repo-instructions cases, in memory, from the committed kody-rules
 // GitHub cases (evals/kody-rules/github-cases.json): real merged PRs whose
-// violations of a convention are enumerated line by line.
+// violations of a convention are enumerated line by line, with the PR as the
+// platform returns it (`pr`), which production's review stage reads.
 //
-// Each case gets a CLAUDE.md that states the convention the PR breaks, plus a
-// decoy instruction the diff never touches. The ground truth is the enumerated
-// violation sites; any finding citing the decoy is a false positive. The
-// instruction text is written here; the diffs, files and violation sites are
-// real. Built at run time so the 1.6 MB of diffs and replay are not copied.
+// Each case's target branch gets a CLAUDE.md that states the convention the PR
+// breaks, plus a decoy instruction the diff never touches. The ground truth is
+// the enumerated violation sites; any finding citing the decoy is a false
+// positive. The instruction text is written here; the PR, its files and the
+// violation sites are real. A case without recorded PR data is left out.
 const fs = require('fs');
 const path = require('path');
 
@@ -31,18 +32,21 @@ function claudeMd(rule) {
 
 function buildCases() {
     const source = JSON.parse(fs.readFileSync(SOURCE, 'utf8'));
-    return source.map((c) => ({
+    return source.filter((c) => c.pr).map((c) => ({
         caseId: `repo-instructions:${c.caseId}`,
         source: c.source,
         convention: c.rule.rule,
         decoy: DECOY,
         vars: {
             caseId: `repo-instructions:${c.caseId}`,
-            prTitle: c.title,
-            prBody: c.body || '',
-            maxSteps: c.maxSteps,
-            changedFiles: c.realChangedFiles,
-            toolReplay: c.toolReplay,
+            prTitle: c.pr.title || c.title,
+            prBody: c.pr.body || c.body || '',
+            repositoryFullName: c.pr.repositoryFullName,
+            prNumber: c.pr.number,
+            prHead: { ref: c.pr.headRef, sha: c.pr.headSha },
+            prBase: { ref: c.pr.baseRef, sha: c.pr.baseSha },
+            prFiles: c.pr.files,
+            prCommits: c.pr.commits,
             repoInstructions: {
                 files: [
                     {

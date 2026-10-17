@@ -3,12 +3,13 @@
 // break the repository's CLAUDE.md, quoting it, without inventing violations
 // and without the block leaking into runs where it is off?
 //
-// Runs the live generalist through the same deterministic tool replay as
-// finder-recall (evals/investigation/agent-provider.js), on cases built by
-// ./cases.js. Scoring is deterministic: ground truth is the enumerated
+// Runs production's review stage the way finder-recall does
+// (evals/investigation/agent-provider.js), on cases built by ./cases.js: with
+// the setting on, the team turned it on and the PR's target branch holds the
+// case's CLAUDE.md. Scoring is deterministic: ground truth is the enumerated
 // violation sites, no judge.
 //
-//   node evals/repo-instructions/run.js --model=<tier0 id> [--arm=both|on|off] [--limit=N] [--concurrency=N] [--output=path] [--gate]
+//   node evals/repo-instructions/run.js --model=<tier0 id> [--arm=both|on|off] [--cases=<id,id>] [--limit=N] [--concurrency=N] [--output=path] [--gate]
 //
 // Writes the shared result (evals/shared/eval-result.js): per case, the
 // violation sites the on arm reported, out of all of them. --gate fails below
@@ -31,7 +32,7 @@ const LINE_TOLERANCE = 2;
 const INFRA_BUDGET = 0.05;
 
 function parseArgs(argv) {
-    const out = { model: 'gpt-5.4', arm: 'both', limit: null, concurrency: 4, output: '', gate: false };
+    const out = { model: 'gpt-5.4', arm: 'both', cases: [], limit: null, concurrency: 4, output: '', gate: false };
     for (const arg of argv.slice(2)) {
         if (arg === '--gate') {
             out.gate = true;
@@ -45,10 +46,11 @@ function parseArgs(argv) {
         if (m[1] === 'model') out.model = m[2];
         else if (m[1] === 'arm') out.arm = m[2];
         else if (m[1] === 'limit') out.limit = Number(m[2]);
+        else if (m[1] === 'cases') out.cases = m[2].split(',').map((id) => id.trim().replace(/^repo-instructions:/, '')).filter(Boolean);
         else if (m[1] === 'output') out.output = m[2];
         else if (m[1] === 'concurrency') out.concurrency = Math.max(1, Number(m[2]) || 1);
         else {
-            console.error(`unknown flag --${m[1]}. Known: --model --arm --limit --concurrency --output --gate`);
+            console.error(`unknown flag --${m[1]}. Known: --model --arm --cases --limit --concurrency --output --gate`);
             process.exit(2);
         }
     }
@@ -149,6 +151,8 @@ async function main() {
     const args = parseArgs(process.argv);
     countTokens();
     let cases = buildCases();
+    // --cases takes the Kody Rules case ids (evals/kody-rules/github-cases.json).
+    if (args.cases.length) cases = cases.filter((c) => args.cases.includes(c.caseId.replace(/^repo-instructions:/, '')));
     if (Number.isFinite(args.limit)) cases = cases.slice(0, args.limit);
     const arms = args.arm === 'both' ? ['on', 'off'] : [args.arm];
 

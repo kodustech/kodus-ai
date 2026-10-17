@@ -1,24 +1,23 @@
 #!/usr/bin/env node
-// format: drives the formatter the review stage calls, `formatSuggestionContent`
-// (libs/code-review/infrastructure/agents/engine/format-suggestion-content.ts),
-// on real findings (batches.json) under each production configuration
-// (variants.js), and checks what it ships (checks.js).
+// format: runs the review stage's own formatting step, `formatAndShapeSuggestions`
+// (libs/code-review/infrastructure/agents/engine/format-and-shape-suggestions.ts,
+// which AgentReviewStage calls), on real findings (batches.json) under each
+// production configuration (variants.js), and checks what it ships (checks.js).
 //
 //   node evals/format/run.js [--model=<id>] [--gate] [--output=<result.json>] [--limit=N] [--concurrency=N]
 //
-// What ships is what the stage posts: the formatted text, or the finder's own
-// text when the formatter returned none for that finding, then the stage's
-// deterministic shaping (agent-review.stage.ts, after formatSuggestionContent):
-// the impact-and-action fallback for an unformatted finding, the scaffolding
-// strip, and the shape (no code block, no opening sentence that restates the
-// title, two sentences unless the team wrote its own guideline). A provider
+// What ships is what that step leaves in each finding: the formatter's text, or
+// the finder's own when it returned none, then the shape the comment needs. The
+// team's guideline goes through production's resolveWritingGuidelines, as the
+// stage reads generation.main. The eval supplies only the findings and the
+// team's settings. A provider
 // refusal leaves the case unmeasured; a timeout or an unreadable answer ships
 // the local fallback, as in production, and is scored.
 //
-// Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/AGENTS.md).
+// Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/README.md).
 const fs = require('fs');
 const path = require('path');
-const { applyModelEnv } = require('../shared/tier0-models');
+const { orgRouteOrExit } = require('../shared/model-route');
 const { countTokens, tokensUsed, withCallErrors } = require('../shared/eval-kit');
 const { evalQuestion, resultProblems } = require('../shared/eval-result');
 const { VARIANTS } = require('./variants');
@@ -49,11 +48,15 @@ const cases = (() => {
 
 // libs/common/utils/crypto.ts reads API_CRYPTO_KEY at import time; CI has no .env.
 if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
-applyModelEnv(MODEL);
+// The org's model, routed as production routes it (evals/shared/model-route.js),
+// and the slot ValidateConfigStage writes into the review config
+// (codeReviewConfig.byokConfig), which AgentReviewStage hands the formatter.
+const ROUTE = orgRouteOrExit(MODEL);
+const { routeCodeReviewModel } = require('../../libs/code-review/pipeline/stages/route-code-review-model.ts');
+const FORMAT_SLOT = routeCodeReviewModel(ROUTE.storedConfig, {}).resolvedModelSlot;
 countTokens();
-const { formatSuggestionContent } = require('../../libs/code-review/infrastructure/agents/engine/format-suggestion-content.ts');
-const { impactAndActionFallback, stripReviewScaffolding } = require('../../libs/code-review/infrastructure/agents/engine/strip-review-scaffolding.ts');
-const { shapeSuggestionBodyWithReport } = require('../../libs/common/utils/codeManagement/suggestion-body-shape.ts');
+const { formatAndShapeSuggestions } = require('../../libs/code-review/infrastructure/agents/engine/format-and-shape-suggestions.ts');
+const { resolveWritingGuidelines } = require('../../libs/common/utils/writing-guidelines.ts');
 const { classifyLLMError, LlmErrorCategory } = require('../../libs/llm/error-classifier.ts');
 
 // The scripted model answers nothing usable, so what ships is the local
@@ -68,23 +71,27 @@ const REFUSED = new Set(['AUTH_INVALID', 'QUOTA_EXCEEDED', 'RATE_LIMIT', 'MODEL_
 async function runCase(c) {
     const batch = BATCHES[c.batch];
     const variant = VARIANTS[c.variant];
-    const { result: formatted, errors } = await withCallErrors(() =>
-        formatSuggestionContent(batch.findings, {
+    // The findings as the stage holds them, and the team's settings.
+    const suggestions = batch.findings.map((f) => ({
+        oneSentenceSummary: f.title,
+        suggestionContent: f.suggestionContent,
+        existingCode: f.existingCode,
+        improvedCode: f.improvedCode,
+        relevantFile: f.relevantFile,
+        language: f.language,
+    }));
+    const { errors } = await withCallErrors(() =>
+        formatAndShapeSuggestions(suggestions, {
+            writingGuidelines: resolveWritingGuidelines(variant.customWritingGuidelines),
             languageResultPrompt: variant.languageResultPrompt,
-            customWritingGuidelines: variant.customWritingGuidelines,
             organizationId: 'format-eval',
+            byokConfig: FORMAT_SLOT,
         }),
     );
     const refusal = errors.find((e) => REFUSED.has(classifyLLMError(e).category));
     if (refusal) throw new Error(`formatter call refused: ${String(refusal?.message || refusal).slice(0, 200)}`);
-    // The stage's own shaping, as agent-review.stage.ts runs it on each finding.
-    const custom = !!variant.customWritingGuidelines;
     const detail = batch.findings.map((f, i) => {
-        const out = formatted.get(i)?.suggestionContent;
-        const formattedHere = !!(out && out.trim());
-        const fallback = !custom && !formattedHere ? impactAndActionFallback(f.suggestionContent || '') : undefined;
-        const body = stripReviewScaffolding(fallback || (formattedHere ? out : f.suggestionContent) || '');
-        const shipped = shapeSuggestionBodyWithReport({ body, title: f.title, capSentences: !custom }).body;
+        const shipped = suggestions[i].suggestionContent;
         const failed = failedChecks(f, shipped, FALLBACK_ONLY ? { ...variant.want, only: FALLBACK_ONLY } : variant.want);
         return { what: `${i}. ${f.relevantFile}: ${f.title.slice(0, 70)}${failed.length ? ` — ${failed.join(', ')}` : ''}`, ok: !failed.length };
     });

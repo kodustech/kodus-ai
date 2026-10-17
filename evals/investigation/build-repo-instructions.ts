@@ -41,6 +41,7 @@ type CaseVars = {
     benchmarkHeadRef?: string;
     changedFiles?: string | Array<{ filename: string }>;
     changedFilesFull?: string | Array<{ filename: string }>;
+    prFiles?: string | Array<{ filename: string }>;
 };
 
 type ChangedFiles = CaseVars['changedFiles'];
@@ -52,11 +53,12 @@ const filenames = (files: ChangedFiles): string[] =>
     ).map((f) => f.filename);
 
 /**
- * The files a review of the case sees: the PR's whole diff when the dataset
- * has it (what the finder eval reviews), else the corpus's first files.
+ * The files a review of the case sees: the platform's file list when the
+ * dataset has it (what production's stage reviews), else the PR's whole diff,
+ * else the corpus's first files.
  */
 export function changedPaths(v: CaseVars): string[] {
-    return filenames(v.changedFilesFull ?? v.changedFiles);
+    return filenames(v.prFiles ?? v.changedFilesFull ?? v.changedFiles);
 }
 
 const arg = (name: string): string | undefined =>

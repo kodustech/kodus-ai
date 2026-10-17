@@ -27,6 +27,13 @@ describe('kody-rules nightly verdict', () => {
         expect(decide({ first: run(40) })).toMatchObject({ verdict: 'pass', mention: false });
     });
 
+    // A model the weekly run measures before its floor is calibrated (real-agent.js writes none).
+    it('never reports a model without a floor as a pass', () => {
+        const noFloor = run(10);
+        noFloor.metric.floor = null as unknown as number;
+        expect(decide({ first: noFloor })).toMatchObject({ verdict: 'ungated', mention: false });
+    });
+
     it('calls a dip that the pooled runs do not confirm an oscillation', () => {
         const out = decide({ first: run(33), confirm: run(42) });
         expect(out).toMatchObject({ verdict: 'oscillation', mention: false });

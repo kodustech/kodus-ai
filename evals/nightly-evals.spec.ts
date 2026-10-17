@@ -5,7 +5,7 @@ const os = require('os');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const path = require('path');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { NIGHTLY_EVALS } = require('./nightly-evals');
+const { NIGHTLY_EVALS, WEEKLY_EVALS, nightlyCommand } = require('./nightly-evals');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { STAGES } = require('./stages');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -25,18 +25,29 @@ describe('evals/nightly-evals.js', () => {
             for (const f of e.files) expect([e.id, f, fs.existsSync(path.join(__dirname, '..', f))]).toEqual([e.id, f, true]);
             expect(wiringSteps).toContain(e.id);
             const stage = STAGES.find((s: { id: string }) => s.id === e.stage);
-            expect([e.id, stage?.nightly, stage?.model]).toEqual([e.id, 'shared', 'real']);
+            expect([e.id, stage?.eval?.nightly]).toEqual([e.id, 'shared']);
         }
     });
 
-    // Friday runs each entry on every tier-0 model, on a few cases.
-    it('cuts every entry to a few cases for Friday', () => {
-        for (const e of NIGHTLY_EVALS) expect([e.id, e.friday.some((a: string) => /^--limit=\d+$/.test(a))]).toEqual([e.id, true]);
+    it('lists every stage the shared job measures', () => {
+        const shared = STAGES.filter((s: { eval: { nightly: string } | null }) => s.eval?.nightly === 'shared').map((s: { id: string }) => s.id);
+        expect(shared.sort()).toEqual(NIGHTLY_EVALS.map((e: { stage: string }) => e.stage).sort());
     });
 
-    it('lists every stage the shared job measures', () => {
-        const shared = STAGES.filter((s: { nightly?: string }) => s.nightly === 'shared').map((s: { id: string }) => s.id);
-        expect(shared.sort()).toEqual(NIGHTLY_EVALS.map((e: { stage: string }) => e.stage).sort());
+    // The nightly and every model's weekly run read the controlled set; an on-demand
+    // run reads the full one, where the stage says it has one.
+    it('selects each set an eval has, and only those', () => {
+        for (const e of WEEKLY_EVALS) {
+            const stage = STAGES.find((s: { id: string }) => s.id === e.stage);
+            expect([e.id, Array.isArray(e.sets.controlled)]).toEqual([e.id, true]);
+            expect([e.id, e.sets.full === null]).toEqual([e.id, stage.eval.sets.full === null]);
+        }
+        expect(nightlyCommand(NIGHTLY_EVALS.find((e: { id: string }) => e.id === 'funnel-verify'))).toEqual(['evals/funnel/verify/run.js', '--set=controlled']);
+    });
+
+    it('measures every stage that has an eval in the weekly run, once', () => {
+        const withEval = STAGES.filter((s: { eval: unknown }) => s.eval).map((s: { id: string }) => s.id);
+        expect(WEEKLY_EVALS.map((e: { stage: string }) => e.stage).sort()).toEqual(withEval.sort());
     });
 });
 

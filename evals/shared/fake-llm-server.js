@@ -2,8 +2,8 @@
 //
 // Why a server and not a mocked LanguageModel: the engine builds its own model
 // from the slot (LLM.run → buildModelFromSlot → openai_compatible executor), so
-// an in-process mock would have to replace production code. Pointing the SAME
-// self-hosted route at 127.0.0.1 keeps every Kodus line real — slot resolution,
+// an in-process mock would have to replace production code. Pointing an org's
+// BYOK route at 127.0.0.1 keeps every Kodus line real — slot resolution,
 // provider options, tool registry, structured-output parsing — and swaps only
 // the vendor at the network edge. No key, no cost, deterministic.
 //
@@ -183,7 +183,8 @@ function writeStream(res, completion) {
 }
 
 function startFakeLlmServer({ port = 0, host = '127.0.0.1' } = {}) {
-    const stats = { requests: 0, toolCalls: 0, finals: 0, byPath: {}, verdictPrompts: [], finderToolResults: [] };
+    // byModel: requests per model id asked for, so a step can prove which model its route reached.
+    const stats = { requests: 0, toolCalls: 0, finals: 0, byPath: {}, byModel: {}, verdictPrompts: [], finderToolResults: [] };
     let seq = 0;
     const server = http.createServer((req, res) => {
         let raw = '';
@@ -206,6 +207,7 @@ function startFakeLlmServer({ port = 0, host = '127.0.0.1' } = {}) {
                 return;
             }
             stats.requests += 1;
+            stats.byModel[body.model || ''] = (stats.byModel[body.model || ''] || 0) + 1;
             seq += 1;
             if ((body.tools || []).some((t) => t?.function?.name === VERDICT_TOOL)) stats.verdictPrompts.push(promptText(body));
             else stats.finderToolResults.push(...toolResultTexts(body).filter((t) => !stats.finderToolResults.includes(t)));

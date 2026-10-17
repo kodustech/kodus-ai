@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // Direct finder-recall runner.
 //
-// This intentionally bypasses promptfoo so local and CI use the same Node
-// entrypoint without npx/network dependency. It runs the live generalist finder
-// through deterministic tool replay, then scores findings against golden bugs
-// with the same recall-assertion judge.
+// Runs production's review on each case (agent-provider.js → shared/review-stage.js:
+// the PR's platform data, the repository at its head, production's sandbox and
+// model route), then scores what the review ships against the PR's known bugs
+// with recall-assertion.js. One Node entry point for local runs and CI.
 const fs = require('fs');
 const path = require('path');
 
@@ -179,13 +179,6 @@ function submissionResultFromOutput(caseId, output, tokenUsage) {
         trace: {
             finishReason: trace.finishReason ?? null,
             steps: typeof trace.steps === 'number' ? trace.steps : null,
-            replayCalls:
-                typeof trace.replayCalls === 'number'
-                    ? trace.replayCalls
-                    : null,
-            unexpectedToolCalls: Array.isArray(trace.unexpectedToolCalls)
-                ? trace.unexpectedToolCalls.length
-                : 0,
         },
     };
 }
@@ -202,18 +195,19 @@ function runMetaOf(args) {
                 args.model,
             provider:
                 (TIER0[args.model] && TIER0[args.model].provider) || 'unknown',
-            // How the finder reached it (agent-provider.js resolveRoute): the
-            // env/managed route, or a BYOK config when an effort is set.
+            // How the finder reached it (model-route.js resolveRoute): a BYOK
+            // config, or none for `kodus-managed`.
             // A subscription model never runs (main exits 2 before it).
-            accessPath: process.env.RECALL_REASONING_EFFORT ? 'byok' : 'managed',
+            accessPath: TIER0[args.model] && TIER0[args.model].managed ? 'managed' : 'byok',
         },
-        executionMode: 'replay',
+        // Production's tools over the repository at the PR's head.
+        executionMode: 'live',
         // heavy = passadas de resample ativadas. Eixo de regime: não comparar
         // entrada heavy com entrada normal sem rotular.
         heavy: process.env.RECALL_HEAVY === '1',
         // RECALL_REASONING_EFFORT reaches the finder as the BYOK model's
         // reasoningEffort (agent-provider.js resolveRoute), which production
-        // maps per provider; without it the managed route runs the family default.
+        // maps per provider; without it the BYOK slot sets none.
         reasoning: process.env.RECALL_REASONING_EFFORT
             ? {
                   config: 'explicit',
@@ -242,12 +236,6 @@ function traceSummaryFromOutput(output) {
         coverage: trace.coverage ?? null,
         anomalies: trace.anomalies ?? null,
         verification: trace.verification ?? null,
-        // RECALL_REAL_REPO=1: true when the tools searched the PR's real
-        // repository, false when the case fell back to the replay.
-        repoPrepared: trace.repoPrepared ?? null,
-        // false: no exec, so checkTypes, findNearestProjectFile and findFile's
-        // fd/find path were not registered (replay, and RECALL_REAL_REPO=1).
-        sandboxExec: trace.sandboxExec ?? null,
     };
 }
 
@@ -336,8 +324,7 @@ async function main() {
     process.env.RECALL_MODEL = args.model;
 
     // The presence check above passed once while holding the FINDER's Fireworks
-    // key — applyModelEnv writes it over API_OPEN_AI_API_KEY — and the 401 only
-    // surfaced after 30 paid finder runs. Presence is not validity: spend one
+    // key, and the 401 only surfaced after 30 paid finder runs. Presence is not validity: spend one
     // judge call before spending the finder.
     if (!NO_JUDGE) {
         try {
@@ -434,19 +421,6 @@ async function main() {
             return;
         }
 
-        // RECALL_TRACES_DIR=<dir>: keep each case's whole engine output (every
-        // tool call with its arguments, the verifier's decisions and the
-        // findings it refuted), which the result rows only summarize.
-        if (process.env.RECALL_TRACES_DIR) {
-            writeJson(
-                path.join(
-                    process.env.RECALL_TRACES_DIR,
-                    `${caseId.replace(/[^\w.-]+/g, '_')}.json`,
-                ),
-                tryParseJson(apiResult.output) ?? { raw: apiResult.output },
-            );
-        }
-
         if (NO_JUDGE) {
             unscored += 1;
             // Carry the trace summary even unscored: it holds the verify funnel
@@ -531,12 +505,11 @@ async function main() {
         });
 
         console.log(
-            `${status.toUpperCase().padEnd(6)} ${caseId} recall=${fmtPct(metadata.recall ?? assertion.score)} precision=${fmtPct(metadata.precision)} fidelity=${fmtPct(metadata.hitRate)} findings=${metadata.findings ?? 'n/a'}`,
+            `${status.toUpperCase().padEnd(6)} ${caseId} recall=${fmtPct(metadata.recall ?? assertion.score)} precision=${fmtPct(metadata.precision)} loop-recall=${fmtPct(metadata.loopRecall)} findings=${metadata.findings ?? 'n/a'}`,
         );
     };
 
-    // Pool: casos são independentes (replay determinístico próprio), então
-    // sequencial era só desperdício de relógio.
+    // Cases share nothing (each review has its own sandbox), so they run in a pool.
     const concurrency = Math.max(
         1,
         Math.min(Number(args.concurrency) || 4, selectedTests.length),
@@ -615,8 +588,9 @@ async function main() {
             recall_mean: avg(rows.map((row) => row.metadata?.recall)),
             precision_mean: avg(rows.map((row) => row.metadata?.precision)),
             f1_mean: avg(rows.map((row) => row.metadata?.f1)),
-            fair_recall_mean: avg(rows.map((row) => row.metadata?.fairRecall)),
-            fidelity_mean: avg(rows.map((row) => row.metadata?.hitRate)),
+            // What the finder's loops returned, before the steps that follow
+            // them: reported next to the gated (shipped) recall, never gated.
+            loop_recall_mean: avg(rows.map((row) => row.metadata?.loopRecall)),
         },
         rows,
     };
@@ -650,7 +624,7 @@ async function main() {
     console.log(`cases: ${summary.cases}`);
     console.log(`recall_mean: ${fmtPct(summary.metrics.recall_mean)}`);
     console.log(`precision_mean: ${fmtPct(summary.metrics.precision_mean)}`);
-    console.log(`fidelity_mean: ${fmtPct(summary.metrics.fidelity_mean)}`);
+    console.log(`loop_recall_mean: ${fmtPct(summary.metrics.loop_recall_mean)}`);
     console.log(`artifact: ${path.relative(process.cwd(), outputPath)}`);
     if (NO_JUDGE) {
         // The percentages above are empty by construction, not a result. Say so

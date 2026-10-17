@@ -9,31 +9,26 @@ const dropped = (file: string) => ({
     suggestionContent: `refuted finding in ${file}`,
 });
 
-const result = (file: string) => ({
-    findings: { reasoning: '', suggestions: [] },
-    droppedByVerify: [dropped(file)],
-    usage: {},
+const loop = (file: string) => ({
+    result: {
+        findings: { reasoning: '', suggestions: [] },
+        droppedByVerify: [dropped(file)],
+        usage: {},
+    },
 });
 
 describe('investigation agent provider — refuted findings', () => {
-    it('keeps every batch’s refuted findings when a review is split', () => {
-        const merged = internals.mergeResults([result('a.py'), result('b.py')]);
+    it('keeps every batch’s refuted findings when a review runs in batches', () => {
+        const combined = internals.combineLoops([loop('a.py'), loop('b.py')]);
         expect(
-            merged.droppedByVerify.map(
+            combined.droppedByVerify.map(
                 (d: { relevantFile: string }) => d.relevantFile,
             ),
         ).toEqual(['a.py', 'b.py']);
     });
 
-    it('saves the refuted findings in the case output', () => {
-        const output = internals.serializeResult(
-            'case-1',
-            result('a.py'),
-            { calls: [], unexpectedCalls: [] },
-            null,
-            null,
-        );
-        expect(output.trace.droppedByVerify).toEqual([
+    it('writes them with their file, lines and text', () => {
+        expect(internals.refutedFindings(loop('a.py').result)).toEqual([
             {
                 path: 'a.py',
                 startLine: 10,
@@ -41,5 +36,31 @@ describe('investigation agent provider — refuted findings', () => {
                 description: 'refuted finding in a.py',
             },
         ]);
+    });
+});
+
+describe('investigation agent provider — coding-agent instructions', () => {
+    const caseData = {
+        caseId: 'c1',
+        prFiles: [{ filename: 'src/a.ts' }],
+        repoInstructions: {
+            files: [{ path: 'CLAUDE.md', content: 'Amounts are integer cents.' }],
+        },
+    };
+
+    it('puts the case’s instruction files on the target branch', () => {
+        expect(internals.prOf(caseData).targetBranchFiles).toEqual({
+            'CLAUDE.md': 'Amounts are integer cents.',
+        });
+    });
+
+    it('turns the setting on only when the case gives instruction files', () => {
+        expect(
+            internals.teamOf(caseData).codeReviewConfig.configs
+                .repoInstructionsEnabled,
+        ).toBe(true);
+        const { repoInstructions: _, ...off } = caseData;
+        expect(internals.teamOf(off).codeReviewConfig).toBeNull();
+        expect(internals.prOf(off).targetBranchFiles).toEqual({});
     });
 });

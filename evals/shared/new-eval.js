@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// pnpm eval:new <name> — a new eval that already follows evals/AGENTS.md: the
+// pnpm eval:new <name> — a new eval that already follows evals/README.md: the
 // README header, cases that each say what they check (with a control pair), a
 // catalog the quality panel reads, and a runner that writes the shared result
 // (evals/shared/eval-result.js), counts tokens and exits 0/1/2. What is left is
@@ -48,7 +48,7 @@ module.exports = { catalog };
 `;
 
 const TARGETS = {
-    __doc: ['Floors per model. Calibrate from two full runs of one commit (evals/AGENTS.md, "Floors and judges"); never copy these numbers elsewhere.'],
+    __doc: ['Floors per model. Calibrate from two full runs of one commit (evals/README.md, "Floors and judges"); never copy these numbers elsewhere.'],
     models: {},
 };
 
@@ -57,10 +57,10 @@ const RUN = (name) => `#!/usr/bin/env node
 //
 //   node evals/${name}/run.js [--model=<id>] [--gate] [--output=<result.json>] [--limit=N]
 //
-// Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/AGENTS.md).
+// Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/README.md).
 const fs = require('fs');
 const path = require('path');
-const { applyModelEnv } = require('../shared/tier0-models');
+const { orgRouteOrExit } = require('../shared/model-route');
 const { countTokens, tokensUsed } = require('../shared/eval-kit');
 const { evalQuestion, resultProblems } = require('../shared/eval-result');
 
@@ -70,8 +70,10 @@ const cases = require('./cases.json').slice(0, args.limit ? Number(args.limit) :
 const floor = (require('./targets.json').models[MODEL] || {}).floor ?? null;
 
 // TODO: drive the engine's real entry point for one case and return what it
-// produced. Never a hand-written stub of an engine service (evals/AGENTS.md).
-async function runCase(_testCase) {
+// produced, handing it the org's model through production's permission service
+// (evalPermissionService(route.storedConfig), evals/shared/model-route.js). Never a hand-written stub of an
+// engine service (evals/README.md).
+async function runCase(_testCase, _route) {
     throw new Error('not wired: runCase must call the engine');
 }
 
@@ -82,13 +84,14 @@ function score(testCase, output) {
 }
 
 async function main() {
-    applyModelEnv(MODEL);
+    // The org's model, routed as production routes it.
+    const route = orgRouteOrExit(MODEL);
     countTokens();
     const results = [];
     let errored = 0;
     for (const testCase of cases) {
         try {
-            results.push({ id: testCase.id, checks: testCase.checks, ...score(testCase, await runCase(testCase)) });
+            results.push({ id: testCase.id, checks: testCase.checks, ...score(testCase, await runCase(testCase, route)) });
         } catch (error) {
             errored += 1;
             console.error(\`  \${testCase.id}: \${String(error.message || error).slice(0, 200)}\`);
@@ -158,7 +161,7 @@ function main() {
   3. run.js: runCase() calls the engine's real entry point; score() says what a case got right.
   4. evals/stages.js: name the stage it covers (eval: 'evals/${name}'), so it reaches the panel.
   5. evals/wiring-smoke.js: a step with model: true running it on --model=eval-fake.
-  6. Calibrate the floor in targets.json from two full runs (evals/AGENTS.md).
+  6. Calibrate the floor in targets.json from two full runs (evals/README.md).
   7. To measure it every night it changes, and on Friday on every tier-0 model: add it to evals/nightly-evals.js
      (its stage gets nightly: 'shared' and a friday key).
 evals/stage-signals.spec.ts fails until 4 and 5 agree, and every catalog is valid.`);
