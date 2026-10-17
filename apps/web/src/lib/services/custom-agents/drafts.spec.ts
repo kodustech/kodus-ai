@@ -9,6 +9,7 @@ import {
     describeAgent,
     isLinked,
     prepareAgentsForSave,
+    prepareKnowledgeForSave,
     setKnowledgeLink,
     withoutSecretValues,
 } from "./drafts";
@@ -229,6 +230,25 @@ describe("custom agent drafts", () => {
         expect(JSON.stringify(redacted)).not.toContain("typed-secret");
         expect(redacted.tools.cli?.[0].secrets).toEqual([
             { env: "LEDGER_URL", ciphertext: "••••" },
+        ]);
+    });
+
+    it("saves only the fields of a knowledge item, never what the screen shows about it", () => {
+        const found = {
+            path: ".claude/skills/tenant-scope",
+            kind: "skill" as const,
+            linkedTo: [{ agentId: "security" }],
+            name: "tenant-scope",
+            description: "How to check tenant scope",
+            kodyRuleSource: false,
+        };
+
+        expect(prepareKnowledgeForSave([found])).toEqual([
+            {
+                path: ".claude/skills/tenant-scope",
+                kind: "skill",
+                linkedTo: [{ agentId: "security" }],
+            },
         ]);
     });
 });

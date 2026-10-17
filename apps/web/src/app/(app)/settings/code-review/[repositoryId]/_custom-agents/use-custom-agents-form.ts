@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback } from "react";
-import { prepareAgentsForSave } from "@services/custom-agents/drafts";
+import {
+    prepareAgentsForSave,
+    prepareKnowledgeForSave,
+} from "@services/custom-agents/drafts";
 import type { CustomAgent, KnowledgeItem } from "@services/custom-agents/types";
 import { useFormContext, useFormState, useWatch } from "react-hook-form";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
@@ -106,7 +109,9 @@ export const useCustomAgentsForm = () => {
                         customAgents: prepareAgentsForSave(
                             values.customAgents?.value ?? [],
                         ),
-                        knowledge: values.knowledge?.value ?? [],
+                        knowledge: prepareKnowledgeForSave(
+                            values.knowledge?.value ?? [],
+                        ),
                     },
                 }),
             });

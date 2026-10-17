@@ -96,7 +96,10 @@ function SkillsContent() {
 
     const register = (item: Pick<KnowledgeItem, "path" | "kind">) => {
         if (registered.has(item.path)) return;
-        setKnowledge([...knowledge, { ...item, linkedTo: [] }]);
+        setKnowledge([
+            ...knowledge,
+            { path: item.path, kind: item.kind, linkedTo: [] },
+        ]);
     };
 
     const onSave = async () => {

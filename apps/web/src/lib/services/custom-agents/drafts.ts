@@ -347,6 +347,12 @@ export const prepareAgentsForSave = (agents: CustomAgent[]): CustomAgent[] =>
  * The agent for the draft check, which only needs to know a secret exists:
  * typed values become the mask and never leave the screen.
  */
+/** A knowledge item as the config stores it: no display fields. */
+export const prepareKnowledgeForSave = (
+    knowledge: KnowledgeItem[],
+): KnowledgeItem[] =>
+    knowledge.map(({ path, kind, linkedTo }) => ({ path, kind, linkedTo }));
+
 export const withoutSecretValues = (agent: CustomAgent): CustomAgent => {
     const [prepared] = prepareAgentsForSave([agent]);
     if (!prepared.tools.cli?.length) return prepared;
