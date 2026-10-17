@@ -339,6 +339,9 @@ function main() {
         const versions = { base: versionOf(baseSha, traces.base), candidate: versionOf(head, traces.candidate) };
         const allProd = [...new Set([...versions.base.prodBlobs.keys(), ...versions.candidate.prodBlobs.keys()])];
         const changedFiles = allProd.filter((f) => versions.base.prodBlobs.get(f) !== versions.candidate.prodBlobs.get(f)).sort();
+        // The production files the step loads: a change to any of them on main
+        // after the base, or on the branch after the candidate, dates this result.
+        const stepFiles = [...allProd].sort();
         const phases = Object.fromEntries(
             Object.entries(measured).map(([phase, { entries, results }]) => {
                 const evals = entries.map((entry) => {
@@ -370,6 +373,7 @@ function main() {
             base: { sha: baseSha, version: strip(versions.base) },
             candidate: { sha: head, version: strip(versions.candidate) },
             changedFiles,
+            stepFiles,
             phases,
             decision,
             exits,
@@ -403,6 +407,7 @@ function main() {
                     eval_version: versions.candidate.eval,
                     dataset_version: versions.candidate.dataset,
                     changed_files: changedFiles,
+                    step_files: stepFiles,
                     comparison: { ...e.comparison, worse: e.comparison.worse.slice(0, 20), better: e.comparison.better.slice(0, 20), worseCount: e.comparison.worse.length, betterCount: e.comparison.better.length },
                     sides: e.sides,
                     run_values: e.runValues,

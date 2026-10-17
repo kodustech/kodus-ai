@@ -85,6 +85,8 @@ Each eval runs `--runs` times per side (2 by default), alternating. Per case, pa
 
 Each side's step version (a hash of the production files its evals loaded, at their committed content: the same on both sides means the branch did not change this step), the files that differ, the eval and dataset versions, what each eval reports of its environment, and model use. Under `--out`: `experiment.json`, `summary.md`, and `rows.json` (`experiments.<step>.<phase>.<eval>.<name>`). The quality panel builds its Experiments tab and each step's experiments from those rows; they never replace a number main measured. Today the rows reach the panel from the CI workflow only; a local run prints them.
 
+The panel dates each experiment by itself: **active** while its branch is open and nothing it measured has changed; **out of date** when main changed one of the step's production files after the base (rebase and run it again) or the branch changed one after the candidate; **merged** or **closed** with its pull request, kept under Archived as the evidence for that version. A newer run on the same branch keeps the earlier ones inside its card.
+
 ### Add a step
 
 Add it to `STEP_EVALS` in `evals/experiment.js`: its main eval (`id`, a short `label`, `run`, `question`) and the evals that must not get worse. The main eval must take `--set=controlled|full`, keep a stable `id` per case, and write the shared result (`evals/shared/eval-result.js`). A dataset is tied to what produced it: `evals/dedup-groups` scores the dedup on suggestions from the lean finder of #1821, so its numbers say how a dedup groups that finder's output, not today's.
