@@ -2,6 +2,11 @@
  * The deterministic quote gate for convention findings — zero LLM.
  * Fixture domain: an invented greenhouse-irrigation service and its team guide.
  */
+import { execFileSync, execSync } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 import type { FinderSuggestion } from '@libs/code-review/infrastructure/agents/core/finder.agent';
 import {
@@ -334,12 +339,59 @@ describe('makeTargetBranchGuideReader', () => {
             'main',
         )!;
         expect(await read(GUIDE)).toBe(GUIDE_TEXT);
-        expect(exec).toHaveBeenCalledWith(`git show 'origin/main:${GUIDE}'`);
+        expect(exec).toHaveBeenCalledWith(
+            `git show 'refs/remotes/origin/main:${GUIDE}'`,
+        );
 
         await read("docs/it's.md");
         expect(exec).toHaveBeenLastCalledWith(
-            `git show 'origin/main:docs/it'\\''s.md'`,
+            `git show 'refs/remotes/origin/main:docs/it'\\''s.md'`,
         );
+    });
+
+    it('reads the base guide even when a tag named like the base ref points at the head', async () => {
+        // A fetch auto-follows tags, and `origin/main` resolves a tag
+        // `refs/tags/origin/main` before the remote-tracking branch.
+        const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'guide-tag-'));
+        const git = (...args: string[]) =>
+            execFileSync('git', args, { cwd: repo, stdio: 'pipe' }).toString();
+        try {
+            git('init', '-q', '-b', 'main');
+            git('config', 'user.email', 'dev@example.test');
+            git('config', 'user.name', 'Dev');
+            git('config', 'commit.gpgsign', 'false');
+            fs.mkdirSync(path.join(repo, 'docs'));
+            fs.writeFileSync(path.join(repo, 'docs/guide.md'), 'BASE RULE');
+            git('add', '-A');
+            git('commit', '-q', '-m', 'base');
+            git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+            git('checkout', '-q', '-b', 'feature');
+            fs.writeFileSync(path.join(repo, 'docs/guide.md'), 'HEAD RULE');
+            git('commit', '-q', '-am', 'head');
+            git('tag', 'origin/main', 'feature');
+
+            const exec = async (command: string) => {
+                try {
+                    const stdout = execSync(command, {
+                        cwd: repo,
+                        shell: '/bin/sh',
+                        stdio: 'pipe',
+                    }).toString();
+                    return { stdout, stderr: '', exitCode: 0 };
+                } catch (error: any) {
+                    return {
+                        stdout: '',
+                        stderr: String(error.stderr ?? ''),
+                        exitCode: error.status ?? 1,
+                    };
+                }
+            };
+            const read = makeTargetBranchGuideReader({ exec } as any, 'main')!;
+
+            expect(await read('docs/guide.md')).toBe('BASE RULE');
+        } finally {
+            fs.rmSync(repo, { recursive: true, force: true });
+        }
     });
 
     it('returns null when git fails or the path escapes', async () => {

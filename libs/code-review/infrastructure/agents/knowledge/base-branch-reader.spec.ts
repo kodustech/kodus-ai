@@ -121,6 +121,28 @@ describe('SandboxBaseBranchReader', () => {
         });
     });
 
+    it('is not fooled by a tag named like the base ref pointing at the head', async () => {
+        // A fetch auto-follows tags, and `origin/main` resolves a tag
+        // `refs/tags/origin/main` before the remote-tracking branch.
+        git('tag', 'origin/main', 'feature');
+        try {
+            const reader = new SandboxBaseBranchReader(sandbox(), 'main');
+
+            const skill = await reader.readFile(
+                '.claude/skills/invoice-errors/SKILL.md',
+            );
+            const headOnly = await reader.readFile('docs/style/new-in-head.md');
+
+            expect(skill).toEqual({
+                status: 'ok',
+                content: expect.stringContaining('BASE BODY'),
+            });
+            expect(headOnly).toEqual({ status: 'missing' });
+        } finally {
+            git('tag', '-d', 'origin/main');
+        }
+    });
+
     it('reports a file that exists only on the head as missing', async () => {
         const reader = new SandboxBaseBranchReader(sandbox(), 'main');
 

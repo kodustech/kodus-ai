@@ -64,7 +64,9 @@ export class SandboxBaseBranchReader implements BaseBranchReader {
             throw new Error(`unsupported base branch name: ${baseBranch}`);
         }
         this.ref = branch;
-        this.treeish = `origin/${branch}`;
+        // Fully qualified: a bare `origin/<branch>` resolves a tag of that
+        // name first, and a fetch auto-follows tags onto the PR head.
+        this.treeish = `refs/remotes/origin/${branch}`;
     }
 
     async readFile(path: string): Promise<BaseBranchReadResult> {

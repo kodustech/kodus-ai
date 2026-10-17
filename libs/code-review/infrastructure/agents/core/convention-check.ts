@@ -248,8 +248,8 @@ export async function checkConventionQuotes(
 
 /**
  * Reads guides from the PR's target branch in the review sandbox:
- * `git show origin/<base>:<file>` (the sandbox fetches the base branch into
- * `refs/remotes/origin/<base>`). Never the PR head — a PR that adds or edits a
+ * `git show refs/remotes/origin/<base>:<file>` (where the sandbox fetches the
+ * base branch). Never the PR head — a PR that adds or edits a
  * guide must not get to quote its own rule.
  */
 export function makeTargetBranchGuideReader(
@@ -261,8 +261,10 @@ export function makeTargetBranchGuideReader(
     return async (file: string) => {
         const path = stripLeading(file);
         if (!path || path.split('/').includes('..')) return null;
+        // Fully qualified: a bare `origin/<base>` resolves a tag of that name
+        // first, and a fetch auto-follows tags onto the PR head.
         const r = await exec(
-            `git show ${shellQuote(`origin/${baseBranch}:${path}`)}`,
+            `git show ${shellQuote(`refs/remotes/origin/${baseBranch}:${path}`)}`,
         );
         return r.exitCode === 0 ? r.stdout : null;
     };
