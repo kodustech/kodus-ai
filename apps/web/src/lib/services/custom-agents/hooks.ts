@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import {
@@ -33,8 +34,30 @@ export const useCustomAgentsStatus = (params: {
     });
 
 /**
+ * A draft value settled after typing stops. Compared by content: drafts are
+ * rebuilt on every render.
+ */
+export const useSettled = <T>(value: T, delayMs = 800) => {
+    const key = JSON.stringify(value ?? null);
+    const [settled, setSettled] = useState({ key, value });
+    useEffect(() => {
+        if (key === settled.key) return;
+        const timer = window.setTimeout(
+            () => setSettled({ key, value }),
+            delayMs,
+        );
+        return () => window.clearTimeout(timer);
+        // `value` is read through `key`.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [key, settled.key, delayMs]);
+    return settled.value;
+};
+
+/**
  * Checks the agent and knowledge on screen against the repository's default
- * branch. Keyed on the draft, so an edit re-checks it.
+ * branch. Keyed on the draft, so an edit re-checks it. At the global level
+ * there is no branch: plugins still resolve and knowledge comes back
+ * unavailable with the reason.
  */
 export const useResolveCustomAgent = (params: {
     teamId?: string;
@@ -64,7 +87,6 @@ export const useResolveCustomAgent = (params: {
         enabled:
             !!params.teamId &&
             !!params.repositoryId &&
-            params.repositoryId !== "global" &&
             params.enabled !== false,
         // Every edit is a new draft to check; keep the last report on screen
         // meanwhile so the sections do not fall back to loading.

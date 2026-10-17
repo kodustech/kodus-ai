@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Badge } from "@components/ui/badge";
 import {
@@ -19,6 +19,7 @@ import { withoutSecretValues } from "@services/custom-agents/drafts";
 import {
     useCustomAgentsStatus,
     useResolveCustomAgent,
+    useSettled,
 } from "@services/custom-agents/hooks";
 import type { CustomAgent } from "@services/custom-agents/types";
 import { usePermission } from "@services/permissions/hooks";
@@ -43,26 +44,6 @@ import { KnowledgeCard } from "./_components/knowledge-card";
 import { StatusStrip } from "./_components/status-strip";
 import { ToolsCard } from "./_components/tools-card";
 import { TryIt } from "./_components/try-it";
-
-/**
- * The draft the resolve check reads, settled after typing stops. Compared by
- * content: the draft is rebuilt on every render.
- */
-const useSettled = <T,>(value: T, delayMs = 800) => {
-    const key = JSON.stringify(value ?? null);
-    const [settled, setSettled] = useState({ key, value });
-    useEffect(() => {
-        if (key === settled.key) return;
-        const timer = window.setTimeout(
-            () => setSettled({ key, value }),
-            delayMs,
-        );
-        return () => window.clearTimeout(timer);
-        // `value` is read through `key`.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [key, settled.key, delayMs]);
-    return settled.value;
-};
 
 function AgentContent() {
     const router = useRouter();
@@ -103,6 +84,7 @@ function AgentContent() {
         repositoryId,
         agent: draft,
         knowledge: settledKnowledge,
+        discover: true,
         enabled: !!draft,
     });
 
@@ -284,6 +266,7 @@ function AgentContent() {
                         <ToolsCard
                             agent={agent}
                             report={resolve.data}
+                            loading={resolve.isLoading}
                             canEdit={canEdit}
                             onChange={patch}
                         />

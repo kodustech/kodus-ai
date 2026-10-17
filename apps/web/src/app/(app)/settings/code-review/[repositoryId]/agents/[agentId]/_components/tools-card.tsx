@@ -206,11 +206,13 @@ const McpPluginRow = ({
 const McpTools = ({
     agent,
     report,
+    loading,
     canEdit,
     onChange,
 }: {
     agent: CustomAgent;
     report?: CustomAgentResolveReport;
+    loading: boolean;
     canEdit: boolean;
     onChange: Patch;
 }) => {
@@ -221,12 +223,20 @@ const McpTools = ({
             tools: { ...current.tools, mcp: next },
         }));
 
-    if (!report) {
+    if (!report && loading) {
         return (
             <div className="flex flex-col gap-2">
                 <Skeleton className="h-14 w-full rounded-xl" />
                 <Skeleton className="h-14 w-full rounded-xl" />
             </div>
+        );
+    }
+    if (!report) {
+        return (
+            <p className="text-text-secondary text-xs">
+                Couldn&apos;t list the connected plugins right now. Reload the
+                page to try again.
+            </p>
         );
     }
     if (report.mcp.status === "unavailable") {
@@ -256,10 +266,7 @@ const McpTools = ({
 };
 
 /** "Linear, Azure DevOps · 54 tools", or nothing when no plugin is on. */
-const mcpSummary = (
-    agent: CustomAgent,
-    report?: CustomAgentResolveReport,
-) => {
+const mcpSummary = (agent: CustomAgent, report?: CustomAgentResolveReport) => {
     if (report?.mcp.status !== "ok") return undefined;
     const on = report.mcp.integrations
         .map((integration) => ({
@@ -272,7 +279,10 @@ const mcpSummary = (
         }))
         .filter((plugin) => plugin.on);
     if (!on.length) return undefined;
-    const tools = on.reduce((total, plugin) => total + plugin.selected.length, 0);
+    const tools = on.reduce(
+        (total, plugin) => total + plugin.selected.length,
+        0,
+    );
     return `${on.map((plugin) => plugin.name).join(", ")} · ${tools} ${tools === 1 ? "tool" : "tools"}`;
 };
 
@@ -520,17 +530,49 @@ const CliEditor = ({
     );
 };
 
-export const ToolsCard = ({
-    agent,
-    report,
-    canEdit,
-    onChange,
-}: {
+type ToolsProps = {
     agent: CustomAgent;
     report?: CustomAgentResolveReport;
+    /** The resolve check is running and has no report yet. */
+    loading: boolean;
     canEdit: boolean;
     onChange: Patch;
-}) => {
+};
+
+/** The plugins the agent may read from, one row per connected plugin. */
+export const PluginsField = ({
+    agent,
+    report,
+    loading,
+    canEdit,
+    onChange,
+}: ToolsProps) => (
+    <Field label="Plugins">
+        <span className="text-text-tertiary -mt-1 text-xs">
+            Systems the agent may look things up in while it reviews. Only read
+            tools are offered; write tools never are.
+        </span>
+        <McpTools
+            agent={agent}
+            report={report}
+            loading={loading}
+            canEdit={canEdit}
+            onChange={onChange}
+        />
+        {mcpSummary(agent, report) && (
+            <span className="text-text-secondary text-xs">
+                On: {mcpSummary(agent, report)}
+            </span>
+        )}
+    </Field>
+);
+
+/** The agent's CLIs and the button that adds one. */
+export const ClisField = ({
+    agent,
+    canEdit,
+    onChange,
+}: Pick<ToolsProps, "agent" | "canEdit" | "onChange">) => {
     const clis = agent.tools.cli ?? [];
     const setClis = (next: CliToolConfig[]) =>
         onChange((current) => ({
@@ -539,92 +581,103 @@ export const ToolsCard = ({
         }));
 
     return (
+        <Field
+            label="CLIs"
+            hint={`Your team's command-line tools, installed in an isolated sandbox. Up to ${CUSTOM_AGENT_LIMITS.maxCliTools}.`}>
+            <div className="flex flex-col gap-3">
+                {clis.map((cli, index) => (
+                    <CliEditor
+                        key={index}
+                        cli={cli}
+                        canEdit={canEdit}
+                        onChange={(next) =>
+                            setClis(
+                                clis.map((item, position) =>
+                                    position === index ? next : item,
+                                ),
+                            )
+                        }
+                        onRemove={() =>
+                            setClis(
+                                clis.filter(
+                                    (_, position) => position !== index,
+                                ),
+                            )
+                        }
+                    />
+                ))}
+                <Button
+                    size="xs"
+                    variant="helper"
+                    className="w-fit"
+                    leftIcon={<PlusIcon />}
+                    disabled={
+                        !canEdit ||
+                        clis.length >= CUSTOM_AGENT_LIMITS.maxCliTools
+                    }
+                    onClick={() => setClis([...clis, newCliTool()])}>
+                    Add CLI
+                </Button>
+            </div>
+        </Field>
+    );
+};
+
+export const ToolsCard = (props: ToolsProps) => {
+    const { agent, report, canEdit, onChange } = props;
+    // Structural search is for teams that already write ast-grep rules:
+    // folded away unless this agent has one.
+    const [advancedOpen, setAdvancedOpen] = useState(
+        !!agent.tools.astGrepConfig?.trim(),
+    );
+
+    return (
         <Section
             title="Tools"
             description="What the agent can run besides reading the code. Every tool is read-only towards your systems.">
-            <Field
-                label="Structural search (ast-grep rules)"
-                hint={
-                    report?.astGrep.ruleCount
-                        ? `${report.astGrep.ruleCount} rules: ${report.astGrep.ruleIds.join(", ")}. A rule match is proof; it needs no model check.`
-                        : "Rule YAML the agent may run. A match counts as proof."
-                }>
-                <Textarea
-                    className="min-h-24 font-mono text-xs"
-                    value={agent.tools.astGrepConfig ?? ""}
-                    disabled={!canEdit}
-                    placeholder={
-                        "id: no-float-money\nlanguage: typescript\nrule:\n  pattern: parseFloat($A)"
-                    }
-                    onChange={(e) =>
-                        onChange((current) => ({
-                            ...current,
-                            tools: {
-                                ...current.tools,
-                                astGrepConfig: e.target.value || undefined,
-                            },
-                        }))
-                    }
-                />
-            </Field>
+            <PluginsField {...props} />
+            <ClisField agent={agent} canEdit={canEdit} onChange={onChange} />
 
-            <Field label="Plugins">
-                <span className="text-text-tertiary -mt-1 text-xs">
-                    Systems the agent may look things up in while it reviews.
-                    Only read tools are offered; write tools never are.
-                </span>
-                <McpTools
-                    agent={agent}
-                    report={report}
-                    canEdit={canEdit}
-                    onChange={onChange}
-                />
-                {mcpSummary(agent, report) && (
-                    <span className="text-text-secondary text-xs">
-                        On: {mcpSummary(agent, report)}
-                    </span>
-                )}
-            </Field>
-
-            <Field
-                label="CLIs"
-                hint={`Your team's command-line tools, installed in an isolated sandbox. Up to ${CUSTOM_AGENT_LIMITS.maxCliTools}.`}>
-                <div className="flex flex-col gap-3">
-                    {clis.map((cli, index) => (
-                        <CliEditor
-                            key={index}
-                            cli={cli}
-                            canEdit={canEdit}
-                            onChange={(next) =>
-                                setClis(
-                                    clis.map((item, position) =>
-                                        position === index ? next : item,
-                                    ),
-                                )
+            <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+                <CollapsibleTrigger asChild>
+                    <button
+                        type="button"
+                        className="text-text-secondary hover:text-text-primary flex items-center gap-2 text-xs font-medium">
+                        Advanced
+                        <CollapsibleIndicator />
+                    </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-3 pb-0">
+                    <Field
+                        label="Structural search (ast-grep rules)"
+                        htmlFor="agent-ast-grep"
+                        hint={
+                            report?.astGrep.ruleCount
+                                ? `${report.astGrep.ruleCount} rules: ${report.astGrep.ruleIds.join(", ")}. A rule match is proof; it needs no model check.`
+                                : "Rule YAML the agent may run. A match counts as proof."
+                        }>
+                        <Textarea
+                            id="agent-ast-grep"
+                            className="min-h-24 font-mono text-xs"
+                            value={agent.tools.astGrepConfig ?? ""}
+                            disabled={!canEdit}
+                            placeholder={
+                                "id: no-float-money\nlanguage: typescript\nrule:\n  pattern: parseFloat($A)"
                             }
-                            onRemove={() =>
-                                setClis(
-                                    clis.filter(
-                                        (_, position) => position !== index,
-                                    ),
-                                )
+                            onChange={(e) =>
+                                onChange((current) => ({
+                                    ...current,
+                                    tools: {
+                                        ...current.tools,
+                                        astGrepConfig:
+                                            e.target.value || undefined,
+                                    },
+                                }))
                             }
                         />
-                    ))}
-                    <Button
-                        size="xs"
-                        variant="helper"
-                        className="w-fit"
-                        leftIcon={<PlusIcon />}
-                        disabled={
-                            !canEdit ||
-                            clis.length >= CUSTOM_AGENT_LIMITS.maxCliTools
-                        }
-                        onClick={() => setClis([...clis, newCliTool()])}>
-                        Add CLI
-                    </Button>
-                </div>
-            </Field>
+                    </Field>
+                </CollapsibleContent>
+            </Collapsible>
         </Section>
     );
 };

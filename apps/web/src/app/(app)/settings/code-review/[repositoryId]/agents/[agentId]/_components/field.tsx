@@ -90,6 +90,7 @@ export const Choice = <T extends string>({
             <button
                 key={option.value}
                 type="button"
+                aria-pressed={value === option.value}
                 disabled={disabled}
                 onClick={() => onChange(option.value)}
                 className={cn(

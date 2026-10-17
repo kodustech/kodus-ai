@@ -172,6 +172,35 @@ const SEVERITIES: Array<{ value: CustomAgentSeverity | "any"; label: string }> =
         { value: "critical", label: "Critical" },
     ];
 
+/** The tag colors an agent's comments can carry. */
+export const TagColorPicker = ({
+    value,
+    disabled,
+    onChange,
+}: {
+    value: string;
+    disabled?: boolean;
+    onChange: (color: string) => void;
+}) => (
+    <div className="flex gap-1.5">
+        {TAG_COLORS.map((color) => (
+            <button
+                key={color}
+                type="button"
+                aria-label={`Tag color ${color}`}
+                aria-pressed={value === color}
+                disabled={disabled}
+                onClick={() => onChange(color)}
+                className={cn(
+                    "size-5 rounded-full ring-offset-2 transition",
+                    value === color && "ring-text-primary ring-2",
+                )}
+                style={{ backgroundColor: color }}
+            />
+        ))}
+    </div>
+);
+
 export const HowItComments = ({
     agent,
     canEdit,
@@ -199,23 +228,11 @@ export const HowItComments = ({
                         style={{ backgroundColor: presentation.tag.color }}>
                         {agent.name || "Agent"}
                     </span>
-                    <div className="flex gap-1.5">
-                        {TAG_COLORS.map((color) => (
-                            <button
-                                key={color}
-                                type="button"
-                                aria-label={`Tag color ${color}`}
-                                disabled={!canEdit}
-                                onClick={() => set({ tag: { color } })}
-                                className={cn(
-                                    "size-5 rounded-full ring-offset-2 transition",
-                                    presentation.tag.color === color &&
-                                        "ring-text-primary ring-2",
-                                )}
-                                style={{ backgroundColor: color }}
-                            />
-                        ))}
-                    </div>
+                    <TagColorPicker
+                        value={presentation.tag.color}
+                        disabled={!canEdit}
+                        onChange={(color) => set({ tag: { color } })}
+                    />
                 </div>
             </Field>
 
@@ -226,8 +243,8 @@ export const HowItComments = ({
                         disabled={!canEdit}
                         onChange={(mode) => set({ mode })}
                         options={[
-                            { value: "shadow", label: "Shadow" },
                             { value: "post", label: "Post" },
+                            { value: "shadow", label: "Shadow" },
                         ]}
                     />
                 </Field>
@@ -330,7 +347,8 @@ export const HowItComments = ({
 
 const ROUTING_DEFAULT = "__routing";
 
-export const Models = ({
+/** Run and check model pickers, without the card around them. */
+export const ModelsFields = ({
     agent,
     canEdit,
     onChange,
@@ -389,9 +407,7 @@ export const Models = ({
     );
 
     return (
-        <Section
-            title="Models"
-            description="By default the routing table decides, under Custom Agents and Custom Agents (check). Pin a model here to override it for this agent only.">
+        <>
             {!byok.isLoading && !models.length && (
                 <p className="text-text-secondary text-xs">
                     No BYOK models configured: the agent uses Kodus&apos;s
@@ -410,6 +426,18 @@ export const Models = ({
                     {selector("check", "customAgentCheck")}
                 </Field>
             </div>
-        </Section>
+        </>
     );
 };
+
+export const Models = (props: {
+    agent: CustomAgent;
+    canEdit: boolean;
+    onChange: Patch;
+}) => (
+    <Section
+        title="Models"
+        description="By default the routing table decides, under Custom Agents and Custom Agents (check). Pin a model here to override it for this agent only.">
+        <ModelsFields {...props} />
+    </Section>
+);
