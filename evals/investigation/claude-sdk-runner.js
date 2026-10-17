@@ -52,11 +52,24 @@ class Semaforo {
 }
 const semaforo = new Semaforo(Number(process.env.RECALL_CLAUDE_SDK_MAX_PAR || 24));
 
+// Chave de API da Anthropic para os modelos '@sdk-api' (o SDK cobra na API, nao na
+// assinatura): do ambiente ou, se faltar, so essa chave do .env do repo.
+function chaveApiAnthropic() {
+    if (process.env.API_ANTHROPIC_API_KEY) return process.env.API_ANTHROPIC_API_KEY;
+    try { return require('dotenv').parse(fs.readFileSync(path.join(__dirname, '..', '..', '.env'))).API_ANTHROPIC_API_KEY; } catch { return undefined; }
+}
+
 function envDoProcesso() {
-    const token = fs.readFileSync(process.env.RECALL_CLAUDE_OAUTH_FILE || path.join(os.homedir(), '.claude-oauth'), 'utf8').trim();
     const fora = new Set(['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_OAUTH_TOKEN']);
     const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !fora.has(k)));
-    env.CLAUDE_CODE_OAUTH_TOKEN = token;
+    // RECALL_MODEL '<modelo>@sdk-api': o Agent SDK pela chave de API; senao, pela assinatura.
+    if (require('../shared/tier0-models').TIER0[process.env.RECALL_MODEL]?.sdkAuth === 'api') {
+        const chave = chaveApiAnthropic();
+        if (!chave) throw new Error('API_ANTHROPIC_API_KEY ausente para o Agent SDK pela API');
+        env.ANTHROPIC_API_KEY = chave;
+    } else {
+        env.CLAUDE_CODE_OAUTH_TOKEN = fs.readFileSync(process.env.RECALL_CLAUDE_OAUTH_FILE || path.join(os.homedir(), '.claude-oauth'), 'utf8').trim();
+    }
     // Sem as chamadas paralelas do CLI (titulo de sessao etc.) que cairiam no Haiku.
     env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1';
     return env;
