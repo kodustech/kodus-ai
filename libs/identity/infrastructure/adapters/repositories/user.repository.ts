@@ -4,7 +4,6 @@ import {
     DataSource,
     FindManyOptions,
     FindOneOptions,
-    FindOptionsWhere,
     In,
     Repository,
 } from 'typeorm';
@@ -273,25 +272,26 @@ export class UserDatabaseRepository implements IUserRepository {
                 .createQueryBuilder('user')
                 .update(UserModel)
                 .set(data)
-                .where(filter);
+                .where(filter)
+                .returning(['uuid']);
 
             const result = await queryBuilder.execute();
 
-            if (result.affected && result.affected > 0) {
-                const findOneOptions: FindOptionsWhere<UserModel> = {
-                    ...(filter as unknown as FindOptionsWhere<UserModel>),
-                };
-
-                const updatedUser = await this.userRepository.findOne({
-                    where: findOneOptions,
-                });
-
-                if (updatedUser) {
-                    return mapSimpleModelToEntity(updatedUser, UserEntity);
-                }
+            // Re-read by the key the UPDATE returned, not by `filter`: a
+            // filter on a column the update changes (e.g. `status: PENDING`
+            // while setting ACTIVE) no longer matches the row it just wrote.
+            const updatedUuid: string | undefined = result.raw[0]?.uuid;
+            if (!updatedUuid) {
+                return undefined;
             }
 
-            return undefined;
+            const updatedUser = await this.userRepository.findOne({
+                where: { uuid: updatedUuid },
+            });
+
+            return updatedUser
+                ? mapSimpleModelToEntity(updatedUser, UserEntity)
+                : undefined;
         } catch (error) {
             // Logging the error and throwing an exception
             console.error('Error updating user:', error);
