@@ -288,20 +288,28 @@ describe('ast-grep proof', () => {
         );
     });
 
+    // The astGrep tool's output: `file:line:column [rule] message`, then the text.
+    const out = (...records: string[]) =>
+        ['1 match for the rules:', ...records.flatMap((r) => [r, '  x'])].join(
+            '\n',
+        );
+
     it('is proven only when an ast-grep output matched the rule in the finding file', () => {
         expect(
             isProvenByAstGrep(finding, [
-                'no-bare-boolean src/valves/close-valve.handler.ts:12',
+                out(
+                    'src/valves/close-valve.handler.ts:12:5 [no-bare-boolean] Use ValveResult',
+                ),
             ]),
         ).toBe(true);
         expect(
             isProvenByAstGrep(finding, [
-                'no-bare-boolean src/valves/open-valve.handler.ts:3',
+                out('src/valves/open-valve.handler.ts:3:1 [no-bare-boolean]'),
             ]),
         ).toBe(false);
         expect(
             isProvenByAstGrep(finding, [
-                'other-rule src/valves/close-valve.handler.ts:12',
+                out('src/valves/close-valve.handler.ts:12:5 [other-rule]'),
             ]),
         ).toBe(false);
         expect(isProvenByAstGrep(finding, [])).toBe(false);
@@ -313,12 +321,57 @@ describe('ast-grep proof', () => {
         ).toBe(false);
     });
 
+    it('needs the rule, the exact file and the line in the same match', () => {
+        // Rule matched in one file, the finding's file listed in another record.
+        expect(
+            isProvenByAstGrep(finding, [
+                out(
+                    'src/valves/open-valve.handler.ts:3:1 [no-bare-boolean]',
+                    'src/valves/close-valve.handler.ts:12:5 [other-rule]',
+                ),
+            ]),
+        ).toBe(false);
+        // A longer path or rule id that contains the finding's.
+        expect(
+            isProvenByAstGrep(finding, [
+                out(
+                    'legacy/src/valves/close-valve.handler.ts:12:5 [no-bare-boolean]',
+                ),
+            ]),
+        ).toBe(false);
+        expect(
+            isProvenByAstGrep(finding, [
+                out(
+                    'src/valves/close-valve.handler.ts:12:5 [no-bare-boolean-v2]',
+                ),
+            ]),
+        ).toBe(false);
+        // A match elsewhere in the file does not prove the reported lines.
+        const onLines = {
+            ...finding,
+            relevantLinesStart: 40,
+            relevantLinesEnd: 42,
+        };
+        expect(
+            isProvenByAstGrep(onLines, [
+                out('src/valves/close-valve.handler.ts:12:5 [no-bare-boolean]'),
+            ]),
+        ).toBe(false);
+        expect(
+            isProvenByAstGrep(onLines, [
+                out('src/valves/close-valve.handler.ts:41:5 [no-bare-boolean]'),
+            ]),
+        ).toBe(true);
+    });
+
     it('accepts the sgconfig marker form', () => {
         const f = conv('x', {
             relevantFile: 'src/a.ts',
             source: { file: 'sgconfig.yml#no-bare-boolean', quote: 'q' },
         });
-        expect(isProvenByAstGrep(f, ['no-bare-boolean src/a.ts:1'])).toBe(true);
+        expect(
+            isProvenByAstGrep(f, [out('src/a.ts:1:1 [no-bare-boolean]')]),
+        ).toBe(true);
     });
 });
 

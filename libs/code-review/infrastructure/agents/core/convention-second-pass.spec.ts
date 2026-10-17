@@ -231,7 +231,7 @@ function tools() {
                 properties: { rule: { type: 'string' } },
             },
             execute: async () => ({
-                output: 'no-bare-boolean src/valves/close-valve.handler.ts:14:  return false;',
+                output: '1 match for the rules:\nsrc/valves/close-valve.handler.ts:14:5 [no-bare-boolean] Return ValveResult\n  return false;',
             }),
         },
     ]);

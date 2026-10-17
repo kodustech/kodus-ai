@@ -149,9 +149,13 @@ export function recordAstGrepOutputs(
     );
 }
 
+/** One match line of the astGrep tool output: `file:line:column [rule] ...`. */
+const AST_GREP_MATCH_LINE = /^(.+):(\d+):\d+ \[([^\]]+)\]/;
+
 /** True when the finding cites an ast-grep rule AND an ast-grep call in this
- *  run returned a match for that rule in the finding's file. The model cannot
- *  claim proof it did not get from the tool. */
+ *  run returned a match of that exact rule in the finding's exact file, on
+ *  the finding's lines when it has them. The model cannot claim proof it did
+ *  not get from the tool. */
 export function isProvenByAstGrep(
     finding: FinderSuggestion,
     astGrepOutputs: readonly string[],
@@ -159,8 +163,17 @@ export function isProvenByAstGrep(
     const ruleId = astGrepRuleIdOf(finding);
     const file = stripLeading(finding.relevantFile);
     if (!ruleId || !file) return false;
-    return astGrepOutputs.some(
-        (output) => output.includes(ruleId) && output.includes(file),
+    const start = Number(finding.relevantLinesStart) || 0;
+    const end = Math.max(start, Number(finding.relevantLinesEnd) || start);
+    return astGrepOutputs.some((output) =>
+        output.split('\n').some((line) => {
+            const m = AST_GREP_MATCH_LINE.exec(line);
+            if (!m || m[3] !== ruleId || stripLeading(m[1]) !== file) {
+                return false;
+            }
+            const matchLine = Number(m[2]);
+            return start === 0 || (matchLine >= start && matchLine <= end);
+        }),
     );
 }
 
