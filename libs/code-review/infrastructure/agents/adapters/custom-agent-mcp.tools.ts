@@ -302,7 +302,23 @@ export async function buildCustomAgentMcpTools(params: {
         call,
         unavailable,
         async close() {
-            await Promise.allSettled(adapters.map((a) => a.disconnect()));
+            // Bounded like connect: a close that never settles would hold the
+            // review. The timeout only stops waiting; the adapter is dropped.
+            await Promise.allSettled(
+                adapters.map((a) =>
+                    withTimeout(
+                        a.disconnect(),
+                        connectTimeoutMs,
+                        'MCP disconnect',
+                    ).catch((error) =>
+                        logger.warn({
+                            message: 'MCP disconnect failed or timed out',
+                            context: 'buildCustomAgentMcpTools',
+                            error,
+                        }),
+                    ),
+                ),
+            );
         },
     };
 }
@@ -374,7 +390,13 @@ export async function listReadOnlyMcpTools(params: {
                     metadata: { server: server.name },
                 });
             } finally {
-                await adapter?.disconnect().catch(() => undefined);
+                if (adapter) {
+                    await withTimeout(
+                        adapter.disconnect(),
+                        timeoutMs,
+                        'MCP disconnect',
+                    ).catch(() => undefined);
+                }
             }
             return listing;
         }),

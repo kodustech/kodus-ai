@@ -354,6 +354,27 @@ describe('buildCustomAgentMcpTools', () => {
         expect(adapter.disconnect).toHaveBeenCalled();
     });
 
+    it('stops waiting for a disconnect that never settles', async () => {
+        const adapter = fakeAdapter([
+            tool('get_ticket', { readOnlyHint: true }),
+        ]);
+        adapter.disconnect.mockImplementation(() => new Promise(() => {}));
+        const set = await buildCustomAgentMcpTools({
+            selections: [
+                { integrationId: 'int-tracker', tools: ['get_ticket'] },
+            ],
+            servers: [TRACKER],
+            createAdapter: () => adapter,
+            connectTimeoutMs: 20,
+        });
+
+        const closed = await Promise.race([
+            set.close().then(() => 'closed'),
+            new Promise((resolve) => setTimeout(() => resolve('hung'), 500)),
+        ]);
+        expect(closed).toBe('closed');
+    });
+
     it('builds provider-safe names', () => {
         expect(mcpToolExposedName('My Tracker!', 'get.ticket')).toBe(
             'My_Tracker__get_ticket',
