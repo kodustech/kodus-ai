@@ -1,4 +1,5 @@
 import type { TeamAutomation } from "@services/automations/types";
+import type { CustomAgent, KnowledgeItem } from "@services/custom-agents/types";
 import type { LanguageValue } from "@services/parameters/types";
 import type { LiteralUnion } from "react-hook-form";
 import type { SeverityLevel } from "src/core/types";
@@ -115,6 +116,10 @@ export type CodeReviewGlobalConfig = {
         tools?: Partial<Record<DeterministicToolId, DeterministicToolMode>>;
     };
     codeReviewVersion?: "legacy" | "v2" | "v3-agent";
+    /** Team-defined review agents (beta, behind `custom-agents`). */
+    customAgents?: CustomAgent[];
+    /** Skills and docs in the repository, linked to the main review or agents. */
+    knowledge?: KnowledgeItem[];
     ideRulesSyncEnabled: boolean;
     /** Only consulted on a true→false transition of `ideRulesSyncEnabled`.
      *  Picks what happens to the rules previously imported from IDE files.

@@ -29,6 +29,7 @@ export const getLayoutData = cache(async (teamId: string) => {
         githubEnterpriseServerPatFeatureFlag,
         kodusProviderFeatureFlag,
         deterministicEvidenceFeatureFlag,
+        customAgentsFeatureFlag,
     ] = await Promise.all([
         getPermissions().catch(() => ({})),
         getOrganizationName().catch(() => ""),
@@ -63,6 +64,15 @@ export const getLayoutData = cache(async (teamId: string) => {
                 }),
             )
             .catch(() => false),
+        releaseTrackPromise
+            .then((releaseTrack) =>
+                isFeatureEnabled({
+                    feature: FEATURE_FLAGS.customAgents,
+                    identifier: "organization",
+                    releaseTrack,
+                }),
+            )
+            .catch(() => false),
     ]);
 
     return {
@@ -75,6 +85,7 @@ export const getLayoutData = cache(async (teamId: string) => {
             githubEnterpriseServerPat: githubEnterpriseServerPatFeatureFlag,
             kodusProvider: kodusProviderFeatureFlag,
             deterministicEvidence: deterministicEvidenceFeatureFlag,
+            customAgents: customAgentsFeatureFlag,
         },
     };
 });

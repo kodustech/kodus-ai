@@ -131,6 +131,12 @@ export type ReviewWarningKind =
     | "SUGGESTIONS_DROPPED_PATH_MISMATCH"
     | "KODY_RULES_PARTIAL"
     | "VERIFY_UNAVAILABLE"
+    | "SKILL_NOT_FOUND"
+    | "SKILL_INVALID"
+    | "SKILL_CHANGED_IN_PR"
+    | "DOC_NOT_FOUND"
+    | "KNOWLEDGE_TRUNCATED"
+    | "SKILL_COMPATIBILITY"
     | "CLI_INSTALL_FAILED";
 
 export interface ReviewWarning {
@@ -146,6 +152,7 @@ export interface ReviewWarning {
         | "judge_shard_failed"
         | "large_pr"
         | "verify_failed"
+        | "knowledge"
         | "cli_install_failed";
     contextWindowTokens: number;
     modelName: string;

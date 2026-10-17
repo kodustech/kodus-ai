@@ -62,6 +62,7 @@ import { UpdateCodeReviewParameterRepositoriesUseCase } from '@libs/code-review/
 import { UpdateOrCreateCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/update-or-create-code-review-parameter-use-case';
 import { PreviewPrSummaryUseCase } from '@libs/code-review/application/use-cases/summary/preview-pr-summary.use-case';
 import { ParametersKey } from '@libs/core/domain/enums';
+import { maskCodeReviewConfigSecrets } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import {
     checkPermissions,
     checkRepoPermissions,

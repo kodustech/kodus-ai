@@ -24,6 +24,10 @@ import { UpdateCodeReviewParameterRepositoriesUseCase } from '../application/use
 import { UpdateOrCreateCodeReviewParameterUseCase } from '../application/use-cases/configuration/update-or-create-code-review-parameter-use-case';
 import { PreviewPrSummaryUseCase } from '../application/use-cases/summary/preview-pr-summary.use-case'; // Added
 import { CentralizedConfigModule } from '@libs/centralized-config/modules/centralized-config.module';
+import { CodeReviewCoreModule } from '@libs/code-review/modules/code-review-core.module';
+import { GetCustomAgentsStatusUseCase } from '../application/use-cases/custom-agents/get-custom-agents-status.use-case';
+import { ResolveCustomAgentUseCase } from '../application/use-cases/custom-agents/resolve-custom-agent.use-case';
+import { TryCustomAgentUseCase } from '../application/use-cases/custom-agents/try-custom-agent.use-case';
 
 @Module({
     imports: [
@@ -41,6 +45,8 @@ import { CentralizedConfigModule } from '@libs/centralized-config/modules/centra
         forwardRef(() => PermissionValidationModule),
         // Linked repositories plan gate (Teams/Enterprise).
         forwardRef(() => LicenseModule),
+        // Stored findings, for the custom agents status.
+        forwardRef(() => CodeReviewCoreModule),
     ],
     providers: [
         DeleteRepositoryCodeReviewParameterUseCase,
@@ -54,6 +60,9 @@ import { CentralizedConfigModule } from '@libs/centralized-config/modules/centra
         UpdateCliRepositorySettingsUseCase,
         UpdateOrCreateCodeReviewParameterUseCase,
         PreviewPrSummaryUseCase, // Added
+        ResolveCustomAgentUseCase,
+        TryCustomAgentUseCase,
+        GetCustomAgentsStatusUseCase,
     ],
     exports: [
         DeleteRepositoryCodeReviewParameterUseCase,
@@ -67,6 +76,9 @@ import { CentralizedConfigModule } from '@libs/centralized-config/modules/centra
         UpdateCliRepositorySettingsUseCase,
         UpdateOrCreateCodeReviewParameterUseCase,
         PreviewPrSummaryUseCase, // Added
+        ResolveCustomAgentUseCase,
+        TryCustomAgentUseCase,
+        GetCustomAgentsStatusUseCase,
     ],
 })
 export class CodeReviewConfigurationModule {}

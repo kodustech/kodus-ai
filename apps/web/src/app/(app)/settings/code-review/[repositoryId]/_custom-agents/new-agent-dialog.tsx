@@ -1,0 +1,225 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@components/ui/dialog";
+import { toast } from "@components/ui/toaster/use-toast";
+import {
+    agentFromSkill,
+    createAgentFromTemplate,
+    CUSTOM_AGENT_TEMPLATES,
+    setKnowledgeLink,
+    type CustomAgentTemplateId,
+} from "@services/custom-agents/drafts";
+import { useResolveCustomAgent } from "@services/custom-agents/hooks";
+import type {
+    CustomAgent,
+    KnowledgeCandidate,
+} from "@services/custom-agents/types";
+import { FolderGit2Icon } from "lucide-react";
+import { cn } from "src/core/utils/components";
+
+import { agentPageHref, useCustomAgentsForm } from "./use-custom-agents-form";
+
+/**
+ * Starts an agent from a template, or from a skill already in the
+ * repository. The agent is saved right away in shadow mode, so its page
+ * opens on something real and nothing is posted until the team says so.
+ */
+export const NewAgentDialog = ({
+    open,
+    onOpenChange,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}) => {
+    const router = useRouter();
+    const {
+        teamId,
+        repositoryId,
+        directoryId,
+        agents,
+        knowledge,
+        otherFieldsDirty,
+        save,
+    } = useCustomAgentsForm();
+    const [tab, setTab] = useState<"templates" | "repository">("templates");
+    const [saving, setSaving] = useState(false);
+    const discover = useResolveCustomAgent({
+        teamId,
+        repositoryId,
+        discover: true,
+        enabled: open && tab === "repository",
+    });
+    const candidates =
+        discover.data?.knowledge.status === "ok"
+            ? (discover.data.knowledge.candidates ?? []).filter(
+                  (candidate) => candidate.kind === "skill",
+              )
+            : [];
+
+    const create = async (
+        agent: CustomAgent,
+        link?: { path: string; kind: "skill" | "doc" },
+    ) => {
+        setSaving(true);
+        try {
+            const nextKnowledge = link
+                ? setKnowledgeLink(knowledge, link, { agentId: agent.id }, true)
+                : knowledge;
+            await save({
+                agents: [...agents, agent],
+                knowledge: nextKnowledge,
+            });
+            onOpenChange(false);
+            router.push(agentPageHref(repositoryId, agent.id, directoryId));
+        } catch (error) {
+            console.error("Error creating custom agent:", error);
+            toast({
+                title: "Error",
+                description: "Couldn't create the agent. Try again.",
+                variant: "danger",
+            });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const fromTemplate = (id: CustomAgentTemplateId) =>
+        create(createAgentFromTemplate(id, agents));
+    const fromSkill = (candidate: KnowledgeCandidate) => {
+        const { agent, link } = agentFromSkill(candidate, agents);
+        return create(agent, link);
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>New agent</DialogTitle>
+                    <DialogDescription>
+                        Starts in shadow: it reviews pull requests and keeps its
+                        findings for you to read, without posting.
+                    </DialogDescription>
+                </DialogHeader>
+
+                {otherFieldsDirty && (
+                    <p className="text-warning text-sm">
+                        Save or discard the other changes on this page first.
+                    </p>
+                )}
+
+                <div className="flex gap-2">
+                    <Button
+                        size="xs"
+                        variant={tab === "templates" ? "primary" : "helper"}
+                        onClick={() => setTab("templates")}>
+                        Templates
+                    </Button>
+                    <Button
+                        size="xs"
+                        variant={tab === "repository" ? "primary" : "helper"}
+                        disabled={repositoryId === "global"}
+                        onClick={() => setTab("repository")}>
+                        Import from repository
+                    </Button>
+                </div>
+
+                {tab === "templates" && (
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {CUSTOM_AGENT_TEMPLATES.map((template) => (
+                            <button
+                                key={template.id}
+                                type="button"
+                                disabled={saving || otherFieldsDirty}
+                                onClick={() => fromTemplate(template.id)}
+                                className={cn(
+                                    "border-card-lv3/60 bg-card-lv1 hover:bg-card-lv2 flex flex-col gap-1 rounded-xl border px-4 py-3 text-left transition-colors disabled:opacity-60",
+                                )}>
+                                <span className="text-text-primary flex items-center gap-2 text-sm font-medium">
+                                    <span
+                                        className="size-2.5 rounded-full"
+                                        style={{
+                                            backgroundColor: template.color,
+                                        }}
+                                    />
+                                    {template.id === "blank"
+                                        ? "Blank"
+                                        : template.name}
+                                </span>
+                                <span className="text-text-secondary text-xs">
+                                    {template.description}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {tab === "repository" && (
+                    <div className="flex flex-col gap-2">
+                        <p className="text-text-secondary text-xs">
+                            Skills found on the default branch. The agent loads
+                            the skill from the repository on every review, so
+                            edits there apply without coming back here.
+                        </p>
+                        {discover.isLoading && (
+                            <p className="text-text-secondary text-sm">
+                                Reading the repository…
+                            </p>
+                        )}
+                        {discover.data?.knowledge.status === "unavailable" && (
+                            <p className="text-warning text-sm">
+                                {discover.data.knowledge.reason}
+                            </p>
+                        )}
+                        {discover.isError && (
+                            <p className="text-danger text-sm">
+                                Couldn&apos;t read the repository. Try again.
+                            </p>
+                        )}
+                        {discover.isSuccess &&
+                            discover.data.knowledge.status === "ok" &&
+                            candidates.length === 0 && (
+                                <p className="text-text-secondary text-sm">
+                                    No skills on{" "}
+                                    {discover.data.repository.branch}. A skill
+                                    is a folder with a SKILL.md, e.g.
+                                    .claude/skills/&lt;name&gt;/SKILL.md.
+                                </p>
+                            )}
+                        {candidates.map((candidate) => (
+                            <button
+                                key={candidate.path}
+                                type="button"
+                                disabled={saving || otherFieldsDirty}
+                                onClick={() => fromSkill(candidate)}
+                                className="border-card-lv3/60 bg-card-lv1 hover:bg-card-lv2 flex items-start gap-3 rounded-xl border px-4 py-3 text-left disabled:opacity-60">
+                                <FolderGit2Icon className="text-text-secondary mt-0.5 size-4 shrink-0" />
+                                <span className="flex min-w-0 flex-col gap-0.5">
+                                    <span className="text-text-primary text-sm font-medium">
+                                        {candidate.name ?? candidate.path}
+                                    </span>
+                                    <span className="text-text-tertiary truncate text-xs">
+                                        {candidate.path}
+                                    </span>
+                                    {candidate.description && (
+                                        <span className="text-text-secondary text-xs">
+                                            {candidate.description}
+                                        </span>
+                                    )}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </DialogContent>
+        </Dialog>
+    );
+};

@@ -18,6 +18,8 @@ import {
     ValidateBy,
     ValidateNested,
     ValidationOptions,
+    IsNotEmpty,
+    ValidateIf,
 } from 'class-validator';
 
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
@@ -417,12 +419,24 @@ class DeterministicEvidenceDto {
     tools?: DeterministicEvidenceToolsDto;
 }
 
+/**
+ * A secret is write-only: the screen sends `value` when the user types one,
+ * or echoes back the masked `ciphertext` it read to keep the stored value.
+ * The save use case encrypts `value` and never stores it.
+ */
 class CliToolSecretDto {
     @Matches(CLI_SECRET_ENV_PATTERN)
     env: string;
 
+    @ValidateIf((secret: CliToolSecretDto) => !secret.value)
     @IsString()
+    @IsNotEmpty()
+    // Absent when `value` is sent; the save fills it before storing.
     ciphertext: string;
+
+    @IsOptional()
+    @IsString()
+    value?: string;
 }
 
 class CliToolConfigDto {

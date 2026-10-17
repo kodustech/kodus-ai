@@ -158,6 +158,39 @@ describe('CreateOrUpdateCodeReviewParameterDto — custom agents', () => {
         expect(flat).toContain('"property":"env"');
     });
 
+    it('accepts a typed secret value, or the mask that keeps the stored one', async () => {
+        const flat = await validateConfig({
+            customAgents: [
+                agent({
+                    tools: {
+                        cli: [
+                            cli({
+                                secrets: [
+                                    { env: 'LEDGER_TOKEN', value: 'typed' },
+                                    { env: 'LEDGER_URL', ciphertext: '••••' },
+                                ],
+                            }),
+                        ],
+                    },
+                }),
+            ],
+        });
+        expect(flat).toBe('[]');
+    });
+
+    it('rejects a secret with neither a value nor a ciphertext', async () => {
+        const flat = await validateConfig({
+            customAgents: [
+                agent({
+                    tools: {
+                        cli: [cli({ secrets: [{ env: 'LEDGER_TOKEN' }] })],
+                    },
+                }),
+            ],
+        });
+        expect(flat).toContain('"property":"ciphertext"');
+    });
+
     it('rejects an unknown presentation mode and format', async () => {
         const flat = await validateConfig({
             customAgents: [

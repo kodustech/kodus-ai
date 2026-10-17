@@ -67,4 +67,52 @@ describe('GetCodeReviewParameterUseCase — get-or-create', () => {
 
         expect(createActiveVersionIfAbsent).not.toHaveBeenCalled();
     });
+
+    it('masks custom agent CLI secrets before the config leaves the server', async () => {
+        const stored = {
+            id: 'ledger-agent',
+            tools: {
+                cli: [
+                    {
+                        name: 'ledgerctl',
+                        secrets: [
+                            { env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' },
+                        ],
+                    },
+                ],
+            },
+        };
+        const entity = {
+            toObject: () => ({
+                configValue: {
+                    configs: { customAgents: [stored] },
+                    repositories: [
+                        {
+                            id: 'repo-1',
+                            configs: { customAgents: [stored] },
+                            directories: [],
+                        },
+                    ],
+                },
+                createdAt: new Date('2026-01-01T00:00:00Z'),
+            }),
+        };
+        const { useCase } = build(
+            jest.fn().mockResolvedValue(entity),
+            jest.fn(),
+        );
+        const formatted = useCase[
+            'getCodeReviewConfigFormatted'
+        ] as unknown as jest.Mock;
+
+        await useCase.execute(user as any, 'team-1', {
+            skipAuthorization: true,
+        });
+
+        const handedToFormatter = formatted.mock.calls[0][1];
+        expect(JSON.stringify(handedToFormatter)).not.toContain('iv:stored');
+        expect(
+            handedToFormatter.configs.customAgents[0].tools.cli[0].secrets,
+        ).toEqual([{ env: 'LEDGER_TOKEN', ciphertext: '••••' }]);
+    });
 });
