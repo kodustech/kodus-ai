@@ -8,8 +8,11 @@ import {
     CUSTOM_AGENT_TEMPLATES,
     describeAgent,
     isLinked,
+    knowledgeChoices,
+    normalizeKnowledgePath,
     prepareAgentsForSave,
     prepareKnowledgeForSave,
+    setAgentKnowledge,
     setKnowledgeLink,
     withoutSecretValues,
 } from "./drafts";
@@ -37,7 +40,7 @@ describe("custom agent drafts", () => {
         ]);
     });
 
-    it("creates a template agent in shadow mode with a unique id", () => {
+    it("creates a template agent that posts, with a unique id", () => {
         const first = createAgentFromTemplate("architecture", []);
         const second = createAgentFromTemplate("architecture", [first]);
 
@@ -46,7 +49,7 @@ describe("custom agent drafts", () => {
             name: "Architecture",
             enabled: true,
             presentation: {
-                mode: "shadow",
+                mode: "post",
                 format: "inline",
                 suggestedFix: "when-confident",
             },
@@ -59,6 +62,7 @@ describe("custom agent drafts", () => {
         const agent = createAgentFromTemplate("blank", []);
         expect(agent.instructions).toBe("");
         expect(agent.name).toBe("New agent");
+        expect(agent.presentation.mode).toBe("post");
     });
 
     it("imports a repository skill as an agent linked to it", () => {
@@ -82,6 +86,7 @@ describe("custom agent drafts", () => {
             kind: "skill",
             linkedTo: [{ agentId: agent.id }],
         });
+        expect(agent.presentation.mode).toBe("post");
     });
 
     it("stops adding agents at the limit", () => {
@@ -155,6 +160,136 @@ describe("custom agent drafts", () => {
                 linkedTo: ["main-review"],
             },
         ]);
+    });
+
+    it("links a file the config did not have yet to one agent", () => {
+        const next = setAgentKnowledge(
+            [],
+            { path: "docs/ledger.md", kind: "doc" },
+            "ledger",
+            true,
+        );
+        expect(next).toEqual([
+            {
+                path: "docs/ledger.md",
+                kind: "doc",
+                linkedTo: [{ agentId: "ledger" }],
+            },
+        ]);
+    });
+
+    it("unlinking keeps an item something else still follows", () => {
+        const knowledge: KnowledgeItem[] = [
+            {
+                path: "docs/ledger.md",
+                kind: "doc",
+                linkedTo: ["main-review", { agentId: "ledger" }],
+            },
+        ];
+        expect(
+            setAgentKnowledge(
+                knowledge,
+                { path: "docs/ledger.md", kind: "doc" },
+                "ledger",
+                false,
+            ),
+        ).toEqual([
+            { path: "docs/ledger.md", kind: "doc", linkedTo: ["main-review"] },
+        ]);
+    });
+
+    it("unlinking the last follower removes the item", () => {
+        const knowledge: KnowledgeItem[] = [
+            {
+                path: ".claude/skills/ledger",
+                kind: "skill",
+                linkedTo: [{ agentId: "ledger" }],
+            },
+            { path: "docs/other.md", kind: "doc", linkedTo: [] },
+        ];
+        expect(
+            setAgentKnowledge(
+                knowledge,
+                { path: ".claude/skills/ledger", kind: "skill" },
+                "ledger",
+                false,
+            ),
+        ).toEqual([{ path: "docs/other.md", kind: "doc", linkedTo: [] }]);
+    });
+
+    it("linking twice does not duplicate the agent", () => {
+        const once = setAgentKnowledge(
+            [],
+            { path: "docs/ledger.md", kind: "doc" },
+            "ledger",
+            true,
+        );
+        const twice = setAgentKnowledge(
+            once,
+            { path: "docs/ledger.md", kind: "doc" },
+            "ledger",
+            true,
+        );
+        expect(twice).toEqual(once);
+    });
+
+    it("lists the config's items and what was found, each once", () => {
+        const knowledge: KnowledgeItem[] = [
+            {
+                path: "docs/ledger.md",
+                kind: "doc",
+                linkedTo: [{ agentId: "ledger" }],
+            },
+            { path: "docs/style.md", kind: "doc", linkedTo: ["main-review"] },
+        ];
+        const choices = knowledgeChoices(
+            knowledge,
+            [
+                {
+                    path: "docs/ledger.md",
+                    kind: "doc",
+                    name: "Ledger",
+                    kodyRuleSource: false,
+                },
+                {
+                    path: ".claude/skills/payments",
+                    kind: "skill",
+                    name: "payments",
+                    kodyRuleSource: true,
+                },
+            ],
+            "ledger",
+        );
+        expect(choices).toEqual([
+            {
+                path: "docs/ledger.md",
+                kind: "doc",
+                name: "Ledger",
+                linked: true,
+                kodyRuleSource: false,
+            },
+            {
+                path: "docs/style.md",
+                kind: "doc",
+                name: undefined,
+                linked: false,
+                kodyRuleSource: false,
+            },
+            {
+                path: ".claude/skills/payments",
+                kind: "skill",
+                name: "payments",
+                linked: false,
+                kodyRuleSource: true,
+            },
+        ]);
+    });
+
+    it("normalizes a typed path", () => {
+        expect(normalizeKnowledgePath("  /docs/ledger.md ")).toBe(
+            "docs/ledger.md",
+        );
+        expect(normalizeKnowledgePath("   ")).toBe("");
     });
 
     it("flags an unpinned install, missing prefixes and secrets on project code", () => {

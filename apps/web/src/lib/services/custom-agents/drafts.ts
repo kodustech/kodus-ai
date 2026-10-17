@@ -164,8 +164,9 @@ const blankAgent = (params: {
         tag: { color: params.color },
         format: "inline",
         suggestedFix: "when-confident",
-        // New agents start in shadow: findings are kept, not posted.
-        mode: "shadow",
+        // New agents post, so the first pull request shows what they do.
+        // Shadow stays one switch away for a team that wants to watch first.
+        mode: "post",
     },
 });
 
@@ -285,6 +286,81 @@ export const setKnowledgeLink = (
     return knowledge.map((entry, position) =>
         position === index ? next : entry,
     );
+};
+
+/** A path as the config stores it: trimmed, relative to the repository. */
+export const normalizeKnowledgePath = (path: string) =>
+    path.trim().replace(/^\/+/, "");
+
+/**
+ * Turns one skill or doc on or off for an agent, from the agent itself:
+ * turning it on registers the file when the config did not have it, and
+ * turning it off drops the file once nothing follows it any more.
+ */
+export const setAgentKnowledge = (
+    knowledge: KnowledgeItem[],
+    item: Pick<KnowledgeItem, "path" | "kind">,
+    agentId: string,
+    on: boolean,
+): KnowledgeItem[] => {
+    const next = setKnowledgeLink(knowledge, item, { agentId }, on);
+    if (on) return next;
+    return next.filter(
+        (entry) =>
+            entry.linkedTo.length > 0 ||
+            entry.path !== item.path ||
+            entry.kind !== item.kind,
+    );
+};
+
+export type KnowledgeChoice = {
+    path: string;
+    kind: KnowledgeItem["kind"];
+    name?: string;
+    linked: boolean;
+    kodyRuleSource: boolean;
+};
+
+/**
+ * Every skill and doc an agent can follow: what the config already has, then
+ * what was found on the branch and is not in the config yet.
+ */
+export const knowledgeChoices = (
+    knowledge: KnowledgeItem[],
+    candidates: KnowledgeCandidate[],
+    agentId: string,
+): KnowledgeChoice[] => {
+    const found = (item: Pick<KnowledgeItem, "path" | "kind">) =>
+        candidates.find(
+            (candidate) =>
+                candidate.path === item.path && candidate.kind === item.kind,
+        );
+    const registered = knowledge.map((item) => ({
+        path: item.path,
+        kind: item.kind,
+        name: found(item)?.name,
+        linked: isLinked(item, { agentId }),
+        kodyRuleSource: found(item)?.kodyRuleSource ?? false,
+    }));
+    const taken = new Set(knowledge.map((item) => `${item.kind}:${item.path}`));
+    const discovered = candidates
+        .filter(
+            (candidate, index, all) =>
+                !taken.has(`${candidate.kind}:${candidate.path}`) &&
+                all.findIndex(
+                    (other) =>
+                        other.path === candidate.path &&
+                        other.kind === candidate.kind,
+                ) === index,
+        )
+        .map((candidate) => ({
+            path: candidate.path,
+            kind: candidate.kind,
+            name: candidate.name,
+            linked: false,
+            kodyRuleSource: candidate.kodyRuleSource,
+        }));
+    return [...registered, ...discovered];
 };
 
 /** Problems the server would reject, shown while the CLI is edited. */

@@ -30,8 +30,8 @@ import { agentPageHref, useCustomAgentsForm } from "./use-custom-agents-form";
 
 /**
  * Starts an agent from a template, or from a skill already in the
- * repository. The agent is saved right away in shadow mode, so its page
- * opens on something real and nothing is posted until the team says so.
+ * repository. The agent is saved right away and posts on the next pull
+ * request its files match; Shadow is one switch away on its row.
  */
 export const NewAgentDialog = ({
     open,
@@ -105,8 +105,9 @@ export const NewAgentDialog = ({
                 <DialogHeader>
                     <DialogTitle>New agent</DialogTitle>
                     <DialogDescription>
-                        Starts in shadow: it reviews pull requests and keeps its
-                        findings for you to read, without posting.
+                        It comments on the next pull request its files match.
+                        Switch it to Shadow to keep its findings unposted
+                        while you try it.
                     </DialogDescription>
                 </DialogHeader>
 
