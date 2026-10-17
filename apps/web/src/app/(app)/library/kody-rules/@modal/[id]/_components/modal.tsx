@@ -110,6 +110,10 @@ export const KodyRuleLibraryItemModal = ({
                     rule,
                 ) as KodyRule["severity"],
                 path: "",
+                // Carried on the import request: the server resolves the
+                // language into the rule's fileScope, and a rule imported
+                // without it lands unscoped and applies to every file (#1832).
+                language: rule.language,
                 examples: rule.examples,
                 origin: KodyRulesOrigin.LIBRARY,
                 status: KodyRulesStatus.ACTIVE,
