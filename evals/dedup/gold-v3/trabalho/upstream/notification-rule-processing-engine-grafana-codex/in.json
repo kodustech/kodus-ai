@@ -1,0 +1,66 @@
+{
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "prTitle": "Notification Rule Processing Engine",
+ "upstream": "grafana/grafana",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/grafana",
+ "base": "47e5bd23163e6037fc0741068ac78930bba2769f",
+ "head": "8df850371034b73dc4dd9908cc30fa09f12a1f97",
+ "tps": [
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#01",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The pause menu item is still gated on a Grafana ruler rule, but the list view now passes only the Prometheus rule, so Pause/Resume disappears for list-view rules even when the user may pause them.",
+   "evidenciaOpus": "AlertRuleMenu.tsx:123 still renders MenuItemPauseRule only when rulerRuleType.grafana.rule(rulerRule), but GrafanaRuleListItem.tsx:47 now passes only promRule to RuleActionsButtons (the ruler-loading GrafanaRuleLoader was deleted), so Pause/Resume never appears in the list view even when canPause is true.",
+   "evidenciaAstra": "GrafanaRuleListItem.tsx:47 now supplies only promRule to RuleActionsButtons. AlertRuleMenu.tsx:123 still requires a Grafana rulerRule before rendering Pause/Resume, so the new Prometheus ability cannot expose those actions."
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#02",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The Delete menu item still requires a ruler rule, which list-view Grafana rules no longer provide, so users with delete permission lose the Delete action.",
+   "evidenciaOpus": "AlertRuleMenu.tsx:165 renders Delete only when canDelete && rulerRule, and handleDelete takes a RulerRuleDTO; list-view Grafana rules (GrafanaRuleListItem.tsx:47) now provide no rulerRule, so the Delete action is never shown despite the new prom-based delete ability.",
+   "evidenciaAstra": "GrafanaRuleListItem.tsx:47 omits the ruler rule for the new list paths. AlertRuleMenu.tsx:165 requires both canDelete and rulerRule, hiding Delete even when the Prometheus permission check succeeds."
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#03",
+   "severity": "medium",
+   "category": "security",
+   "bug": "When the Grafana prom-rule branch is skipped (datasource rules), useAllGrafanaPromRuleAbilities(undefined) still reports Duplicate as supported and allowed by Grafana create permission, and AlertRuleMenu ORs it with the ruler ability, so Duplicate appears on cloud rules even when the ruler check denies it.",
+   "evidenciaOpus": "useGrafanaPromRuleAbilities(skipToken) calls useAllGrafanaPromRuleAbilities(undefined); useIsGrafanaPromRuleEditable returns loading:false, so MaybeSupported is AlwaysSupported and Duplicate = toAbility(AlwaysSupported, grafana create). AlertRuleMenu.tsx:91 ORs this with the ruler ability, so Duplicate shows for datasource rules whenever the user has Grafana create permission.",
+   "evidenciaAstra": "useAbilities.ts:401 converts skipToken to undefined, and lines 354\u2013355 return loading:false for that case; lines 309\u2013318 consequently grant Duplicate support using Grafana create permission. AlertRuleMenu.tsx:73 passes skipToken for datasource rules and lines 91\u201392 OR that result with their ruler ability, overriding a denied or unsupported datasource result."
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#04",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The refactor of useAllAlertRuleAbilities into useAllRulerRuleAbilities drops the isFederatedRuleGroup check (isFederated is hardcoded false), so federated Mimir rules are reported as editable and deletable.",
+   "evidenciaOpus": "useAllAlertRuleAbilities now delegates to useAllRulerRuleAbilities, which hardcodes isFederated = false (useAbilities.ts, TODO), replacing the removed isFederatedRuleGroup(rule.group) check, so federated Mimir groups are no longer immutable for Update/Delete/Pause.",
+   "evidenciaAstra": "useAbilities.ts:227\u2013228 replaces the CombinedRule implementation with delegation, losing the base implementation's group federation check. The receiving hook hardcodes isFederated=false at line 245 and uses it to determine Update/Delete support at lines 250\u2013265, so federated rules can now receive mutating abilities."
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#05",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The Grafana prom-rule abilities gate Pause, Restore, Export and DeletePermanently on alertingRule(rule) while the comment claims it checks Grafana-managed rules, so Grafana recording rules lose these actions in the list view.",
+   "evidenciaOpus": "In useAllGrafanaPromRuleAbilities the comment says all GrafanaPromRuleDTO rules are Grafana-managed but the variable is isAlertingRule = prometheusRuleType.grafana.alertingRule(rule); Pause, Restore, ModifyExport and DeletePermanently use it, so Grafana recording rules lose these abilities that the ruler path (rulerRuleType.grafana.rule) grants.",
+   "evidenciaAstra": "useAbilities.ts:302 checks specifically for an alerting rule, and lines 324\u2013328 use that result to disable Export, Pause, Restore, and permanent deletion for recording rules. This is a behavioral defect beyond the misleading comment: the ruler implementation at lines 268\u2013272 supports Grafana recording rules, while the new Prometheus-only list uses the narrower abilities."
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#07",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The rendered GrafanaRuleListItem is missing the required key prop for React list items. This can cause rendering issues when the list order changes.",
+   "evidenciaOpus": "FilterView.tsx: the grafana case returns <GrafanaRuleListItem .../> without key={key} inside rules.map, while the datasource and unknown cases pass key and the replaced GrafanaRuleLoader had key={key}.",
+   "evidenciaAstra": "FilterView.tsx:151\u2013162 maps rules into GrafanaRuleListItem elements without assigning the already-destructured key, replacing the previously keyed loader. These rows contain action state in RuleActionsButtons.V2.tsx:43\u201348, so positional reconciliation can retain state across different rules when results change."
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#11",
+   "severity": "high",
+   "category": "bug",
+   "bug": "RuleActionsButtons is invoked with only promRule, but SilenceGrafanaRuleDrawer inside RuleActionsButtons still depends on a Grafana Ruler rule being present, so for Grafana rules coming from list views the 'Silence notifications' menu entry (now driven by Grafana Prom abilities) will toggle showSilenceDrawer without ever rendering the drawer. This means clicking 'Silence notifications' for these rules has no visible effect, even when abilities indicate silencing is allowed.",
+   "evidenciaOpus": "RuleActionsButtons.V2.tsx:104 mounts SilenceGrafanaRuleDrawer only when rulerRuleType.grafana.alertingRule(rule), but GrafanaRuleListItem.tsx:47 passes only promRule, while canSilence can be true via grafana prom abilities; clicking Silence sets showSilenceDrawer and nothing renders.",
+   "evidenciaAstra": "GrafanaRuleListItem.tsx:47 now passes only promRule, while RuleActionsButtons.V2.tsx:100 merely sets showSilenceDrawer when Silence is clicked. Lines 104\u2013105 still require a Grafana alerting ruler rule to mount the drawer, so the newly available menu action has no visible effect."
+  }
+ ]
+}

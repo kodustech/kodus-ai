@@ -1,0 +1,42 @@
+{
+ "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+ "prTitle": "Span Buffer Multiprocess Enhancement with Health Monitoring",
+ "upstream": "getsentry/sentry",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/sentry",
+ "base": "de11fb0166a7244115bb066edd65ec0d6b7e365c",
+ "head": "3162ad68a5c87666788b27a44eb31235025091a9",
+ "tps": [
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "severity": "high",
+   "category": "bug",
+   "bug": "Because flusher processes are created via multiprocessing.get_context('spawn').Process, they are instances of multiprocessing.context.SpawnProcess, which on POSIX is not a subclass of multiprocessing.Process, so this isinstance check will always be false and hung processes won't be killed here.",
+   "evidenciaOpus": "flusher.py:254 guards kill() with isinstance(process, multiprocessing.Process), but processes come from get_context('spawn').Process (line 53/105), i.e. SpawnProcess, which is not a subclass of multiprocessing.Process; the base code called kill() unconditionally, so hung workers are now never killed before a replacement is started (line 259).",
+   "evidenciaAstra": "src/sentry/spans/consumers/process/flusher.py:53 and :105 create SpawnProcess workers, which are not instances of multiprocessing.Process, as confirmed with the local Python runtime. The guard at line 254 therefore skips killing an unhealthy live worker before line 259 creates its replacement and line 124 overwrites its handle."
+  },
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "severity": "medium",
+   "category": "concurrency",
+   "bug": "Breaking out of the loop when the deadline has elapsed can skip terminating remaining flusher processes, potentially leaving them running after shutdown; consider ensuring termination is attempted even if the deadline is exceeded.",
+   "evidenciaOpus": "flusher.py:337-347: once the shared deadline passes the loop breaks before reaching terminate() for the current and remaining processes, so later workers are never terminated on shutdown.",
+   "evidenciaAstra": "src/sentry/spans/consumers/process/flusher.py:340-341 breaks out of worker cleanup when the shared deadline expires, bypassing termination at line 347 for every remaining worker. The stop flag at line 331 cannot interrupt a worker blocked inside Redis or producer calls, so those workers can survive shutdown."
+  },
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#06",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "max_processes uses a truthiness fallback, so --flusher-processes 0 silently becomes one process per shard instead of being rejected.",
+   "evidenciaOpus": "flusher.py:51 `max_processes or len(...)` turns an explicit 0 into one process per shard. Only reachable with a nonsensical --flusher-processes 0 configuration.",
+   "evidenciaAstra": "src/sentry/consumers/__init__.py:435 accepts zero, and src/sentry/spans/consumers/process/factory.py:74 forwards it without validation. src/sentry/spans/consumers/process/flusher.py:51 replaces zero with the shard count, silently expanding the supplied maximum instead of rejecting it."
+  },
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "severity": "medium",
+   "category": "perf",
+   "bug": "submit() queries cluster-wide Redis memory once per flusher buffer, repeating identical INFO calls per process on every submit.",
+   "evidenciaOpus": "flusher.py:299-301 calls get_memory_info() for every per-process buffer, and SpansBuffer.get_memory_info (buffer.py:375-376) is iter_cluster_memory_usage(self.client) for the whole cluster, so INFO is repeated once per process; submit is not a hot path and the ratio is unchanged.",
+   "evidenciaAstra": "src/sentry/spans/consumers/process/flusher.py:300-301 synchronously queries memory once per worker buffer, but src/sentry/spans/buffer.py:375-376 delegates each query to the entire configured cluster. src/sentry/processing/backpressure/memory.py:86-95 executes fresh INFO requests each time, multiplying network work and ingestion-thread waiting by the worker count."
+  }
+ ]
+}

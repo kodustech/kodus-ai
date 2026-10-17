@@ -1,0 +1,50 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "prTitle": "Database Performance Optimizations",
+ "upstream": "grafana/grafana",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/grafana",
+ "base": "a886bd3c79a417a70b51509384d1f1ec3e87e96b",
+ "head": "04cfa3bfd469c035ff8b35f9a66867c4e8d5dcf4",
+ "tps": [
+  {
+   "issueId": "database-performance-optimizations-grafana-codex#04",
+   "severity": "medium",
+   "category": "perf",
+   "bug": "The code uses Error log level for what appears to be debugging information. This will pollute error logs in production. Consider using Debug or Info level instead.",
+   "evidenciaOpus": "xorm_store.go:534-537, :554-557 and :576-579 call r.log.Error on every cleanup batch for normal progress, including the full ids slice (up to the batch size) and a nil err.",
+   "evidenciaAstra": "pkg/services/annotations/annotationsimpl/xorm_store.go:534 and :537 unconditionally emit Error-level messages during successful cleanup, including the full fetched ID list. The same pattern appears at :554\u2013557 and :576\u2013579, introducing false operational errors and potentially large log payloads on normal batches."
+  },
+  {
+   "issueId": "database-performance-optimizations-grafana-codex#06",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "On MySQL and Postgres, deleteByIDs binds one placeholder per ID without limit, so a cleanup batch size above 65535 makes every DELETE fail.",
+   "evidenciaOpus": "xorm_store.go:614-618 binds one placeholder per id for all non-SQLite engines with no cap; MySQL and Postgres reject more than 65535 bind parameters, so an AnnotationCleanupJobBatchSize above that fails every batch. Requires an unusually large configured batch size.",
+   "evidenciaAstra": "pkg/setting/setting.go:710 reads the configured batch size without an upper bound, and pkg/services/annotations/annotationsimpl/xorm_store.go:615\u2013622 binds every selected ID in one statement for non-SQLite databases. With more than 65,535 eligible rows in a configured batch, PostgreSQL/MySQL parameter limits cause cleanup to fail; the previous subquery DELETE did not bind these IDs."
+  },
+  {
+   "issueId": "database-performance-optimizations-grafana-codex#07",
+   "severity": "medium",
+   "category": "perf",
+   "bug": "The SQLite inline ID list is built with repeated fmt.Sprintf concatenation, which is quadratic in batch size.",
+   "evidenciaOpus": "xorm_store.go:608-613 builds the SQLite IN list with repeated fmt.Sprintf(\"%s, %d\", values, v), quadratic in batch size; only hit on SQLite with batch size > 999 in a background job.",
+   "evidenciaAstra": "pkg/services/annotations/annotationsimpl/xorm_store.go:609\u2013612 rebuilds the entire accumulated string for each additional ID, producing quadratic copying and allocation. The 32,767-row batches enabled by cleanup_test.go:101 make this substantial memory churn and cleanup overhead, rather than a minor optimization."
+  },
+  {
+   "issueId": "database-performance-optimizations-grafana-codex#08",
+   "severity": "medium",
+   "category": "perf",
+   "bug": "The cleanup job ticker was changed from 10 minutes to 1 minute, which can lead to increased database load and contention due to more frequent execution of cleanup tasks. This change should be reviewed to ensure it aligns with performance expectations.",
+   "evidenciaOpus": "cleanup.go:77 changes the ticker from time.Minute * 10 to time.Minute * 1, running the whole cleanup service (temp files, annotations, snapshots, versions, etc.) ten times as often with no stated reason.",
+   "evidenciaAstra": "The PR changes pkg/services/cleanup/cleanup.go:77 from ten minutes to one minute, and :96\u2013104 shows that the interval governs all eight cleanup jobs, increasing recurring database and filesystem work. Calls are synchronous at :81, so overlapping cycles are not supported by the code, but the increased workload is real."
+  },
+  {
+   "issueId": "database-performance-optimizations-grafana-codex#oph-01",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The 'running the max count delete again' test case no longer runs cleanup a second time after the PR's per-subtest seeding and cleanup, so it does not verify that a repeated max-count cleanup deletes nothing.",
+   "evidenciaOpus": "cleanup_test.go:83-96 together with the per-subtest seeding and t.Cleanup added at :116-128: each case now creates fresh annotations and wipes the tables, so the case 'running the max count delete again should not remove any annotations' calls cleaner.Run only once, on 9 annotations with MaxCount=3. It no longer checks that a second run is a no-op, which is the behaviour the case is named for.",
+   "evidenciaAstra": "The repeat-cleanup case seeds nine annotations with MaxCount=3 per type (pkg/services/annotations/annotationsimpl/cleanup_test.go:83\u201395). Each subtest now creates fresh data and clears both tables afterward (lines 116\u2013127), and calls cleaner.Run only once (line 132). This PR therefore removes the previous second-run coverage, leaving the intended idempotency behavior untested."
+  }
+ ]
+}

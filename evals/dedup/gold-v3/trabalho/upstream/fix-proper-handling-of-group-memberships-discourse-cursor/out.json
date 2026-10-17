@@ -1,0 +1,108 @@
+{
+  "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+  "prOriginal": {
+    "numero": null,
+    "url": "https://github.com/discourse/discourse/commit/060cda77729cb1c4a827560e09e89a7b22078ba9",
+    "mergedAt": "2015-01-05",
+    "nota": "No upstream PR: the benchmark head 060cda77 (Régis Hanol, 'FIX: proper handling of group memberships') was committed directly to master on 2015-01-05 and is an ancestor of main (compare = ahead); /commits/<sha>/pulls is empty. The merged code is the benchmark head itself."
+  },
+  "tps": {
+    "fix-proper-handling-of-group-memberships-discourse-cursor#01": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2017-05-17",
+        "pr": null,
+        "commit": "9090c7b05b2ce52236e831607dae923f7a371d62",
+        "url": "https://github.com/discourse/discourse/commit/9090c7b05b2ce52236e831607dae923f7a371d62"
+      },
+      "removidoEm": null,
+      "diasNoAr": 863,
+      "reason": "The Math.floor(user_count/limit)+1 totalPages moved unchanged from admin-group.js.es6 into components/group-members-input.js.es6 (7bfabb02, 2016-12-13). Commit 9090c7b0 'FIX: Admin groups editor was showing extra page when exactly 50 records' (2017-05-17) changed it to Math.ceil(userCount / limit).",
+      "astra": []
+    },
+    "fix-proper-handling-of-group-memberships-discourse-cursor#04": {
+      "status": "descontinuado",
+      "corrigidoEm": null,
+      "removidoEm": {
+        "data": "2018-04-09",
+        "pr": null,
+        "commit": "c82b2dcc24c06634e64a6c388c18a815f039c608",
+        "url": "https://github.com/discourse/discourse/commit/c82b2dcc24c06634e64a6c388c18a815f039c608"
+      },
+      "diasNoAr": 1190,
+      "reason": "The next/previous paging that set offset and called findMembers (which unconditionally setProperties from each response) survived unchanged, last in components/group-members-input rendered by admin/templates/group.hbs. No change ever added request cancellation or a staleness check; the admin group pages that rendered this paging were removed in c82b2dcc 'Remove admin group management pages' (2018-04-09), and the component itself was deleted as dead code in 352d43b1 (#8356, 2019-11-18), with findMembers rewritten to append-only load-more.",
+      "astra": []
+    },
+    "fix-proper-handling-of-group-memberships-discourse-cursor#06": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2015-02-19",
+        "pr": null,
+        "commit": "8fd69fd3cf0c20e9f5e16662ce838c42e1a734cd",
+        "url": "https://github.com/discourse/discourse/commit/8fd69fd3cf0c20e9f5e16662ce838c42e1a734cd"
+      },
+      "removidoEm": null,
+      "diasNoAr": 45,
+      "reason": "Commit 8fd69fd3 'FIX: group member pages only showing first 50 members alphabetically' (2015-02-19) added a group/members controller with a loadMore action and a LoadMore view mixin on the public group members page, so members beyond the first 50 page are fetched by infinite scroll.",
+      "astra": []
+    },
+    "fix-proper-handling-of-group-memberships-discourse-cursor#07": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2015-01-23",
+        "pr": null,
+        "commit": "f7f5e39f75adb8f5336322aae007f70f5e683f2d",
+        "url": "https://github.com/discourse/discourse/commit/f7f5e39f75adb8f5336322aae007f70f5e683f2d"
+      },
+      "removidoEm": null,
+      "diasNoAr": 18,
+      "reason": "Commit f7f5e39f 'FIX: Minor Admin bug with a setting when creating a new group' (2015-01-23) added group.alias_level = params[:alias_level].to_i if params[:alias_level].present? to Admin::GroupsController#create.",
+      "astra": []
+    },
+    "fix-proper-handling-of-group-memberships-discourse-cursor#10": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2015-02-09",
+        "pr": null,
+        "commit": "e8323fa5348959688e876b2da24f18497af99db4",
+        "url": "https://github.com/discourse/discourse/commit/e8323fa5348959688e876b2da24f18497af99db4"
+      },
+      "removidoEm": null,
+      "diasNoAr": 35,
+      "reason": "Commit e8323fa5 'FIX: removing a group from a user was not removing primary group' (2015-02-09) made remove_member load the user, set primary_group_id = nil when it equals the group id and save it, with a spec asserting primary_group_id becomes nil.",
+      "astra": []
+    },
+    "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2015-04-15",
+        "pr": 3378,
+        "commit": "499bed69e2365a7e9dad329cf69bb8169886d2b6",
+        "url": "https://github.com/discourse/discourse/pull/3378"
+      },
+      "removidoEm": null,
+      "diasNoAr": 100,
+      "reason": "PR #3378 'FIX: show error message if user already exist in group' (merged 2015-04-15) wrapped group.add in if !group.users.include?(user) and returns a 422 member_already_exist error instead of hitting the unique index (spec 'returns 422 if member already exists'). Earlier users in the list could still be added before the 422; that residue went away later when GroupsController#add_members began checking all users first (group.users.where(id: users.pluck(:id))) before adding any.",
+      "astra": [
+        {
+          "pergunta": "Does #3378 (skip-check returning 422 for an existing member, partial add still possible) count as the fix, or should the later all-or-nothing pre-check be the fix date?",
+          "resposta": "confirmado by 499bed69/#3378 on 2015-04-15: it directly fixed adding an existing member (no unique-index violation, 422 instead of 500); the partial add is a residual problem fixed later and does not delay the classification.",
+          "veredito": "confirmado, #3378, 2015-04-15"
+        }
+      ]
+    },
+    "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2019-06-17",
+        "pr": null,
+        "commit": "704c579550396a9ba2bd0ddb1637741ea8675b05",
+        "url": "https://github.com/discourse/discourse/commit/704c579550396a9ba2bd0ddb1637741ea8675b05"
+      },
+      "removidoEm": null,
+      "diasNoAr": 1624,
+      "reason": "GroupsController#members got a negative check in 982df3c1 'FIX: return status 400 for invalid member params' (2018-06-29: limit < 0 raises InvalidParameters) and an upper bound in 704c5795 'FIX: do not allow unbound membership lookups' (2019-06-17: limit > 1000 raises InvalidParameters). Main today uses fetch_limit_from_params(default:, max: MEMBERS_MAX_PAGE_SIZE). The fix date is when both halves were in place.",
+      "astra": []
+    }
+  }
+}

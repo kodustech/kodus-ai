@@ -1,0 +1,106 @@
+{
+ "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "prOriginal": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/267d8be1f556ed59639ced396c885bb44586da19",
+  "mergedAt": "2015-08-11",
+  "nota": "No PR: the benchmark head 267d8be1 (Arpit Jalan) is itself an upstream commit pushed directly to main (committer date 2015-08-11, ancestor of main per compare API; commits/{sha}/pulls is empty). Merged code equals the benchmark head."
+ },
+ "tps": {
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2016-04-11",
+    "pr": 4158,
+    "commit": "c6f6b17f71a1d0b3ff479396b57e14ed8ba3d3db",
+    "url": "https://github.com/discourse/discourse/pull/4158"
+   },
+   "removidoEm": null,
+   "diasNoAr": 244,
+   "reason": "PR #4158 'Show website path in website name for all domains' replaced the case-sensitive host comparison with uri.host + uri.path for every host, so an uppercase host matching the instance now keeps its path. Today user_card_serializer.rb website_name is uri.host.sub(/\\Awww\\./,'') + uri.path with no comparison.",
+   "astra": [
+    {
+     "pergunta": "Given PR #4158 (2016-04-11) replacing the domain comparison with uri.host + uri.path for all domains, a10c9397 (2017-06-04) adding website_name to untrusted_attributes, and #14407 (2021-09-22) deleting the dead include_website_name: status for #01/#04/#05/#06/#07?",
+     "resposta": "#01 confirmado by #4158 (uppercase hosts now keep the path); #04 descontinuado by #4158 (classification removed, full path for all hosts is now intended policy); #05 confirmado by #4158; #06 confirmado by a10c9397; #07 confirmado by a10c9397 (first behavioural fix, #14407 is cleanup); the '.' << literal claim is not a bug.",
+     "veredito": "accepted"
+    }
+   ]
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2016-04-11",
+    "pr": 4158,
+    "commit": "c6f6b17f71a1d0b3ff479396b57e14ed8ba3d3db",
+    "url": "https://github.com/discourse/discourse/pull/4158"
+   },
+   "diasNoAr": 244,
+   "reason": "PR #4158 removed the first-label-stripping same-domain check entirely; full path is now shown for all hosts by design, so the misclassification no longer exists, but the change was a policy change, not a fix of the classification.",
+   "astra": [
+    {
+     "pergunta": "Given PR #4158 (2016-04-11) replacing the domain comparison with uri.host + uri.path for all domains, a10c9397 (2017-06-04) adding website_name to untrusted_attributes, and #14407 (2021-09-22) deleting the dead include_website_name: status for #01/#04/#05/#06/#07?",
+     "resposta": "#01 confirmado by #4158 (uppercase hosts now keep the path); #04 descontinuado by #4158 (classification removed, full path for all hosts is now intended policy); #05 confirmado by #4158; #06 confirmado by a10c9397; #07 confirmado by a10c9397 (first behavioural fix, #14407 is cleanup); the '.' << literal claim is not a bug.",
+     "veredito": "accepted"
+    }
+   ]
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#05": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2016-04-11",
+    "pr": 4158,
+    "commit": "c6f6b17f71a1d0b3ff479396b57e14ed8ba3d3db",
+    "url": "https://github.com/discourse/discourse/pull/4158"
+   },
+   "removidoEm": null,
+   "diasNoAr": 244,
+   "reason": "After PR #4158 a website on a subdomain of the instance shows host + path like every other host, removing the asymmetry; still the case today in user_card_serializer.rb.",
+   "astra": [
+    {
+     "pergunta": "Given PR #4158 (2016-04-11) replacing the domain comparison with uri.host + uri.path for all domains, a10c9397 (2017-06-04) adding website_name to untrusted_attributes, and #14407 (2021-09-22) deleting the dead include_website_name: status for #01/#04/#05/#06/#07?",
+     "resposta": "#01 confirmado by #4158 (uppercase hosts now keep the path); #04 descontinuado by #4158 (classification removed, full path for all hosts is now intended policy); #05 confirmado by #4158; #06 confirmado by a10c9397; #07 confirmado by a10c9397 (first behavioural fix, #14407 is cleanup); the '.' << literal claim is not a bug.",
+     "veredito": "accepted"
+    }
+   ]
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2017-06-04",
+    "pr": null,
+    "commit": "a10c9397753324ecdf79af38effe98b5a00ca2e8",
+    "url": "https://github.com/discourse/discourse/commit/a10c9397753324ecdf79af38effe98b5a00ca2e8"
+   },
+   "removidoEm": null,
+   "diasNoAr": 663,
+   "reason": "Commit a10c9397 'FIX: do not show website name on TL0 profile' (pushed to main) added :website_name to untrusted_attributes, whose include_website_name? returns false when restrict_user_fields?. Today user_card_serializer.rb lists :website_name in untrusted_attributes.",
+   "astra": [
+    {
+     "pergunta": "Given PR #4158 (2016-04-11) replacing the domain comparison with uri.host + uri.path for all domains, a10c9397 (2017-06-04) adding website_name to untrusted_attributes, and #14407 (2021-09-22) deleting the dead include_website_name: status for #01/#04/#05/#06/#07?",
+     "resposta": "#01 confirmado by #4158 (uppercase hosts now keep the path); #04 descontinuado by #4158 (classification removed, full path for all hosts is now intended policy); #05 confirmado by #4158; #06 confirmado by a10c9397; #07 confirmado by a10c9397 (first behavioural fix, #14407 is cleanup); the '.' << literal claim is not a bug.",
+     "veredito": "accepted"
+    }
+   ]
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2017-06-04",
+    "pr": null,
+    "commit": "a10c9397753324ecdf79af38effe98b5a00ca2e8",
+    "url": "https://github.com/discourse/discourse/commit/a10c9397753324ecdf79af38effe98b5a00ca2e8"
+   },
+   "removidoEm": null,
+   "diasNoAr": 663,
+   "reason": "a10c9397 (2017-06-04) made website_name conditional through the generated include_website_name? predicate, leaving the misnamed method dead; #14407 (2021-09-22, 'include_ serializer methods must end with ?') then deleted it. The '.' << literal was removed by #4158 in 2016.",
+   "astra": [
+    {
+     "pergunta": "Given PR #4158 (2016-04-11) replacing the domain comparison with uri.host + uri.path for all domains, a10c9397 (2017-06-04) adding website_name to untrusted_attributes, and #14407 (2021-09-22) deleting the dead include_website_name: status for #01/#04/#05/#06/#07?",
+     "resposta": "#01 confirmado by #4158 (uppercase hosts now keep the path); #04 descontinuado by #4158 (classification removed, full path for all hosts is now intended policy); #05 confirmado by #4158; #06 confirmado by a10c9397; #07 confirmado by a10c9397 (first behavioural fix, #14407 is cleanup); the '.' << literal claim is not a bug.",
+     "veredito": "accepted"
+    }
+   ]
+  }
+ }
+}

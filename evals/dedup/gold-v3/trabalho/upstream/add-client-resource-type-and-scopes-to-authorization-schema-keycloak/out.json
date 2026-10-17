@@ -1,0 +1,120 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "prOriginal": {
+  "numero": 36880,
+  "url": "https://github.com/keycloak/keycloak/pull/36880",
+  "mergedAt": "2025-02-11",
+  "nota": "Found via gh pr list search on the title (branch 35564-client-authz-schema). Its single commit is the benchmark head 1950a511026d; merged as 7e5540896b (rebase), so merged code equals the benchmark head. Files later moved to admin/fgap/ and authorization/fgap/ (May 2025)."
+ },
+ "tps": {
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-03-11",
+    "pr": 37984,
+    "commit": "872a6917574f7ae4693e14421f54b4ef569f5bc2",
+    "url": "https://github.com/keycloak/keycloak/pull/37984"
+   },
+   "removidoEm": null,
+   "diasNoAr": 28,
+   "reason": "The V1-only guard in AdminPermissions.registerListener is still there today (now in admin/fgap/AdminPermissions.java), but V2 cleanup was added separately: PR #37984 'Remove permissions and resources when their corresponding objects are deleted' (closes #37242) added AdminPermissionsSchema.removeResourceObject, called from ClientApplicationSynchronizer/GroupSynchronizer/RoleSynchronizer/UserSynchronizer on ClientRemovedEvent etc., gated on V2 being enabled. So under V2 the per-object resources and permissions are no longer orphaned.",
+   "astra": []
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-03-17",
+    "pr": 38015,
+    "commit": "b200ab0792e99bc60b6ba8d89cea410f1a4bc264",
+    "url": "https://github.com/keycloak/keycloak/pull/38015"
+   },
+   "removidoEm": null,
+   "diasNoAr": 34,
+   "reason": "PR #38015 'Fix permissions for view-members and manage-members' (commit b200ab0792) replaced resourceStore.findByType(server, CLIENTS_RESOURCE_TYPE, ...) with policyStore.findByResourceType(...) flattened to policy.getResources(), so the method returns the names (client ids) of the per-client resources referenced by permissions instead of the type-level 'Clients' resource. It was later renamed getClientIdsByScope and today delegates to FineGrainedAdminPermissionEvaluator.getIdsByScope with the same policy-based logic.",
+   "astra": []
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-10-10",
+    "pr": 43353,
+    "commit": "815d2d14d4a6d674bf16e4b32fc75cddda6a7338",
+    "url": "https://github.com/keycloak/keycloak/pull/43353"
+   },
+   "removidoEm": null,
+   "diasNoAr": 241,
+   "reason": "The findByResource call was rewritten in April 2025 (9f079f7874, then moved into FineGrainedAdminPermissionEvaluator), but a null from getResourceTypeResource still dereferenced (resourceTypeResource.getScopes()). Issue #43331 reported exactly this NPE (500 after disabling realm admin permissions), and PR #43353 'Check FGAP enabled before proceeding with evaluation' added `if (!AdminPermissionsSchema.SCHEMA.isAdminPermissionsEnabled(root.realm)) return false;` before the lookup, closing the reachable null case.",
+   "astra": []
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-03-25",
+    "pr": 38396,
+    "commit": "26c90f369f94bf789a374b9d2c5e9a95a3ea0e63",
+    "url": "https://github.com/keycloak/keycloak/pull/38396"
+   },
+   "removidoEm": null,
+   "diasNoAr": 42,
+   "reason": "canView() still checks only VIEW today, and PR #38559 (2025-04-02) made that deliberate by removing MANAGE->VIEW transitiveness everywhere. The slow path itself was removed by PR #38396 'Support for partial evaluation for clients': ClientsResource now sets canView = isAdminPermissionsEnabled(realm) || auth.clients().canView(), so under FGAP V2 listing always uses the paginated store query with permission filtering pushed into the store.",
+   "astra": [
+    {
+     "pergunta": "#09: PR #38396 makes ClientsResource use the paginated store query whenever FGAP V2 is enabled (canView = isAdminPermissionsEnabled(realm) || canView()), and PR #38559 later removed MANAGE->VIEW transitiveness. Confirmado, pendente or descontinuado?",
+     "resposta": "Confirmado via PR #38396: under FGAP V2 the listing uses the paginated store query with partial evaluation, eliminating the slow path for global-MANAGE-only admins.",
+     "veredito": "confirmado"
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#10": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-04-02",
+    "pr": 38559,
+    "commit": "f12fa0b5bb35e44ae6737e9194b598b9d9a53e5a",
+    "url": "https://github.com/keycloak/keycloak/pull/38559"
+   },
+   "removidoEm": null,
+   "diasNoAr": 50,
+   "reason": "PR #38559 '[FGAP] remove transitiveness from auth scopes' replaced `if (canView() || canConfigure(client)) return true;` in canView(ClientModel) with an admin-role check followed by hasPermission(client, VIEW). Today canView(client) calls eval.hasPermission(new ClientModelRecord(client), null, VIEW), which evaluates the client's own resource (both specific and all-clients permissions apply) and grants only on a permission for that resource id; ClientsResource listing filters via partial evaluation (PR #38396).",
+   "astra": [
+    {
+     "pergunta": "#10: PR #38559 replaced `if (canView() || canConfigure(client)) return true` with an admin-role check followed by hasPermission(client, VIEW); today the evaluator evaluates the client's own resource with its resource type. Is the short-circuit bug fixed?",
+     "resposta": "Confirmado via PR #38559: removing the canView() shortcut forces VIEW evaluation on the specific client, and today's evaluator keeps applying both specific and all-clients permissions to that resource.",
+     "veredito": "confirmado"
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#11": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2026-07-14",
+    "pr": 50780,
+    "commit": "95aa8ce074305b0842d8af5a37985155ee225f2b",
+    "url": "https://github.com/keycloak/keycloak/pull/50780"
+   },
+   "removidoEm": null,
+   "diasNoAr": 518,
+   "reason": "The test was renamed ClientResourceTypeEvaluationTest and the weak block (getDefaultClientScopes() and removeDefaultClientScope in one try before any grant) is still there unchanged. But PR #50780 ([CVE-2026-14614] FGAP bypass in client scope assignment) added assertions that fetch the scopes with the full realm admin and call removeDefaultClientScope alone expecting Forbidden, plus testClientScopeAssignmentRequiresManageClientScopes, so the removal permission check is now actually exercised.",
+   "astra": [
+    {
+     "pergunta": "#11: the weak block (getDefaultClientScopes() then removeDefaultClientScope in one try) is still in testManageOnlyOneClient, but PR #50780 added removal assertions that fetch scopes via the full admin and isolate the remove call, plus testClientScopeAssignmentRequiresManageClientScopes. Confirmado or pendente?",
+     "resposta": "Confirmado via PR #50780: the new assertions isolate the removal call and close the coverage gap; the weak block remaining does not make it pendente.",
+     "veredito": "confirmado"
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-02": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2026-03-10",
+    "pr": 46967,
+    "commit": "d2c2151d1d7b7ea7abd8d13ec2c491058c5ee960",
+    "url": "https://github.com/keycloak/keycloak/pull/46967"
+   },
+   "removidoEm": null,
+   "diasNoAr": 392,
+   "reason": "PR #46967 'Fix deny unsupported FGAPv2 token-exchange audience checks' (closes #46718) changed ClientPermissionsV2.canExchangeTo from throwing UnsupportedOperationException to `return false`, explicitly because V1 token exchange audience validation failed with HTTP 500 under FGAP V2. Main today still returns false.",
+   "astra": []
+  }
+ }
+}

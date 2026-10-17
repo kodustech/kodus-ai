@@ -1,0 +1,65 @@
+{
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "prOriginal": {
+  "numero": 37634,
+  "url": "https://github.com/keycloak/keycloak/pull/37634",
+  "mergedAt": "2025-02-26",
+  "nota": "Found with gh pr list search 'Encoding context to access token IDs'; headRefOid equals benchmark head daffb05b (2 commits), squash-merged as c8738721. Per-file additions/deletions of the squash commit match base..head exactly."
+ },
+ "tps": {
+  "implement-access-token-context-encoding-framework-keycloak#01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 598,
+   "reason": "AccessTokenContext constructor on main still has `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")` as the fourth check; rawTokenId is still never null-checked. Later edits (#37701, user session lookup changes) did not touch this line.",
+   "astra": []
+  },
+  "implement-access-token-context-encoding-framework-keycloak#02": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 598,
+   "reason": "AssertEvents.isAccessTokenId was moved by #48752 (2026-05-20) into EventMatchers.isAccessTokenId (test-framework/core and testsuite copies), with identical logic: items[0].substring(3, 5).equals(expectedGrantShortcut) returns false, then only the token-id suffix is checked. The inverted/misaligned grant check is still there.",
+   "astra": []
+  },
+  "implement-access-token-context-encoding-framework-keycloak#04": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 598,
+   "reason": "DefaultTokenContextEncoderProviderTest on main still builds the factory with init(null) and hand-filled maps without postInit (sessionFactory null), and testIncorrectGrantType still catches RuntimeException for 'ofrtac:5678', so an NPE still satisfies it.",
+   "astra": []
+  },
+  "implement-access-token-context-encoding-framework-keycloak#05": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 598,
+   "reason": "Partially fixed: #37701 (2025-02-27, https://github.com/keycloak/keycloak/pull/37701) added clientSessionCtx.setAttribute(Constants.GRANT_TYPE, ...) to ClientCredentialsGrantType, so client-credentials ids now carry 'cc'. The UMA path in AuthorizationTokenService still creates its own clientSessionCtx and calls generateAccessToken() with no GRANT_TYPE, and DefaultTokenContextEncoderProvider still falls back to 'na', so part of the reported behaviour remains.",
+   "astra": [
+    {
+     "pergunta": "Client-credentials case got GRANT_TYPE set in #37701 one day after merge; UMA path in AuthorizationTokenService still never sets it. Which single status fits?",
+     "resposta": "#37701 fixed only the client-credentials part; the UMA path still lacks GRANT_TYPE and falls back to 'na'. Since the TP explicitly covers both flows, the status should reflect the remaining defect; client credentials alone would be confirmado.",
+     "veredito": "pendente"
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak#06": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 598,
+   "reason": "DefaultTokenContextEncoderProviderFactory has no commits after the merge; getShortcutByGrantType/getGrantTypeByShortcut still lazily put into both maps without the duplicate-shortcut check done in postInit.",
+   "astra": []
+  },
+  "implement-access-token-context-encoding-framework-keycloak#opa-01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 598,
+   "reason": "OAuth2GrantTypeFactory on main still declares `String getShortcut();` with no default (no commits to the file since merge), and postInit still calls gtf.getShortcut() on every registered grant factory.",
+   "astra": []
+  }
+ }
+}

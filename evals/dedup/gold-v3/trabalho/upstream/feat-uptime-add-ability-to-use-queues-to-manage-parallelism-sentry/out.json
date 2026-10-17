@@ -1,0 +1,192 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "prOriginal": {
+  "numero": 95633,
+  "url": "https://github.com/getsentry/sentry/pull/95633",
+  "mergedAt": "2025-07-16",
+  "nota": "Found by title search (branch danf/uptime-queue-consumer). Benchmark head 9966ec5a is the PR's last commit; same 7 files. Squash-merged as 33f4fddf."
+ },
+ "tps": {
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-07-17",
+    "pr": 95753,
+    "commit": "82e2139720",
+    "url": "https://github.com/getsentry/sentry/pull/95753"
+   },
+   "removidoEm": null,
+   "diasNoAr": 1,
+   "reason": "#95753 added OffsetTracker.update_assignments()/clear(), called from SimpleQueueProcessingStrategy.__init__ with the new partitions, so per-partition state is reset on every assignment. The gap scan in get_committable_offsets stayed unchanged (only one contiguous run per cycle), but the 'permanent block' was already overstated by both reviewers; the module was later deleted in #97340.",
+   "astra": [
+    {
+     "pergunta": "Did #95753 fix the reset-on-rebalance / gap-blocking behaviour, or did it survive until deletion?",
+     "resposta": "Confirmado, partially: #95753 resets tracking state on assignment changes; the gap algorithm is unchanged so the one-contiguous-run-per-cycle limitation survived; the permanent block was inaccurate.",
+     "veredito": "confirmado"
+    }
+   ]
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-08-07",
+    "pr": 97340,
+    "commit": "e6ab860545e5371e415384b8f6cc6ddad3cb0ce3",
+    "url": "https://github.com/getsentry/sentry/pull/97340"
+   },
+   "diasNoAr": 22,
+   "reason": "OrderedQueueWorker.run kept calling offset_tracker.complete_offset in the finally block after a processor exception in every later version (#95753, #95919, #95943 touched run() but not this). #97340 (2025-08-07) deleted queue_consumer.py, test_queue_consumer.py and the thread-queue-parallel tests/mode as unused code, not targeting this bug.",
+   "astra": []
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#04": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-08-07",
+    "pr": 97340,
+    "commit": "e6ab860545e5371e415384b8f6cc6ddad3cb0ce3",
+    "url": "https://github.com/getsentry/sentry/pull/97340"
+   },
+   "diasNoAr": 22,
+   "reason": "test_thread_queue_parallel_error_handling kept its docstring and the 'no commit' assertion; later commits only added consumer_group='test' to the factory. #97340 (2025-08-07) deleted queue_consumer.py, test_queue_consumer.py and the thread-queue-parallel tests/mode as unused code, not targeting this bug.",
+   "astra": []
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#05": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-08-07",
+    "pr": 97340,
+    "commit": "e6ab860545e5371e415384b8f6cc6ddad3cb0ce3",
+    "url": "https://github.com/getsentry/sentry/pull/97340"
+   },
+   "diasNoAr": 22,
+   "reason": "The error-handling test kept the 0.2s sleep before asserting no commit while the commit interval stayed 1.0s by default; later commits only added consumer_group. #97340 (2025-08-07) deleted queue_consumer.py, test_queue_consumer.py and the thread-queue-parallel tests/mode as unused code, not targeting this bug.",
+   "astra": []
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-08-07",
+    "pr": 97340,
+    "commit": "e6ab860545e5371e415384b8f6cc6ddad3cb0ce3",
+    "url": "https://github.com/getsentry/sentry/pull/97340"
+   },
+   "diasNoAr": 22,
+   "reason": "FixedQueuePool kept creating queue.Queue() with no maxsize and submit/poll never applied backpressure in #95753/#95919; the unbounded queues survived. #97340 (2025-08-07) deleted queue_consumer.py, test_queue_consumer.py and the thread-queue-parallel tests/mode as unused code, not targeting this bug.",
+   "astra": []
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-08-07",
+    "pr": 97340,
+    "commit": "e6ab860545e5371e415384b8f6cc6ddad3cb0ce3",
+    "url": "https://github.com/getsentry/sentry/pull/97340"
+   },
+   "diasNoAr": 22,
+   "reason": "#95753 moved the commit thread into the pool and stopped close() from shutting down the pool, but FixedQueuePool.shutdown still sets worker.shutdown before draining, and the new join()/flush() discards queued work and clears the offset tracker without a final commit, so completed work could still be replayed. Behaviour survived in reshaped form until deletion. #97340 (2025-08-07) deleted queue_consumer.py, test_queue_consumer.py and the thread-queue-parallel tests/mode as unused code, not targeting this bug.",
+   "astra": [
+    {
+     "pergunta": "Did #95753 fix the shutdown drain / final-commit behaviour?",
+     "resposta": "Descontinuado: workers still get shutdown flags before draining; moving the commit thread does not guarantee a final commit; flush() clears tracking without committing completed work, so replay remains possible.",
+     "veredito": "descontinuado"
+    }
+   ]
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-07-17",
+    "pr": 95753,
+    "commit": "82e2139720",
+    "url": "https://github.com/getsentry/sentry/pull/95753"
+   },
+   "removidoEm": null,
+   "diasNoAr": 1,
+   "reason": "#95753 ('Fix thread-queue-parallel consumer to handle Kafka rebalances correctly') removed queue_pool.shutdown() from SimpleQueueProcessingStrategy.close/terminate/join, moved the commit thread to the factory-owned pool to survive rebalances, and added update_assignments, so a replacement strategy no longer reuses a dead pool.",
+   "astra": []
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#12": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-08-07",
+    "pr": 97340,
+    "commit": "e6ab860545e5371e415384b8f6cc6ddad3cb0ce3",
+    "url": "https://github.com/getsentry/sentry/pull/97340"
+   },
+   "diasNoAr": 22,
+   "reason": "#95753 moved _commit_loop from the strategy into FixedQueuePool, but it still runs in a background daemon thread and calls Arroyo's commit callback outside submit/poll. #97340 (2025-08-07) deleted queue_consumer.py, test_queue_consumer.py and the thread-queue-parallel tests/mode as unused code, not targeting this bug.",
+   "astra": []
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#16": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-08-07",
+    "pr": 97340,
+    "commit": "e6ab860545e5371e415384b8f6cc6ddad3cb0ce3",
+    "url": "https://github.com/getsentry/sentry/pull/97340"
+   },
+   "diasNoAr": 22,
+   "reason": "test_concurrent_processing_across_groups and test_thread_queue_parallel_concurrent_subscriptions kept asserting only counts/groups seen (later changes only shortened timeouts and adjusted WorkItem/consumer_group). #97340 (2025-08-07) deleted queue_consumer.py, test_queue_consumer.py and the thread-queue-parallel tests/mode as unused code, not targeting this bug.",
+   "astra": []
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#17": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-08-07",
+    "pr": 97340,
+    "commit": "e6ab860545e5371e415384b8f6cc6ddad3cb0ce3",
+    "url": "https://github.com/getsentry/sentry/pull/97340"
+   },
+   "diasNoAr": 22,
+   "reason": "test_preserves_order_within_group kept submitting identical sub1 messages and asserting only len==5 (#95753 only changed the timeout). #97340 (2025-08-07) deleted queue_consumer.py, test_queue_consumer.py and the thread-queue-parallel tests/mode as unused code, not targeting this bug.",
+   "astra": []
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#18": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-08-07",
+    "pr": 97340,
+    "commit": "e6ab860545e5371e415384b8f6cc6ddad3cb0ce3",
+    "url": "https://github.com/getsentry/sentry/pull/97340"
+   },
+   "diasNoAr": 22,
+   "reason": "test_thread_queue_parallel_graceful_shutdown kept asserting only factory.queue_pool is None; later commits only added consumer_group. #97340 (2025-08-07) deleted queue_consumer.py, test_queue_consumer.py and the thread-queue-parallel tests/mode as unused code, not targeting this bug.",
+   "astra": []
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-08-07",
+    "pr": 97340,
+    "commit": "e6ab860545e5371e415384b8f6cc6ddad3cb0ce3",
+    "url": "https://github.com/getsentry/sentry/pull/97340"
+   },
+   "diasNoAr": 22,
+   "reason": "test_thread_queue_parallel_offset_commit kept the wait loop that breaks on any commit and asserts offset 105; later commits only added consumer_group. #97340 (2025-08-07) deleted queue_consumer.py, test_queue_consumer.py and the thread-queue-parallel tests/mode as unused code, not targeting this bug.",
+   "astra": []
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#oph-01": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-08-07",
+    "pr": 97340,
+    "commit": "e6ab860545e5371e415384b8f6cc6ddad3cb0ce3",
+    "url": "https://github.com/getsentry/sentry/pull/97340"
+   },
+   "diasNoAr": 22,
+   "reason": "The remote_subscriptions.queue_worker.queue_depth gauge kept only the identifier tag in all later versions (#95943 added a processing_time timer with the same single tag). #97340 (2025-08-07) deleted queue_consumer.py, test_queue_consumer.py and the thread-queue-parallel tests/mode as unused code, not targeting this bug.",
+   "astra": []
+  }
+ }
+}

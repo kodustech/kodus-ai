@@ -1,0 +1,50 @@
+{
+ "caseId": "github-oauth-security-enhancement-sentry",
+ "prTitle": "GitHub OAuth Security Enhancement",
+ "upstream": "getsentry/sentry",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/sentry",
+ "base": "344aa102e7818606e29426ebe69d5a680d8727c6",
+ "head": "bb75657fc8f13923c1d7983f422290908a1e7310",
+ "tps": [
+  {
+   "issueId": "github-oauth-security-enhancement-sentry#03",
+   "severity": "high",
+   "category": "security",
+   "bug": "OAuth state uses pipeline.signature (static) instead of a per-request random value",
+   "evidenciaOpus": "integration.py:402 uses pipeline.signature as OAuth state; pipeline/base.py:132-133 computes it as md5 of the pipeline view class names, a constant identical for every user and attempt (tests hardcode 9cae5e88...). It provides no CSRF protection or binding of the OAuth callback to the user's attempt.",
+   "evidenciaAstra": "src/sentry/pipeline/base.py:132-133 computes signature solely from pipeline view class names, without user-specific or random input. src/sentry/integrations/github/integration.py:402,412 uses that predictable value as OAuth state, allowing an injected authorization callback to satisfy the new state check."
+  },
+  {
+   "issueId": "github-oauth-security-enhancement-sentry#05",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The new OAuth step's token exchange and user lookup are not wrapped in error handling, so GitHub/network failures surface as 500s instead of the installation-failed page.",
+   "evidenciaOpus": "integration.py:423 calls safe_urlopen outside the try at :425, and get_user_info at :434 calls resp.raise_for_status() (identity/github/provider.py:16) unguarded; network errors or non-2xx GitHub responses raise and produce a 500 instead of the error() page.",
+   "evidenciaAstra": "src/sentry/integrations/github/integration.py:423 executes safe_urlopen before the try block, and line 434 calls get_user_info outside it. That helper performs a network request and raise_for_status at src/sentry/identity/github/provider.py:9-16, so transport and HTTP failures escape instead of rendering the installation error response."
+  },
+  {
+   "issueId": "github-oauth-security-enhancement-sentry#06",
+   "severity": "high",
+   "category": "security",
+   "bug": "When no Integration exists yet for the installation_id the pipeline advances without comparing the OAuth user to the installer, bypassing the new ownership check.",
+   "evidenciaOpus": "integration.py:481-482 returns pipeline.next_step() when no Integration row exists for installation_id, skipping the new github_authenticated_user vs sender check at :500-505; a user supplying an installation_id before the webhook creates the row completes setup without the ownership verification this PR adds.",
+   "evidenciaAstra": "src/sentry/integrations/github/integration.py:481-482 advances when the local integration is absent, bypassing the new ownership comparison at lines 501-505. Completion builds the integration using app credentials at lines 308-312,346-353 and attaches it at src/sentry/integrations/pipeline.py:225-227 without checking the OAuth user's access."
+  },
+  {
+   "issueId": "github-oauth-security-enhancement-sentry#09",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The code attempts to access integration.metadata[sender][login] without checking for the existence of the sender key. This causes a KeyError for integrations where the sender metadata was not set during creation",
+   "evidenciaOpus": "integration.py:503 indexes integration.metadata[\"sender\"][\"login\"], but build_integration only sets sender when state has it (:376-377) and installation.py:44 explicitly handles metadata without sender; such an active integration without an OrganizationIntegration raises KeyError (500) instead of the error page.",
+   "evidenciaAstra": "src/sentry/integrations/github/integration.py:376-377 adds sender metadata only conditionally, but the new comparison at line 503 indexes it unconditionally. An active, unlinked integration without sender therefore raises KeyError; src/sentry/integrations/github/installation.py:44-45 explicitly recognizes such records."
+  },
+  {
+   "issueId": "github-oauth-security-enhancement-sentry#10",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "test_installation_not_found uses a wrong OAuth state, so it fails at the state check and never reaches the installation-not-found path it is meant to test.",
+   "evidenciaOpus": "test_integration.py:392 sends state ddd023d8... which is not the pipeline signature (9cae5e88..., used at :242/:445), so OAuthLoginView returns error() at integration.py:412-413 before GitHubInstallation; the asserted generic message is shared, so installation-not-found handling is never exercised.",
+   "evidenciaAstra": "tests/sentry/integrations/github/test_integration.py:392 supplies a state different from the actual signature asserted at line 235. The callback consequently fails at src/sentry/integrations/github/integration.py:412-413, making the generic assertion at test line 396 pass without exercising the installation lookup mocked to return 404."
+  }
+ ]
+}

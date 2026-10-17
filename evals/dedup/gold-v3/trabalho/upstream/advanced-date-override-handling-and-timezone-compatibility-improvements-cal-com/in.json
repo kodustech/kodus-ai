@@ -1,0 +1,90 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "prTitle": "Advanced date override handling and timezone compatibility improvements",
+ "upstream": "calcom/cal.com",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/cal.com",
+ "base": "93cb21f55a2a40d9116c014741f5679fbeff5fd9",
+ "head": "ee38fd295fd294b9fc787eba482bde24bbfea69b",
+ "tps": [
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "severity": "high",
+   "category": "bug",
+   "bug": "Incorrect end time calculation using slotStartTime instead of slotEndTime",
+   "evidenciaOpus": "viewer/slots.ts:141-142 computes end from slotStartTime, identical to start, so the `end > workingHour.endTime` check ignores the event length.",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/slots.ts:141-143 computes both boundaries from slotStartTime, so the new check accepts events extending beyond working hours when another host's override supplies the slot. The additional timezone allegation is incorrect: packages/lib/availability.ts:80-85 already converts working hours to UTC minutes."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "severity": "high",
+   "category": "bug",
+   "bug": "Using === for dayjs object comparison will always return false as it compares object references, not values. Use .isSame() method instead: dayjs(date.start).add(utcOffset, 'minutes').isSame(dayjs(date.end).add(utcOffset, minutes))",
+   "evidenciaOpus": "viewer/slots.ts:114 compares two newly created dayjs objects with ===, which is always false, so the start==end (unavailable-day) override branch never fires.",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/slots.ts:114 compares distinct Dayjs objects, making the closed-day rejection unreachable. A positive-duration slot starting exactly at the zero-length override passes the remaining comparisons at lines 118-123 and reaches the availability return at lines 133-134."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "severity": "high",
+   "category": "bug",
+   "bug": "When a date override exists for the day, checkIfIsAvailable returns true before checking busy times, so slots overlapping existing bookings are reported available.",
+   "evidenciaOpus": "viewer/slots.ts:133-135 returns true when a date override matches the day, before the busy.every check at :153, so existing bookings within the override window are ignored.",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/slots.ts:133-134 returns true for accepted overrides before checking conflicts at line 153. Both host-validation callers pass their schedules, including busy periods, at lines 488-492 and 513-517, so the new return bypasses existing booking conflicts."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The working-hours check rejects a slot when any interval for the weekday excludes it, so split schedules (e.g. morning and afternoon) reject all slots.",
+   "evidenciaOpus": "viewer/slots.ts:138-147 rejects a slot if any workingHours entry for that weekday does not contain it (find), so with split schedules on the same day every slot is rejected by the other interval.",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/slots.ts:139-150 rejects a slot whenever any same-weekday working-hours interval excludes it. Separate morning and afternoon intervals therefore reject each other's valid slots, removing availability."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The date-override bound compares the slot start, not the slot end, with the override end, so slots extending past the override are accepted.",
+   "evidenciaOpus": "viewer/slots.ts:123 checks slotStartTime.isAfter(override end), so a slot that starts before the override end but finishes after it is accepted.",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/slots.ts:118-123 checks for non-overlap rather than full containment, then returns true at lines 133-134. Consequently, a fixed host's 10:00\u201311:00 override accepts a 10:30\u201311:30 slot supplied by another host; the find predicate also rejects valid slots against unrelated intervals on the same date."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#06",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The override timezone conversion keeps only hour and minute, so overrides that cross midnight in the invitee timezone become inverted ranges or are applied to the wrong day.",
+   "evidenciaOpus": "lib/slots.ts:212-224 converts override start/end to minutes using only hour()/minute() after the offset, dropping day rollover, and activeOverrides are bucketed by UTC day (:206-207) before shifting; overrides crossing invitee midnight become reversed ranges or land on the wrong day.",
+   "evidenciaAstra": "packages/lib/slots.ts:218-223 extracts only hours and minutes after timezone conversion, discarding date rollover and potentially producing startTime greater than endTime. buildSlots explicitly skips such ranges at lines 66-68, while override processing removes the corresponding regular availability at lines 227-245, causing valid slots to disappear."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#07",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The new working-hours check does not reject slots on weekdays that have no working-hours entry, so those slots are treated as available.",
+   "evidenciaOpus": "viewer/slots.ts:138-147 only rejects when a workingHours entry for the slot's weekday excludes it; if no entry covers that weekday, find returns undefined and the slot falls through to busy checks and is accepted.",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/slots.ts:139-153 falls through to busy checks when no working-hours entry matches the weekday, accepting a conflict-free slot. Another host's override can add that day's slots through packages/lib/slots.ts:245, and fixed-host validation at packages/trpc/server/routers/viewer/slots.ts:483-493 does not reject the absent weekday."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "checkIfIsAvailable's date-override check never rejects a slot that starts before the override start (only one that ends before it), so slots partly outside the override hours are treated as available.",
+   "evidenciaOpus": "slots.ts:117-125 rejects the slot only when slotEndTime is at or before the override start or slotStartTime is after the override end; a slot starting before the override start and ending inside it passes, and the function then returns true at line 135 (dateOverrideExist). Fixed hosts can be offered slots partly outside their override window.",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/slots.ts:118-124 checks the slot end against the override start, allowing a slot that starts before the override and ends inside it. Slots generated from another host's availability can reach this check for every fixed host at slots.ts:483-493, so the missing start-bound check affects returned availability."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-02",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The override day is computed with local-time dayjs(date.start) while the slot day is formatted in UTC, so on a server not running in UTC overrides near midnight are applied to the wrong day or skipped.",
+   "evidenciaOpus": "slots.ts:110-111 formats dayjs(date.start).add(utcOffset) in the server's local timezone while slotStartTime is a UTC dayjs (line 100). On a non-UTC server the YYYY MM DD comparison drifts for overrides near midnight, so overrides are matched to the wrong day.",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/slots.ts:100 makes slotStartTime UTC, but slots.ts:110 formats the adjusted override using server-local dayjs. Overrides originate as UTC-constructed Dates in packages/core/getUserAvailability.ts:218-222, so a non-UTC server can produce a different calendar date and incorrectly skip or apply the new override check."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-03",
+   "severity": "high",
+   "category": "bug",
+   "bug": "With several date-override ranges on the same day, a slot is rejected as soon as it falls outside any one of them, so slots inside the other ranges become unavailable.",
+   "evidenciaOpus": "slots.ts:105-131 uses dateOverrides.find(...) and returns false (unavailable) as soon as any single override on the slot's day has the slot outside its range. With two override ranges on one day, a slot inside the second range is rejected because it is outside the first.",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/slots.ts:105-130 rejects a slot when any matching-date override excludes it. Consequently, a 14:00 slot generated from the afternoon range in packages/lib/slots.ts:211-245 is rejected by a separate 09:00\u201311:00 override, even though it fits a valid range."
+  }
+ ]
+}

@@ -1,0 +1,58 @@
+{
+ "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+ "prTitle": "Enhanced Pagination Performance for High-Volume Audit Logs",
+ "upstream": "getsentry/sentry",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/sentry",
+ "base": "a5d290951def84afdcc4c88d2f1f20023fc36e2a",
+ "head": "8ab88145113dd23a930e23b9cbbcf8b30e4c0b17",
+ "tps": [
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The OptimizedCursorPaginator in organization_auditlogs.py attempts to use negative slice offsets on Django querysets, but Django querysets do not support negative slicing and will raise an AssertionError.",
+   "evidenciaOpus": "When enable_advanced_features and cursor.offset < 0, OptimizedCursorPaginator.get_result slices queryset[cursor.offset:stop] directly (paginator.py:877-882) under a comment claiming the ORM 'properly handles negative slicing'; Django querysets reject negative indices, so such cursors raise instead of paginating.",
+   "evidenciaAstra": "src/sentry/api/paginator.py:877-882 forwards negative offsets directly into Django queryset slicing, which rejects negative indices. Cursor parsing permits these offsets at src/sentry/utils/cursors.py:59, and src/sentry/api/base.py:540 catches only BadPaginationError, leaving this failure unhandled."
+  },
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "severity": "high",
+   "category": "bug",
+   "bug": "get_item_key assumes a numeric key, but the paginator is used with order_by=-datetime in the audit logs endpoint; calling math.floor/ceil on a datetime will raise a TypeError.",
+   "evidenciaOpus": "OptimizedCursorPaginator.get_item_key applies math.floor/math.ceil to getattr(item, self.key) (paginator.py:838-840), and value_from_cursor returns the raw cursor value, but the only caller uses order_by='-datetime' (organization_auditlogs.py:76-82); math.floor on a datetime raises TypeError while building the cursor for any non-empty page.",
+   "evidenciaAstra": "src/sentry/api/endpoints/organization_auditlogs.py:79-80 selects the new paginator with datetime ordering, but src/sentry/api/paginator.py:838-843 applies numeric rounding directly and returns unconverted cursor values. AuditLogEntry.datetime is a DateTimeField at src/sentry/models/auditlogentry.py:69, so nonempty first pages fail during cursor construction."
+  },
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+   "severity": "high",
+   "category": "bug",
+   "bug": "When requests are authenticated with API keys or org auth tokens (which have user_id=None), organization_context.member is None. Line 71 attempts to access organization_context.member.has_global_access without checking if member is None, causing an AttributeError crash when optimized_pagination=true is used, even though the request passed all permission checks with valid org:write scope.",
+   "evidenciaOpus": "organization_auditlogs.py:71 evaluates organization_context.member.has_global_access unconditionally for non-superusers, but RpcUserOrganizationContext.member can be None for org auth token / API key requests, so the endpoint raises AttributeError even when optimized_pagination is not requested.",
+   "evidenciaAstra": "src/sentry/organizations/services/organization/impl.py:123-140 leaves member=None without a user ID, while src/sentry/auth/access.py:1183-1194 supports organization-token access. The unconditional dereference at src/sentry/api/endpoints/organization_auditlogs.py:71 therefore crashes authorized non-superuser requests without membership, even when optimized pagination is absent."
+  },
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#09",
+   "severity": "medium",
+   "category": "security",
+   "bug": "A user-controlled optimized_pagination flag lets any member with global access switch to a paginator that accepts unvalidated negative cursor offsets, widening the attack surface and causing server errors.",
+   "evidenciaOpus": "A request-controlled optimized_pagination=true flag (organization_auditlogs.py:70-83) switches any member with global access, not only admins, to the paginator that forwards user-supplied negative cursor offsets into queryset slicing (paginator.py:877-882) with no validation, letting callers trigger server errors; the 'permissions are checked at the queryset level' claim has no backing check.",
+   "evidenciaAstra": "src/sentry/api/endpoints/organization_auditlogs.py:70-82 enables the unchecked negative-slicing branch at src/sentry/api/paginator.py:877-882 for eligible callers, causing server errors on crafted offsets. OrganizationAuditPermission still enforces access at src/sentry/api/bases/organization.py:110-124, so the supported defect is invalid-offset handling rather than an authorization bypass."
+  },
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "BasePaginator.get_result clamps negative offsets only for next cursors; a prev cursor with a negative offset is passed straight into the queryset slice, which Django rejects with an error (500) on every paginated endpoint.",
+   "evidenciaOpus": "paginator.py:182 clamps the offset only when not cursor.is_prev and passes a negative offset unchanged into queryset[start_offset:stop] for prev cursors; Cursor accepts any int offset (cursors.py:28). Django rejects negative slicing, so a crafted prev cursor returns a 500, and the PR's added comment (lines 179-181) wrongly claims this is safe.",
+   "evidenciaAstra": "src/sentry/api/paginator.py:182-184 leaves negative offsets unchanged for previous cursors and passes them into Django queryset slicing, which rejects them. Cursor parsing accepts negative integers at src/sentry/utils/cursors.py:58-59, and src/sentry/api/base.py:540 catches only BadPaginationError around pagination. Although this failure existed previously, the PR directly changes the implicated slicing code; the claim about every paginated endpoint is overly broad."
+  },
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#oph-01",
+   "severity": "high",
+   "category": "bug",
+   "bug": "OptimizedCursorPaginator.value_from_cursor returns the raw integer cursor value, which is then compared against the datetime column, so next/prev cursor pagination of audit logs breaks.",
+   "evidenciaOpus": "paginator.py:842-843: OptimizedCursorPaginator.value_from_cursor returns cursor.value, the integer millisecond timestamp, and BasePaginator.build_queryset uses it in the '-datetime' filter. DateTimePaginator.value_from_cursor at :238-241 converts it back to a UTC datetime. As a result, following a cursor on the audit-log endpoint filters on the wrong value or fails.",
+   "evidenciaAstra": "The PR selects OptimizedCursorPaginator with order_by=\"-datetime\" in src/sentry/api/endpoints/organization_auditlogs.py:79-80. Its value_from_cursor returns the numeric value unchanged (src/sentry/api/paginator.py:842-843), which build_queryset inserts directly into the SQL comparison at lines 119-125 against AuditLogEntry's DateTimeField (src/sentry/models/auditlogentry.py:69). Thus timestamp cursors produce an invalid datetime-versus-integer comparison; the required conversion exists in DateTimePaginator at src/sentry/api/paginator.py:238-241."
+  }
+ ]
+}

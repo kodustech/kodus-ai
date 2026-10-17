@@ -1,0 +1,88 @@
+{
+  "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+  "prOriginal": {
+    "numero": 14943,
+    "url": "https://github.com/calcom/cal.diy/pull/14943",
+    "mergedAt": "2024-05-13",
+    "nota": "calcom/cal.com now redirects to calcom/cal.diy. Found via head branch fix/add-retry-count-workflow-reminder; PR head c790227e equals the benchmark head, merged as 2dae0bfb8. On 2026-04-15 PR #28903 'refactor: Cal.diy' removed packages/features/ee (all workflow code) from the default branch."
+  },
+  "tps": {
+    "sms-workflow-reminder-retry-count-tracking-cal-com#01": {
+      "status": "descontinuado",
+      "corrigidoEm": null,
+      "removidoEm": {
+        "data": "2026-04-15",
+        "pr": 28903,
+        "commit": "ab21c7f805a089fa3a11ffd61c4a9aecc349c16c",
+        "url": "https://github.com/calcom/cal.diy/pull/28903"
+      },
+      "diasNoAr": 702,
+      "reason": "Both failure updates still wrote retryCount: reminder.retryCount + 1 from the findMany snapshot (no { increment: 1 }) in the last version before removal (scheduleSMSReminders.ts at 353f71bdc69, 2026-03-16). No change targeted it; the file was removed with all of packages/features/ee by #28903 on 2026-04-15.",
+      "astra": []
+    },
+    "sms-workflow-reminder-retry-count-tracking-cal-com#02": {
+      "status": "descontinuado",
+      "corrigidoEm": null,
+      "removidoEm": {
+        "data": "2025-06-24",
+        "pr": 21906,
+        "commit": "cb96a569604d9bb94cbabfc40968b720b5353e33",
+        "url": "https://github.com/calcom/cal.diy/pull/21906"
+      },
+      "diasNoAr": 407,
+      "reason": "The deleteMany with the unscoped { retryCount: { gt: 1 } } OR arm stayed unchanged until #21906 ('Preserve past SMS workflow reminders by disabling deletion') removed the whole deleteMany block. No retryCount-based deletion exists afterwards (main at 2025-11 only filters retryCount < 3 in findMany). The removal served row retention, not the missing method filter.",
+      "astra": []
+    },
+    "sms-workflow-reminder-retry-count-tracking-cal-com#04": {
+      "status": "descontinuado",
+      "corrigidoEm": null,
+      "removidoEm": {
+        "data": "2026-04-15",
+        "pr": 28903,
+        "commit": "ab21c7f805a089fa3a11ffd61c4a9aecc349c16c",
+        "url": "https://github.com/calcom/cal.diy/pull/28903"
+      },
+      "diasNoAr": 702,
+      "reason": "The prisma.workflowReminder.update inside the catch block remained unguarded inside the for loop through the last version before removal (353f71bdc69, 2026-03-16), so its rejection still escaped the loop. The file was removed by #28903 on 2026-04-15 without a targeting change.",
+      "astra": []
+    },
+    "sms-workflow-reminder-retry-count-tracking-cal-com#06": {
+      "status": "descontinuado",
+      "corrigidoEm": null,
+      "removidoEm": {
+        "data": "2025-06-24",
+        "pr": 21906,
+        "commit": "cb96a569604d9bb94cbabfc40968b720b5353e33",
+        "url": "https://github.com/calcom/cal.diy/pull/21906"
+      },
+      "diasNoAr": 407,
+      "reason": "The harm described, deleting pending reminders once transient errors pushed retryCount past 1, depended on the deleteMany retryCount>1 arm, which #21906 removed on 2025-06-24 for row retention. Errors still increment retryCount and #22251 (2025-07-03) later stops retrying after 3 failures, but that is a different abandonment mechanism, not the deletion of the queue.",
+      "astra": [
+        {
+          "pergunta": "Deletion block (incl. retryCount>1 arm) removed by #21906 on 2025-06-24; #22251 later added retryCount<3 to the findMany, so reminders failing 3 times are skipped forever but not deleted. Is #06/#e2b-01 descontinuado at 2025-06-24 or did it survive until the 2026-04-15 removal?",
+          "resposta": "Both descontinuado at 2025-06-24 (#21906): the destructive mechanism as written (deleting reminders once the count exhausted) was removed for an unrelated retention purpose. Counting locks/transient errors as failures remained, and #22251 introduced a different abandonment path (skip after 3 failures), a related but separate defect.",
+          "veredito": "descontinuado 2025-06-24"
+        }
+      ]
+    },
+    "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01": {
+      "status": "descontinuado",
+      "corrigidoEm": null,
+      "removidoEm": {
+        "data": "2025-06-24",
+        "pr": 21906,
+        "commit": "cb96a569604d9bb94cbabfc40968b720b5353e33",
+        "url": "https://github.com/calcom/cal.diy/pull/21906"
+      },
+      "diasNoAr": 407,
+      "reason": "twilioProvider still returns undefined when SMS sending is locked and the cron still increments retryCount on a falsy result, but the retryCount>1 deletion that permanently removed those future reminders was removed by #21906 on 2025-06-24. The later retry cap (#22251, retryCount < 3) skips them instead of deleting them, a separate behaviour.",
+      "astra": [
+        {
+          "pergunta": "Deletion block (incl. retryCount>1 arm) removed by #21906 on 2025-06-24; #22251 later added retryCount<3 to the findMany, so reminders failing 3 times are skipped forever but not deleted. Is #06/#e2b-01 descontinuado at 2025-06-24 or did it survive until the 2026-04-15 removal?",
+          "resposta": "Both descontinuado at 2025-06-24 (#21906): the destructive mechanism as written (deleting reminders once the count exhausted) was removed for an unrelated retention purpose. Counting locks/transient errors as failures remained, and #22251 introduced a different abandonment path (skip after 3 failures), a related but separate defect.",
+          "veredito": "descontinuado 2025-06-24"
+        }
+      ]
+    }
+  }
+}

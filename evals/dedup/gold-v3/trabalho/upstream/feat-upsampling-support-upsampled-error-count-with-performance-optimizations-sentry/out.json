@@ -1,0 +1,78 @@
+{
+ "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "prOriginal": {
+  "numero": 94376,
+  "url": "https://github.com/getsentry/sentry/pull/94376",
+  "mergedAt": "2025-06-26",
+  "nota": "Found with gh search prs ('upsampled error count'); upstream title is 'feat(upsampling) - Support upsampled error count in events-stats API'. Its last commit equals the benchmark head (71826eb08f). Squash-merged as 9c80bbc00a; the merged files match the head except organization_events_stats.py, which additionally carries disable_aggregate_extrapolation arguments from master (unrelated to the TPs)."
+ },
+ "tps": {
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 478,
+   "reason": "On master, _get_event_stats in organization_events_stats.py still calls is_errors_query_for_error_upsampled_projects(snuba_params, organization, dataset, request) with the closure's outer dataset while the query runs on scoped_dataset. The dashboard-split path still calls the factory with discover as scoped_dataset (split_dataset = discover), and _should_apply_sample_weight_transform still returns False for metrics datasets. The allowlist check changed from ALL to ANY projects (#95824), which does not touch this.",
+   "astra": []
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 478,
+   "reason": "_is_error_focused_query in src/sentry/api/helpers/error_upsampling.py is unchanged on master: it still returns True when the lowercased request query contains the substring 'event.type:error', so negated or mixed OR queries on discover are still treated as error-only. No commit touching the helper since the merge (#94835, #95473, #95824, #95964, #95940, #98388) changed this function.",
+   "astra": []
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#05": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 478,
+   "reason": "test_error_upsampling_with_transaction_events still exists on master in tests/snuba/api/endpoints/test_organization_events_stats.py with the same transaction fixture without sample_weight and the same count 1 / 0 assertions. upsampled_count in the discover dataset still sums ifNull(sample_weight, 1), so the test still cannot tell upsampled from raw count.",
+   "astra": []
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#08": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 478,
+   "reason": "On master the non-RPC top-events path still passes final_columns only as timeseries_columns, with selected_columns=raw_groupby (get_field_list) and orderby=self.get_orderby(request) untransformed. discover.top_events_timeseries still picks the top groups with query(selected_columns, orderby=orderby, ...). transform_orderby_for_error_upsampling (#98388) exists but is only used by the Events API, not events-stats.",
+   "astra": []
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-07-16",
+    "pr": 95473,
+    "commit": "32814e0ab1067bb5124bd2073116ad9f6f6d1a3d",
+    "url": "https://github.com/getsentry/sentry/pull/95473"
+   },
+   "removidoEm": null,
+   "diasNoAr": 20,
+   "reason": "PR #95473 extended transform_query_columns_for_error_upsampling to rewrite eps() and epm() to upsampled_eps()/upsampled_epm(), and master keeps a conversion map for count(), eps() and epm(). The fix is partial: matching is still exact on the bare string, so an aliased count still falls through, and count_unique() is intentionally left unweighted (upstream test asserts it).",
+   "astra": [
+    {
+     "pergunta": "Is the core of the TP the eps()/epm() gap (fixed by #95473) or the exact-match on bare strings (still there for aliased counts); which status?",
+     "resposta": "The TP explicitly names eps()/epm(), which #95473 corrected; the report covers several manifestations and does not make aliased counts the sole core; count_unique exclusion is intentional. Partial fix, aliased part would be pendente if tracked separately.",
+     "veredito": "confirmado"
+    }
+   ]
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#15": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 478,
+   "reason": "events-stats still calls transform_query_columns_for_error_upsampling(query_columns) with include_alias=True, producing 'upsampled_count() as count'. QueryBuilder.process_results still renames result columns to function_details.field when transform_alias_to_input_format is set, and resolve_axis_column still returns the requested 'count()' as-is in that mode. The result renaming added later (handle_error_upsampling / convert_fields_for_upsampling, #95964 and #95940) is wired only into the Events API, not events-stats.",
+   "astra": []
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#18": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 478,
+   "reason": "tests/sentry/api/helpers/test_error_upsampling.py on master (test_are_any_projects_error_upsampled) still sets mock_options.get.return_value = [] right before asserting are_any_projects_error_upsampled([]) is False, so the empty-allowlist branch still answers and the empty project_ids guard is not exercised. Only the function name changed (all -> any) since the merge.",
+   "astra": []
+  }
+ }
+}

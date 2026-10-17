@@ -1,0 +1,74 @@
+{
+ "caseId": "dual-storage-architecture-grafana-codex",
+ "prTitle": "Dual Storage Architecture",
+ "upstream": "grafana/grafana",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/grafana",
+ "base": "66c4dff17e9147b11fb9b14c6ed63089a599da65",
+ "head": "e369f24665ec70e1e3700f457d25ef83301d931a",
+ "tps": [
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#02",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "In DualWriterMode3's DeleteCollection method, when a storage operation fails, recordStorageDuration is incorrectly called with recordLegacyDuration instead.",
+   "evidenciaOpus": "dualwriter_mode3.go:166, inside the legacy DeleteCollection goroutine, calls d.recordStorageDuration with startLegacy, so legacy latency/errors are recorded in the unified-storage histogram and the legacy histogram gets nothing for delete-collection.",
+   "evidenciaAstra": "pkg/apiserver/rest/dualwriter_mode3.go:165 calls Legacy.DeleteCollection, then line 166 records its result through recordStorageDuration. That helper updates the storage histogram at pkg/apiserver/rest/metrics.go:61, incorrectly attributing legacy latency and failures to unified storage."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#03",
+   "severity": "medium",
+   "category": "api",
+   "bug": "Inconsistency: using name instead of options.Kind for metrics recording differs from other methods.",
+   "evidenciaOpus": "dualwriter_mode3.go:106 calls recordStorageDuration(false, mode3Str, name, ...) where every other call (e.g. :103) passes options.Kind, so successful deletes are labelled with the object name, splitting series and creating unbounded label cardinality.",
+   "evidenciaAstra": "pkg/apiserver/rest/dualwriter_mode3.go:106 passes the object name, whereas the error path at line 103 passes options.Kind. The third histogram label is explicitly kind at pkg/apiserver/rest/metrics.go:23, so successful deletes produce per-object series and incorrect kind aggregation."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#04",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "On storage Create/Update failure the duration is recorded with recordLegacyDuration, attributing unified-store errors to the legacy metric.",
+   "evidenciaOpus": "dualwriter_mode3.go:45 (Create) and :129 (Update) record a failed d.Storage call with d.recordLegacyDuration, so unified-store failures are counted as legacy failures and missing from the storage error metric.",
+   "evidenciaAstra": "The Storage.Create and Storage.Update failure branches call recordLegacyDuration at pkg/apiserver/rest/dualwriter_mode3.go:45 and :129. This helper observes the legacy histogram at pkg/apiserver/rest/metrics.go:56, misattributing unified-storage failures."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#05",
+   "severity": "high",
+   "category": "bug",
+   "bug": "Mode 3 legacy writes now run in background goroutines derived from the request context, which is cancelled when the request completes, so legacy writes can be cancelled and legacy storage falls out of sync.",
+   "evidenciaOpus": "dualwriter_mode3.go:50-57 (and :108, :134, :161) run the legacy write in a goroutine whose context comes from context.WithTimeoutCause(ctx, ...) on the request ctx; the PR made these writes async (previously synchronous), and the request context is cancelled when the handler returns, so legacy writes can be aborted and the legacy store silently diverges.",
+   "evidenciaAstra": "pkg/apiserver/rest/dualwriter_mode3.go:50 launches background work whose timeout context inherits the caller context at line 51, while Create returns at line 59 without waiting. Parent cancellation therefore cancels the legacy operation; Delete, Update, and DeleteCollection repeat this newly introduced lifetime mismatch at lines 110, 135, and 163."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#06",
+   "severity": "high",
+   "category": "data",
+   "bug": "Legacy.Update now receives the original objInfo instead of a wrapper carrying the object stored in unified storage, so legacy recomputes the update and can diverge.",
+   "evidenciaOpus": "Base code passed Legacy.Update an updateWrapper{upstream: objInfo, updated: obj} pinned to the Storage result; head :139 passes the raw objInfo, so Legacy recomputes the update against its own old object and can diverge from (or reject) what unified storage persisted.",
+   "evidenciaAstra": "pkg/apiserver/rest/dualwriter_mode3.go:139 now passes the original objInfo instead of wrapping the unified-storage result. The playlist legacy implementation evaluates it against its own stored object at pkg/registry/apis/playlist/legacy_storage.go:142 and :147, allowing state-dependent updates to diverge; updateWrapper instead returns the fixed object at pkg/apiserver/rest/dualwriter.go:143."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#07",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The Mode 3 tests never wait for or assert the asynchronous legacy writes, and legacy and storage share one mock, so removing the legacy calls would not fail them.",
+   "evidenciaOpus": "dualwriter_mode3_test.go:47-76 register legacy expectations on the same *mock.Mock shared by legacyStoreMock and storageMock, never wait for the goroutine and never assert expectations; removing the d.Legacy.* calls in dualwriter_mode3.go would leave every test passing.",
+   "evidenciaAstra": "pkg/apiserver/rest/dualwriter_mode3_test.go:313 registers a legacy Update expectation, but lines 345\u2013353 only call Update and inspect its returned result, with no synchronization or expectation verification. Both adapters also share one mock at lines 333\u2013334, so removing the asynchronous legacy write leaves this test passing."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#11",
+   "severity": "high",
+   "category": "concurrency",
+   "bug": "Independent per-request goroutines remove ordering between legacy writes to the same resource, so legacy can end up with an older version or a resurrected object.",
+   "evidenciaOpus": "Each Create/Update/Delete at dualwriter_mode3.go:50, :108, :134 launches an independent goroutine for the legacy write, so legacy writes to the same resource can complete out of order (e.g. an older update or a create after a delete), leaving legacy in a state that differs from unified storage.",
+   "evidenciaAstra": "pkg/apiserver/rest/dualwriter_mode3.go:134 launches each legacy update independently and returns at line 143 without ordering or waiting. Consequently, even sequential caller updates can reach legacy storage in reverse order, and the playlist SQL update at pkg/services/playlist/playlistimpl/xorm_store.go:90 overwrites fields without a version guard."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#sncc-01",
+   "severity": "high",
+   "category": "bug",
+   "bug": "DualWriterMode3.Delete now returns on any unified-storage error, including NotFound, before deleting from legacy, so objects that exist only in legacy can no longer be deleted.",
+   "evidenciaOpus": "At base, Delete tolerated apierrors.IsNotFound from Storage and still deleted from Legacy. At head (dualwriter_mode3.go:100-105), any Storage error, NotFound included, returns before the legacy delete goroutine runs (lines 108-114). Objects present only in legacy are never removed there.",
+   "evidenciaAstra": "At head, pkg/apiserver/rest/dualwriter_mode3.go:100-104 returns on every unified-storage delete error, including NotFound, so the legacy delete at line 112 is skipped. The base version explicitly tolerated NotFound at lines 58-65 and continued to legacy deletion; this change leaves legacy-only objects persisted after deletion attempts."
+  }
+ ]
+}

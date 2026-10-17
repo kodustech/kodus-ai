@@ -1,0 +1,58 @@
+{
+ "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+ "prTitle": "scale-color $lightness must use $secondary for dark themes",
+ "upstream": "discourse/discourse",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/discourse",
+ "base": "7554b5e3c458dc79b591d5e874e79ab10cf30c2f",
+ "head": "d38c4d5f7443223c81529c22470293771baf9f38",
+ "tps": [
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "severity": "medium",
+   "category": "style",
+   "bug": "In .topic-meta-data h5 a, the original code had color: scale-color($primary, $lightness: 30%) but was changed to dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%)). The lightness for the light theme changed from 30% to 70%, which is a dramatic inversion",
+   "evidenciaOpus": "desktop/topic-post.scss:291 changed `scale-color($primary, $lightness: 30%)` to `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))`, so the light-theme argument went from 30% to 70% (inverted), visibly lightening the reply author link in the existing light theme.",
+   "evidenciaAstra": "app/assets/stylesheets/desktop/topic-post.scss:291 changes the light-theme primary lightness from 30% in the base to 70%. This makes the reply-author link substantially paler; dark-light-choose selects that first argument for light themes (app/assets/stylesheets/common/foundation/variables.scss:46)."
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "In topic-post.css the original code used $lightness: 70% but the replacement uses $lightness: 30% for the light theme. This makes the text significantly darker than intended.",
+   "evidenciaOpus": "mobile/modal.scss:102 changed `scale-color($primary, $lightness: 70%)` to `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`; the light value went from 70% to 30% and differs from desktop/modal.scss which keeps 70/30.",
+   "evidenciaAstra": "app/assets/stylesheets/mobile/modal.scss:102 replaces the original 70% primary lightness with 30% in the light-theme branch, visibly darkening the message-length hint. The desktop counterpart preserves 70%/30% at app/assets/stylesheets/desktop/modal.scss:94, confirming the introduced inconsistency."
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "severity": "medium",
+   "category": "speculative",
+   "bug": "This change for desktop/user.css changes $primary from 30% to 50% for the light theme; most other changes preserve the original $primary value and move the complement to $secondary for dark. Consider reviewing this (also applies to a similar .name change in the mobile variant).",
+   "evidenciaOpus": "desktop/user.scss:522 changed .name from `scale-color($primary, $lightness: 30%)` to `dark-light-choose(scale-color($primary, $lightness: 50%), ...50%)`, altering the light-theme color, unlike the other rules that keep the original primary value.",
+   "evidenciaAstra": "app/assets/stylesheets/desktop/user.scss:522 changes the group-member name's light-theme primary lightness from 30% to 50%. This reduces its contrast and gives it the same color as the adjacent title at app/assets/stylesheets/desktop/user.scss:527."
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "In mobile/user.scss line 497, the lightness value for dark themes should be inverted to 70% instead of being changed to 50%. This change may lead to unintended visual regressions in light themes.",
+   "evidenciaOpus": "mobile/user.scss:497 changed .name from `scale-color($primary, $lightness: 30%)` to `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))`, changing the light-theme color.",
+   "evidenciaAstra": "app/assets/stylesheets/mobile/user.scss:497 changes the group-member name from the base's 30% primary lightness to 50% in the light-theme branch. This introduces a visible light-theme contrast regression alongside the dark-theme conversion."
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "In mobile topic-post a.star h3 the light-theme lightness changed from 20% to 50%, fading the heading and diverging from the desktop 20%/80% conversion.",
+   "evidenciaOpus": "mobile/topic-post.scss:182 changed a.star h3 from `scale-color($primary, $lightness: 20%)` to `dark-light-choose(scale-color($primary, $lightness: 50%), ...50%)`, while desktop/topic-post.scss:321 kept 20%/80%; the mobile light-theme heading becomes lighter.",
+   "evidenciaAstra": "app/assets/stylesheets/mobile/topic-post.scss:182 changes the topic-map heading's light-theme primary lightness from 20% to 50%, making it substantially paler. The corresponding desktop heading retains 20%/80% at app/assets/stylesheets/desktop/topic-post.scss:321; the affected selector is .topic-map h3, despite some comments calling it a.star h3."
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#08",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "In dark themes the notification badge background becomes a lightened $secondary while its text stays $secondary, giving dark text on a dark background with poor contrast.",
+   "evidenciaOpus": "badges.css.scss:235-243 keeps text `color: $secondary` but the dark-theme background is now scale-color($secondary, $lightness: 30%), i.e. a slightly lighter version of the same dark color, so badge counts become dark-on-dark with low contrast in dark themes (previously a lightened $primary background).",
+   "evidenciaAstra": "app/assets/stylesheets/common/components/badges.css.scss:239 introduces a dark background while lines 235 and 241 retain the dark secondary foreground, reducing contrast for default badges such as the unread count in app/assets/javascripts/discourse/templates/topic-post-badges.raw.hbs:3. The cited site-map category example is overridden by app/assets/stylesheets/common/base/header.scss:300, but the underlying default-badge contrast regression is real."
+  }
+ ]
+}

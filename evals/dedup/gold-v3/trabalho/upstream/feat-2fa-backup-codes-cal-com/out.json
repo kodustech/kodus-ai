@@ -1,0 +1,72 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "prOriginal": {
+  "numero": 10600,
+  "url": "https://github.com/calcom/cal.diy/pull/10600",
+  "mergedAt": "2023-08-30",
+  "nota": "calcom/cal.com now redirects to calcom/cal.diy (default branch main). Found with gh pr list search 'backup codes in:title'; headRefOid equals benchmark head 54486a05, squash-merged as a308075b. disable.ts later moved to apps/web/app/api/auth/two-factor/totp/disable/route.ts (#19826); authorize() was extracted to authorizeCredentials in the same next-auth-options.ts."
+ },
+ "tps": {
+  "feat-2fa-backup-codes-cal-com#01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-12-03",
+    "pr": 25563,
+    "commit": "63d1361a7a999e7613a55d4fefbf6dbabab9eb11",
+    "url": "https://github.com/calcom/cal.diy/pull/25563"
+   },
+   "removidoEm": null,
+   "diasNoAr": 826,
+   "reason": "PR #25563 'fix: simplify credentials provider authorization flow' removed the `if (user.password?.hash && !credentials.totpCode)` guard and now always runs verifyPassword before the backup-code/TOTP branches. Today authorizeCredentials throws IncorrectEmailPassword on a wrong password regardless of totpCode, so backup code plus dummy totpCode no longer bypasses the password.",
+   "astra": []
+  },
+  "feat-2fa-backup-codes-cal-com#02": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1144,
+   "reason": "EnableTwoFactorModal.tsx on main still only calls setStep(SetupStep.DisplayBackupCodes) on success and calls onEnable() only from the backup-codes-close button. The settings view (apps/web/modules/settings/security/two-factor-auth-view.tsx) still passes onOpenChange={() => setEnableModalOpen(!enableModalOpen)}, so dismissing skips the viewer.me invalidation in onEnable.",
+   "astra": []
+  },
+  "feat-2fa-backup-codes-cal-com#05": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1144,
+   "reason": "apps/web/playwright/login.2fa.e2e.ts on main still clicks backup-codes-copy and only waits for toast-success, with the original '// TODO: check clipboard content' comment still in place.",
+   "astra": []
+  },
+  "feat-2fa-backup-codes-cal-com#07": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1144,
+   "reason": "authorizeCredentials on main still decrypts user.backupCodes, finds the index with indexOf, nulls it and writes back with prisma.user.update({where:{id:user.id}}) with no version/compare-and-set or transaction, so concurrent use of the same code is still possible.",
+   "astra": []
+  },
+  "feat-2fa-backup-codes-cal-com#12": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1144,
+   "reason": "The backup-codes-copy handler in EnableTwoFactorModal.tsx on main is unchanged: navigator.clipboard.writeText(...) is not awaited and showToast(t(\"backup_codes_copied\"), \"success\") fires immediately.",
+   "astra": []
+  },
+  "feat-2fa-backup-codes-cal-com#16": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1144,
+   "reason": "The endpoint moved to the app router (apps/web/app/api/auth/two-factor/totp/disable/route.ts, #19826) but still does `if (user.twoFactorEnabled && body.backupCode)` then body.backupCode.replaceAll(\"-\", \"\") with no string type check, so a truthy non-string still throws instead of a 400.",
+   "astra": []
+  },
+  "feat-2fa-backup-codes-cal-com#sncc-01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1144,
+   "reason": "authorizeCredentials on main still matches with backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\")) over the decrypted codes; no constant-time comparison was introduced.",
+   "astra": []
+  }
+ }
+}

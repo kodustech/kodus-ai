@@ -1,0 +1,63 @@
+{
+  "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+  "prOriginal": {
+    "numero": 7232,
+    "url": "https://github.com/calcom/cal.diy/pull/7232",
+    "mergedAt": "2023-02-20",
+    "nota": "calcom/cal.com now redirects to calcom/cal.diy. Found via head branch fix/cancelled-rescheduled-workflow-emails; PR head 6048e2a8 equals the benchmark head (same 8 commits), merged as 2ebfcf448. On 2026-04-15 PR #28903 'refactor: Cal.diy' removed packages/features/ee (all workflow code) from the default branch."
+  },
+  "tps": {
+    "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2024-07-08",
+        "pr": 15083,
+        "commit": "c4104af8a211f9cba3cd461422614b799a90829e",
+        "url": "https://github.com/calcom/cal.diy/pull/15083"
+      },
+      "removidoEm": null,
+      "diasNoAr": 504,
+      "reason": "handleCancelBooking first collected the delete promises and awaited them via Promise.all in #14864 (2024-05-10). The remaining unawaited forEach sites (workflow delete/update/activateEventType handlers) were all replaced in #15083 ('use deleteAllWorkflowReminders everywhere') by an awaited deleteAllWorkflowReminders that runs Promise.allSettled; reschedule paths were already awaited by then. From 2024-07-08 every caller named in the bug awaits the reminder cancellation.",
+      "astra": []
+    },
+    "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2023-04-03",
+        "pr": 8026,
+        "commit": "caf5918b72974406140539c624f47c3f32aaccd2",
+        "url": "https://github.com/calcom/cal.diy/pull/8026"
+      },
+      "removidoEm": null,
+      "diasNoAr": 42,
+      "reason": "#8026 moved the try/catch inside the for loop in scheduleEmailReminders.ts, so each SendGrid cancel and its row update (now update scheduled:false, awaited per reminder) succeed or fail independently; one failing cancel no longer aborts the others. Later versions use Promise.allSettled over per-reminder cancel/update promises.",
+      "astra": []
+    },
+    "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#05": {
+      "status": "descontinuado",
+      "corrigidoEm": null,
+      "removidoEm": {
+        "data": "2025-09-04",
+        "pr": 23591,
+        "commit": "6f05142447391f8541eff0cafb57a3525f75deb3",
+        "url": "https://github.com/calcom/cal.diy/pull/23591"
+      },
+      "diasNoAr": 927,
+      "reason": "The deferred SendGrid cancellation (flag cancelled:true, cancel later in the 15-min cron) was kept and even extended (#7647). #20293 (2025-04-09) moved workflow emails to SMTP via the tasker, where deleteScheduledEmailReminder cancels the task immediately (tasker.cancelWithReference), and #23591 removed SendGrid scheduling from emailReminderManager entirely, leaving the cron path only as a deprecated legacy path. The change was a provider migration, not a fix aimed at the cutoff; the whole code was then removed on 2026-04-15 (#28903).",
+      "astra": []
+    },
+    "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#13": {
+      "status": "descontinuado",
+      "corrigidoEm": null,
+      "removidoEm": {
+        "data": "2026-04-15",
+        "pr": 28903,
+        "commit": "ab21c7f805a089fa3a11ffd61c4a9aecc349c16c",
+        "url": "https://github.com/calcom/cal.diy/pull/28903"
+      },
+      "diasNoAr": 1150,
+      "reason": "deleteScheduledSMSReminder kept twilio.cancelSMS and prisma.workflowReminder.delete in the same try with no separate DB cleanup through the last version before removal (smsReminderManager.ts at 353f71bdc69, 2026-03-16). Callers still delegate deletion to it (deleteAllWorkflowReminders). The file was removed with all of packages/features/ee by #28903 on 2026-04-15, without any change targeting this bug.",
+      "astra": []
+    }
+  }
+}

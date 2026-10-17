@@ -1,0 +1,114 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "prTitle": "feat(uptime): Add ability to use queues to manage parallelism",
+ "upstream": "getsentry/sentry",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/sentry",
+ "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+ "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+ "tps": [
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+   "severity": "high",
+   "category": null,
+   "bug": "Claims OffsetTracker.get_committable_offsets requires every integer offset to exist, so Kafka offset gaps permanently block commits for the partition and per-partition state is never cleared on rebalance.",
+   "evidenciaOpus": "queue_consumer.py:86-105: the scan stops at a missing offset only until the lower offset is committed; mark_committed (line 105) drops offsets <= committed, so the next cycle starts at max(last_committed+1, min_offset)=next received offset and commits past the gap. Gaps delay the commit by one cycle, they never block it permanently.",
+   "evidenciaAstra": "queue_consumer.py:86-93 stops at missing integer offsets, unnecessarily limiting progress to one contiguous run per commit cycle, and result_consumer.py:254-258 reuses the tracker without resetting assignment state. The permanent-stall claim is overstated: queue_consumer.py:105 removes committed entries, allowing the next scan to skip the gap."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "severity": "high",
+   "category": "bug",
+   "bug": "OrderedQueueWorker marks a work item's offset complete in a finally block even when processing raised, so failed messages are committed and dropped, contradicting the documented guarantee of committing only after successful processing.",
+   "evidenciaOpus": "OrderedQueueWorker.run calls offset_tracker.complete_offset in the finally block (queue_consumer.py:144-149) even when result_processor raised, so the commit loop commits past a failed message; the strategy docstring (line 254) promises 'Only commits offsets after successful processing'.",
+   "evidenciaAstra": "queue_consumer.py:144-149 logs processor exceptions and unconditionally completes their offsets. The commit loop at :278-289 subsequently commits those offsets, so failed work can be skipped despite the success-only guarantee at :254."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#04",
+   "severity": "medium",
+   "category": "doc_defect",
+   "bug": "The test test_thread_queue_parallel_error_handling has a docstring that doesn't match the test implementation.",
+   "evidenciaOpus": "test_results_consumer.py:1874-1922: the docstring says errors don't block commits for other messages, but the test asserts len(committed_offsets)==0 or partition not in committed_offsets, i.e. that nothing was committed; it passes only because it asserts before the 1s commit loop fires.",
+   "evidenciaAstra": "test_results_consumer.py:1876 claims to verify continued commits after processing errors, but :1922 asserts that no partition offset was committed. Removing commit processing entirely would satisfy that assertion, making this a substantive test gap rather than merely inaccurate wording."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#05",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The error-handling test asserts no commit happened after only a 0.2s sleep while the commit loop runs every second, so it passes without ever observing whether a failed offset gets committed.",
+   "evidenciaOpus": "The test waits for the processor calls, sleeps 0.2s (test_results_consumer.py:1916-1917) and asserts no commit, while _commit_loop waits 1.0s per iteration (queue_consumer.py:276); the failed offset is completed in finally, so a commit may happen right after the assertion and the test passes regardless.",
+   "evidenciaAstra": "test_results_consumer.py:1916-1922 waits for processor calls plus 0.2 seconds before asserting no commit. queue_consumer.py:276 waits one second before committing, so the assertion can pass before the failed offset, completed at :149, is committed."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "severity": "medium",
+   "category": "perf",
+   "bug": "FixedQueuePool uses unbounded queues and the strategy never applies backpressure, so when workers fall behind the consumer keeps polling and queued work items grow memory without limit, contrary to the documented backpressure guarantee.",
+   "evidenciaOpus": "FixedQueuePool creates queue.Queue() with no maxsize (queue_consumer.py:185) and submit/poll never block or raise MessageRejected (lines 204-212, 327-333), despite the docstring promising 'Natural backpressure when queues fill up' (line 253). A slow worker lets the queue grow without bound.",
+   "evidenciaAstra": "queue_consumer.py:185 creates unbounded queues, :211-212 always enqueues accepted work, and :327-333 only reports queue depth. No capacity check or rejection limits retained messages when ingestion outpaces processing, permitting unbounded memory growth."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Graceful shutdown sets each worker's shutdown flag before draining, so workers stop with items still queued, and close() stops the commit thread first, so finished work is not committed and gets replayed.",
+   "evidenciaOpus": "FixedQueuePool.shutdown sets worker.shutdown=True before q.shutdown(immediate=False) (queue_consumer.py:233-238), and the worker loop checks 'while not self.shutdown' (line 129), so workers exit after the current item and abandon queued work; close() also stops the commit thread before the pool (lines 335-338), so completed work is never committed.",
+   "evidenciaAstra": "queue_consumer.py:234 sets the flag checked by the worker loop at :129, causing workers to exit with queued work remaining despite shutdown(immediate=False). Strategy close stops the commit thread before shutting down workers at :335-338, and join at :344-345 neither drains work nor performs a final post-processing commit."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "severity": "critical",
+   "category": "bug",
+   "bug": "The strategy's close() shuts down the factory-owned shared queue pool, so after a partition rebalance the next strategy reuses a dead pool; submissions fail and the error handler marks their offsets complete, committing messages that were never processed.",
+   "evidenciaOpus": "ResultsStrategyFactory creates one FixedQueuePool in __init__ and passes self.queue_pool to every strategy (result_consumer.py:131-137, 254-259), while SimpleQueueProcessingStrategy.close/terminate/join shut that pool down (queue_consumer.py:335-345). After a rebalance the new strategy reuses a shut-down pool; put() raises and submit's except marks the offset complete, so messages are committed unprocessed.",
+   "evidenciaAstra": "result_consumer.py:133 creates one pool and :255 passes it to every replacement strategy, while queue_consumer.py:338 shuts it down when a strategy closes. [Arroyo's assignment lifecycle](https://github.com/getsentry/arroyo/blob/2.28.0/arroyo/processing/processor.py) recreates strategies after revocation, so replacement submissions reach closed queues and are incorrectly completed by :317-325."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#12",
+   "severity": "medium",
+   "category": "concurrency",
+   "bug": "The strategy invokes Arroyo's commit callback from a background thread rather than from submit/poll on the consumer thread, so commits can race with polling and partition revocation on a non-thread-safe consumer.",
+   "evidenciaOpus": "_commit_loop runs in a separate daemon thread (queue_consumer.py:270-289) and calls commit_function, which invokes Arroyo's commit callback (result_consumer.py:249-252) outside submit/poll on the consumer thread; Arroyo's consumer is not thread-safe, so commits can race with polling and rebalance.",
+   "evidenciaAstra": "queue_consumer.py:270-287 invokes the commit callback from its own thread, and result_consumer.py:249-252 forwards directly to Arroyo. That callback accesses unsynchronized staging and assignment state in [Arroyo's Kafka wrapper](https://github.com/getsentry/arroyo/blob/2.28.0/arroyo/backends/kafka/consumer.py), creating a real race with consumer lifecycle operations."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#16",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The tests named for concurrent processing across groups only check that all items were processed and all groups seen, so a fully serial implementation would pass and concurrency is never verified.",
+   "evidenciaOpus": "test_concurrent_processing_across_groups (test_queue_consumer.py:137-173) only asserts 6 items processed and 3 groups seen, and test_thread_queue_parallel_concurrent_subscriptions (test_results_consumer.py:1780-1820) only asserts call_count==2; a serial implementation passes both.",
+   "evidenciaAstra": "test_queue_consumer.py:161-173 checks only eventual completion and distinct group names, while test_results_consumer.py:1820 checks only two calls. Both tests would pass with serial processing and therefore fail to verify the concurrency they claim to test."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#17",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The strategy ordering test submits identical messages and only checks the count processed, so it cannot detect out-of-order processing within a group.",
+   "evidenciaOpus": "test_preserves_order_within_group (test_queue_consumer.py:302-312) submits five identical sub1 messages and asserts only len(processed_results)==5, so out-of-order processing would still pass.",
+   "evidenciaAstra": "test_queue_consumer.py:237-240 decodes each sub1 message into identical results, and :307-312 asserts only that five results arrived. Reversing their processing order would remain undetectable, so the ordering test does not verify ordering."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#18",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The graceful-shutdown test only asserts that the factory cleared its queue_pool reference, which shutdown always does, so it does not verify that pending work is drained or workers stop.",
+   "evidenciaOpus": "test_thread_queue_parallel_graceful_shutdown (test_results_consumer.py:1987-2005) only asserts factory.queue_pool is None, which factory.shutdown sets unconditionally (result_consumer.py:183-185); it never checks that submitted work completed or workers stopped.",
+   "evidenciaAstra": "test_results_consumer.py:1997-2005 submits work and checks only that factory.queue_pool becomes None. result_consumer.py:183-185 clears that reference unconditionally after shutdown, so abandoned work or surviving workers would not fail this graceful-shutdown test."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The test's wait loop stops at the first recorded commit but asserts the committed offset is exactly 105, so a commit fired mid-processing can record a lower offset and make the test flaky.",
+   "evidenciaOpus": "The wait loop in test_thread_queue_parallel_offset_commit (test_results_consumer.py:1861-1867) breaks once total_items == 0 and any commit exists, then asserts == 105 (line 1870). The commit loop first fires 1s after start (queue_consumer.py:275), so a mid-processing commit is only a narrow theoretical race with the mocked processor; this is test tidying.",
+   "evidenciaAstra": "tests/sentry/uptime/consumers/test_results_consumer.py:1864 exits when queues are empty and any commit exists, then line 1870 requires offset 105. The independent one-second commit loop in queue_consumer.py:273-289 can publish a partial offset before processing finishes; empty queues do not guarantee another commit has published the final offset, making the new test timing-dependent."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#oph-01",
+   "severity": "medium",
+   "category": "style",
+   "bug": "The per-worker queue_depth gauge is tagged only with identifier, so all queues report into one series and the metric shows whichever queue reported last.",
+   "evidenciaOpus": "queue_consumer.py:150-156: each OrderedQueueWorker emits the gauge remote_subscriptions.queue_worker.queue_depth with its own queue's qsize() and only the identifier tag, so the 20 workers overwrite one series. The fact is real, but it only affects a metric's tags and does not change how the consumer behaves.",
+   "evidenciaAstra": "The new pool creates separate queues and workers sharing one identifier (src/sentry/remote_subscriptions/consumers/queue_consumer.py:184-194), while each worker gauges its own qsize() with only that identifier (same file:150-156). Their readings therefore collide in one gauge series, allowing an empty queue to overwrite a backlogged queue's depth and mislead operators."
+  }
+ ]
+}

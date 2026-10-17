@@ -1,0 +1,130 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "prTitle": "fix: handle collective multiple host on destinationCalendar",
+ "upstream": "calcom/cal.com",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/cal.com",
+ "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+ "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+ "tps": [
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "severity": "high",
+   "category": "bug",
+   "bug": "Logic error: when externalCalendarId is provided, you're searching for a calendar where externalId === externalCalendarId, but this will always fail since you're looking for a calendar that matches itself. Should likely find by credentialId or use different logic.",
+   "evidenciaOpus": "googlecalendar/lib/CalendarService.ts:254-256 (updateEvent) and :315-317 (deleteEvent) fall back to destinationCalendar.find(cal => cal.externalId === externalCalendarId) only when externalCalendarId is falsy, so the find can never match and the old destinationCalendar.externalId fallback is lost.",
+   "evidenciaAstra": "packages/app-store/googlecalendar/lib/CalendarService.ts:254 searches destinations against externalCalendarId only when that value is falsy, losing the configured destination fallback. Update passes the resulting undefined calendarId at :261, while deletion repeats the lookup at :315 and falls back to primary at :322."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "severity": "high",
+   "category": "bug",
+   "bug": "Logic inversion in organization creation: The slug property is now conditionally set when IS_TEAM_BILLING_ENABLED is true, instead of when it's false as originally intended. This change, combined with requestedSlug still being set when IS_TEAM_BILLING_ENABLED is true, results in both properties being set when billing is enabled, and neither when disabled",
+   "evidenciaOpus": "organizations/create.handler.ts:151 changed ...(!IS_TEAM_BILLING_ENABLED && { slug }) to ...(IS_TEAM_BILLING_ENABLED ? { slug } : {}), inverting the condition while requestedSlug is still set only when billing is enabled; without billing the org gets neither slug nor requestedSlug.",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/organizations/create.handler.ts:151 reverses the previous slug condition, while :153 still assigns requestedSlug only when billing is enabled. Billing-disabled organizations consequently receive neither field, and packages/trpc/server/routers/viewer/organizations/publish.handler.ts:54 rejects publication without requestedSlug."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "severity": "high",
+   "category": "api",
+   "bug": "The Calendar interface now requires createEvent(event, credentialId), but some implementations (e.g., Lark/Office365) still declare createEvent(event) only\u2014this breaks the interface contract (also applies to other locations in the PR).",
+   "evidenciaOpus": "office365calendar/lib/CalendarService.ts:72-76 keeps createEvent(event) and always uses destinationCalendar[0], while CalendarManager.createEvent now passes credential.id and EventManager.createAllCalendarEvents (EventManager.ts:339-372) calls it per destination; a second Office365 host's token is used against the first host's calendar id.",
+   "evidenciaAstra": "packages/app-store/office365calendar/lib/CalendarService.ts:73 always selects the first destination and uses its ID in the request URL at :76. EventManager creates events separately for each destination's credential at packages/core/EventManager.ts:370, so subsequent Office365 hosts use the first host's calendar ID with their own credentials."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#06",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The `credential` may be undefined when passed to `updateEvent` if `reference.credentialId` is set but the credential is not found. This can lead to a runtime error when `updateEvent` is called with an undefined credential, which should be handled to prevent crashes.",
+   "evidenciaOpus": "EventManager.ts:511-547 can pass an undefined credential to updateEvent when the DB lookup fails, but the same undefined-credential path existed before (filter(...)[0]) and the PR only adds a DB fallback; the call runs inside updateAllCalendarEvents' try/catch that returns failure results.",
+   "evidenciaAstra": "packages/core/EventManager.ts:529 assigns a credential only when the database lookup returns a record with an app slug, but :542 calls updateEvent unconditionally. Although getCalendar tolerates missing credentials, packages/core/CalendarManager.ts:314 dereferences credential.appName, causing a rejected update when credential resolution fails."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The Google Meet fallback reads mainHostDestinationCalendar.integration without optional chaining, so a Meet booking with a null or empty destinationCalendar throws instead of falling back to Cal Video.",
+   "evidenciaOpus": "EventManager.ts:118-119 destructures const [mainHostDestinationCalendar] = evt.destinationCalendar ?? [] then reads mainHostDestinationCalendar.integration without ?.; handleNewBooking sets destinationCalendar to null and other callers to [], so a Google Meet booking without a destination calendar throws a TypeError.",
+   "evidenciaAstra": "packages/core/EventManager.ts:118 destructures an optionally empty destination array, then :119 accesses mainHostDestinationCalendar.integration without a guard for Google Meet bookings. packages/features/bookings/lib/handleNewBooking.ts:1067 explicitly supplies null when no destination exists, making this exception reachable."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "severity": "high",
+   "category": "bug",
+   "bug": "For collective events whose organizer has no destination calendar, destinationCalendar is null and the optional push drops all other hosts' destination calendars, so those hosts never get calendar events.",
+   "evidenciaOpus": "handleNewBooking.ts:1063-1067 sets evt.destinationCalendar to null when neither event type nor organizer has one, and :1077-1078 then calls evt.destinationCalendar?.push(...teamDestinationCalendars), which silently does nothing.",
+   "evidenciaAstra": "packages/features/bookings/lib/handleNewBooking.ts:1063 initializes destinationCalendar to null when neither organizer nor event type has a destination. The optional push at :1078 then discards the secondary hosts' destinations collected at :993, preventing their calendar events from being created."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+   "severity": "high",
+   "category": "bug",
+   "bug": "Video booking references are now saved without their credentialId, so cancelling the booking can no longer find the video credential and the meeting is not deleted.",
+   "evidenciaOpus": "EventManager.ts:170 now stores credentialId: isCalendarType ? result.credentialId : undefined, dropping the video credentialId previously stored; handleCancelBooking.ts:490-501 deletes the video meeting only when the video reference has a credentialId.",
+   "evidenciaAstra": "packages/core/EventManager.ts:170 now discards credentialId for video results even though packages/core/videoClient.ts:78 supplies it. Cancellation requires that ID at packages/features/bookings/lib/handleCancelBooking.ts:491 before calling deleteMeeting, so newly created video meetings miss cleanup."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+   "severity": "high",
+   "category": "bug",
+   "bug": "updateLocation stores externalCalendarId and credentialId from updateEvent's result, which never returns them, so calendar references rewritten on location edit lose their calendar and credential and later updates or cancellations misroute.",
+   "evidenciaOpus": "EventManager.ts:208-209 updateLocation now builds references from result.externalId and result.credentialId, but CalendarManager.updateEvent (CalendarManager.ts:315-324) returns neither; previously they fell back to evt.destinationCalendar, so location edits now persist calendar references without externalCalendarId/credentialId.",
+   "evidenciaAstra": "packages/core/EventManager.ts:208 now constructs location-update references from result.externalId and result.credentialId, but packages/core/CalendarManager.ts:313 returns neither field for updates. These incomplete references are persisted by packages/trpc/server/routers/viewer/bookings/editLocation.handler.ts:120, losing the routing metadata previously supplied by the destination."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
+   "severity": "high",
+   "category": "bug",
+   "bug": "Cancelling all remaining occurrences of a recurring collective booking deletes only the first calendar reference of each booking, repeated once per host, so the other hosts' events stay on their calendars.",
+   "evidenciaOpus": "handleCancelBooking.ts:449-470: inside the new loop over all calendar references, the recurring cancel-all branch still iterates the organizer's credentials and deletes updBooking.references.find(first _calendar ref), so every outer iteration repeats the first host's deletion and other hosts' recurring events are never removed.",
+   "evidenciaAstra": "packages/features/bookings/lib/handleCancelBooking.ts:423 now loops over every calendar reference, but its recurring cancellation branch at :449 still uses only the organizer's credentials. At :454 it selects each booking's first calendar reference again, repeatedly deleting that event while leaving additional hosts' events untouched."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#14",
+   "severity": "high",
+   "category": "bug",
+   "bug": "Google createEvent picks the target calendar only by matching credentialId, so destination calendars without a credentialId are ignored and events are created on the primary calendar instead.",
+   "evidenciaOpus": "googlecalendar/lib/CalendarService.ts:148-154 selects the calendar only by destinationCalendar.find(cal.credentialId === credentialId), falling back to 'primary'; destinations without a credentialId (handled in EventManager.ts:372-378) previously used destinationCalendar.externalId and now go to primary.",
+   "evidenciaAstra": "packages/core/EventManager.ts:375 explicitly supports destinations without credentialId by selecting credentials through their integration type. Google creation nevertheless requires an exact credentialId match at packages/app-store/googlecalendar/lib/CalendarService.ts:148, so these destinations fail to match and insertion targets primary at :154."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#15",
+   "severity": "high",
+   "category": "bug",
+   "bug": "For destination calendars without a credentialId, createEvent is called without the externalId, so the booking reference is stored with an undefined externalCalendarId.",
+   "evidenciaOpus": "EventManager.ts:375-378 calls createEvent(c, event) without destination.externalId for credential-less destinations; CalendarManager.createEvent returns externalId only from that argument (CalendarManager.ts:267) and EventManager.ts:169 stores result.externalId, so these references get no externalCalendarId.",
+   "evidenciaAstra": "packages/core/EventManager.ts:380 calls createEvent without destination.externalId in the integration-based fallback. packages/core/CalendarManager.ts:267 merely returns that omitted argument, and EventManager.ts:169 now stores it as externalCalendarId, so these references lose their configured calendar ID."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "When cancelling a recurring booking with multiple calendar references, the recurring-event deletion over all remaining bookings and credentials runs once per reference, causing duplicate delete calls and errors.",
+   "evidenciaOpus": "handleCancelBooking.ts:423-461 now iterates over every _calendar reference (filter instead of find), and the recurring-event branch inside the loop deletes events for all updatedBookings across all user calendar credentials. With N calendar references (the collective multi-host case this PR adds), that deletion runs N times, issuing duplicate deleteEvent calls that fail for already-deleted events.",
+   "evidenciaAstra": "packages/features/bookings/lib/handleCancelBooking.ts:423 introduces a loop over all calendar references, while lines 449\u2013457 repeat the entire recurring-booking deletion batch independently of the current reference. Multiple valid references therefore repeat external deletion requests, causing unnecessary API traffic and potentially already-deleted errors caught at lines 464\u2013466."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-03",
+   "severity": "medium",
+   "category": "security",
+   "bug": "loadUsers forwards raw Prisma error messages to the client in a 400 response, exposing internal model and query details.",
+   "evidenciaOpus": "handleNewBooking.ts:757-759: the new catch rethrows Prisma.PrismaClientKnownRequestError as HttpError({statusCode: 400, message: error.message}), returning raw Prisma error text, including model/query details, to the booking API client. Previously Prisma errors were not mapped into a client-facing message here.",
+   "evidenciaAstra": "packages/features/bookings/lib/handleNewBooking.ts:758\u2013759 wraps the raw Prisma message in HttpError, bypassing the Prisma-instance redaction in packages/lib/redactError.ts:7\u201323. The resulting message survives getServerErrorFromUnknown.ts:54\u201362 and is returned to the client by packages/lib/server/defaultResponder.ts:19\u201321, introducing disclosure of database error details."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "loadUsers throws a plain Error for an empty/invalid dynamicUserList, which the catch block converts into a generic 500 'Unable to load users', hiding a client input error behind a server error.",
+   "evidenciaOpus": "handleNewBooking.ts:727-729 throws a plain Error when dynamicUserList is empty or not an array; the catch at 758-762 only maps HttpError/Prisma errors to 400 and turns everything else into HttpError 500 'Unable to load users'. Before the PR an empty list just yielded no users.",
+   "evidenciaAstra": "packages/prisma/zod-utils.ts:214 permits eventTypeId: 0, and :220 accepts an empty user array, making this validation reachable for dynamic bookings. The newly added plain Error at packages/features/bookings/lib/handleNewBooking.ts:728 falls through to the generic HTTP 500 at :761, masking a client validation failure."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-02",
+   "severity": "medium",
+   "category": "security",
+   "bug": "Collective bookings now push every team member's DestinationCalendar row (externalId, credentialId, userId) into evt.destinationCalendar, and since evt is spread into the webhook payload these other members' calendar identifiers are sent to webhook subscribers.",
+   "evidenciaOpus": "For COLLECTIVE events handleNewBooking.ts:990-994 collects each member's full DestinationCalendar row and 1077-1079 pushes them into evt.destinationCalendar; webhookData at 1754-1771 spreads ...evt and sendPayload forwards all fields, so other members' externalId/credentialId reach the webhook subscriber.",
+   "evidenciaAstra": "packages/features/bookings/lib/handleNewBooking.ts:993 collects members\u2019 complete destination-calendar records and :1078 appends them to evt.destinationCalendar. The webhook payload spreads evt at :2297, and packages/features/webhooks/lib/sendPayload.ts:122 serializes the unfiltered data, exposing other hosts\u2019 calendar and credential identifiers to ordinary webhook subscribers."
+  }
+ ]
+}

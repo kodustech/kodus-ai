@@ -1,0 +1,42 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "prTitle": "feat: add calendar cache status and actions (#22532)",
+ "upstream": "calcom/cal.com",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/cal.com",
+ "base": "30a92a4d66b417f7c19dee2b343099adc6e88aa6",
+ "head": "5fd11f9faa79c4aefd39975d1b0e963e5034f793",
+ "tps": [
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "After deleting the calendar cache, CredentialActionsDropdown does not invalidate the connectedCalendars query, so where no parent refetch callback is passed the stale cache status and delete action remain visible.",
+   "evidenciaOpus": "CredentialActionsDropdown.tsx:42-50 deleteCacheMutation only calls onSuccess?.() and never invalidates viewer.calendars.connectedCalendars, unlike disconnectMutation (:61-64). The settings page passes an onChanged that invalidates, but EventAdvancedTab renders SelectedCalendarsSettingsWebWrapper without onChanged, so there the deleted cache status stays visible.",
+   "evidenciaAstra": "packages/features/apps/components/CredentialActionsDropdown.tsx:43 only invokes the optional callback after deletion. Although CalendarListContainer.tsx:87 supplies invalidation, packages/features/eventtypes/components/tabs/advanced/EventAdvancedTab.tsx:372 mounts the wrapper without that callback, leaving its cache status stale after deletion."
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#04",
+   "severity": "low",
+   "category": "bug",
+   "bug": "Date is formatted with hardcoded 'en-US' locale instead of using the user's locale from useLocale, which can lead to incorrect date representation for users in different locales.",
+   "evidenciaOpus": "CredentialActionsDropdown.tsx:89-92 formats cacheUpdatedAt with new Intl.DateTimeFormat(\"en-US\", ...) while the label is translated via t() from useLocale, so non-US users see US date order.",
+   "evidenciaAstra": "packages/features/apps/components/CredentialActionsDropdown.tsx:89 explicitly formats the timestamp using en-US while translating the surrounding message at line 88. The active locale is available through packages/lib/hooks/useLocale.ts:58, but is ignored, producing incorrect localization for other locales."
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+   "severity": "low",
+   "category": "bug",
+   "bug": "logic: macOS-specific sed syntax with empty string after -i flag will fail on Linux systems",
+   "evidenciaOpus": "scripts/test-gcal-webhooks.sh:68 uses sed -i '' -E ..., the BSD/macOS form; GNU sed treats '' as the script and fails, so on Linux GOOGLE_WEBHOOK_URL is not updated while the script still prints that it was.",
+   "evidenciaAstra": "scripts/test-gcal-webhooks.sh:68 uses BSD-specific sed -i '' syntax, which fails under GNU sed when replacing an existing GOOGLE_WEBHOOK_URL. The script does not check the command result and prints the success message at line 73 despite leaving the old URL unchanged."
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#08",
+   "severity": "medium",
+   "category": "api",
+   "bug": "Throwing a generic Error for authentication failures results in a 500 response in tRPC. Instead, it should return a structured TRPCError with an appropriate code, such as FORBIDDEN, to accurately reflect the error type.",
+   "evidenciaOpus": "deleteCache.handler.ts:24-26 throws new Error(\"Credential not found or access denied\"), which tRPC maps to INTERNAL_SERVER_ERROR (500) instead of a TRPCError with NOT_FOUND/FORBIDDEN.",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts:17 checks credential ownership and throws a generic Error at line 25 when that check fails. This authorization failure becomes an internal-server error, and packages/trpc/server/errorFormatter.ts:38 preserves that classification instead of returning an appropriate access-denied or not-found code."
+  }
+ ]
+}

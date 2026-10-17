@@ -1,0 +1,121 @@
+{
+ "caseId": "dual-storage-architecture-grafana-codex",
+ "prOriginal": {
+  "numero": 90045,
+  "url": "https://github.com/grafana/grafana/pull/90045",
+  "mergedAt": "2024-07-24",
+  "nota": "Found via gh pr list by author leonorfmartins (\"Dual writer: mode 3\", branch dualwriter_mode3). Its headRefOid is e369f24665ec, the benchmark head; squash-merged as 67b74e1e8a. The mode3 file was deleted on 2025-03-01 (#101393) and folded into pkg/storage/legacysql/dualwrite/dualwriter.go."
+ },
+ "tps": {
+  "dual-storage-architecture-grafana-codex#02": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2024-10-23",
+    "pr": 93852,
+    "commit": "a03652494c",
+    "url": "https://github.com/grafana/grafana/pull/93852"
+   },
+   "removidoEm": null,
+   "diasNoAr": 91,
+   "reason": "In #93852 (Dual Writer simplification) the legacy DeleteCollection path moved to deleteCollectionFromLegacyStorage, which records the legacy call via d.recordLegacyDuration(err != nil, ...); the swapped recordStorageDuration call on the legacy result is gone. Intermediate commits (#91041, #91113, #92654) only changed the label argument and kept the wrong helper.",
+   "astra": []
+  },
+  "dual-storage-architecture-grafana-codex#03": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2024-12-19",
+    "pr": 98147,
+    "commit": "124440ccee",
+    "url": "https://github.com/grafana/grafana/pull/98147"
+   },
+   "removidoEm": null,
+   "diasNoAr": 148,
+   "reason": "The success path of Delete kept passing `name` as the kind/resource label through #91041, #91113, #92654 and #93852 (which even widened it to recordStorageDuration(err != nil, mode3Str, name, ...)). #98147 rewrote Delete and records storage duration with d.resource, removing the per-object label.",
+   "astra": []
+  },
+  "dual-storage-architecture-grafana-codex#04": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2024-10-23",
+    "pr": 93852,
+    "commit": "a03652494c",
+    "url": "https://github.com/grafana/grafana/pull/93852"
+   },
+   "removidoEm": null,
+   "diasNoAr": 91,
+   "reason": "In #93852 Create and Update record the Storage call with d.recordStorageDuration(errObjectSt != nil / err != nil, ...) right after the d.Storage call; the recordLegacyDuration call on the storage failure branch was removed in both methods.",
+   "astra": []
+  },
+  "dual-storage-architecture-grafana-codex#05": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2024-10-23",
+    "pr": 93852,
+    "commit": "a03652494c",
+    "url": "https://github.com/grafana/grafana/pull/93852"
+   },
+   "removidoEm": null,
+   "diasNoAr": 91,
+   "reason": "#93852 moved the legacy writes into helper goroutines whose context is context.WithTimeoutCause(context.WithoutCancel(ctx), 10s, ...), with an explicit comment that it ignores cancellation from the parent context; request completion no longer cancels the legacy write. #98147 later made the writes synchronous.",
+   "astra": []
+  },
+  "dual-storage-architecture-grafana-codex#06": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2024-12-19",
+    "pr": 98147,
+    "commit": "124440ccee",
+    "url": "https://github.com/grafana/grafana/pull/98147"
+   },
+   "diasNoAr": 148,
+   "reason": "The raw objInfo passed to Legacy.Update survived until #98147, which rewrote mode 3 Update to write legacy first (as primary) and unified second, both from objInfo. The step where legacy should persist the unified result but recomputes it no longer exists; today's pkg/storage/legacysql/dualwrite/dualwriter.go keeps the legacy-first order with unified recomputing via wrappedUpdateInfo. Not a change targeting this bug, so descontinuado.",
+   "astra": [
+    {
+     "pergunta": "Given base (updateWrapper with storage result), head (raw objInfo to legacy in goroutine), #98147 (legacy first, then unified, both with objInfo) and today's dualWriter.Update: confirmado, pendente or descontinuado?",
+     "resposta": "descontinuado: #98147 writes legacy first, removing the stage where legacy should persist the unified result; stores can still diverge, but now the unified store recomputes, not the original behaviour; a rewrite, not a targeted fix.",
+     "veredito": "descontinuado (agreed)"
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex#07": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-02-12",
+    "pr": 100389,
+    "commit": "aca024bcbb",
+    "url": "https://github.com/grafana/grafana/pull/100389"
+   },
+   "removidoEm": null,
+   "diasNoAr": 203,
+   "reason": "#98147 made the legacy writes synchronous, so the tests no longer race with a goroutine, and #100389 (use dedicated mocks per storage type) replaced the shared *mock.Mock with one mock per backend, whose description cites exactly the shared-mock problem. Today's dualwriter_mode3_test.go uses separate fakeStorage instances, and legacy-failure cases expect an error that only the legacy fake can produce.",
+   "astra": []
+  },
+  "dual-storage-architecture-grafana-codex#11": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2024-12-19",
+    "pr": 98147,
+    "commit": "124440ccee",
+    "url": "https://github.com/grafana/grafana/pull/98147"
+   },
+   "removidoEm": null,
+   "diasNoAr": 148,
+   "reason": "#98147 (Block on legacy writes in mode3) removed the per-request goroutines for Create, Update, Delete and DeleteCollection; legacy and unified writes now run synchronously in the request, so writes to the same resource keep request order.",
+   "astra": []
+  },
+  "dual-storage-architecture-grafana-codex#sncc-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2024-12-19",
+    "pr": 98147,
+    "commit": "124440ccee",
+    "url": "https://github.com/grafana/grafana/pull/98147"
+   },
+   "removidoEm": null,
+   "diasNoAr": 148,
+   "reason": "#98147 rewrote Delete to delete from legacy first, tolerating apierrors.IsNotFound from legacy, and only then from unified storage. An object present only in legacy is now deleted there before the unified NotFound is returned, so the early return that skipped the legacy delete is gone.",
+   "astra": []
+  }
+ }
+}

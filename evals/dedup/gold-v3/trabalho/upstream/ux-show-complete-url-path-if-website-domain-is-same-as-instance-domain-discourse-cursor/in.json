@@ -1,0 +1,50 @@
+{
+ "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "prTitle": "UX: show complete URL path if website domain is same as instance domain",
+ "upstream": "discourse/discourse",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/discourse",
+ "base": "7a5fbae060bd0d3e29f3a4b5c6f2bfd8b2914dc7",
+ "head": "267d8be1f556ed59639ced396c885bb44586da19",
+ "tps": [
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "website_name compares hostnames case-sensitively, so an uppercase website host matching the instance domain shows only the host instead of the full path.",
+   "evidenciaOpus": "user_serializer.rb:138 takes URI(website).host with the user's casing and compares it to Discourse.current_hostname case-sensitively at :141, :146, :149; an uppercase host only shows the host without path. Rare, display-only.",
+   "evidenciaAstra": "app/serializers/user_serializer.rb:138 preserves the parsed hostname's case, and comparisons at lines 141, 146, and 149 never normalize it. app/services/user_updater.rb:105-106 also preserves hostname case, so http://EXAMPLE.COM/user on example.com loses its path."
+  },
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "website_name strips only the first label to decide same-domain, so unrelated hosts under multi-label public suffixes (co.uk, github.io) are treated as the instance domain and shown with full path.",
+   "evidenciaOpus": "user_serializer.rb:144-146 treats two hosts with the same label count as the same domain when everything after the first label matches, so forum.co.uk vs example.co.uk or a.github.io vs b.github.io show the full path for an unrelated site, contrary to the feature's rule.",
+   "evidenciaAstra": "app/serializers/user_serializer.rb:144-146 compares equally deep hostnames after removing their first labels. Consequently, example.co.uk and forum.co.uk both reduce to co.uk, incorrectly selecting the full-path display for unrelated domains."
+  },
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#05",
+   "severity": "medium",
+   "category": null,
+   "bug": "Claims website_name should also show the full path when the website is a subdomain of the instance host.",
+   "evidenciaOpus": "user_serializer.rb:147-149 deliberately handles only the website being a parent of the instance host (commented 'example.com == forum.example.com'); a website on a subdomain of the instance is a different host, and showing only its host is consistent with the stated rule.",
+   "evidenciaAstra": "app/serializers/user_serializer.rb:149 checks only whether the instance is a subdomain of the website, so website sub.example.com/page on instance example.com returns only sub.example.com. This makes shared-domain handling asymmetric despite explicitly recognizing sibling domains at lines 144-146 and parent websites in spec/serializers/user_serializer_spec.rb:87-89."
+  },
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "severity": "high",
+   "category": "security",
+   "bug": "website_name is not marked untrusted, so the host/path of a TL0 user's website, which is hidden from anonymous viewers, is still exposed through the new field.",
+   "evidenciaOpus": "website is in untrusted_attributes (user_serializer.rb:105-111), whose include_website? returns false when scope.restrict_user_fields?(object) (:25-31), but the new :website_name attribute (:43) is not, so a TL0 user's hidden website host (and path) is still sent to anonymous viewers.",
+   "evidenciaAstra": "app/serializers/user_serializer.rb:105-111 protects website but omits website_name, which reads the same profile URL through lines 133-138. The restriction at lib/guardian/user_guardian.rb:58-60 therefore hides website from anonymous viewers of TL0 profiles while the new attribute exposes its hostname and potentially its path."
+  },
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+   "severity": "high",
+   "category": "api",
+   "bug": "The include_website_name method is missing the required ? suffix. Rails serializers expect include_ methods to end with ? for conditional attribute inclusion, a convention followed by other methods in this serializer. Without it, the website_name attribute may not be conditionally included as intended. Additionally, the '.' << website_host string concatenation should be replaced with '.' + website_host or '.#{website_host}' to avoid mutating string literals, which can lead to issues.",
+   "evidenciaOpus": "user_serializer.rb:153 defines include_website_name without '?', while AMS 0.8.3 calls include_<attr>? (cf. include_email? :117), so the guard is dead and website_name is always serialized; when website is blank it is just nil, so there is no visible effect (the TL0 leak is the separate untrusted-attribute issue).",
+   "evidenciaAstra": "app/serializers/user_serializer.rb:153 defines include_website_name without the required question mark, unlike the inclusion predicates generated at lines 25-30, leaving the attribute declared at line 43 unconditional. Renaming alone would not fix the disclosure because website_name also lacks the restriction applied at lines 105-111; the additional claim about mutating a fresh string literal at line 149 does not establish a defect."
+  }
+ ]
+}

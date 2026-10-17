@@ -1,0 +1,167 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "prOriginal": {
+  "numero": 93989,
+  "url": "https://github.com/getsentry/sentry/pull/93989",
+  "mergedAt": "2025-06-20",
+  "nota": "Benchmark head ea188e2d736f is the master merge commit of #93989 (merged 2025-06-20). Base 49a275847631 is the merge of #93864 'feat(replays): Add self-serve bulk deletes' (the benchmark title). The diff spans 32 master commits merged 2025-06-20; TPs come from #93917 (#01,#02), #93669 (#06,#07,sncc-01,opa-01), #93902 (#12,#13), #93739 (#19), #93964 (opa-02), #93989 (opa-03), all merged 2025-06-20, so the reference date is 2025-06-20. Code is identical to master at that commit."
+ },
+ "tps": {
+  "replays-self-serve-bulk-delete-system-sentry#01": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-12-02",
+    "pr": 104223,
+    "commit": "a8f012b648cc",
+    "url": "https://github.com/getsentry/sentry/pull/104223"
+   },
+   "diasNoAr": 165,
+   "reason": "validate_timestamp/validate_age kept the truthiness checks self.initial_data.get('age'/'timestamp') through every later edit (#93999, #94325, #94414, #95036). PR #104223 deleted browser_reporting_collector.py and its route as part of an endpoint cleanup; no equivalent code exists on master.",
+   "astra": []
+  },
+  "replays-self-serve-bulk-delete-system-sentry#02": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-12-02",
+    "pr": 104223,
+    "commit": "a8f012b648cc",
+    "url": "https://github.com/getsentry/sentry/pull/104223"
+   },
+   "diasNoAr": 165,
+   "reason": "The validation-failure logger.warning still carried extra={'validation_errors': ..., 'raw_report': report} in the last version (after #95036). The whole endpoint was removed by #104223 (cleanup, not targeting logging).",
+   "astra": []
+  },
+  "replays-self-serve-bulk-delete-system-sentry#06": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 484,
+   "reason": "fetch_error_details moved to src/sentry/replays/usecases/summarize.py (#96278) and still pairs `zip(error_ids, events.values())`. nodestore get_multi (now src/sentry/services/nodestore/base.py) still builds uncached items then items.update(cache_items) and omits missing nodes, so order/length can still diverge from error_ids.",
+   "astra": []
+  },
+  "replays-self-serve-bulk-delete-system-sentry#07": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-08-01",
+    "pr": 97008,
+    "commit": "22e785c60df8",
+    "url": "https://github.com/getsentry/sentry/pull/97008"
+   },
+   "diasNoAr": 42,
+   "reason": "The endpoint kept running query_replay_instance before checking enable_error_context up to its 2025-07-30 version. #97008 deleted the experimental endpoint; today's rpc_get_replay_summary_logs has no enable_error_context opt-out at all, so the behaviour is gone.",
+   "astra": []
+  },
+  "replays-self-serve-bulk-delete-system-sentry#12": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-06-26",
+    "pr": 94034,
+    "commit": "1e02df86ee2c",
+    "url": "https://github.com/getsentry/sentry/pull/94034"
+   },
+   "removidoEm": null,
+   "diasNoAr": 6,
+   "reason": "#94034 'use new table widget in dashboards' replaced columns={[]} and the empty tableData with columns built by decodeColumnOrder from the widget fields and tableData=convertTableDataToTabularData(tableResults[0]), so the table now renders the real results.",
+   "astra": []
+  },
+  "replays-self-serve-bulk-delete-system-sentry#13": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-06-26",
+    "pr": 94425,
+    "commit": "e1f66a1f874f",
+    "url": "https://github.com/getsentry/sentry/pull/94425"
+   },
+   "diasNoAr": 6,
+   "reason": "#94425 deleted defaultTableCellRenderers.tsx and replaced renderTableBodyCell/renderTableHeadCell (with `if (cell)` fallback) by a getRenderer/makeBaggage API whose renderer output is rendered directly. The truthiness-fallback logic no longer exists; the change redesigned the API rather than targeting the falsy case.",
+   "astra": []
+  },
+  "replays-self-serve-bulk-delete-system-sentry#19": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2026-04-16",
+    "pr": 113047,
+    "commit": "f39c8635b6a8",
+    "url": "https://github.com/getsentry/sentry/pull/113047"
+   },
+   "removidoEm": null,
+   "diasNoAr": 300,
+   "reason": "The key ['use-trace-item-attribute-keys', queryOptions(, search)] stayed org-less through every revision until 2026-04-15. #113047 replaced the hook with traceItemAttributeKeysOptions built on apiOptions, whose queryKey is [url, options] with url containing organization.slug; its description cites making cache key behaviour consistent.",
+   "astra": [
+    {
+     "pergunta": "#113047 removed the hook and moved to apiOptions, whose key is the URL with the org slug; PR says it makes cache key behavior consistent. confirmado or descontinuado?",
+     "resposta": "#113047 kept the functionality and put the org slug in the query key via the URL, ending the cross-org collision; any way of fixing counts.",
+     "veredito": "confirmado"
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry#sncc-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-06-23",
+    "pr": 94126,
+    "commit": "8689fe53f7d6",
+    "url": "https://github.com/getsentry/sentry/pull/94126"
+   },
+   "removidoEm": null,
+   "diasNoAr": 3,
+   "reason": "#94126 'error context timestamps should be in MS' changed fetch_error_details to timestamp=data.get('timestamp', 0.0) * 1000. Today summarize.py still multiplies by 1000 before interleaving with recording timestamps.",
+   "astra": []
+  },
+  "replays-self-serve-bulk-delete-system-sentry#opa-01": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-08-01",
+    "pr": 97008,
+    "commit": "22e785c60df8",
+    "url": "https://github.com/getsentry/sentry/pull/97008"
+   },
+   "diasNoAr": 42,
+   "reason": "The paginated endpoint fetched all errors before self.paginate on every page until #97008 removed it. Today summaries go through rpc_get_replay_summary_logs, called once per summary without pagination (trace errors limit=100; direct errors still uncapped but fetched once).",
+   "astra": [
+    {
+     "pergunta": "Paginated endpoint removed in #97008; today's Seer RPC fetches direct errors once per summary, still uncapped. descontinuado or pendente?",
+     "resposta": "Removing the endpoint eliminated the per-page re-fetch of all errors; the uncapped direct fetch in the RPC is a residual risk but runs once per summary, not per page.",
+     "veredito": "descontinuado"
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry#opa-02": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-06-23",
+    "pr": 94100,
+    "commit": "8f66433842a1",
+    "url": "https://github.com/getsentry/sentry/pull/94100"
+   },
+   "removidoEm": null,
+   "diasNoAr": 3,
+   "reason": "#94100 'Hiding some attrs from tree' passed hiddenAttributes={HIDDEN_ATTRIBUTES} to AttributesTree, which filters those names regardless of search, so they are hidden in the default (no-search) view too. Later #97416 deliberately removed internal-attribute filtering, a separate product decision.",
+   "astra": []
+  },
+  "replays-self-serve-bulk-delete-system-sentry#opa-03": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2026-08-10",
+    "pr": 121644,
+    "commit": "fd5068d4f5a3",
+    "url": "https://github.com/getsentry/sentry/pull/121644"
+   },
+   "removidoEm": null,
+   "diasNoAr": 416,
+   "reason": "The cited test (test_run_bulk_replay_delete_job_completion) still mocks delete_matched_rows. #121644 added test_delete_matched_rows_archives_in_the_replays_own_range, which calls the real delete_matched_rows with max_segment_id None (only publish_replay_event patched), so removing the guard in _make_recording_filenames would raise TypeError and fail it; gap closed incidentally.",
+   "astra": [
+    {
+     "pergunta": "Test added in #121644 calls real delete_matched_rows with max_segment_id None; the cited test still mocks. confirmado or pendente?",
+     "resposta": "The #121644 test reaches the guard; removing it raises TypeError and fails that test, so the gap closed incidentally even though the cited test is unchanged.",
+     "veredito": "confirmado"
+    }
+   ]
+  }
+ }
+}

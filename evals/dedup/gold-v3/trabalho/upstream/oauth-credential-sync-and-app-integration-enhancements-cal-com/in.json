@@ -1,0 +1,114 @@
+{
+ "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
+ "prTitle": "OAuth credential sync and app integration enhancements",
+ "upstream": "calcom/cal.com",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/cal.com",
+ "base": "bc89fe00ea84d20bedcec782f0701b9711dc8201",
+ "head": "9fde0e906897cc0f4f71793f647dd629faba3317",
+ "tps": [
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "severity": "high",
+   "category": "security",
+   "bug": "The new app-credential webhook checks its shared secret with a plain !== string comparison instead of a constant-time comparison, leaking timing information about the secret.",
+   "evidenciaOpus": "app-credential.ts:24-27 (new file) compares the request header to CALCOM_WEBHOOK_SECRET with !==, a non-constant-time comparison on an endpoint that writes user credentials.",
+   "evidenciaAstra": "apps/web/pages/api/webhook/app-credential.ts:25 compares the supplied authentication secret directly with the configured secret using !==, without a constant-time comparison. This introduces a timing-sensitive secret check, although the comments overstate the evidence for practical byte-by-byte recovery."
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
+   "severity": "medium",
+   "category": "api",
+   "bug": "The `appCredentialWebhookRequestBodySchema.parse` function can throw on invalid payloads, resulting in 500 Internal Server Errors instead of the expected 400 Bad Request responses. This can lead to confusion for clients and hinder proper error handling.",
+   "evidenciaOpus": "app-credential.ts:31 calls appCredentialWebhookRequestBodySchema.parse(req.body) and :57-59 JSON.parse(symmetricDecrypt(...)) with no try/catch, so malformed input throws and returns 500 instead of 400.",
+   "evidenciaAstra": "apps/web/pages/api/webhook/app-credential.ts:31 calls schema.parse without handling validation errors, and :57 likewise performs unguarded decryption and JSON parsing. Authenticated malformed requests therefore produce server errors rather than controlled client-error responses; production stack disclosure is not established."
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#03",
+   "severity": "high",
+   "category": "concurrency",
+   "bug": "The webhook's non-atomic findFirst-then-create lets concurrent deliveries for the same user and app insert duplicate credential rows.",
+   "evidenciaOpus": "app-credential.ts:62-91 does findFirst on (userId, appId) then create when nothing is found; there is no atomic upsert or unique constraint, so two concurrent deliveries for the same user/app can both create a credential.",
+   "evidenciaAstra": "apps/web/pages/api/webhook/app-credential.ts:62 looks up a credential separately from the creation at :83, allowing concurrent deliveries to both create rows. packages/prisma/schema.prisma:127 defines no userId/appId uniqueness constraint, so subsequent findFirst updates can leave duplicate credentials stale."
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The parseRefreshTokenResponse function incorrectly sets refresh_token to the hardcoded string 'refresh_token' when it's missing from the OAuth refresh token response. This invalidates the token, breaking subsequent token refreshes and causing authentication failures.",
+   "evidenciaOpus": "parseRefreshTokenResponse.ts:25-27 sets data.refresh_token = \"refresh_token\" whenever the response lacks one; office365 merges this into stored credentials, replacing the real refresh token with a literal placeholder.",
+   "evidenciaAstra": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:25 inserts the literal \"refresh_token\" when the parsed response lacks that field. Office365 permits omission at packages/app-store/office365calendar/lib/CalendarService.ts:56 and merges the result over existing credentials at :264, overwriting the valid refresh token."
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The Zod schema in parseRefreshTokenResponse uses computed property keys [z.string().toString()] and [z.string().optional().toString()] in minimumTokenResponseSchema, which is invalid Zod syntax and will throw a runtime error.",
+   "evidenciaOpus": "parseRefreshTokenResponse.ts:8,10 use computed keys [z.string().toString()] which both evaluate to the same literal object-string key, not wildcards; the schema ends up as {access_token, '<literal>': unknown optional} and z.object strips expiry/refresh fields in sync mode.",
+   "evidenciaAstra": "Both computed keys in packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:8 resolve to \"[object Object]\", with the optional definition at :10 overwriting the numeric definition. Consequently, normal expiry and refresh fields are stripped in sync mode; the defect is real, although the claims of invalid syntax or guaranteed validation failure are incorrect."
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "severity": "high",
+   "category": "api",
+   "bug": "When APP_CREDENTIAL_SHARING_ENABLED and CALCOM_CREDENTIAL_SYNC_ENDPOINT are set, the refreshFunction helper returns the fetch Response, but several callers (for example GoogleCalendarService.refreshAccessToken expecting res.data, and HubspotCalendarService.refreshAccessToken expecting a HubspotToken) assume it returns the integration-specific token object. That mismatch will cause runtime errors in the sync-enabled path unless the return type or those call sites are adjusted.",
+   "evidenciaOpus": "refreshOAuthTokens.ts:8-15 returns the raw fetch Response in sync mode, while googlecalendar reads res?.data, zoho-bigin reads tokenInfo.data.error and hubspot types the result as HubspotToken; those callers break when sharing is enabled.",
+   "evidenciaAstra": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:15 returns the unparsed fetch Response in sync mode. Google reads res.data at packages/app-store/googlecalendar/lib/CalendarService.ts:94, Bigin reads tokenInfo.data.error at packages/app-store/zoho-bigin/lib/CalendarService.ts:96, and HubSpot reads token fields directly, so their expected return contracts break."
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "severity": "critical",
+   "category": "data",
+   "bug": "parseRefreshTokenResponse returns a Zod safeParse result ({ success, data, error }), not the credential key object. Persisting that as key stores the wrapper instead of the token payload; we should store the parsed data or use schema parse.",
+   "evidenciaOpus": "googlecalendar/lib/CalendarService.ts:97-100 stores key = parseRefreshTokenResponse(...), which returns the safeParse wrapper {success,data}, as credential.key; googleCredentialSchema.parse(credential.key) then fails on the next load.",
+   "evidenciaAstra": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:29 returns the safeParse result wrapper, which packages/app-store/googlecalendar/lib/CalendarService.ts:97 assigns directly to the persisted key at :100. Subsequent loading at :75 expects root-level credential fields, so the stored wrapper fails validation even with sharing disabled."
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+   "severity": "medium",
+   "category": "perf",
+   "bug": "Salesforce getClient now refreshes the OAuth token and writes the credential on every service construction, adding a network round trip and DB write even when the access token is valid.",
+   "evidenciaOpus": "salesforce CalendarService.ts:75-99 now runs a refresh_token exchange and a prisma update inside getClient, called from the constructor, on every service instantiation regardless of token validity.",
+   "evidenciaAstra": "packages/app-store/salesforce/lib/CalendarService.ts:57 invokes getClient for every service construction, and the new fetch at :75 has no expiration guard. This adds a blocking OAuth exchange before every connection, with a credential write at :96, introducing meaningful latency and provider dependency even for valid tokens."
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#14",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The new Salesforce token refresh uses prisma without importing it, so the code fails type checking and throws a ReferenceError at runtime.",
+   "evidenciaOpus": "salesforce CalendarService.ts:96 calls prisma.credential.update but the file has no prisma import (imports at lines 1-20), causing a compile error / ReferenceError.",
+   "evidenciaAstra": "packages/app-store/salesforce/lib/CalendarService.ts:96 references prisma, but the imports at :1 contain no Prisma client import and the file declares no such variable. The new code therefore produces an unresolved-name type error and a ReferenceError if execution reaches the update."
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The `refreshOAuthTokens` function is passed `credentialId` instead of `userId`, which breaks the credential sync functionality by causing incorrect user lookups. This issue can lead to failures in syncing user credentials, impacting user experience.",
+   "evidenciaOpus": "zoho-bigin CalendarService.ts:85-94 passes credentialId (credential.id, line 53) as the userId argument of refreshOAuthTokens, which sends it as calcomUserId to the sync endpoint.",
+   "evidenciaAstra": "packages/app-store/zoho-bigin/lib/CalendarService.ts:53 derives credentialId from credential.id and passes it to refreshOAuthTokens at :93. The helper interprets that argument as userId and serializes it as calcomUserId at packages/app-store/_utils/oauth/refreshOAuthTokens.ts:11, addressing the wrong user and incorrectly enabling user sync for team credentials."
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The Salesforce integration checks `response.statusText` instead of `response.ok` when handling OAuth token refresh responses. This can lead to unreliable behavior, as a successful response may not be correctly identified, resulting in the use of stale credentials and potential authentication failures.",
+   "evidenciaOpus": "salesforce CalendarService.ts:86 treats any response whose statusText is not exactly \"OK\" as failure (empty under HTTP/2), and :101-107 builds the connection from the stale credentialKey tokens, ignoring the refreshed accessTokenParsed.data.",
+   "evidenciaAstra": "packages/app-store/salesforce/lib/CalendarService.ts:86 accepts responses based on the exact reason phrase \"OK\", so a successful response with an empty or different reason phrase is rejected. Additionally, :105 constructs the connection from the original credential values rather than the newly parsed token at :90, confirming the stale-token portion of the report."
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The `jsforce.Connection` is created using stale `credentialKey.access_token` and `credentialKey.instance_url` after a token refresh, which can lead to authentication failures and incorrect data access. Ensure that the connection is established using the refreshed token values instead.",
+   "evidenciaOpus": "salesforce CalendarService.ts:96-99 persists accessTokenParsed.data but :101-107 creates jsforce.Connection with credentialKey.access_token and instance_url, the pre-refresh values.",
+   "evidenciaAstra": "packages/app-store/salesforce/lib/CalendarService.ts:98 writes the refreshed payload without updating credentialKey. The connection at :105 still receives credentialKey.instance_url and credentialKey.access_token, so the newly refreshed credentials are not used, independently of the missing-import defect."
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-01",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The app-credential webhook looks up appStoreMetadata by app.slug, but the map is keyed by dirName, so apps whose slug differs from their directory (e.g. google-calendar) always get a 404 and their credentials cannot be synced.",
+   "evidenciaOpus": "The new app-credential.ts:40-54 selects only app.slug and indexes appStoreMetadata[app.slug], but appStoreMetadata is keyed by directory name (apps.metadata.generated.ts:98 `googlecalendar:`), while googlecalendar/_metadata.ts:17 has slug 'google-calendar'. For such apps the lookup is undefined and the webhook returns 404.",
+   "evidenciaAstra": "The new webhook indexes metadata by app.slug and returns 404 when missing (apps/web/pages/api/webhook/app-credential.ts:50-53). The registry actually uses googlecalendar as its key (packages/app-store/apps.metadata.generated.ts:98), whereas its slug is google-calendar (packages/app-store/googlecalendar/_metadata.ts:17), so valid Google Calendar credential sync requests fail."
+  }
+ ]
+}

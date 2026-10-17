@@ -1,0 +1,69 @@
+{
+ "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+ "prOriginal": {
+  "numero": 37429,
+  "url": "https://github.com/keycloak/keycloak/pull/37429",
+  "mergedAt": "2025-02-20",
+  "nota": "Found via gh pr list search on the title (branch is-37428-add-html-sanitizer-for-messages). The PR's single commit is the benchmark head 02f48f77; merged as 5d77e7ea on main, same content."
+ },
+ "tps": {
+  "add-html-sanitizer-for-translated-message-resources-keycloak#01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 604,
+   "reason": "On main today account/messages/messages_lt.properties still has totpStep1=Installa una delle seguenti applicazioni sul tuo cellulare: and login/messages/messages_lt.properties still has the same Italian loginTotpStep1. No later change restored Lithuanian text.",
+   "astra": []
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak#02": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 604,
+   "reason": "messages_zh_CN.properties was renamed to messages_zh_Hans.properties in d2e9b09e (2025-07-28, 'Migrate to zh-Hant / zh-Hans'), but totpStep1 there still reads 在您的手機上安裝以下應用程式之一 (Traditional forms) while totpStep2/3 are Simplified. The rename kept the value unchanged.",
+   "astra": []
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak#06": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-04-23",
+    "pr": 38779,
+    "commit": "3e0bb6dfbdbbb05777371dfb67183c3130304ca2",
+    "url": "https://github.com/keycloak/keycloak/pull/38779"
+   },
+   "removidoEm": null,
+   "diasNoAr": 62,
+   "reason": "Commit 3e0bb6df 'Fix range error when minimizing the string' (PR #38779, closes #38778) changed the suffix loop bounds from end < sanitized.length() && end < value.length() to end < sanitized.length() - start && end < value.length() - start, so prefix and suffix can no longer overlap and substring cannot throw. Today's VerifyMessageProperties keeps that bound.",
+   "astra": []
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak#07": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 604,
+   "reason": "normalizeValue on main still does value.replaceAll(\"\\\\{[0-9]+,choice,[^}]*}\", \"...\") for keys starting with linkExpirationFormatter.timePeriodUnit and for error-invalid-multivalued-size, before santizeAnchors and the HTML policy run. Markup inside those choice branches is still never checked.",
+   "astra": []
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak#10": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-03-17",
+    "pr": 38144,
+    "commit": "2b245059e368e3346cd5abb535682a4abfea385b",
+    "url": "https://github.com/keycloak/keycloak/pull/38144"
+   },
+   "removidoEm": null,
+   "diasNoAr": 25,
+   "reason": "Commit 2b245059 'Don't use Java's MessageFormat for messages evaluated in the front end' (PR #38144, closes #38143) touched exactly the account-ui and admin-ui messages_en.properties; today both have error-invalid-multivalued-size=Attribute {{0}} must have at least {{1}} and at most {{2}} value(s). The verifier also now rejects single-brace placeholders for frontend bundles (verifyNotMessageFormatPlaceholders).",
+   "astra": []
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak#opa-01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 604,
+   "reason": "verifySafeHtml on main still derives the English file by string replacement and wraps the FileInputStream IOException in new RuntimeException(\"unable to read file \" + englishFile). verify() catches only IOException and ThemeVerifierMojo.execute does not catch it, so a bundle without an English sibling still aborts the mojo with an unchecked exception.",
+   "astra": []
+  }
+ }
+}

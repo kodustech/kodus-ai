@@ -1,0 +1,61 @@
+{
+  "caseId": "database-performance-optimizations-grafana-codex",
+  "prOriginal": {
+    "numero": 80329,
+    "url": "https://github.com/grafana/grafana/pull/80329",
+    "mergedAt": "2024-01-12",
+    "nota": "PR 'Annotations: Split cleanup into separate queries and deletes to avoid deadlocks on MySQL' (branch alexweav/split-queries); its last commit is the benchmark head 04cfa3bf. Squash commit 81c45bfe on main has the same content as the head for the three PR files (cleanup_test.go, xorm_store.go, cleanup.go)."
+  },
+  "tps": {
+    "database-performance-optimizations-grafana-codex#04": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2024-01-16",
+        "pr": 80670,
+        "commit": "68d4e8a9309e7fddd3c3db545b4af295ae8996a4",
+        "url": "https://github.com/grafana/grafana/pull/80670"
+      },
+      "removidoEm": null,
+      "diasNoAr": 4,
+      "reason": "PR #80670 'Annotations: Remove extraneous, debug log messages' (merged 2024-01-16) deleted all six r.log.Error calls in CleanAnnotations and CleanOrphanedAnnotationTags, returning r.deleteByIDs directly. Today's main xorm_store.go has no such Error logs in the cleanup paths.",
+      "astra": []
+    },
+    "database-performance-optimizations-grafana-codex#06": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 1009,
+      "reason": "deleteByIDs on main today still builds '?' + strings.Repeat(',?', len(ids)-1) and binds every ID for non-SQLite engines, and setting.go still reads cleanupjob_batchsize with MustInt64(100) and no upper bound. No commit to xorm_store.go since the merge touched deleteByIDs.",
+      "astra": []
+    },
+    "database-performance-optimizations-grafana-codex#07": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 1009,
+      "reason": "The SQLite branch of deleteByIDs on main today is unchanged: it still loops values = fmt.Sprintf(\"%s, %d\", values, v) for every ID. No later commit to xorm_store.go modified this loop.",
+      "astra": []
+    },
+    "database-performance-optimizations-grafana-codex#08": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2024-01-16",
+        "pr": 80670,
+        "commit": "68d4e8a9309e7fddd3c3db545b4af295ae8996a4",
+        "url": "https://github.com/grafana/grafana/pull/80670"
+      },
+      "removidoEm": null,
+      "diasNoAr": 4,
+      "reason": "The same PR #80670 (merged 2024-01-16) reverted the ticker in pkg/services/cleanup/cleanup.go from time.Minute * 1 back to time.Minute * 10; main today still has time.NewTicker(time.Minute * 10).",
+      "astra": []
+    },
+    "database-performance-optimizations-grafana-codex#oph-01": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 1009,
+      "reason": "On main today cleanup_test.go still seeds fresh annotations per subtest (createTestAnnotations inside t.Run) and wipes both tables in t.Cleanup, and the 'running the max count delete again should not remove any annotations' case still calls cleaner.Run once on 9 annotations with MaxCount=3. Later edits to the test (#102622, #106676, #120207, etc.) did not restore a second run.",
+      "astra": []
+    }
+  }
+}

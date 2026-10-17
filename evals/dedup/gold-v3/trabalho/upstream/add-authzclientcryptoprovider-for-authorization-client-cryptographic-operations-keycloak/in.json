@@ -1,0 +1,42 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "prTitle": "Add AuthzClientCryptoProvider for authorization client cryptographic operations",
+ "upstream": "keycloak/keycloak",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/keycloak",
+ "base": "10aca5552314d6e5c9226f3c6d0107861c38c693",
+ "head": "79d11c4890cc4792e3dc3535af59e4e5f7a2739d",
+ "tps": [
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#04",
+   "severity": "high",
+   "category": "speculative",
+   "bug": "Abstract order() method on CryptoProvider may break backward compatibility with existing implementations",
+   "evidenciaOpus": "CryptoProvider.java:39-44 adds abstract int order() to the public interface and CryptoIntegration.detectProvider now calls CryptoProvider::order on every ServiceLoader provider; any implementation compiled against the old interface fails with AbstractMethodError.",
+   "evidenciaAstra": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java:44 adds order() without a default implementation, and CryptoIntegration.java:57 invokes it during provider comparisons. An older implementation discovered alongside the newly registered authz provider therefore throws AbstractMethodError when compared, breaking binary compatibility during initialization."
+  },
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+   "severity": "high",
+   "category": "security",
+   "bug": "detectProvider no longer fails when several crypto providers are present; with Default, FIPS and Elytron all at order 200, ties are resolved by classpath order and a FIPS deployment can silently run with the non-FIPS provider.",
+   "evidenciaOpus": "CryptoIntegration.detectProvider (CryptoIntegration.java:54-72) drops the 'multiple crypto providers' IllegalStateException and picks the first after sorting by order(), while DefaultCryptoProvider, FIPS1402Provider and WildFlyElytronProvider all return 200, so a default+FIPS classpath silently picks by ServiceLoader order.",
+   "evidenciaAstra": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:57 sorts by priority and line 71 selects the first provider without rejecting ties, replacing the base commit's multiple-provider error. crypto/default/src/main/java/org/keycloak/crypto/def/DefaultCryptoProvider.java:83-84 and crypto/fips1402/src/main/java/org/keycloak/crypto/fips/FIPS1402Provider.java:114-115 both return 200, leaving conflicting selections dependent on discovery order."
+  },
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#10",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The ES384 and ES512 tests sign with the same default P-256 key, so the converter is never tested with real P-384 or P-521 signatures.",
+   "evidenciaOpus": "ECDSAAlgorithmTest.java:39-43 generates one default EC key pair (P-256) and reuses it for ES384/ES512, so those tests only pad 32-byte r/s values and never exercise 48/66-byte components.",
+   "evidenciaAstra": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java:41-42 generates an EC key without selecting a curve, while lines 49-54 vary only the signature algorithm and conversion width. The ES384 and ES512 cases at lines 65-71 therefore do not ensure that full-width P-384 and P-521 components are exercised, leaving a meaningful conversion test gap."
+  },
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#11",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The test only checks a round trip between the two new converters and never verifies the re-encoded DER against the original signature or with Signature.verify, so mutually consistent bugs go undetected.",
+   "evidenciaOpus": "ECDSAAlgorithmTest.java:52-56 asserts only that asn1derToConcatenatedRS(concatenatedRSToASN1DER(x)) equals x, never comparing asn1Des to the original sign or verifying the signature, so symmetric bugs (e.g. swapped r/s) pass.",
+   "evidenciaAstra": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java:53-56 asserts only that decoding, encoding, and decoding again preserves the first decoded output. It never checks the original DER signature from line 52 or independently verifies the converted result, allowing mutually compensating conversion defects to pass."
+  }
+ ]
+}

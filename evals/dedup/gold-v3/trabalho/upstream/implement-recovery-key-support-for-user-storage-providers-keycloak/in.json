@@ -1,0 +1,42 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "prTitle": "Implement recovery key support for user storage providers",
+ "upstream": "keycloak/keycloak",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/keycloak",
+ "base": "85737f52b59aa2e3403c9b8e48acf71ccc5bfae3",
+ "head": "ce2dcc537b4b1f98a335e88cfe8e0b804483252a",
+ "tps": [
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#02",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "After creating the RecoveryAuthnCodesCredentialModel, consider setting its id from the stored credential (e.g., myUser.recoveryCodes.getId()); otherwise getId() will be null and downstream removal by id (e.g., removeStoredCredentialById in the authenticator flow) may not work.",
+   "evidenciaOpus": "getCredentials builds the model with RecoveryAuthnCodesCredentialModel.createFromValues (BackwardsCompatibilityUserStorage.java:237-242), which never sets an id (RecoveryAuthnCodesCredentialModel.java:58-85), although updateCredential assigned one (KeycloakModelUtils.generateId()). Callers using the id, e.g. RecoveryAuthnCodesFormAuthenticator removeStoredCredentialById(model.getId()), receive null.",
+   "evidenciaAstra": "BackwardsCompatibilityUserStorage.java:195 assigns a stored ID, but lines 237-242 return a reconstructed model without copying it; RecoveryAuthnCodesCredentialModel.java:72-81 does not initialize an ID. CredentialDeleteHelper.java:64 resolves federated credentials by that ID, so the returned credential cannot be resolved for deletion."
+  },
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
+   "severity": "high",
+   "category": "security",
+   "bug": "Creating recovery codes in external storage does not remove a previously stored local recovery-codes credential, and validation falls back to local storage, so the replaced codes still authenticate.",
+   "evidenciaOpus": "When updateCredential succeeds in external storage, createRecoveryCodesCredential skips the local provider's createCredential (CredentialHelper.java:125-129), so an existing local recovery-codes credential is not replaced; UserCredentialManager.isValid falls back to local validators for inputs the storage rejects (UserCredentialManager.java:66-79), so old local codes keep working.",
+   "evidenciaAstra": "CredentialHelper.java:125-129 skips local credential creation after external success, thereby bypassing the replacement deletion in RecoveryAuthnCodesCredentialProvider.java:39-40. UserCredentialManager.java:70-77 still tries local validators after external rejection, allowing remaining codes from the supposedly replaced local credential to authenticate."
+  },
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Exhausted recovery codes are removed with removeStoredCredentialById, which only covers local storage, so a federated recovery-codes credential is never removed.",
+   "evidenciaOpus": "RecoveryAuthnCodesUtils.getCredential now prefers federated credentials, but exhausted codes are still removed with removeStoredCredentialById (RecoveryAuthnCodesFormAuthenticator.java:80-88), which only targets local storage. A federated exhausted credential is never removed and stays configured.",
+   "evidenciaAstra": "RecoveryAuthnCodesFormAuthenticator.java:80-87 now retrieves external credentials but still removes exhausted credentials through removeStoredCredentialById. UserCredentialManager.java:114-116 and 298-304 route that removal to Keycloak-owned storage, without invoking the external provider, so an exhausted external credential is not removed."
+  },
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-01",
+   "severity": "medium",
+   "category": null,
+   "bug": "Looking up recovery codes now always queries the federated provider first, which for LDAP users adds an LDAP round-trip and can throw IllegalStateException, failing recovery-code login with a 500.",
+   "evidenciaOpus": "RecoveryAuthnCodesUtils.java:56-62 does query getFederatedCredentialsStream first, and for LDAP users this reaches LDAPStorageProvider.getCredentials (:1211-1217), which throws only when the LDAP object is missing. Federated LDAP users are already loaded and validated against LDAP during login, so that state is not reached in the recovery-code step. What remains is one extra lookup, not a failure.",
+   "evidenciaAstra": "RecoveryAuthnCodesUtils.java:56-61 queries federated credentials before local storage, and UserCredentialManager.java:138-141 delegates directly to the provider. LDAPStorageProvider.java:1212-1216 performs an LDAP lookup and throws when the object is missing, preventing the local fallback and breaking the newly changed recovery-page lookup."
+  }
+ ]
+}

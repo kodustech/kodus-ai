@@ -1,0 +1,66 @@
+{
+ "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+ "prTitle": "FEATURE: per-topic unsubscribe option in emails",
+ "upstream": "discourse/discourse",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/discourse",
+ "base": "56abd247e1829cb6de82dfcc8ce04deb5f0d1e91",
+ "head": "6669a2d94d76eea3b99b8c476d12b1eb66726b07",
+ "tps": [
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "severity": "medium",
+   "category": "security",
+   "bug": "The new unsubscribe endpoint changes the user's topic notification level on a plain GET request, so a third-party page can trigger it for a logged-in user without any CSRF token.",
+   "evidenciaOpus": "config/routes.rb:441-442 add GET t/:slug/:topic_id/unsubscribe and t/:topic_id/unsubscribe, and TopicsController#unsubscribe (topics_controller.rb:98-116) changes notification_level and calls tu.save! on that GET with check_xhr skipped; Rails CSRF protection does not cover GET, so a cross-site request from a logged-in user changes their topic notification level.",
+   "evidenciaAstra": "config/routes.rb:440-441 exposes unsubscribe through GET, and app/controllers/topics_controller.rb:32 skips check_xhr while lines 105-113 mutate the authenticated user's preferences without a capability token. A forged navigation can therefore change notification settings without CSRF verification."
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "severity": "high",
+   "category": "bug",
+   "bug": "logic: Potential nil pointer exception - if no TopicUser record exists, tu will be nil and calling methods on it will crash",
+   "evidenciaOpus": "topics_controller.rb:105-107 does tu = TopicUser.find_by(user_id:, topic_id:) and then tu.notification_level without a nil check; TopicView.new does not create the topic_users row, so a user without a row (e.g. notified via category watching without visiting) gets NoMethodError and a 500.",
+   "evidenciaAstra": "app/controllers/topics_controller.rb:105-107 dereferences a potentially nil TopicUser without a guard, and lib/topic_view.rb:238-242 only looks up the row. An authenticated visitor without that row can trigger a 500, although ordinary notification emails create the row beforehand at app/mailers/user_notifications.rb:312."
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#03",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The message builder spec passes unsubscribe_url in the fixture but never asserts the per-topic unsubscribe link appears in the email.",
+   "evidenciaOpus": "spec/components/email/message_builder_spec.rb:169-172 only adds unsubscribe_url to the fixture; the existing tests check the List-Unsubscribe header presence and user_preferences_url, not the new topic link. Missing coverage, not a broken test.",
+   "evidenciaAstra": "spec/components/email/message_builder_spec.rb:169-179 supplies unsubscribe_url but asserts only header presence and the preferences URL. Removing or miswiring the new topic link would leave these assertions passing, so the added behavior is not verified."
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#08",
+   "severity": "medium",
+   "category": "doc_defect",
+   "bug": "The unsubscribe confirmation says the user will stop receiving notifications for the topic, but watching/tracking users are only moved to regular, which still sends mention/reply notifications.",
+   "evidenciaOpus": "client.en.yml:985 says 'You will stop receiving notifications', but topics_controller.rb:107-111 drops watching/tracking users to regular, which still notifies on mentions/replies. Message wording only.",
+   "evidenciaAstra": "config/locales/client.en.yml:985 promises notifications will stop, but app/controllers/topics_controller.rb:107-108 changes watching/tracking users to regular. Mention notifications still run through app/services/post_alerter.rb:42, whose topic-level suppression at line 105 applies only to muted users, making the confirmation misleading."
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#09",
+   "severity": "high",
+   "category": "bug",
+   "bug": "Unsubscribe saves the new notification level without setting notifications_reason_id, so auto-tracked topics are promoted back to tracking on the next read, undoing the unsubscribe.",
+   "evidenciaOpus": "topics_controller.rb:107-113 sets notification_level and calls save! without setting notifications_reason_id; TopicUser.update_last_read (topic_user.rb:~157-163) re-promotes rows with null notifications_reason_id to tracking once the read threshold passes, while TopicUser.change sets reason user_changed (lines 86-88).",
+   "evidenciaAstra": "app/controllers/topics_controller.rb:107-113 changes and saves only notification_level, bypassing the explicit-choice metadata assigned by app/models/topic_user.rb:87-89. For rows with a null notifications_reason_id, update_last_read at app/models/topic_user.rb:160-166 can restore tracking after the reading threshold, undoing the unsubscribe."
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#10",
+   "severity": "medium",
+   "category": null,
+   "bug": "Claims the client unsubscribe route never performs the unsubscribe when entered through an in-app transition.",
+   "evidenciaOpus": "routes/topic-unsubscribe.js.es6 only loads the topic view; the unsubscribe itself is performed by the server-rendered GET (topics_controller.rb#unsubscribe) reached from the email link, and nothing in the app links to this route for an in-app transition.",
+   "evidenciaAstra": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6:4-9 only loads the topic; app/assets/javascripts/discourse/models/post-stream.js.es6:811-823 fetches /t/:id.json or consumes preload data. Internal links can be intercepted at app/assets/javascripts/discourse/initializers/click-interceptor.js.es6:9-31, allowing the confirmation route to render without executing the server unsubscribe action."
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The topic unsubscribe GET endpoint is not idempotent: each visit steps the notification level down again, so reloading the link moves a topic from regular to muted.",
+   "evidenciaOpus": "topics_controller.rb:105-111: unsubscribe lowers the level one step each time it is called, from tracking or watching to regular and from regular to muted, and the change is triggered by a GET. A second visit or a reload of the unsubscribe link therefore mutes the topic, which the user did not ask for.",
+   "evidenciaAstra": "config/routes.rb:440 exposes unsubscribe through GET, and app/controllers/topics_controller.rb:107-113 saves regular for watching/tracking but muted for regular. Reloading the authenticated unsubscribe page therefore changes the saved preference again, unintentionally suppressing additional notifications."
+  }
+ ]
+}

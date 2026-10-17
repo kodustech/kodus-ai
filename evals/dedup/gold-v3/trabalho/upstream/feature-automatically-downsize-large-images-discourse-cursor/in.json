@@ -1,0 +1,74 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "prTitle": "FEATURE: automatically downsize large images",
+ "upstream": "discourse/discourse",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/discourse",
+ "base": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+ "head": "ffbaf8c54269df2ce510de91245760fddce09896",
+ "tps": [
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The downsize method is defined twice. The second definition, which expects a single dimensions string parameter, overrides the first, which expected separate max_width and max_height parameters. This makes the original method unreachable and breaks existing code that calls it with separate width and height arguments.",
+   "evidenciaOpus": "optimized_image.rb defines self.downsize(from, to, max_width, max_height, opts={}) and then self.downsize(from, to, dimensions, opts={}); Ruby keeps the last one, so app/jobs/regular/resize_emoji.rb:14 OptimizedImage.downsize(path, path, 100, 100, opts) now raises ArgumentError (5 args for 3..4).",
+   "evidenciaAstra": "app/models/optimized_image.rb:149 overrides the earlier downsize definition with a method accepting three or four arguments. app/jobs/regular/resize_emoji.rb:14 still supplies five arguments, causing ArgumentError; evaluating the actual method definitions confirms this."
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Hardcoding maxSizeKB = 10 * 1024 ignores Discourse.SiteSettings['max_' + type + '_size_kb'], so the client-side limit can diverge from server-side and per-type settings (also applies to the 413 handler below).",
+   "evidenciaOpus": "utilities.js:182 replaces Discourse.SiteSettings['max_' + type + '_size_kb'] with a fixed 10 * 1024 for every upload type (and the 413 handler at :246), while the server-side downsizing only applies to images, so attachment limits no longer match the configured max_attachment_size_kb.",
+   "evidenciaAstra": "app/assets/javascripts/discourse/lib/utilities.js:158 routes both images and attachments through the fixed limit at line 182. lib/validators/upload_validator.rb:80-86 still enforces the configured per-type limit, so valid attachments above 10 MB are blocked and smaller configured attachment limits are ignored client-side."
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#03",
+   "severity": "high",
+   "category": "data",
+   "bug": "Passing 80% as the dimensions can fail for animated GIFs when allow_animated_thumbnails is true, since the animated path uses gifsicle --resize-fit which expects WxH geometry, not a percentage; downsizing would then silently fail.",
+   "evidenciaOpus": "uploads_controller.rb:67 passes \"80%\" as dimensions; when allow_animation is set and the path ends in .gif (e.g. URL downloads, whose Tempfile keeps the extension in FileHelper.download), optimize uses downsize_instructions_animated -> gifsicle --resize-fit 80%, which needs WxH, so the conversion fails and the image is not reduced.",
+   "evidenciaAstra": "app/controllers/uploads_controller.rb:67 passes \"80%\", which app/models/optimized_image.rb:120 inserts into gifsicle --resize-fit; that option requires width-by-height dimensions according to the [Gifsicle manual](https://www.lcdf.org/gifsicle/man.html). This branch is reachable for API-downloaded GIFs because lib/file_helper.rb:13-14 preserves their extension, so the animated-GIF defect exists."
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#04",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Auto-downsizing passes the upload tempfile path, which lacks a .gif extension, so the animated branch is never chosen and convert keeps only the first frame, flattening oversized animated GIFs.",
+   "evidenciaOpus": "optimize selects the animated branch only when from =~ /\\.GIF$/i; for multipart uploads the controller passes tempfile.path (Rack 1.5.5 per Gemfile.lock names it RackMultipart... without the extension), so downsize_instructions runs convert #{from}[0] and keeps only the first frame of an oversized animated GIF.",
+   "evidenciaAstra": "app/controllers/uploads_controller.rb:58 and :67 pass the multipart tempfile path directly, and the pinned [Rack 1.5.5 parser](https://raw.githubusercontent.com/rack/rack/1.5.5/lib/rack/multipart/parser.rb) creates that tempfile without an extension. Consequently, app/models/optimized_image.rb:155 misses the animated branch and line 129 selects only frame zero, flattening oversized GIF uploads."
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#08",
+   "severity": "medium",
+   "category": null,
+   "bug": "Claims up to five synchronous ImageMagick runs per oversized upload block request threads and enable DoS.",
+   "evidenciaOpus": "The inline downsize loop (uploads_controller.rb:64-70) is bounded to 5 attempts on files capped at 10 MB, and this controller already processes uploads synchronously; moving it to a background job is a design preference, not a defect.",
+   "evidenciaAstra": "app/controllers/uploads_controller.rb:65-68 adds up to five synchronous conversion-and-optimization passes, implemented at app/models/optimized_image.rb:160-164. Although ordinary uploads use Scheduler::Defer, config/initializers/99-unicorn.rb:5 installs the hook at lib/scheduler/defer.rb:83-87 that drains deferred work on the Unicorn worker after responding, so expensive uploads still occupy request-serving workers."
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#09",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The loop checking `tempfile.size` may never terminate correctly due to stale cached size, leading to potential infinite loops or incorrect file handling after modifications.",
+   "evidenciaOpus": "The loop at uploads_controller.rb:65-69 is bounded by attempt = 5 decremented each iteration, so it cannot loop forever; Tempfile#size is not cached but re-read from the file each call.",
+   "evidenciaAstra": "app/controllers/uploads_controller.rb:65-68 guarantees termination after five attempts, but the stale-size/file-handling concern is real. app/models/optimized_image.rb:164 invokes ImageOptim, whose pinned version [replaces files by renaming](https://raw.githubusercontent.com/toy/image_optim/v0.20.2/lib/image_optim/image_path.rb), leaving the open tempfile handle attached to the previous inode. Consequently, the size checks at line 66 and filesize passed at line 72 can describe the old file, causing unnecessary resizing or incorrect rejection."
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+   "severity": "medium",
+   "category": null,
+   "bug": "The 413 upload error message states a hard-coded 10 MB maximum that may not match the limit the server or web server actually enforces.",
+   "evidenciaOpus": "utilities.js:246 now hard-codes 10 MB for the 413 case, matching the limit the PR sets everywhere else: uploads_controller.rb downloads with 10.megabytes and the server now downsizes images above max_image_size_kb instead of rejecting them, and config/nginx.sample.conf:61 ships client_max_body_size 10m. The 413 comes from the web server, so the message matches the shipped configuration. This is the intended design.",
+   "evidenciaAstra": "The PR replaces the configured value with 10 * 1024 for every HTTP 413 response in app/assets/javascripts/discourse/lib/utilities.js:245-247; config/locales/client.en.yml:1297 displays it as the maximum allowed size. Although config/nginx.sample.conf:61 defaults to 10m, a deployment with a lower web-server limit will reject uploads while this message incorrectly advertises 10 MB."
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#opa-01",
+   "severity": "critical",
+   "category": "security",
+   "bug": "The upload tempfile path, which for API URL uploads embeds the request-controlled type param, is now passed to OptimizedImage.downsize and run unescaped in a shell via backticks, allowing command injection through type.",
+   "evidenciaOpus": "uploads_controller.rb:55 names the API URL-upload tempfile `discourse-upload-#{type}` with type from params, and :67 now passes tempfile.path to OptimizedImage.downsize, whose convert_with (optimized_image.rb:160-161) runs the joined instructions through backticks without escaping. Shell metacharacters in `type` execute on the server when an oversized image is downsized.",
+   "evidenciaAstra": "app/controllers/uploads_controller.rb:6 accepts unrestricted `type`, which becomes the tempfile prefix at line 55 through lib/file_helper.rb:14; the supported Ruby 2.0 implementation [preserves that prefix](https://raw.githubusercontent.com/ruby/ruby/v2_0_0_0/lib/tmpdir.rb). The newly added downsizing call at app/controllers/uploads_controller.rb:67 passes this path into unescaped command arguments at app/models/optimized_image.rb:129 and :133, executed through shell backticks at :161, allowing command injection during oversized API URL uploads."
+  }
+ ]
+}

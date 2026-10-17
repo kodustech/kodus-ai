@@ -1,0 +1,108 @@
+{
+  "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+  "prOriginal": {
+    "numero": null,
+    "url": "https://github.com/discourse/discourse/commit/d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+    "mergedAt": "2015-08-20",
+    "nota": "No upstream PR: the benchmark head d1c69189 is itself a direct commit by Robin Ward on discourse/discourse main (committer date 2015-08-20, no associated pull request; gh pr search by title finds nothing), and it is an ancestor of main. The reference date is that commit's date."
+  },
+  "tps": {
+    "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 4076,
+      "reason": "app/models/embeddable_host.rb on main still has 'before_validation do host.sub!(%r{\\Ahttps?://}, \"\"); host.sub!(%r{/.*\\z}, \"\") end' with no nil guard, and Admin::EmbeddableHostsController#save_host still assigns params[:embeddable_host][:host] directly. Later commits only reformatted the regexes (\\A/\\z, RedundantSelf); a request without host still raises NoMethodError.",
+      "astra": []
+    },
+    "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 4076,
+      "reason": "On main, Admin::EmbeddableHostsController#update and #destroy still do EmbeddableHost.where(id: params[:id]).first and then call save_host(host, :update) / host.destroy without a nil check or find/raise. The controller gained tags, user and staff logging but the lookups are unchanged, so an unknown id still yields NoMethodError (500).",
+      "astra": []
+    },
+    "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 4076,
+      "reason": "record_for_host became record_for_url and still runs where(\"lower(host) = ?\", host) without lowercasing the bound value. Since PR #17840 (2022-08-09, onebox URL normalization) UrlHelper.normalized_encode downcases the host when the URL parses with ::URI, which covers ordinary ASCII URLs, but URLs that fall back to Addressable (e.g. non-ASCII path) keep the host's case, so the mismatch is only partly gone.",
+      "astra": [
+        {
+          "pergunta": "Lookup still compares lower(host) to an un-lowercased URI host; #17840 made normalized_encode downcase the host on the ::URI path, with an Addressable fallback. Confirmado, pendente or descontinuado?",
+          "resposta": "#17840 is a partial fix: the Addressable fallback keeps ASCII host case (IDNA only for non-ASCII hosts), e.g. https://ExAmPlE.com/café still binds ExAmPlE.com; its onebox motivation would not prevent counting it as a fix if it removed the behaviour.",
+          "veredito": "pendente"
+        }
+      ]
+    },
+    "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 4076,
+      "reason": "Two days after the merge, commit d418c4cf (2015-08-22, 'FIX: Bug with migrating old embeddedable hosts with http://') added migration FixMigratedHosts that strips ^https?:// from embeddable_hosts.host, which fixes migrated hosts with a scheme. Nothing ever stripped path segments from migrated rows, and the original migration still inserts the lines verbatim, so migrated hosts with a path still never match URI.host; partial fix only.",
+      "astra": [
+        {
+          "pergunta": "d418c4cf strips only the scheme from migrated hosts, not paths. Confirmado or pendente?",
+          "resposta": "Partial fix: example.com/path stays unmatched; the bug explicitly includes path segments, so being uncommon does not remove the residual case. Would be confirmado if the report were scheme-only.",
+          "veredito": "pendente"
+        }
+      ]
+    },
+    "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 4076,
+      "reason": "db/migrate/20150818190757_create_embeddable_hosts.rb on main still executes \"INSERT INTO embeddable_hosts (...) VALUES ('#{h}', #{category_id}, ...)\" with each legacy host interpolated unescaped. Later commits on the file (Rails 5 fixes, formatting, the 2026 uncategorized guard) left the interpolation as is.",
+      "astra": []
+    },
+    "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2015-08-20",
+        "pr": null,
+        "commit": "676416f4787d7abb5a268f84c033dda820fdd897",
+        "url": "https://github.com/discourse/discourse/commit/676416f4787d7abb5a268f84c033dda820fdd897"
+      },
+      "removidoEm": null,
+      "diasNoAr": 0,
+      "reason": "Fourteen minutes after the feature commit, Robin Ward pushed 676416f4 'FIX: Build broken when someone didn't have an embed category', which keeps category_id = 0 and only reads category_row[0]['id'] if category_row.cmd_tuples > 0, falling back to uncategorized_category_id. Main still has that guard (and since #39971 also guards the uncategorized lookup).",
+      "astra": []
+    },
+    "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2024-03-28",
+        "pr": 26420,
+        "commit": "5835d4e5ed9e3b10aa8f63a13da38b246261df33",
+        "url": "https://github.com/discourse/discourse/pull/26420"
+      },
+      "removidoEm": null,
+      "diasNoAr": 3143,
+      "reason": "The post-save overwrite with Category.findById(categoryId) survived #14517 (2021, which only set the initial category with an uncategorized fallback) and #26374. PR #26420 bound the chooser to this.category, saved props.category_id = this.category.id and deleted the findById(this.categoryId) line, so a new host keeps the uncategorized category initialised in init after saving; #30122 (2025) later moved editing to a separate form page.",
+      "astra": [
+        {
+          "pergunta": "Overwrite with findById(categoryId) after save removed in #26420 (DEV refactor of CategoryChooser); #14517 only fixed initial render; #30122 later rewrote the UI. Confirmado or descontinuado?",
+          "resposta": "#14517 kept the line that cleared the category after saving; #26420 resolved the described behaviour even though tagged DEV; the later #30122 rewrite does not make it descontinuado since it was already fixed.",
+          "veredito": "confirmado"
+        }
+      ]
+    },
+    "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2017-02-27",
+        "pr": null,
+        "commit": "bf9626d031750bdccb43ab16d03aa0c4fd5e3c00",
+        "url": "https://github.com/discourse/discourse/commit/bf9626d031750bdccb43ab16d03aa0c4fd5e3c00"
+      },
+      "removidoEm": null,
+      "diasNoAr": 557,
+      "reason": "Commit bf9626d0 'FIX: Embedding was broken with non-english URLs and ports' added 'host << \":#{uri.port}\" if uri.port.present? && uri.port != 80 && uri.port != 443' in record_for_url before the lookup, so a stored host:port now matches. The line is still on main and spec/models/embeddable_host_spec.rb has an 'it works with ports' case.",
+      "astra": []
+    }
+  }
+}

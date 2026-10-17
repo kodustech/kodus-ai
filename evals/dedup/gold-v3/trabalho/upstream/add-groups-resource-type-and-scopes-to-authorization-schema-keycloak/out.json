@@ -1,0 +1,63 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "prOriginal": {
+  "numero": 37038,
+  "url": "https://github.com/keycloak/keycloak/pull/37038",
+  "mergedAt": "2025-02-12",
+  "nota": "Found with gh search prs by title. The PR has a single commit equal to the benchmark head (7355f05e6a); it was merged into main as 679f44692d with the same commit message, so the merged code matches the benchmark head."
+ },
+ "tps": {
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-04-02",
+    "pr": 38559,
+    "commit": "f12fa0b5bb35e44ae6737e9194b598b9d9a53e5a",
+    "url": "https://github.com/keycloak/keycloak/pull/38559"
+   },
+   "removidoEm": null,
+   "diasNoAr": 49,
+   "reason": "The merged GroupPermissionsV2.canManage() returned hasPermission(null, VIEW, MANAGE). PR #38559 '[FGAP] remove transitiveness from auth scopes' changed it to hasPermission(null, MANAGE). Today's main (fgap/GroupPermissionsV2.java) checks only AdminPermissionsSchema.MANAGE in canManage().",
+   "astra": []
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-03-17",
+    "pr": 38015,
+    "commit": "b200ab0792e99bc60b6ba8d89cea410f1a4bc264",
+    "url": "https://github.com/keycloak/keycloak/pull/38015"
+   },
+   "removidoEm": null,
+   "diasNoAr": 33,
+   "reason": "PR #38015 'Fix permissions for view-members and manage-members' rewrote getGroupIdsWithViewPermission to iterate the resources of the Groups-type policies and call hasPermission(gr.getName(), ...) and granted.add(gr.getName()), so it passes and returns group ids (resource names) instead of resource ids. The method was later turned into an UnsupportedOperationException in the V2 evaluator refactor.",
+   "astra": []
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#03": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-03-17",
+    "pr": 38015,
+    "commit": "b200ab0792e99bc60b6ba8d89cea410f1a4bc264",
+    "url": "https://github.com/keycloak/keycloak/pull/38015"
+   },
+   "removidoEm": null,
+   "diasNoAr": 33,
+   "reason": "PR #38015 replaced resourceStore.findByType(server, GROUPS_RESOURCE_TYPE, ...) with policyStore.findByResourceType(server, GROUPS_RESOURCE_TYPE) flattened to policy.getResources(), so per-group resources attached to Groups permissions are enumerated even though they carry no type. The fix does not add a type to the resources, but the missing per-group grants behaviour is gone.",
+   "astra": []
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#04": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-03-17",
+    "pr": 38015,
+    "commit": "b200ab0792e99bc60b6ba8d89cea410f1a4bc264",
+    "url": "https://github.com/keycloak/keycloak/pull/38015"
+   },
+   "removidoEm": null,
+   "diasNoAr": 33,
+   "reason": "PR #38015 changed JpaUserProvider.groupsWithPermissionsSubquery to match the resource name to the bare groupId when admin permissions V2 are enabled for the realm, keeping the 'group.resource.'+groupId pattern only for V1. Members of V2-authorized groups are no longer excluded from the user search filter.",
+   "astra": []
+  }
+ }
+}

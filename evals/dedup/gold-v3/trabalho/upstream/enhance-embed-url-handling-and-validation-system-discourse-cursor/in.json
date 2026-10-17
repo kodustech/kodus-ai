@@ -1,0 +1,146 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "prTitle": "Enhance embed URL handling and validation system",
+ "upstream": "discourse/discourse",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/discourse",
+ "base": "62db063e1e1abe691313ab42682a68f796d63769",
+ "head": "4f8aed295a29954023b2849c060ef4fb299d1b5d",
+ "tps": [
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+   "severity": "medium",
+   "category": "security",
+   "bug": "The current origin validation using indexOf is insufficient and can be bypassed. An attacker could use a malicious domain like evil-discourseUrl.com to pass this check.",
+   "evidenciaOpus": "embed.js:17 accepts a message when discourseUrl.indexOf(e.origin) !== -1, a substring test, so any origin that is a prefix/substring of discourseUrl (e.g. https://forum.example for https://forum.example.com/) passes. Impact is limited to the discourse-resize handler setting iframe.height (embed.js:20-21).",
+   "evidenciaAstra": "app/assets/javascripts/embed.js:17 accepts any origin contained in discourseUrl, and lines 20-21 apply the supplied height without checking the sender window. For example, https://forum.co passes for https://forum.com/; the golden's evil-discourseUrl.com example is incorrect, but the underlying validation defect exists."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#04",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The referer and embed_url host checks compare against SiteSetting.embeddable_host case-sensitively, so a host differing only in case is rejected even though hostnames are case-insensitive.",
+   "evidenciaOpus": "embed_controller.rb:26 and topic_retriever.rb:15 compare hosts with != without normalising case. Browsers send lowercase referer hosts, so this only bites when the admin types a mixed-case embeddable_host or the embed_url has uppercase letters, and it fails closed.",
+   "evidenciaAstra": "app/controllers/embed_controller.rb:26 and lib/topic_retriever.rb:15 compare hostname strings without normalizing case. Ruby URI preserves hostname capitalization, so equivalent mixed-case hosts are incorrectly rejected."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "severity": "high",
+   "category": "bug",
+   "bug": "Calling `i.content.scrub` assumes that `i.content` is always populated. However, many RSS feeds do not provide a `content` field, leading to a potential nil pointer exception when `i.content` is nil. A fallback to `description` should be implemented to prevent crashes.",
+   "evidenciaOpus": "poll_feed.rb:35 calls CGI.unescapeHTML(i.content.scrub) with no fallback; RSS 2.0 items that carry only <description> have no content, so .scrub raises NoMethodError and, with no per-item rescue, aborts the whole poll (poll_feed.rb:31-37).",
+   "evidenciaAstra": "app/jobs/scheduled/poll_feed.rb:35 unconditionally evaluates i.content.scrub without checking for missing content or selecting description/content_encoded. There is no per-item rescue around lines 31-36, so an entry lacking content stops processing subsequent entries."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+   "severity": "critical",
+   "category": "security",
+   "bug": "Posts imported from RSS or remote pages use cook_method raw_html, which makes Post#cook return the raw HTML without sanitization, and the embed view outputs it with raw post.cooked, allowing stored XSS from imported content.",
+   "evidenciaOpus": "post.rb returns raw verbatim when cook_method is raw_html, PollFeed passes feed HTML straight into TopicEmbed.import with cook_method raw_html (topic_embed.rb:22, poll_feed.rb:35-36), and best.html.erb:19 renders it with raw post.cooked on the forum origin, so script or event-handler markup in imported content is served unsanitized.",
+   "evidenciaAstra": "app/jobs/scheduled/poll_feed.rb:35-36 passes feed HTML into app/models/topic_embed.rb:22 with raw_html cooking, and app/models/post.rb:133 returns that HTML without sanitization. The stored HTML reaches executable rendering sinks, including app/views/topics/show.html.erb:12, so the separate broken embed template does not eliminate the stored-XSS exposure."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "severity": "critical",
+   "category": "bug",
+   "bug": "The TopicEmbed.import method is susceptible to a NoMethodError if the contents parameter is nil when attempting to append a string, and an XSS vulnerability due to unescaped url interpolation in the generated HTML.",
+   "evidenciaOpus": "topic_embed.rb:13 interpolates url unescaped into <a href='#{url}'>#{url}</a> inside raw_html content rendered with raw (best.html.erb:19); the only check is the /^https?:\\/\\// prefix (topic_embed.rb:11), so a URL containing a quote can inject attributes/markup. The nil-contents part is weaker (callers pass strings), but the XSS holds.",
+   "evidenciaAstra": "app/models/topic_embed.rb:13 interpolates the URL into a single-quoted href without escaping, and line 22 stores the result using raw_html. A valid URI such as http://example.com/'onmouseover='alert(1) survives URI parsing and becomes an actual onmouseover attribute when Nokogiri parses the fragment."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#17",
+   "severity": "medium",
+   "category": "concurrency",
+   "bug": "TopicEmbed.import checks for an existing embed and then creates the post and TopicEmbed without handling the unique-index conflict, so two concurrent imports of the same URL make one job fail with RecordNotUnique.",
+   "evidenciaOpus": "topic_embed.rb:15-30 does a where(embed_url).first then PostCreator + TopicEmbed.create! with a unique index on embed_url (create_topic_embeds migration) and no rescue; the scheduled PollFeed and the retrieval-triggered PollFeed (topic_retriever.rb:40-42) can run concurrently for the same URL, so the loser raises RecordNotUnique and aborts its job.",
+   "evidenciaAstra": "app/models/topic_embed.rb:15 performs an unlocked lookup before the insert at line 25, and db/migrate/20131217174004_create_topic_embeds.rb:11 enforces uniqueness. Concurrent scheduled and retrieval-triggered polls can both observe no embed, causing the losing transaction to raise an unhandled uniqueness exception and terminate its polling run."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "When the embedded post has been deleted, TopicEmbed.import's update path passes a nil embed.post to PostRevisor and crashes on every later import of that URL.",
+   "evidenciaOpus": "topic_embed.rb:32-36 takes post = embed.post and calls PostRevisor.new(post).revise! when the sha changes; Post includes Trashable with a default_scope excluding deleted posts, so after the post is deleted embed.post is nil and every later import of that URL raises NoMethodError.",
+   "evidenciaAstra": "app/models/post.rb:16 includes Trashable, whose default scope at lib/trashable.rb:5 hides deleted posts without deleting their TopicEmbed records. Consequently app/models/topic_embed.rb:32 can return nil, and a changed import reaches lib/post_revisor.rb:27, which dereferences @post.raw."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#19",
+   "severity": "high",
+   "category": null,
+   "bug": "Claims import_remote crashes on unparseable pages (nil content) and dead URLs because it does no nil check or network error handling around open(url).read.",
+   "evidenciaOpus": "import_remote (topic_embed.rb:44-53) does not rescue open(url) errors, but it runs inside the RetrieveTopic job where a raised fetch error is ordinary job failure; Readability's content returns a string, so the nil-content crash is not shown by the code. The Disqus angle is covered separately.",
+   "evidenciaAstra": "app/models/topic_embed.rb:48 performs open(url).read without handling HTTP or connection failures. lib/tasks/disqus.thor:143-148 calls this inside its thread-import loop without a rescue, so a dead article URL aborts the import and prevents subsequent threads from being processed."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "absolutize_urls only handles root-relative paths: protocol-relative URLs like //cdn.example.com/x.png are rewritten to http://host/cdn.example.com/x.png and path-relative links are left unresolved, breaking links and images in imported posts.",
+   "evidenciaOpus": "absolutize_urls (topic_embed.rb:62-73) only rewrites values starting with '/', and for '//cdn.example.com/x.png' it strips the slashes and prefixes the article host, producing http://host/cdn.example.com/x.png; path-relative links like 'images/a.jpg' are left relative and resolve against the forum.",
+   "evidenciaAstra": "app/models/topic_embed.rb:64-71 rewrites only references beginning with a slash and strips every leading slash. This leaves path-relative references unresolved and incorrectly converts protocol-relative CDN references into paths on the article host."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#24",
+   "severity": "low",
+   "category": "bug",
+   "bug": "The embed view formats post dates with a hard-coded strftime pattern, so users in non-English locales see English month names and a fixed order while the rest of the view is translated.",
+   "evidenciaOpus": "best.html.erb:14 formats the post date with strftime(\"%e %b %Y\"), which always yields English month abbreviations and day-month-year order, while the surrounding labels use I18n.t (best.html.erb:3,5,25).",
+   "evidenciaAstra": "app/views/embed/best.html.erb:14 formats dates with a literal strftime pattern instead of the configured locale. app/controllers/application_controller.rb:98-99 sets I18n.locale, but this date expression bypasses it and retains English month abbreviations."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#29",
+   "severity": "medium",
+   "category": "data",
+   "bug": "The Disqus importer now creates topics through TopicEmbed.import_remote, dropping the thread's created_at and the category option and requiring a live HTTP fetch per thread, so imported topics get wrong dates/categories and a dead link aborts the import.",
+   "evidenciaOpus": "disqus.thor:148 replaces the PostCreator call (which passed created_at and category) with TopicEmbed.import_remote(user, t[:link], title:), which never forwards a timestamp or category, and the --category option was removed; it also now fetches every thread link live with open(url), which raises and aborts the whole import on a dead link.",
+   "evidenciaAstra": "lib/tasks/disqus.thor:148 replaces the previous timestamp/category-aware creation call with import_remote supplying only the title, and app/models/topic_embed.rb:22 forwards neither historical timestamps nor categories. Replies still receive historical timestamps at lib/tasks/disqus.thor:164, and the newly required fetch can abort the import; title stripping remains implemented at lines 89-90."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+   "severity": "medium",
+   "category": "perf",
+   "bug": "Every retrieval of an article not yet embedded synchronously polls and imports the entire RSS feed, and since throttling is per URL, many different article requests repeat the full feed download and processing.",
+   "evidenciaOpus": "topic_retriever.rb:40-42 runs Jobs::PollFeed.new.execute synchronously on every uncached retrieval when feed polling is enabled; the throttle is per embed_url (topic_retriever.rb:26), so requests for different unknown articles each re-download and re-process the full feed.",
+   "evidenciaAstra": "lib/topic_retriever.rb:40-42 synchronously executes the entire feed poll for each missing article when polling is enabled. Its throttle key at line 26 is article-specific, so requests for different articles independently repeat the download and per-item work in app/jobs/scheduled/poll_feed.rb:29-36."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#32",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The 'is 404 without an embed_url' spec never sets an embeddable host, so the request is rejected by ensure_embeddable before the embed_url check runs, and the test would pass even without that check.",
+   "evidenciaOpus": "embed_controller_spec.rb:8-11 never stubs embeddable_host (default '' in site_settings.yml), so ensure_embeddable raises at embed_controller.rb:25 before params.require(:embed_url) at :9 runs; the test stays green if the embed_url requirement is removed and only checks not-success, not 404.",
+   "evidenciaAstra": "spec/controllers/embed_controller_spec.rb:8-10 supplies neither an allowed host nor a referrer and asserts only non-success. The blank host default at config/site_settings.yml:354 triggers app/controllers/embed_controller.rb:25 before params.require at line 9, so this example does not verify its named parameter requirement."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The 'requires feed_polling_url' and 'requires embed_by_username' specs leave feed_polling_enabled at its false default, so they never reach the condition they name and would pass with those checks deleted.",
+   "evidenciaOpus": "poll_feed_spec.rb:18-28 stub only feed_polling_url or embed_by_username to nil; feed_polling_enabled defaults to false (site_settings.yml), so execute short-circuits at the first condition (poll_feed.rb:15) and the tests pass even if the URL/username checks are removed.",
+   "evidenciaAstra": "spec/jobs/poll_feed_spec.rb:12-27 leaves the other prerequisites at their disabled or blank defaults from config/site_settings.yml:355-357. Each example therefore still prevents polling if its named guard is removed, leaving the individual prerequisite checks unverified."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The embed layout references the 'embed' stylesheet and embed.js, but neither is in config.assets.precompile, so with precompiled assets in production the embed page fails to load them.",
+   "evidenciaOpus": "app/views/layouts/embed.html.erb:4 calls stylesheet_link_tag 'embed', but config/application.rb:61 precompiles only vendor/common/desktop/mobile/admin and similar assets, not embed.css/embed.js, and production.rb:23 sets config.assets.compile = false. In production the embed layout fails to resolve the asset and embed.js is never served.",
+   "evidenciaAstra": "The new layout requests embed.css at app/views/layouts/embed.html.erb:4, but config/application.rb:57\u201370 does not select either new embed asset for precompilation. Production disables runtime compilation at config/environments/production.rb:23, leaving the stylesheet and iframe-creating script at app/assets/javascripts/embed.js:5\u201312 unavailable in precompiled deployments."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-01",
+   "severity": "medium",
+   "category": "security",
+   "bug": "The retrieve throttle is keyed by the full embed URL, so an anonymous client can vary the query string on the embeddable host to bypass it and make the server create an unbounded number of topics.",
+   "evidenciaOpus": "topic_retriever.rb:26 throttles on `retrieved:#{@embed_url}` and embed_controller.rb:15 enqueues retrieve_topic for any embed_url on the embeddable host (Referer check at :26 is forgeable). Varying the query string yields new keys and TopicEmbed.import (topic_embed.rb:15-28) creates a new topic per distinct URL as embed_by_username.",
+   "evidenciaAstra": "lib/topic_retriever.rb:26 keys throttling by the unchanged URL, and app/models/topic_embed.rb:15-28 creates separate topics for distinct URL strings. Anonymous requests enqueue retrieval after only a Referer-host check (app/controllers/embed_controller.rb:15,26), allowing query-string variants to generate duplicate topics; when embed_by_username is staff, model rate limits also permit unlimited creation (lib/rate_limiter.rb:73-74)."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-04",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The \"requires feed_polling_enabled?\" spec leaves feed_polling_url and embed_by_username at their blank defaults, so poll_feed is skipped regardless and the test would pass even without the enabled check.",
+   "evidenciaOpus": "poll_feed.rb:15-17 requires feed_polling_enabled?, feed_polling_url.present? and embed_by_username.present?; site_settings.yml:356-357 defaults both to ''. The spec at poll_feed_spec.rb:12-16 only stubs feed_polling_enabled? to false, so it would still pass if that check were removed.",
+   "evidenciaAstra": "spec/jobs/poll_feed_spec.rb:12-16 stubs only the enabled flag, leaving feed_polling_url and embed_by_username blank as configured in config/site_settings.yml:355-357. Consequently, the independent presence checks in app/jobs/scheduled/poll_feed.rb:15-17 keep the test passing even if the enabled check is removed, so it does not verify its stated behavior."
+  }
+ ]
+}

@@ -1,0 +1,226 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "prOriginal": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/4f8aed295a29954023b2849c060ef4fb299d1b5d",
+  "mergedAt": "2013-12-31",
+  "nota": "Benchmark head 4f8aed2 is itself on upstream main: direct commit by Robin Ward, 2013-12-31 ('FEATURE: Embeddable Discourse comments, now with simple-rss instead of feedzirra'), no PR associated (gh commits/<sha>/pulls empty). Base 62db063 is the revert of the earlier attempt; diff identical to the benchmark."
+ },
+ "tps": {
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 4673,
+   "reason": "embed.js moved to public/javascripts/embed.js (2013-12-31) and was rewritten many times, but postMessageReceived on main still accepts any message whose origin is a substring of the Discourse URL: `if (!normalizeUrl(DE.discourseUrl).includes(normalizeUrl(e.origin))) return;` (indexOf became includes in #17541). The substring origin check that lets a prefix origin set the iframe height is unchanged.",
+   "astra": []
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#04": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2022-08-09",
+    "pr": 17840,
+    "commit": "f0a02525267e88986581be1f87c9e5608b9a4377",
+    "url": "https://github.com/discourse/discourse/pull/17840"
+   },
+   "removidoEm": null,
+   "diasNoAr": 3143,
+   "reason": "The SiteSetting comparisons were replaced by EmbeddableHost.record_for_url on 2015-08-18 (d1c69189, `where(\"lower(host) = ?\", host)`), which fixed a mixed-case admin host but still did not downcase the incoming URI host. PR #17840 made UrlHelper.escape_uri/normalized_encode (used by record_for_url and url_allowed?) downcase the host via normalize_with_ruby_uri, so both referer and embed_url checks are case-insensitive on main today.",
+   "astra": [
+    {
+     "pergunta": "#04: confirmado at 2015-08-18 (EmbeddableHost where lower(host)=?, incoming host not downcased) or 2022-08-09 (PR #17840 normalize_with_ruby_uri downcases incoming host)?",
+     "resposta": "Confirmado at PR #17840, 2022-08-09: it lowercases the incoming host; after 2015 an uppercase URL host still failed.",
+     "veredito": "confirmado 2022-08-09"
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#06": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2014-01-02",
+    "pr": null,
+    "commit": "ed2e53bb068246205e2c3fc1fd985a54859fcad7",
+    "url": "https://github.com/discourse/discourse/commit/ed2e53bb068246205e2c3fc1fd985a54859fcad7"
+   },
+   "removidoEm": null,
+   "diasNoAr": 2,
+   "reason": "Two days after the original commit, ed2e53bb ('FIX: Support feeds with description as well as content') replaced `CGI.unescapeHTML(i.content.scrub)` with `content = i.content || i.description; if content ... end`, removing the nil.scrub crash. PollFeed was later moved to the rss-polling plugin (#8233).",
+   "astra": []
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#08": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 4673,
+   "reason": "Post#cook on main still does `return raw if cook_method == Post.cook_methods[:raw_html]`, and TopicEmbed.import still defaults cook_method to raw_html (unless embed_support_markdown). RSS import moved to plugins/discourse-rss-polling (#8233), whose FeedItem#cook_method returns nil for HTML items, so feed HTML is still stored as cooked without sanitization; the only PrettyText.sanitize added (#42808, 2026-08-25) is on the expansion path, not the stored post.",
+   "astra": []
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#09": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2026-08-04",
+    "pr": 42314,
+    "commit": "9e3cac68a65df5bb7b45ec4d06f6cedde5aa6e63",
+    "url": "https://github.com/discourse/discourse/pull/42314"
+   },
+   "removidoEm": null,
+   "diasNoAr": 4599,
+   "reason": "The nil-contents part was fixed on 2015-05-06 (edae9d7a, `contents ||= ''`, today `contents.to_s`). The unescaped URL in the 'imported from' link survived the move into imported_from_html until PR #42314 ('SECURITY: Escape embed URL for HTML attribute context in footer'), which applies ERB::Util.html_escape after URL normalization; that matches the injection described.",
+   "astra": []
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#17": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 4673,
+   "reason": "TopicEmbed.import on main still does an unlocked topic_embed_by_url lookup and then creates the post/embed inside Topic.transaction with no mutex and no rescue of the unique violation; fb8ba5e1 (2015-06-15) only added validates_uniqueness_of (application-level, not race-safe). The synchronous PollFeed inside TopicRetriever was removed with #8233, but the scheduled RSS plugin import and RetrieveTopic/import_remote can still race on the same URL.",
+   "astra": []
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#18": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2014-05-08",
+    "pr": null,
+    "commit": "5fb962a65fe7dedef9462ed8af0849dc3c2ed1fd",
+    "url": "https://github.com/discourse/discourse/commit/5fb962a65fe7dedef9462ed8af0849dc3c2ed1fd"
+   },
+   "removidoEm": null,
+   "diasNoAr": 128,
+   "reason": "5fb962a6 ('in the case that an imported post was deleted, don't error out of the PollFeed job') changed the update guard to `if post && content_sha1 != embed.content_sha1`, followed the same day by a post.topic check. Main today returns early with `return post unless post&.topic`.",
+   "astra": []
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#19": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2017-09-22",
+    "pr": 5200,
+    "commit": "6f6b47f096d68d879ea4fc8cb3ab4645a50c0b16",
+    "url": "https://github.com/discourse/discourse/pull/5200"
+   },
+   "removidoEm": null,
+   "diasNoAr": 1361,
+   "reason": "Nil contents was handled on 2015-05-06 (edae9d7a). find_remote began rescuing OpenURI::HTTPError on 2017-05-25 (39e19481, then Net::OpenTimeout on 2017-08-10), but import_remote then dereferenced the nil response; PR #5200 added `return if response.nil?` in import_remote, so a dead URL no longer raises. Main keeps both guards.",
+   "astra": []
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#22": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2021-11-17",
+    "pr": 14975,
+    "commit": "cc1b45f58b3ecb8eeeeea5b9169006f332db187e",
+    "url": "https://github.com/discourse/discourse/pull/14975"
+   },
+   "removidoEm": null,
+   "diasNoAr": 2878,
+   "reason": "PR #14975 ('FIX: Convert URLs embedded topics to absolute form') replaced the start_with?('/') + sub(/^\\/+/) rewrite in absolutize_urls with `URI.join(prefix, href)`, which keeps protocol-relative URLs on their own host and resolves path-relative ones (spec changed to images/wat.jpg). Main is unchanged since.",
+   "astra": []
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#24": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 4673,
+   "reason": "best.html.erb was replaced by EmbedHelper#embed_post_date; PR #28014 (2024-07-22) switched to `dt.strftime I18n.t(\"datetime_formats.formats.short_no_year\")`, which localizes the order, but Ruby strftime %B is not locale-aware and the locale formats use %B (e.g. de '%-d. %B'), so month names still come out in English on main.",
+   "astra": [
+    {
+     "pergunta": "#24: PR #28014 (2024-07-22) switched to strftime with I18n format strings; %B/%b still English in Ruby strftime. Confirmado or pendente?",
+     "resposta": "Pendente: #28014 localizes the format order only; month names still come out in English.",
+     "veredito": "pendente"
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#29": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 4673,
+   "reason": "disqus.thor moved to script/import_scripts/disqus.rb (efff3351, 2015-07-01) still calling import_remote with the title only. 72d7c055 (2016-08-17) added a hard-coded IMPORT_CATEGORY and a rescue of OpenURI::HTTPError, but on main the thread's created_at is still never applied to the topic or first post, so imported topics still get the import date.",
+   "astra": [
+    {
+     "pergunta": "#29: 72d7c05 (2016-08-17) added a hard-coded import category and rescue OpenURI::HTTPError around import_remote, but the thread created_at is still never applied. Pendente or confirmado?",
+     "resposta": "Pendente: partial fix for category and HTTP failures, but the historical topic/first-post date is still dropped.",
+     "veredito": "pendente"
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#30": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2016-11-16",
+    "pr": null,
+    "commit": "67e20416912bb0b7849be8c5fc4efc111530545f",
+    "url": "https://github.com/discourse/discourse/commit/67e20416912bb0b7849be8c5fc4efc111530545f"
+   },
+   "removidoEm": null,
+   "diasNoAr": 1051,
+   "reason": "67e20416 ('Prevent topic_retriever from retrieving more than once a minute') changed the throttle key from per-URL `retrieved:#{@embed_url}` to the global `retrieved_topic`, so different unknown articles can no longer each trigger a full synchronous feed poll. The synchronous PollFeed call was later removed entirely with #8233 (2019-11-12).",
+   "astra": []
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#32": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 4673,
+   "reason": "spec/requests/embed_controller_spec.rb on main still has 'is 404 without an embed_url' doing `get \"/embed/comments\"` with no embeddable host and asserting only the generic embed.error body. The controller now rejects via `EmbeddableHost.url_allowed?(embed_url)`, which fails for a missing host and a missing URL alike, so the example still cannot detect a missing embed_url check.",
+   "astra": []
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#33": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2019-11-12",
+    "pr": 8233,
+    "commit": "3dd2f2f7014a540918f85b7e9819377af32d5b95",
+    "url": "https://github.com/discourse/discourse/pull/8233"
+   },
+   "diasNoAr": 2142,
+   "reason": "On 2014-04-24 (#2428) the embed_by_username guard and its spec were removed, while 'requires feed_polling_url' kept feed_polling_enabled false and stayed gappy. spec/jobs/poll_feed_spec.rb and Jobs::PollFeed were deleted from core by #8233 (RSS polling moved to a plugin) without a change targeting the gap.",
+   "astra": []
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2013-12-31",
+    "pr": null,
+    "commit": "cab6a3f339bb769029dc844b7e5866174f9d690f",
+    "url": "https://github.com/discourse/discourse/commit/cab6a3f339bb769029dc844b7e5866174f9d690f"
+   },
+   "removidoEm": null,
+   "diasNoAr": 0,
+   "reason": "The same day, cab6a3f3 ('Don't forget to precompile the embed css') added 'embed.css' to config.assets.precompile, and 5621a645 moved embed.js from app/assets to public/javascripts so it is served statically without precompilation.",
+   "astra": []
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2016-11-16",
+    "pr": null,
+    "commit": "67e20416912bb0b7849be8c5fc4efc111530545f",
+    "url": "https://github.com/discourse/discourse/commit/67e20416912bb0b7849be8c5fc4efc111530545f"
+   },
+   "removidoEm": null,
+   "diasNoAr": 1051,
+   "reason": "67e20416 replaced the per-URL throttle key with a global `retrieved_topic` 60s key; main's TopicRetriever is identical, so varying the query string no longer bypasses the throttle (at most one anonymous retrieval per minute site-wide). Distinct URLs still map to distinct topics, but not at an unbounded rate.",
+   "astra": [
+    {
+     "pergunta": "opa-01: 67e20416 (2016-11-16) changed the throttle key from retrieved:#{url} to a global retrieved_topic (60s). Confirmado or pendente?",
+     "resposta": "Confirmado 2016-11-16: the global key removes the query-string bypass; distinct topics over time do not reproduce it.",
+     "veredito": "confirmado 2016-11-16"
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-04": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2019-11-12",
+    "pr": 8233,
+    "commit": "3dd2f2f7014a540918f85b7e9819377af32d5b95",
+    "url": "https://github.com/discourse/discourse/pull/8233"
+   },
+   "diasNoAr": 2142,
+   "reason": "The specs were rewritten on 2014-04-24 (#2428), but no example ever isolated feed_polling_enabled (the enabled=false example also left the URL nil). spec/jobs/poll_feed_spec.rb and Jobs::PollFeed were deleted by #8233 when RSS polling moved to a plugin, without targeting the gap.",
+   "astra": []
+  }
+ }
+}

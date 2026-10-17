@@ -1,0 +1,65 @@
+{
+ "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+ "prOriginal": {
+  "numero": null,
+  "url": null,
+  "mergedAt": null,
+  "nota": "No original upstream PR: head 8ab88145 is a synthetic benchmark commit (bobharper208, 2025-07-25) on upstream 74618671; gh search prs for the title and for OptimizedCursorPaginator returned nothing, and the commit history of both touched files upstream contains none of its code."
+ },
+ "tps": {
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01": {
+   "status": "nao_entrou_no_original",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": null,
+   "reason": "The benchmark head 8ab88145 is a synthetic commit (author bobharper208, Claude-generated message) on top of upstream 74618671; no upstream PR matches its title, and upstream paginator.py / organization_auditlogs.py history since 2025-05 never contains OptimizedCursorPaginator, optimized_pagination or enable_advanced_features. The OptimizedCursorPaginator negative-slice branch never existed on upstream master; today's paginator.py has no such class.",
+   "astra": []
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06": {
+   "status": "nao_entrou_no_original",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": null,
+   "reason": "The benchmark head 8ab88145 is a synthetic commit (author bobharper208, Claude-generated message) on top of upstream 74618671; no upstream PR matches its title, and upstream paginator.py / organization_auditlogs.py history since 2025-05 never contains OptimizedCursorPaginator, optimized_pagination or enable_advanced_features. OptimizedCursorPaginator.get_item_key with math.floor on datetime never reached upstream; the audit-log endpoint upstream still uses DateTimePaginator only.",
+   "astra": []
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07": {
+   "status": "nao_entrou_no_original",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": null,
+   "reason": "The benchmark head 8ab88145 is a synthetic commit (author bobharper208, Claude-generated message) on top of upstream 74618671; no upstream PR matches its title, and upstream paginator.py / organization_auditlogs.py history since 2025-05 never contains OptimizedCursorPaginator, optimized_pagination or enable_advanced_features. The unconditional organization_context.member.has_global_access dereference was added only by the synthetic commit; upstream organization_auditlogs.py (later moved to core in #97407) never had it.",
+   "astra": []
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#09": {
+   "status": "nao_entrou_no_original",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": null,
+   "reason": "The benchmark head 8ab88145 is a synthetic commit (author bobharper208, Claude-generated message) on top of upstream 74618671; no upstream PR matches its title, and upstream paginator.py / organization_auditlogs.py history since 2025-05 never contains OptimizedCursorPaginator, optimized_pagination or enable_advanced_features. The request-controlled optimized_pagination flag never existed upstream, so the widened surface was never shipped.",
+   "astra": []
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01": {
+   "status": "nao_entrou_no_original",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": null,
+   "reason": "The benchmark head 8ab88145 is a synthetic commit (author bobharper208, Claude-generated message) on top of upstream 74618671; no upstream PR matches its title, and upstream paginator.py / organization_auditlogs.py history since 2025-05 never contains OptimizedCursorPaginator, optimized_pagination or enable_advanced_features. The partial clamp (max(0, offset) only for next cursors) and its 'safe' comment never reached upstream. Note: upstream BasePaginator.get_result today still slices queryset[offset:stop] with no negative-offset check in either direction (pre-existing behaviour; #122411 and #127885 added rejection only to GenericOffsetPaginator and OffsetPaginator), but that is not the benchmark-attributed change.",
+   "astra": [
+    {
+     "pergunta": "Negative-offset slicing in BasePaginator pre-existed upstream and is still there, but the benchmark PR (partial clamp + false comment) was never merged. nao_entrou_no_original or pendente?",
+     "resposta": "nao_entrou_no_original: the original PR was never merged and its partial clamp/comment never existed upstream; the pre-existing BasePaginator issue remaining unresolved does not show the benchmark-attributed bug reached upstream.",
+     "veredito": "nao_entrou_no_original"
+    }
+   ]
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#oph-01": {
+   "status": "nao_entrou_no_original",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": null,
+   "reason": "The benchmark head 8ab88145 is a synthetic commit (author bobharper208, Claude-generated message) on top of upstream 74618671; no upstream PR matches its title, and upstream paginator.py / organization_auditlogs.py history since 2025-05 never contains OptimizedCursorPaginator, optimized_pagination or enable_advanced_features. OptimizedCursorPaginator.value_from_cursor returning the raw integer never existed upstream; DateTimePaginator (with conversion) remains the paginator in use.",
+   "astra": []
+  }
+ }
+}

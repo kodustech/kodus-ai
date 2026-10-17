@@ -1,0 +1,189 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "prOriginal": {
+  "numero": 10967,
+  "url": "https://github.com/calcom/cal.diy/pull/10967",
+  "mergedAt": "2023-08-31",
+  "nota": "Upstream calcom/cal.com now redirects to calcom/cal.diy. Found by head branch fix-collective-events-have-only-one-team-attendee-on-the-google-event-7754-cal-1267; benchmark head de62829 is the PR's last commit and squash c4e5d168 has the same 22-file diff (only unrelated main-merge drift in imports). Files later moved: EventManager -> packages/features/bookings/lib, CalendarManager -> packages/features/calendars/lib, handleNewBooking -> service/RegularBookingService + handleNewBooking/loadUsers."
+ },
+ "tps": {
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2023-10-06",
+    "pr": 11733,
+    "commit": "f9c578c87d30aa7058b2317dc6a1a736fbd0727b",
+    "url": "https://github.com/calcom/cal.diy/pull/11733"
+   },
+   "removidoEm": null,
+   "diasNoAr": 36,
+   "reason": "PR #11733 'fix: Backwards compatibility on google reschedule/cancel' (body: fixes issue introduced in #10967) replaced the dead `externalCalendarId ? externalCalendarId : destinationCalendar.find(cal.externalId === externalCalendarId)` in updateEvent and deleteEvent with `(externalCalendarId ? find(...) : undefined) || 'primary'`, so update no longer receives an undefined calendarId. It falls back to primary rather than restoring the destination-calendar externalId; today's code keeps that shape.",
+   "astra": [
+    {
+     "pergunta": "Is #03 confirmado by #11733 (dead lookup removed, undefined calendarId replaced by primary) or pendente because the old fallback to destinationCalendar.externalId was not restored?",
+     "resposta": "Confirmado under 'any fix counts': #11733 removes the falsy lookup and update now gets 'primary' instead of undefined; it does not restore the destination-calendar fallback, which limits coverage but does not make it pendente; not descontinuado since it was a targeted fix.",
+     "veredito": "confirmado"
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2023-09-12",
+    "pr": 11267,
+    "commit": "86af383f6c963545dd215cfa96ad17c7b5386daf",
+    "url": "https://github.com/calcom/cal.diy/pull/11267"
+   },
+   "removidoEm": null,
+   "diasNoAr": 12,
+   "reason": "In create.handler.ts, PR #11267 (feat: autolink org on provider signup) changed `...(IS_TEAM_BILLING_ENABLED ? { slug } : {})` back to `...(!IS_TEAM_BILLING_ENABLED ? { slug } : {})`, restoring the original condition so billing-disabled orgs get a slug again. The handler file was later moved/removed from the upstream tree.",
+   "astra": []
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2023-09-14",
+    "pr": 11327,
+    "commit": "197b435b6f04d5e43bb318a1515353e40b7dd898",
+    "url": "https://github.com/calcom/cal.diy/pull/11327"
+   },
+   "removidoEm": null,
+   "diasNoAr": 14,
+   "reason": "PR #11327 'fix: Duplicate calendar events' changed Office365 createEvent to `createEvent(event, credentialId)` selecting `destinationCalendar.find(cal => cal.credentialId === credentialId) ?? destinationCalendar[0]`; Lark got the same pattern. Today both Office365 and Lark createEvent accept credentialId and pick the matching destination.",
+   "astra": []
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#06": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1143,
+   "reason": "EventManager.updateAllCalendarEvents (now packages/features/bookings/lib/EventManager.ts) still resolves credential from calendarCredentials then CredentialRepository and calls `updateEvent(credential, event, bookingRefUid, calendarExternalId)` unconditionally even if none was found. CalendarManager.updateEvent (packages/features/calendars/lib/CalendarManager.ts) still dereferences credential.appName/credential.type in its return.",
+   "astra": []
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2023-09-28",
+    "pr": 11574,
+    "commit": "b8e3b549f896ec7fcb427af6f7eb1b8ca2e63782",
+    "url": "https://github.com/calcom/cal.diy/pull/11574"
+   },
+   "removidoEm": null,
+   "diasNoAr": 28,
+   "reason": "PR #11574 'fix: Booking failures when there are no destination calendars but Google Meet location' (possible regression from #10967) changed the check to `mainHostDestinationCalendar?.integration !== \"google_calendar\"`. Today's EventManager still uses the optional chaining.",
+   "astra": []
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-03-20",
+    "pr": 19459,
+    "commit": "b1b8b0135e0fed1618ea654659db962caaddc083",
+    "url": "https://github.com/calcom/cal.diy/pull/19459"
+   },
+   "removidoEm": null,
+   "diasNoAr": 567,
+   "reason": "PR #19459 (refactor: event type builder) replaced `evt.destinationCalendar?.push(...teamDestinationCalendars)` with `withDestinationCalendar([...(evt.destinationCalendar ?? []), ...teamDestinationCalendars])`, so a null organizer destination no longer drops the other hosts' calendars. Today RegularBookingService uses the same `[...(destinationCalendar ?? []), ...teamDestinationCalendars]`.",
+   "astra": []
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2024-05-31",
+    "pr": 14272,
+    "commit": "625a7ec180b41ab4b7288a85d636ab7a78a17fad",
+    "url": "https://github.com/calcom/cal.diy/pull/14272"
+   },
+   "removidoEm": null,
+   "diasNoAr": 274,
+   "reason": "PR #14272 (refactor: Introduce crmManager) changed the reference mapping in EventManager.create from `credentialId: isCalendarType ? result.credentialId : undefined` to `credentialId: result?.credentialId || undefined`, so video references keep their credentialId again. Today it is `...getCredentialPayload(result)` which keeps any positive credentialId regardless of type.",
+   "astra": []
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1143,
+   "reason": "EventManager.updateLocation today still builds referencesToCreate with `externalCalendarId: result.externalId` and credentialId from result.credentialId, while CalendarManager.updateEvent still returns neither externalId nor credentialId. editLocation.handler still persists these references via updateLocationById.",
+   "astra": []
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2024-04-23",
+    "pr": 14261,
+    "commit": "571e93a19ac7b1bde6f4bd31370246c34369829b",
+    "url": "https://github.com/calcom/cal.diy/pull/14261"
+   },
+   "diasNoAr": 236,
+   "reason": "The per-reference loop with the recurring branch over organizer credentials and `updBooking.references.find(first _calendar ref)` survived #12651 as a fallback, then PR #14261 (chore: EventManager add cancelEvent method, part of a CRM refactor) deleted it. Today EventManager.deleteEventsAndMeetings deletes each calendar reference once with its own credential, using thirdPartyRecurringEventId for series.",
+   "astra": [
+    {
+     "pergunta": "Recurring cancel loop (per reference x organizer credentials x first ref of each booking) was deleted by #14261 (chore: EventManager cancelEvent) and replaced by per-reference deletion with each reference's own credential. Descontinuado or confirmado for #13 and sncc-01?",
+     "resposta": "Both descontinuado via #14261: the refactor removed the path that picked only the first reference per booking and the bookings x credentials batch inside the reference loop; no evidence of a change targeting the bug. #12651 kept both problems in its fallback.",
+     "veredito": "descontinuado"
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#14": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1143,
+   "reason": "Google createEvent today selects `externalCalendarId ?? (destinationCalendar.find(cal.credentialId === credentialId)?.externalId || 'primary')`, but CalendarManager.createEvent passes externalCalendarId only for delegation credentials. For credential-less destinations EventManager still calls `createEvent(firstCalendarCredential, event)`, so the find fails and the event goes to primary.",
+   "astra": []
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#15": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1143,
+   "reason": "The credential-less branch of EventManager.createAllCalendarEvents still calls `createEvent(firstCalendarCredential, event)` without destination.externalId; CalendarManager.createEvent still returns `externalId` from its argument, and references are still built with `externalCalendarId: isCalendarType ? result.externalId : undefined`.",
+   "astra": []
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2024-04-23",
+    "pr": 14261,
+    "commit": "571e93a19ac7b1bde6f4bd31370246c34369829b",
+    "url": "https://github.com/calcom/cal.diy/pull/14261"
+   },
+   "diasNoAr": 236,
+   "reason": "The recurring deletion batch (remaining bookings x organizer calendar credentials) nested inside the loop over calendar references was removed wholesale by PR #14261, a refactor moving cancellation into EventManager.cancelEvent. Today each calendar reference is deleted exactly once, so the repetition no longer exists.",
+   "astra": [
+    {
+     "pergunta": "Recurring cancel loop (per reference x organizer credentials x first ref of each booking) was deleted by #14261 (chore: EventManager cancelEvent) and replaced by per-reference deletion with each reference's own credential. Descontinuado or confirmado for #13 and sncc-01?",
+     "resposta": "Both descontinuado via #14261: the refactor removed the path that picked only the first reference per booking and the bookings x credentials batch inside the reference loop; no evidence of a change targeting the bug. #12651 kept both problems in its fallback.",
+     "veredito": "descontinuado"
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-03": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1143,
+   "reason": "loadUsers moved to packages/features/bookings/lib/handleNewBooking/loadUsers.ts but its catch still does `if (error instanceof HttpError || error instanceof Prisma.PrismaClientKnownRequestError) throw new HttpError({ statusCode: 400, message: error.message })`, forwarding the raw Prisma message to the client.",
+   "astra": []
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1143,
+   "reason": "loadDynamicUsers in today's loadUsers.ts still throws a plain `new Error(\"dynamicUserList is not properly defined or empty.\")`, and the loadUsers catch still maps non-HttpError/non-Prisma errors to HttpError 500 'Unable to load users'.",
+   "astra": []
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-02": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1143,
+   "reason": "computeTeamData in RegularBookingService still pushes `{...user.destinationCalendar, externalId}` for COLLECTIVE members into the event's destinationCalendar, webhookData still starts with `...evt`, and handleWebhookTrigger/sendPayload still serialize the data unfiltered (`payload: data`).",
+   "astra": []
+  }
+ }
+}

@@ -1,0 +1,58 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "prOriginal": {
+  "numero": 22532,
+  "url": "https://github.com/calcom/cal.diy/pull/22532",
+  "mergedAt": "2025-07-22",
+  "nota": "calcom/cal.com now redirects to calcom/cal.diy (renamed). PR #22532 head sha equals benchmark head 5fd11f9f; squash commit cb786923. Its tree differs from the head only by unrelated main changes (apps/web version bump, one unrelated locale key)."
+ },
+ "tps": {
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com#03": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-11-20",
+    "pr": 25284,
+    "commit": "ae7fd0cae207a828a0f63c0b8cf782e1986ed6a5",
+    "url": "https://github.com/calcom/cal.diy/pull/25284"
+   },
+   "diasNoAr": 121,
+   "reason": "CredentialActionsDropdown.tsx was not touched between the merge and PR #25284 ('Remove all code related to the old cache system'), which deleted deleteCacheMutation, the cache status item, the delete-cache dialog and the deleteCache tRPC route. With no cache delete action left, the missing connectedCalendars invalidation no longer exists; the component was later moved to apps/web (#26420).",
+   "astra": []
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com#04": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-11-20",
+    "pr": 25284,
+    "commit": "ae7fd0cae207a828a0f63c0b8cf782e1986ed6a5",
+    "url": "https://github.com/calcom/cal.diy/pull/25284"
+   },
+   "diasNoAr": 121,
+   "reason": "The hardcoded new Intl.DateTimeFormat(\"en-US\", ...) for cacheUpdatedAt stayed unchanged until PR #25284 removed the whole cache status block (and the cacheUpdatedAt prop) from CredentialActionsDropdown as part of removing the old calendar cache system, not as a locale fix.",
+   "astra": []
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com#07": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 452,
+   "reason": "scripts/test-gcal-webhooks.sh on main today still runs sed -i '' -E \"s|^GOOGLE_WEBHOOK_URL=.*|...|\" and then unconditionally prints the success message. The file has no commit after the original merge.",
+   "astra": []
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com#08": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-11-20",
+    "pr": 25284,
+    "commit": "ae7fd0cae207a828a0f63c0b8cf782e1986ed6a5",
+    "url": "https://github.com/calcom/cal.diy/pull/25284"
+   },
+   "diasNoAr": 121,
+   "reason": "deleteCache.handler.ts kept throwing new Error(\"Credential not found or access denied\") with no change after the merge, and the file was deleted (with its deleteCache route in _router.tsx) by PR #25284 when the old cache system was removed.",
+   "astra": []
+  }
+ }
+}

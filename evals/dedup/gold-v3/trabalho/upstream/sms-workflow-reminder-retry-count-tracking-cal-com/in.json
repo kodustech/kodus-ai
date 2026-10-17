@@ -1,0 +1,50 @@
+{
+ "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+ "prTitle": "SMS workflow reminder retry count tracking",
+ "upstream": "calcom/cal.com",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/cal.com",
+ "base": "917c7b0764f4c6bfdca95db2c5f73dbfdbe11757",
+ "head": "c790227e0cda780e6fea9bb03af27948d9e286b9",
+ "tps": [
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#01",
+   "severity": "medium",
+   "category": "concurrency",
+   "bug": "Using retryCount: reminder.retryCount + 1 reads a possibly stale value and can lose increments under concurrency; consider an atomic increment via Prisma (increment: 1) to avoid race conditions (also applies to the similar update in the catch block).",
+   "evidenciaOpus": "Both failure updates write retryCount: reminder.retryCount + 1 (scheduleSMSReminders.ts:184 and :195) from the value read by findMany at the start of the run instead of { increment: 1 }; overlapping cron runs both write N+1 and undercount failures.",
+   "evidenciaAstra": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:184 and :195 assign counters from the snapshot selected at :48, without locking or atomic increments. Overlapping invocations can overwrite each other's increments and allow extra attempts, although indefinite retries are not established."
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The deletion logic in scheduleSMSReminders.ts incorrectly deletes non-SMS workflow reminders (e.g., Email, WhatsApp) that have retryCount > 1. This occurs because the retryCount condition within the OR clause for deletion lacks a method: WorkflowMethods.SMS filter, causing it to apply to all reminder types instead of only SMS reminders, which is the intended scope of this function.",
+   "evidenciaOpus": "The method: SMS filter is only in the first OR arm (scheduleSMSReminders.ts:31-43); the retryCount > 1 arm matches WorkflowReminder rows of any method. Today only this SMS cron increments retryCount, so the latent effect is limited, but the deletion is no longer scoped to SMS as the comment states. (The claim that a successfully scheduled reminder with retryCount 2 is deleted is not reachable: such rows are deleted before findMany.)",
+   "evidenciaAstra": "Non-SMS deletion is currently hypothetical: the counter defaults to zero at packages/prisma/schema.prisma:1000, and its writers select only SMS reminders. However, overlapping invocations can read retryCount=1, then independently record success at packages/features/ee/workflows/api/scheduleSMSReminders.ts:174 and failure at :195, leaving a successfully scheduled reminder with count=2. The unrestricted cleanup at :39 then deletes its tracking record before delivery; the sequential scenario described in one comment is incorrect."
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The retry-count update inside the catch block is not guarded, so if it throws (for example the reminder was deleted concurrently) the error escapes the loop and the cron run fails, skipping the remaining reminders.",
+   "evidenciaOpus": "The new prisma.workflowReminder.update inside catch (scheduleSMSReminders.ts:190-197) is unguarded; if it throws (row deleted by a concurrent cancellation -> P2025, or a DB error), the exception escapes the for loop, the remaining reminders are skipped and the handler fails. Previously the catch only logged.",
+   "evidenciaAstra": "The awaited update inside the catch at packages/features/ee/workflows/api/scheduleSMSReminders.ts:190 has no further error guard, so its rejection aborts the remaining loop iterations. Concurrent removal is reachable through packages/features/ee/workflows/lib/reminders/smsReminderManager.ts:251, making a missing-record failure concrete."
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#06",
+   "severity": "critical",
+   "category": null,
+   "bug": "Claims transient errors increment retryCount, so two runs during an outage delete the whole pending SMS reminder queue.",
+   "evidenciaOpus": "The catch block counts any exception as a failed attempt (scheduleSMSReminders.ts:190-197); counting all failures toward a two-attempt limit is the behaviour the PR deliberately introduces. Distinguishing transient from permanent errors is a design request, not a defect in the change.",
+   "evidenciaAstra": "Transient provider failures can propagate from packages/features/ee/workflows/lib/reminders/providers/twilioProvider.ts:104 into the unconditional counter update at packages/features/ee/workflows/api/scheduleSMSReminders.ts:195. Two such failures make otherwise valid future reminders eligible for permanent deletion at :39, without distinguishing temporary outages from terminal failures; the affected queue is the selected seven-day window."
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+   "severity": "high",
+   "category": "bug",
+   "bug": "SMS-sending locks are counted as failed scheduling attempts: scheduleSMS returns undefined for locked users/teams, retryCount is incremented, and after two cron runs the retryCount > 1 cleanup deletes future reminders even if sending is later unlocked.",
+   "evidenciaOpus": "twilioProvider.ts:90-95 returns undefined when isLockedForSMSSending is true, and the PR's new else branch in scheduleSMSReminders.ts:178-186 increments retryCount on any falsy result. The PR's new deleteMany clause (scheduleSMSReminders.ts:38-41, retryCount gt 1) then deletes those still-future reminders after two cron runs, so a temporarily locked user/team permanently loses them.",
+   "evidenciaAstra": "packages/features/ee/workflows/lib/reminders/providers/twilioProvider.ts:90-95 returns undefined when sending is locked, before the Twilio request at line 104. The PR adds an unconditional retry increment for that result in packages/features/ee/workflows/api/scheduleSMSReminders.ts:178-185; after two locked runs, the new deletion condition at lines 29-42 permanently removes future reminders even if sending has been unlocked."
+  }
+ ]
+}

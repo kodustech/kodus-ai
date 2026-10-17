@@ -1,0 +1,43 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "prOriginal": {
+  "numero": 33832,
+  "url": "https://github.com/keycloak/keycloak/pull/33832",
+  "mergedAt": "2024-10-15",
+  "nota": "Found by gh search on 'AuthzClientCryptoProvider'. Single PR commit is the benchmark head 79d11c48; squash commit b95d12a9 on main touches the same 12 files with the same line counts. Backported to release/26.0 as #34003."
+ },
+ "tps": {
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#04": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 732,
+   "reason": "CryptoProvider.java on main still declares `int order();` with no default, and CryptoIntegration.detectProvider still sorts every ServiceLoader provider with Comparator.comparingInt(CryptoProvider::order). Later commits to CryptoProvider (#43432 import order, RSA 3072, BCFKS truststore) did not add a default.",
+   "astra": []
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 732,
+   "reason": "CryptoIntegration.detectProvider on main is unchanged: sorts by order() and returns the first, only logging ignored providers, with no tie/multiple-provider error. DefaultCryptoProvider, FIPS1402Provider and WildFlyElytronProvider all still return 200 from order().",
+   "astra": []
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#10": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 732,
+   "reason": "ECDSAAlgorithmTest on main still builds one KeyPairGenerator.getInstance(\"EC\").genKeyPair() (default curve) in the constructor and reuses it for ES256/ES384/ES512. Only change after merge was the import-order commit #43432.",
+   "astra": []
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#11": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 732,
+   "reason": "ECDSAAlgorithmTest.test on main still asserts only assertArrayEquals(rsConcat, rsConcat2) after a decode/encode/decode round trip, never comparing asn1Des to the original signature nor calling Signature.verify.",
+   "astra": []
+  }
+ }
+}

@@ -1,0 +1,98 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "prTitle": "Replays Self-Serve Bulk Delete System",
+ "upstream": "getsentry/sentry",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/sentry",
+ "base": "49a275847631e231672d01b5dcd66558c069d25b",
+ "head": "ea188e2d736fd6ed27c1dba8aae63b7268e2a7a9",
+ "tps": [
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Validation logic incorrectly uses .get('timestamp'), which treats a timestamp of 0 as absent. It should directly check 'timestamp' in self.initial_data to ensure proper field presence detection, preventing both 'age=0' and 'timestamp' from passing mutual-exclusion validation.",
+   "evidenciaOpus": "browser_reporting_collector.py:52 and :58 test presence with self.initial_data.get(\"age\") / .get(\"timestamp\"); age (line 47) and timestamp (min_value=0, line 48) both accept 0, so a report carrying age=0 plus timestamp, or timestamp=0 plus age, passes the mutual-exclusion validators.",
+   "evidenciaAstra": "src/sentry/issues/endpoints/browser_reporting_collector.py:47-58 permits zero for both fields and checks their truthiness. Both age=0 and timestamp=0 therefore pass together, although a zero paired with a nonzero value is rejected by the other validator."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#02",
+   "severity": "high",
+   "category": "security",
+   "bug": "The validation-failure warning logs the entire raw, attacker-controlled browser report instead of a redacted subset.",
+   "evidenciaOpus": "Line 113 logs raw_report on validation failure. The same unauthenticated payload is already logged in full at line 93 (request_body, pre-existing) and line 102, so the new field adds no new exposure; it is a log-context detail.",
+   "evidenciaAstra": "src/sentry/issues/endpoints/browser_reporting_collector.py:111-113 newly attaches the entire caller-supplied report to a warning without redaction. This exposes URLs and arbitrary body contents at warning level even when the existing info-level logging at line 93 is suppressed."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#06",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Using zip(error_ids, events.values()) assumes the get_multi result preserves the input order; dict value order is not guaranteed to match error_ids, so event data can be paired with the wrong ID (missing nodes also shift alignment).",
+   "evidenciaOpus": "project_replay_summarize_breadcrumbs.py fetch_error_details zips error_ids with events.values(); nodestore base.py get_multi dedupes ids and returns uncached items then items.update(cache_items), and omits missing nodes, so value order/length can differ from error_ids and errors get the wrong id.",
+   "evidenciaAstra": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:118 pairs error IDs positionally with dictionary values. src/sentry/nodestore/base.py:194-205 constructs uncached results first and then appends cached results, so mixed cache hits can associate payloads with the wrong IDs."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#07",
+   "severity": "medium",
+   "category": "perf",
+   "bug": "The Snuba replay lookup for error IDs runs even when enable_error_context=false, adding a needless query (and failure point) to opt-out requests.",
+   "evidenciaOpus": "In get() the query_replay_instance Snuba call runs before the enable_error_context check, so error_ids are fetched even when they are then discarded. The effect is one extra query per opt-out request, an efficiency detail.",
+   "evidenciaAstra": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:70-88 executes the replay query before evaluating enable_error_context. That query reaches execute_query in src/sentry/replays/query.py:97, adding an unnecessary database dependency and failure path to opted-out requests."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#12",
+   "severity": "high",
+   "category": "bug",
+   "bug": "Hardcoded empty data passed to TableWidgetVisualization causes it to always render an empty table instead of displaying actual results when the feature flag is enabled.",
+   "evidenciaOpus": "widgetCard/chart.tsx: when organization has 'use-table-widget-visualization', TableWidgetVisualization is rendered with columns={[]} and tableData {data: [], meta: {fields: {}, units: {}}}, discarding result.data/result.meta, so the table is always empty.",
+   "evidenciaAstra": "static/app/views/dashboards/widgetCard/chart.tsx:164-173 passes empty columns and empty table data whenever the feature is enabled. static/app/views/dashboards/widgets/tableWidget/tableWidgetVisualization.tsx:93-104 consumes those props directly, discarding the actual query results and rendering an empty table."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#13",
+   "severity": "medium",
+   "category": "api",
+   "bug": "The custom cell renderers fall back to default rendering on any falsy return (0, '', null), not only undefined, so a renderer cannot render zero or an empty cell.",
+   "evidenciaOpus": "defaultTableCellRenderers.tsx:32 and :71 use if (cell) so a custom renderer returning 0 or '' falls back to the default; the prop docs (tableWidgetVisualization.tsx:42,54) only state the return type ReactNode | undefined. New component with no caller relying on falsy output.",
+   "evidenciaAstra": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx:31-34,70-73 uses truthiness to accept custom renderer output, discarding valid zero, empty-string, and null results. This violates the undefined-based fallback contract documented in static/app/views/dashboards/widgets/tableWidget/tableWidgetVisualization.stories.tsx:110-114."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#19",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The attribute-keys query key no longer includes the organization slug, so two organizations with the same filters share a cache entry and switching orgs can show the previous org's attribute names.",
+   "evidenciaOpus": "useTraceItemAttributeKeys.tsx now uses queryKey ['use-trace-item-attribute-keys', queryOptions] where makeTraceItemAttributeKeysQueryOptions returns only itemType/attributeType/project/dates; the old useApiQuery key included the /organizations/{slug}/ path, so org identity was dropped from the cache key.",
+   "evidenciaAstra": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx:39-42 builds its cache key solely from query options, which contain no organization identity. The fetch uses organization.slug at static/app/views/explore/hooks/useGetTraceItemAttributeKeys.tsx:78, so different organizations with identical filters collide in the shared query cache."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Error event timestamps (seconds) are compared with replay recording event timestamps (milliseconds), so errors are not interleaved chronologically with breadcrumbs.",
+   "evidenciaOpus": "project_replay_summarize_breadcrumbs.py: fetch_error_details takes the nodestore event 'timestamp' (epoch seconds), and gen_request_data compares it with each recording event's event.get('timestamp'), which for rrweb events is epoch milliseconds. Every error timestamp is therefore smaller and all errors are emitted before the first breadcrumb, which breaks the intended chronological interleaving. The new tests use seconds on both sides, so they hide this.",
+   "evidenciaAstra": "The new comparison in src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:153-155 compares the unconverted nodestore timestamp from line 115 with the recording timestamp. Error timestamps use seconds (src/sentry/eventstore/models.py:117-118), while recording timestamps use milliseconds (src/sentry/replays/testutils.py:326), causing errors to precede earlier breadcrumbs."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-01",
+   "severity": "medium",
+   "category": "perf",
+   "bug": "Every paginated breadcrumb-summary request queries the replay and fetches all of its error events from nodestore with no cap, adding latency and memory proportional to the replay's error count on each page.",
+   "evidenciaOpus": "project_replay_summarize_breadcrumbs.py:67-94 now runs query_replay_instance and fetch_error_details on every GET before pagination, and fetch_error_details does nodestore.backend.get_multi over all error_ids with no cap, loading full event payloads per page request.",
+   "evidenciaAstra": "The newly added path fetches all returned error IDs by default before pagination (src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:84\u2013100), and fetch_error_details passes every ID to nodestore.get_multi (lines 104\u2013108). The query aggregation has no cap (src/sentry/replays/query.py:461\u2013495), so each page can load all error payloads, causing meaningful latency and memory overhead for error-heavy replays."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-02",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "HIDDEN_ATTRIBUTES is applied only when a search query is present; the no-search early return shows all attributes, so the hidden attributes still appear in the default span attributes view.",
+   "evidenciaOpus": "attributes.tsx:59-70 returns `sorted` unchanged when the search query is empty and only applies the HIDDEN_ATTRIBUTES filter inside the search branch, so is_segment, project_id and received are still shown in the default view.",
+   "evidenciaAstra": "The initial search is empty, and the early return bypasses the newly added hidden-attribute filter (static/app/views/performance/newTraceDetails/traceDrawer/details/span/eapSections/attributes.tsx:51\u201368). Those unfiltered attributes are passed directly to AttributesTree at line 139, so the default view still displays the attributes intended to be hidden."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-03",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The bulk delete test sets max_segment_id to None to cover the new guard in _make_recording_filenames, but it mocks delete_matched_rows, so the guard is never executed and removing it would not fail the test.",
+   "evidenciaOpus": "test_delete_replays_bulk.py:94-99 changes a row to max_segment_id None, but the test patches sentry.replays.tasks.delete_matched_rows and only asserts the mock call, so _make_recording_filenames (delete.py:86-90, the new None guard) never runs.",
+   "evidenciaAstra": "The changed None fixture is in a test that patches delete_matched_rows and only checks that the rows were forwarded (tests/sentry/replays/tasks/test_delete_replays_bulk.py:81\u2013113). Consequently, it never reaches the new guard in src/sentry/replays/usecases/delete.py:89\u201390 and would still pass if removing that guard caused the arithmetic at line 100 to fail."
+  }
+ ]
+}

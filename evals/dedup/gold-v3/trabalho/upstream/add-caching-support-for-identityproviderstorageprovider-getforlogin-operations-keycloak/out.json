@@ -1,0 +1,79 @@
+{
+ "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "prOriginal": {
+  "numero": 32918,
+  "url": "https://github.com/keycloak/keycloak/pull/32918",
+  "mergedAt": "2024-09-18",
+  "nota": "Found via commit history of InfinispanIdentityProviderStorageProvider.java: squash commit 3e597722 'Add cache for IdentityProviderStorageProvider.getForLogin (#32918)'. PR head sha equals benchmark head e944e2ac; the squash tree is identical to the benchmark head for all 4 touched files."
+ },
+ "tps": {
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2026-03-17",
+    "pr": 46970,
+    "commit": "e0dfe8d5b13e4cf4448f60fc1b38452435a227e0",
+    "url": "https://github.com/keycloak/keycloak/pull/46970"
+   },
+   "removidoEm": null,
+   "diasNoAr": 545,
+   "reason": "In testCacheIDPForLogin the per-loop cleanup get(\"alias\")::remove was changed to get(alias)::remove with alias = \"idp-alias-\"+i in PR #46970 (commit message: 'Fixed a flaky test'), and the same fix was applied to the org-idp loop. The remaining get(\"alias\") cleanup for idp-alias-20 survived until the test was migrated in PR #48163 (2026-04-17), which now cleans up with findAll().forEach(remove). Today no cleanup targets the literal \"alias\".",
+   "astra": []
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#05": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 759,
+   "reason": "Today getForLogin on main still does, on a partial miss, cache.invalidateObject(cacheKey); loaded = cache.getCurrentRevision(cacheKey); new IdentityProviderListQuery(loaded, ..., cached, query); cache.addRevisioned(query, cache.getCurrentCounter()), and IdentityProviderListQuery's second constructor still copies previous.searchKeys without validation. File history since the merge (ordering, imports, multi-org ids) never touched this merge logic.",
+   "astra": []
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 759,
+   "reason": "update() on main still passes getById(...) (org-aware wrapper whose isEnabled is false when the linked organizations are disabled) as original to registerIDPLoginInvalidationOnUpdate, which still returns early when the predicate fails for both. BROKER_PUBLIC was removed from getLoginPredicate in PR #32668 (2024-09-20) and 'private' is now hideOnLogin=true, which is still in the predicate, so the same skip happens; org enable/disable does not invalidate login caches and the cache-hit path does not recheck visibility.",
+   "astra": [
+    {
+     "pergunta": "#08/#opa-01/#14 sent together: bug text, head vs today code of update()/registerIDPLoginInvalidationOnUpdate/getLoginPredicate, PR #32668 removing BROKER_PUBLIC, PR #36876 test; asked status for each. #08: pendente or descontinuado, given BROKER_PUBLIC replaced by hideOnLogin?",
+     "resposta": "Pendente: the hideOnLogin swap keeps the mechanism (original disabled via org wrapper, updated ineligible because hidden, invalidation skipped, cache keeps the IDP).",
+     "veredito": "pendente"
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#14": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 759,
+   "reason": "The migrated testCacheIDPForLogin (tests/base/.../organization/cache/OrganizationCacheTest.java) still discards every getForLogin stream and asserts only IdentityProviderListQuery sizes, querying each mode once after each invalidation. PR #36876 (2025-02-07) added IdentityProviderTest.testFindForLoginPreservesOrderByAlias, which asserts returned aliases, but on a single first (miss) call, so a cache hit is still never exercised and checked.",
+   "astra": [
+    {
+     "pergunta": "#08/#opa-01/#14 sent together: bug text, head vs today code of update()/registerIDPLoginInvalidationOnUpdate/getLoginPredicate, PR #32668 removing BROKER_PUBLIC, PR #36876 test; asked status for each. #14: does the PR #36876 ordering test close the gap?",
+     "resposta": "Pendente: the ordering test covers result assembly on a miss but not results served from an already populated cache; the original test still asserts nothing returned.",
+     "veredito": "pendente"
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-01": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2024-09-20",
+    "pr": 32668,
+    "commit": "900c496ffe19b7413fab07130926bfc4465a1322",
+    "url": "https://github.com/keycloak/keycloak/pull/32668"
+   },
+   "diasNoAr": 2,
+   "reason": "The `orgId == null || BROKER_PUBLIC` clause added to LoginFilter.getLoginPredicate was removed two days after the merge by PR #32668, which dropped the kc.org.broker.public attribute altogether in favour of hideOnLogin; the change targets the attribute, not this bug. Today getLoginPredicate is only nonNull + ENABLED + LINK_ONLY + HIDE_ON_LOGIN, so the base IdentityProviderBean no longer filters linked IdPs by organization.",
+   "astra": [
+    {
+     "pergunta": "#08/#opa-01/#14 sent together: bug text, head vs today code of update()/registerIDPLoginInvalidationOnUpdate/getLoginPredicate, PR #32668 removing BROKER_PUBLIC, PR #36876 test; asked status for each. #opa-01: confirmado or descontinuado?",
+     "resposta": "Descontinuado: removing the org/BROKER_PUBLIC clause in #32668 eliminated the condition, as part of replacing the attribute, not a targeted fix.",
+     "veredito": "descontinuado"
+    }
+   ]
+  }
+ }
+}

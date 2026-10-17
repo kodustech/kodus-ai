@@ -1,0 +1,93 @@
+{
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "prOriginal": {
+  "numero": 106778,
+  "url": "https://github.com/grafana/grafana/pull/106778",
+  "mergedAt": "2025-07-07",
+  "nota": "Found with gh pr list --head on the benchmark branch name (alerting/remove-ruler-from-alert-list-view2); upstream title is 'Alerting: Remove ruler from alert list view2', not the benchmark title. Its head equals the benchmark head (8df8503710); squash-merged as 3e6d620d2c, and the TP files (AlertRuleMenu, useAbilities, FilterView, GrafanaRuleListItem, RuleActionsButtons.V2) match the head byte for byte."
+ },
+ "tps": {
+  "notification-rule-processing-engine-grafana-codex#01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-07-09",
+    "pr": 107885,
+    "commit": "5d92f3eee5eb3660c400320c87f40450c3855fdd",
+    "url": "https://github.com/grafana/grafana/pull/107885"
+   },
+   "removidoEm": null,
+   "diasNoAr": 2,
+   "reason": "PR #107885 'Alerting: Fix silence / delete on new list view' changed AlertRuleMenu to render MenuItemPauseRule when canPause && ruleUid (taken via getRuleUID(rulerRule ?? promRule)), with isPaused also read from promRule.isPaused, and MenuItemPauseRule now takes uid/isPaused instead of a RulerGrafanaRuleDTO. Main still has this gating.",
+   "astra": []
+  },
+  "notification-rule-processing-engine-grafana-codex#02": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-07-09",
+    "pr": 107885,
+    "commit": "5d92f3eee5eb3660c400320c87f40450c3855fdd",
+    "url": "https://github.com/grafana/grafana/pull/107885"
+   },
+   "removidoEm": null,
+   "diasNoAr": 2,
+   "reason": "PR #107885 changed the Delete item from canDelete && rulerRule to canDelete alone, and handleDelete now takes an EditableRuleIdentifier instead of a RulerRuleDTO. List-view Grafana rules without a ruler rule get the Delete action again. Main keeps {canDelete && (...)}.",
+   "astra": []
+  },
+  "notification-rule-processing-engine-grafana-codex#03": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2026-07-09",
+    "pr": 128121,
+    "commit": "78d8bb8a26901e07027b708e557c843a2213fa0b",
+    "url": "https://github.com/grafana/grafana/pull/128121"
+   },
+   "removidoEm": null,
+   "diasNoAr": 367,
+   "reason": "PR #128121 moved AlertRuleMenu to usePromRuleAdministrationAbility(skipToken) (added in #123338), which returns duplicate: NotSupported for skipToken, so the OR no longer grants Duplicate on datasource rules. The old useAllGrafanaPromRuleAbilities still has the flawed Duplicate computation, but its only remaining caller (RuleActionsButtons.V2) asks only for Update, which isEditable=false denies. The PR presents itself as a refactor with no behaviour change, and its new hook handles skipToken explicitly.",
+   "astra": [
+    {
+     "pergunta": "Is the Duplicate leak gone after #128121, and is it confirmado or descontinuado given the PR claims no behaviour change?",
+     "resposta": "Yes, gone: AlertRuleMenu passes skipToken to usePromRuleAdministrationAbility whose guard returns duplicate NotSupported; the old hook's remaining caller only requests Update. Any later change fixing the behaviour counts.",
+     "veredito": "confirmado"
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex#04": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 467,
+   "reason": "On main, useAllAlertRuleAbilities still delegates to useAllRulerRuleAbilities, which keeps 'const isFederated = false' under a TODO, and the new useRuleAdministrationAbility (hooks/abilities/rules/rulerRuleAbilities.ts) also hardcodes isFederated = false. No isFederatedRuleGroup check was restored, so federated Mimir rules still get Update/Delete abilities.",
+   "astra": []
+  },
+  "notification-rule-processing-engine-grafana-codex#05": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 467,
+   "reason": "useAllGrafanaPromRuleAbilities on main still sets isAlertingRule = prometheusRuleType.grafana.alertingRule(rule) under the 'all Grafana-managed' comment and gates Pause, Restore, ModifyExport and DeletePermanently on it. The new usePromRuleAdministrationAbility/usePromRuleExportAbility used by AlertRuleMenu keep the same alerting-only gate, while the ruler path still uses rulerRuleType.grafana.rule. Grafana recording rules in the list view still lose these actions.",
+   "astra": []
+  },
+  "notification-rule-processing-engine-grafana-codex#07": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 467,
+   "reason": "FilterView.tsx on main still returns <GrafanaRuleListItem rule=... groupIdentifier=... namespaceName=... showLocation /> without key={key} in the 'grafana' case, while the datasource and unknown cases pass key. Later edits to the file (#112407, #113738, #114231, #114176, #131415) did not add it.",
+   "astra": []
+  },
+  "notification-rule-processing-engine-grafana-codex#11": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-07-09",
+    "pr": 107885,
+    "commit": "5d92f3eee5eb3660c400320c87f40450c3855fdd",
+    "url": "https://github.com/grafana/grafana/pull/107885"
+   },
+   "removidoEm": null,
+   "diasNoAr": 2,
+   "reason": "PR #107885 changed RuleActionsButtons.V2 to mount SilenceGrafanaRuleDrawer when silenceableRule is true, computed from getRuleUID(rule ?? promRule) and rulerRuleType.grafana.alertingRule(rule) || prometheusRuleType.grafana.alertingRule(promRule). The drawer now takes ruleUid instead of a ruler rule, so 'Silence notifications' opens it for prom-only list rules.",
+   "astra": []
+  }
+ }
+}

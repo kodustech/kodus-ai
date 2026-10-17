@@ -1,0 +1,66 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "prTitle": "Add Client resource type and scopes to authorization schema",
+ "upstream": "keycloak/keycloak",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/keycloak",
+ "base": "b8c1cd410f4499c77a8b372decfe1718b80ccfd2",
+ "head": "1950a511026d520a7329c7b6b9ee60a4af8f8b55",
+ "tps": [
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Inconsistent feature flag bug causing orphaned permissions. The AdminPermissions event listener, responsible for cleaning up permissions upon role, client, or group removal, is incorrectly guarded by the ADMIN_FINE_GRAINED_AUTHZ (V1) feature flag. This is inconsistent with other methods in the class that use ADMIN_FINE_GRAINED_AUTHZ_V2. Consequently, if ADMIN_FINE_GRAINED_AUTHZ_V2 is enabled but V1 is not, the permission cleanup logic will not execute, leading to orphaned permission data. Cleanup should occur regardless of which fine-grained authorization version is enabled.",
+   "evidenciaOpus": "AdminPermissions.java:77 now gates the V1 cleanup on ADMIN_FINE_GRAINED_AUTHZ. V1 and V2 are versions of the same feature and cannot both be enabled (Profile.java:56-58, 285), so under V2 the old cleanup would call ClientPermissionsV2.setPermissionsEnabled which throws (ClientPermissionsV2.java:193); with V1 off no V1 permission resources exist to clean. The guard is the intended way to keep V1 cleanup V1-only.",
+   "evidenciaAstra": "Data: the V2 orphaning case exists because AdminPermissions.java:77 skips removal handling under V2, while AdminPermissionsSchema.java:104 creates persistent per-client authorization resources. ClientApplicationSynchronizer.java:52 only deletes the removed client's own resource server, leaving its resource in the admin-permissions server; however, the claimed disabled-V1 regression is overstated because MgmtPermissions.java:85 already disables authorization access when neither feature is enabled."
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "severity": "high",
+   "category": "bug",
+   "bug": "In getClientsWithPermission(String scope), iterating resourceStore.findByType(server, AdminPermissionsSchema.CLIENTS_RESOURCE_TYPE) and returning resource.getName() will only ever consider the type-level 'Clients' resource (per-client resources have no type) and return its name, while AvailableRoleMappingResource#getRoleIdsWithPermissions expects actual client IDs to pass to realm.getClientById, which can lead to incorrect behavior or a null client and subsequent failures.",
+   "evidenciaOpus": "ClientPermissionsV2.java:138-141 iterates findByType(server, CLIENTS_RESOURCE_TYPE) and returns resource.getName(); only the type-level resource has type set (AdminPermissionsSchema.java:247-250), per-client resources from getOrCreateResource (line 104) have none, so the result is {\"Clients\"} or empty, and AvailableRoleMappingResource.java:229 treats these names as client ids.",
+   "evidenciaAstra": "Bug: AdminPermissionsSchema.java:104 creates individual resources without assigning a type, whereas line 250 assigns the Clients type to the aggregate resource. ClientPermissionsV2.java:138 consequently misses individual clients and can return \"Clients\", which AvailableRoleMappingResource.java:230 treats as a client ID and dereferences without a null check."
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "In ClientPermissionsV2.hasPermission, the method getResourceTypeResource could return null, leading to a NullPointerException in findByResource. Defensive null checks are needed to prevent this issue.",
+   "evidenciaOpus": "getResourceTypeResource (AdminPermissionsSchema.java:117-131) returns null only when the realm/server does not support the schema or the 'Clients' type resource is missing; hasPermission is only reached with root.realmResourceServer() for the V2 admin-permissions client, whose type resources are created with the schema. Same pattern as the existing UserPermissionsV2. Defensive check for a state normal paths do not reach.",
+   "evidenciaAstra": "Bug: RealmAdapter.java:1208 allows disabling realm admin permissions while retaining the permissions client, making AdminPermissionsSchema.java:117 return null despite an existing resource server. ClientPermissionsV2.java:219 passes that null to findByResource, whose JPA implementation dereferences it at JPAPolicyStore.java:215."
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+   "severity": "medium",
+   "category": "perf",
+   "bug": "ClientPermissionsV2.canView() ignores a global MANAGE permission, so admins with only global manage take the unpaginated, per-client evaluated listing path.",
+   "evidenciaOpus": "ClientPermissionsV2.java:86-88 canView() checks only VIEW, while canView(client) (line 78) also grants via canConfigure/canManage. An admin with only global MANAGE gets canView()=false, so ClientsResource.getClients (lines 122-133) loads the unpaginated client stream and filters per client; results are still correct, only slower.",
+   "evidenciaAstra": "Perf: ClientPermissionsV2.java:87 excludes fine-grained MANAGE from global viewing, although lines 58 and 78 allow it for individual clients. For callers allowed to list through a query role, ClientsResource.java:131 consequently selects the unpaginated stream and applies pagination only after representation and permission processing at line 162."
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+   "severity": "high",
+   "category": "security",
+   "bug": "canView(client) short-circuits on the global all-clients VIEW permission, so a client-specific permission denying an admin is never evaluated and the client is still viewable.",
+   "evidenciaOpus": "ClientPermissionsV2.java:78 returns true from canView(client) whenever the all-clients VIEW permission is granted, before evaluating the client's own resource (line 82); a client-specific deny is never consulted, unlike UserPermissionsV2.hasPermission which evaluates the specific resource first (UserPermissionsV2.java:117-124).",
+   "evidenciaAstra": "Security: ClientPermissionsV2.java:78 returns immediately on the global VIEW grant, bypassing the resource-specific lookup and evaluation at line 214. ClientsResource.java:148 also bypasses individual authorization when global canView is true, exposing clients whose specific permissions deny access."
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#11",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The negative check for removing a default client scope expects ForbiddenException, but it can come from the preceding getDefaultClientScopes() call, so the test passes even without a permission check on removal.",
+   "evidenciaOpus": "PermissionClientTest.java:146-151 calls getDefaultClientScopes() inside the same try as removeDefaultClientScope(); without permissions the read is already forbidden, so the asserted ForbiddenException does not prove the removal is protected.",
+   "evidenciaAstra": "Test_gap: PermissionClientTest.java:148 performs the restricted scope read before attempting removal and accepts either operation's ForbiddenException. ClientResource.java:382 requires view permission for that read, so the test never exercises the unauthorized removal check at line 419."
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-02",
+   "severity": "high",
+   "category": "bug",
+   "bug": "ClientPermissionsV2.canExchangeTo throws UnsupportedOperationException, but AbstractTokenExchangeProvider still calls clients().canExchangeTo for client-to-client exchange, so with token exchange and FGAP V2 enabled the request fails with a server error instead of a permission decision.",
+   "evidenciaOpus": "ClientPermissionsV2.java:147-150 now throws UnsupportedOperationException from canExchangeTo, and MgmtPermissionsV2.clients() returns ClientPermissionsV2. V1 TOKEN_EXCHANGE (Profile.java:76) has no dependency on FGAP V1, and V1TokenExchangeProvider:154 reaches AbstractTokenExchangeProvider.java:276 `clients().canExchangeTo(...)`, so with V1 token exchange plus FGAP V2 a client-to-client exchange becomes a server error instead of an allow/deny.",
+   "evidenciaAstra": "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/V1TokenExchangeProviderFactory.java:59-60 enables legacy token exchange independently of admin authorization V1, and AbstractTokenExchangeProvider.java:276 calls canExchangeTo for another target client. The new dispatch at services/src/main/java/org/keycloak/services/resources/admin/permissions/MgmtPermissionsV2.java:64-67 reaches ClientPermissionsV2.java:148-149, which throws instead of returning a permission decision."
+  }
+ ]
+}

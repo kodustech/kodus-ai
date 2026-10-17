@@ -1,0 +1,53 @@
+{
+  "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+  "prOriginal": {
+    "numero": 93824,
+    "url": "https://github.com/getsentry/sentry/pull/93824",
+    "mergedAt": "2025-06-23",
+    "nota": "PR 'ref(span-buffer): Introduce multiprocessed flusher' (branch spans-buffer-multiprocessing); its last commit is the benchmark head 3162ad68. Squash commit 9bf83b05 on master has no diff from the head under src/sentry/spans, src/sentry/consumers and tests/sentry/spans."
+  },
+  "tps": {
+    "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2026-05-07",
+        "pr": 115050,
+        "commit": "f9d3dbf6e143c3d6a0c6222f5daee96ec7e16871",
+        "url": "https://github.com/getsentry/sentry/pull/115050"
+      },
+      "removidoEm": null,
+      "diasNoAr": 318,
+      "reason": "_ensure_processes_alive kept `if isinstance(process, multiprocessing.Process): process.kill()` until PR #115050 'fix(span-buffer): Fix another process leak' (merged 2026-05-07) changed it to isinstance(process, multiprocessing.process.BaseProcess), which SpawnProcess satisfies. Master today has the BaseProcess check before kill().",
+      "astra": []
+    },
+    "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2026-05-06",
+        "pr": 114955,
+        "commit": "a4474e6308e60efc9ea636d569b948d5b03f9342",
+        "url": "https://github.com/getsentry/sentry/pull/114955"
+      },
+      "removidoEm": null,
+      "diasNoAr": 317,
+      "reason": "join() kept the `if remaining_time <= 0: break` before terminate() until PR #114955 'fix(span-buffer): Fix flusher processes leaking on timeout' (merged 2026-05-06) removed the break and kills every process, with a test that reproduces the early break on timeout. Master today loops over all processes and calls kill() on each.",
+      "astra": []
+    },
+    "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#06": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 481,
+      "reason": "SpanFlusher.__init__ on master still sets self.max_processes = max_processes or len(buffer.assigned_shards), and --flusher-processes is still a plain click int option (default 1) forwarded by factory.py without validation, so 0 still becomes one process per shard.",
+      "astra": []
+    },
+    "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 481,
+      "reason": "submit() on master still loops `for buffer in self.buffers.values(): memory_infos.extend(buffer.get_memory_info())`, and SpansBuffer.get_memory_info still returns iter_cluster_memory_usage(self.client) where every buffer's client is the same get_redis_client() cluster. The cluster-wide INFO is still repeated once per flusher process buffer.",
+      "astra": []
+    }
+  }
+}

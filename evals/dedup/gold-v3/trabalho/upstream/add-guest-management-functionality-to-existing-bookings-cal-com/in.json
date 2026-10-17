@@ -1,0 +1,122 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "prTitle": "Add guest management functionality to existing bookings",
+ "upstream": "calcom/cal.com",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/cal.com",
+ "base": "b004587262e8221083bafbe9a0c515e7becaa7b3",
+ "head": "92f44dcea7ff19e9123a30c63c167a2938df5a55",
+ "tps": [
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The logic for checking team admin/owner permissions is incorrect. This condition uses AND (&&) which requires both isTeamAdmin AND isTeamOwner to be true, but it should use OR (||) since a user needs to be either an admin OR an owner to have permission.",
+   "evidenciaOpus": "addGuests.handler.ts:46-48 computes isTeamAdminOrOwner as isTeamAdmin && isTeamOwner; isTeamAdmin (queries/teams/index.ts:264) already matches ADMIN or OWNER while isTeamOwner (:286) matches only OWNER, so the check is OWNER-only and team ADMINs get FORBIDDEN.",
+   "evidenciaAstra": "packages/lib/server/queries/teams/index.ts:270 accepts ADMIN or OWNER, while line 292 requires OWNER. Combining these with && in packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:46 excludes ordinary team admins, who receive FORBIDDEN unless independently authorized."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "severity": "high",
+   "category": "security",
+   "bug": "The addGuests.handler.ts blacklist check uses blacklistedGuestEmails.includes(guest) after lowercasing the blacklist but not the input guest emails, allowing attackers to bypass BLACKLISTED_GUEST_EMAILS restrictions by submitting emails with uppercase characters.",
+   "evidenciaOpus": "addGuests.handler.ts:71 lowercases the BLACKLISTED_GUEST_EMAILS entries but line 77 checks blacklistedGuestEmails.includes(guest) with the raw input; the schema (addGuests.schema.ts:5) does not lowercase, so mixed-case addresses bypass the blacklist.",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:71 lowercases blacklist entries, but line 77 compares the unchanged guest input. The schema at packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:5 performs no normalization, allowing mixed-case blacklist bypasses."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "uniqueGuests filters out existing attendees and blacklisted emails but does not deduplicate duplicates within the input; createMany can insert duplicate attendee rows if the client submits repeated emails.",
+   "evidenciaOpus": "uniqueGuests (addGuests.handler.ts:74-78) only filters against existing attendees and the blacklist; ZAddGuestsInputSchema has no uniqueness refine (only the client dialog dedupes) and the Attendee model has no unique (bookingId,email), so repeated emails become duplicate attendee rows via createMany (:100-104).",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:74 filters only against existing attendees and the blacklist, then inserts every surviving entry at line 101. The schema at addGuests.schema.ts:5 has no uniqueness validation, and packages/prisma/schema.prisma:526 defines no booking/email unique constraint, so repeated inputs create duplicate rows."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#04",
+   "severity": "medium",
+   "category": "concurrency",
+   "bug": "Check-then-insert without a transaction or unique constraint lets two concurrent addGuests calls for the same email both pass the existing-attendee check and create duplicate attendees.",
+   "evidenciaOpus": "The handler reads booking.attendees (addGuests.handler.ts:26-42), filters, then inserts with a separate booking.update createMany (:92-106) with no transaction, and schema.prisma's Attendee has no unique constraint on (bookingId,email); concurrent requests for the same new email both insert.",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:26 reads attendees separately from the insertion at line 92, allowing concurrent requests to validate against the same snapshot. packages/prisma/schema.prisma:537 defines ordinary indexes rather than a uniqueness constraint, so both requests can insert the same guest."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#05",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Attendee authorization and existing-attendee dedup compare emails case-sensitively, so an attendee with differently-cased stored email is FORBIDDEN and a case-variant of an existing attendee is added again.",
+   "evidenciaOpus": "addGuests.handler.ts:52 (attendee.email === user.email) and :76 (guest === attendee.email) use case-sensitive equality while the blacklist at :71 is lowercased; an attendee whose stored email differs only in case is denied and a case-variant guest is duplicated.",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:52 and line 76 use case-sensitive email equality, while line 86 preserves incoming casing when storing guests. Consequently, a differently cased session email can fail attendee authorization, and case variants of existing attendees can be inserted again."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The sendAddGuestsEmails function in email-manager.ts passes the full calendarEvent.attendees array when determining which attendees receive AttendeeScheduledEmail vs AttendeeAddGuestsEmail, but checks if newGuests.includes(attendee.email) where newGuests is the input guests array.",
+   "evidenciaOpus": "addGuests.handler.ts:168 calls sendAddGuestsEmails(evt, guests) with the raw input instead of uniqueGuests; email-manager.ts sendAddGuestsEmails sends AttendeeScheduledEmail to every attendee whose email is in newGuests, so a re-submitted existing attendee gets a new-booking email instead of the add-guests notice.",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:74 excludes existing attendees from insertion, but line 168 passes the original guests array to email dispatch. packages/emails/email-manager.ts:541 uses that array to select AttendeeScheduledEmail, so an existing attendee submitted alongside a new guest receives the wrong notification."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
+   "severity": "high",
+   "category": "bug",
+   "bug": "EventManager is created with the requesting user's credentials, so when a non-organizer adds guests the organizer's calendar event is not updated (or the wrong account is used) for references without a credentialId.",
+   "evidenciaOpus": "addGuests.handler.ts:158-163 builds EventManager from getUsersCredentials(ctx.user), the caller; EventManager.updateAllCalendarEvents (EventManager.ts:871-878) falls back to this.calendarCredentials filtered by type when a reference lacks credentialId, so an admin/attendee caller updates their own calendar or none instead of the organizer's.",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:158 loads the requesting user's credentials and initializes EventManager with that user. For references without credentialId, packages/core/EventManager.ts:872 selects credentials by type exclusively from that collection, so another user's organizer calendar is not correctly updated."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#09",
+   "severity": "high",
+   "category": null,
+   "bug": "Claims a failing calendar update at addGuests.handler.ts:165 aborts the mutation after guests are persisted; the calendar update path already swallows provider errors.",
+   "evidenciaOpus": "updateCalendarAttendees -> updateAllCalendarEvents wraps its work in try/catch and CalendarManager.updateEvent catches calendar errors and returns success:false (CalendarManager.ts ~336), so calendar failures do not propagate to the handler as claimed.",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:92 commits attendees before the unguarded calendar call at line 165. Calendar initialization can reject through packages/core/CalendarManager.ts:310, and EventManager.ts:920 returns Promise.all without awaiting it inside its catch, allowing rejection to escape, skip emails, and leave retries rejected by addGuests.handler.ts:80."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#10",
+   "severity": "high",
+   "category": null,
+   "bug": "Claims any attendee can add guests and trigger invites; this is the deliberate permission model of the new feature.",
+   "evidenciaOpus": "addGuests.handler.ts:52-56 explicitly authorizes isAttendee alongside organizer and team admins; letting attendees add guests is the intended feature behaviour, not a defect.",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:52 grants attendee permission solely through an email match, without checking emailVerified. packages/trpc/server/middlewares/sessionMiddleware.ts:209 requires only a user and session, and packages/features/auth/lib/next-auth-options.ts:669 permits credentials sign-in without email verification, leaving the reported identity-verification gap reachable."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#11",
+   "severity": "medium",
+   "category": "security",
+   "bug": "The guests array has no server-side size limit, so any authorized caller, including an attendee, can add thousands of guests and trigger an unbounded batch of inserts and emails.",
+   "evidenciaOpus": "addGuests.schema.ts:5 accepts z.array(z.string().email()) with no max, the handler inserts all (handler:92-106) and sendAddGuestsEmails fans out one email per attendee via Promise.all; any attendee can submit an arbitrarily large list.",
+   "evidenciaAstra": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:5 imposes no guest-count limit, and packages/emails/email-manager.ts:540 starts notification work for every attendee concurrently. Each non-seated attendee email generates an ICS containing the full attendee list through packages/emails/lib/generateIcsString.ts:81, producing quadratic aggregate work for large submissions."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#14",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "After a validation failure followed by a successful add, isInvalidEmail stays true, so the stale emails_must_be_unique_valid error shows the next time the dialog is opened.",
+   "evidenciaOpus": "AddGuestsDialog.tsx:36-41 onSuccess resets multiEmailValue and closes but never calls setIsInvalidEmail(false), and handleAdd (:52-58) does not clear it on success; after a failed validation the error banner reappears when the dialog is reopened.",
+   "evidenciaAstra": "apps/web/components/dialog/AddGuestsDialog.tsx:56 sets isInvalidEmail, but neither successful validation at line 53 nor mutation success at line 36 clears it. apps/web/components/booking/BookingListItem.tsx:357 keeps the dialog component mounted, so the validation warning can persist after success and reopening."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#16",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The `sendAddGuestsEmails` function does not check the `disableStandardEmails` flags in the `EventType` metadata, which may result in sending emails to hosts/attendees even when standard emails are disabled for the event type.",
+   "evidenciaOpus": "email-manager.ts sendAddGuestsEmails (new) sends organizer, team-member and attendee emails unconditionally and takes no eventTypeMetadata, whereas sibling senders like sendLocationChangeEmails check eventTypeDisableHostEmail/AttendeeEmail (email-manager.ts:82-86, 503).",
+   "evidenciaAstra": "packages/emails/email-manager.ts:525 accepts no event-type metadata and unconditionally schedules host and attendee emails at lines 529 and 539. Existing suppression helpers at lines 81 and 85 enforce disableStandardEmails elsewhere, but the new dispatch path never consults them."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#e2b-01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The add-guests handler omits booking.iCalUID from the CalendarEvent, so the add-guests emails' .ics attachments use booking.uid as UID and recipients' calendars treat them as a new event rather than an update of the original booking invite.",
+   "evidenciaOpus": "addGuests.handler.ts:124-147 builds the CalendarEvent with uid: booking.uid but no iCalUID, although Booking has iCalUID (schema.prisma:592) set at creation as `${uid}@APP_NAME` (handleNewBooking.ts:829,1019). generateIcsString.ts:67 uses event.iCalUID || event.uid, so the REQUEST .ics in the new attendee/organizer add-guests emails carries a different UID than the original invite, creating a separate calendar event instead of updating it.",
+   "evidenciaAstra": "The new handler sets only `uid: booking.uid`, omitting persisted `iCalUID`, and passes that event to the email sender (packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:137,168). Guest-update attachments use generateIcsString (packages/emails/templates/attendee-add-guests-email.ts:10), whose UID fallback is `event.iCalUID || event.uid` (packages/emails/lib/generateIcsString.ts:67). This changes calendar identity for ordinary bookings because getICalUID generates `${uid}@${APP_NAME}` (packages/emails/lib/getICalUID.ts:30), preventing invitations from updating the original event."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#sncc-01",
+   "severity": "low",
+   "category": "bug",
+   "bug": "The addGuests FORBIDDEN error uses the translation key you_do_not_have_permission, which is missing from the locale files, so the dialog shows the raw key to users.",
+   "evidenciaOpus": "addGuests.handler.ts:55 throws FORBIDDEN with message 'you_do_not_have_permission', a key that exists nowhere else in the repo at head, and AddGuestsDialog.tsx:43 renders t(err.message). Users who are not allowed get the raw key in the error toast.",
+   "evidenciaAstra": "The newly added handler throws \"you_do_not_have_permission\" at packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:55, but that translation key is absent; apps/web/public/static/locales/en/common.json:1628 instead defines \"dont_have_permission\". apps/web/components/dialog/AddGuestsDialog.tsx:43\u201344 translates err.message and displays it, exposing the raw key on permission failures."
+  }
+ ]
+}

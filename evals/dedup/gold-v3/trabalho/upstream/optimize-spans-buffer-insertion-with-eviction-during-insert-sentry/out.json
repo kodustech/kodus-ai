@@ -1,0 +1,81 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "prOriginal": {
+  "numero": 92393,
+  "url": "https://github.com/getsentry/sentry/pull/92393",
+  "mergedAt": "2025-06-02",
+  "nota": "Found by head branch ref/spans-evict-oldest; its last commit is the benchmark head eb9623b4, merged as 74618671 at 2025-06-02T10:06Z. The whole change was reverted the same day by #92626 (14:50Z) for a 30% insert overhead."
+ },
+ "tps": {
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-06-02",
+    "pr": 92626,
+    "commit": "7c3e2bd76afeb6058be3b092e635c7d447d9e74f",
+    "url": "https://github.com/getsentry/sentry/pull/92626"
+   },
+   "diasNoAr": 0,
+   "reason": "The revert #92626 restored SET keys and sunionstore, removing the zunionstore calls with default SUM, without targeting this bug. A later separate PR (#94033, 2025-06-23) reintroduced zunionstore with default SUM under span-buf:z:, but today's add-buffer.lua has no ZSET at all (SET member keys, after the ZSET cleanup #107863).",
+   "astra": [
+    {
+     "pergunta": "PR #92393 was reverted the same day by #92626 for 30% insert overhead (restores SET/sunionstore, removes zpopmin, restores 10000 loop); #94033 (2025-06-23) later reintroduced ZSET under span-buf:z: with zunionstore/zpopmin, and today add-buffer.lua uses SETs with no ZSET. Which status for #03?",
+     "resposta": "The revert removed ZSET/ZUNIONSTORE and so the score-summing mechanism, without a targeted fix; reintroduction in #94033 is to be judged separately.",
+     "veredito": "descontinuado"
+    }
+   ]
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-06-02",
+    "pr": 92617,
+    "commit": "06676cb27914341a3ab86cc9eb7b4c3cc560fcd5",
+    "url": "https://github.com/getsentry/sentry/pull/92617"
+   },
+   "removidoEm": null,
+   "diasNoAr": 0,
+   "reason": "PR #92617 'fix(spans): Rename span buf prefix' (2025-06-02, 1.5 h after the merge) states it fixes a regression in #92393 where the key data type changed without renaming the keys, and moves all keys to the sb: namespace, removing the WRONGTYPE collision with old SET keys. Both were later reverted together by #92626.",
+   "astra": []
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-06-02",
+    "pr": 92626,
+    "commit": "7c3e2bd76afeb6058be3b092e635c7d447d9e74f",
+    "url": "https://github.com/getsentry/sentry/pull/92626"
+   },
+   "diasNoAr": 0,
+   "reason": "The revert #92626 removed the zpopmin eviction from add-buffer.lua, so the root span could no longer be evicted while the has-root flag stayed set; the revert was for performance, not this bug. Today's script has no zpopmin; segment size is limited by detaching subsegments by byte count instead.",
+   "astra": [
+    {
+     "pergunta": "PR #92393 was reverted the same day by #92626 for 30% insert overhead (restores SET/sunionstore, removes zpopmin, restores 10000 loop); #94033 (2025-06-23) later reintroduced ZSET under span-buf:z: with zunionstore/zpopmin, and today add-buffer.lua uses SETs with no ZSET. Which status for #05?",
+     "resposta": "The revert removed zpopmin, ending that eviction path without specifically fixing its relation to has-root.",
+     "veredito": "descontinuado"
+    }
+   ]
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-06-02",
+    "pr": 92626,
+    "commit": "7c3e2bd76afeb6058be3b092e635c7d447d9e74f",
+    "url": "https://github.com/getsentry/sentry/pull/92626"
+   },
+   "diasNoAr": 0,
+   "reason": "The revert #92626 restored `for i = 0, 10000 do` as part of withdrawing the whole implementation for performance reasons. Today's loop is `for i = 0, 100 do` in a different, rewritten implementation, which does not carry the original change.",
+   "astra": [
+    {
+     "pergunta": "PR #92393 was reverted the same day by #92626 for 30% insert overhead (restores SET/sunionstore, removes zpopmin, restores 10000 loop); #94033 (2025-06-23) later reintroduced ZSET under span-buf:z: with zunionstore/zpopmin, and today add-buffer.lua uses SETs with no ZSET. Which status for #sncc-01?",
+     "resposta": "Restoring 10000 happened as part of the full withdrawal for performance; the current limit of 100 belongs to another implementation and does not show persistence of the original code.",
+     "veredito": "descontinuado"
+    }
+   ]
+  }
+ }
+}

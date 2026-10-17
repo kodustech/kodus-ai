@@ -1,0 +1,42 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "prTitle": "Optimize spans buffer insertion with eviction during insert",
+ "upstream": "getsentry/sentry",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/sentry",
+ "base": "28e3db2520d4ea28c57b08da57b83917ba7b2e15",
+ "head": "eb9623b4e787303a3bd15e10bbbdb78d59875ac6",
+ "tps": [
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "ZUNIONSTORE merges sorted sets with the default SUM aggregate, so a span payload present in both keys gets a doubled end-timestamp score and is wrongly kept by the oldest-first eviction.",
+   "evidenciaOpus": "zunionstore at add-buffer.lua:47 and :53 uses default AGGREGATE SUM, so a duplicate payload present in both set_key and the merged key gets its end-timestamp score doubled. The score is only used for zpopmin eviction (add-buffer.lua:62-64), so the effect is a duplicate span being biased against eviction in segments over 1000 spans; flushing ignores scores (buffer.py zscan values discarded).",
+   "evidenciaAstra": "src/sentry/scripts/spans/add-buffer.lua:47 and :53 union timestamp-scored members without specifying aggregation, so overlapping members receive summed scores. A replay inserted into its original parent key by src/sentry/spans/buffer.py:195\u2013199 can overlap the resolved destination, causing the eviction at add-buffer.lua:63 to retain an older duplicated span over newer spans."
+  },
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "severity": "high",
+   "category": "data",
+   "bug": "Segment keys change from Redis sets to sorted sets under the same key names, so keys left by the previous release make ZADD, ZCARD and ZSCAN fail with WRONGTYPE during rollout, crashing span processing and flushing.",
+   "evidenciaOpus": "Segment keys switch from SET to ZSET (buffer.py:197-199 zadd, flush zscan, Lua zcard/zunionstore) without renaming the span-buf:s: namespace. Keys written by the previous release live up to redis_ttl/set_timeout, so during deploy ZADD/ZCARD/ZSCAN on an existing SET key raise WRONGTYPE, failing the pipeline and the consumer batch.",
+   "evidenciaAstra": "src/sentry/spans/buffer.py:195\u2013199 changes SADD to ZADD while preserving the exact segment-key namespace, and line 434 similarly changes reads to ZSCAN. Existing SET keys therefore cause WRONGTYPE errors during deployment, with no conversion or version separation in these paths."
+  },
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+   "severity": "medium",
+   "category": null,
+   "bug": "Claims zpopmin eviction can drop the root span while the has-root flag stays set, flushing a segment without its root.",
+   "evidenciaOpus": "Eviction uses zpopmin on end_timestamp_precise (add-buffer.lua:62-64); the root span encloses its children so it normally has the largest end timestamp and is the last candidate for eviction. Identical timestamps exist only in fixtures that never exceed 1000 spans. Speculative.",
+   "evidenciaAstra": "src/sentry/scripts/spans/add-buffer.lua:62\u201369 evicts solely by score and retains the root-present flag without checking whether eviction removed the root payload. Losing that payload removes the segment span identified at src/sentry/spans/buffer.py:382\u2013384, preventing downstream processing that depends on finding it."
+  },
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+   "severity": "medium",
+   "category": null,
+   "bug": "The span redirect-walk limit was cut from 10000 to 1000 iterations, so trees deeper than 1000 may not resolve to the correct segment root.",
+   "evidenciaOpus": "add-buffer.lua:30 does lower the redirect-walk loop from 10000 to 1000 and drops the comment. This is part of the PR's insertion-cost optimisation: the same script now caps each set at 1000 spans with zpopmin (lines 62-64). Bounding the per-insert redirect walk is a deliberate tradeoff for pathological traces, not an accidental change.",
+   "evidenciaAstra": "src/sentry/scripts/spans/add-buffer.lua:30 reduces traversal from 10,001 to 1,001 iterations, then uses the potentially intermediate node as the destination at line 45. Descendant-first arrivals across batches can build longer redirect chains; eviction at lines 62\u201363 removes payloads without shortening those chains, allowing subsequent spans to form a separate segment."
+  }
+ ]
+}

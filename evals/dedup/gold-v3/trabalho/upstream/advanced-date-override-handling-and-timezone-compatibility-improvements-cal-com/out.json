@@ -1,0 +1,251 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "prOriginal": {
+  "numero": 8330,
+  "url": "https://github.com/calcom/cal.diy/pull/8330",
+  "mergedAt": "2023-04-18",
+  "nota": "Found via head branch fix/round-robin-date-override (repo calcom/cal.com now redirects to calcom/cal.diy). PR's last commit is the benchmark head ee38fd2; squash commit 3ef3284 touches the same 4 files with identical line counts. Reverted by #8369 on 2023-04-19."
+ },
+ "tps": {
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2023-04-19",
+    "pr": 8369,
+    "commit": "20c010fef1c1b0ebadec59095cf99fc052abf020",
+    "url": "https://github.com/calcom/cal.diy/pull/8369"
+   },
+   "diasNoAr": 1,
+   "reason": "The buggy code (the dateOverrides/workingHours block added to checkIfIsAvailable in packages/trpc/server/routers/viewer/slots.ts) was merged upstream with #8330 on 2023-04-18, identical to the benchmark head. The next day #8369 reverted #8330 entirely with no stated reason, restoring the pre-PR code; the history of the file (later moved to viewer/slots/util.ts) and main today show the logic was never reintroduced. Removal by a whole-PR revert that targets no specific bug, so descontinuado.",
+   "astra": [
+    {
+     "pergunta": "Whole-PR revert (#8369, 2023-04-19, no stated reason) removed all code added by #8330 and it was never reintroduced: descontinuado or confirmado?",
+     "resposta": "First answer: confirmado, the revert restored prior behaviour and eliminated the bugs.",
+     "veredito": "confirmado"
+    },
+    {
+     "pergunta": "Counterpoint: descontinuado covers removal without a change targeting the bug; a reasonless whole-PR revert also removed the feature and targets no specific bug. Does that change the verdict?",
+     "resposta": "Yes: the revert removed the bug-carrying code, evidence does not show it targeted these bugs; removal alone is not a confirmed fix.",
+     "veredito": "descontinuado"
+    }
+   ]
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2023-04-19",
+    "pr": 8369,
+    "commit": "20c010fef1c1b0ebadec59095cf99fc052abf020",
+    "url": "https://github.com/calcom/cal.diy/pull/8369"
+   },
+   "diasNoAr": 1,
+   "reason": "The buggy code (the dateOverrides/workingHours block added to checkIfIsAvailable in packages/trpc/server/routers/viewer/slots.ts) was merged upstream with #8330 on 2023-04-18, identical to the benchmark head. The next day #8369 reverted #8330 entirely with no stated reason, restoring the pre-PR code; the history of the file (later moved to viewer/slots/util.ts) and main today show the logic was never reintroduced. Removal by a whole-PR revert that targets no specific bug, so descontinuado.",
+   "astra": [
+    {
+     "pergunta": "Whole-PR revert (#8369, 2023-04-19, no stated reason) removed all code added by #8330 and it was never reintroduced: descontinuado or confirmado?",
+     "resposta": "First answer: confirmado, the revert restored prior behaviour and eliminated the bugs.",
+     "veredito": "confirmado"
+    },
+    {
+     "pergunta": "Counterpoint: descontinuado covers removal without a change targeting the bug; a reasonless whole-PR revert also removed the feature and targets no specific bug. Does that change the verdict?",
+     "resposta": "Yes: the revert removed the bug-carrying code, evidence does not show it targeted these bugs; removal alone is not a confirmed fix.",
+     "veredito": "descontinuado"
+    }
+   ]
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2023-04-19",
+    "pr": 8369,
+    "commit": "20c010fef1c1b0ebadec59095cf99fc052abf020",
+    "url": "https://github.com/calcom/cal.diy/pull/8369"
+   },
+   "diasNoAr": 1,
+   "reason": "The buggy code (the dateOverrides/workingHours block added to checkIfIsAvailable in packages/trpc/server/routers/viewer/slots.ts) was merged upstream with #8330 on 2023-04-18, identical to the benchmark head. The next day #8369 reverted #8330 entirely with no stated reason, restoring the pre-PR code; the history of the file (later moved to viewer/slots/util.ts) and main today show the logic was never reintroduced. Removal by a whole-PR revert that targets no specific bug, so descontinuado.",
+   "astra": [
+    {
+     "pergunta": "Whole-PR revert (#8369, 2023-04-19, no stated reason) removed all code added by #8330 and it was never reintroduced: descontinuado or confirmado?",
+     "resposta": "First answer: confirmado, the revert restored prior behaviour and eliminated the bugs.",
+     "veredito": "confirmado"
+    },
+    {
+     "pergunta": "Counterpoint: descontinuado covers removal without a change targeting the bug; a reasonless whole-PR revert also removed the feature and targets no specific bug. Does that change the verdict?",
+     "resposta": "Yes: the revert removed the bug-carrying code, evidence does not show it targeted these bugs; removal alone is not a confirmed fix.",
+     "veredito": "descontinuado"
+    }
+   ]
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2023-04-19",
+    "pr": 8369,
+    "commit": "20c010fef1c1b0ebadec59095cf99fc052abf020",
+    "url": "https://github.com/calcom/cal.diy/pull/8369"
+   },
+   "diasNoAr": 1,
+   "reason": "The buggy code (the dateOverrides/workingHours block added to checkIfIsAvailable in packages/trpc/server/routers/viewer/slots.ts) was merged upstream with #8330 on 2023-04-18, identical to the benchmark head. The next day #8369 reverted #8330 entirely with no stated reason, restoring the pre-PR code; the history of the file (later moved to viewer/slots/util.ts) and main today show the logic was never reintroduced. Removal by a whole-PR revert that targets no specific bug, so descontinuado.",
+   "astra": [
+    {
+     "pergunta": "Whole-PR revert (#8369, 2023-04-19, no stated reason) removed all code added by #8330 and it was never reintroduced: descontinuado or confirmado?",
+     "resposta": "First answer: confirmado, the revert restored prior behaviour and eliminated the bugs.",
+     "veredito": "confirmado"
+    },
+    {
+     "pergunta": "Counterpoint: descontinuado covers removal without a change targeting the bug; a reasonless whole-PR revert also removed the feature and targets no specific bug. Does that change the verdict?",
+     "resposta": "Yes: the revert removed the bug-carrying code, evidence does not show it targeted these bugs; removal alone is not a confirmed fix.",
+     "veredito": "descontinuado"
+    }
+   ]
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2023-04-19",
+    "pr": 8369,
+    "commit": "20c010fef1c1b0ebadec59095cf99fc052abf020",
+    "url": "https://github.com/calcom/cal.diy/pull/8369"
+   },
+   "diasNoAr": 1,
+   "reason": "The buggy code (the dateOverrides/workingHours block added to checkIfIsAvailable in packages/trpc/server/routers/viewer/slots.ts) was merged upstream with #8330 on 2023-04-18, identical to the benchmark head. The next day #8369 reverted #8330 entirely with no stated reason, restoring the pre-PR code; the history of the file (later moved to viewer/slots/util.ts) and main today show the logic was never reintroduced. Removal by a whole-PR revert that targets no specific bug, so descontinuado.",
+   "astra": [
+    {
+     "pergunta": "Whole-PR revert (#8369, 2023-04-19, no stated reason) removed all code added by #8330 and it was never reintroduced: descontinuado or confirmado?",
+     "resposta": "First answer: confirmado, the revert restored prior behaviour and eliminated the bugs.",
+     "veredito": "confirmado"
+    },
+    {
+     "pergunta": "Counterpoint: descontinuado covers removal without a change targeting the bug; a reasonless whole-PR revert also removed the feature and targets no specific bug. Does that change the verdict?",
+     "resposta": "Yes: the revert removed the bug-carrying code, evidence does not show it targeted these bugs; removal alone is not a confirmed fix.",
+     "veredito": "descontinuado"
+    }
+   ]
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#06": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2023-04-19",
+    "pr": 8369,
+    "commit": "20c010fef1c1b0ebadec59095cf99fc052abf020",
+    "url": "https://github.com/calcom/cal.diy/pull/8369"
+   },
+   "diasNoAr": 1,
+   "reason": "The buggy code (the override minute conversion added to getSlots in packages/lib/slots.ts (hour()/minute() after offset)) was merged upstream with #8330 on 2023-04-18, identical to the benchmark head. The next day #8369 reverted #8330 entirely with no stated reason, restoring the pre-PR code; the history of the file (later moved to viewer/slots/util.ts) and main today show the logic was never reintroduced. Removal by a whole-PR revert that targets no specific bug, so descontinuado.",
+   "astra": [
+    {
+     "pergunta": "Whole-PR revert (#8369, 2023-04-19, no stated reason) removed all code added by #8330 and it was never reintroduced: descontinuado or confirmado?",
+     "resposta": "First answer: confirmado, the revert restored prior behaviour and eliminated the bugs.",
+     "veredito": "confirmado"
+    },
+    {
+     "pergunta": "Counterpoint: descontinuado covers removal without a change targeting the bug; a reasonless whole-PR revert also removed the feature and targets no specific bug. Does that change the verdict?",
+     "resposta": "Yes: the revert removed the bug-carrying code, evidence does not show it targeted these bugs; removal alone is not a confirmed fix.",
+     "veredito": "descontinuado"
+    }
+   ]
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#07": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2023-04-19",
+    "pr": 8369,
+    "commit": "20c010fef1c1b0ebadec59095cf99fc052abf020",
+    "url": "https://github.com/calcom/cal.diy/pull/8369"
+   },
+   "diasNoAr": 1,
+   "reason": "The buggy code (the dateOverrides/workingHours block added to checkIfIsAvailable in packages/trpc/server/routers/viewer/slots.ts) was merged upstream with #8330 on 2023-04-18, identical to the benchmark head. The next day #8369 reverted #8330 entirely with no stated reason, restoring the pre-PR code; the history of the file (later moved to viewer/slots/util.ts) and main today show the logic was never reintroduced. Removal by a whole-PR revert that targets no specific bug, so descontinuado.",
+   "astra": [
+    {
+     "pergunta": "Whole-PR revert (#8369, 2023-04-19, no stated reason) removed all code added by #8330 and it was never reintroduced: descontinuado or confirmado?",
+     "resposta": "First answer: confirmado, the revert restored prior behaviour and eliminated the bugs.",
+     "veredito": "confirmado"
+    },
+    {
+     "pergunta": "Counterpoint: descontinuado covers removal without a change targeting the bug; a reasonless whole-PR revert also removed the feature and targets no specific bug. Does that change the verdict?",
+     "resposta": "Yes: the revert removed the bug-carrying code, evidence does not show it targeted these bugs; removal alone is not a confirmed fix.",
+     "veredito": "descontinuado"
+    }
+   ]
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-01": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2023-04-19",
+    "pr": 8369,
+    "commit": "20c010fef1c1b0ebadec59095cf99fc052abf020",
+    "url": "https://github.com/calcom/cal.diy/pull/8369"
+   },
+   "diasNoAr": 1,
+   "reason": "The buggy code (the dateOverrides/workingHours block added to checkIfIsAvailable in packages/trpc/server/routers/viewer/slots.ts) was merged upstream with #8330 on 2023-04-18, identical to the benchmark head. The next day #8369 reverted #8330 entirely with no stated reason, restoring the pre-PR code; the history of the file (later moved to viewer/slots/util.ts) and main today show the logic was never reintroduced. Removal by a whole-PR revert that targets no specific bug, so descontinuado.",
+   "astra": [
+    {
+     "pergunta": "Whole-PR revert (#8369, 2023-04-19, no stated reason) removed all code added by #8330 and it was never reintroduced: descontinuado or confirmado?",
+     "resposta": "First answer: confirmado, the revert restored prior behaviour and eliminated the bugs.",
+     "veredito": "confirmado"
+    },
+    {
+     "pergunta": "Counterpoint: descontinuado covers removal without a change targeting the bug; a reasonless whole-PR revert also removed the feature and targets no specific bug. Does that change the verdict?",
+     "resposta": "Yes: the revert removed the bug-carrying code, evidence does not show it targeted these bugs; removal alone is not a confirmed fix.",
+     "veredito": "descontinuado"
+    }
+   ]
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-02": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2023-04-19",
+    "pr": 8369,
+    "commit": "20c010fef1c1b0ebadec59095cf99fc052abf020",
+    "url": "https://github.com/calcom/cal.diy/pull/8369"
+   },
+   "diasNoAr": 1,
+   "reason": "The buggy code (the dateOverrides/workingHours block added to checkIfIsAvailable in packages/trpc/server/routers/viewer/slots.ts) was merged upstream with #8330 on 2023-04-18, identical to the benchmark head. The next day #8369 reverted #8330 entirely with no stated reason, restoring the pre-PR code; the history of the file (later moved to viewer/slots/util.ts) and main today show the logic was never reintroduced. Removal by a whole-PR revert that targets no specific bug, so descontinuado.",
+   "astra": [
+    {
+     "pergunta": "Whole-PR revert (#8369, 2023-04-19, no stated reason) removed all code added by #8330 and it was never reintroduced: descontinuado or confirmado?",
+     "resposta": "First answer: confirmado, the revert restored prior behaviour and eliminated the bugs.",
+     "veredito": "confirmado"
+    },
+    {
+     "pergunta": "Counterpoint: descontinuado covers removal without a change targeting the bug; a reasonless whole-PR revert also removed the feature and targets no specific bug. Does that change the verdict?",
+     "resposta": "Yes: the revert removed the bug-carrying code, evidence does not show it targeted these bugs; removal alone is not a confirmed fix.",
+     "veredito": "descontinuado"
+    }
+   ]
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-03": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2023-04-19",
+    "pr": 8369,
+    "commit": "20c010fef1c1b0ebadec59095cf99fc052abf020",
+    "url": "https://github.com/calcom/cal.diy/pull/8369"
+   },
+   "diasNoAr": 1,
+   "reason": "The buggy code (the dateOverrides/workingHours block added to checkIfIsAvailable in packages/trpc/server/routers/viewer/slots.ts) was merged upstream with #8330 on 2023-04-18, identical to the benchmark head. The next day #8369 reverted #8330 entirely with no stated reason, restoring the pre-PR code; the history of the file (later moved to viewer/slots/util.ts) and main today show the logic was never reintroduced. Removal by a whole-PR revert that targets no specific bug, so descontinuado.",
+   "astra": [
+    {
+     "pergunta": "Whole-PR revert (#8369, 2023-04-19, no stated reason) removed all code added by #8330 and it was never reintroduced: descontinuado or confirmado?",
+     "resposta": "First answer: confirmado, the revert restored prior behaviour and eliminated the bugs.",
+     "veredito": "confirmado"
+    },
+    {
+     "pergunta": "Counterpoint: descontinuado covers removal without a change targeting the bug; a reasonless whole-PR revert also removed the feature and targets no specific bug. Does that change the verdict?",
+     "resposta": "Yes: the revert removed the bug-carrying code, evidence does not show it targeted these bugs; removal alone is not a confirmed fix.",
+     "veredito": "descontinuado"
+    }
+   ]
+  }
+ }
+}

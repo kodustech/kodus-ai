@@ -1,0 +1,172 @@
+{
+ "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
+ "prOriginal": {
+  "numero": 11059,
+  "url": "https://github.com/calcom/cal.diy/pull/11059",
+  "mergedAt": "2023-09-19",
+  "nota": "Upstream calcom/cal.com now redirects to calcom/cal.diy. Found by head branch feat/sync-app-credentials; headRefOid equals benchmark head 9fde0e9 and the squash 824145b0 has an identical diff. Reverted same day (#11450, 2023-09-19) and re-added by #11453 (2023-09-20) with safeParse/.data handling; re-add otherwise kept the bugs."
+ },
+ "tps": {
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1124,
+   "reason": "Today's handler (apps/web/app/api/webhook/app-credential/route.ts, moved to app dir in #19699) still checks `secretHeader !== CREDENTIAL_SYNC_SECRET`. #13907 only renamed the header/secret constants; no constant-time comparison was ever introduced.",
+   "astra": []
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#02": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2024-04-25",
+    "pr": 14588,
+    "commit": "d47c6b3fdb6f1d66314438fd5194e425e5a6494a",
+    "url": "https://github.com/calcom/cal.diy/pull/14588"
+   },
+   "removidoEm": null,
+   "diasNoAr": 219,
+   "reason": "#14588 'Credential Syncing Improvements' replaced appCredentialWebhookRequestBodySchema.parse with safeParse returning 400 on failure. The decrypt/JSON.parse step is still unguarded for 400 (today wrapped in a try/catch returning 500), but the schema-validation 500 described by the bug is fixed.",
+   "astra": []
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#03": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1124,
+   "reason": "Today's route.ts still does prisma.credential.findFirst({userId, appId}) followed by create when nothing is found, with the comment 'Can't use prisma upsert'. The Credential model in schema.prisma has no unique constraint on (userId, appId), only indexes.",
+   "astra": []
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#07": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2023-10-17",
+    "pr": 11862,
+    "commit": "33bef6acd0055cc652658e0097147b982d144a1b",
+    "url": "https://github.com/calcom/cal.diy/pull/11862"
+   },
+   "removidoEm": null,
+   "diasNoAr": 28,
+   "reason": "The merged code (kept by the 2023-09-20 re-add #11453) set the placeholder unconditionally. #11862 restricted it to credential-sync mode (`&& credentialSyncingEnabled`), so normal refreshes no longer overwrite the real token; that code is unchanged today, and Office365 later moved to OAuthManager.",
+   "astra": [
+    {
+     "pergunta": "Did #11862 (placeholder only when credential sync is enabled) fix real refresh tokens being overwritten by the literal 'refresh_token'?",
+     "resposta": "Yes; ordinary refreshes no longer get the placeholder; in sync mode the instance does not use its own refresh token, so the reported failure is not reproduced.",
+     "veredito": "confirmado"
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#08": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2024-03-15",
+    "pr": 13963,
+    "commit": "7a790aaabedd5941825f0c20935b91a88efbc16b",
+    "url": "https://github.com/calcom/cal.diy/pull/13963"
+   },
+   "removidoEm": null,
+   "diasNoAr": 178,
+   "reason": "The computed-key schema survived the re-add #11453. #13963 'Moving credential syncing to API' replaced it with z.object({access_token}).passthrough().superRefine(requires a numeric field), so other fields are no longer stripped; this is today's code.",
+   "astra": []
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#09": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1124,
+   "reason": "refreshOAuthTokens.ts today still returns the raw fetch Response in sync mode. Google Calendar moved to OAuthManager, but hubspot/lib/CrmService.ts still types the result as HubspotToken and reads expiresIn, and zoho-bigin/lib/CrmService.ts still reads tokenInfo.data.error, so those callers keep the mismatched contract.",
+   "astra": []
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#10": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2023-09-20",
+    "pr": 11453,
+    "commit": "5ee962948f35bef2f1f74cfa4b94e328dae0b124",
+    "url": "https://github.com/calcom/cal.diy/pull/11453"
+   },
+   "removidoEm": null,
+   "diasNoAr": 1,
+   "reason": "#11059 was reverted the same day (#11450) and re-added next day by #11453 'with proper handling of safeParse'. The re-add changed parseRefreshTokenResponse to return refreshTokenResponse.data and Google stores {...parsedKey}; today the function still returns .data.",
+   "astra": []
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#13": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2026-01-27",
+    "pr": 27264,
+    "commit": "01ae6f1b9ea421bba8fa931c51e6f4cd80fae707",
+    "url": "https://github.com/calcom/cal.diy/pull/27264"
+   },
+   "removidoEm": null,
+   "diasNoAr": 861,
+   "reason": "getClient refreshed unconditionally (try/catch added by #11508, file renamed to CrmService.ts by #14272) until #27264, which added an issued_at + token_lifetime validity check with a 5-minute buffer and only refreshes when the token is not valid. Today's CrmService.ts has that guard.",
+   "astra": []
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#14": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2023-10-11",
+    "pr": 11839,
+    "commit": "833fe7c7b716c079af0dc30cc837c4029d792d2f",
+    "url": "https://github.com/calcom/cal.diy/pull/11839"
+   },
+   "removidoEm": null,
+   "diasNoAr": 22,
+   "reason": "At the merge prisma was only available through a `declare global var prisma` in packages/prisma/index.ts. #11839 'don't declare prisma as a global object and explicitly import it' added `import { prisma } from \"@calcom/prisma\"` to salesforce/lib/CalendarService.ts; the import is present today.",
+   "astra": []
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#15": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1124,
+   "reason": "zoho-bigin/lib/CrmService.ts (renamed from CalendarService.ts in #14272) still does `const credentialId = credential.id` and passes credentialId as the userId argument of refreshOAuthTokens(..., \"zoho-bigin\", credentialId), which serializes it as calcomUserId.",
+   "astra": []
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#16": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2023-09-25",
+    "pr": 11508,
+    "commit": "1d4eeab33ebcdfe62bae37016d0148c59fba1f65",
+    "url": "https://github.com/calcom/cal.diy/pull/11508"
+   },
+   "removidoEm": null,
+   "diasNoAr": 6,
+   "reason": "#11508 'fix: Salesforce by wrapping the refresh logic in a try/catch' replaced `if (response.statusText !== \"OK\") throw` with `if (!response.ok)`; today's CrmService.ts still checks response.ok. The stale-token part is tracked as #17.",
+   "astra": []
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#17": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2026-01-27",
+    "pr": 27264,
+    "commit": "01ae6f1b9ea421bba8fa931c51e6f4cd80fae707",
+    "url": "https://github.com/calcom/cal.diy/pull/27264"
+   },
+   "removidoEm": null,
+   "diasNoAr": 861,
+   "reason": "Until #27264 the Connection was built from credentialKey.access_token/instance_url after persisting the refreshed token. #27264 assigns credentialKey.access_token (and this.accessToken/instanceUrl) from the refresh result before building the Connection; credentialKey.instance_url is still not reassigned (minor residual).",
+   "astra": [
+    {
+     "pergunta": "Did #27264 fix jsforce.Connection being built with pre-refresh credentialKey tokens?",
+     "resposta": "Yes; after a successful refresh credentialKey.access_token is reassigned before building the Connection; instance_url not reassigned is a minor residual.",
+     "veredito": "confirmado"
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2023-09-27",
+    "pr": 11530,
+    "commit": "a2df323cf8958a34435d4c1e1be7bb967ab8474e",
+    "url": "https://github.com/calcom/cal.diy/pull/11530"
+   },
+   "removidoEm": null,
+   "diasNoAr": 8,
+   "reason": "#11530 'fix: credential sync app lookup' changed the select to dirName and indexes appStoreMetadata[app.dirName]; today's route.ts keeps that lookup.",
+   "astra": []
+  }
+ }
+}

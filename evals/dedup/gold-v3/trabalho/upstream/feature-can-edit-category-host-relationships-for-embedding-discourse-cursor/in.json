@@ -1,0 +1,74 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "prTitle": "FEATURE: Can edit category/host relationships for embedding",
+ "upstream": "discourse/discourse",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/discourse",
+ "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+ "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+ "tps": [
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The EmbeddableHost model's before_validation callback calls self.host.sub! to strip http://, https://, and path segments, but if self.host is nil, this raises NoMethodError.",
+   "evidenciaOpus": "app/models/embeddable_host.rb:5-8 calls self.host.sub! with no nil guard; Admin::EmbeddableHostsController#save_host (embeddable_hosts_controller.rb:23) assigns params[:embeddable_host][:host] directly, so a missing host raises NoMethodError (500) instead of a validation error.",
+   "evidenciaAstra": "Bug: app/controllers/admin/embeddable_hosts_controller.rb:23 assigns the supplied host value directly, allowing nil. The callback at app/models/embeddable_host.rb:5-7 then calls sub! on nil before validation can return an error."
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The update and destroy methods in Admin::EmbeddableHostsController do not validate the existence of the EmbeddableHost record retrieved by ID. If EmbeddableHost.where(id: params[:id]).first returns nil (i.e., the host does not exist), attempting to call methods on the nil object (e.g., save_host or destroy) will result in a NoMethodError.",
+   "evidenciaOpus": "embeddable_hosts_controller.rb:10 and :15 use EmbeddableHost.where(id:).first and immediately call save_host(host)/host.destroy; an unknown id yields nil and NoMethodError (500) instead of a 404.",
+   "evidenciaAstra": "Bug: app/controllers/admin/embeddable_hosts_controller.rb:10-16 uses nullable first lookups without checking their results. A nonexistent ID causes either host.destroy or the assignment at line 23 to raise NoMethodError."
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "record_for_host compares lower(host) = ? but does not normalize the parameter\u2019s case, so mixed\u2011case referer hosts may fail to match even though comparison intends to be case\u2011insensitive.",
+   "evidenciaOpus": "embeddable_host.rb:14-17 lowercases the column (lower(host)) but binds uri.host unchanged; URI preserves host case, so a referer with uppercase letters never matches a stored lowercase host and the validation regex is /i so mixed-case hosts can also be stored.",
+   "evidenciaAstra": "Bug: app/models/embeddable_host.rb:14-17 compares the case-preserving URI hostname against lower(host) without lowercasing the parameter. Consequently, an incoming URL containing EXAMPLE.com fails to match a configured example.com."
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "severity": "high",
+   "category": "data",
+   "bug": "Because this migration inserts embeddable_hosts rows with raw SQL, any existing embeddable_hosts values that include http:// or /https:// or path segments won\u2019t go through the EmbeddableHost model\u2019s normalization, so the new host lookup (which compares only the bare host) may fail for migrated data. Consider ensuring that migrated hosts are normalized to the same format as newly created EmbeddableHost records so existing embedding configurations keep working.",
+   "evidenciaOpus": "db/migrate/20150818190757_create_embeddable_hosts.rb:24-25 inserts raw lines of the old embeddable_hosts setting via SQL, bypassing the model's scheme/path stripping; the removed SiteSetting.allows_embeddable_host? accepted entries like http://host, but record_for_host now compares only URI.host, so migrated rows with a scheme never match.",
+   "evidenciaAstra": "Data defect: db/migrate/20150818190757_create_embeddable_hosts.rb:22-25 inserts legacy entries verbatim, bypassing the normalization at app/models/embeddable_host.rb:5-7. Entries containing schemes or paths therefore cannot match the bare hostname queried at app/models/embeddable_host.rb:14-17."
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+   "severity": "medium",
+   "category": "security",
+   "bug": "The SQL query in the `app/controllers/admin/embeddable_hosts_controller.rb` file uses string interpolation (`'#{h}'`) to insert values, which is vulnerable to SQL injection. It should use parameter binding or proper quoting to prevent this security vulnerability.",
+   "evidenciaOpus": "create_embeddable_hosts.rb:25 interpolates the host string into VALUES ('#{h}', ...); the source is the admin-only host_list site setting being migrated, so a quote would only break the migration on malformed data rather than be an exploitable injection.",
+   "evidenciaAstra": "Security: db/migrate/20150818190757_create_embeddable_hosts.rb:18-25 reads stored setting values and interpolates them into SQL without escaping. A quote-containing entry can break the migration or inject SQL; the golden names the wrong file, but the review comments identify the actual vulnerable statement."
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The migration accesses execute(...)[0]['id'] without checking if the query returned any rows, which causes a crash when no embed_category setting exists. This can lead to a broken feature when attempting to edit category/host relationships.",
+   "evidenciaOpus": "create_embeddable_hosts.rb:9-11 indexes execute(...)[0]['id'] without checking for rows; embed_category is only stored when changed from its '' default, so on most installs the query returns no rows and the migration raises before the category_id == 0 fallback (line 15 has the same issue).",
+   "evidenciaAstra": "Bug: db/migrate/20150818190757_create_embeddable_hosts.rb:9-11 immediately indexes the first result of an inner join that can return no rows. An absent or unmatched embed_category therefore aborts the migration before the fallback at lines 14-15."
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "After saving a host, the component overwrites its category with findById(categoryId); when no category was chosen this is null even though the server saved the uncategorized category, so the row shows no category until reload.",
+   "evidenciaOpus": "embeddable-host.js.es6:37-38 sets host.category = Discourse.Category.findById(this.get('categoryId')) after save; for a new host with no category, categoryId is null while the server stores uncategorized_category_id (embeddable_hosts_controller.rb:25), so the row shows no category until reload.",
+   "evidenciaAstra": "Bug: app/controllers/admin/embeddable_hosts_controller.rb:25 supplies the uncategorized category when category_id is blank. The component instead assigns category using its nullable local categoryId at app/assets/javascripts/admin/components/embeddable-host.js.es6:38, and findById returns undefined for that value at app/assets/javascripts/discourse/models/category.js:241-243."
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Hosts saved with a port (allowed by the validation regex) are stored as host:port, but lookup compares only URI.host, so those configured hosts never match and embedding fails for them.",
+   "evidenciaOpus": "embeddable_host.rb:2 regex explicitly allows a :port and before_validation only strips scheme and path, so example.com:8080 is stored with the port; record_for_host (line 14-17) compares URI.host, which excludes the port, so such a record never matches.",
+   "evidenciaAstra": "Bug: app/models/embeddable_host.rb:2 accepts a port suffix, and normalization at lines 5-7 preserves it. Lookup at lines 14-17 uses URI.host, which excludes the port, so a saved example.com:8080 cannot match its corresponding URL."
+  }
+ ]
+}

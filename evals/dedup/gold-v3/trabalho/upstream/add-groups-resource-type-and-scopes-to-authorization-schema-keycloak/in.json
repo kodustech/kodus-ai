@@ -1,0 +1,42 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "prTitle": "Add Groups resource type and scopes to authorization schema",
+ "upstream": "keycloak/keycloak",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/keycloak",
+ "base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+ "head": "7355f05e6aafe2a7acc6434fb40c686665416606",
+ "tps": [
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "severity": "critical",
+   "category": "bug",
+   "bug": "In GroupPermissionsV2.canManage(), the permission fallback checks for both VIEW and MANAGE scopes (hasPermission(null, AdminPermissionsSchema.VIEW, AdminPermissionsSchema.MANAGE)), but canManage() should only grant access for MANAGE scope, not VIEW. This means users with only VIEW permission on groups can pass the canManage() check, granting them write access they should not have. The canView() method correctly checks both VIEW and MANAGE, but canManage() should only check MANAGE.",
+   "evidenciaOpus": "GroupPermissionsV2.java:70 canManage() returns hasPermission(null, VIEW, MANAGE), whereas canManage(GroupModel) at :79 requires MANAGE; a view-only all-groups grant passes requireManage() and can create groups.",
+   "evidenciaAstra": "GroupPermissionsV2.java:70 accepts VIEW or MANAGE, and its scope evaluation returns true for either match at lines 156-159. GroupsResource.java:181 gates top-level group creation with requireManage(), so an all-groups VIEW grant authorizes this write operation."
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "severity": "high",
+   "category": "api",
+   "bug": "In getGroupIdsWithViewPermission, hasPermission is called with groupResource.getId() and the same groupResource.getId() is added to granted, but hasPermission resolves resources by name (treating the argument as a group id) and the GroupPermissionEvaluator contract says this method returns group IDs that are later used as UserModel.GROUPS and in getUsersCount group filters. This mismatch means per-group VIEW_MEMBERS/MANAGE_MEMBERS permissions may not yield the expected group IDs for filtering and counts, and evaluation may effectively only look at the type-level 'all-groups' resource; consider revisiting whether this should operate on the underlying group ids (resource names) instead so it aligns with the JPA queries and the interface contract.",
+   "evidenciaOpus": "GroupPermissionsV2.java:121-124 passes groupResource.getId() to hasPermission, which does findByName (:141), while V2 resources are named by group id (AdminPermissionsSchema.resolveGroup); it also adds the resource id, not the group id, to the returned set used as UserModel.GROUPS.",
+   "evidenciaAstra": "GroupPermissionsV2.java:122-123 passes and returns authorization resource IDs, while line 141 resolves the argument by resource name. AdminPermissionsSchema.java:121 and :185 instead name individual resources with model group IDs; JpaUserProvider.java:1070 consumes the returned values as membership group IDs, making the identifiers incompatible."
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "severity": "high",
+   "category": "bug",
+   "bug": "Per-group resources are created without the Groups type, so getGroupIdsWithViewPermission's findByType never sees specific group grants.",
+   "evidenciaOpus": "AdminPermissionsSchema.getOrCreateResource creates per-group resources with resourceStore.create(server, name, owner) and never sets a type, so findByType(GROUPS_RESOURCE_TYPE) at GroupPermissionsV2.java:121 does not enumerate them.",
+   "evidenciaAstra": "AdminPermissionsSchema.java:120-127 creates individual group resources and assigns scopes without setting their type, whereas lines 271-274 explicitly type the all-Groups resource. Consequently, the new findByType call in GroupPermissionsV2.java:121 omits individual group resources and includes the aggregate resource."
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The user search filter still requires legacy 'group.resource.<id>' resources, so with V2 group permissions the members of authorized groups are excluded from user searches.",
+   "evidenciaOpus": "JpaUserProvider.groupsWithPermissionsSubquery requires a ResourceEntity named 'group.resource.'+groupId, but V2 group resources are named with the bare group id (resolveGroup), so the UsersResource.java:448-450 filter excludes members of V2-authorized groups.",
+   "evidenciaAstra": "UsersResource.java:448-450 routes the new V2 permission results into the group filter, but JpaUserProvider.java:1081-1085 still requires an authorization resource named group.resource.<groupId>. AdminPermissionsSchema.java:121 and :185 create V2 resources named with the bare group ID, so this integration excludes authorized memberships even if the separate ID-collection defects are corrected."
+  }
+ ]
+}

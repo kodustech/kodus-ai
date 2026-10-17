@@ -1,0 +1,108 @@
+{
+  "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+  "prOriginal": {
+    "numero": null,
+    "url": "https://github.com/discourse/discourse/commit/6669a2d94d76eea3b99b8c476d12b1eb66726b07",
+    "mergedAt": "2015-08-12",
+    "nota": "No PR: the benchmark head commit 6669a2d94d (Regis Hanol, 2015-08-12T21:00Z) was pushed directly to upstream main (GitHub lists no associated PR; it is an ancestor of main). Merged code equals the benchmark head. The whole per-topic unsubscribe page (route, TopicsController#unsubscribe, Ember route/template, locale strings) was removed by commit 9353ae4b5d on 2018-04-16."
+  },
+  "tps": {
+    "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01": {
+      "status": "descontinuado",
+      "corrigidoEm": null,
+      "removidoEm": {
+        "data": "2018-04-16",
+        "pr": null,
+        "commit": "9353ae4b5dacc2d63ebda02de2f9e378c7af4b38",
+        "url": "https://github.com/discourse/discourse/commit/9353ae4b5dacc2d63ebda02de2f9e378c7af4b38"
+      },
+      "diasNoAr": 978,
+      "reason": "The GET routes t/:slug/:topic_id/unsubscribe and t/:topic_id/unsubscribe and the state-changing TopicsController#unsubscribe stayed on GET with no token through 2018-04-15 (only a login redirect for anonymous users was added in 6243a7ad07). Commit 9353ae4b5d 'Remove obsolete per topic unsubscribe page' deleted the routes and action; today's routes.rb has only the key-based email/unsubscribe flow, which performs the change on POST.",
+      "astra": []
+    },
+    "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2016-04-25",
+        "pr": null,
+        "commit": "0b6d12f95dce480977101cec617056dec0660c9a",
+        "url": "https://github.com/discourse/discourse/commit/0b6d12f95dce480977101cec617056dec0660c9a"
+      },
+      "removidoEm": null,
+      "diasNoAr": 257,
+      "reason": "Commit 0b6d12f95d 'FIX: when no notification state exists on topic, mute on unsubscribe' changed the action to `if tu && tu.notification_level > regular ... else TopicUser.change(..., muted)`, so a missing TopicUser row no longer dereferences nil.",
+      "astra": []
+    },
+    "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#03": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2016-06-17",
+        "pr": null,
+        "commit": "852860de6688668d6abe566cb1f4953fd13e2f35",
+        "url": "https://github.com/discourse/discourse/commit/852860de6688668d6abe566cb1f4953fd13e2f35"
+      },
+      "removidoEm": null,
+      "diasNoAr": 310,
+      "reason": "In 852860de66 the message builder spec replaced the preferences-url check with an assertion that the body matches the unsubscribe_url fixture '/t/1234/unsubscribe', so the link passed in the fixture is now verified in the rendered email.",
+      "astra": [
+        {
+          "pergunta": "852860de66 added `it 'has the unsubscribe url in the body'` asserting the fixture '/t/1234/unsubscribe' appears, while the mailer switched to a key-based post.unsubscribe_url(user). Confirmado or descontinuado?",
+          "resposta": "Confirmado 2016-06-17: the gap was supplying unsubscribe_url without asserting it is rendered; the new expectation covers exactly that with the same fixture. The production URL change does not remove the tested behaviour (rendering the given unsubscribe_url).",
+          "veredito": "confirmado 2016-06-17"
+        }
+      ]
+    },
+    "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#08": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2015-08-13",
+        "pr": null,
+        "commit": "61dc01911ee1ee77ca17c5d0af4e0e6d237db2e7",
+        "url": "https://github.com/discourse/discourse/commit/61dc01911ee1ee77ca17c5d0af4e0e6d237db2e7"
+      },
+      "removidoEm": null,
+      "diasNoAr": 1,
+      "reason": "Hours after the feature landed, Jeff Atwood's commit 61dc01911e 'copyedit on per-topic email notify change page' changed topic.unsubscribe.stop_notifications from 'You will stop receiving notifications' to 'You will now receive less notifications', which no longer promises that notifications stop.",
+      "astra": []
+    },
+    "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#09": {
+      "status": "descontinuado",
+      "corrigidoEm": null,
+      "removidoEm": {
+        "data": "2018-04-16",
+        "pr": null,
+        "commit": "9353ae4b5dacc2d63ebda02de2f9e378c7af4b38",
+        "url": "https://github.com/discourse/discourse/commit/9353ae4b5dacc2d63ebda02de2f9e378c7af4b38"
+      },
+      "diasNoAr": 978,
+      "reason": "Until removal, the watching/tracking branch still set tu.notification_level = regular and called tu.save! without notifications_reason_id, and TopicUser.update_last_read still re-promoted rows with null notifications_reason_id to tracking. 0b6d12f95d only routed the regular->muted/no-row branch through TopicUser.change. The action was deleted by 9353ae4b5d without a change targeting this.",
+      "astra": []
+    },
+    "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#10": {
+      "status": "descontinuado",
+      "corrigidoEm": null,
+      "removidoEm": {
+        "data": "2018-04-16",
+        "pr": null,
+        "commit": "9353ae4b5dacc2d63ebda02de2f9e378c7af4b38",
+        "url": "https://github.com/discourse/discourse/commit/9353ae4b5dacc2d63ebda02de2f9e378c7af4b38"
+      },
+      "diasNoAr": 978,
+      "reason": "routes/topic-unsubscribe.js.es6 kept only loading the topic view (later edits were select-box/view refactors) until 9353ae4b5d deleted the Ember route, controller, template and the topic.unsubscribe route map entry. No change made the client route perform the unsubscribe.",
+      "astra": []
+    },
+    "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-01": {
+      "status": "descontinuado",
+      "corrigidoEm": null,
+      "removidoEm": {
+        "data": "2018-04-16",
+        "pr": null,
+        "commit": "9353ae4b5dacc2d63ebda02de2f9e378c7af4b38",
+        "url": "https://github.com/discourse/discourse/commit/9353ae4b5dacc2d63ebda02de2f9e378c7af4b38"
+      },
+      "diasNoAr": 978,
+      "reason": "Through the last version (9353ae4b5d^), a second GET still stepped the level down again: watching/tracking -> regular, otherwise TopicUser.change(..., muted), so revisiting from regular muted the topic. The GET action was removed with the obsolete per-topic page on 2018-04-16, not by a fix for idempotency.",
+      "astra": []
+    }
+  }
+}

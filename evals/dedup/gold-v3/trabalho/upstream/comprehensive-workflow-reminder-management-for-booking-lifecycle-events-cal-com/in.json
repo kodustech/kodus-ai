@@ -1,0 +1,42 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "prTitle": "Comprehensive workflow reminder management for booking lifecycle events",
+ "upstream": "calcom/cal.com",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/cal.com",
+ "base": "d1440bb5d2f2190ad7ae1d26c165f970055b5370",
+ "head": "6048e2a86b50e81e1e3b1b467dfea5a895add3dc",
+ "tps": [
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "severity": "high",
+   "category": "concurrency",
+   "bug": "Asynchronous functions deleteScheduledEmailReminder and deleteScheduledSMSReminder are called without await inside forEach loops. This occurs during booking rescheduling/cancellation, and workflow/workflow step deletion/updates. Consequently, scheduled workflow reminders may not be reliably cancelled, potentially leaving them active.",
+   "evidenciaOpus": "handleCancelBooking.ts:487-492, bookings.tsx:488-494 and workflows.tsx call the async deleteScheduledEmailReminder/deleteScheduledSMSReminder inside forEach without awaiting; the PR removed the awaited prisma deleteMany, so the DB cancellation/deletion now runs in floating promises.",
+   "evidenciaAstra": "packages/features/bookings/lib/handleCancelBooking.ts:485-497 discards both reminder-manager promises and excludes them from the awaited cancellation work. Database cleanup now happens inside those asynchronous helpers, so completion of the handler no longer guarantees that reminder cancellation has persisted."
+  },
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The cron cancels SendGrid sends for cancelled reminders in one try around the whole loop, so one failing cancel aborts all remaining cancellations and the row deletions, and the failing row blocks later runs.",
+   "evidenciaOpus": "scheduleEmailReminders.ts:53-77 wraps the whole sequential cancel loop in one try; any client.request rejection jumps to the catch, skipping the remaining cancels and the Promise.all of queued deletes.",
+   "evidenciaAstra": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:53-76 wraps every cancellation request in one try/catch and awaits the collected Prisma deletes only after the loop. A rejected request therefore skips subsequent cancellations and prevents the queued deletions from executing."
+  },
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#05",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Email reminders for cancelled bookings are only flagged cancelled and cancelled in SendGrid by the cron later, so reminders close to their send time can still be delivered.",
+   "evidenciaOpus": "Cancellation is deferred: deleteScheduledEmailReminder only sets cancelled:true (emailReminderManager.ts:224-231) and the actual SendGrid cancel happens only when the cron runs (scheduleEmailReminders.ts:43-77); a booking cancelled shortly before the send time may not be cancelled before SendGrid's cutoff, so the email is delivered.",
+   "evidenciaAstra": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:225-232 only records cancellation locally, while scheduleEmailReminders.ts:44-64 attempts cancellation without enforcing SendGrid's deadline. The fifteen-minute schedule at .github/workflows/cron-scheduleEmailReminders.yml:8 can delay an otherwise timely cancellation past the provider's [ten-minute cutoff](https://www.twilio.com/docs/sendgrid/api-reference/cancel-scheduled-sends/cancel-or-pause-a-scheduled-send)."
+  },
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#13",
+   "severity": "medium",
+   "category": "data",
+   "bug": "deleteScheduledSMSReminder deletes the DB row only after a successful Twilio cancel, so a cancel failure leaves the reminder row behind now that callers no longer delete it.",
+   "evidenciaOpus": "smsReminderManager.ts:177-189 puts twilio.cancelSMS and prisma.workflowReminder.delete in one try; callers no longer delete rows themselves, so a Twilio failure leaves the reminder row for a cancelled booking.",
+   "evidenciaAstra": "packages/features/ee/workflows/lib/reminders/smsReminderManager.ts:178-188 skips database deletion when twilio.cancelSMS rejects, and the provider implementation at smsProviders/twilioProvider.ts:48-50 propagates that rejection. Since handleCancelBooking.ts:485-497 removes the independent database cleanup, failed cancellations now leave reminder rows attached to retained cancelled bookings."
+  }
+ ]
+}

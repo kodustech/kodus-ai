@@ -1,0 +1,66 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "prTitle": "FIX: proper handling of group memberships",
+ "upstream": "discourse/discourse",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/discourse",
+ "base": "4975fc28903a84418f546b2809370f19abf10e08",
+ "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+ "tps": [
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The `totalPages` calculation using `Math.floor(user_count / limit) + 1` produces an extra page when `user_count` is an exact multiple of `limit`, leading to incorrect pagination. For example, with 100 users and a limit of 50, it reports 3 pages instead of 2, allowing navigation to an empty page.",
+   "evidenciaOpus": "admin-group.js.es6:11-14 computes totalPages as Math.floor(user_count/limit)+1, which adds a phantom page when user_count is an exact multiple of limit; showingLast stays false on the real last page and next (lines 30-37) sets offset = min(offset+limit, user_count) = user_count, loading an empty page.",
+   "evidenciaAstra": "app/assets/javascripts/admin/controllers/admin-group.js.es6:13 computes floor(count/limit)+1, so 50 members produce two pages. The next action at lines 29\u201337 permits offset 50, and app/controllers/groups_controller.rb:26 returns an empty page at that offset."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#04",
+   "severity": "medium",
+   "category": "concurrency",
+   "bug": "Paging actions fire overlapping member requests and each response unconditionally overwrites offset and members, so a stale response arriving last can revert the list to an earlier page.",
+   "evidenciaOpus": "next/previous set group.offset immediately and call findMembers without cancelling earlier requests (admin-group.js.es6:30-52); findMembers unconditionally setProperties with the response's offset and members (group.js:30-37), so with rapid clicks an older response arriving last overwrites the newer page.",
+   "evidenciaAstra": "app/assets/javascripts/admin/controllers/admin-group.js.es6:29\u201337 changes offset immediately and allows another navigation request before completion. app/assets/javascripts/discourse/models/group.js:30\u201336 unconditionally applies each response's offset and members, allowing an older response to overwrite the latest navigation."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The public members endpoint now always caps results at 50 per page, but the public group members page has no pagination, so groups with more than 50 members are silently truncated for users.",
+   "evidenciaOpus": "GroupsController#members now applies limit (default 50) and offset to every group (groups_controller.rb:22-26), whereas non-automatic groups previously returned all members; the public group/members.hbs and group-members route load once with no paging controls, so members beyond the first 50 are unreachable.",
+   "evidenciaAstra": "app/controllers/groups_controller.rb:22\u201326 now applies a default limit of 50 to every group, including previously unlimited custom groups. app/assets/javascripts/discourse/routes/group-members.js.es6:8\u201311 fetches once, and app/assets/javascripts/discourse/templates/group/members.hbs:1\u201322 provides no navigation or further fetching, making subsequent members inaccessible through this view."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#07",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Creating a group ignores the alias_level the admin selected, saving only name and visibility, so new groups keep the default alias level.",
+   "evidenciaOpus": "Admin::GroupsController#create (admin/groups_controller.rb:22-33) sets only name and visible, while update sets alias_level and the client asJSON sends alias_level (group.js:61-67) with the alias combo shown on the new-group form; a new group's chosen alias level is dropped.",
+   "evidenciaAstra": "app/assets/javascripts/admin/templates/group.hbs:43 exposes alias_level, and app/assets/javascripts/discourse/models/group.js:62\u201372 sends it during creation. The rewritten create action at app/controllers/admin/groups_controller.rb:22\u201327 assigns only name and visible, retaining this omission in code the PR changes and discarding the administrator's selection."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+   "severity": "high",
+   "category": "data",
+   "bug": "Removing a member deletes the membership row directly and skips clearing the user's primary_group_id, so a removed user can keep this group as their primary group.",
+   "evidenciaOpus": "remove_member calls group.users.delete(user_id) (admin/groups_controller.rb:90), which deletes the GroupUser row without the primary_group_id cleanup that the previous usernames= path performed in destroy_deletions (group.rb:287-292), leaving the removed user's primary_group_id pointing at the group.",
+   "evidenciaAstra": "app/controllers/admin/groups_controller.rb:90 deletes membership directly without clearing the user's primary_group_id. The previous usernames-update path populated deletions at app/models/group.rb:255\u2013259 and cleared matching primary-group references at lines 287\u2013291; the replacement removal path therefore leaves stale primary-group state."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Admin add_members pushes every username into group.users without skipping existing members, so adding someone already in the group hits the unique group_users index, returns a 500 and leaves earlier users partially added.",
+   "evidenciaOpus": "The new add_members action (admin/groups_controller.rb:65-81) calls group.add(user), which is users.push (group.rb:272-274), for every username with no membership check; group_users has a UNIQUE (group_id,user_id) index, so re-adding an existing member raises RecordNotUnique (500) after earlier usernames were already inserted.",
+   "evidenciaAstra": "The new add_members action calls group.add for every supplied username without checking membership or wrapping the batch in a transaction (app/controllers/admin/groups_controller.rb:71\u201377). Group#add unconditionally pushes the user (app/models/group.rb:272\u2013273), conflicting with the unique membership index (db/migrate/20130416004933_group_users.rb:9); an existing member therefore causes an exception after earlier additions have persisted."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "severity": "medium",
+   "category": null,
+   "bug": "The public group members endpoint takes `limit` from params with no upper bound or positivity check, letting a visitor request huge pages or trigger a 500 with a negative limit.",
+   "evidenciaOpus": "groups_controller.rb:22-26 does take limit from params without a bound, but before the PR non-automatic groups returned all members with no limit and automatic groups already used an unbounded params[:limit]; the PR adds a default of 50 and paginates, so it does not introduce the unbounded read.",
+   "evidenciaAstra": "The changed endpoint passes the integer limit directly into the query and serializes its results without bounds checks (app/controllers/groups_controller.rb:22\u201329), allowing oversized responses and PostgreSQL errors for negative limits. Visible groups are accessible anonymously (lib/guardian.rb:120\u2013121); although automatic groups already accepted unchecked limits, this PR extends that behavior to nonautomatic groups."
+  }
+ ]
+}

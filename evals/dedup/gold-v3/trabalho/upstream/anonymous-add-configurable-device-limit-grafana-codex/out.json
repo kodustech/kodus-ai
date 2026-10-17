@@ -1,0 +1,69 @@
+{
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "prOriginal": {
+    "numero": 79265,
+    "url": "https://github.com/grafana/grafana/pull/79265",
+    "mergedAt": "2023-12-12",
+    "nota": "Found by title with gh pr list (branch jguer/add-anon-device-limit). Its last commit is the benchmark head bbd8c507; squash-merged as 3647ba73 on 2023-12-12, and database.go, impl.go and client.go at the merge commit are byte-identical to the benchmark head. The benchmark base/head diff also contains unrelated social-login and ssosettings changes that are not part of #79265."
+  },
+  "tps": {
+    "anonymous-add-configurable-device-limit-grafana-codex#01": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 1040,
+      "reason": "On main, AnonDBStore.CreateOrUpdateDevice (anonstore/database.go) still calls CountDevices and, if count < deviceLimit, runs the INSERT ... ON CONFLICT upsert in a separate WithDbSession call, with no transaction, lock or conditional insert. The file's later commits (#80028 pagination, Spanner support/removal, lint) never touched the check-then-insert sequence, so concurrent new devices can still all pass the count check.",
+      "astra": []
+    },
+    "anonymous-add-configurable-device-limit-grafana-codex#02": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 1040,
+      "reason": "TagDevice in anonimpl/impl.go on main still takes X-Grafana-Device-Id verbatim from the request and tagDeviceUI admits every new ID until the store reports ErrDeviceLimitReached, after which client.go rejects authentication. The validator added in #94700 (AnonUserLimitValidator, a no-op fake in OSS) and the cache change in #94218 do not validate device IDs or rate-limit creation per client, so slots can still be exhausted with fabricated IDs.",
+      "astra": []
+    },
+    "anonymous-add-configurable-device-limit-grafana-codex#05": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 1040,
+      "reason": "TestIntegrationBeyondDeviceLimit on main (anonstore/database_test.go) is unchanged: it admits one device, swaps to a new ID and asserts ErrDeviceLimitReached, never updating an existing device at the limit. The later TestIntegrationAnonDeviceService_DeviceLimitWithCache (impl_test.go, #94218) repeats the admitted device1 only through the local-cache hit, so the store's updateDevice path at capacity is still not exercised by any test.",
+      "astra": []
+    },
+    "anonymous-add-configurable-device-limit-grafana-codex#07": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2024-10-04",
+        "pr": 94218,
+        "commit": "544b5f905ca4b69ca40da7cca35d851a66a14b88",
+        "url": "https://github.com/grafana/grafana/pull/94218"
+      },
+      "removidoEm": null,
+      "diasNoAr": 297,
+      "reason": "PR #94218 'Anonymous: Fix anonymous cache ignoring device limit evaluation' changed tagDeviceUI so that on ErrDeviceLimitReached the cache entry is set to false and later cache hits with false return ErrDeviceLimitReached; any other store error now deletes the cache entry. A rejected device can no longer authenticate through the cache-hit branch; main still has this code and a test for it.",
+      "astra": []
+    },
+    "anonymous-add-configurable-device-limit-grafana-codex#11": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2023-12-18",
+        "pr": 79494,
+        "commit": "57ca8fa36814055a22699582a2d7f7ef9fac25e0",
+        "url": "https://github.com/grafana/grafana/pull/79494"
+      },
+      "removidoEm": null,
+      "diasNoAr": 6,
+      "reason": "The merged PR #79265 did not add device_limit to conf/defaults.ini. Six days later PR #79494 'Anonymous: Add device limits to stats' added 'device_limit =' under [auth.anonymous] in conf/defaults.ini, so the key exists in the loaded INI and GF_AUTH_ANONYMOUS_DEVICE_LIMIT can override it; the key is still there on main.",
+      "astra": []
+    },
+    "anonymous-add-configurable-device-limit-grafana-codex#opa-02": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 1040,
+      "reason": "On main, TagDevice still begins with 'if deviceID == \"\" { return nil }', and Anonymous.Authenticate in client.go only fails on ErrDeviceLimitReached, otherwise returning an anonymous identity. A request without the X-Grafana-Device-Id header is therefore still authenticated anonymously regardless of device_limit; none of the later impl.go/client.go commits changed this.",
+      "astra": []
+    }
+  }
+}

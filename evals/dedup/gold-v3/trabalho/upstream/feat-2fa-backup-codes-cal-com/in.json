@@ -1,0 +1,66 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "prTitle": "feat: 2fa backup codes",
+ "upstream": "calcom/cal.com",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/cal.com",
+ "base": "efa6d464a38e60ceeeb88f40668c1c4ac4bfaf54",
+ "head": "54486a059cd2032042189bb565646ba4e0f6bd61",
+ "tps": [
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#01",
+   "severity": "critical",
+   "category": "security",
+   "bug": "The credentials authorize() skips the password check when any totpCode is present, and the new backup-code branch never validates that totpCode, so a backup code plus a dummy totpCode logs in without the account password.",
+   "evidenciaOpus": "next-auth-options.ts:121 skips password verification whenever credentials.totpCode is truthy, and the new branch at :131 is taken whenever backupCode is truthy, never validating totpCode. Submitting a valid backup code plus any dummy totpCode therefore logs in without the password.",
+   "evidenciaAstra": "packages/features/auth/lib/next-auth-options.ts:121 skips password verification whenever totpCode is truthy, while :131\u2013156 accepts a valid backupCode without validating that TOTP value. Submitting both fields therefore reaches the authenticated user return at :205 without checking the password."
+  },
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#02",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "After enabling 2FA, onEnable is only called from the backup-codes Close button; dismissing the dialog by Escape/overlay never notifies the parent, so the settings page keeps showing 2FA disabled.",
+   "evidenciaOpus": "EnableTwoFactorModal.tsx:135 now only sets step DisplayBackupCodes on success; onEnable() runs only from the Close button (:269). Dismissing via Dialog onOpenChange (two-factor-auth.tsx:64 just toggles open) skips utils.viewer.me.invalidate(), so the switch shows 2FA disabled although the server enabled it, and the step/backup codes state persists.",
+   "evidenciaAstra": "apps/web/components/settings/EnableTwoFactorModal.tsx:134\u2013136 advances to the backup-code screen, and only its explicit Close handler calls onEnable at :269. Dialog dismissal forwards onOpenChange at :166 to apps/web/pages/settings/security/two-factor-auth.tsx:64, which closes the modal without the viewer.me invalidation at :67, leaving the switch stale."
+  },
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#05",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The backup-code copy e2e test only waits for the success toast, which is shown unconditionally, so it never verifies the clipboard content.",
+   "evidenciaOpus": "login.2fa.e2e.ts:121-122 clicks backup-codes-copy and only waits for toast-success; EnableTwoFactorModal.tsx:277-278 fires showToast unconditionally after an un-awaited clipboard.writeText, so the test passes even if copying is broken.",
+   "evidenciaAstra": "apps/web/playwright/login.2fa.e2e.ts:119\u2013122 checks only that a success toast appears after clicking Copy. apps/web/components/settings/EnableTwoFactorModal.tsx:278\u2013279 emits that toast without awaiting or checking the clipboard write, so the new test does not verify that any codes were copied."
+  },
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#07",
+   "severity": "high",
+   "category": "concurrency",
+   "bug": "Because backupCodes are decrypted and mutated in memory before being written back, two concurrent login requests using the same backupCode could both pass this check and update, so a single backup code may effectively be accepted more than once if used concurrently, weakening the intended one-time-use semantics.",
+   "evidenciaOpus": "next-auth-options.ts:139-156 decrypts backupCodes, finds the index, nulls it and writes back with an unconditional prisma.user.update by id. Concurrent logins with the same code both pass indexOf before either write, so a single-use code can be used twice and concurrent writes can restore consumed codes.",
+   "evidenciaAstra": "packages/features/auth/lib/next-auth-options.ts:73 reads the user before the backup-code check at :144, and :149\u2013156 writes the modified array using only the user ID. Concurrent requests can validate the same original array and both authenticate, or overwrite another request's removal, violating the single-use promise in apps/web/public/static/locales/en/common.json:2015."
+  },
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#12",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The copy button shows a success toast without awaiting clipboard.writeText, so a failed copy still tells the user their backup codes were saved.",
+   "evidenciaOpus": "EnableTwoFactorModal.tsx:277-278 calls navigator.clipboard.writeText without awaiting and immediately shows 'Backup codes copied!'; if the write is denied or rejects, the user is told their recovery codes were copied when they were not.",
+   "evidenciaAstra": "apps/web/components/settings/EnableTwoFactorModal.tsx:278 calls clipboard.writeText without awaiting its Promise or handling rejection, then immediately shows success at :279. A rejected write therefore produces a false confirmation that the recovery codes were copied."
+  },
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#16",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The disable endpoint calls replaceAll on req.body.backupCode without checking it is a string, so non-string input throws a 500.",
+   "evidenciaOpus": "disable.ts:60 calls req.body.backupCode.replaceAll without a type check; a crafted non-string value from the authenticated user yields a 500 instead of 400. Only malformed requests from the account owner hit it.",
+   "evidenciaAstra": "apps/web/pages/api/auth/two-factor/totp/disable.ts:48 checks only truthiness before calling req.body.backupCode.replaceAll at :61. An authenticated request satisfying the preceding password check can supply a truthy number or array and trigger an uncaught TypeError instead of the structured validation error at :63."
+  },
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#sncc-01",
+   "severity": "medium",
+   "category": "security",
+   "bug": "The backup code is compared with the stored codes through Array.indexOf, which is not constant-time and leaks timing information about the secret backup codes.",
+   "evidenciaOpus": "next-auth-options.ts:144 checks the supplied backup code with backupCodes.indexOf(...), a short-circuiting string comparison against the decrypted secrets, instead of a constant-time comparison. It is a timing side channel on a 2FA secret, though it needs a correct password first (lines 121-128).",
+   "evidenciaAstra": "The PR adds decryption of stored backup codes and compares them directly with user input using Array.indexOf in packages/features/auth/lib/next-auth-options.ts:139-145. Neither string equality nor the early-exiting search provides constant-time secret comparison, creating the reported timing weakness; the rate-limit check at lines 109-111 restricts probing but does not eliminate it."
+  }
+ ]
+}

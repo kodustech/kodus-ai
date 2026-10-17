@@ -1,0 +1,58 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "prTitle": "Anonymous: Add configurable device limit",
+ "upstream": "grafana/grafana",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/grafana",
+ "base": "50f4e78a39914711d0d231a501ba215becf17ebc",
+ "head": "bbd8c507cdf56f6b884373809e0b24abd4a2353d",
+ "tps": [
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "severity": "medium",
+   "category": "concurrency",
+   "bug": "Race condition: Multiple concurrent requests could pass the device count check simultaneously and create devices beyond the limit. Consider using a database transaction or lock.",
+   "evidenciaOpus": "anonstore/database.go:108-118: CreateOrUpdateDevice calls CountDevices and then, in a separate statement with no transaction or lock, inserts; concurrent new devices can all observe count < deviceLimit and all insert.",
+   "evidenciaAstra": "pkg/services/anonymous/anonimpl/anonstore/database.go:110 checks the count before the separate write at line 149, without admission locking or a shared transaction. Concurrent requests with distinct device IDs can both pass the check and insert beyond the limit."
+  },
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#02",
+   "severity": "high",
+   "category": "security",
+   "bug": "Device slots are keyed by the client-controlled X-Grafana-Device-Id header with no validation or rate limiting, so an anonymous caller can fill the limit with fake IDs and deny anonymous access to every new legitimate device.",
+   "evidenciaOpus": "Slots are consumed per X-Grafana-Device-Id header value (impl.go TagDevice reads it unvalidated) and database.go:108-118 rejects new devices once count >= deviceLimit; client.go:44-47 then fails authentication, so one client minting device IDs can lock out all new anonymous users.",
+   "evidenciaAstra": "pkg/services/anonymous/anonimpl/impl.go:119 accepts the caller-supplied device ID and line 136 constructs a device without validating its identity or limiting creation per client. One caller can consume the available slots using distinct IDs, causing subsequent legitimate devices to encounter the authentication rejection at pkg/services/anonymous/anonimpl/client.go:45."
+  },
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#05",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "TestIntegrationBeyondDeviceLimit only checks that a new device is rejected at the limit and never verifies that an existing device can still be updated at the limit.",
+   "evidenciaOpus": "database_test.go:51-70 only submits a new device id at the limit; no test calls CreateOrUpdateDevice for an existing device while at the limit, so the updateDevice success path is never exercised and a broken update would still pass.",
+   "evidenciaAstra": "pkg/services/anonymous/anonimpl/anonstore/database_test.go:65 replaces the admitted ID with a new ID and only asserts rejection at line 69. The other store tests configure limit zero at lines 16 and 74, leaving successful updates at capacity unverified; an implementation that always rejects at capacity would pass."
+  },
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The `tagDeviceUI` function populates the local cache with the device ID before the `CreateOrUpdateDevice` call. If `ErrDeviceLimitReached` is returned, the cache entry remains set, allowing subsequent requests to bypass the device limit until the cache expires after 29 minutes.",
+   "evidenciaOpus": "impl.go:83-93: tagDeviceUI calls localCache.SetDefault(key) before CreateOrUpdateDevice and never evicts on error; a retry hits the cache at impl.go:83-84 and returns nil, so client.go:44-47 authenticates a device that was rejected with ErrDeviceLimitReached.",
+   "evidenciaAstra": "pkg/services/anonymous/anonimpl/impl.go:87 caches the device before the store operation at line 93, and an error does not remove that entry. A retry returns nil through the cache-hit branch at line 83, bypassing the authentication rejection for the 29-minute cache lifetime configured at line 42."
+  },
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#11",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The new auth.anonymous device_limit setting has no entry in conf/defaults.ini, so the GF_AUTH_ANONYMOUS_DEVICE_LIMIT environment override is ignored and the limit stays 0.",
+   "evidenciaOpus": "setting.go:1654 reads device_limit, but conf/defaults.ini [auth.anonymous] (lines 581-592) has no device_limit key, and applyEnvVariableOverrides (setting.go:686) only overrides keys present in the loaded INI, so GF_AUTH_ANONYMOUS_DEVICE_LIMIT is ignored.",
+   "evidenciaAstra": "conf/defaults.ini:581 defines auth.anonymous without a device_limit key, while pkg/setting/setting.go:688 applies environment overrides only to existing keys. That override pass runs at line 917 before device_limit is read with a zero default at line 1654, so the environment variable alone cannot enable enforcement."
+  },
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-02",
+   "severity": "medium",
+   "category": "security",
+   "bug": "The anonymous device limit is enforced only through TagDevice, which returns nil when the client-controlled device ID header is missing, so requests without the header authenticate anonymously regardless of the configured limit.",
+   "evidenciaOpus": "client.go:44-50 enforces the limit only via TagDevice returning ErrDeviceLimitReached, and impl.go:119-122 returns nil when the X-Grafana-Device-Id header is empty. A client that omits the header always gets an anonymous identity regardless of device_limit.",
+   "evidenciaAstra": "pkg/services/anonymous/anonimpl/impl.go:119-122 returns nil when the device header is absent, and client.go:44-58 consequently returns an anonymous identity without checking the configured limit. This bypasses the enforcement introduced by the PR, although the additional claim about fresh random IDs is incorrect: database.go:95-96 rejects unknown devices when the limit is reached."
+  }
+ ]
+}

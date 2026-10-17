@@ -1,0 +1,102 @@
+{
+  "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+  "prOriginal": {
+    "numero": null,
+    "url": "https://github.com/discourse/discourse/commit/d38c4d5f7443223c81529c22470293771baf9f38",
+    "mergedAt": "2015-08-20",
+    "nota": "No upstream PR: the benchmark head d38c4d5f is a direct commit by Jeff Atwood on discourse/discourse main (2015-08-20, no associated pull request; title search finds none) and is an ancestor of main. The reference date is that commit's date. Status changes were located by bisecting each rule's file history through the GitHub contents API."
+  },
+  "tps": {
+    "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 4076,
+      "reason": "The 70% light value was carried through every rewrite: dark-light-choose($primary-low-mid, $secondary-high) in #5235 (2017-10-13, $primary-low-mid is the 70% blend), var(--primary-low-mid-or-secondary-high) in #10341 (2020), and moved verbatim to common/base/embedded-posts.scss by #37678 (2026-02-10), where '.topic-meta-data h5 a' still has it on main. Caveat: core markup renders no h5 inside .topic-meta-data, neither at the benchmark head nor today, so the rule may have no visible effect in core.",
+      "astra": [
+        {
+          "pergunta": "The 70% value persists unchanged through tokens and file moves into today's embedded-posts.scss, but no core markup seems to render an h5 in .topic-meta-data (2015 or today). Pendente?",
+          "resposta": "Pendente: the chain keeps the 70% value; tokenising and moving the rule neither fixed nor removed the declaration. The missing h5 already in 2015 suggests dead CSS from the start, not a later change justifying descontinuado; claiming a visible effect would need matching markup.",
+          "veredito": "pendente"
+        }
+      ]
+    },
+    "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2018-02-24",
+        "pr": null,
+        "commit": "b731d5d9b5a317a1449b4feb8eab98225143d74a",
+        "url": "https://github.com/discourse/discourse/commit/b731d5d9b5a317a1449b4feb8eab98225143d74a"
+      },
+      "removidoEm": null,
+      "diasNoAr": 919,
+      "reason": "Mobile .custom-message-length kept the 30% light value through #5235 ($primary-high). Commit b731d5d9 (Kris, 2018-02-24, 'Removing unneeded and duplicate styles') deleted the mobile and desktop rules and added one rule in common/base/modal.scss with dark-light-choose($primary-low-mid, $secondary-high), the original 70% value, so mobile no longer gets the darker text nor diverges from desktop.",
+      "astra": [
+        {
+          "pergunta": "b731d5d9 replaced the mobile 30% rule with a common rule using the 70% value as part of a style dedup. Confirmado or descontinuado?",
+          "resposta": "Confirmado by b731d5d9: the common rule now applies the 70% light value on mobile, restoring the pre-bug behaviour; removing the specific rule was part of consolidation, and the stated dedup intent does not change the classification.",
+          "veredito": "confirmado"
+        }
+      ]
+    },
+    "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03": {
+      "status": "descontinuado",
+      "corrigidoEm": null,
+      "removidoEm": {
+        "data": "2017-11-02",
+        "pr": null,
+        "commit": "e700068b17ce7e15e14cff88fc3ba04f2b76be8e",
+        "url": "https://github.com/discourse/discourse/commit/e700068b17ce7e15e14cff88fc3ba04f2b76be8e"
+      },
+      "diasNoAr": 805,
+      "reason": "The desktop .group-member-info .name rule (light 50%) was moved unchanged into common/components/user-stream-item.scss by #5093 (2017-08-25) and tokenised to $primary-medium by #5235. Robin Ward's commit e700068b (2017-11-02, 'UX: Convert Group Posts to Flexbox') deleted the .name/.title rules and restyled group posts in common/base/group.scss (.group-member-info { display: flex; color: lighten($primary, 40%) }) with new markup; no 50% name rule exists since.",
+      "astra": []
+    },
+    "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04": {
+      "status": "descontinuado",
+      "corrigidoEm": null,
+      "removidoEm": {
+        "data": "2017-11-02",
+        "pr": null,
+        "commit": "e700068b17ce7e15e14cff88fc3ba04f2b76be8e",
+        "url": "https://github.com/discourse/discourse/commit/e700068b17ce7e15e14cff88fc3ba04f2b76be8e"
+      },
+      "diasNoAr": 805,
+      "reason": "The mobile .group-member-info .name rule (light 50%) was removed from mobile/user.scss and merged into the shared rule in common/components/user-stream-item.scss by #5093 (2017-08-25), still 50%. That shared rule was deleted by commit e700068b (2017-11-02, 'UX: Convert Group Posts to Flexbox'), which rewrote group post markup and styling, so the changed light-theme name color no longer exists.",
+      "astra": []
+    },
+    "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2018-02-12",
+        "pr": null,
+        "commit": "32116654ec1367d21ad117a0d72ee7b1f233bdf2",
+        "url": "https://github.com/discourse/discourse/commit/32116654ec1367d21ad117a0d72ee7b1f233bdf2"
+      },
+      "removidoEm": null,
+      "diasNoAr": 907,
+      "reason": "Mobile .topic-map h3 kept the faded 50% value through #5235 ($primary-medium) while desktop used $primary-high. Commit 32116654 (Kris, 2018-02-12, 'removing duplicate topic-map desktop/mobile styles') deleted the mobile and desktop h3 rules and added a single common .topic-map h3 with dark-light-choose($primary-high, $secondary-low), so mobile now uses the desktop value instead of 50%.",
+      "astra": [
+        {
+          "pergunta": "32116654 removed the mobile 50% topic-map h3 and both platforms now use a common rule with the desktop value ($primary-high). Confirmado or descontinuado?",
+          "resposta": "Confirmado by 32116654: the unification kept .topic-map h3 and fixed the color applied on mobile, replacing 50% with the desktop value; removing duplicated rules and putting the correct one in common is not discontinuing the behaviour.",
+          "veredito": "confirmado"
+        }
+      ]
+    },
+    "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#08": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2015-08-21",
+        "pr": 3685,
+        "commit": "e2e7e6df442c2649ad2340a2fbccc36f6a3f2904",
+        "url": "https://github.com/discourse/discourse/pull/3685"
+      },
+      "removidoEm": null,
+      "diasNoAr": 1,
+      "reason": "One day later PR #3685 (Kane York, 'FIX: Unread post circle colors in dark theme') changed the .badge-notification dark-theme background from scale-color($secondary, $lightness: 30%) to scale-color($secondary, $lightness: 70%), a light background behind the $secondary text, and also adjusted new/unread badge colors. The dark-on-dark default badge was thus fixed.",
+      "astra": []
+    }
+  }
+}

@@ -1,0 +1,58 @@
+{
+ "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+ "prTitle": "Add HTML sanitizer for translated message resources",
+ "upstream": "keycloak/keycloak",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/keycloak",
+ "base": "f3c8e8f3487112f2c99aa78400430cce2d30be39",
+ "head": "02f48f776f43734d1ac8914d3ad6a7115acdcb33",
+ "tps": [
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "severity": "medium",
+   "category": "doc_defect",
+   "bug": "The translation is in Italian instead of Lithuanian. This should be translated to Lithuanian to match the file's locale (messages_lt.properties).",
+   "evidenciaOpus": "messages_lt.properties (account :101 and login :71) now set totpStep1/loginTotpStep1 to the Italian 'Installa una delle seguenti applicazioni sul tuo cellulare:', so Lithuanian users see Italian text.",
+   "evidenciaAstra": "The PR replaces Lithuanian instructions with Italian text at themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties:101 and themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71. These are displayed message values, so this introduces a user-visible localization defect."
+  },
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "severity": "low",
+   "category": "doc_defect",
+   "bug": "The totpStep1 value uses Traditional Chinese terms in the Simplified Chinese file (zh_CN), which is likely incorrect for this locale. Please verify the locale\u2011appropriate translation.",
+   "evidenciaOpus": "account/messages_zh_CN.properties:112 totpStep1 uses Traditional forms (\u624b\u6a5f, \u5b89\u88dd, \u61c9\u7528\u7a0b\u5f0f) while the rest of the Simplified Chinese file uses Simplified; still readable, only the script variant is wrong.",
+   "evidenciaAstra": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties:112 introduces Traditional Chinese characters, including \u624b\u6a5f and \u61c9\u7528\u7a0b\u5f0f, into the Simplified Chinese bundle. The adjacent instructions at lines 113\u2013114 use Simplified Chinese, confirming the locale inconsistency."
+  },
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The diff-trimming code computes common prefix and suffix independently, so they can overlap and substring throws StringIndexOutOfBoundsException, crashing the verifier instead of reporting the illegal HTML.",
+   "evidenciaOpus": "VerifyMessageProperties.java:102-111 computes the common prefix and suffix independently, so start + end can exceed a string's length (e.g. '<b>x</b></b>' sanitized to '<b>x</b>' gives start=8, end=4) and substring throws StringIndexOutOfBoundsException, which verify() does not catch.",
+   "evidenciaAstra": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:103 and :107 compute matching prefixes and suffixes independently, then line 111 uses potentially overlapping bounds. For '<b>x</b></b>' sanitized to '<b>x</b>', start becomes 8 and end becomes 4, causing sanitized.substring(8, 4) to throw instead of reporting invalid HTML."
+  },
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#07",
+   "severity": "high",
+   "category": "security",
+   "bug": "normalizeValue blanks the entire choice expression for some keys before HTML validation, so markup placed inside a choice branch of those keys bypasses the new verifier.",
+   "evidenciaOpus": "VerifyMessageProperties.java:124-126 replaces the whole {n,choice,...} block with '...' before sanitizing for linkExpirationFormatter.timePeriodUnit* and error-invalid-multivalued-size, so HTML or links inside choice branches of those keys are never checked.",
+   "evidenciaAstra": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:124\u2013126 replaces entire choice expressions, including their branch markup, before anchor and HTML validation at lines 88\u201392. This permits prohibited markup to escape build-time validation; services/src/main/java/org/keycloak/theme/beans/LinkExpirationFormatterMethod.java:66 subsequently expands the original choice content with MessageFormat."
+  },
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The account and admin UI bundles now use Java MessageFormat placeholders and choice syntax for error-invalid-multivalued-size, but i18next expects {{n}}, so the UI shows literal {0}/{1}/{2} and the raw choice text.",
+   "evidenciaOpus": "account-ui messages_en.properties:188 and admin-ui messages_en.properties:3138 changed {{0}}/{{1}}/{{2}} to {0}/{1}/{2} plus a Java choice; both UIs use i18next with default {{ }} interpolation (account-ui src/i18n.ts, admin-ui i18n.ts) and the server returns raw values (ThemeResource.getLocalizationTexts), so users see literal placeholders.",
+   "evidenciaAstra": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties:188 and js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties:3138 replace i18next placeholders with Java MessageFormat syntax. js/libs/ui-shared/src/user-profile/utils.ts:74\u201385 passes numeric interpolation parameters directly to t(), while js/apps/account-ui/src/i18n.ts:25\u201347 configures no MessageFormat processor, leaving the new placeholders and choice expression literal."
+  },
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#opa-01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "If the English counterpart of a messages_*.properties file does not exist, verifySafeHtml throws an unchecked RuntimeException that escapes the mojo, crashing the build instead of reporting a validation message.",
+   "evidenciaOpus": "VerifyMessageProperties.java:74-79 derives the _en.properties path by string replacement and wraps the FileInputStream IOException in a RuntimeException, which escapes verify() (it only catches IOException from line 49) and ThemeVerifierMojo:51. A messages_* file without an English sibling crashes the mojo with an unhandled exception instead of a validation message.",
+   "evidenciaAstra": "VerifyMessageProperties.java:74-79 newly opens the derived English bundle unconditionally and wraps a missing-file IOException in RuntimeException. That exception escapes verify(), which catches only IOException (lines 48-53), and ThemeVerifierMojo.java:48-55, aborting validation before collected diagnostics are reported. Existing bundles have English counterparts, but the file-selection path does not enforce that prerequisite, so a missing counterpart triggers the reported error-handling defect."
+  }
+ ]
+}

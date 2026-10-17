@@ -1,0 +1,56 @@
+{
+ "caseId": "github-oauth-security-enhancement-sentry",
+ "prOriginal": {
+  "numero": 67876,
+  "url": "https://github.com/getsentry/sentry/pull/67876",
+  "mergedAt": "2024-04-04",
+  "nota": "Found via upstream commit history of src/sentry/integrations/github/integration.py (843d7c7192, Alexander Tarasov). PR head branch fix/oauth-validate-github-integration-user has the same 5 commits ending at bb75657f; git diff bb75657f..843d7c71 on the 3 touched files is empty, so merged code equals the benchmark head."
+ },
+ "tps": {
+  "github-oauth-security-enhancement-sentry#03": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 926,
+   "reason": "The legacy OAuthLoginView was removed in #113338 (2026-04-20), but the logic moved to the API pipeline: _build_github_oauth_url still sends state=pipeline.signature and OAuthLoginApiStep.handle_post compares validated_data['state'] != pipeline.signature. pipeline/base.py still computes signature as md5 of the pipeline view class names, a constant per provider.",
+   "astra": []
+  },
+  "github-oauth-security-enhancement-sentry#05": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 926,
+   "reason": "Today exchange_github_oauth calls safe_urlopen before the try that only guards safe_urlread/parse, and client.get_user_info() is unguarded; handle_post only catches GitHubPipelineError and organization_pipeline.py api_advance has no generic handler. Transport or HTTP errors still escape as 500 instead of the error result.",
+   "astra": []
+  },
+  "github-oauth-security-enhancement-sentry#06": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 926,
+   "reason": "validate_github_installation today still returns installation_id on Integration.DoesNotExist without comparing github_authenticated_user to any installer; a comment now documents this as an accepted race ('we proceed without the sender validation'). Behaviour unchanged.",
+   "astra": []
+  },
+  "github-oauth-security-enhancement-sentry#09": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 926,
+   "reason": "validate_github_installation today still indexes integration.metadata['sender']['login'] unconditionally (when no chosen_installation), while build_integration still sets sender only if state.get('sender'). The KeyError path remains.",
+   "astra": []
+  },
+  "github-oauth-security-enhancement-sentry#10": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2026-04-20",
+    "pr": 113338,
+    "commit": "90d4b82776515c29718ccaaf84a8b7c3c1edc71a",
+    "url": "https://github.com/getsentry/sentry/pull/113338"
+   },
+   "diasNoAr": 746,
+   "reason": "Scanning every upstream revision of tests/sentry/integrations/github/test_integration.py since the merge, test_installation_not_found with the wrong state ddd023d8... is present unchanged until #113338 'Remove legacy pipeline views' (2026-04-20), which deleted it together with the legacy views (-609 lines in the test file). The test was removed with the flow, not fixed.",
+   "astra": []
+  }
+ }
+}

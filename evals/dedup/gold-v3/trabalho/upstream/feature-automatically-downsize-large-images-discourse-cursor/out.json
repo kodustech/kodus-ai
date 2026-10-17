@@ -1,0 +1,116 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "prOriginal": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/ffbaf8c54269df2ce510de91245760fddce09896",
+  "mergedAt": "2015-08-12",
+  "nota": "No upstream PR: the benchmark head ffbaf8c5 (Régis Hanol, 2015-08-12) was pushed directly to discourse/discourse and is an ancestor of main (compare ffbaf8c...main = ahead). gh pr search on the title returns nothing; the commit has no associated PR. Reference date is the commit date."
+ },
+ "tps": {
+  "feature-automatically-downsize-large-images-discourse-cursor#01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2015-10-30",
+    "pr": null,
+    "commit": "5c0fb34eee",
+    "url": "https://github.com/discourse/discourse/commit/5c0fb34eee"
+   },
+   "removidoEm": null,
+   "diasNoAr": 79,
+   "reason": "Commit 5c0fb34e 'FIX: resize emoji job was generate errors' deleted the first downsize(from, to, max_width, max_height, opts) definition and changed resize_emoji.rb to OptimizedImage.downsize(path, path, \"100x100\", opts), removing the ArgumentError.",
+   "astra": []
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor#02": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2015-08-21",
+    "pr": null,
+    "commit": "07d6bb8d31",
+    "url": "https://github.com/discourse/discourse/commit/07d6bb8d31"
+   },
+   "removidoEm": null,
+   "diasNoAr": 9,
+   "reason": "Commit 07d6bb8d 'FIX: remove client side maximum filesize check' deleted the hard-coded maxSizeKB = 10 * 1024 check from validateUploadedFile, leaving the per-type limits to the server. The remaining hard-coded value in the 413 handler was replaced by Discourse.SiteSettings['max_' + type + '_size_kb'] in a5d8dfb0 (2016-04-06, 'FIX: don't hardcode maximum file size').",
+   "astra": []
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor#03": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2015-11-09",
+    "pr": null,
+    "commit": "d541018bb2",
+    "url": "https://github.com/discourse/discourse/commit/d541018bb2"
+   },
+   "removidoEm": null,
+   "diasNoAr": 89,
+   "reason": "Commit d541018b 'FIX: automagic image downsizing wasn't working for GIFs...' replaced the \"80%\" argument with dimensions computed from FastImage as \"#{(w * 0.8).floor}x#{(h * 0.8).floor}\", i.e. WxH geometry that gifsicle --resize-fit accepts.",
+   "astra": []
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor#04": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2015-09-20",
+    "pr": null,
+    "commit": "a3831a7003",
+    "url": "https://github.com/discourse/discourse/commit/a3831a7003"
+   },
+   "removidoEm": null,
+   "diasNoAr": 39,
+   "reason": "Commit a3831a70 'FIX: uploading an animated user card/profile background was converted to a still image' made the controller pass filename: filename to OptimizedImage.downsize and changed optimize to pick the _animated branch when from =~ /\\.GIF$/i || opts[:filename] =~ /\\.GIF$/i, so an extensionless multipart tempfile of a GIF now takes the animated path.",
+   "astra": []
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor#08": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 4084,
+   "reason": "The loop was reduced to 2 attempts (d541018b, 2015-11-09) and later moved to UploadCreator#downsize!, which today still runs up to 3 synchronous OptimizedImage.downsize (ImageMagick) passes per oversized image. The controller now wraps create_upload in hijack, which schedules it via Scheduler::Defer in the same web process, so the in-process multi-pass conversion remains, only mitigated.",
+   "astra": [
+    {
+     "pergunta": "Given benchmark loop of 5 synchronous downsizes (inside Scheduler::Defer or synchronous API), and today's hijack -> Scheduler::Defer + UploadCreator#downsize! with 3.times and early exits, which status applies?",
+     "resposta": "Multiple synchronous ImageMagick passes remain (up to three); upload runs through hijack/Scheduler::Defer in a defer thread of the same web-worker process; reductions and hijack mitigate but do not eliminate the pattern.",
+     "veredito": "pendente"
+    }
+   ]
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor#09": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2015-08-17",
+    "pr": null,
+    "commit": "827ea641b0",
+    "url": "https://github.com/discourse/discourse/commit/827ea641b0"
+   },
+   "removidoEm": null,
+   "diasNoAr": 5,
+   "reason": "Five days after the feature, commit 827ea641 'FIX: Use File.size instead of IO.size' replaced tempfile.size with File.size(tempfile.path) in the loop condition and in the filesize passed to Upload.create_for, so the size is re-read from the path after ImageOptim replaces the file.",
+   "astra": []
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor#sncc-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2016-04-06",
+    "pr": null,
+    "commit": "a5d8dfb07e",
+    "url": "https://github.com/discourse/discourse/commit/a5d8dfb07e"
+   },
+   "removidoEm": null,
+   "diasNoAr": 238,
+   "reason": "Commit a5d8dfb0 'FIX: don't hardcode maximum file size' replaced var maxSizeKB = 10 * 1024 in the 413 case with Discourse.SiteSettings['max_' + type + '_size_kb'] and made the max size settings client-visible again.",
+   "astra": []
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor#opa-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2016-12-18",
+    "pr": null,
+    "commit": "15b5fddd49",
+    "url": "https://github.com/discourse/discourse/commit/15b5fddd49"
+   },
+   "removidoEm": null,
+   "diasNoAr": 494,
+   "reason": "Commit 15b5fddd 'SECURITY: protect upload params, only allow very strict filenames' added raise Discourse::InvalidAccess unless type =~ /^[a-z\\-\\_]{1,100}$/ in UploadsController#create and OptimizedImage.ensure_safe_paths! (only [_\\-a-zA-Z0-9./]) in every *_instructions method, including downsize_instructions. Shell metacharacters can no longer reach the backtick command.",
+   "astra": []
+  }
+ }
+}

@@ -1,0 +1,66 @@
+{
+ "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "prTitle": "feat(upsampling) - Support upsampled error count with performance optimizations",
+ "upstream": "getsentry/sentry",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/sentry",
+ "base": "e805e472f4a80017957e2fbec975ea78c6ee45ed",
+ "head": "71826eb08fc7ea35a5925ad223296feadd5c5e29",
+ "tps": [
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The upsampling eligibility check passes the outer dataset instead of the actual dataset used by scoped_dataset. In paths where the query ultimately runs against discover (e.g., dashboard split) while the original dataset is metrics, upsampling may be skipped even when all projects are allowlisted.",
+   "evidenciaOpus": "organization_events_stats.py:218-220 passes the closure `dataset` to is_errors_query_for_error_upsampled_projects, while the dashboard-split path calls _get_event_stats(discover, ...) (lines ~351, 365, 406, 423) when dataset is metrics_enhanced_performance; _should_apply_sample_weight_transform then returns False for metrics, so the errors split query is never upsampled.",
+   "evidenciaAstra": "src/sentry/api/endpoints/organization_events_stats.py:218-219 checks the outer dataset, whereas line 277 executes scoped_dataset. The dashboard path passes discover at lines 365-368 while the outer dataset remains metrics-based, causing eligible error queries to skip upsampling."
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "_is_error_focused_query uses a substring match for `event.type:error` on the request query, so negated or mixed (OR transaction) discover queries are treated as error-only and get the sample_weight sum instead of count().",
+   "evidenciaOpus": "error_upsampling.py:100-103 returns True when the raw request query contains the substring `event.type:error`, so `!event.type:error` or `event.type:error OR event.type:transaction` on the discover dataset gets count() rewritten to upsampled_count(); it also ignores the query actually passed to _get_event_stats.",
+   "evidenciaAstra": "src/sentry/api/helpers/error_upsampling.py:100-103 accepts any query containing the substring event.type:error, including negated and mixed OR queries. That result enables the aggregate replacement at src/sentry/api/endpoints/organization_events_stats.py:218-223 without establishing that the executed query is restricted to errors."
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#05",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "test_error_upsampling_with_transaction_events cannot detect upsampling being applied to transaction queries, because the transaction has no sample_weight and upsampled_count() equals count() for it.",
+   "evidenciaOpus": "test_organization_events_stats.py:3654-3697 stores a transaction without sample_weight; upsampled_count is toInt64(sum(ifNull(sample_weight,1))) (discover.py:1044-1049), so the asserted counts 1 and 0 are identical whether or not upsampling is wrongly applied.",
+   "evidenciaAstra": "The transaction fixture at tests/snuba/api/endpoints/test_organization_events_stats.py:3660-3675 supplies no sampling information, and lines 3696-3697 only assert counts of one and zero. Because the replacement aggregate defaults missing weights to one at src/sentry/search/events/datasets/discover.py:1046, those assertions do not distinguish the intended count from erroneous upsampling."
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#08",
+   "severity": "high",
+   "category": "bug",
+   "bug": "With upsampling active, top-events queries pick and order the top N groups by raw count() (selected_columns/orderby are not transformed) while the plotted series use upsampled_count(), so ranking can disagree with the displayed weighted counts.",
+   "evidenciaOpus": "organization_events_stats.py:242-248 passes final_columns only as timeseries_columns to top_events_timeseries while selected_columns/orderby come unchanged from get_field_list/get_orderby, so top-N groups are chosen and ordered by raw count() while the series show weighted counts.",
+   "evidenciaAstra": "src/sentry/api/endpoints/organization_events_stats.py:242-248 transforms timeseries_columns but leaves selected_columns and orderby unchanged. src/sentry/snuba/discover.py:489-505 uses those unchanged inputs to select the limited group set, so raw-count ranking can omit groups with larger weighted counts."
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14",
+   "severity": "high",
+   "category": null,
+   "bug": "Claims only bare count() is rewritten, so aliased count, eps(), epm(), count_unique() etc. stay un-upsampled.",
+   "evidenciaOpus": "transform_query_columns_for_error_upsampling (error_upsampling.py:54-64) intentionally rewrites only count(); its docstring scopes the feature to replacing count() with sum(sample_weight). Other aggregates being unchanged is the designed scope, not a defect introduced here.",
+   "evidenciaAstra": "src/sentry/api/helpers/error_upsampling.py:58-63 rewrites only bare count(), leaving equivalent aliased counts and count-based rates unweighted. Aliases are supported at src/sentry/search/events/fields.py:680-686, and eps/epm explicitly use raw count at src/sentry/search/events/datasets/function_aliases.py:379-393, producing inconsistent results for eligible sampled-error queries."
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#15",
+   "severity": "high",
+   "category": "bug",
+   "bug": "Rewriting count() to `upsampled_count() as count` breaks responses for transformAliasToInputFormat=1: the result column is translated to the rewritten field string while the serializer still reads `count()`.",
+   "evidenciaOpus": "With transformAliasToInputFormat=1, QueryBuilder.process_results (builder/base.py:1566-1580) renames result column `count` to the FunctionDetails field string 'upsampled_count() as count', while the serializer resolves the axis via resolve_axis_column('count()') (bases/organization_events.py:75-78), so the value is not found under the requested key.",
+   "evidenciaAstra": "The replacement field is recorded in the function alias map at src/sentry/search/events/builder/base.py:746-748 and becomes the returned key when input-format translation runs at lines 1566-1571. The endpoint still resolves the original count() axis at src/sentry/api/bases/organization_events.py:605-610, so the serializer's missing-key default at src/sentry/api/serializers/snuba.py:92 returns zero instead of the weighted count."
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#18",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The 'no project IDs' test case runs with an empty allowlist mock, so it passes via the empty-allowlist branch and does not verify the empty project_ids guard.",
+   "evidenciaOpus": "tests/sentry/api/helpers/test_error_upsampling.py:48-52: options.get is still mocked to [] when calling with project_ids=[], so the `if not allowlist` branch returns False and the `if not project_ids` guard (needed because all([]) is True) is never exercised.",
+   "evidenciaAstra": "tests/sentry/api/helpers/test_error_upsampling.py:48 leaves the mocked allowlist empty before the empty-project assertion at line 52. Removing the project guard at src/sentry/api/helpers/error_upsampling.py:35-36 would still return False through lines 38-40, so the test cannot detect loss of the behavior it claims to cover."
+  }
+ ]
+}

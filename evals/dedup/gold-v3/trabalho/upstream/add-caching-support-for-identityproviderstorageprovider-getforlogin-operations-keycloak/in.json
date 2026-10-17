@@ -1,0 +1,50 @@
+{
+ "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "prTitle": "Add caching support for IdentityProviderStorageProvider.getForLogin operations",
+ "upstream": "keycloak/keycloak",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/keycloak",
+ "base": "272cfc68dcc88615396ae62ed1571918e9c58ad3",
+ "head": "e944e2acf1e64421860a8e827f93ad06c169621b",
+ "tps": [
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "severity": "low",
+   "category": "bug",
+   "bug": "Cleanup reference uses incorrect alias - should be 'idp-alias-' + i instead of 'alias'.",
+   "evidenciaOpus": "OrganizationCacheTest.java:381 and :424 register cleanup with testRealm().identityProviders().get(\"alias\")::remove instead of the created \"idp-alias-\"+i / \"idp-alias-20\", so the 21 IDPs created by testCacheIDPForLogin are never removed and leak into later tests.",
+   "evidenciaAstra": "Bug: OrganizationCacheTest.java:381 and :425 register deletion of the literal alias \"alias\", rather than the created providers. TestCleanup.java:65\u201371 suppresses deletion exceptions, leaving the remaining providers behind; the claimed count is slightly overstated because OrganizationCacheTest.java:428 explicitly deletes one."
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#05",
+   "severity": "high",
+   "category": "concurrency",
+   "bug": "On a partial cache miss getForLogin merges the previously read login query into a newly revisioned entry, so a concurrent invalidation can be lost and stale IDP IDs for other organizations persist.",
+   "evidenciaOpus": "When the searchKey is missing, getForLogin (InfinispanIdentityProviderStorageProvider.java:233-240) invalidates the key, takes the current revision and builds a new query that copies the previously read query's entries; if another transaction invalidated the key between the read and this step, the stale entries are republished under the fresh revision.",
+   "evidenciaAstra": "Concurrency: InfinispanIdentityProviderStorageProvider.java:236\u2013240 assigns a fresh revision while retaining the previously read query, and IdentityProviderListQuery.java:43 copies its old results without validation. CacheManager.java:165\u2013172 checks the newly supplied revision and counter, allowing membership invalidated before that refresh to be republished."
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08",
+   "severity": "high",
+   "category": "bug",
+   "bug": "Login-cache invalidation on update compares the organization-aware enabled state, so changing a broker to private while its organization is disabled skips invalidation and leaves the now-private IDP in the cached login list.",
+   "evidenciaOpus": "update() passes getById(...) (org-aware wrapper whose isEnabled includes org state, :455-466) as original to registerIDPLoginInvalidationOnUpdate (:403-411); with the org disabled, both predicates are false when BROKER_PUBLIC flips to false, so no invalidation, while the cache was filled from the raw delegate and still lists the IDP, which reappears once the org is re-enabled.",
+   "evidenciaAstra": "Bug: InfinispanIdentityProviderStorageProvider.java:91 obtains the original through getById(), whose wrapper makes isEnabled() depend on organization state at :438\u2013441. Consequently, :405\u2013406 can skip invalidation when a disabled organization's public broker becomes private, and OrganizationAwareIdentityProviderBean.java:80 only rechecks enabled status when that cached membership is reused."
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#14",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "The test never consumes or asserts getForLogin's returned providers and never repeats a query, so the cache-hit path that builds the result is untested and could return wrong IDPs without failing.",
+   "evidenciaOpus": "OrganizationCacheTest.java:399-412 discards the streams returned by getForLogin and asserts only IdentityProviderListQuery sizes, each mode queried once; the cache-hit path that builds the returned models (InfinispanIdentityProviderStorageProvider.java:243-254) is never executed or checked.",
+   "evidenciaAstra": "Test_gap: OrganizationCacheTest.java:401\u2013414 discards every returned stream and checks only internal cache counts; subsequent query groups at :483\u2013496 and :519\u2013532 follow explicit invalidations. Since InfinispanIdentityProviderStorageProvider.java:230\u2013231 populates the cache before returning results at :254, an empty returned stream or a broken cache-hit path can escape this test."
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Adding the organization/BROKER_PUBLIC check to the shared LoginFilter.getLoginPredicate also changes IdentityProviderBean.federatedProviderPredicate, so with organizations disabled a user's linked IdP that has an organizationId but is not public is no longer shown on the login page.",
+   "evidenciaOpus": "IdentityProviderStorageProvider.java:254 adds `orgId == null || BROKER_PUBLIC` to the shared getLoginPredicate, and IdentityProviderBean.java:225-226 uses it unmodified as federatedProviderPredicate for the base bean used when organizations are disabled (getFederatedIdentityProviders:213). A user's linked IdP that carries an organizationId but is not public is now filtered out of the base login page, a behaviour change beyond caching.",
+   "evidenciaAstra": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java:254 adds an unconditional organization/public restriction, which services/src/main/java/org/keycloak/forms/login/freemarker/model/IdentityProviderBean.java:213 applies to linked providers through the predicate returned at line 226. With the organization feature disabled, model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:433 returns the original provider without disabling it, so this new restriction removes previously visible, enabled linked IdPs."
+  }
+ ]
+}

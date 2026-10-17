@@ -1,0 +1,43 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "prOriginal": {
+  "numero": 38446,
+  "url": "https://github.com/keycloak/keycloak/pull/38446",
+  "mergedAt": "2025-04-03",
+  "nota": "Found via commit history of server-spi-private/.../CredentialHelper.java: squash commit 134437a5 'Create recovery keys in user storage or local (#38446)'. PR head sha equals benchmark head ce2dcc53; the squash tree is identical to the benchmark head for all 8 touched files."
+ },
+ "tps": {
+  "implement-recovery-key-support-for-user-storage-providers-keycloak#02": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 562,
+   "reason": "BackwardsCompatibilityUserStorage.getCredentials on main still builds the recovery-codes credential with RecoveryAuthnCodesCredentialModel.createFromValues(codes, createdDate, userLabel) and never copies myUser.recoveryCodes.getId(); createFromValues still sets no id. The only later commit on the file is the Spotless import reorder (#43432).",
+   "astra": []
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak#05": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 562,
+   "reason": "CredentialHelper.createRecoveryCodesCredential on main still returns right after user.credentialManager().updateCredential(...) succeeds in the user storage, without calling the local provider's createCredential (the only change, #50787 on 2026-10-07, adds a return value). UserCredentialManager.isValid still runs the local CredentialInputValidators for inputs the storage did not validate, so an older local recovery-codes credential is neither removed nor stops validating.",
+   "astra": []
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak#06": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 562,
+   "reason": "RecoveryAuthnCodesFormAuthenticator on main still takes the credential from RecoveryAuthnCodesUtils.getCredential (federated first) and, when allCodesUsed(), removes it with credentialManager().removeStoredCredentialById(id), which goes to getStoreForUser (local store) only. Later commits (#38994, #39213, #40021, #42050) touched other parts of the authenticator, not this removal.",
+   "astra": []
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 562,
+   "reason": "RecoveryAuthnCodesUtils.getCredential on main is unchanged: getFederatedCredentialsStream() is queried first, then local storage. UserCredentialManager.getFederatedCredentialsStream still delegates straight to the provider's getCredentials, and LDAPStorageProvider.getCredentials still loads the LDAP object and throws IllegalStateException when it is missing.",
+   "astra": []
+  }
+ }
+}

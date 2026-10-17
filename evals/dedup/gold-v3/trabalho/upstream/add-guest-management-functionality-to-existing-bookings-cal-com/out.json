@@ -1,0 +1,164 @@
+{
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "prOriginal": {
+    "numero": 14740,
+    "url": "https://github.com/calcom/cal.diy/pull/14740",
+    "mergedAt": "2024-08-20",
+    "nota": "Found via the commit history of addGuests.handler.ts (first commit baa9045af7, 'feat: ability to add guests via app.cal.com/bookings (#14740)'). PR headRefOid equals the benchmark head and the merged handler is byte-identical to the benchmark head. The repo calcom/cal.com now redirects to calcom/cal.diy."
+  },
+  "tps": {
+    "add-guest-management-functionality-to-existing-bookings-cal-com#01": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2024-10-09",
+        "pr": 17017,
+        "commit": "83d7bf322a25edc1e17ede9d2af5a25f2aebd91b",
+        "url": "https://github.com/calcom/cal.diy/pull/17017"
+      },
+      "removidoEm": null,
+      "diasNoAr": 50,
+      "reason": "PR #17017 changed `isTeamAdmin(...) && isTeamOwner(...)` to `||` in addGuests.handler.ts, so team ADMINs pass the check. The check was later replaced by PermissionCheckService (#24026, fallback OWNER/ADMIN) and is absent today, but the fix came first.",
+      "astra": []
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com#02": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2025-10-15",
+        "pr": 24298,
+        "commit": "64297f027c124be2d0a51c397901064c65a74df4",
+        "url": "https://github.com/calcom/cal.diy/pull/24298"
+      },
+      "removidoEm": null,
+      "diasNoAr": 421,
+      "reason": "PR #24298 rewrote the filter to compare `extractBaseEmail(guest).toLowerCase()` against the lowercased blacklist; today sanitizeAndFilterGuests still does `blacklistedGuestEmails.includes(baseGuestEmail)` with the lowercased input, so mixed case no longer bypasses it.",
+      "astra": []
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com#03": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2025-10-15",
+        "pr": 24298,
+        "commit": "64297f027c124be2d0a51c397901064c65a74df4",
+        "url": "https://github.com/calcom/cal.diy/pull/24298"
+      },
+      "removidoEm": null,
+      "diasNoAr": 421,
+      "reason": "PR #24298 added a Set-based dedup of input guests by lowercased base email (now deduplicateGuestEmails), so repeated emails in one request are collapsed before createMany.",
+      "astra": []
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com#04": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 788,
+      "reason": "Today the handler still reads booking.attendees, filters in memory, then BookingRepository.updateBookingAttendees runs a separate booking.update with attendees.createMany, no transaction or lock. schema.prisma Attendee still has only indexes on email/bookingId, no unique (bookingId,email), so concurrent requests can both insert.",
+      "astra": []
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com#05": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 788,
+      "reason": "PR #24298 made the existing-attendee dedup case-insensitive, but validateUserPermissions today still uses `attendee.email === user.email`, so an attendee whose stored email differs in case is still FORBIDDEN. Half of the TP's behaviour remains.",
+      "astra": [
+        {
+          "pergunta": "Dedup half fixed by #24298, authorization still case-sensitive today; which status for the TP as a whole?",
+          "resposta": "pendente: partial fix, the authorization still compares case-sensitively and can return FORBIDDEN for a valid attendee, so the defective behaviour still exists.",
+          "veredito": "pendente"
+        }
+      ]
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com#06": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2025-10-15",
+        "pr": 24298,
+        "commit": "64297f027c124be2d0a51c397901064c65a74df4",
+        "url": "https://github.com/calcom/cal.diy/pull/24298"
+      },
+      "removidoEm": null,
+      "diasNoAr": 421,
+      "reason": "PR #24298 changed `sendAddGuestsEmails(evt, guests)` to pass uniqueGuests; today sendGuestNotifications passes uniqueGuestEmails (filtered of existing attendees) as newGuests, so a re-submitted existing attendee no longer gets AttendeeScheduledEmail.",
+      "astra": []
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com#08": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2025-10-28",
+        "pr": 24414,
+        "commit": "b620581d7a0942f94551e2f08653b465678c78f6",
+        "url": "https://github.com/calcom/cal.diy/pull/24414"
+      },
+      "removidoEm": null,
+      "diasNoAr": 434,
+      "reason": "PR #24414 moved the calendar update into updateCalendarEvent, building EventManager from `...booking.user` with getUsersCredentialsIncludeServiceAccountKey(booking.user) instead of ctx.user, so the organizer's credentials are used. Still so today.",
+      "astra": []
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com#09": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 788,
+      "reason": "The flow is unchanged today: guests are persisted via updateBookingAttendees, then `await updateCalendarEvent(booking, evt)` runs with no try/catch in the handler, and EventManager.updateCalendarAttendees still just awaits updateAllCalendarEvents (which keeps its internal try/catch). No upstream change touched this ordering or error handling.",
+      "astra": []
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com#10": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 788,
+      "reason": "validateUserPermissions today still authorizes `isOrganizer || isAttendee`, so any attendee can add guests and trigger invites; the permission model is unchanged (team-admin path was dropped, attendee path kept).",
+      "astra": []
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com#11": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 788,
+      "reason": "addGuests.schema.ts today is `guests: z.array(ZGuestSchema)` with no .max(); the tRPC route uses authedProcedure with no extra limit, and the handler inserts all filtered guests and emails each attendee. No size cap was added.",
+      "astra": []
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com#14": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 788,
+      "reason": "AddGuestsDialog.tsx today: onSuccess still only toasts, closes and resets multiEmailValue, and handleAdd's success branch never calls setIsInvalidEmail(false); only the Cancel button clears it. The stale error banner can still reappear.",
+      "astra": []
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com#16": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2025-10-28",
+        "pr": 24414,
+        "commit": "b620581d7a0942f94551e2f08653b465678c78f6",
+        "url": "https://github.com/calcom/cal.diy/pull/24414"
+      },
+      "removidoEm": null,
+      "diasNoAr": 434,
+      "reason": "PR #24414 replaced the sendAddGuestsEmails call with BookingEmailSmsHandler.handleAddGuests, which passes eventType metadata to the new sendAddGuestsEmailsAndSMS; it checks eventTypeDisableHostEmail and shouldSkipAttendeeEmailWithSettings before sending.",
+      "astra": []
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com#e2b-01": {
+      "status": "confirmado",
+      "corrigidoEm": {
+        "data": "2025-07-04",
+        "pr": 22247,
+        "commit": "f40a1c92ef3de27d072fb3fbeba2748e4e5c861c",
+        "url": "https://github.com/calcom/cal.diy/pull/22247"
+      },
+      "removidoEm": null,
+      "diasNoAr": 318,
+      "reason": "PR #22247 (fix: Duplicate calendar event when a guest is added) added `iCalUID: booking.iCalUID` to the CalendarEvent built in addGuests.handler.ts; buildCalendarEvent still sets it today.",
+      "astra": []
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com#sncc-01": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 788,
+      "reason": "The handler still throws FORBIDDEN with message 'you_do_not_have_permission' and AddGuestsDialog still renders t(err.message), but the key is absent from packages/i18n/locales/en/common.json today, so the raw key is still shown.",
+      "astra": []
+    }
+  }
+}
