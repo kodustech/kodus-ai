@@ -28,6 +28,7 @@ import { CodeReviewCoreModule } from '@libs/code-review/modules/code-review-core
 import { GetCustomAgentsStatusUseCase } from '../application/use-cases/custom-agents/get-custom-agents-status.use-case';
 import { ResolveCustomAgentUseCase } from '../application/use-cases/custom-agents/resolve-custom-agent.use-case';
 import { TryCustomAgentUseCase } from '../application/use-cases/custom-agents/try-custom-agent.use-case';
+import { CustomAgentsEngineModule } from './custom-agents-engine.module';
 
 @Module({
     imports: [
@@ -47,6 +48,8 @@ import { TryCustomAgentUseCase } from '../application/use-cases/custom-agents/tr
         forwardRef(() => LicenseModule),
         // Stored findings, for the custom agents status.
         forwardRef(() => CodeReviewCoreModule),
+        // Skills/docs reader, plugin tool catalog and Try it runner.
+        forwardRef(() => CustomAgentsEngineModule),
     ],
     providers: [
         DeleteRepositoryCodeReviewParameterUseCase,

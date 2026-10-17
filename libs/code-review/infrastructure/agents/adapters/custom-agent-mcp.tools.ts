@@ -302,3 +302,77 @@ export async function buildCustomAgentMcpTools(params: {
         },
     };
 }
+
+/** One connection and the read-only tools it offers (the settings picker). */
+export interface ReadOnlyMcpListing {
+    integrationId: string;
+    name: string;
+    tools: Array<{ name: string; description?: string }>;
+}
+
+/**
+ * The read-only tools each connection offers, by the same rule a run applies,
+ * so the settings screen can only offer what a review would accept. A server
+ * that cannot be reached is listed with no tools.
+ */
+export async function listReadOnlyMcpTools(params: {
+    servers: readonly CustomAgentMcpServer[];
+    createAdapter?: (config: MCPAdapterConfig) => MCPAdapter;
+    connectTimeoutMs?: number;
+}): Promise<ReadOnlyMcpListing[]> {
+    const createAdapter = params.createAdapter ?? createMCPAdapter;
+    const timeoutMs = params.connectTimeoutMs ?? DEFAULT_MCP_CONNECT_TIMEOUT_MS;
+
+    return Promise.all(
+        params.servers.map(async (server) => {
+            const listing: ReadOnlyMcpListing = {
+                integrationId: server.integrationId,
+                name: server.name,
+                tools: [],
+            };
+            let adapter: MCPAdapter | undefined;
+            try {
+                adapter = createAdapter({
+                    servers: [server],
+                    defaultTimeout: timeoutMs,
+                    maxRetries: 0,
+                });
+                await withTimeout(
+                    adapter.connect(),
+                    timeoutMs,
+                    `MCP ${server.name} connect`,
+                );
+                const listed = await withTimeout(
+                    adapter.getTools(),
+                    timeoutMs,
+                    `MCP ${server.name} list`,
+                );
+                const marks = serverMarksReadOnly(listed);
+                const connectionAllows = server.allowedTools?.length
+                    ? new Set(server.allowedTools)
+                    : null;
+                listing.tools = listed
+                    .filter(
+                        (raw) =>
+                            (!connectionAllows ||
+                                connectionAllows.has(raw.name)) &&
+                            isReadOnlyMcpTool(raw, marks),
+                    )
+                    .map((raw) => ({
+                        name: raw.name,
+                        description: raw.description,
+                    }));
+            } catch (error) {
+                logger.warn({
+                    message: 'MCP server unavailable while listing tools',
+                    context: 'listReadOnlyMcpTools',
+                    error,
+                    metadata: { server: server.name },
+                });
+            } finally {
+                await adapter?.disconnect().catch(() => undefined);
+            }
+            return listing;
+        }),
+    );
+}

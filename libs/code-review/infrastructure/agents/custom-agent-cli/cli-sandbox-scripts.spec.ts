@@ -67,7 +67,7 @@ const withStubs = (
 
 const runBash = (dir: string, script: string) =>
     spawnSync('bash', ['-c', script], {
-        env: { PATH: `${dir}:/usr/bin:/bin` },
+        env: { PATH: `${dir}:/usr/bin:/bin` } as NodeJS.ProcessEnv,
         encoding: 'utf8',
     });
 

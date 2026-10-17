@@ -153,5 +153,5 @@ export function checkCliInstallCommand(
 export function cliInstallProblem(install: unknown): string | null {
     if (typeof install !== 'string') return 'install must be a string';
     const check = checkCliInstallCommand(install);
-    return check.ok ? null : check.reason;
+    return check.ok === false ? check.reason : null;
 }

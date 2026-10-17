@@ -488,7 +488,13 @@ export function firstDuplicate<T>(values: readonly T[]): T | undefined {
  * agent with that id were created later.
  */
 export function knowledgeLinkProblems(
-    knowledge: ReadonlyArray<{ path?: string; linkedTo?: unknown[] }> | undefined,
+    knowledge:
+        | ReadonlyArray<{
+              path?: string;
+              linkedTo?: readonly unknown[];
+              [key: string]: unknown;
+          }>
+        | undefined,
     agents: ReadonlyArray<{ id?: string }> | undefined,
 ): string[] {
     const ids = new Set((agents ?? []).map((agent) => agent?.id));

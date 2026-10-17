@@ -133,8 +133,12 @@ describe('ReviewOrchestratorService — custom agents', () => {
             }),
         );
 
-        expect(generalist.execute.mock.calls[0][0].knowledge).toBe(main);
-        expect(kodyRules.execute.mock.calls[0][0].knowledge).toBeUndefined();
+        expect((generalist.execute.mock.calls[0] as any[])[0].knowledge).toBe(
+            main,
+        );
+        expect(
+            (kodyRules.execute.mock.calls[0] as any[])[0].knowledge,
+        ).toBeUndefined();
         expect((customCalls.get('agent-1') as any).knowledge).toBe(ledger);
         expect((customCalls.get('agent-2') as any).knowledge).toBeUndefined();
         expect(
