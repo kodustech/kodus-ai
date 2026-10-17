@@ -40,6 +40,18 @@
                 "floor": 0.85,
                 "observed": 1
             }
+        },
+        "gpt-6-sol": {
+            "rule": {
+                "floor": null,
+                "observed": 0.833,
+                "noFloor": "Asked to narrow a rule, it wrote nothing in both runs; a floor would not be above what a model that never writes scores."
+            },
+            "memory": {
+                "floor": null,
+                "observed": 0.714,
+                "noFloor": "Asked to save a memory, it wrote nothing in both runs: it scores what a model that never writes scores."
+            }
         }
     }
 }

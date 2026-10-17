@@ -309,6 +309,26 @@ const READERS = {
 // ([a-z0-9._-]); the row's meta keeps the id itself.
 const nameOf = (model) => String(model).toLowerCase().replace(/[^a-z0-9._-]+/g, '_');
 
+// Why a model has no floor on a stage's eval, when its targets file says so: a `noFloor`
+// sentence beside the measure (models.<model>, sets.<set>.models.<model>, and for one eval
+// measuring two stages, the stage's kind under it).
+function noFloorReason(stage, model, set) {
+    if (!stage.eval || !model) return null;
+    let t;
+    try {
+        t = JSON.parse(fs.readFileSync(path.join(__dirname, '..', stage.eval.path, 'targets.json'), 'utf8'));
+    } catch {
+        return null;
+    }
+    const kind = stage.id.startsWith('thread-') ? stage.id.slice('thread-'.length) : null;
+    for (const scope of [t.sets?.[set]?.models, set === 'controlled' ? t.models : null]) {
+        const entry = scope?.[model];
+        const at = kind && entry?.[kind] ? entry[kind] : entry;
+        if (typeof at?.noFloor === 'string') return at.noFloor;
+    }
+    return null;
+}
+
 // One eval result as a row: its number against its floor, status from the verdict.
 function evalRow(name, stage, result, verdict, extraMeta) {
     const meta = { ...stageMeta(stage), eval: describeEval(stage), ...extraMeta };
@@ -316,12 +336,13 @@ function evalRow(name, stage, result, verdict, extraMeta) {
     if (!read || !Number.isFinite(read.value)) {
         return { name, status: 'infra', value: null, unit: 'ratio', meta: { ...meta, reason: result ? 'the result has no value' : 'no result' } };
     }
+    const noFloor = read.floor === null ? noFloorReason(stage, read.extra.model || extraMeta.model, extraMeta.set) : null;
     return {
         name,
         status: VERDICT_STATUS[verdict] || 'infra',
         value: read.value,
         unit: 'ratio',
-        meta: { ...meta, floor: read.floor, baseline: read.baseline, ...read.extra, verdict: verdict || null },
+        meta: { ...meta, floor: read.floor, baseline: read.baseline, ...read.extra, verdict: verdict || null, ...(noFloor ? { no_floor: noFloor } : {}) },
     };
 }
 

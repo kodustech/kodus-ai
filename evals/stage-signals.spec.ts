@@ -218,6 +218,10 @@ describe('stage-signals: eval rows', () => {
         expect(row.meta).toMatchObject({ stage: 'conversation', tier: 'weekly', set: 'controlled', model: 'kimi-k2.7-code@openrouter', floor: 0.85, verdict: 'pass' });
         expect(row.meta.case_catalog).toBeUndefined();
         expect(weeklyRows(result, 'ungated', { stageId: 'conversation', model: 'm', set: 'controlled' })[0].status).toBe('yellow');
+        // A model whose targets say why it has no floor carries the reason to the panel.
+        const unfloored = { ...result, model: 'gpt-6-sol', metric: { ...result.metric, floor: null } };
+        expect(weeklyRows(unfloored, 'ungated', { stageId: 'thread-memory', model: 'gpt-6-sol', set: 'controlled' })[0].meta.no_floor).toEqual(expect.stringContaining('wrote nothing'));
+        expect(weeklyRows(result, 'pass', { stageId: 'conversation', model: 'kimi-k2.7-code@openrouter', set: 'controlled' })[0].meta.no_floor).toBeUndefined();
         expect(weeklyRows(null, 'infra', { stageId: 'finder', model: 'm', set: 'full' })[0]).toMatchObject({ name: 'evals.weekly.finder.full.m', status: 'infra' });
         expect(weeklyRows(result, 'pass', { stageId: 'parse', model: 'm', set: 'controlled' })).toEqual([]);
     });

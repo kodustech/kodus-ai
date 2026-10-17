@@ -22,6 +22,11 @@
         "claude-sonnet-5-5": {
             "floor": 0.89,
             "observed": 0.963
+        },
+        "gpt-6-sol": {
+            "floor": null,
+            "observed": 0.796,
+            "noFloor": "Its replies said it had not checked the commit, or answered with a condition, instead of reading the code; a floor would not be above what the scripted model scores."
         }
     }
 }
