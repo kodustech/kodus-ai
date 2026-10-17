@@ -165,9 +165,6 @@ const blankAgent = (params: {
         tag: { color: params.color },
         format: "inline",
         suggestedFix: "when-confident",
-        // New agents post, so the first pull request shows what they do.
-        // Shadow stays one switch away for a team that wants to watch first.
-        mode: "post",
     },
 });
 
@@ -321,7 +318,6 @@ export const agentUsageLine = (
     return [
         `${status.pullRequests} ${status.pullRequests === 1 ? "PR" : "PRs"}`,
         `${status.posted} posted`,
-        `${status.shadowKept} in shadow`,
         `${status.dropped} dropped`,
         `last ${windowDays} days`,
     ].join(" · ");
@@ -461,11 +457,7 @@ export const pullRequestPlan = (
     ].filter(Boolean);
     if (!steps.length) steps.push("follows its instructions");
     steps.push("checks each finding");
-    steps.push(
-        agent.presentation.mode === "shadow"
-            ? "keeps findings unposted"
-            : `posts as ${agent.name || "this agent"}`,
-    );
+    steps.push(`posts as ${agent.name || "this agent"}`);
     return `${when} — ${steps.join(", ")}.`;
 };
 

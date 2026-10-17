@@ -118,9 +118,6 @@ export const WhatItDoes = ({
                         {clis} {clis === 1 ? "CLI" : "CLIs"}
                     </Chip>
                 )}
-                <Chip>
-                    {agent.presentation.mode === "shadow" ? "Shadow" : "Posts"}
-                </Chip>
             </div>
         </Section>
     );
@@ -241,17 +238,6 @@ export const HowItComments = ({
             </Field>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Mode">
-                    <Choice
-                        value={presentation.mode}
-                        disabled={!canEdit}
-                        onChange={(mode) => set({ mode })}
-                        options={[
-                            { value: "post", label: "Post" },
-                            { value: "shadow", label: "Shadow" },
-                        ]}
-                    />
-                </Field>
                 <Field label="Format">
                     <Choice
                         value={presentation.format}

@@ -11,7 +11,6 @@ import {
     CircleAlertIcon,
     CircleCheckIcon,
     CircleDashedIcon,
-    EyeOffIcon,
     PauseCircleIcon,
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
@@ -59,7 +58,6 @@ export const StatusStrip = ({
 
     const problems = draftProblems(report);
     const idle = !status || status.pullRequests === 0;
-    const shadow = agent.presentation.mode === "shadow";
 
     const headline = !agent.enabled
         ? "Off · this agent doesn't run"
@@ -69,9 +67,7 @@ export const StatusStrip = ({
             ? "On · runs on every repository that inherits it"
             : idle
               ? `No findings in the last ${windowDays} days`
-              : shadow
-                ? "Running in shadow"
-                : "Posting";
+              : "Posting";
 
     return (
         <Card
@@ -87,8 +83,6 @@ export const StatusStrip = ({
                     <CircleAlertIcon className="text-warning size-4" />
                 ) : idle ? (
                     <CircleDashedIcon className="text-text-tertiary size-4" />
-                ) : shadow ? (
-                    <EyeOffIcon className="text-text-secondary size-4" />
                 ) : (
                     <CircleCheckIcon className="text-success size-4" />
                 )}
@@ -99,17 +93,11 @@ export const StatusStrip = ({
                     <span className="text-text-secondary">
                         · {status.pullRequests}{" "}
                         {status.pullRequests === 1 ? "PR" : "PRs"} ·{" "}
-                        {status.posted} posted · {status.shadowKept} in shadow ·{" "}
-                        {status.dropped} dropped in {windowDays} days
+                        {status.posted} posted · {status.dropped} dropped in{" "}
+                        {windowDays} days
                     </span>
                 )}
             </div>
-            {agent.enabled && shadow && (
-                <p className="text-text-secondary pl-6 text-xs">
-                    Findings are kept, not posted. Switch to Post under “How it
-                    comments” once they read right.
-                </p>
-            )}
             {problems.slice(0, 5).map((problem) => (
                 <p key={problem} className="text-warning pl-6 text-xs">
                     {problem}

@@ -31,7 +31,7 @@ import { agentPageHref, useCustomAgentsForm } from "./use-custom-agents-form";
 /**
  * Starts an agent from a template, or from a skill already in the
  * repository. The agent is saved right away and posts on the next pull
- * request its files match; Shadow is one switch away on its row.
+ * request its files match.
  */
 export const NewAgentDialog = ({
     open,
@@ -112,8 +112,6 @@ export const NewAgentDialog = ({
                     <DialogTitle>New agent</DialogTitle>
                     <DialogDescription>
                         It comments on the next pull request its files match.
-                        Switch it to Shadow to keep its findings unposted while
-                        you try it.
                     </DialogDescription>
                 </DialogHeader>
 

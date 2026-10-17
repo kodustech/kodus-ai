@@ -45,8 +45,11 @@ export type CustomAgentPresentation = {
     maxComments?: number;
     suggestedFix: "when-confident" | "never";
     writing?: string;
-    /** `shadow` keeps findings unposted; `post` publishes them. */
-    mode: "shadow" | "post";
+    /**
+     * @deprecated Ignored: custom agents always post. Configs saved while a
+     * shadow mode existed may still carry it.
+     */
+    mode?: "shadow" | "post";
 };
 
 export type CustomAgent = {
@@ -171,7 +174,6 @@ export type CustomAgentStatus = {
     agentId: string;
     pullRequests: number;
     posted: number;
-    shadowKept: number;
     dropped: number;
 };
 

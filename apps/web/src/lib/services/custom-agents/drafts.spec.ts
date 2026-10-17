@@ -57,11 +57,11 @@ describe("custom agent drafts", () => {
             name: "Architecture",
             enabled: true,
             presentation: {
-                mode: "post",
                 format: "inline",
                 suggestedFix: "when-confident",
             },
         });
+        expect(first.presentation).not.toHaveProperty("mode");
         expect(first.instructions.length).toBeGreaterThan(40);
         expect(second.id).toBe("architecture-2");
     });
@@ -70,7 +70,7 @@ describe("custom agent drafts", () => {
         const agent = createAgentFromTemplate("blank", []);
         expect(agent.instructions).toBe("");
         expect(agent.name).toBe("New agent");
-        expect(agent.presentation.mode).toBe("post");
+        expect(agent.presentation).not.toHaveProperty("mode");
     });
 
     it("imports a repository skill as an agent linked to it", () => {
@@ -94,7 +94,7 @@ describe("custom agent drafts", () => {
             kind: "skill",
             linkedTo: [{ agentId: agent.id }],
         });
-        expect(agent.presentation.mode).toBe("post");
+        expect(agent.presentation).not.toHaveProperty("mode");
     });
 
     it("stops adding agents at the limit", () => {
@@ -129,12 +129,11 @@ describe("custom agent drafts", () => {
                     agentId: "a",
                     pullRequests: 3,
                     posted: 4,
-                    shadowKept: 2,
                     dropped: 1,
                 },
                 30,
             ),
-        ).toBe("3 PRs · 4 posted · 2 in shadow · 1 dropped · last 30 days");
+        ).toBe("3 PRs · 4 posted · 1 dropped · last 30 days");
     });
 
     it("links and unlinks knowledge without losing the registration", () => {
@@ -582,14 +581,14 @@ describe("custom agent drafts", () => {
             );
         });
 
-        it("runs on every pull request, keeps shadow findings unposted", () => {
-            const agent: CustomAgent = {
+        it("runs on every pull request and posts, even for an agent saved in the retired shadow mode", () => {
+            const agent = {
                 ...base(),
                 scope: { exclude: ["**/*.test.ts"] },
                 presentation: { ...base().presentation, mode: "shadow" },
-            };
+            } as CustomAgent;
             expect(pullRequestPlan(agent, [], [])).toBe(
-                "On every pull request except **/*.test.ts — follows its instructions, checks each finding, keeps findings unposted.",
+                "On every pull request except **/*.test.ts — follows its instructions, checks each finding, posts as E2E tests reviewer.",
             );
         });
 

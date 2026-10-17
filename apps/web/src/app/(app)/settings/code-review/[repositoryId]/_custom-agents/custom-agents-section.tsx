@@ -33,7 +33,7 @@ import { ArrowRightIcon, PlusIcon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
 import { useByokModels } from "../agents/[agentId]/_components/agent-sections";
-import { Chip, Choice, Field } from "../agents/[agentId]/_components/field";
+import { Chip, Field } from "../agents/[agentId]/_components/field";
 import { AgentKnowledgeField } from "../agents/[agentId]/_components/knowledge-card";
 import { NewAgentDialog } from "./new-agent-dialog";
 import {
@@ -170,22 +170,6 @@ const AgentInlineConfig = ({
                         <Chip key={chip}>{chip}</Chip>
                     ))}
                 </span>
-                <Choice
-                    size="sm"
-                    label={`Post or shadow: ${agent.name}`}
-                    value={agent.presentation.mode}
-                    disabled={!canEdit}
-                    onChange={(mode) =>
-                        patch((current) => ({
-                            ...current,
-                            presentation: { ...current.presentation, mode },
-                        }))
-                    }
-                    options={[
-                        { value: "post", label: "Post" },
-                        { value: "shadow", label: "Shadow" },
-                    ]}
-                />
                 <Link
                     href={agentPageHref(repositoryId, agent.id, directoryId)}
                     className="text-text-secondary hover:text-text-primary ml-auto flex items-center gap-1.5 text-xs">
@@ -337,12 +321,6 @@ export const CustomAgentsSection = ({ canEdit }: { canEdit: boolean }) => {
                                                 className="text-text-primary cursor-pointer text-sm font-medium">
                                                 {agent.name}
                                             </label>
-                                            {agent.presentation.mode ===
-                                                "shadow" && (
-                                                <span className="bg-card-lv2 text-text-secondary inline-flex h-5 items-center rounded px-1.5 text-xs font-medium">
-                                                    Shadow
-                                                </span>
-                                            )}
                                         </div>
                                         <p className="text-text-secondary text-xs">
                                             {describeAgent(agent)}
