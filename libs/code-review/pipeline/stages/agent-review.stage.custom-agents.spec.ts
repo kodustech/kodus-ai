@@ -367,6 +367,101 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
         ).toBe('partial');
     });
 
+    describe('dedup against native findings and Kody Rules', () => {
+        const native = (over: Record<string, any> = {}) => ({
+            ...finding({
+                label: 'potential_issues',
+                severity: 'medium',
+                suggestionContent: 'Native: the entry is one-sided.',
+                ...over,
+            }),
+            customAgent: undefined,
+        });
+        const honorEveryMerge = (stage: AgentReviewStage) =>
+            jest
+                .spyOn(stage as any, 'resolveDedupMerge')
+                .mockResolvedValue({ honor: true, reason: 'same', score: 1 });
+
+        it('keeps the custom agent finding over a Kody Rule on the same problem', async () => {
+            const { stage } = makeStage(
+                output([
+                    finding(),
+                    native({
+                        label: 'kody_rules',
+                        brokenKodyRulesIds: ['rule-ledger'],
+                        suggestionContent: 'Rule: entries must balance.',
+                    }),
+                ]),
+            );
+            honorEveryMerge(stage);
+
+            const result = await run(stage, makeContext([agent()]));
+
+            expect(contents(result.validSuggestions)).toEqual([
+                'The entry is booked on one side only.',
+            ]);
+        });
+
+        it('a finding its own agent filters out never takes a native one with it', async () => {
+            (hasManagedModelKey as jest.Mock).mockReturnValue(true);
+            runSpy.mockImplementation(async (args: any) =>
+                args?.runName === 'code-review-dedup'
+                    ? { groups: [{ keep: 0, duplicates: [1] }], unique: [] }
+                    : { groups: [], unique: [] },
+            );
+            const { stage } = makeStage(
+                output([native(), finding({ severity: 'medium' })]),
+            );
+            honorEveryMerge(stage);
+
+            const result = await run(
+                stage,
+                makeContext([
+                    agent({
+                        presentation: { mode: 'post', minSeverity: 'high' },
+                    }),
+                ]),
+            );
+
+            expect(contents(result.validSuggestions)).toEqual([
+                'Native: the entry is one-sided.',
+            ]);
+        });
+
+        it('a finding over its agent comment limit never takes a native one with it', async () => {
+            (hasManagedModelKey as jest.Mock).mockReturnValue(true);
+            runSpy.mockImplementation(async (args: any) =>
+                args?.runName === 'code-review-dedup'
+                    ? { groups: [{ keep: 0, duplicates: [2] }], unique: [1] }
+                    : { groups: [], unique: [] },
+            );
+            const { stage } = makeStage(
+                output([
+                    native(),
+                    finding({
+                        relevantLinesStart: 9,
+                        relevantLinesEnd: 9,
+                        severity: 'critical',
+                        suggestionContent: 'Critical one.',
+                    }),
+                    finding({ severity: 'medium' }),
+                ]),
+            );
+            honorEveryMerge(stage);
+
+            const result = await run(
+                stage,
+                makeContext([
+                    agent({ presentation: { mode: 'post', maxComments: 1 } }),
+                ]),
+            );
+
+            expect(contents(result.validSuggestions).sort()).toEqual(
+                ['Critical one.', 'Native: the entry is one-sided.'].sort(),
+            );
+        });
+    });
+
     describe('skills and docs', () => {
         const knowledge = [
             {

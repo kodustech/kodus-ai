@@ -1351,8 +1351,39 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 customAgentsById,
             );
             allDiscarded.push(...shadowSplit.shadow);
-            const severityNormalized: Partial<CodeSuggestion>[] =
+            let severityNormalized: Partial<CodeSuggestion>[] =
                 shadowSplit.active;
+
+            // A custom agent's own severity floor and comment limit apply
+            // whatever the team's filter is (#2172), and also before dedup:
+            // a finding dropped after it had absorbed a native one would take
+            // the native comment with it.
+            if (customAgentsById.size > 0) {
+                const belowAgentFloor = severityNormalized.filter(
+                    (s) =>
+                        customAgentSeverityVerdict(s, customAgentsById) ===
+                        false,
+                );
+                if (belowAgentFloor.length) {
+                    severityNormalized = severityNormalized.filter(
+                        (s) => !belowAgentFloor.includes(s),
+                    );
+                    for (const s of belowAgentFloor) {
+                        allDiscarded.push({
+                            ...s,
+                            priorityStatus:
+                                PriorityStatus.DISCARDED_BY_SEVERITY,
+                            deliveryStatus: DeliveryStatus.NOT_SENT,
+                        });
+                    }
+                }
+                const capped = capCustomAgentComments(
+                    severityNormalized,
+                    customAgentsById,
+                );
+                severityNormalized = capped.kept;
+                allDiscarded.push(...capped.overflow);
+            }
 
             // Deduplicate Kody Rules deterministically by ruleUuid.
             // No LLM call needed — the ruleUuid unambiguously identifies
@@ -1435,15 +1466,21 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // deduped in separate streams above, so both survive. Absorb the
             // suggestion into the Kody Rule when they describe the same bug (the
             // rule wins — it's user-configured and carries the violation link).
+            // Custom agent findings sit this one out: against a rule they are
+            // the representative (below).
             try {
-                dedupedNonRules =
+                const keptNative = new Set(
                     await this.crossDedupSuggestionsAgainstKodyRules(
-                        dedupedNonRules,
+                        dedupedNonRules.filter((s) => !isCustomAgentFinding(s)),
                         kodyRulesForDedup,
                         prNumber,
                         context.codeReviewConfig?.byokConfig,
                         telemetryMeta,
-                    );
+                    ),
+                );
+                dedupedNonRules = dedupedNonRules.filter(
+                    (s) => isCustomAgentFinding(s) || keptNative.has(s),
+                );
             } catch (crossErr) {
                 this.logger.warn({
                     message: `[DEDUP-CROSS] PR#${prNumber}: cross-stream dedup failed, keeping all`,
@@ -1581,33 +1618,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
             }
 
-            // A custom agent's own severity floor applies whatever the
-            // team's filter is (#2172); then its comment limit and fix policy.
+            // The agent's fix policy (its floor and limit applied before dedup).
             if (customAgentsById.size > 0) {
-                const belowAgentFloor = deduped.filter(
-                    (s) =>
-                        customAgentSeverityVerdict(s, customAgentsById) ===
-                        false,
-                );
-                if (belowAgentFloor.length) {
-                    deduped = deduped.filter(
-                        (s) => !belowAgentFloor.includes(s),
-                    );
-                    for (const s of belowAgentFloor) {
-                        allDiscarded.push({
-                            ...s,
-                            priorityStatus:
-                                PriorityStatus.DISCARDED_BY_SEVERITY,
-                            deliveryStatus: DeliveryStatus.NOT_SENT,
-                        });
-                    }
-                }
-                const capped = capCustomAgentComments(
-                    deduped,
-                    customAgentsById,
-                );
-                deduped = capped.kept;
-                allDiscarded.push(...capped.overflow);
                 stripCustomAgentFixes(deduped, customAgentsById);
             }
 
