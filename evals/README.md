@@ -54,12 +54,37 @@ A test passes or fails the same on every run: unit tests, and contract tests tha
 
 ## Experiments
 
-Is a change to a step better than what main has? `node evals/experiment.js --step=<step>` answers it on your machine (`evals/experiment.js` `STEP_EVALS` lists each step's evals: one that says whether it is better, and the ones that must not get worse).
+Is a change to a step better than what main has? An experiment answers it on your machine or in CI.
 
-- **The two sides:** the candidate is your branch's HEAD, committed (the run refuses uncommitted changes); the base is where the branch left `--base` (main by default). The evals must be the same on both sides: land an eval change on main first.
-- **What it answers, in order:** *Did it break anything?* (the regression phase: the main eval on its controlled set and the evals that must not get worse) and *Is it better?* (the decision phase: the main eval on its extended set, enough cases for a real change to clear its interval). Each eval runs `--runs` times per side (2 by default), alternating, with the same cases, model and judge. `--phases=regression` answers the first only, as a PR's check does.
-- **How it compares:** per case, paired. The pooled metric of each side, the difference with a 95% bootstrap interval over the cases, the cases that got worse or better, and how far each side moved between its own runs. A difference counts only when its interval clears zero.
-- **What it records:** each side's step version, a hash of the production files its evals loaded at their committed content (the same on both sides means the branch did not change this step), the files that differ, the eval and dataset versions, and what each eval reports of its environment.
-- **The decision**, fixed before the run: it ships when nothing regressed and the decision phase is better beyond its interval, or ties with fewer tokens. With the regression phase alone, the answer is "no regression", never "ships".
-- **Where it shows:** `experiment.json` and `rows.json` (`experiments.<step>.<phase>.<eval>.<name>`) under `--out`; the quality panel shows the rows on the step's page, next to the nightly, without replacing it.
-- **A dataset is tied to what produced it.** `evals/dedup-groups` scores the dedup on suggestions from the lean finder of #1821; its numbers say how a dedup groups that finder's output, not today's.
+### Run one
+
+1. Branch from main, change the step, and commit. The command refuses uncommitted changes: the result must point at code that exists.
+2. Run `node evals/experiment.js --step=<step>` with the model keys in the environment (the same ones the evals use; the dedup also needs the platform's OpenAI key, `API_OPEN_AI_API_KEY`, for its embedder). In CI: the "Evals: experiment on a review step" workflow, dispatched on your branch.
+3. Read `summary.md` (or the quality panel, for a CI run): the decision, why, and each eval before → after.
+
+To change more, commit and run it again.
+
+### What it compares
+
+- **The base** is the commit of main your branch last started from: `git merge-base HEAD origin/main`. Rebase or merge main into the branch and the base moves to that commit; your changes stay, and earlier experiments keep the commits they ran on.
+- **The candidate** is your branch's HEAD.
+- The command checks out the base in a temporary folder (`git worktree`), runs the same evals in both folders with the same cases, model and judge, compares the results case by case, and removes the folder. The evals' own files must be the same on both sides; land an eval change on main first.
+- Not main's tip on purpose: what others merged since you branched would count as yours.
+- `--base=<ref>` compares against another branch; `--phases=regression` runs the first question only.
+
+### What it answers
+
+1. **Did it break anything?** The main eval on its controlled set, and the evals that must not get worse. Fast; it catches a drop.
+2. **Is it better?** The main eval on its extended set: enough cases for a real change to clear its interval.
+
+Each eval runs `--runs` times per side (2 by default), alternating. Per case, paired: each side's pooled metric, the difference with a 95% bootstrap interval over the cases, and the cases that got worse or better. A difference counts only when its interval clears zero.
+
+**It ships when**, fixed before the run: the step's code changed (its step version differs), every eval measured on both sides (at most 5% of cases unmeasured), nothing got worse in question 1 (the main eval not worse beyond its interval, no case of a must-not-get-worse eval worse), and question 2 is better beyond its interval or ties with fewer tokens. With question 1 alone, the answer is "no regression", never "ships".
+
+### What it records
+
+Each side's step version (a hash of the production files its evals loaded, at their committed content: the same on both sides means the branch did not change this step), the files that differ, the eval and dataset versions, what each eval reports of its environment, and model use. Under `--out`: `experiment.json`, `summary.md`, and `rows.json` (`experiments.<step>.<phase>.<eval>.<name>`). The quality panel builds its Experiments tab and each step's experiments from those rows; they never replace a number main measured. Today the rows reach the panel from the CI workflow only; a local run prints them.
+
+### Add a step
+
+Add it to `STEP_EVALS` in `evals/experiment.js`: its main eval (`id`, a short `label`, `run`, `question`) and the evals that must not get worse. The main eval must take `--set=controlled|full`, keep a stable `id` per case, and write the shared result (`evals/shared/eval-result.js`). A dataset is tied to what produced it: `evals/dedup-groups` scores the dedup on suggestions from the lean finder of #1821, so its numbers say how a dedup groups that finder's output, not today's.
