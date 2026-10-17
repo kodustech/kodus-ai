@@ -9,17 +9,11 @@ import {
     UseGuards,
 } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
-import {
-    ApiBearerAuth,
-    ApiOperation,
-    ApiQuery,
-    ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { GetCustomAgentsStatusUseCase } from '@libs/code-review/application/use-cases/custom-agents/get-custom-agents-status.use-case';
 import { ResolveCustomAgentUseCase } from '@libs/code-review/application/use-cases/custom-agents/resolve-custom-agent.use-case';
 import { TryCustomAgentUseCase } from '@libs/code-review/application/use-cases/custom-agents/try-custom-agent.use-case';
-import type { KnowledgeItem } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import {
     Action,
@@ -29,17 +23,22 @@ import {
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
-import {
-    checkPermissions,
-    checkRepoPermissions,
-} from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
+import { checkRepoPermissions } from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
 
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
+import {
+    CustomAgentsStatusQueryDto,
+    ResolveCustomAgentDto,
+    TryCustomAgentDto,
+} from '../dtos/custom-agents.dto';
 import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 
-const canReadSettings = checkPermissions({
+// Resolve reads the repository's knowledge and status its agents' activity:
+// both are scoped to the repository the request names.
+const canReadSettings = checkRepoPermissions({
     action: Action.Read,
     resource: ResourceType.CodeReviewSettings,
+    repo: { key: { body: 'repositoryId', query: 'repositoryId' } },
 });
 
 // A try spends model calls, runs the agent's tools and returns findings on a
@@ -83,21 +82,7 @@ export class CustomAgentsController {
     })
     @UseGuards(PolicyGuard)
     @CheckPolicies(canReadSettings)
-    async resolve(
-        @Body()
-        body: {
-            teamId: string;
-            repositoryId: string;
-            agent?: unknown;
-            knowledge?: KnowledgeItem[];
-            discover?: boolean;
-        },
-    ) {
-        if (!body?.teamId || !body?.repositoryId) {
-            throw new BadRequestException(
-                'teamId and repositoryId are required',
-            );
-        }
+    async resolve(@Body() body: ResolveCustomAgentDto) {
         return this.resolveCustomAgent.execute({
             organizationAndTeamData: {
                 organizationId: this.organizationId(),
@@ -118,33 +103,14 @@ export class CustomAgentsController {
     })
     @UseGuards(PolicyGuard)
     @CheckPolicies(canEditSettings)
-    async try(
-        @Body()
-        body: {
-            teamId: string;
-            repositoryId: string;
-            prUrl: string;
-            agent: unknown;
-            knowledge?: KnowledgeItem[];
-        },
-    ) {
-        if (
-            !body?.teamId ||
-            !body?.repositoryId ||
-            !body?.prUrl?.trim() ||
-            !body?.agent
-        ) {
-            throw new BadRequestException(
-                'teamId, repositoryId, prUrl and agent are required',
-            );
-        }
+    async try(@Body() body: TryCustomAgentDto) {
         return this.tryCustomAgent.execute({
             organizationAndTeamData: {
                 organizationId: this.organizationId(),
                 teamId: body.teamId,
             },
             repositoryId: body.repositoryId,
-            prUrl: body.prUrl.trim(),
+            prUrl: body.prUrl,
             agent: body.agent,
             knowledge: body.knowledge,
         });
@@ -156,22 +122,12 @@ export class CustomAgentsController {
         description:
             'Per agent over the last 30 days: pull requests with findings, findings posted, and dropped.',
     })
-    @ApiQuery({ name: 'teamId', type: String, required: true })
-    @ApiQuery({ name: 'repositoryId', type: String, required: true })
     @UseGuards(PolicyGuard)
     @CheckPolicies(canReadSettings)
-    async status(
-        @Query('teamId') teamId: string,
-        @Query('repositoryId') repositoryId: string,
-    ) {
-        if (!teamId || !repositoryId) {
-            throw new BadRequestException(
-                'teamId and repositoryId are required',
-            );
-        }
+    async status(@Query() query: CustomAgentsStatusQueryDto) {
         return this.customAgentsStatus.execute({
             organizationId: this.organizationId(),
-            repositoryId,
+            repositoryId: query.repositoryId,
         });
     }
 }
