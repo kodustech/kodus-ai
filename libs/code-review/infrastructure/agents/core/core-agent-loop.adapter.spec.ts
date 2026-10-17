@@ -143,6 +143,42 @@ const secrets: any = {
 };
 
 describe('runAgentLoopViaCore (harness + agent integration)', () => {
+    it('verifies on the check slot when one differs from the run slot', async () => {
+        const { model } = makeModel();
+        const input = makeInput(model);
+        const runSlot = { provider: 'openai', model: 'run-model' };
+        const checkSlot = { provider: 'anthropic', model: 'check-model' };
+
+        const out = await runAgentLoopViaCore(input, {
+            ...secrets,
+            byokConfig: runSlot,
+            verifyByokConfig: checkSlot,
+        });
+
+        expect(out.droppedByVerify.map((s: any) => s.relevantFile)).toEqual([
+            'b.ts',
+        ]);
+        const slotsCalled = mockResolve.mock.calls.map(([slot]) => slot?.model);
+        expect(slotsCalled).toContain('run-model');
+        expect(slotsCalled).toContain('check-model');
+    });
+
+    it('keeps verify on the run slot when the check slot is the same model', async () => {
+        const { model } = makeModel();
+        const input = makeInput(model);
+        mockResolve.mockClear();
+        const runSlot = { provider: 'openai', model: 'run-model' };
+
+        await runAgentLoopViaCore(input, {
+            ...secrets,
+            byokConfig: runSlot,
+            verifyByokConfig: { ...runSlot },
+        });
+
+        const slotsCalled = mockResolve.mock.calls.map(([slot]) => slot);
+        expect(slotsCalled.every((slot) => slot === runSlot)).toBe(true);
+    });
+
     it('runs finder + verify end-to-end and maps RunState -> AgentLoopOutput', async () => {
         const { model } = makeModel();
         const out = await runAgentLoopViaCore(makeInput(model), secrets);

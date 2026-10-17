@@ -85,4 +85,36 @@ const getLabelShield = (label: string) => {
     }
 };
 
-export { getLabelShield };
+/** Shields.io escapes: `-` and `_` are separators, spaces become `_`. */
+const escapeShieldText = (text: string): string =>
+    encodeURIComponent(
+        text.trim().replace(/-/g, '--').replace(/_/g, '__').replace(/ /g, '_'),
+    );
+
+/** A hex color (without `#`) or a plain color name; anything else is dropped. */
+const sanitizeShieldColor = (color?: string): string | undefined => {
+    const value = (color || '').trim().replace(/^#/, '');
+    return /^[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value) ||
+        /^[a-z]{3,20}$/i.test(value)
+        ? value
+        : undefined;
+};
+
+/**
+ * The tag of a suggestion: a custom agent's finding shows the agent's own
+ * name and color (#2172); every other finding shows its label's tag.
+ */
+const getSuggestionShield = (suggestion: {
+    label?: string;
+    customAgent?: { name: string; color?: string };
+}): string => {
+    const agent = suggestion?.customAgent;
+    if (suggestion?.label === LabelType.CUSTOM_AGENT && agent?.name?.trim()) {
+        const color = sanitizeShieldColor(agent.color) ?? ShieldColor.BLUE;
+        const alt = agent.name.replace(/[[\]]/g, '').trim();
+        return `![${alt}](https://img.shields.io/badge/${escapeShieldText(agent.name)}-${color})`;
+    }
+    return suggestion?.label ? getLabelShield(suggestion.label) : '';
+};
+
+export { getLabelShield, getSuggestionShield };

@@ -31,7 +31,10 @@ import type { NormalizedModel } from '@libs/llm/byok-config';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 import type { ReasoningEffort } from '@libs/llm/reasoning-options';
 
-import { CoverageSummary, CoverageTier } from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
+import {
+    CoverageSummary,
+    CoverageTier,
+} from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
 import { type AdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import type { DocumentationSearchAdapter } from '@libs/code-review/infrastructure/agents/engine/agent-tools.factory';
@@ -283,7 +286,8 @@ export interface RuntimeMeta {
  * cohesive slices above so a consumer can depend on just what it needs.
  */
 export interface ReviewAgentInput
-    extends PrReviewContext,
+    extends
+        PrReviewContext,
         ToolingContext,
         ReviewRuleConfig,
         ModelConfig,
@@ -462,6 +466,9 @@ export interface AgentLoopSecrets {
      */
     remoteCommands: RemoteCommands | undefined;
     byokConfig?: NormalizedModel;
+    /** Slot the verify pass runs on when it differs from `byokConfig` (a
+     *  custom agent's check model, #2172). Unset: verify uses `byokConfig`. */
+    verifyByokConfig?: NormalizedModel;
     gitHubToken?: string;
     /** Cross-repo linked-repo access for agent tools (#1576). */
     linkedRepoAccess?: LinkedRepoAccess;

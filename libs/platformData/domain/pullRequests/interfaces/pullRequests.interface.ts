@@ -233,6 +233,12 @@ export interface ISuggestionByPR {
     brokenKodyRulesIds?: string[];
     priorityStatus?: PriorityStatus;
     deliveryStatus: DeliveryStatus;
+    /** The custom agent whose findings this comment gathers (#2172); drives its tag. */
+    customAgent?: {
+        id: string;
+        name: string;
+        color?: string;
+    };
     comment?: {
         id: number;
         pullRequestReviewId: number;
