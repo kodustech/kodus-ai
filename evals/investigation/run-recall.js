@@ -195,10 +195,10 @@ function runMetaOf(args) {
                 args.model,
             provider:
                 (TIER0[args.model] && TIER0[args.model].provider) || 'unknown',
-            // How the finder reached it (agent-provider.js resolveRoute): the
-            // env/managed route, or a BYOK config when an effort is set.
+            // How the finder reached it (model-route.js resolveRoute): a BYOK
+            // config, or none for `kodus-managed`.
             // A subscription model never runs (main exits 2 before it).
-            accessPath: process.env.RECALL_REASONING_EFFORT ? 'byok' : 'managed',
+            accessPath: TIER0[args.model] && TIER0[args.model].managed ? 'managed' : 'byok',
         },
         // Production's tools over the repository at the PR's head.
         executionMode: 'live',
@@ -207,7 +207,7 @@ function runMetaOf(args) {
         heavy: process.env.RECALL_HEAVY === '1',
         // RECALL_REASONING_EFFORT reaches the finder as the BYOK model's
         // reasoningEffort (agent-provider.js resolveRoute), which production
-        // maps per provider; without it the managed route runs the family default.
+        // maps per provider; without it the BYOK slot sets none.
         reasoning: process.env.RECALL_REASONING_EFFORT
             ? {
                   config: 'explicit',

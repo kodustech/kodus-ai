@@ -1,9 +1,12 @@
-// How an eval reaches its model the way an org does: the env/managed route by
-// default, a stored BYOK config read by production's PermissionValidationService
-// and routed by resolveTaskSlot when the model is not the managed default or the
-// run asks for a reasoning effort. Model ids and keys come from
-// evals/shared/tier0-models.js only. Shared by every eval that runs the review stage
-// (evals/shared/review-stage.js).
+// How an eval reaches its model the way an org does: a stored BYOK config, read
+// by production's PermissionValidationService and routed by resolveTaskSlot,
+// for every model, DeepSeek included, so every model is measured on the same
+// path an org that picks its model takes. The managed default (an org with no
+// model config: Kodus's own DeepSeek and key) is a contract test, not an eval:
+// the `kodus-managed` entry of tier0-models.js routes it with no stored config
+// (evals/wiring-smoke.js `managed-route`). Model ids and keys come from
+// evals/shared/tier0-models.js only. Shared by every eval that runs the review
+// stage (evals/shared/review-stage.js).
 // The route reads production's TypeScript (libs/llm), so the hooks load here,
 // whoever requires this first.
 require('ts-node/register/transpile-only');
@@ -16,14 +19,14 @@ const path = require('path');
 // .resolveTaskSlot), and LLM.run builds the model from that slot, or from the
 // managed default when there is none (AiSdkAgentRunner's call to LLM.run).
 //
-// So the eval routes the way a cloud org does (tier0-models.js applyPlatformEnv
-// sets the platform's own keys, and no self-hosted env model):
-//   - the managed default (KODUS_TRIAL_MODEL, the trial's DeepSeek on
-//     Fireworks) with no stored config, the route of an org without BYOK;
-//   - any other model, or a run that asks for a reasoning effort: a stored BYOK
-//     config (version 2) holding that model, read by production's getBYOKConfig
-//     (permissionValidation.service.ts) and routed by resolveTaskSlot,
-//     like a customer's BYOK model and its effort.
+// So the eval routes the way a cloud org with BYOK does (tier0-models.js
+// applyPlatformEnv sets the platform's own keys, and no self-hosted env model):
+// a stored BYOK config (version 2) holding the model, read by production's
+// getBYOKConfig (permissionValidation.service.ts) and routed by
+// resolveTaskSlot, like a customer's BYOK model and its effort. The two routes
+// send different requests for the same DeepSeek (2026-10-17: the BYOK route
+// sends `thinking` on every call and `reasoning_effort: high` on structured
+// ones; the managed route sends neither), so the evals measure one route: BYOK.
 // The model's key is in the stored config, never in API_OPEN_AI_API_KEY: that
 // variable is the platform's OpenAI key, which the dedup's embedder reads.
 // The org's stored config is the one thing the eval supplies (the
@@ -152,9 +155,11 @@ function resolveRoute(config) {
         }
         applyPlatformEnv();
         if (!spec) throw new Error(`unknown tier-0 model '${modelId}'`);
-        const { KODUS_TRIAL_MODEL } = require('../../libs/llm/byok-defaults.ts');
-        if (spec.doModel === KODUS_TRIAL_MODEL && !effort) {
-            if (!process.env.API_FIREWORKS_API_KEY) throw new Error(`no API key for ${modelId} — set one of ${spec.keyEnvs.join('/')}`);
+        // `kodus-managed`: an org with no model config, which gets Kodus's default
+        // model on Kodus's key (libs/llm/managed-slot.ts). No stored config, no effort.
+        if (spec.managed) {
+            if (effort) throw new NotAProductionRoute(`${modelId} has no model config, so no reasoning effort to set`);
+            if (!process.env.API_FIREWORKS_API_KEY) throw new Error(`no API key for the managed route — set one of ${spec.keyEnvs.join('/')}`);
             return { storedConfig: null, route: 'managed', modelId, reasoningEffort: null };
         }
         const key = spec.keyEnvs.map((name) => process.env[name]).find(Boolean);

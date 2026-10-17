@@ -162,7 +162,8 @@ function writeStream(res, completion) {
 }
 
 function startFakeLlmServer({ port = 0, host = '127.0.0.1' } = {}) {
-    const stats = { requests: 0, toolCalls: 0, finals: 0, byPath: {} };
+    // byModel: requests per model id asked for, so a step can prove which model its route reached.
+    const stats = { requests: 0, toolCalls: 0, finals: 0, byPath: {}, byModel: {} };
     let seq = 0;
     const server = http.createServer((req, res) => {
         let raw = '';
@@ -185,6 +186,7 @@ function startFakeLlmServer({ port = 0, host = '127.0.0.1' } = {}) {
                 return;
             }
             stats.requests += 1;
+            stats.byModel[body.model || ''] = (stats.byModel[body.model || ''] || 0) + 1;
             seq += 1;
             const decision = decide(body);
             if (decision.tool) stats.toolCalls += 1;

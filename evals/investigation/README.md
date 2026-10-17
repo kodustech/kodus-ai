@@ -22,8 +22,9 @@ The eval supplies data only:
   (`evals/shared/repo-mirror.js`, cached under `EVAL_REPO_CACHE`);
 - the team's stored config: none (the defaults), or the memories and overrides a
   case carries;
-- the org's model config (`evals/shared/model-route.js`): none on the managed
-  default, a stored BYOK config for any other tier-0 model.
+- the org's model config (`evals/shared/model-route.js`): a stored BYOK config
+  holding the model, DeepSeek included. An org with no model config (`kodus-managed`)
+  is a contract test (`evals/wiring-smoke.js` `managed-route`), not an eval.
 
 Not the same as production: the eval org has no stored AST graph, so the stage
 builds the call graph from the checkout (its legacy path), and it is on no

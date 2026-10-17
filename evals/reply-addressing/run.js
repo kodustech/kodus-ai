@@ -7,8 +7,7 @@
  * GitHub returns them, the free gate (`implicitReplyGate`), then the classifier
  * on the model the org routes the conversation task to (production's
  * PermissionValidationService over the org's stored model config,
- * evals/shared/model-route.js: none on the managed default, a BYOK config for
- * any other model). Cases: `cases.json`, the 64 boundary
+ * evals/shared/model-route.js: a BYOK config holding the model). Cases: `cases.json`, the 64 boundary
  * conversations from the TypeSafe experiment plus threads where two people talk
  * and one of them addresses Kody. A reply the gate silences counts as not
  * answered, as in production.

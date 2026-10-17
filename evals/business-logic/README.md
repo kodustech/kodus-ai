@@ -21,8 +21,7 @@ case's PR. The eval supplies data only:
   for a ticket it does not have;
 - the code host's answers about the PR (its record and its files' patches);
 - the team's settings: business logic on, and the org's model config
-  (`evals/shared/model-route.js`: none on the managed default, a stored BYOK
-  config for any other model).
+  (`evals/shared/model-route.js`: a stored BYOK config holding the model).
 
 What is scored is what the stage records and publishes: its outcome
 (`gap_found`, `success`, `skipped`) and, for a gap, whether the published

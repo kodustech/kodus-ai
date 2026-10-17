@@ -21,8 +21,8 @@
 // where it drifted unnoticed.
 //
 // An eval reaches these models the way a cloud org does (evals/shared/
-// model-route.js): the managed default with no stored config, any other model
-// through a stored BYOK config holding its key from `keyEnvs`.
+// model-route.js): through a stored BYOK config holding its key from `keyEnvs`.
+// `kodus-managed` alone has no stored config: an org with no model of its own.
 
 // id → { provider, keyEnvs (first present wins), baseURL? }
 // keyEnvs mirror the benchmark's secret names so the same CI secrets work.
@@ -112,6 +112,18 @@ const TIER0 = {
     'gpt-6-sol@openrouter': { provider: 'openai_compatible', doModel: 'openai/gpt-6-sol', openrouterProviderOrder: ['openai'], keyEnvs: ['BYOK_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY'], baseURL: 'https://openrouter.ai/api/v1' },
     'claude-sonnet-5-5@openrouter': { provider: 'openai_compatible', doModel: 'anthropic/claude-sonnet-5.5', openrouterProviderOrder: ['anthropic'], keyEnvs: ['BYOK_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY'], baseURL: 'https://openrouter.ai/api/v1' },
 
+    // Not a model to pick: what an org with no model config gets, Kodus's default
+    // model (libs/llm/byok-defaults.ts KODUS_TRIAL_MODEL) on Kodus's own key, the
+    // managed route (libs/llm/managed-slot.ts). Every eval measures the models on
+    // BYOK (model-route.js); this one runs only in the managed route's contract
+    // test (evals/wiring-smoke.js `managed-route`).
+    'kodus-managed': {
+        managed: true,
+        provider: 'openai_compatible',
+        keyEnvs: ['API_FIREWORKS_API_KEY', 'FIREWORKS_API_KEY', 'BYOK_FIREWORKS_API_KEY'],
+        baseURL: 'https://api.fireworks.ai/inference/v1',
+    },
+
     // Scripted local model (evals/shared/fake-llm-server.js) for the wiring
     // smoke: an org's BYOK openai_compatible endpoint at 127.0.0.1.
     // Measures nothing — it proves the harness still drives the engine.
@@ -142,7 +154,7 @@ function tier0() {
 // Every routable id minus the ones the benchmark skips by default (cost). NOT
 // the gate set — that is tier0(). Read by `run-recall --list-models`.
 function defaultMatrix() {
-    return Object.keys(TIER0).filter((id) => id !== 'gpt-5.4-mini' && !EXCLUDED_BY_DEFAULT.has(id) && !LOCAL_ONLY.has(id));
+    return Object.keys(TIER0).filter((id) => id !== 'gpt-5.4-mini' && !EXCLUDED_BY_DEFAULT.has(id) && !LOCAL_ONLY.has(id) && !TIER0[id].managed);
 }
 
 // The self-hosted env route: points the env at `modelId` so
@@ -184,7 +196,7 @@ function applyModelEnv(modelId, env = process.env) {
 // semantic tier), and the Fireworks key of the managed default model
 // (resolveManagedSlot). No org's model is configured here: the cloud has no
 // self-hosted env model (API_LLM_PROVIDER_MODEL), so a model either comes from
-// the org's stored BYOK config or is the managed default.
+// the org's stored BYOK config or, with none (`kodus-managed`), is the managed default.
 const PLATFORM_KEYS = {
     API_OPEN_AI_API_KEY: ['API_OPEN_AI_API_KEY', 'BYOK_OPENAI_API_KEY'],
     API_FIREWORKS_API_KEY: ['API_FIREWORKS_API_KEY', 'FIREWORKS_API_KEY', 'BYOK_FIREWORKS_API_KEY'],

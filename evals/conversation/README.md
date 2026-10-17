@@ -24,9 +24,8 @@ GitHub:
   stores, and whose GitHub calls go through `GithubService` to the PR's
   remote answering as GitHub's REST API (`evals/shared/kodus-mcp.js`,
   `evals/shared/github-rest.js`);
-- the org's model config (`evals/shared/model-route.js`: none on the managed
-  default, a stored BYOK config for any other model), which production's
-  `PermissionValidationService` routes.
+- the org's model config (`evals/shared/model-route.js`: a stored BYOK config
+  holding the model), which production's `PermissionValidationService` routes.
 
 `cases.js` holds the cases, written for the eval with invented code after the
 replies production threads carry most (`kodus_agent_sessions`): "Fixed in

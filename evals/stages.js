@@ -25,6 +25,9 @@
 //         the same contract on every tier-0 model, every week (evals/weekly.js)
 //     { kind: 'e2e', name, scenario, signal }
 //         an E2E scenario on the test matrix, which reports as `signal`
+//     { kind: 'contract', name, spec, signal }
+//         a contract test another workflow runs against the real provider,
+//         which reports as `signal` (contract-tests.yml: contract.api)
 //   eval — how good the step is, measured by a real model against a floor; null
 //     when nothing measures it yet:
 //     { path, metric, sets: { controlled, full }, nightly, caveat, catalog }
@@ -123,6 +126,9 @@ const STAGES = [
                 ],
             },
             { kind: 'contract', name: "A scripted model's review of a PR reaches scoring with its finding", wiring: ['finder-recall'] },
+            { kind: 'unit', name: "An org with no model of its own: the default model is built on Kodus's key", specs: ['libs/llm/byok-to-vercel.env-default.spec.ts'] },
+            { kind: 'contract', name: "An org with no model of its own: the review runs end to end on Kodus's default model", wiring: ['managed-route'] },
+            { kind: 'contract', name: "Kodus's default model is a real model the provider answers", signal: 'contract.api', spec: 'libs/llm/trial-model-availability.contract.spec.ts' },
         ],
         eval: {
             path: 'evals/investigation',

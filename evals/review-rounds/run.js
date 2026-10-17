@@ -100,9 +100,8 @@ const arg = (n, d) => {
 const MODEL = arg('model');
 const REPS = Number(arg('reps', 1));
 const ONLY = arg('case');
-// --byok-reasoning=<none|low|medium|high>: route both agents through a BYOK
-// slot — the path production customers take, each with the reasoning effort
-// they configured — instead of the env/managed default (family effort).
+// --byok-reasoning=<none|low|medium|high>: the reasoning effort the org's BYOK
+// slot carries, as a customer configures it; without it, the slot sets none.
 const BYOK_REASONING = arg('byok-reasoning');
 const GATE = process.argv.includes('--gate');
 const SET = arg('set');
@@ -305,8 +304,8 @@ const isMarkedUnverified = (f) =>
     f?.evidence?.status === 'unverified' ||
     f?.verification === 'unverified';
 
-// The org's model: the managed route, or with --byok-reasoning a stored BYOK
-// config carrying that effort, routed by production (evals/shared/model-route.js).
+// The org's model: a stored BYOK config, carrying --byok-reasoning's effort when
+// given, routed by production (evals/shared/model-route.js).
 let routeCache;
 function orgRoute() {
     if (routeCache) return routeCache;

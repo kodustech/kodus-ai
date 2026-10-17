@@ -10,7 +10,7 @@ This is the only page: the rules, how to create one, where to look. Numbers and 
 2. **The eval supplies data, nothing else.** Datasets, the org's stored config, the repository at the PR's head. Read intermediate results by wrapping a production method, never by replacing one. No hand-written stand-ins for engine services.
 3. **Same input production builds.** Production's builders and defaults: the whole PR, the categories, the step budget, the language, the diff format. A field production never sets is not an input.
 4. **Same tools.** Production's sandbox over the real repository at the PR's head, `exec` included. A recording that answers what production wouldn't is a different review.
-5. **Same model route.** A stored BYOK config or the managed default, through production's routing; model ids and keys only through `evals/shared/tier0-models.js`. A route production doesn't have is refused, not run.
+5. **Same model route.** A stored BYOK config, through production's routing, for every model; an org with no model config (`kodus-managed`) is a contract test, not an eval; model ids and keys only through `evals/shared/tier0-models.js`. A route production doesn't have is refused, not run.
 6. **Score what ships.** Measure after the steps production runs before posting. An eval that stops earlier says where and why in its README.
 7. **Prove it can fail.** Cases come in pairs (the step must act / must not), and a deliberate break turns the eval red before it merges.
 8. **Replacing eval code? Prove equivalence.** Diff what the step receives on every case, old against new. Identical: the floor stands. Different: explain each difference, then recalibrate.

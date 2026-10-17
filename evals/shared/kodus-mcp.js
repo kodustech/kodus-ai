@@ -254,8 +254,8 @@ async function startKodusMcp({ storedConfig = null } = {}) {
     const platformIntegrationFactory = new PlatformIntegrationFactory();
     platformIntegrationFactory.registerCodeManagementService(PlatformType.GITHUB, githubService);
     const codeManagementService = new CodeManagementService(integrationService, platformIntegrationFactory);
-    // The org's stored model config (evals/shared/model-route.js): none on the
-    // managed default, a BYOK config for any other model.
+    // The org's stored model config (evals/shared/model-route.js): a BYOK config
+    // holding the model.
     const permissionValidationService = evalPermissionService(storedConfig);
     const kodyRulesValidationService = new KodyRulesValidationService(permissionValidationService);
     const telemetry = new TelemetryService(new PostHogProvider(configService), new ResendEventsProvider(configService), new N8nProvider(configService));

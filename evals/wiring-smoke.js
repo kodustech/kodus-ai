@@ -102,6 +102,7 @@ async function main() {
     const server = await startFakeLlmServer();
     const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-wiring-'));
     const finderOut = path.join(scratch, 'finder-recall-eval-fake.json');
+    const managedOut = path.join(scratch, 'finder-recall-managed.json');
     const traceDir = path.join(scratch, 'trace');
     const reviewCasesFile = path.join(scratch, 'review-cases.json');
     fs.writeFileSync(reviewCasesFile, JSON.stringify({ cases: require('./review-rounds/cases').cases }));
@@ -161,6 +162,24 @@ async function main() {
                 return findings >= 1 ? null : `expected the scripted finding to reach scoring, got findings=${findings}`;
             },
         },
+        // An org with no model config: the same review on Kodus's default model and
+        // key (the managed route, libs/llm/managed-slot.ts), its Fireworks endpoint
+        // pointed at the scripted model. The evals measure every model on BYOK
+        // (evals/shared/model-route.js); this proves the managed route still works.
+        {
+            name: 'managed-route',
+            model: true,
+            result: 'finder',
+            // Production's own variables for the managed default: Kodus's key and Fireworks's endpoint.
+            env: { API_FIREWORKS_API_KEY: 'fake', API_FIREWORKS_BASE_URL: server.url },
+            args: ['evals/investigation/run-recall.js', '--model=kodus-managed', `--cases=${FINDER_CASE}`, '--concurrency=1', `--output=${managedOut}`],
+            check: ({ models }) => {
+                const managed = Object.keys(models).filter((m) => /^accounts\/fireworks\/models\//.test(m));
+                if (!managed.length) return `no call reached Kodus's default model (asked for: ${Object.keys(models).join(', ') || 'nothing'})`;
+                const findings = readJson(managedOut)?.rows?.[0]?.metadata?.findings;
+                return findings >= 1 ? null : `expected the scripted finding to reach scoring on the managed route, got findings=${findings}`;
+            },
+        },
         // Production's review of one merged PR (a real clone of its head; the
         // smallest repository). The scripted model's compile answer scopes the
         // rule to no file, so this proves the compile, sandbox, fetch and stage
@@ -181,14 +200,16 @@ async function main() {
         const resultFile = given ? given.slice('--output='.length) : path.join(scratch, `${step.name}-result.json`);
         const args = step.result && !given ? [...step.args, `--output=${resultFile}`] : step.args;
         const before = server.stats.requests;
+        const modelsBefore = { ...server.stats.byModel };
         // eslint-disable-next-line no-await-in-loop
-        const { code, timedOut, output, ms } = await run(process.execPath, args, { ...env, TRACE_LOADED_LABEL: step.name });
+        const { code, timedOut, output, ms } = await run(process.execPath, args, { ...env, ...(step.env || {}), TRACE_LOADED_LABEL: step.name });
         const calls = server.stats.requests - before;
+        const models = Object.fromEntries(Object.entries(server.stats.byModel).map(([m, n]) => [m, n - (modelsBefore[m] || 0)]).filter(([, n]) => n > 0));
         let problem = null;
         if (timedOut) problem = `did not exit within ${STEP_TIMEOUT_MS / 60000} min`;
         else if (code !== 0) problem = `exit ${code}`;
         else if (step.model && calls === 0) problem = 'never reached the model';
-        else if (step.check) problem = step.check();
+        else if (step.check) problem = step.check({ models });
         if (!problem && step.result) problem = resultProblem(step, resultFile);
         results.push({ step, problem, calls, ms, output });
         console.log(`${problem ? '❌' : '✅'} ${step.name.padEnd(17)} ${String(Math.round(ms / 1000)).padStart(3)}s${step.model ? `  model calls=${calls}` : ''}${problem ? `  — ${problem}` : ''}`);

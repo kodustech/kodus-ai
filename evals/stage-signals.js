@@ -71,6 +71,7 @@ function describeTest(test) {
     const base = { kind: test.kind, name: test.name };
     if (test.kind === 'unit') return { ...base, specs: test.specs };
     if (test.kind === 'e2e') return { ...base, scenario: test.scenario, signal: test.signal };
+    if (test.signal) return { ...base, spec: test.spec, signal: test.signal };
     return test.weekly ? { ...base, weekly: true } : { ...base, wiring: test.wiring };
 }
 
@@ -136,7 +137,8 @@ function testResult(test, { byStep, bySpec, jestRan }) {
             ...(missing.length ? { problem: `did not run: ${missing.join(', ')}` } : {}),
         };
     }
-    if (test.kind === 'e2e') return { ...base, status: 'elsewhere' };
+    // Reported by another job's signal (the E2E matrix, the provider contracts).
+    if (test.kind === 'e2e' || test.signal) return { ...base, status: 'elsewhere' };
     if (test.weekly) return { ...base, status: 'weekly' };
     const steps = test.wiring.map((step) => ({ step, r: byStep.get(step) }));
     const failed = steps.filter((x) => x.r && !x.r.ok);
@@ -309,28 +311,18 @@ const READERS = {
     }),
 };
 
-// How a tier-0 model is reached, for the panel: the provider that serves it, and the org's
-// route (evals/shared/model-route.js resolveRoute): `managed` when the model is the managed
-// default (libs/llm/byok-defaults.ts KODUS_TRIAL_MODEL, Kodus's own key), `byok` otherwise (a
-// stored config with the org's key). Read from the files, never assumed.
+// How a tier-0 model is reached, for the panel: the provider that serves it, and
+// the org's route to it, which every eval takes (evals/shared/model-route.js):
+// a stored BYOK config with the org's key. Read from tier0-models.js.
 const HOSTS = { 'api.fireworks.ai': 'Fireworks', 'openrouter.ai': 'OpenRouter', 'api.deepseek.com': 'DeepSeek', 'api.moonshot.ai': 'Moonshot' };
 const PROVIDERS = { openai: 'OpenAI', anthropic: 'Anthropic', google_gemini: 'Google', google_vertex: 'Vertex AI' };
-let trialModel;
 function routeOf(model) {
     const spec = TIER0[model];
     if (!spec) return null;
-    if (trialModel === undefined) {
-        try {
-            const source = fs.readFileSync(path.join(__dirname, '..', 'libs/llm/byok-defaults.ts'), 'utf8');
-            trialModel = (source.match(/KODUS_TRIAL_MODEL\s*=\s*'([^']+)'/) || [])[1] || null;
-        } catch {
-            trialModel = null;
-        }
-    }
     const host = spec.baseURL ? new URL(spec.baseURL).hostname : null;
     const base = HOSTS[host] || PROVIDERS[spec.provider] || host || spec.provider;
     const upstream = spec.openrouterProviderOrder?.[0];
-    return { provider: upstream ? `${base} → ${upstream}` : base, route: spec.doModel && spec.doModel === trialModel ? 'managed' : 'byok' };
+    return { provider: upstream ? `${base} → ${upstream}` : base, route: 'byok' };
 }
 
 // A model id inside a signal name, folded as .github/actions/report-signal does

@@ -53,8 +53,8 @@ nothing comes out of it (#1938).
 
 `--model` picks the runs recorded on that model, and prose recovery runs on
 that model's slot, routed the way the recording reached it
-(`evals/shared/model-route.js`: the managed route, or a stored BYOK config with
-`RECALL_REASONING_EFFORT`): production recovers a run's prose on the slot the
+(`evals/shared/model-route.js`: a stored BYOK config, with
+`RECALL_REASONING_EFFORT` when the run set one): production recovers a run's prose on the slot the
 run ended on. A refused call (key, quota, rate, outage) leaves the case
 unmeasured; an answer that does not fit the schema loses the findings, as it
 does in production. A model with no recorded runs is not measured (exit 2).

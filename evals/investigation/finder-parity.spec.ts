@@ -1,7 +1,7 @@
 /**
  * The finder eval runs production's route and scores one finding per known bug.
- * Routing: as a cloud org, the managed default with no stored config for the
- * trial's model, a stored BYOK config for any other model or an asked effort,
+ * Routing: as a cloud org, a stored BYOK config for every model (no stored
+ * config only for `kodus-managed`, an org with no model of its own),
  * the platform's own OpenAI key left to the embedder, and no run at all for a
  * model production cannot reach. Scoring:
  * each known bug keeps the one finding the judge is surest of, so a repeated
@@ -57,7 +57,9 @@ describe('finder model route', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { internals } = require('./agent-provider');
 
-    it("runs the trial's model on the managed default, with the platform's keys and no self-hosted env model", () => {
+    // Every model on the BYOK route, the trial's DeepSeek too: the two routes send
+    // different requests for it (model-route.js), and the evals measure one.
+    it("stores the trial's model as the org's BYOK config too, with the platform's keys and no self-hosted env model", () => {
         process.env.BYOK_FIREWORKS_API_KEY = 'fw';
         process.env.BYOK_OPENAI_API_KEY = 'platform-openai';
         process.env.API_LLM_PROVIDER_MODEL = 'some-self-hosted-model';
@@ -66,10 +68,26 @@ describe('finder model route', () => {
         delete process.env.API_OPEN_AI_API_KEY;
         delete process.env.RECALL_REASONING_EFFORT;
         delete process.env.RECALL_MODEL;
-        expect(internals.resolveRoute({ provider: 'tier0', model: 'deepseek-v4-flash@fireworks' })).toMatchObject({ storedConfig: null, route: 'managed' });
+        const route = internals.resolveRoute({ provider: 'tier0', model: 'deepseek-v4-flash@fireworks' });
+        expect(route).toMatchObject({ route: 'byok', reasoningEffort: null });
+        expect(route.storedConfig.models).toEqual([expect.objectContaining({ model: 'accounts/fireworks/models/deepseek-v4p1-flash' })]);
         expect(process.env.API_FIREWORKS_API_KEY).toBe('fw');
         expect(process.env.API_OPEN_AI_API_KEY).toBe('platform-openai');
         expect(process.env.API_LLM_PROVIDER_MODEL).toBeUndefined();
+    });
+
+    // The managed route's contract test (wiring smoke `managed-route`): an org with no model config.
+    it('routes kodus-managed with no stored config, as an org with no model of its own', () => {
+        process.env.BYOK_FIREWORKS_API_KEY = 'fw';
+        delete process.env.RECALL_MODEL;
+        delete process.env.RECALL_REASONING_EFFORT;
+        expect(internals.resolveRoute({ provider: 'tier0', model: 'kodus-managed' })).toMatchObject({ storedConfig: null, route: 'managed', reasoningEffort: null });
+        process.env.RECALL_REASONING_EFFORT = 'high';
+        try {
+            expect(() => internals.resolveRoute({ provider: 'tier0', model: 'kodus-managed' })).toThrow(/no reasoning effort/);
+        } finally {
+            delete process.env.RECALL_REASONING_EFFORT;
+        }
     });
 
     it("stores any other model as the org's BYOK config, and never puts its key where the embedder reads", () => {

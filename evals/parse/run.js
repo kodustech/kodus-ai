@@ -58,10 +58,10 @@ const text = (v) => (typeof v === 'string' ? v.trim() : '');
 const norm = (f) => text(f).replace(/\\/g, '/').replace(/^\.?\/+/, '');
 
 // The slot the recorded runs ended on: their model, reached the way capture.js
-// reached it (evals/shared/model-route.js: the env/managed route, or a stored
-// BYOK config with RECALL_REASONING_EFFORT) and routed as ValidateConfigStage
+// reached it (evals/shared/model-route.js: a stored BYOK config, with
+// RECALL_REASONING_EFFORT when set) and routed as ValidateConfigStage
 // routes the codeReview task. Production's adapter hands that slot
-// (secrets.byokConfig, none on the managed route) to the prose recovery
+// (secrets.byokConfig) to the prose recovery
 // (core-agent-loop.adapter.ts).
 function slotOf(modelId) {
     const route = resolveRoute({ provider: 'tier0', model: modelId });

@@ -10,7 +10,7 @@ const { costUpperBound, catalogIdFor } = require('./investigation/nightly-compar
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { loadCatalog, catalogProblems } = require('./shared/eval-result');
 
-type Test = { kind: string; name: string; specs?: string[]; wiring?: string[]; weekly?: string[]; scenario?: string; signal?: string };
+type Test = { kind: string; name: string; specs?: string[]; spec?: string; wiring?: string[]; weekly?: string[]; scenario?: string; signal?: string };
 type Stage = { id: string; name: string; group: string; short: string; does: string; pipeline: string[] | null; tests: Test[]; eval: { path: string; nightly: string; sets: { controlled: string; full: string | null } } | null; note?: string };
 type Row = { name: string; status: string; value: number | null; meta: Record<string, any> };
 
@@ -65,7 +65,7 @@ describe('evals/stages.js', () => {
                 expect(['unit', 'contract', 'e2e']).toContain(t.kind);
                 expect(t.name.length).toBeGreaterThan(0);
                 if (t.kind === 'unit') expect([stage.id, (t.specs || []).length > 0]).toEqual([stage.id, true]);
-                if (t.kind === 'contract') expect([stage.id, Boolean(t.wiring?.length || t.weekly?.length)]).toEqual([stage.id, true]);
+                if (t.kind === 'contract') expect([stage.id, Boolean(t.wiring?.length || t.weekly?.length || (t.signal && t.spec && fs.existsSync(path.join(__dirname, '..', t.spec))))]).toEqual([stage.id, true]);
                 if (t.kind === 'e2e') expect([stage.id, fs.existsSync(path.join(__dirname, '..', t.scenario as string)), t.signal]).toEqual([stage.id, true, expect.stringMatching(/^e2e\./)]);
             }
         }
@@ -123,7 +123,8 @@ describe('stage-signals: tests.stage rows', () => {
         const finder = rows.find((r) => r.name === 'tests.stage.finder')!;
         expect(finder.meta).toMatchObject({ stage: 'finder', name: 'Finder', group: 'The agents, side by side', order: stages.findIndex((s) => s.id === 'finder') + 1 });
         expect(finder.meta.does).toEqual(expect.stringContaining('looks for bugs'));
-        expect(finder.meta.tests.map((t: { kind: string; status: string }) => [t.kind, t.status])).toEqual([['unit', 'pass'], ['contract', 'pass']]);
+        expect(finder.meta.tests.map((t: { kind: string; status: string }) => [t.kind, t.status])).toEqual([['unit', 'pass'], ['contract', 'pass'], ['unit', 'pass'], ['contract', 'pass'], ['contract', 'elsewhere']]);
+        expect(finder.meta.tests[4]).toMatchObject({ signal: 'contract.api', spec: 'libs/llm/trial-model-availability.contract.spec.ts' });
         expect(finder.meta.tests[0]).toMatchObject({ passed: 5, total: 5 });
         expect(finder.meta.eval).toMatchObject({ path: 'evals/investigation', metric: 'of known bugs found', question: expect.stringMatching(/\?/) });
         expect(finder.meta.case_catalog.length).toBe(15);
@@ -227,8 +228,8 @@ describe('stage-signals: eval rows', () => {
         expect(weeklyRows(result, 'pass', { stageId: 'parse', model: 'm', set: 'controlled' })).toEqual([]);
     });
 
-    it('says which provider serves each model and whether it is the managed default or BYOK', () => {
-        expect(routeOf('deepseek-v4-flash@fireworks')).toEqual({ provider: 'Fireworks', route: 'managed' });
+    it('says which provider serves each model, on the BYOK route every eval takes', () => {
+        expect(routeOf('deepseek-v4-flash@fireworks')).toEqual({ provider: 'Fireworks', route: 'byok' });
         expect(routeOf('kimi-k2.7-code@openrouter')).toEqual({ provider: 'OpenRouter → moonshotai', route: 'byok' });
         expect(routeOf('gpt-6-sol')).toEqual({ provider: 'OpenAI', route: 'byok' });
         expect(routeOf('claude-sonnet-5-5')).toEqual({ provider: 'Anthropic', route: 'byok' });

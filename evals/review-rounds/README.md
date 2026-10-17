@@ -124,8 +124,8 @@ that came back, is the exception: not posted again (#2097).
 ### Reasoning effort
 
 Production reviews run through the customer's BYOK model with the reasoning
-effort the customer configured; the eval's default route is the env/managed
-model at the family's default effort. `--byok-reasoning=<none|low|medium|high>`
+effort the customer configured; the eval's default route is a stored BYOK
+config holding the model, with no effort set. `--byok-reasoning=<none|low|medium|high>`
 routes both agents through a BYOK slot with that effort, as production does.
 Repeat measurements use `--byok-reasoning=none`, the configuration under which
 the production reposts reproduce; a higher effort hides them.

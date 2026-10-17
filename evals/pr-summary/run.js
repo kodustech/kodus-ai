@@ -84,7 +84,7 @@ function infra(msg) {
 }
 
 // ── The org's model, routed as production routes it (evals/shared/model-route.js):
-//    none stored on the managed default, a BYOK config for any other model. ──
+//    a stored BYOK config holding the model. ──
 const { resolveRoute, EVAL_ORG, storedByokConfigOf, tier0ModelEntry, evalPermissionService } = require('../shared/model-route');
 let ROUTE;
 try {
