@@ -31,7 +31,10 @@ import type { NormalizedModel } from '@libs/llm/byok-config';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 import type { ReasoningEffort } from '@libs/llm/reasoning-options';
 
-import { CoverageSummary, CoverageTier } from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
+import {
+    CoverageSummary,
+    CoverageTier,
+} from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
 import { type AdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import type { DocumentationSearchAdapter } from '@libs/code-review/infrastructure/agents/engine/agent-tools.factory';
@@ -283,7 +286,8 @@ export interface RuntimeMeta {
  * cohesive slices above so a consumer can depend on just what it needs.
  */
 export interface ReviewAgentInput
-    extends PrReviewContext,
+    extends
+        PrReviewContext,
         ToolingContext,
         ReviewRuleConfig,
         ModelConfig,
@@ -418,6 +422,11 @@ export interface AgentLoopInput {
      *  `systemPrompt`/`userPrompt` above (see `formatPreviousDecisions` in
      *  prompt-builder.ts), so this field exists ONLY for the verifier hop. */
     previousDecisions?: PrDecisionRecord[];
+    /** Custom agents only: the team guides linked to this agent (may be
+     *  empty). Set → findings may carry kind/source, and convention findings
+     *  take the quote check (target branch, via the sandbox) and the
+     *  convention verifier instead of HV2. Unset for every other agent. */
+    conventionGuides?: string[];
     /** Reasoning effort level from BYOK config. Mapped to provider-specific
      *  providerOptions (anthropic.thinking, google.thinkingConfig, etc). */
     reasoningEffort?: ReasoningEffort;
@@ -546,6 +555,9 @@ export interface AgentLoopOutput {
     droppedByVerify?: FindingsOutput['suggestions'];
     /** Suggestions whose verify run failed — not refuted, not confirmed. */
     unverifiedByVerify?: FindingsOutput['suggestions'];
+    /** Convention findings whose quoted rule is not in the cited guide on the
+     *  target branch (`quote-not-found`) — dropped before verify. */
+    droppedByQuoteCheck?: FindingsOutput['suggestions'];
     /** Token usage for the verification sub-step only (included in total usage). */
     verificationUsage?: {
         inputTokens: number;
@@ -596,6 +608,8 @@ export interface VerificationTraceSummary {
     droppedByVerifier: number;
     /** Findings whose verify run failed (not judged, not published). */
     unverified?: number;
+    /** Convention findings dropped by the quote check, before verify. */
+    droppedByQuoteCheck?: number;
     /** @deprecated Always 0 — evidence gate now forces verification instead of dropping. Kept for backwards compatibility. */
     droppedByEvidenceFilter: number;
     sentToEvidenceGate?: number;

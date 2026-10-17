@@ -51,6 +51,11 @@ import { buildProviderOptions } from '@libs/llm/reasoning-options';
 // buildAgentAnomalies is review-specific (anomaly summary shapes) — lives in its
 // own module (relocated out of the legacy llm/agent-loop.ts).
 import { buildAgentAnomalies } from '@libs/code-review/infrastructure/agents/core/agent-anomalies';
+import {
+    AstGrepOutputLog,
+    makeTargetBranchGuideReader,
+    recordAstGrepOutputs,
+} from '@libs/code-review/infrastructure/agents/core/convention-check';
 
 const funnelLogger = createLogger('review-funnel');
 
@@ -72,7 +77,7 @@ export async function runAgentLoopViaCore(
         reporter: secrets.byokErrorReporter,
     });
 
-    const { registry: tools, cache: toolCache } = buildFinderToolRegistry({
+    const { registry: baseTools, cache: toolCache } = buildFinderToolRegistry({
         remoteCommands: secrets.remoteCommands,
         gitHubToken: secrets.gitHubToken,
         repositoryFullName: input.repositoryFullName,
@@ -82,6 +87,23 @@ export async function runAgentLoopViaCore(
         outlineFirst: input.outlineFirst,
         linkedRepoAccess: secrets.linkedRepoAccess,
     });
+
+    // Second pass for convention findings (custom agents): needs the guides
+    // as they are on the target branch, so only with a sandbox that can run
+    // git. Without one, convention findings fall back to HV2 like any other.
+    const readGuide =
+        input.conventionGuides !== undefined
+            ? makeTargetBranchGuideReader(
+                  secrets.remoteCommands,
+                  input.baseBranch,
+              )
+            : undefined;
+    // What ast-grep matched in this review: a convention finding it backs
+    // needs no model check.
+    const astGrepLog = readGuide ? new AstGrepOutputLog() : undefined;
+    const tools = astGrepLog
+        ? recordAstGrepOutputs(baseTools, astGrepLog)
+        : baseTools;
 
     const coverageLedger = new DiffCoverageLedger({
         changedFiles: input.changedFiles,
@@ -161,6 +183,7 @@ export async function runAgentLoopViaCore(
             maxSteps: input.maxSteps ?? 20,
             providerOptions,
             acceptsRevisions: !!input.previousDecisions?.length,
+            acceptsConventions: !!readGuide,
         });
 
     // Base pass uses the reported `coverageLedger` (read back below for the
@@ -224,6 +247,13 @@ export async function runAgentLoopViaCore(
             // run at all (not fast/self-contained); harmless otherwise.
             heavy: !!input.heavy && !skipHeavyPasses,
             previousDecisions: input.previousDecisions,
+            ...(readGuide && {
+                conventionCheck: {
+                    readGuide,
+                    guideFiles: input.conventionGuides,
+                    astGrepLog,
+                },
+            }),
             telemetryMetadata: input.telemetryMetadata,
             agentName: input.agentName,
             usageRunName: input.usageRunName,
@@ -300,7 +330,10 @@ export async function runAgentLoopViaCore(
 
     // Verify funnel made observable: before = kept + dropped, after = kept.
     const verifiedBefore =
-        r.kept.length + r.droppedByVerify.length + r.unverified.length;
+        r.kept.length +
+        r.droppedByVerify.length +
+        r.unverified.length +
+        r.droppedByQuoteCheck.length;
     const verification: VerificationTraceSummary | null =
         verifiedBefore === 0
             ? null
@@ -309,6 +342,9 @@ export async function runAgentLoopViaCore(
                   afterCount: r.kept.length,
                   droppedByVerifier: r.droppedByVerify.length,
                   unverified: r.unverified.length,
+                  ...(r.droppedByQuoteCheck.length > 0 && {
+                      droppedByQuoteCheck: r.droppedByQuoteCheck.length,
+                  }),
                   droppedByEvidenceFilter: 0,
                   decisions: [
                       ...r.kept.map((f, i) => ({
@@ -391,6 +427,11 @@ export async function runAgentLoopViaCore(
         discardedBySeverity: [],
         droppedByVerify: r.droppedByVerify.map((d) => d.finding) as any,
         unverifiedByVerify: r.unverified.map((u) => u.finding) as any,
+        ...(r.droppedByQuoteCheck.length > 0 && {
+            droppedByQuoteCheck: r.droppedByQuoteCheck.map(
+                (q) => q.finding,
+            ) as any,
+        }),
         coverage,
         verification,
         verificationUsage: {
