@@ -258,7 +258,13 @@ describe('CustomAgentProvider — knowledge and tools', () => {
         const mcpManager = {
             getConnections: jest.fn(async (_org: any, format?: boolean) =>
                 format
-                    ? [{ name: 'Tracker', url: 'https://mcp.example.test' }]
+                    ? [
+                          {
+                              name: 'Tracker',
+                              url: 'https://mcp.example.test',
+                              integrationId: 'int-1',
+                          },
+                      ]
                     : [
                           {
                               organizationId: 'org-1',

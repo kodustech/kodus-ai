@@ -321,7 +321,13 @@ describe('CustomAgentToolCatalogService', () => {
     it('lists no connection of another organization', async () => {
         const getConnections = jest.fn(async (_org: any, format?: boolean) =>
             format
-                ? [{ name: 'Tracker', url: 'https://mcp.example.test' }]
+                ? [
+                      {
+                          name: 'Tracker',
+                          url: 'https://mcp.example.test',
+                          integrationId: 'int-9',
+                      },
+                  ]
                 : [
                       {
                           organizationId: 'org-2',
