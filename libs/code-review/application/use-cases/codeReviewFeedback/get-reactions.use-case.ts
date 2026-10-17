@@ -173,12 +173,24 @@ export class GetReactionsUseCase implements IUseCase {
 
                     const commentsLinkedToSuggestions = (comments ?? []).filter(
                         (comment) => {
-                            const threadId =
-                                comment?.threadId ??
-                                comment?.notes?.[0]?.id ??
-                                comment?.id;
-                            const suggestion =
-                                suggestionsByCommentId.get(threadId);
+                            // Adapters disagree on which identifier comes back
+                            // on the reaction: GitLab echoes notes[0].id, Azure
+                            // the threadId, GitHub the comment id, and Forgejo
+                            // carries the review id in threadId with the
+                            // comment's own id beside it. Every candidate is
+                            // tried: keying on the first one present drops the
+                            // comment — and its reactions — whenever that first
+                            // id is not the one the suggestion was stored under.
+                            const suggestion = [
+                                comment?.threadId,
+                                comment?.notes?.[0]?.id,
+                                comment?.id,
+                            ]
+                                .filter(
+                                    (id) => id !== undefined && id !== null,
+                                )
+                                .map((id) => suggestionsByCommentId.get(id))
+                                .find((found) => found !== undefined);
 
                             if (!suggestion) {
                                 return false;
