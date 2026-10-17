@@ -47,7 +47,7 @@ const { spawnSync, execFileSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
 const { TIER0 } = require('./shared/tier0-models');
-const { sendExperimentRows, recordedExperiments, PANEL } = require('./shared/quality-client');
+const { sendExperimentRows, recordedExperiments, experimentsPage } = require('./shared/quality-client');
 // The nightly's model (evals/README.md): an experiment's default.
 const DEFAULT_MODEL = 'deepseek-v4-flash@fireworks';
 const DEFAULT_RUNS = 2;
@@ -330,13 +330,17 @@ function blobsAt(sha, files) {
     return Object.fromEntries(out.split('\n').filter(Boolean).map((l) => { const [meta, file] = l.split('\t'); return [file, meta.split(' ')[2]]; }));
 }
 
-// A recorded experiment that measured exactly this code: the same content of
-// every step file it recorded on both sides, and every phase asked for.
-function measuredAlready(recorded, phaseIds, blobsOf) {
+// A recorded experiment that measured exactly this, so it need not run again:
+// the same model, runs and evals (their tree), every phase asked for answered
+// (none missing or not measured), and the same content of every step file it
+// recorded on both sides. A record without any of these is not reused.
+function measuredAlready(recorded, { phaseIds, model, runs, evalsTree }, blobsOf) {
     return (recorded || []).find((x) => {
         const blobs = x.step_blobs;
         if (!blobs || !blobs.base || !blobs.candidate || !Object.keys(blobs.candidate).length) return false;
-        if (!phaseIds.every((p) => (x.phases || []).includes(p))) return false;
+        if (x.model !== model || x.runs !== runs || !x.evals_tree || x.evals_tree !== evalsTree) return false;
+        const verdicts = x.phase_verdicts || {};
+        if (!phaseIds.every((p) => (x.phases || []).includes(p) && verdicts[p] && verdicts[p] !== 'not measured')) return false;
         const same = (want, side) => {
             const have = blobsOf(side, Object.keys(want));
             return Object.entries(want).every(([file, blob]) => have[file] === blob);
@@ -411,16 +415,30 @@ async function main() {
     const name = slug(args.name || branch);
     if (args['if-new']) {
         const recorded = await recordedExperiments(step, branch);
-        const hit = recorded && measuredAlready(recorded, phaseIds, (side, files) => blobsAt(side === 'base' ? baseSha : head, files));
+        const identity = { phaseIds, model, runs, evalsTree: git(['rev-parse', `${head}:evals`]) };
+        const hit = recorded && measuredAlready(recorded, identity, (side, files) => blobsAt(side === 'base' ? baseSha : head, files));
         if (hit) {
             const out = path.resolve(args.out || path.join(os.tmpdir(), 'kodus-experiments', `${step}-${name}-${Date.now()}`));
             fs.mkdirSync(out, { recursive: true });
             const verdicts = hit.phase_verdicts || {};
+            // What the panel recorded is data, quoted as such; one line each, so it cannot close the quote.
+            const quoted = (v) => String(v ?? '').replace(/[\r\n]+/g, ' ').replace(/[<>`]/g, '');
             fs.writeFileSync(
                 path.join(out, 'summary.md'),
-                `### Experiment: ${step} · ${name}\n\nThis code was measured already, on ${String(hit.ts).slice(0, 10)} (${hit.candidate?.sha?.slice(0, 9) || 'a commit'} with the same content in every file of the step): not run again.\n\n**${hit.decision}**: ${hit.reason}\n\n${Object.entries(verdicts).map(([p, v]) => `- ${PHASES[p]?.question || p} ${v}`).join('\n')}\n\n${PANEL}/experiments\n`,
+                [
+                    `### Experiment: ${step} · ${name}`,
+                    '',
+                    `This code was measured already, on ${String(hit.ts).slice(0, 10)}, with the same model, runs and evals and the same content in every file of the step: not run again. The panel's record, as data:`,
+                    '',
+                    `> decision: ${quoted(hit.decision)}`,
+                    `> reason: ${quoted(hit.reason)}`,
+                    ...phaseIds.map((p) => `> ${quoted(PHASES[p].question)} ${quoted(verdicts[p])}`),
+                    '',
+                    experimentsPage(),
+                    '',
+                ].join('\n'),
             );
-            console.log(`measured already on ${hit.ts}: ${hit.decision} — ${hit.reason}\n${PANEL}/experiments`);
+            console.log(`measured already on ${hit.ts}: ${hit.decision} — ${hit.reason}\n${experimentsPage()}`);
             return verdicts.regression === 'regression' ? 1 : 0;
         }
         console.log(recorded === null ? 'the panel could not say whether this code was measured: running it' : 'not measured yet: running it');
@@ -522,6 +540,7 @@ async function main() {
             candidate: { sha: head, version: strip(versions.candidate) },
             changedFiles,
             stepBlobs,
+            evalsTree: git(['rev-parse', `${head}:evals`]),
             phases,
             decision,
             exits,
@@ -554,6 +573,8 @@ async function main() {
                     base: { sha: baseSha, ref: baseRef, step_version: versions.base.step },
                     candidate: { sha: head, step_version: versions.candidate.step },
                     eval_version: versions.candidate.eval,
+                    // the evals' whole tree: the same on both sides (checked above), what a reuse must match
+                    evals_tree: experiment.evalsTree,
                     dataset_version: versions.candidate.dataset,
                     changed_files: changedFiles,
                     // once per phase, on its main eval's row

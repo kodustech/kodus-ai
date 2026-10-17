@@ -165,50 +165,81 @@ describe('evals/experiment.js derived measures', () => {
 describe('evals/experiment.js measuredAlready', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { measuredAlready } = require('./experiment');
-    const recorded = [{ experiment: 'x', phases: ['regression', 'decision'], step_blobs: { base: { 'libs/a.ts': 'a1', 'libs/b.ts': 'b1' }, candidate: { 'libs/a.ts': 'a2', 'libs/b.ts': 'b1' } } }];
+    const blobs = { base: { 'libs/a.ts': 'a1', 'libs/b.ts': 'b1' }, candidate: { 'libs/a.ts': 'a2', 'libs/b.ts': 'b1' } };
+    const record = { experiment: 'x', model: 'm', runs: 2, evals_tree: 't1', phases: ['regression', 'decision'], phase_verdicts: { regression: 'no regression', decision: 'better' }, step_blobs: blobs };
+    const ask = { phaseIds: ['regression'], model: 'm', runs: 2, evalsTree: 't1' };
     const blobsOf = (now: Record<string, Record<string, string>>) => (side: string, files: string[]) => Object.fromEntries(files.map((f) => [f, now[side][f]]));
+    const same = blobsOf(blobs);
 
-    it('finds the experiment that measured exactly this code', () => {
-        const now = { base: { 'libs/a.ts': 'a1', 'libs/b.ts': 'b1' }, candidate: { 'libs/a.ts': 'a2', 'libs/b.ts': 'b1' } };
-        expect(measuredAlready(recorded, ['regression'], blobsOf(now))).toBe(recorded[0]);
+    it('finds the experiment that measured exactly this, on the same model, runs and evals', () => {
+        expect(measuredAlready([record], ask, same)).toBe(record);
     });
 
-    it('runs again when a step file differs on either side, or a phase was not measured', () => {
-        const branchChanged = { base: { 'libs/a.ts': 'a1', 'libs/b.ts': 'b1' }, candidate: { 'libs/a.ts': 'a3', 'libs/b.ts': 'b1' } };
-        const mainChanged = { base: { 'libs/a.ts': 'a1', 'libs/b.ts': 'b9' }, candidate: { 'libs/a.ts': 'a2', 'libs/b.ts': 'b1' } };
-        expect(measuredAlready(recorded, ['regression'], blobsOf(branchChanged))).toBeNull();
-        expect(measuredAlready(recorded, ['regression'], blobsOf(mainChanged))).toBeNull();
-        expect(measuredAlready([{ ...recorded[0], phases: ['regression'] }], ['regression', 'decision'], blobsOf({ base: recorded[0].step_blobs.base, candidate: recorded[0].step_blobs.candidate }))).toBeNull();
+    it('runs again when a step file differs on either side', () => {
+        expect(measuredAlready([record], ask, blobsOf({ base: blobs.base, candidate: { ...blobs.candidate, 'libs/a.ts': 'a3' } }))).toBeNull();
+        expect(measuredAlready([record], ask, blobsOf({ base: { ...blobs.base, 'libs/b.ts': 'b9' }, candidate: blobs.candidate }))).toBeNull();
+    });
+
+    it('runs again for another model, run count or evals, or a record without them', () => {
+        expect(measuredAlready([record], { ...ask, model: 'other' }, same)).toBeNull();
+        expect(measuredAlready([record], { ...ask, runs: 3 }, same)).toBeNull();
+        expect(measuredAlready([record], { ...ask, evalsTree: 't2' }, same)).toBeNull();
+        expect(measuredAlready([{ ...record, evals_tree: null }], ask, same)).toBeNull();
+    });
+
+    it('never reuses a phase that was not asked, not answered or not measured', () => {
+        expect(measuredAlready([{ ...record, phases: ['regression'] }], { ...ask, phaseIds: ['regression', 'decision'] }, same)).toBeNull();
+        expect(measuredAlready([{ ...record, phase_verdicts: { regression: 'not measured' } }], ask, same)).toBeNull();
+        expect(measuredAlready([{ ...record, phase_verdicts: {} }], ask, same)).toBeNull();
     });
 });
 
 describe('evals/shared/quality-client.js', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const client = require('./shared/quality-client');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const crypto = require('crypto');
     const saved = { ...process.env };
     afterEach(() => {
         process.env = { ...saved };
         jest.restoreAllMocks();
     });
 
-    it('does not send without a token, and says why', async () => {
+    it('does not send without a secret, and says why', async () => {
         delete process.env.KODUS_QUALITY_INGEST_TOKEN;
         expect(await client.sendExperimentRows([{ name: 'experiments.x' }])).toMatchObject({ sent: false, reason: expect.stringContaining('KODUS_QUALITY_INGEST_TOKEN') });
     });
 
-    it('posts the rows with the token, and reports a refusal without throwing', async () => {
-        process.env.KODUS_QUALITY_INGEST_TOKEN = 't';
+    it('signs each request instead of sending the secret, and reports a refusal without throwing', async () => {
+        process.env.KODUS_QUALITY_INGEST_TOKEN = 'the-secret';
         process.env.KODUS_QUALITY_URL = 'https://panel.test/';
-        const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({ inserted: 1, url: 'https://panel.test/experiments' }), { status: 200 }));
+        const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({ inserted: 1 }), { status: 200 }));
         expect(await client.sendExperimentRows([{ name: 'experiments.x' }])).toEqual({ sent: true, url: 'https://panel.test/experiments' });
-        expect(fetch.mock.calls[0][0]).toBe('https://panel.test/api/experiments');
-        expect((fetch.mock.calls[0][1] as RequestInit).headers).toMatchObject({ authorization: 'Bearer t' });
+        const [url, init] = fetch.mock.calls[0] as [string, RequestInit & { headers: Record<string, string> }];
+        expect(url).toBe('https://panel.test/api/experiments');
+        expect(JSON.stringify(init.headers)).not.toContain('the-secret');
+        const ts = init.headers['x-kodus-timestamp'];
+        const bodyHash = crypto.createHash('sha256').update(init.body).digest('hex');
+        expect(init.headers['x-kodus-signature']).toBe(`sha256=${crypto.createHmac('sha256', 'the-secret').update(`POST\n/api/experiments\n${ts}\n${bodyHash}`).digest('hex')}`);
         fetch.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'no writer' }), { status: 503 }));
         expect(await client.sendExperimentRows([{ name: 'experiments.x' }])).toMatchObject({ sent: false, reason: 'the panel answered 503: no writer' });
     });
 
+    it('refuses a panel URL that is not a bare https origin before any secret is used', async () => {
+        process.env.KODUS_QUALITY_INGEST_TOKEN = 'the-secret';
+        const fetch = jest.spyOn(globalThis, 'fetch');
+        for (const bad of ['http://panel.test', 'https://panel.test/other', 'https://panel.test/?x=1', 'https://user:pw@panel.test', 'ftp://panel.test']) {
+            process.env.KODUS_QUALITY_URL = bad;
+            expect(await client.sendExperimentRows([{ name: 'experiments.x' }])).toMatchObject({ sent: false, reason: expect.stringContaining('KODUS_QUALITY_URL') });
+        }
+        expect(fetch).not.toHaveBeenCalled();
+        process.env.KODUS_QUALITY_URL = 'http://localhost:3777';
+        expect(client.panelOrigin()).toBe('http://localhost:3777');
+    });
+
     it('cannot say what was measured when the panel does not answer', async () => {
-        process.env.KODUS_QUALITY_INGEST_TOKEN = 't';
+        process.env.KODUS_QUALITY_INGEST_TOKEN = 'the-secret';
+        delete process.env.KODUS_QUALITY_URL;
         jest.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('offline'));
         expect(await client.recordedExperiments('dedup', 'feat/x')).toBeNull();
     });
