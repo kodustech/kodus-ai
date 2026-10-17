@@ -43,7 +43,19 @@ export type ReviewWarningKind =
     /** Some Kody Rules checks failed to run; the others still posted. */
     | 'KODY_RULES_PARTIAL'
     /** A finding's verify run failed, so it was not published (#2171). */
-    | 'VERIFY_UNAVAILABLE';
+    | 'VERIFY_UNAVAILABLE'
+    /** A linked skill has no SKILL.md on the PR's target branch. */
+    | 'SKILL_NOT_FOUND'
+    /** A linked skill breaks the skill format, so it was not loaded. */
+    | 'SKILL_INVALID'
+    /** The PR edits a linked skill or doc; the target-branch version was used. */
+    | 'SKILL_CHANGED_IN_PR'
+    /** A linked doc is absent on the PR's target branch. */
+    | 'DOC_NOT_FOUND'
+    /** A skill body or the linked docs were cut to fit their budget. */
+    | 'KNOWLEDGE_TRUNCATED'
+    /** A skill declares requirements the reviewer may not meet. */
+    | 'SKILL_COMPATIBILITY';
 
 export type ReviewWarningReason =
     | 'small_context_window'
@@ -65,7 +77,9 @@ export type ReviewWarningReason =
     /** The prompt did not fit the single-batch budget on a large PR. */
     | 'large_pr'
     /** The verifier's model call failed (provider error, 429, abort). */
-    | 'verify_failed';
+    | 'verify_failed'
+    /** A linked skill or doc could not be used as configured. */
+    | 'knowledge';
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;
