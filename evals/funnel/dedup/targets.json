@@ -4,6 +4,7 @@
         "floor = min(mean - 2 binomial SE, (n - 2) / n) over the n checks of one run, rounded down: a pair of perfect runs still leaves room for 2 checks, like evals/conversation/targets.json.",
         "deepseek-v4-flash@fireworks, controlled: calibrated 2026-10-17 from 2 local runs on a725253d6 (managed route, snapshot built on 57ef595ce): 32/32 and 32/32, mean 1.0. floor 0.93.",
         "deepseek-v4-flash@fireworks, full: calibrated 2026-10-17 from 2 local runs on a725253d6 (managed route, snapshot built on 57ef595ce): 45/45 and 45/45, mean 1.0. floor 0.95.",
+        "Deliberate break, 2026-10-17 (local, deepseek, controlled): dedup keeping one finding per PR (dedupSuggestionStreams): 0.375, 11 of 30 known bugs and 1 of 2 controls kept, GATE FAILED, exit 1.",
         "The relabeled dataset (#2114) changes the known bugs: a new snapshot and two runs per set recalibrate these floors in the same PR.",
         "gpt-6-sol: calibrated 2026-10-17 from 2 local runs on a725253d6: 32/32 and 32/32, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.93.",
         "claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 32/32 and 32/32, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.93."

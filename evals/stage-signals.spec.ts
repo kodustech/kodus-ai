@@ -4,7 +4,7 @@ import * as path from 'path';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { STAGES, GROUPS, PLUMBING, unitSpecs } = require('./stages');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { testRows, nightlyRows, weeklyRows, weeklyTestRows, READERS, catalogPath, usageMeta } = require('./stage-signals');
+const { testRows, nightlyRows, weeklyRows, weeklyTestRows, routeOf, READERS, catalogPath, usageMeta } = require('./stage-signals');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { costUpperBound, catalogIdFor } = require('./investigation/nightly-compare');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -227,6 +227,16 @@ describe('stage-signals: eval rows', () => {
         expect(weeklyRows(result, 'pass', { stageId: 'parse', model: 'm', set: 'controlled' })).toEqual([]);
     });
 
+    it('says which provider serves each model and whether it is the managed default or BYOK', () => {
+        expect(routeOf('deepseek-v4-flash@fireworks')).toEqual({ provider: 'Fireworks', route: 'managed' });
+        expect(routeOf('kimi-k2.7-code@openrouter')).toEqual({ provider: 'OpenRouter → moonshotai', route: 'byok' });
+        expect(routeOf('gpt-6-sol')).toEqual({ provider: 'OpenAI', route: 'byok' });
+        expect(routeOf('claude-sonnet-5-5')).toEqual({ provider: 'Anthropic', route: 'byok' });
+        expect(routeOf('not-a-tier0-model')).toBeNull();
+        const [row]: Row[] = weeklyRows({ model: 'gpt-6-sol', metric: { value: 1, floor: 0.9 }, cases: [] }, 'pass', { stageId: 'conversation', model: 'gpt-6-sol', set: 'controlled' });
+        expect(row.meta).toMatchObject({ provider: 'OpenAI', route: 'byok' });
+    });
+
     it('reports a weekly contract test per model: green on exit 0, red on 1, infra otherwise', () => {
         const at = (exit: number) => weeklyTestRows({ stageId: 'pr-summary', model: 'gpt-6-sol', exit, problem: exit ? `exit ${exit}` : null })[0];
         expect(at(0)).toMatchObject({ name: 'tests.weekly.pr-summary.gpt-6-sol', status: 'green', meta: { stage: 'pr-summary', model: 'gpt-6-sol', tier: 'weekly', kind: 'contract' } });
@@ -242,6 +252,7 @@ describe('stage-signals: eval rows', () => {
             calls: 8, in: 4000, out: 400, cacheRead: 1000, cacheWrite: 0, cacheHit: 0.25, ms: 8000, p50Ms: 900, p95Ms: 1700, reviews: 4,
             perCase: { calls: 2, in: 1000, out: 100, cacheRead: 250, cacheWrite: 0, ms: 2000 },
             usdPerCaseMax: null,
+            efforts: null,
         });
         // Priced only from the Kodus catalog, every input token at the full rate.
         const priced = usageMeta(tokens, 4, 'deepseek-v4-flash@fireworks');

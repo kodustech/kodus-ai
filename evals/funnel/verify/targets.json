@@ -6,6 +6,7 @@
         "deepseek-v4-flash@fireworks, full: calibrated 2026-10-17 from 2 local runs on a725253d6, one at a time: 45/45 and 45/45, mean 1.0. floor 0.95.",
         "gpt-6-sol: calibrated 2026-10-17 from 2 local runs on a725253d6: 31/32 and 31/32, mean 0.969. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.9.",
         "claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 32/32 and 32/32, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.93.",
+        "Deliberate break, 2026-10-17 (local, deepseek, controlled): the verifier dropping every candidate (LlmVerifier.verify keep:false): 0.031, 0 of 30 known bugs and 1 of 2 controls kept, GATE FAILED, exit 1.",
         "The relabeled dataset (#2114) changes the known bugs: a new snapshot and two runs per set recalibrate these floors in the same PR."
     ],
     "sets": {

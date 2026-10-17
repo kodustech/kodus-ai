@@ -85,7 +85,13 @@ function poolTokens(a = {}, b = {}) {
         keys.map((k) => {
             const x = (a || {})[k];
             const y = (b || {})[k];
-            return [k, Array.isArray(x) || Array.isArray(y) ? [...(x || []), ...(y || [])] : (x || 0) + (y || 0)];
+            if (Array.isArray(x) || Array.isArray(y)) return [k, [...(x || []), ...(y || [])]];
+            // efforts: per task, the values both runs saw
+            if ((x && typeof x === 'object') || (y && typeof y === 'object')) {
+                const tasks = [...new Set([...Object.keys(x || {}), ...Object.keys(y || {})])];
+                return [k, Object.fromEntries(tasks.map((t) => [t, [...new Set([...((x || {})[t] || []), ...((y || {})[t] || [])])]]))];
+            }
+            return [k, (x || 0) + (y || 0)];
         }),
     );
 }

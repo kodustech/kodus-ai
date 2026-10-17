@@ -5,6 +5,8 @@ const fs = require('fs');
 const path = require('path');
 
 const callScope = new AsyncLocalStorage();
+// The task (production's runName) a model call serves, for the request it sends.
+const taskScope = new AsyncLocalStorage();
 
 // Load the engine's TypeScript from plain node: esbuild, not ts-node, because
 // agent-loop.ts places value imports mid-file and ts-node leaves them
@@ -35,12 +37,13 @@ function countTokens() {
     registerTs();
     const { setLlmObservability } = require(path.join(__dirname, '../../libs/llm/llm-observability.ts'));
     const { readAiSdkUsage, readAiSdkUsageFromError } = require(path.join(__dirname, '../../libs/llm/ai-sdk-usage.ts'));
+    watchEfforts();
     setLlmObservability({
-        runAiSdkLLMInSpan: async ({ exec }) => {
+        runAiSdkLLMInSpan: async ({ exec, runName, spanName }) => {
             const startedAt = Date.now();
             let result;
             try {
-                result = await exec();
+                result = await taskScope.run(runName || spanName || 'unnamed', exec);
             } catch (error) {
                 failedCalls().push(error);
                 callScope.getStore()?.push(error);
@@ -57,6 +60,48 @@ function countTokens() {
     });
 }
 
+// The reasoning effort each task's requests actually carried, read from the body
+// sent to the provider (production decides it per task in
+// libs/llm/reasoning-options.ts, and some providers get none of what was asked):
+// `reasoning_effort` / `reasoning.effort` (OpenAI, OpenAI-compatible), `effort`
+// (Anthropic), else the thinking switch. Watches fetch, changes nothing it sends.
+const EFFORT_SKIP = new Set(['messages', 'input', 'system', 'tools', 'prompt', 'contents']);
+function effortOf(body) {
+    let effort = null;
+    let thinking = null;
+    const walk = (node, depth) => {
+        if (!node || typeof node !== 'object' || depth > 4) return;
+        for (const [key, value] of Object.entries(node)) {
+            if (EFFORT_SKIP.has(key)) continue;
+            if ((key === 'reasoning_effort' || key === 'effort') && typeof value === 'string') effort = effort || value;
+            else if (key === 'thinking' && value && typeof value === 'object') thinking = thinking || (value.budget_tokens ? `thinking ${value.budget_tokens} tokens` : value.type === 'disabled' ? 'off' : `thinking ${value.type}`);
+            else walk(value, depth + 1);
+        }
+    };
+    walk(body, 0);
+    return effort || thinking || 'not sent';
+}
+function watchEfforts() {
+    if (global.__EVAL_FETCH_WATCHED || typeof globalThis.fetch !== 'function') return;
+    global.__EVAL_FETCH_WATCHED = true;
+    const original = globalThis.fetch;
+    globalThis.fetch = function watchedFetch(input, init) {
+        const task = taskScope.getStore();
+        if (task && init && typeof init.body === 'string') {
+            try {
+                const body = JSON.parse(init.body);
+                if (body && body.model) {
+                    const efforts = tokensUsed().efforts;
+                    efforts[task] = [...new Set([...(efforts[task] || []), effortOf(body)])];
+                }
+            } catch {
+                // not JSON: not a model request
+            }
+        }
+        return original.call(this, input, init);
+    };
+}
+
 // The running total of what the model calls cost, shared with agent-run usage
 // spans an eval may also count. Every field sums or concatenates, so two runs
 // pool (evals/shared/nightly-verdict.js):
@@ -64,8 +109,9 @@ function countTokens() {
 //                                   `in` includes the cached ones
 //   calls, ms                       the calls the provider answered, and their time
 //   callMs                          each of those calls' time, for percentiles
+//   efforts                         per task, the reasoning effort its requests carried
 function tokensUsed() {
-    global.__EVAL_TOK = global.__EVAL_TOK || { in: 0, out: 0, cacheRead: 0, cacheWrite: 0, calls: 0, ms: 0, callMs: [] };
+    global.__EVAL_TOK = global.__EVAL_TOK || { in: 0, out: 0, cacheRead: 0, cacheWrite: 0, calls: 0, ms: 0, callMs: [], efforts: {} };
     return global.__EVAL_TOK;
 }
 
@@ -97,4 +143,4 @@ async function withCallErrors(fn) {
     return { result, errors };
 }
 
-module.exports = { registerTs, countTokens, tokensUsed, addCall, failedCalls, withCallErrors };
+module.exports = { registerTs, countTokens, tokensUsed, addCall, failedCalls, withCallErrors, effortOf };

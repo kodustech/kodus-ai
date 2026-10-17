@@ -44,6 +44,8 @@ describe('evals/shared/eval-result', () => {
     it('pools token totals from either run: numbers add up, per-call times join', () => {
         expect(poolTokens({ in: 5, calls: 1, callMs: [40] }, { in: 7, out: 1, calls: 2, callMs: [10, 20] })).toEqual({ in: 12, calls: 3, callMs: [40, 10, 20], out: 1 });
         expect(poolTokens(undefined, { in: 1 })).toEqual({ in: 1 });
+        // Efforts per task: what either run saw.
+        expect(poolTokens({ efforts: { verify: ['low'] } }, { efforts: { verify: ['low', 'off'], finder: ['high'] } })).toEqual({ efforts: { verify: ['low', 'off'], finder: ['high'] } });
     });
 
     it('keeps every case in the signal but caps its detail and long text', () => {
