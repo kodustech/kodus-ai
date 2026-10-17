@@ -161,8 +161,8 @@ async function startServices(world) {
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
         // Each close on its own: a failing one neither escapes nor skips the other.
         res.on('close', () => {
-            Promise.resolve().then(() => transport.close()).catch((error) => console.warn('fake Atlassian MCP: transport close failed', error));
-            Promise.resolve().then(() => server.close()).catch((error) => console.warn('fake Atlassian MCP: server close failed', error));
+            Promise.resolve().then(() => transport.close()).catch((error) => console.warn('fake Atlassian MCP: transport close failed:', error instanceof Error ? error.message : 'Unknown cleanup error'));
+            Promise.resolve().then(() => server.close()).catch((error) => console.warn('fake Atlassian MCP: server close failed:', error instanceof Error ? error.message : 'Unknown cleanup error'));
         });
         await server.connect(transport);
         await transport.handleRequest(req, res, req.body);
