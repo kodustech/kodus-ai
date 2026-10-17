@@ -349,6 +349,15 @@ function measuredAlready(recorded, { phaseIds, model, runs, evalsTree }, blobsOf
     }) || null;
 }
 
+// One run, one name: the branch (or --name), the candidate commit, when the run
+// started (UTC, to the second) and a random suffix, taken once for all its rows.
+// A later run writes rows of its own instead of overwriting some of this run's
+// and leaving the rest, even at the same commit and second (a regression-only
+// check on another model after a full run would otherwise mix two runs in one
+// experiment).
+const runName = (branchOrName, head, startedAt, nonce = crypto.randomBytes(3).toString('hex')) =>
+    `${slug(branchOrName)}-${String(head).slice(0, 9)}-${startedAt.toISOString().replace(/\D/g, '').slice(0, 14)}-${nonce}`;
+
 async function main() {
     const args = parseArgs(process.argv.slice(2));
     if (args.affected) {
@@ -412,7 +421,7 @@ async function main() {
         console.error(`not comparable: the evals differ between the two sides; land the eval change on ${baseRef} first:\n${evalDiff}`);
         return 2;
     }
-    const name = slug(args.name || branch);
+    const name = runName(args.name || branch, head, new Date());
     if (args['if-new']) {
         const recorded = await recordedExperiments(step, branch);
         const identity = { phaseIds, model, runs, evalsTree: git(['rev-parse', `${head}:evals`]) };
@@ -625,4 +634,4 @@ if (require.main === module) {
         });
 }
 
-module.exports = { main, measuredAlready, compare, comparisonOf, deriveRuns, perCase, decide, phaseVerdict, affectedSteps, PHASES, STEP_EVALS };
+module.exports = { main, runName, measuredAlready, compare, comparisonOf, deriveRuns, perCase, decide, phaseVerdict, affectedSteps, PHASES, STEP_EVALS };
