@@ -86,6 +86,10 @@ env -u ANTHROPIC_API_KEY -u BYOK_ANTHROPIC_API_KEY \
 Scope/model env: `RECALL_ALL=1` (all PRs) or `RECALL_CASES=id1,id2` (subset);
 `RECALL_MODEL=<id>` overrides the model from this one config.
 
+Whole engine output per case: `RECALL_TRACES_DIR=<dir>` writes one JSON per case with every tool call and its
+arguments, the verifier's decisions and the findings it refuted; the result rows only
+summarize them.
+
 Real repository instead of the replay: `RECALL_REAL_REPO=1` checks out the PR's
 head in a worktree (`prepare-repo.js`) and answers grep, readFile and listDir with
 the commands production's local sandbox builds (`libs/sandbox/infrastructure/providers/local-sandbox.service.ts`),

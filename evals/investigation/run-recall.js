@@ -434,6 +434,19 @@ async function main() {
             return;
         }
 
+        // RECALL_TRACES_DIR=<dir>: keep each case's whole engine output (every
+        // tool call with its arguments, the verifier's decisions and the
+        // findings it refuted), which the result rows only summarize.
+        if (process.env.RECALL_TRACES_DIR) {
+            writeJson(
+                path.join(
+                    process.env.RECALL_TRACES_DIR,
+                    `${caseId.replace(/[^\w.-]+/g, '_')}.json`,
+                ),
+                tryParseJson(apiResult.output) ?? { raw: apiResult.output },
+            );
+        }
+
         if (NO_JUDGE) {
             unscored += 1;
             // Carry the trace summary even unscored: it holds the verify funnel

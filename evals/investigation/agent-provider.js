@@ -729,6 +729,14 @@ function serializeResult(caseId, agentResult, remoteCommands, repoHandle, produc
             coverage: agentResult.coverage,
             anomalies: agentResult.anomalies,
             verification: agentResult.verification,
+            // What the verifier refuted, so a missed golden can be told apart:
+            // never reported, or reported and refuted.
+            droppedByVerify: (agentResult.droppedByVerify || []).map((f) => ({
+                path: f.relevantFile,
+                startLine: f.relevantLinesStart ?? null,
+                endLine: f.relevantLinesEnd ?? null,
+                description: f.suggestionContent || '',
+            })),
             toolCalls: (agentResult.toolCalls || []).map((call) => ({
                 tool: call.toolName || call.tool,
                 args: call.args || {},
@@ -873,6 +881,7 @@ function mergeResults(results) {
         coverage: results.map((r) => r.coverage),
         anomalies: results.map((r) => r.anomalies),
         verification: results.map((r) => r.verification),
+        droppedByVerify: results.flatMap((r) => r.droppedByVerify || []),
         toolCalls: results.flatMap((r) => r.toolCalls || []),
         batches: results.flatMap((r) => r.batches || []),
     };
@@ -1038,4 +1047,4 @@ class InvestigationAgentProvider {
 
 module.exports = InvestigationAgentProvider;
 // For the specs: how a case reaches production's loop.
-module.exports.internals = { resolveRoute, evalPermissionService, buildProductionRun, productionLoopInput, mergeResults, NotAProductionRoute };
+module.exports.internals = { resolveRoute, evalPermissionService, buildProductionRun, productionLoopInput, mergeResults, serializeResult, NotAProductionRoute };
