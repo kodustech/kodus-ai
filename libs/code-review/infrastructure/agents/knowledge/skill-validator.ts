@@ -1,0 +1,159 @@
+import * as yaml from 'js-yaml';
+
+import {
+    estimateTokens,
+    tokensToChars,
+} from '@libs/code-review/infrastructure/adapters/services/utils/token-estimator';
+
+/**
+ * SKILL.md validation, following the Agent Skills format (agentskills.io):
+ * YAML frontmatter with `name` and `description`, then a Markdown body.
+ *
+ * - `name`: 1-64 chars, lowercase letters, digits and single hyphens, no
+ *   leading or trailing hyphen, equal to the skill's folder name.
+ * - `description`: 1-1024 chars, required.
+ * - body: kept under 500 lines and ~5k tokens; longer bodies are cut and
+ *   flagged so the review says it read a partial skill.
+ * - `allowed-tools` is ignored: a skill never widens what a reviewer may run.
+ * - `compatibility` is surfaced as a note, since the reviewer may lack what
+ *   the skill expects.
+ */
+
+export const SKILL_LIMITS = {
+    nameMaxLength: 64,
+    descriptionMaxLength: 1024,
+    bodyMaxLines: 500,
+    bodyMaxTokens: 5000,
+} as const;
+
+const SKILL_NAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+export const SKILL_BODY_TRUNCATED_MARKER =
+    '[... skill truncated: only the first part of SKILL.md was loaded ...]';
+
+export interface ParsedSkill {
+    name: string;
+    description: string;
+    body: string;
+    bodyTruncated: boolean;
+    compatibility?: string;
+}
+
+export type SkillParseResult =
+    | { ok: true; skill: ParsedSkill; notes: string[]; errors: [] }
+    | { ok: false; errors: string[] };
+
+const FRONTMATTER = /^---[ \t]*\n([\s\S]*?)\n---[ \t]*(?:\n|$)([\s\S]*)$/;
+
+export function parseSkillMarkdown(
+    markdown: string,
+    options: { expectedName?: string } = {},
+): SkillParseResult {
+    const text = (markdown ?? '').replace(/\r\n?/g, '\n').replace(/^﻿/, '');
+    const match = FRONTMATTER.exec(text);
+    if (!match) {
+        return {
+            ok: false,
+            errors: ['SKILL.md must start with a YAML frontmatter block (---)'],
+        };
+    }
+
+    let frontmatter: unknown;
+    try {
+        frontmatter = yaml.load(match[1]);
+    } catch (error) {
+        return {
+            ok: false,
+            errors: [`frontmatter is not valid YAML: ${firstLine(error)}`],
+        };
+    }
+    if (!frontmatter || typeof frontmatter !== 'object') {
+        return { ok: false, errors: ['frontmatter must be a YAML mapping'] };
+    }
+
+    const fields = frontmatter as Record<string, unknown>;
+    const errors: string[] = [];
+
+    const name = typeof fields.name === 'string' ? fields.name : '';
+    if (!name) {
+        errors.push('name is required');
+    } else if (name.length > SKILL_LIMITS.nameMaxLength) {
+        errors.push(
+            `name must be at most ${SKILL_LIMITS.nameMaxLength} characters`,
+        );
+    } else if (!SKILL_NAME_PATTERN.test(name)) {
+        errors.push(
+            'name must use lowercase letters, digits and single hyphens, without a leading or trailing hyphen',
+        );
+    } else if (options.expectedName && name !== options.expectedName) {
+        errors.push(
+            `name "${name}" must match its folder name "${options.expectedName}"`,
+        );
+    }
+
+    const description =
+        typeof fields.description === 'string' ? fields.description.trim() : '';
+    if (!description) {
+        errors.push('description is required');
+    } else if (description.length > SKILL_LIMITS.descriptionMaxLength) {
+        errors.push(
+            `description must be at most ${SKILL_LIMITS.descriptionMaxLength} characters`,
+        );
+    }
+
+    if (errors.length) return { ok: false, errors };
+
+    const notes: string[] = [];
+    const { body, truncated } = capBody(match[2].trim());
+    if (truncated) {
+        notes.push(
+            `SKILL.md body truncated to ${SKILL_LIMITS.bodyMaxLines} lines / ~${SKILL_LIMITS.bodyMaxTokens} tokens`,
+        );
+    }
+
+    const compatibility =
+        typeof fields.compatibility === 'string' && fields.compatibility.trim()
+            ? fields.compatibility.trim()
+            : undefined;
+    if (compatibility) {
+        notes.push(`compatibility: ${compatibility}`);
+    }
+
+    return {
+        ok: true,
+        skill: {
+            name,
+            description,
+            body,
+            bodyTruncated: truncated,
+            ...(compatibility ? { compatibility } : {}),
+        },
+        notes,
+        errors: [],
+    };
+}
+
+function capBody(body: string): { body: string; truncated: boolean } {
+    let capped = body;
+    let truncated = false;
+
+    const lines = capped.split('\n');
+    if (lines.length > SKILL_LIMITS.bodyMaxLines) {
+        capped = lines.slice(0, SKILL_LIMITS.bodyMaxLines).join('\n');
+        truncated = true;
+    }
+
+    if (estimateTokens(capped) > SKILL_LIMITS.bodyMaxTokens) {
+        capped = capped.slice(0, tokensToChars(SKILL_LIMITS.bodyMaxTokens));
+        truncated = true;
+    }
+
+    return truncated
+        ? { body: `${capped}\n\n${SKILL_BODY_TRUNCATED_MARKER}`, truncated }
+        : { body: capped, truncated };
+}
+
+function firstLine(error: unknown): string {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.split('\n')[0];
+}
