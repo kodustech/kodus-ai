@@ -33,7 +33,6 @@ const agent = (overrides: Partial<CustomAgentConfig> = {}): CustomAgentConfig =>
             tag: { color: '#3366ff' },
             format: 'inline',
             suggestedFix: 'never',
-            mode: 'shadow',
         },
         ...overrides,
     }) as CustomAgentConfig;

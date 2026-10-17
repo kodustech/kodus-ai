@@ -19,7 +19,6 @@ const agent = (over: Partial<CustomAgentConfig> = {}) =>
             tag: { color: 'blue' },
             format: 'inline',
             suggestedFix: 'when-confident',
-            mode: 'shadow',
         },
         ...over,
     }) as CustomAgentConfig;

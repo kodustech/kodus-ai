@@ -14,7 +14,7 @@ import type { DedupGroup } from '@libs/code-review/infrastructure/agents/engine/
 
 /**
  * How a custom agent's findings reach the PR (#2172): its own severity floor,
- * comment limit, fix policy and format, and shadow mode, where nothing posts.
+ * comment limit, fix policy and format.
  * Every helper leaves findings without a `customAgent` stamp untouched.
  */
 
@@ -40,37 +40,6 @@ const SEVERITY_RANK: Record<string, number> = {
 
 const rankOf = (severity?: string): number =>
     SEVERITY_RANK[(severity || '').toLowerCase()] ?? SEVERITY_RANK.medium;
-
-/**
- * Shadow findings leave the stream before dedup: one that absorbed a native
- * finding and then never posted would take the native comment with it. An
- * agent whose config is gone counts as shadow, the default mode.
- */
-export function splitShadowFindings(
-    suggestions: Finding[],
-    agents: CustomAgentsById,
-): { active: Finding[]; shadow: Finding[] } {
-    const active: Finding[] = [];
-    const shadow: Finding[] = [];
-    for (const s of suggestions) {
-        if (!isCustomAgentFinding(s)) {
-            active.push(s);
-            continue;
-        }
-        const agent = agents.get(s.customAgent.id);
-        if (agent?.presentation?.mode === 'post') {
-            active.push(s);
-            continue;
-        }
-        shadow.push({
-            ...s,
-            priorityStatus: PriorityStatus.PRIORITIZED,
-            deliveryStatus: DeliveryStatus.NOT_SENT,
-            notSentReason: 'custom-agent-shadow',
-        });
-    }
-    return { active, shadow };
-}
 
 /**
  * The agent's own severity floor, when it set one: true keeps the finding,

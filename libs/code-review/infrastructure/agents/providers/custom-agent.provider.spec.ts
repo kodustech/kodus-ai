@@ -50,7 +50,6 @@ function config(over: Partial<CustomAgentConfig> = {}): CustomAgentConfig {
             tag: { color: '7B1FA2' },
             format: 'inline',
             suggestedFix: 'when-confident',
-            mode: 'post',
         },
         ...over,
     };

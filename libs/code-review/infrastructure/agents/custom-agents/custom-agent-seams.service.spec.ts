@@ -23,7 +23,6 @@ const agent = (over: Partial<CustomAgentConfig> = {}): CustomAgentConfig => ({
         tag: { color: '#304FFE' },
         format: 'inline',
         suggestedFix: 'when-confident',
-        mode: 'shadow',
     },
     ...over,
 });

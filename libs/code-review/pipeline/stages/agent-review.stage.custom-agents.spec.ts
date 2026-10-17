@@ -20,7 +20,7 @@ jest.mock('@libs/llm/managed-slot', () => {
 
 /**
  * #2172 — how the review stage dispatches custom agents and presents what
- * they found: the beta gate, shadow mode, per-agent severity floor, comment
+ * they found: the beta gate, per-agent severity floor, comment
  * limit, fix policy, single PR-level comment and the per-agent summary.
  */
 
@@ -75,7 +75,7 @@ const agent = (over: Record<string, any> = {}) => ({
     name: 'Ledger Rules',
     enabled: true,
     instructions: 'Every ledger entry must balance.',
-    presentation: { mode: 'post', tag: { color: '#7B1FA2' } },
+    presentation: { tag: { color: '#7B1FA2' } },
     ...over,
 });
 
@@ -126,7 +126,6 @@ const output = (suggestions: any[], over: Record<string, unknown> = {}) => ({
             id: 'agent-ledger',
             name: 'Ledger Rules',
             slug: 'ledger-rules',
-            mode: 'post',
             status: 'ran',
             droppedByVerify: 2,
         },
@@ -187,30 +186,25 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
         ).toEqual(['agent-ledger']);
     });
 
-    it('never posts a shadow agent finding and keeps it as not sent', async () => {
+    it('posts the finding of an agent stored with the retired shadow mode', async () => {
         const { stage } = makeStage(output([finding()]));
 
         const result = await run(
             stage,
-            makeContext([agent({ presentation: { mode: 'shadow' } })]),
+            makeContext([agent({ presentation: { mode: 'shadow' } as any })]),
         );
 
-        expect(contents(result.validSuggestions)).toEqual([]);
-        expect(result.validSuggestionsByPR ?? []).toEqual([]);
-        const stored = result.discardedSuggestions.find(
-            (s: any) => s.customAgent?.id === 'agent-ledger',
-        );
-        expect(stored).toMatchObject({
-            deliveryStatus: 'not_sent',
-            notSentReason: 'custom-agent-shadow',
-        });
-        expect(result.customAgentRuns[0]).toMatchObject({
-            posted: 0,
-            shadowKept: 1,
-        });
+        expect(contents(result.validSuggestions)).toEqual([
+            'The entry is booked on one side only.',
+        ]);
+        expect(
+            result.discardedSuggestions.filter(
+                (s: any) => s.customAgent?.id === 'agent-ledger',
+            ),
+        ).toEqual([]);
     });
 
-    it('posts a post-mode finding inline and counts it in the summary', async () => {
+    it('posts a finding inline and counts it in the summary', async () => {
         const { stage } = makeStage(output([finding()]));
 
         const result = await run(stage, makeContext([agent()]));
@@ -220,7 +214,6 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
         ]);
         expect(result.customAgentRuns[0]).toMatchObject({
             posted: 1,
-            shadowKept: 0,
             droppedByVerify: 2,
         });
     });
@@ -241,7 +234,7 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
         const result = await run(
             stage,
             makeContext([
-                agent({ presentation: { mode: 'post', minSeverity: 'high' } }),
+                agent({ presentation: { minSeverity: 'high' } }),
             ]),
         );
 
@@ -274,7 +267,7 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
         const result = await run(
             stage,
             makeContext([
-                agent({ presentation: { mode: 'post', maxComments: 1 } }),
+                agent({ presentation: { maxComments: 1 } }),
             ]),
         );
 
@@ -293,7 +286,7 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
             stage,
             makeContext([
                 agent({
-                    presentation: { mode: 'post', suggestedFix: 'never' },
+                    presentation: { suggestedFix: 'never' },
                 }),
             ]),
         );
@@ -317,7 +310,7 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
             stage,
             makeContext([
                 agent({
-                    presentation: { mode: 'post', format: 'single-comment' },
+                    presentation: { format: 'single-comment' },
                 }),
             ]),
         );
@@ -355,7 +348,6 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
             makeContext([
                 agent({
                     presentation: {
-                        mode: 'post',
                         format: 'single-comment',
                         maxComments: 1,
                         minSeverity: 'medium',
@@ -390,7 +382,7 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
             stage,
             makeContext([
                 agent({
-                    presentation: { mode: 'post', minSeverity: 'medium' },
+                    presentation: { minSeverity: 'medium' },
                 }),
             ]),
         );
@@ -402,38 +394,47 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
         classify.mockRestore();
     });
 
-    it('holds approval for a cut-short post agent but not for a shadow one', async () => {
-        const incomplete = (mode: string) => ({
-            agentName: 'custom-agent:ledger-rules',
-            category: 'custom_agent',
-            finishReason: 'max-steps',
-            suggestionsFound: 0,
-            durationMs: 1,
-            customAgent: { id: 'agent-ledger', mode },
-        });
+    it('holds approval for a failed, cut-short or unverified custom agent', async () => {
+        const ref = { id: 'agent-ledger' };
+        const name = 'custom-agent:ledger-rules';
+        const { stage } = makeStage(
+            output([], {
+                failures: [
+                    {
+                        agentName: name,
+                        category: 'custom_agent',
+                        error: new Error('boom'),
+                        durationMs: 1,
+                        customAgent: ref,
+                    },
+                ],
+                incomplete: [
+                    {
+                        agentName: name,
+                        category: 'custom_agent',
+                        finishReason: 'max-steps',
+                        suggestionsFound: 0,
+                        durationMs: 1,
+                        customAgent: ref,
+                    },
+                ],
+                unverified: [
+                    {
+                        agentName: name,
+                        category: 'custom_agent',
+                        unverifiedCount: 2,
+                        customAgent: ref,
+                    },
+                ],
+            }),
+        );
 
-        const shadow = makeStage(
-            output([], { incomplete: [incomplete('shadow')] }),
-        );
-        const shadowResult = await run(
-            shadow.stage,
-            makeContext([agent({ presentation: { mode: 'shadow' } })]),
-        );
-        expect(
-            (shadowResult.errors ?? []).filter((e: any) =>
-                e.substage?.startsWith('agent:custom-agent'),
-            ),
-        ).toEqual([]);
+        const result = await run(stage, makeContext([agent()]));
 
-        const post = makeStage(
-            output([], { incomplete: [incomplete('post')] }),
-        );
-        const postResult = await run(post.stage, makeContext([agent()]));
-        expect(
-            (postResult.errors ?? []).find(
-                (e: any) => e.substage === 'agent:custom-agent:ledger-rules',
-            )?.severity,
-        ).toBe('partial');
+        const severities = (result.errors ?? [])
+            .filter((e: any) => e.substage === `agent:${name}`)
+            .map((e: any) => e.severity);
+        expect(severities).toEqual(['partial', 'partial', 'partial']);
     });
 
     describe('dedup against native findings and Kody Rules', () => {
@@ -487,7 +488,7 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
                 stage,
                 makeContext([
                     agent({
-                        presentation: { mode: 'post', minSeverity: 'high' },
+                        presentation: { minSeverity: 'high' },
                     }),
                 ]),
             );
@@ -521,7 +522,7 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
             const result = await run(
                 stage,
                 makeContext([
-                    agent({ presentation: { mode: 'post', maxComments: 1 } }),
+                    agent({ presentation: { maxComments: 1 } }),
                 ]),
             );
 

@@ -28,11 +28,28 @@ const agent = (id: string, clis: ReturnType<typeof cli>[] = []) => ({
         tag: { color: '#304FFE' },
         format: 'inline',
         suggestedFix: 'when-confident',
-        mode: 'shadow',
     },
 });
 
 describe('custom agent config schemas', () => {
+    it('accepts an agent without a presentation mode', () => {
+        expect(customAgentConfigSchema.safeParse(agent('ledger')).success).toBe(
+            true,
+        );
+    });
+
+    it('still accepts a config saved with the retired mode', () => {
+        for (const mode of ['shadow', 'post']) {
+            const legacy = agent('ledger');
+            expect(
+                customAgentConfigSchema.safeParse({
+                    ...legacy,
+                    presentation: { ...legacy.presentation, mode },
+                }).success,
+            ).toBe(true);
+        }
+    });
+
     it('refuses an install with any unpinned package', () => {
         expect(
             customAgentConfigSchema.safeParse(

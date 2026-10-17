@@ -85,7 +85,6 @@ import {
     indexCustomAgents,
     isCustomAgentFinding,
     preferCustomAgentKeep,
-    splitShadowFindings,
     stripCustomAgentFixes,
     type CustomAgentsById,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-presentation';
@@ -979,12 +978,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             ]);
 
             for (const failure of result.failures || []) {
-                // A shadow agent posts nothing, so its failure cannot leave
-                // the review incomplete; a posting one is auxiliary, like
-                // kody-rules.
-                if (failure.customAgent?.mode === 'shadow') {
-                    continue;
-                }
+                // A custom agent is auxiliary, like kody-rules: its failure
+                // leaves the review partial, not failed.
                 const severity = CRITICAL_AGENTS.has(failure.agentName)
                     ? 'critical'
                     : 'partial';
@@ -1018,7 +1013,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             for (const cut of result.incomplete || []) {
                 if (
                     !CRITICAL_AGENTS.has(cut.agentName) &&
-                    cut.customAgent?.mode !== 'post'
+                    !cut.customAgent
                 ) {
                     continue;
                 }
@@ -1054,7 +1049,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             for (const gap of result.unverified || []) {
                 if (
                     !CRITICAL_AGENTS.has(gap.agentName) &&
-                    gap.customAgent?.mode !== 'post'
+                    !gap.customAgent
                 ) {
                     continue;
                 }
@@ -1343,16 +1338,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     deliveryStatus: DeliveryStatus.NOT_SENT,
                 });
             }
-            // A shadow agent's findings are kept for the summary and the
-            // dashboard but never reach the PR, and leave before dedup so
-            // one cannot absorb a native finding it would then not post.
-            const shadowSplit = splitShadowFindings(
-                repeatCheck.kept,
-                customAgentsById,
-            );
-            allDiscarded.push(...shadowSplit.shadow);
             let severityNormalized: Partial<CodeSuggestion>[] =
-                shadowSplit.active;
+                repeatCheck.kept;
 
             // A custom agent's own severity floor and comment limit apply
             // whatever the team's filter is (#2172), and also before dedup:
@@ -1993,10 +1980,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             deduped = singleComments.inline;
             const customAgentSummaries = summarizeCustomAgentRuns(
                 result.customAgentRuns,
-                {
-                    posted: [...deduped, ...singleComments.grouped],
-                    shadow: shadowSplit.shadow,
-                },
+                [...deduped, ...singleComments.grouped],
             );
             const prLevelSuggestions = deduped.filter(isPrLevelSuggestion);
             const fileLevelSuggestions = deduped.filter(

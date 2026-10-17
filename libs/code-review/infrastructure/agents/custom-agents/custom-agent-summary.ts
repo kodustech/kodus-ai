@@ -8,7 +8,6 @@ export interface CustomAgentRun {
     id: string;
     name: string;
     slug: string;
-    mode: 'shadow' | 'post';
     status: 'ran' | 'no-matching-files' | 'failed' | 'incomplete';
     /** Findings the verify pass refuted (or could not judge). */
     droppedByVerify: number;
@@ -16,26 +15,17 @@ export interface CustomAgentRun {
 
 export interface CustomAgentRunSummary extends CustomAgentRun {
     posted: number;
-    shadowKept: number;
 }
 
 /** Joins the orchestrator's runs with the findings the review kept for each agent. */
 export function summarizeCustomAgentRuns(
     runs: readonly CustomAgentRun[] | undefined,
-    kept: {
-        /** Findings that will post: inline, or gathered in a single comment. */
-        posted: ReadonlyArray<Partial<CodeSuggestion>>;
-        shadow: ReadonlyArray<Partial<CodeSuggestion>>;
-    },
+    /** Findings that will post: inline, or gathered in a single comment. */
+    posted: ReadonlyArray<Partial<CodeSuggestion>>,
 ): CustomAgentRunSummary[] {
-    const countBy = (
-        list: ReadonlyArray<Partial<CodeSuggestion>>,
-        id: string,
-    ) => list.filter((s) => s.customAgent?.id === id).length;
     return (runs ?? []).map((run) => ({
         ...run,
-        posted: countBy(kept.posted, run.id),
-        shadowKept: countBy(kept.shadow, run.id),
+        posted: posted.filter((s) => s.customAgent?.id === run.id).length,
     }));
 }
 
@@ -58,7 +48,7 @@ export function formatCustomAgentsSummary(
     }
     const rows = runs.map(
         (r) =>
-            `| ${escapeCell(r.name)} | ${r.mode} | ${STATUS_TEXT[r.status]} | ${r.posted} | ${r.droppedByVerify} | ${r.shadowKept} |`,
+            `| ${escapeCell(r.name)} | ${STATUS_TEXT[r.status]} | ${r.posted} | ${r.droppedByVerify} |`,
     );
     return [
         '',
@@ -66,8 +56,8 @@ export function formatCustomAgentsSummary(
         '<details>',
         '<summary>Custom agents</summary>',
         '',
-        '| Agent | Mode | Status | Posted | Dropped by verification | Shadow kept |',
-        '| --- | --- | --- | --- | --- | --- |',
+        '| Agent | Status | Posted | Dropped by verification |',
+        '| --- | --- | --- | --- |',
         ...rows,
         '',
         '</details>',

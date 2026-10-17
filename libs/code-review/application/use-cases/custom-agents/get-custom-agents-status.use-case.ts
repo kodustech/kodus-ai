@@ -21,8 +21,6 @@ export type CustomAgentStatus = {
     /** Pull requests where the agent left at least one finding. */
     pullRequests: number;
     posted: number;
-    /** Kept by the check but not posted: shadow mode, or over a limit. */
-    shadowKept: number;
     /** Dropped by the check, severity, limits or dedup. */
     dropped: number;
 };
@@ -41,7 +39,6 @@ export function summarizeCustomAgentSuggestions(
             agentId: row.agentId,
             pullRequests: 0,
             posted: 0,
-            shadowKept: 0,
             dropped: 0,
             prs: new Set<number>(),
         };
@@ -50,8 +47,6 @@ export function summarizeCustomAgentSuggestions(
             status.posted += 1;
         } else if (isDropped(row)) {
             status.dropped += 1;
-        } else if (row.deliveryStatus === DeliveryStatus.NOT_SENT) {
-            status.shadowKept += 1;
         }
         byAgent.set(row.agentId, status);
     }

@@ -27,7 +27,6 @@ const ledgerAgent = (overrides: Record<string, unknown> = {}) => ({
         tag: { color: '#304FFE' },
         format: 'inline',
         suggestedFix: 'when-confident',
-        mode: 'shadow',
     },
     ...overrides,
 });
@@ -446,7 +445,7 @@ describe('TryCustomAgentUseCase', () => {
 });
 
 describe('GetCustomAgentsStatusUseCase', () => {
-    it('counts pull requests, posted, shadow-kept and dropped findings per agent', () => {
+    it('counts pull requests, posted and dropped findings per agent', () => {
         expect(
             summarizeCustomAgentSuggestions([
                 {
@@ -479,14 +478,12 @@ describe('GetCustomAgentsStatusUseCase', () => {
                 agentId: 'ledger-agent',
                 pullRequests: 2,
                 posted: 1,
-                shadowKept: 1,
                 dropped: 1,
             },
             {
                 agentId: 'e2e-agent',
                 pullRequests: 1,
                 posted: 0,
-                shadowKept: 1,
                 dropped: 0,
             },
         ]);
@@ -529,7 +526,6 @@ describe('GetCustomAgentsStatusUseCase', () => {
                 agentId: 'ledger-agent',
                 pullRequests: 2,
                 posted: 2,
-                shadowKept: 0,
                 dropped: 0,
             },
         ]);

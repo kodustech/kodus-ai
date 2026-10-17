@@ -28,7 +28,6 @@ const agent = (overrides: Record<string, unknown> = {}) => ({
         tag: { color: '#304FFE' },
         format: 'inline',
         suggestedFix: 'when-confident',
-        mode: 'shadow',
     },
     ...overrides,
 });
@@ -46,6 +45,26 @@ const validateConfig = async (configValue: Record<string, unknown>) => {
 };
 
 describe('CreateOrUpdateCodeReviewParameterDto — custom agents', () => {
+    it('accepts an agent without a presentation mode', async () => {
+        expect(await validateConfig({ customAgents: [agent()] })).toBe('[]');
+    });
+
+    it('still accepts an agent saved with the retired mode', async () => {
+        for (const mode of ['shadow', 'post']) {
+            const legacy = agent();
+            expect(
+                await validateConfig({
+                    customAgents: [
+                        {
+                            ...legacy,
+                            presentation: { ...legacy.presentation, mode },
+                        },
+                    ],
+                }),
+            ).toBe('[]');
+        }
+    });
+
     it('accepts a valid agent with a pinned CLI and linked knowledge', async () => {
         const flat = await validateConfig({
             customAgents: [agent({ tools: { cli: [cli()] } })],

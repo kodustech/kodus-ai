@@ -20,7 +20,6 @@ function agentConfig(over: Partial<CustomAgentConfig> = {}): CustomAgentConfig {
             tag: { color: '7B1FA2' },
             format: 'inline',
             suggestedFix: 'when-confident',
-            mode: 'shadow',
         },
         ...over,
     };
@@ -199,7 +198,6 @@ describe('ReviewOrchestratorService — custom agents', () => {
             expect.objectContaining({
                 status: 'ran',
                 droppedByVerify: 2,
-                mode: 'shadow',
             }),
         ]);
     });
@@ -252,28 +250,21 @@ describe('ReviewOrchestratorService — custom agents', () => {
         ]);
     });
 
-    it('reports a failed agent with its mode so the stage can tell shadow from post', async () => {
+    it('reports a failed agent with the custom agent it belongs to', async () => {
         const { service } = setup(() => {
             throw new Error('provider down');
         });
 
         const out = await service.execute(
             inputFor({
-                customAgents: [
-                    agentConfig({
-                        presentation: {
-                            ...agentConfig().presentation,
-                            mode: 'post',
-                        },
-                    }),
-                ],
+                customAgents: [agentConfig()],
             }),
         );
 
         expect(out.failures).toEqual([
             expect.objectContaining({
                 agentName: 'custom-agent:ledger-rules',
-                customAgent: { id: 'agent-1', mode: 'post' },
+                customAgent: { id: 'agent-1' },
             }),
         ]);
         expect(out.customAgentRuns?.[0].status).toBe('failed');
@@ -294,7 +285,7 @@ describe('ReviewOrchestratorService — custom agents', () => {
 
         expect(out.incomplete).toEqual([
             expect.objectContaining({
-                customAgent: { id: 'agent-1', mode: 'shadow' },
+                customAgent: { id: 'agent-1' },
             }),
         ]);
         expect(out.customAgentRuns?.[0].status).toBe('incomplete');

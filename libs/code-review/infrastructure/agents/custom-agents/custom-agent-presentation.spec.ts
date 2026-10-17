@@ -15,7 +15,6 @@ import {
     customAgentWriting,
     indexCustomAgents,
     preferCustomAgentKeep,
-    splitShadowFindings,
     stripCustomAgentFixes,
 } from './custom-agent-presentation';
 import {
@@ -37,7 +36,6 @@ const agent = (
         tag: { color: '7B1FA2' },
         format: 'inline',
         suggestedFix: 'when-confident',
-        mode: 'post',
         ...presentation,
     },
 });
@@ -53,39 +51,6 @@ const finding = (
     severity: 'medium',
     ...(agentId && { customAgent: { id: agentId, name: `Agent ${agentId}` } }),
     ...over,
-});
-
-describe('splitShadowFindings', () => {
-    it('takes shadow-mode findings out of the stream as not sent', () => {
-        const agents = indexCustomAgents([
-            agent('s', { mode: 'shadow' }),
-            agent('p', { mode: 'post' }),
-        ]);
-        const native = finding(undefined);
-        const { active, shadow } = splitShadowFindings(
-            [native, finding('s'), finding('p')],
-            agents,
-        );
-
-        expect(active).toEqual([native, finding('p')]);
-        expect(shadow).toEqual([
-            expect.objectContaining({
-                customAgent: expect.objectContaining({ id: 's' }),
-                priorityStatus: PriorityStatus.PRIORITIZED,
-                deliveryStatus: DeliveryStatus.NOT_SENT,
-                notSentReason: 'custom-agent-shadow',
-            }),
-        ]);
-    });
-
-    it('treats a finding whose agent config is gone as shadow', () => {
-        const { active, shadow } = splitShadowFindings(
-            [finding('gone')],
-            indexCustomAgents([]),
-        );
-        expect(active).toEqual([]);
-        expect(shadow).toHaveLength(1);
-    });
 });
 
 describe('customAgentSeverityVerdict', () => {
@@ -256,7 +221,6 @@ describe('custom agents summary', () => {
                     id: 'p',
                     name: 'Ledger | Rules',
                     slug: 'ledger-rules',
-                    mode: 'post',
                     status: 'ran',
                     droppedByVerify: 1,
                 },
@@ -264,28 +228,45 @@ describe('custom agents summary', () => {
                     id: 's',
                     name: 'Docs',
                     slug: 'docs',
-                    mode: 'shadow',
                     status: 'no-matching-files',
                     droppedByVerify: 0,
                 },
             ],
-            {
-                posted: [finding('p'), finding('p')],
-                shadow: [finding('s')],
-            },
+            [finding('p'), finding('p')],
         );
 
         const markdown = formatCustomAgentsSummary(summary);
 
         expect(markdown).toContain(
-            '| Ledger \\| Rules | post | ran | 2 | 1 | 0 |',
+            '| Ledger \\| Rules | ran | 2 | 1 |',
         );
         expect(markdown).toContain(
-            '| Docs | shadow | not run: no matching files | 0 | 0 | 1 |',
+            '| Docs | not run: no matching files | 0 | 0 |',
         );
     });
 
     it('renders nothing when no agent was configured', () => {
         expect(formatCustomAgentsSummary([])).toBe('');
+    });
+
+    it('has no mode or shadow column', () => {
+        const markdown = formatCustomAgentsSummary(
+            summarizeCustomAgentRuns(
+                [
+                    {
+                        id: 'p',
+                        name: 'Docs',
+                        slug: 'docs',
+                        status: 'ran',
+                        droppedByVerify: 0,
+                    },
+                ],
+                [],
+            ),
+        );
+        expect(markdown).toContain(
+            '| Agent | Status | Posted | Dropped by verification |',
+        );
+        expect(markdown).not.toMatch(/shadow|mode/i);
     });
 });

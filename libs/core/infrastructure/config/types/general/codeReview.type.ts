@@ -235,10 +235,9 @@ export type CodeSuggestion = {
     };
     /**
      * Why a finding the review kept was not posted, when `priorityStatus`
-     * alone does not say: a shadow-mode custom agent's finding, or one past
-     * its agent's `maxComments` (#2172).
+     * alone does not say: one past its custom agent's `maxComments` (#2172).
      */
-    notSentReason?: 'custom-agent-shadow' | 'custom-agent-max-comments';
+    notSentReason?: 'custom-agent-max-comments';
 
     isCommittable?: boolean;
     validatedData?: {
@@ -406,8 +405,11 @@ export const customAgentPresentationSchema = z.object({
     maxComments: z.number().int().positive().optional(),
     suggestedFix: z.enum(['when-confident', 'never']),
     writing: z.string().max(CUSTOM_AGENT_LIMITS.maxWritingLength).optional(),
-    /** `shadow` stores findings as NOT_SENT; `post` publishes them. */
-    mode: z.enum(['shadow', 'post']),
+    /**
+     * @deprecated Ignored: custom agents always post. Still accepted so
+     * configs saved while a `shadow` mode existed keep parsing.
+     */
+    mode: z.enum(['shadow', 'post']).optional(),
 });
 
 export const customAgentConfigSchema = z.object({

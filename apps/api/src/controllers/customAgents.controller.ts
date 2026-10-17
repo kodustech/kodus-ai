@@ -154,7 +154,7 @@ export class CustomAgentsController {
     @ApiOperation({
         summary: 'Custom agents status',
         description:
-            'Per agent over the last 30 days: pull requests with findings, findings posted, kept in shadow, and dropped.',
+            'Per agent over the last 30 days: pull requests with findings, findings posted, and dropped.',
     })
     @ApiQuery({ name: 'teamId', type: String, required: true })
     @ApiQuery({ name: 'repositoryId', type: String, required: true })

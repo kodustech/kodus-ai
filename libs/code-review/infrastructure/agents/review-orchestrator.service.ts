@@ -48,7 +48,6 @@ export interface OrchestratorInput extends ReviewAgentInput {
 /** Which custom agent a failure, cut-short run or unverified set belongs to. */
 export interface OrchestratorCustomAgentRef {
     id: string;
-    mode: 'shadow' | 'post';
 }
 
 export interface OrchestratorAgentFailure {
@@ -244,8 +243,6 @@ export class ReviewOrchestratorService {
                 onlyCustomAgent,
             )) {
                 const slug = customAgentSlug(agent.name);
-                const mode =
-                    agent.presentation?.mode === 'post' ? 'post' : 'shadow';
                 const files = filesInAgentScope(
                     agent,
                     agentInput.changedFiles ?? [],
@@ -254,7 +251,6 @@ export class ReviewOrchestratorService {
                     id: agent.id,
                     name: agent.name,
                     slug,
-                    mode,
                     status: 'ran',
                     droppedByVerify: 0,
                 };
@@ -269,7 +265,7 @@ export class ReviewOrchestratorService {
                     budgetKey: 'custom-agent',
                     provider,
                     changedFiles: files,
-                    customAgent: { id: agent.id, mode },
+                    customAgent: { id: agent.id },
                     knowledge: knowledgeByTarget?.get(agent.id),
                 });
             }

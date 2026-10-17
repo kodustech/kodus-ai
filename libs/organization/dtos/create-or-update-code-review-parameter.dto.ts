@@ -611,8 +611,13 @@ class CustomAgentPresentationDto {
     @MaxLength(CUSTOM_AGENT_LIMITS.maxWritingLength)
     writing?: string;
 
+    /**
+     * @deprecated Ignored: custom agents always post. Still accepted so
+     * configs saved while a `shadow` mode existed keep validating.
+     */
+    @IsOptional()
     @IsIn(['shadow', 'post'])
-    mode: 'shadow' | 'post';
+    mode?: 'shadow' | 'post';
 }
 
 class CustomAgentConfigDto {
