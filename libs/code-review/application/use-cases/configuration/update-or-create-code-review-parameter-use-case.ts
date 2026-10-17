@@ -1,9 +1,4 @@
 import { CreateOrUpdateParametersUseCase } from '@libs/organization/application/use-cases/parameters/create-or-update-use-case';
-import { encrypt } from '@libs/common/utils/crypto';
-import {
-    CliSecretMissingError,
-    sealCliSecrets,
-} from '@libs/code-review/infrastructure/agents/custom-agent-cli/cli-secrets';
 import {
     BadRequestException,
     ForbiddenException,
@@ -38,8 +33,10 @@ import {
 import { deepDifference, deepMerge } from '@libs/common/utils/deep';
 import { encrypt } from '@libs/common/utils/crypto';
 import {
-    collectStoredCustomAgents,
+    CliSecretMissingError,
+    maskCliSecrets,
     sealCustomAgentSecrets,
+    storedCustomAgentsAtLevel,
 } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import { convertTiptapJSONToText } from '@libs/common/utils/tiptap-json';
 import { alignPromptOverridesWithParent } from './align-prompt-overrides';
@@ -224,28 +221,31 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 organizationAndTeamData,
             );
 
-            // Custom agent CLI secrets arrive in plaintext (or as the mask,
-            // meaning "keep") and are stored only as ciphertext.
-            try {
-                sealCliSecrets(configValue, codeReviewConfigs, encrypt);
-            } catch (error) {
-                if (error instanceof CliSecretMissingError) {
-                    throw new BadRequestException(error.message);
-                }
-                throw error;
-            }
             const codeRepositories = await this.getFormattedRepositories(
                 organizationAndTeamData,
             );
 
             // CLI secrets are write-only: encrypt what was typed and keep
             // what the screen echoed back masked, before anything is stored.
+            // Only the level being saved can supply a kept secret, so a
+            // secret never moves to another repository or level.
             if (Array.isArray(configValue?.customAgents)) {
-                configValue.customAgents = sealCustomAgentSecrets(
-                    configValue.customAgents,
-                    collectStoredCustomAgents(codeReviewConfigs),
-                    encrypt,
-                );
+                try {
+                    configValue.customAgents = sealCustomAgentSecrets(
+                        configValue.customAgents,
+                        storedCustomAgentsAtLevel(codeReviewConfigs, {
+                            repositoryId,
+                            directoryId,
+                            directoryPaths: resolvedPaths,
+                        }),
+                        encrypt,
+                    );
+                } catch (error) {
+                    if (error instanceof CliSecretMissingError) {
+                        throw new BadRequestException(error.message);
+                    }
+                    throw error;
+                }
             }
 
             const filteredRepositoryInfo =
@@ -544,7 +544,10 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
 
             return result;
         } catch (error) {
-            if (error instanceof ForbiddenException) {
+            if (
+                error instanceof ForbiddenException ||
+                error instanceof BadRequestException
+            ) {
                 throw error;
             }
 
@@ -1586,12 +1589,14 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                     userId: actor.userId,
                     userEmail: actor.userEmail,
                 },
-                oldConfig,
-                newConfig,
+                // The audit log is readable from the settings history: CLI
+                // secrets go in masked, like on every other read path.
+                oldConfig: maskCliSecrets(oldConfig),
+                newConfig: maskCliSecrets(newConfig),
                 actionType: ActionType.EDIT,
                 configLevel: level,
-                repository,
-                directory,
+                repository: maskCliSecrets(repository),
+                directory: maskCliSecrets(directory),
                 isCreation,
             });
         } catch (error) {
@@ -1617,7 +1622,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             error: error,
             metadata: {
                 parametersKey: ParametersKey.CODE_REVIEW_CONFIG,
-                configValue: body.configValue,
+                configValue: maskCliSecrets(body.configValue),
                 organizationAndTeamData: body.organizationAndTeamData,
             },
         });

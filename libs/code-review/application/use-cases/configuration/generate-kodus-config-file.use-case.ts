@@ -3,9 +3,11 @@ import * as fs from 'node:fs';
 import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import * as yaml from 'js-yaml';
-import { maskCliSecrets } from '@libs/code-review/infrastructure/agents/custom-agent-cli/cli-secrets';
 
-import { maskCodeReviewConfigSecrets } from '@libs/code-review/domain/custom-agents/cli-secrets';
+import {
+    maskCliSecrets,
+    maskCodeReviewConfigSecrets,
+} from '@libs/code-review/domain/custom-agents/cli-secrets';
 
 import { createLogger } from '@libs/core/log/logger';
 import {

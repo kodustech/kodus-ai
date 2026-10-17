@@ -19,9 +19,30 @@ export const CUSTOM_AGENT_LIMITS = {
     maxWritingLength: 2000,
 } as const;
 
-/** Mirrors PINNED_INSTALL_PATTERN on the backend. */
-export const PINNED_INSTALL_PATTERN =
-    /@v?\d+\.\d+\.\d+|==\d+\.\d+\.\d+|sha256[:=]?[a-f0-9]{64}|\b[a-f0-9]{64}\b/i;
+/** A package spec pinned to an exact version or digest, matched whole. */
+const PINNED_SPEC =
+    /^(?:(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._/-]*@(?:v?\d+\.\d+\.\d+(?:-[0-9a-z.-]+)?(?:\+[0-9a-z.-]+)?|sha256:[a-f0-9]{64})|[a-z0-9][a-z0-9._-]*(?:\[[a-z0-9,._-]+\])?===?\d+\.\d+\.\d+[0-9a-z.]*)$/i;
+
+/** Words before the package specs: the installer and its install verb(s). */
+const INSTALL_VERBS = new Set(["install", "i", "add", "global", "tool", "pip"]);
+
+/**
+ * Mirrors `checkCliInstallCommand` on the backend closely enough to warn
+ * while editing: every package the command names must be pinned. The server
+ * stays the authority.
+ */
+export const isPinnedInstall = (install: string): boolean => {
+    if (/[;&|<>`$\\(){}'"*?!~#^]/.test(install)) return false;
+    const [, ...rest] = install.trim().split(/\s+/);
+    const specs = rest
+        .filter((token) => !token.startsWith("-"))
+        .filter((token, index, all) =>
+            all.slice(0, index + 1).every((t) => INSTALL_VERBS.has(t))
+                ? false
+                : true,
+        );
+    return specs.length > 0 && specs.every((spec) => PINNED_SPEC.test(spec));
+};
 
 export const CLI_SECRET_ENV_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
 
@@ -271,7 +292,7 @@ export const cliIssues = (cli: CliToolConfig): string[] => {
     const issues: string[] = [];
     if (!cli.name.trim()) issues.push("Name the CLI");
     if (!cli.binary.trim()) issues.push("Set the binary the agent calls");
-    if (!PINNED_INSTALL_PATTERN.test(cli.install)) {
+    if (!isPinnedInstall(cli.install)) {
         issues.push("Pin the install to a version, e.g. tool@1.2.3");
     }
     if (!cli.allowedPrefixes.filter((prefix) => prefix.trim()).length) {

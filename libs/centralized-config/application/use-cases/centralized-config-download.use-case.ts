@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { createLogger } from '@libs/core/log/logger';
 import { promises as fsPromises } from 'fs';
 import * as yaml from 'js-yaml';
-import { maskCliSecrets } from '@libs/code-review/infrastructure/agents/custom-agent-cli/cli-secrets';
+import { maskCliSecrets } from '@libs/code-review/domain/custom-agents/cli-secrets';
 
 import { GenerateKodusConfigFileUseCase } from '@libs/code-review/application/use-cases/configuration/generate-kodus-config-file.use-case';
 import { GetCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/get-code-review-parameter.use-case';

@@ -8,7 +8,8 @@ import {
 
 import { encrypt } from '@libs/common/utils/crypto';
 import {
-    collectStoredCustomAgents,
+    CliSecretMissingError,
+    effectiveStoredCustomAgents,
     sealCustomAgentSecrets,
 } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import {
@@ -70,11 +71,22 @@ export class TryCustomAgentUseCase {
             this.parametersService,
             params.organizationAndTeamData,
         );
-        const [sealed] = sealCustomAgentSecrets(
-            [params.agent as CustomAgentConfig],
-            collectStoredCustomAgents(configValue),
-            encrypt,
-        );
+        // Only the agents this repository would run can lend a kept secret.
+        let sealed: CustomAgentConfig;
+        try {
+            [sealed] = sealCustomAgentSecrets(
+                [params.agent as CustomAgentConfig],
+                effectiveStoredCustomAgents(configValue, {
+                    repositoryId: params.repositoryId,
+                }),
+                encrypt,
+            );
+        } catch (error) {
+            if (error instanceof CliSecretMissingError) {
+                throw new BadRequestException(error.message);
+            }
+            throw error;
+        }
         const agent = customAgentConfigSchema.parse(sealed);
 
         const knowledge = (params.knowledge ?? []).filter((item) =>

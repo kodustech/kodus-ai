@@ -14,10 +14,8 @@
  */
 import { createHash } from 'node:crypto';
 
-import {
-    CliToolConfig,
-    PINNED_INSTALL_PATTERN,
-} from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { CliToolConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { checkCliInstallCommand } from '@libs/core/infrastructure/config/types/general/cli-install';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
 
 export const CLI_OUTPUT_MAX_CHARS = 20_000;
@@ -30,40 +28,8 @@ export const CLI_MAX_ARG_LENGTH = 4_096;
 /** Where the sandbox keeps the checkout the CLI reads. */
 export const CLI_REPO_DIR = '/home/user/repo';
 
-/** Installers whose output lands in the CLI user's own bin directory. */
-const INSTALLERS: Record<string, string[]> = {
-    npm: ['install', 'i', 'add'],
-    pnpm: ['add', 'install', 'i'],
-    yarn: ['add', 'global'],
-    pip: ['install'],
-    pip3: ['install'],
-    pipx: ['install'],
-    uv: ['tool', 'pip'],
-    go: ['install'],
-    cargo: ['install'],
-};
-
 const NODE_INSTALLERS = new Set(['npm', 'pnpm', 'yarn']);
 const PIP_INSTALLERS = new Set(['pip', 'pip3']);
-
-/** Anything a shell would interpret. Install commands are split on spaces and
- *  run as argv, so none of these may appear. */
-const SHELL_META = /[;&|<>`$\\(){}'"\n\r\t*?!~#]/;
-
-/** Flags an install may carry. Anything else (registries, index URLs, git
- *  sources, editable installs) could fetch something other than the pin. */
-const ALLOWED_INSTALL_FLAGS = new Set([
-    '-g',
-    '--global',
-    '--ignore-scripts',
-    '--user',
-    '--no-deps',
-    '--only-binary=:all:',
-    '--locked',
-    '--force',
-    '--quiet',
-    '-q',
-]);
 
 /** Env names that would change how the CLI process itself loads or resolves,
  *  rather than carry a credential. */
@@ -157,87 +123,9 @@ export type CliInstallPlan =
  * A CLI that runs project code installs without lifecycle scripts.
  */
 export function planCliInstall(cli: CliToolConfig): CliInstallPlan {
-    const command = (cli.install ?? '').trim();
-    if (!command) return { ok: false, reason: 'no install command' };
-    if (SHELL_META.test(command)) {
-        return {
-            ok: false,
-            reason: 'install command must be a single command without shell syntax',
-        };
-    }
-    if (!PINNED_INSTALL_PATTERN.test(command)) {
-        return { ok: false, reason: 'install command does not pin a version' };
-    }
-
-    const argv = command.split(/\s+/);
-    const [installer, sub] = argv;
-    const subcommands = INSTALLERS[installer];
-    if (!subcommands) {
-        return {
-            ok: false,
-            reason: `unsupported installer "${installer}" (use ${Object.keys(INSTALLERS).join(', ')})`,
-        };
-    }
-    if (!subcommands.includes(sub)) {
-        return {
-            ok: false,
-            reason: `"${installer} ${sub ?? ''}" is not an install command`,
-        };
-    }
-
-    // `uv tool install` / `uv pip install` and `yarn global add` carry a second word.
-    let start = 2;
-    if (
-        (installer === 'uv' || (installer === 'yarn' && sub === 'global')) &&
-        argv[2] !== (installer === 'uv' ? 'install' : 'add')
-    ) {
-        return { ok: false, reason: 'not an install command' };
-    }
-    if (installer === 'uv' || (installer === 'yarn' && sub === 'global')) {
-        start = 3;
-    }
-
-    const positional: string[] = [];
-    for (let i = start; i < argv.length; i++) {
-        const token = argv[i];
-        // A flag could point the installer somewhere other than the pin
-        // (`--index-url=…`, `--registry …`): only the listed ones pass.
-        if (token.startsWith('-')) {
-            if (!ALLOWED_INSTALL_FLAGS.has(token)) {
-                return {
-                    ok: false,
-                    reason: `install flag "${token}" is not allowed`,
-                };
-            }
-            continue;
-        }
-        positional.push(token);
-    }
-
-    if (!positional.length) {
-        return { ok: false, reason: 'install command names no package' };
-    }
-    // A URL, VCS spec or local path is not a registry package: the pin in it
-    // would be whatever that source says it is.
-    const notRegistry = positional.find((token) =>
-        /:\/\/|^(git|hg|svn|bzr)\+|^file:|^[./~]/i.test(token),
-    );
-    if (notRegistry) {
-        return {
-            ok: false,
-            reason: `"${notRegistry}" is not a registry package`,
-        };
-    }
-    // `@x.y.z`, `==x.y.z` or a sha256 on every package (cargo: `crate@x.y.z`).
-    const unpinned = positional.filter(
-        (token) => !PINNED_INSTALL_PATTERN.test(token),
-    );
-    if (unpinned.length) {
-        return {
-            ok: false,
-            reason: `every package must pin a version (unpinned: ${unpinned.join(', ')})`,
-        };
-    }
+    const check = checkCliInstallCommand(cli.install);
+    if (check.ok === false) return { ok: false, reason: check.reason };
+    const { argv, installer } = check;
 
     if (cli.runsProjectCode) {
         if (

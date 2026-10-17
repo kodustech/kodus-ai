@@ -1,3 +1,4 @@
+import { cliInstallProblem } from './cli-install';
 import type {
     ContextLayer,
     ContextPack,
@@ -350,12 +351,11 @@ export const CUSTOM_AGENT_LIMITS = {
 } as const;
 
 /**
- * A CLI install command must pin what it installs: `pkg@1.2.3`,
- * `pkg==1.2.3`, or a sha256 digest. An unpinned install would let a moving
- * registry tag decide what runs next to the team's secrets.
+ * A CLI install command must pin every package it installs (`pkg@1.2.3`,
+ * `pkg==1.2.3`, or a sha256 digest): an unpinned install would let a moving
+ * registry tag decide what runs next to the team's secrets. The full rule is
+ * `checkCliInstallCommand` in `./cli-install`.
  */
-export const PINNED_INSTALL_PATTERN =
-    /@v?\d+\.\d+\.\d+|==\d+\.\d+\.\d+|sha256[:=]?[a-f0-9]{64}|\b[a-f0-9]{64}\b/i;
 
 /** Environment variable name a CLI secret is exposed under. */
 export const CLI_SECRET_ENV_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
@@ -371,7 +371,13 @@ export const cliToolSecretSchema = z.object({
 
 export const cliToolConfigSchema = z.object({
     name: z.string().min(1),
-    install: z.string().min(1).regex(PINNED_INSTALL_PATTERN),
+    install: z
+        .string()
+        .min(1)
+        .superRefine((install, ctx) => {
+            const problem = cliInstallProblem(install);
+            if (problem) ctx.addIssue({ code: 'custom', message: problem });
+        }),
     binary: z.string().min(1),
     /** argv must start with one of these (no shell is involved). */
     allowedPrefixes: z.array(z.string().min(1)).min(1),
@@ -418,6 +424,15 @@ export const customAgentConfigSchema = z.object({
         cli: z
             .array(cliToolConfigSchema)
             .max(CUSTOM_AGENT_LIMITS.maxCliTools)
+            .superRefine((clis, ctx) => {
+                const duplicate = firstDuplicate(clis.map((c) => c.name));
+                if (duplicate !== undefined) {
+                    ctx.addIssue({
+                        code: 'custom',
+                        message: `CLI name "${duplicate}" is used twice`,
+                    });
+                }
+            })
             .optional(),
     }),
     /** BYOK model ids overriding the `customAgent` / `customAgentCheck` tasks. */
@@ -430,6 +445,21 @@ export const customAgentConfigSchema = z.object({
     presentation: customAgentPresentationSchema,
 });
 
+/** The agents of one config level: ids are unique, since findings, links,
+ *  secrets and model overrides all name an agent by its id. */
+export const customAgentsSchema = z
+    .array(customAgentConfigSchema)
+    .max(CUSTOM_AGENT_LIMITS.maxAgents)
+    .superRefine((agents, ctx) => {
+        const duplicate = firstDuplicate(agents.map((a) => a.id));
+        if (duplicate !== undefined) {
+            ctx.addIssue({
+                code: 'custom',
+                message: `agent id "${duplicate}" is used twice`,
+            });
+        }
+    });
+
 export const knowledgeItemSchema = z.object({
     /** Path in the repository, read from the PR's target branch. */
     path: z.string().min(1),
@@ -441,6 +471,43 @@ export const knowledgeItemSchema = z.object({
         ]),
     ),
 });
+
+/** The first value that appears twice, if any. */
+export function firstDuplicate<T>(values: readonly T[]): T | undefined {
+    const seen = new Set<T>();
+    for (const value of values) {
+        if (seen.has(value)) return value;
+        seen.add(value);
+    }
+    return undefined;
+}
+
+/**
+ * Knowledge links that name an agent the same save does not configure. A
+ * dangling link would never load, and would silently start loading if an
+ * agent with that id were created later.
+ */
+export function knowledgeLinkProblems(
+    knowledge: ReadonlyArray<{ path?: string; linkedTo?: unknown[] }> | undefined,
+    agents: ReadonlyArray<{ id?: string }> | undefined,
+): string[] {
+    const ids = new Set((agents ?? []).map((agent) => agent?.id));
+    const problems: string[] = [];
+    for (const item of knowledge ?? []) {
+        for (const target of item?.linkedTo ?? []) {
+            const agentId =
+                target && typeof target === 'object'
+                    ? (target as { agentId?: unknown }).agentId
+                    : undefined;
+            if (typeof agentId === 'string' && !ids.has(agentId)) {
+                problems.push(
+                    `${item.path} links to unknown agent "${agentId}"`,
+                );
+            }
+        }
+    }
+    return problems;
+}
 
 export type CliToolSecret = z.infer<typeof cliToolSecretSchema>;
 export type CliToolConfig = z.infer<typeof cliToolConfigSchema>;

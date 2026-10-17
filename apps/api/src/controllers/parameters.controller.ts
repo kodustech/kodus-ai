@@ -8,7 +8,7 @@ import {
     Res,
     UseGuards,
 } from '@nestjs/common';
-import { maskCliSecrets } from '@libs/code-review/infrastructure/agents/custom-agent-cli/cli-secrets';
+import { maskCliSecrets } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import { REQUEST } from '@nestjs/core';
 import {
     ApiBadRequestResponse,
@@ -62,7 +62,6 @@ import { UpdateCodeReviewParameterRepositoriesUseCase } from '@libs/code-review/
 import { UpdateOrCreateCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/update-or-create-code-review-parameter-use-case';
 import { PreviewPrSummaryUseCase } from '@libs/code-review/application/use-cases/summary/preview-pr-summary.use-case';
 import { ParametersKey } from '@libs/core/domain/enums';
-import { maskCodeReviewConfigSecrets } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import {
     checkPermissions,
     checkRepoPermissions,
@@ -182,13 +181,15 @@ export class ParametersController {
             );
         }
 
-        return await this.createOrUpdateParametersUseCase.execute(
-            body.key,
-            body.configValue,
-            {
-                organizationId,
-                teamId: body.organizationAndTeamData.teamId,
-            },
+        return maskCliSecrets(
+            await this.createOrUpdateParametersUseCase.execute(
+                body.key,
+                body.configValue,
+                {
+                    organizationId,
+                    teamId: body.organizationAndTeamData.teamId,
+                },
+            ),
         );
     }
 
@@ -473,7 +474,9 @@ export class ParametersController {
         @Body()
         body: DeleteRepositoryCodeReviewParameterDto,
     ) {
-        return this.deleteRepositoryCodeReviewParameterUseCase.execute(body);
+        return maskCliSecrets(
+            await this.deleteRepositoryCodeReviewParameterUseCase.execute(body),
+        );
     }
     //#endregion
 

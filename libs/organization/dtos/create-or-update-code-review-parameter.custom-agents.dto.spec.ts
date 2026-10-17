@@ -118,7 +118,8 @@ describe('CreateOrUpdateCodeReviewParameterDto — custom agents', () => {
         'npm install -g @acme-ledger/lint@2.4.1',
         'pip install ledger-lint==0.9.3',
         'go install example.test/ledger-lint@v1.2.0',
-        `curl -fsSL https://example.test/ledger-lint -o l && echo "${'a'.repeat(64)}  l" | sha256sum -c`,
+        'npm install -g @acme-ledger/lint@2.4.1 @acme-ledger/fmt@1.0.0-rc.1',
+        'cargo install ledger-lint@0.4.0 --locked',
     ])('accepts a pinned install: %s', async (install) => {
         const flat = await validateConfig({
             customAgents: [agent({ tools: { cli: [cli({ install })] } })],
@@ -132,6 +133,14 @@ describe('CreateOrUpdateCodeReviewParameterDto — custom agents', () => {
         'pip install ledger-lint',
         'pip install ledger-lint>=0.9',
         'go install example.test/ledger-lint@main',
+        'npm install -g a@latest b@1.2.3',
+        'npm install -g ledger-lint@1.2.3x',
+        'npm install -g ledger-lint@1.2.3@latest',
+        'npm install -g ledger-lint@^1.2.3',
+        'pip install ledger-lint==0.9.3 ledger-fmt',
+        'pip install https://example.test/ledger-lint-0.9.3.tar.gz',
+        `pip install https://example.test/ledger-lint-0.9.3.tar.gz#sha256=${'a'.repeat(64)}`,
+        `curl -fsSL https://example.test/ledger-lint -o l && echo "${'a'.repeat(64)}  l" | sha256sum -c`,
     ])('rejects an unpinned install: %s', async (install) => {
         const flat = await validateConfig({
             customAgents: [agent({ tools: { cli: [cli({ install })] } })],
@@ -302,5 +311,37 @@ describe('CreateOrUpdateCodeReviewParameterDto — custom agents', () => {
             customAgents: [agent({ id: '' })],
         });
         expect(flat).toContain('"property":"id"');
+    });
+
+    it('rejects two CLIs with the same name on one agent', async () => {
+        const flat = await validateConfig({
+            customAgents: [
+                agent({ tools: { cli: [cli(), cli({ binary: 'other' })] } }),
+            ],
+        });
+        expect(flat).toContain('uniqueCliNames');
+        expect(
+            await validateConfig({
+                customAgents: [
+                    agent({
+                        tools: { cli: [cli(), cli({ name: 'ledger-fmt' })] },
+                    }),
+                ],
+            }),
+        ).toBe('[]');
+    });
+
+    it('rejects knowledge linked to an agent that is not configured', async () => {
+        const flat = await validateConfig({
+            customAgents: [agent()],
+            knowledge: [
+                {
+                    path: 'docs/ledger.md',
+                    kind: 'doc',
+                    linkedTo: [{ agentId: 'agent-missing' }],
+                },
+            ],
+        });
+        expect(flat).toContain('knowledgeLinksKnownAgents');
     });
 });

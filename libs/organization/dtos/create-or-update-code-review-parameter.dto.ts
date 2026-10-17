@@ -18,7 +18,6 @@ import {
     ValidateBy,
     ValidateNested,
     ValidationOptions,
-    IsNotEmpty,
     ValidateIf,
 } from 'class-validator';
 
@@ -33,10 +32,12 @@ import {
     GroupingModeSuggestions,
     KNOWLEDGE_MAIN_REVIEW_TARGET,
     KnowledgeItem,
+    firstDuplicate,
+    knowledgeLinkProblems,
     LimitationType,
-    PINNED_INSTALL_PATTERN,
     ReviewCadenceType,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { cliInstallProblem } from '@libs/core/infrastructure/config/types/general/cli-install';
 import {
     ConfigLevel,
     PullRequestMessageStatus,
@@ -443,11 +444,16 @@ class CliToolConfigDto {
     @IsString()
     name: string;
 
-    /** Must pin a version (`@1.2.3`, `==1.2.3`) or a sha256 digest. */
+    /** One package-manager install whose every package pins an exact
+     *  version (`@1.2.3`, `==1.2.3`) or a sha256 digest. */
     @IsString()
-    @Matches(PINNED_INSTALL_PATTERN, {
-        message:
-            'install must pin a version (@x.y.z or ==x.y.z) or a sha256 digest',
+    @ValidateBy({
+        name: 'pinnedInstall',
+        validator: {
+            validate: (install: unknown) => cliInstallProblem(install) === null,
+            defaultMessage: (args) =>
+                `install ${cliInstallProblem(args?.value) ?? 'is invalid'}`,
+        },
     })
     install: string;
 
@@ -517,6 +523,15 @@ class CustomAgentToolsDto {
     @IsOptional()
     @IsArray()
     @ArrayMaxSize(CUSTOM_AGENT_LIMITS.maxCliTools)
+    @ValidateBy({
+        name: 'uniqueCliNames',
+        validator: {
+            validate: (clis: unknown) =>
+                !Array.isArray(clis) ||
+                firstDuplicate(clis.map((c) => c?.name)) === undefined,
+            defaultMessage: () => 'CLI names must be unique within an agent',
+        },
+    })
     @ValidateNested({ each: true })
     @Type(() => CliToolConfigDto)
     cli?: CliToolConfigDto[];
@@ -861,11 +876,9 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @ValidateBy({
         name: 'uniqueCustomAgentIds',
         validator: {
-            validate: (agents: unknown) => {
-                if (!Array.isArray(agents)) return true;
-                const ids = agents.map((a) => a?.id);
-                return new Set(ids).size === ids.length;
-            },
+            validate: (agents: unknown) =>
+                !Array.isArray(agents) ||
+                firstDuplicate(agents.map((a) => a?.id)) === undefined,
             defaultMessage: () => 'customAgents ids must be unique',
         },
     })
@@ -880,6 +893,28 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @IsOptional()
     @IsArray()
     @KnowledgeWithinTargetLimits()
+    // The settings screen saves agents and knowledge together for one level.
+    // A payload without agents cannot be checked here; at review time a link
+    // to an agent that does not run loads nothing.
+    @ValidateBy({
+        name: 'knowledgeLinksKnownAgents',
+        validator: {
+            validate: (knowledge: unknown, args) => {
+                const agents = (args?.object as { customAgents?: unknown })
+                    ?.customAgents;
+                if (!Array.isArray(knowledge) || !Array.isArray(agents)) {
+                    return true;
+                }
+                return knowledgeLinkProblems(knowledge, agents).length === 0;
+            },
+            defaultMessage: (args) =>
+                knowledgeLinkProblems(
+                    args?.value,
+                    (args?.object as { customAgents?: { id?: string }[] })
+                        ?.customAgents,
+                ).join('; ') || 'knowledge links an unknown agent',
+        },
+    })
     @ValidateNested({ each: true })
     @Type(() => KnowledgeItemDto)
     @ApiPropertyOptional({

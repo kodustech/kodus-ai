@@ -1,0 +1,95 @@
+import {
+    customAgentConfigSchema,
+    customAgentsSchema,
+    knowledgeLinkProblems,
+} from './codeReview.type';
+
+const cli = (
+    name: string,
+    install = 'npm install -g @acme-ledger/lint@2.4.1',
+) => ({
+    name,
+    install,
+    binary: 'ledger-lint',
+    allowedPrefixes: ['ledger-lint check'],
+    usage: 'Run `ledger-lint check <path>`.',
+    runsProjectCode: false,
+    allowedDomains: ['registry.npmjs.org'],
+});
+
+const agent = (id: string, clis: ReturnType<typeof cli>[] = []) => ({
+    id,
+    name: `Reviewer ${id}`,
+    enabled: true,
+    instructions: 'Every posting must balance debits and credits.',
+    scope: { include: ['src/ledger/**'] },
+    tools: { cli: clis },
+    presentation: {
+        tag: { color: '#304FFE' },
+        format: 'inline',
+        suggestedFix: 'when-confident',
+        mode: 'shadow',
+    },
+});
+
+describe('custom agent config schemas', () => {
+    it('refuses an install with any unpinned package', () => {
+        expect(
+            customAgentConfigSchema.safeParse(
+                agent('ledger', [
+                    cli('lint', 'npm install -g a@latest b@1.2.3'),
+                ]),
+            ).success,
+        ).toBe(false);
+        expect(
+            customAgentConfigSchema.safeParse(agent('ledger', [cli('lint')]))
+                .success,
+        ).toBe(true);
+    });
+
+    it('refuses two CLIs with the same name on one agent', () => {
+        expect(
+            customAgentConfigSchema.safeParse(
+                agent('ledger', [cli('lint'), cli('lint')]),
+            ).success,
+        ).toBe(false);
+    });
+
+    it('refuses two agents with the same id', () => {
+        expect(
+            customAgentsSchema.safeParse([agent('ledger'), agent('ledger')])
+                .success,
+        ).toBe(false);
+        expect(
+            customAgentsSchema.safeParse([agent('ledger'), agent('billing')])
+                .success,
+        ).toBe(true);
+    });
+
+    it('names knowledge links to agents that do not exist', () => {
+        expect(
+            knowledgeLinkProblems(
+                [
+                    {
+                        path: 'docs/ledger.md',
+                        kind: 'doc',
+                        linkedTo: ['main-review', { agentId: 'ghost' }],
+                    },
+                ],
+                [agent('ledger')],
+            ),
+        ).toEqual(['docs/ledger.md links to unknown agent "ghost"']);
+        expect(
+            knowledgeLinkProblems(
+                [
+                    {
+                        path: 'docs/ledger.md',
+                        kind: 'doc',
+                        linkedTo: [{ agentId: 'ledger' }],
+                    },
+                ],
+                [agent('ledger')],
+            ),
+        ).toEqual([]);
+    });
+});

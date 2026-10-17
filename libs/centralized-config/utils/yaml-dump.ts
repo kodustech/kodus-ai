@@ -1,6 +1,6 @@
 import * as yaml from 'js-yaml';
 
-import { maskCliSecrets } from '@libs/code-review/infrastructure/agents/custom-agent-cli/cli-secrets';
+import { maskCliSecrets } from '@libs/code-review/domain/custom-agents/cli-secrets';
 
 /**
  * `yaml.dump` for payloads that may have come off an HTTP request.

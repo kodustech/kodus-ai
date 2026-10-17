@@ -161,6 +161,16 @@ describe("custom agent drafts", () => {
         expect(cliIssues(cli({ install: "npm i -g ledgerctl" }))).toContain(
             "Pin the install to a version, e.g. tool@1.2.3",
         );
+        for (const install of [
+            "npm i -g a@latest b@1.2.3",
+            "npm i -g ledgerctl@1.2.3x",
+            "npm i -g ledgerctl@^1.2.3",
+            "pip install ledgerctl==1.2.3 ledgerfmt",
+        ]) {
+            expect(cliIssues(cli({ install }))).toContain(
+                "Pin the install to a version, e.g. tool@1.2.3",
+            );
+        }
         expect(cliIssues(cli({ allowedPrefixes: [] }))).toContain(
             "Add at least one allowed command prefix",
         );

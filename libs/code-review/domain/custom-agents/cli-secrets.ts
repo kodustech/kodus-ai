@@ -1,14 +1,16 @@
 import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 /**
- * CLI secrets are write-only (#2172). A read replaces every stored
- * ciphertext with this placeholder, and a save that sends the placeholder
- * back keeps the stored value. A new value arrives as `value` and is
- * encrypted before anything is stored.
+ * CLI secrets are write-only (#2172). The config stores `{ env, ciphertext }`
+ * and a client never sees a ciphertext: every read carries this placeholder
+ * instead, and a save that sends it back keeps the value stored for the same
+ * agent, CLI and env name at the same config level. A new value arrives as
+ * `value` (the settings screen) or as a plaintext `ciphertext` (API and YAML
+ * clients) and is encrypted before anything is stored.
  */
 export const CLI_SECRET_MASK = '••••';
 
-/** A secret as the settings screen sends it on save. */
+/** A secret as a client sends it on save. */
 export type IncomingCliSecret = {
     env: string;
     ciphertext?: string;
@@ -24,6 +26,68 @@ type AgentLike = Pick<CustomAgentConfig, 'id'> & {
         }>;
     };
 };
+
+function isSecretLike(value: unknown): value is IncomingCliSecret {
+    return (
+        !!value &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        typeof (value as IncomingCliSecret).env === 'string' &&
+        ('ciphertext' in (value as object) || 'value' in (value as object))
+    );
+}
+
+function containsCliSecret(root: unknown): boolean {
+    const seen = new Set<unknown>();
+    const walk = (node: unknown): boolean => {
+        if (!node || typeof node !== 'object' || seen.has(node)) return false;
+        seen.add(node);
+        if (isSecretLike(node)) return true;
+        return Object.values(node).some(walk);
+    };
+    return walk(root);
+}
+
+/**
+ * `value` with every CLI secret replaced by `{ env, ciphertext: mask }`: a
+ * JSON-equivalent copy (which is what a response serializes to) when there is
+ * a secret to hide, the value itself otherwise. Works at any depth, so it
+ * covers a parameter entity, a bare config value, a formatted config or a
+ * YAML object alike.
+ */
+export function maskCliSecrets<T>(value: T): T {
+    if (value === undefined || value === null) return value;
+    if (!containsCliSecret(value)) return value;
+    const copy = JSON.parse(JSON.stringify(value));
+    const walk = (node: unknown): void => {
+        if (Array.isArray(node)) {
+            node.forEach(walk);
+            return;
+        }
+        if (!node || typeof node !== 'object') return;
+        if (isSecretLike(node)) {
+            const hasValue = !!(node.ciphertext || node.value);
+            delete node.value;
+            node.ciphertext = hasValue ? CLI_SECRET_MASK : '';
+            return;
+        }
+        Object.values(node).forEach(walk);
+    };
+    walk(copy);
+    return copy;
+}
+
+/** Copy of the agents with every secret masked. */
+export function maskCustomAgentSecrets<T extends AgentLike>(
+    agents: T[] | undefined,
+): T[] | undefined {
+    return maskCliSecrets(agents);
+}
+
+/** Copy of a stored code review config with every CLI secret masked. */
+export function maskCodeReviewConfigSecrets<T>(configValue: T): T {
+    return maskCliSecrets(configValue);
+}
 
 const secretKey = (agentId: string, cliName: string, env: string) =>
     `${agentId}\u0000${cliName}\u0000${env}`;
@@ -49,39 +113,29 @@ const indexStoredSecrets = (stored: AgentLike[] | undefined) => {
     return index;
 };
 
-/** Copy of the agents with every secret ciphertext masked. */
-export function maskCustomAgentSecrets<T extends AgentLike>(
-    agents: T[] | undefined,
-): T[] | undefined {
-    if (!Array.isArray(agents)) return agents;
-    return agents.map((agent) => {
-        const cli = agent?.tools?.cli;
-        if (!Array.isArray(cli)) return agent;
-        return {
-            ...agent,
-            tools: {
-                ...agent.tools,
-                cli: cli.map((tool) =>
-                    Array.isArray(tool?.secrets)
-                        ? {
-                              ...tool,
-                              secrets: tool.secrets.map((secret) => ({
-                                  env: secret.env,
-                                  ciphertext: CLI_SECRET_MASK,
-                              })),
-                          }
-                        : tool,
-                ),
-            },
-        };
-    });
+export class CliSecretMissingError extends Error {
+    constructor(
+        readonly env: string,
+        readonly cliName: string,
+    ) {
+        super(
+            `Secret ${env} of CLI "${cliName}" has no value at this level: send the value to set it`,
+        );
+        this.name = 'CliSecretMissingError';
+    }
 }
 
 /**
- * Turns the secrets of agents on their way to storage into ciphertext:
- * a typed `value` is encrypted, the mask placeholder is swapped for the
- * stored ciphertext of the same agent, CLI and env name, and a mask with
- * nothing stored behind it is dropped (there is no value to keep).
+ * Turns the secrets of agents on their way to storage into ciphertext.
+ * `stored` must be the agents of the SAME config level being saved (see
+ * `storedCustomAgentsAtLevel`), never the whole config: a secret set on one
+ * repository or level must not be reachable from another one.
+ * - a typed `value` is encrypted;
+ * - the mask (or an empty ciphertext) keeps the ciphertext stored for the
+ *   same agent, CLI and env name, and fails when there is none;
+ * - a ciphertext equal to the one stored in that same slot is kept;
+ * - any other ciphertext is a plaintext from an API client and is encrypted,
+ *   so a client can never plant a ciphertext of its choosing.
  */
 export function sealCustomAgentSecrets<T extends AgentLike>(
     incoming: T[] | undefined,
@@ -100,35 +154,31 @@ export function sealCustomAgentSecrets<T extends AgentLike>(
                 ...agent.tools,
                 cli: cli.map((tool) => {
                     if (!Array.isArray(tool?.secrets)) return tool;
-                    const secrets: Array<{ env: string; ciphertext: string }> =
-                        [];
-                    for (const secret of tool.secrets) {
+                    const secrets = tool.secrets.map((secret) => {
                         if (typeof secret?.value === 'string' && secret.value) {
-                            secrets.push({
+                            return {
                                 env: secret.env,
                                 ciphertext: encrypt(secret.value),
-                            });
-                            continue;
+                            };
                         }
-                        if (secret?.ciphertext === CLI_SECRET_MASK) {
-                            const kept = storedSecrets.get(
-                                secretKey(agent.id, tool.name, secret.env),
-                            );
-                            if (kept) {
-                                secrets.push({
-                                    env: secret.env,
-                                    ciphertext: kept,
-                                });
+                        const kept = storedSecrets.get(
+                            secretKey(agent.id, tool.name, secret?.env),
+                        );
+                        const sent = secret?.ciphertext;
+                        if (!sent || sent === CLI_SECRET_MASK) {
+                            if (!kept) {
+                                throw new CliSecretMissingError(
+                                    secret?.env,
+                                    tool.name,
+                                );
                             }
-                            continue;
+                            return { env: secret.env, ciphertext: kept };
                         }
-                        if (secret?.ciphertext) {
-                            secrets.push({
-                                env: secret.env,
-                                ciphertext: secret.ciphertext,
-                            });
+                        if (sent === kept) {
+                            return { env: secret.env, ciphertext: kept };
                         }
-                    }
+                        return { env: secret.env, ciphertext: encrypt(sent) };
+                    });
                     return { ...tool, secrets };
                 }),
             },
@@ -140,14 +190,21 @@ export function sealCustomAgentSecrets<T extends AgentLike>(
 // as whatever shape was stored.
 type ConfigsLike = { customAgents?: unknown };
 
-type ScopedConfigs = {
+type DirectoryLike = {
+    id?: string;
+    folders?: Array<{ path?: string }>;
     configs?: ConfigsLike;
-    directories?: Array<{ configs?: ConfigsLike }>;
+};
+
+type RepositoryLike = {
+    id?: string;
+    configs?: ConfigsLike;
+    directories?: DirectoryLike[];
 };
 
 type CodeReviewConfigValueLike = {
     configs?: ConfigsLike;
-    repositories?: ScopedConfigs[];
+    repositories?: RepositoryLike[];
 };
 
 const agentsOf = (configs: ConfigsLike | undefined): AgentLike[] =>
@@ -169,38 +226,81 @@ export function collectStoredCustomAgents(
     return agents;
 }
 
-/**
- * Copy of a stored code review config with every CLI secret masked, at
- * every level, so no read path hands ciphertext to a client.
- */
-export function maskCodeReviewConfigSecrets<
-    T extends CodeReviewConfigValueLike,
->(configValue: T): T {
-    if (!configValue || typeof configValue !== 'object') return configValue;
-    const maskConfigs = <C extends ConfigsLike | undefined>(configs: C): C =>
-        configs && Array.isArray(configs.customAgents)
-            ? {
-                  ...configs,
-                  customAgents: maskCustomAgentSecrets(
-                      configs.customAgents as AgentLike[],
-                  ),
-              }
-            : configs;
+export type CustomAgentConfigLevel = {
+    repositoryId?: string;
+    directoryId?: string;
+    /** A directory group named by its folder paths (create-or-match save). */
+    directoryPaths?: string[];
+};
 
-    return {
-        ...configValue,
-        configs: maskConfigs(configValue.configs),
-        repositories: Array.isArray(configValue.repositories)
-            ? configValue.repositories.map((repository) => ({
-                  ...repository,
-                  configs: maskConfigs(repository?.configs),
-                  directories: Array.isArray(repository?.directories)
-                      ? repository.directories.map((directory) => ({
-                            ...directory,
-                            configs: maskConfigs(directory?.configs),
-                        }))
-                      : repository?.directories,
-              }))
-            : configValue.repositories,
-    };
+/**
+ * The agents stored at exactly one config level: the global config when no
+ * repository is named, the repository's own config, or one directory group's
+ * config. Nothing is inherited from a parent level.
+ */
+export function storedCustomAgentsAtLevel(
+    configValue: CodeReviewConfigValueLike | undefined,
+    level: CustomAgentConfigLevel,
+): AgentLike[] {
+    const repositoryId =
+        level.repositoryId && level.repositoryId !== 'global'
+            ? level.repositoryId
+            : undefined;
+    if (!repositoryId) return agentsOf(configValue?.configs);
+
+    const repository = configValue?.repositories?.find(
+        (repo) => repo?.id === repositoryId,
+    );
+    if (!repository) return [];
+
+    if (level.directoryId) {
+        return agentsOf(
+            repository.directories?.find((dir) => dir?.id === level.directoryId)
+                ?.configs,
+        );
+    }
+
+    const paths = level.directoryPaths?.filter(Boolean) ?? [];
+    if (paths.length > 0) {
+        const group = repository.directories?.find((dir) => {
+            const folders = (dir?.folders ?? []).map((f) => f?.path);
+            return (
+                folders.length === paths.length &&
+                paths.every((path) => folders.includes(path))
+            );
+        });
+        return agentsOf(group?.configs);
+    }
+
+    return agentsOf(repository.configs);
+}
+
+/**
+ * The agents a review at this level runs: the most specific level that
+ * defines `customAgents` (directory, then repository, then global) wins,
+ * as a list there replaces its parent's. Never another repository's agents.
+ */
+export function effectiveStoredCustomAgents(
+    configValue: CodeReviewConfigValueLike | undefined,
+    level: CustomAgentConfigLevel,
+): AgentLike[] {
+    const repositoryId =
+        level.repositoryId && level.repositoryId !== 'global'
+            ? level.repositoryId
+            : undefined;
+    const repository = repositoryId
+        ? configValue?.repositories?.find((repo) => repo?.id === repositoryId)
+        : undefined;
+    const directory = level.directoryId
+        ? repository?.directories?.find((dir) => dir?.id === level.directoryId)
+        : undefined;
+
+    for (const configs of [
+        directory?.configs,
+        repository?.configs,
+        configValue?.configs,
+    ]) {
+        if (Array.isArray(configs?.customAgents)) return agentsOf(configs);
+    }
+    return [];
 }

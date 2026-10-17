@@ -31,10 +31,17 @@ const ledgerAgent = (secrets: Array<Record<string, string>>) => ({
     },
 });
 
-const buildUseCase = (repositoryConfigs: Record<string, unknown> = {}) => {
+const buildUseCase = (
+    repositoryConfigs: Record<string, unknown> = {},
+    stored: {
+        globalConfigs?: Record<string, unknown>;
+        otherRepositoryConfigs?: Record<string, unknown>;
+    } = {},
+) => {
     const createOrUpdateParametersUseCase = {
         execute: jest.fn().mockResolvedValue(true),
     };
+    const eventEmitter = { emit: jest.fn() };
     const useCase = new UpdateOrCreateCodeReviewParameterUseCase(
         {
             findByKey: jest.fn().mockResolvedValue({
@@ -42,7 +49,7 @@ const buildUseCase = (repositoryConfigs: Record<string, unknown> = {}) => {
                     id: 'global',
                     name: 'Global',
                     isSelected: true,
-                    configs: {},
+                    configs: stored.globalConfigs ?? {},
                     repositories: [
                         {
                             id: 'repo-1',
@@ -51,19 +58,25 @@ const buildUseCase = (repositoryConfigs: Record<string, unknown> = {}) => {
                             configs: repositoryConfigs,
                             directories: [],
                         },
+                        {
+                            id: 'repo-2',
+                            name: 'billing',
+                            isSelected: true,
+                            configs: stored.otherRepositoryConfigs ?? {},
+                            directories: [],
+                        },
                     ],
                 },
             }),
         } as any,
         createOrUpdateParametersUseCase as any,
         {
-            findIntegrationConfigFormatted: jest
-                .fn()
-                .mockResolvedValue([
-                    { id: 'repo-1', name: 'ledger', directories: [] },
-                ]),
+            findIntegrationConfigFormatted: jest.fn().mockResolvedValue([
+                { id: 'repo-1', name: 'ledger', directories: [] },
+                { id: 'repo-2', name: 'billing', directories: [] },
+            ]),
         } as any,
-        { emit: jest.fn() } as any,
+        eventEmitter as any,
         { ensure: jest.fn() } as any,
         { detectAndSaveReferences: jest.fn() } as any,
         { buildConfigKey: jest.fn().mockReturnValue('config-key') } as any,
@@ -110,7 +123,7 @@ const buildUseCase = (repositoryConfigs: Record<string, unknown> = {}) => {
             .configs;
     };
 
-    return { save };
+    return { save, eventEmitter };
 };
 
 describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
@@ -161,5 +174,71 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
         expect(configs.customAgents[0].tools.cli[0].secrets).toEqual([
             { env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' },
         ]);
+    });
+
+    it('never restores a secret stored on another repository or level', async () => {
+        const storedElsewhere = {
+            customAgents: [
+                ledgerAgent([{ env: 'LEDGER_TOKEN', ciphertext: 'iv:other' }]),
+            ],
+        };
+        const masked = {
+            customAgents: [
+                ledgerAgent([
+                    { env: 'LEDGER_TOKEN', ciphertext: CLI_SECRET_MASK },
+                ]),
+            ],
+        };
+
+        await expect(
+            buildUseCase({}, { globalConfigs: storedElsewhere }).save(masked),
+        ).rejects.toThrow(/LEDGER_TOKEN/);
+        await expect(
+            buildUseCase({}, { otherRepositoryConfigs: storedElsewhere }).save(
+                masked,
+            ),
+        ).rejects.toThrow(/LEDGER_TOKEN/);
+    });
+
+    it('encrypts a ciphertext it did not store instead of trusting it', async () => {
+        const configs = await buildUseCase(
+            {},
+            {
+                otherRepositoryConfigs: {
+                    customAgents: [
+                        ledgerAgent([
+                            { env: 'LEDGER_TOKEN', ciphertext: 'iv:other' },
+                        ]),
+                    ],
+                },
+            },
+        ).save({
+            customAgents: [
+                ledgerAgent([{ env: 'LEDGER_TOKEN', ciphertext: 'iv:other' }]),
+            ],
+        });
+
+        const [secret] = configs.customAgents[0].tools.cli[0].secrets;
+        expect(secret.ciphertext).not.toBe('iv:other');
+        expect(decrypt(secret.ciphertext)).toBe('iv:other');
+    });
+
+    it('never writes a ciphertext into the settings audit log', async () => {
+        const { save, eventEmitter } = buildUseCase({
+            customAgents: [
+                ledgerAgent([{ env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' }]),
+            ],
+        });
+        await save({
+            customAgents: [
+                ledgerAgent([{ env: 'LEDGER_TOKEN', value: 'ledger-s3cret' }]),
+            ],
+        });
+
+        const audit = JSON.stringify(eventEmitter.emit.mock.calls);
+        expect(eventEmitter.emit).toHaveBeenCalled();
+        expect(audit).not.toContain('iv:stored');
+        expect(audit).not.toContain('ledger-s3cret');
+        expect(audit).not.toMatch(/"ciphertext":"(?!••••)[^"]+"/);
     });
 });
