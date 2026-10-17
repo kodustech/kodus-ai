@@ -28,7 +28,7 @@ const agent = {
     },
 };
 
-function build(params: { sandboxType: 'e2b' | 'local'; flag: boolean }) {
+function build(params: { sandboxType: 'e2b' | 'local' }) {
     const sandbox: any = { type: params.sandboxType, baseBranch: 'main' };
     const leaseManager: any = {
         acquire: jest.fn().mockResolvedValue({ sandbox, leaseId: 'lease-1' }),
@@ -41,8 +41,10 @@ function build(params: { sandboxType: 'e2b' | 'local'; flag: boolean }) {
             platform: 'github',
         }),
     };
+    // Custom agents are on for every organization: no feature flag gates
+    // the install, so every flag reads off here.
     const featureGate: any = {
-        isEnabled: jest.fn().mockResolvedValue(params.flag),
+        isEnabled: jest.fn().mockResolvedValue(false),
     };
     const organizationService: any = {
         getReleaseTrack: jest.fn().mockResolvedValue('beta'),
@@ -73,8 +75,8 @@ describe('CreateSandboxStage custom agent CLIs', () => {
         });
     });
 
-    it('installs the CLIs on E2B when the feature is on', async () => {
-        const { stage, context } = build({ sandboxType: 'e2b', flag: true });
+    it('installs the CLIs on E2B with no feature flag on', async () => {
+        const { stage, context } = build({ sandboxType: 'e2b' });
         const result: any = await (stage as any).executeStage(context);
         expect(provision).toHaveBeenCalledWith(
             expect.objectContaining({ changedFiles: ['src/app.ts'] }),
@@ -83,7 +85,7 @@ describe('CreateSandboxStage custom agent CLIs', () => {
     });
 
     it('installs for a disabled agent asked for by `@kody -v`', async () => {
-        const { stage, context } = build({ sandboxType: 'e2b', flag: true });
+        const { stage, context } = build({ sandboxType: 'e2b' });
         context.codeReviewConfig.customAgents = [{ ...agent, enabled: false }];
         context.onlyCustomAgent = 'lint';
         await (stage as any).executeStage(context);
@@ -95,7 +97,6 @@ describe('CreateSandboxStage custom agent CLIs', () => {
     it('never installs on the local sandbox', async () => {
         const { stage, context, featureGate } = build({
             sandboxType: 'local',
-            flag: true,
         });
         const result: any = await (stage as any).executeStage(context);
         expect(provision).not.toHaveBeenCalled();
@@ -103,10 +104,9 @@ describe('CreateSandboxStage custom agent CLIs', () => {
         expect(result.customAgentClis).toBeUndefined();
     });
 
-
     it('keeps the sandbox when provisioning throws', async () => {
         provision.mockRejectedValue(new Error('boom'));
-        const { stage, context } = build({ sandboxType: 'e2b', flag: true });
+        const { stage, context } = build({ sandboxType: 'e2b' });
         const result: any = await (stage as any).executeStage(context);
         expect(result.sandboxHandle).toBeDefined();
         expect(result.customAgentClis).toBeUndefined();
