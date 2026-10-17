@@ -8,6 +8,7 @@
         "2026-10-16, every round through production's review stage (reviewPullRequest: the PR's diff from a base and a head branch, history through LoadExternalContextStage in the decision store's record shape with existingCode, Kody Rules through the orchestrator next to the generalist, repeats, dedup, severity and formatter as the stage runs them; scored on what the stage ships). Two runs of the nightly set on 4437cf529: 32 and 32 of 36, mean 88.9%. Misses: the revisions R2 (1 of 2 missed per run) and R8 (1 and 2 of 2), the P22 repeat posted once per run, a P40 new site once. Paired per-case difference over the 13 cases: sd 0.204, so a night's mean moves 0.204/sqrt(2)/sqrt(13) = 0.040, against this 2-run baseline 0.049; floor = 0.889 - 2.2 x 0.049 = 0.78 (2 binomial SE over 36 claims gives the same 0.78). Deliberate break (dropRepeats keeping every finding, local only): 11 of 18, --gate exit 1.",
         "2026-10-16, cloud route: the review's dedup now gets the platform's embedder key (applyModelEnv used to write the model's key over API_OPEN_AI_API_KEY, so the merge guard fell back to its lexical veto). Two runs of the nightly set: 32 and 33 of 36, mean 90.3%; the runs differ on R2, R8 and the P22 repeat. Paired per-case difference over the 13 cases: sd 0.208, against this 2-run baseline 0.208/sqrt(2)/sqrt(13) x sqrt(1.5) = 0.050; floor = 0.903 - 2.2 x 0.050 = 0.79.",
         "gpt-6-sol: calibrated 2026-10-17 from 2 local runs on a725253d6 (set nightly, judge gemini-3-flash-preview, --byok-reasoning=none): 36/36 and 36/36, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 36, rounded down: 0.94.",
+        "claude-sonnet-5-5: 3 local runs on a725253d6 (set nightly, judge gemini-3-flash-preview, --byok-reasoning=none): every measured claim right, but 1, 4 and 2 of 26 cases did not measure, over the 5% a run may leave out: the repeat check (code-review-repeat-check) and a Kody Rules shard answered with no valid structured object on this model ([structured-output] reroute-json produced no valid object), each run on P40. No floor until that is fixed: the weekly run reports it as not measured.",
         "RATCHET: when a PR moves this on purpose, recalibrate here with two runs as evidence."
     ],
     "sets": {
@@ -41,6 +42,14 @@
             "byokReasoning": "none",
             "floor": 0.94,
             "observed": 1
+        },
+        "claude-sonnet-5-5": {
+            "set": "nightly",
+            "judge": "gemini-3-flash-preview",
+            "byokReasoning": "none",
+            "floor": null,
+            "observed": 1.0,
+            "noFloor": "In 3 runs, 1 to 4 of its 26 cases did not measure: on this model the repeat check's and the Kody Rules shard's structured output produced no valid object (reroute-json), every run on the same case (P40). A floor waits for that to be fixed."
         }
     }
 }
