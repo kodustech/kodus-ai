@@ -4,6 +4,7 @@ import {
     Controller,
     Get,
     Inject,
+    NotFoundException,
     Post,
     Query,
     UseGuards,
@@ -29,7 +30,14 @@ import {
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
-import { checkPermissions } from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
+import {
+    checkPermissions,
+    checkRepoPermissions,
+} from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
+import {
+    ITeamService,
+    TEAM_SERVICE_TOKEN,
+} from '@libs/organization/domain/team/contracts/team.service.contract';
 
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 
@@ -38,10 +46,12 @@ const canReadSettings = checkPermissions({
     resource: ResourceType.CodeReviewSettings,
 });
 
-// A try spends model calls and runs the agent's tools.
-const canEditSettings = checkPermissions({
+// A try spends model calls, runs the agent's tools and returns findings on a
+// pull request's code: it is scoped to the repository, like a settings edit.
+const canEditSettings = checkRepoPermissions({
     action: Action.Update,
     resource: ResourceType.CodeReviewSettings,
+    repo: { key: { body: 'repositoryId' } },
 });
 
 /** What the custom agent settings pages read and test (#2172). */
@@ -56,12 +66,26 @@ export class CustomAgentsController {
         private readonly resolveCustomAgent: ResolveCustomAgentUseCase,
         private readonly tryCustomAgent: TryCustomAgentUseCase,
         private readonly customAgentsStatus: GetCustomAgentsStatusUseCase,
+        @Inject(TEAM_SERVICE_TOKEN)
+        private readonly teamService: ITeamService,
     ) {}
 
     private organizationId(): string {
         const organizationId = this.request?.user?.organization?.uuid;
         if (!organizationId) {
             throw new BadRequestException('Organization not found');
+        }
+        return organizationId;
+    }
+
+    /** The caller's organization, once the team from the request is known to
+     *  belong to it: the stored config is looked up by team alone. */
+    private async organizationOwningTeam(teamId: string): Promise<string> {
+        const organizationId = this.organizationId();
+        const teamOrganizationId =
+            await this.teamService.findOneOrganizationIdByTeamId(teamId);
+        if (!teamOrganizationId || teamOrganizationId !== organizationId) {
+            throw new NotFoundException('Team not found');
         }
         return organizationId;
     }
@@ -74,7 +98,7 @@ export class CustomAgentsController {
     })
     @UseGuards(PolicyGuard)
     @CheckPolicies(canReadSettings)
-    resolve(
+    async resolve(
         @Body()
         body: {
             teamId: string;
@@ -91,7 +115,7 @@ export class CustomAgentsController {
         }
         return this.resolveCustomAgent.execute({
             organizationAndTeamData: {
-                organizationId: this.organizationId(),
+                organizationId: await this.organizationOwningTeam(body.teamId),
                 teamId: body.teamId,
             },
             repositoryId: body.repositoryId,
@@ -109,7 +133,7 @@ export class CustomAgentsController {
     })
     @UseGuards(PolicyGuard)
     @CheckPolicies(canEditSettings)
-    try(
+    async try(
         @Body()
         body: {
             teamId: string;
@@ -131,7 +155,7 @@ export class CustomAgentsController {
         }
         return this.tryCustomAgent.execute({
             organizationAndTeamData: {
-                organizationId: this.organizationId(),
+                organizationId: await this.organizationOwningTeam(body.teamId),
                 teamId: body.teamId,
             },
             repositoryId: body.repositoryId,
@@ -151,7 +175,7 @@ export class CustomAgentsController {
     @ApiQuery({ name: 'repositoryId', type: String, required: true })
     @UseGuards(PolicyGuard)
     @CheckPolicies(canReadSettings)
-    status(
+    async status(
         @Query('teamId') teamId: string,
         @Query('repositoryId') repositoryId: string,
     ) {
@@ -161,7 +185,7 @@ export class CustomAgentsController {
             );
         }
         return this.customAgentsStatus.execute({
-            organizationId: this.organizationId(),
+            organizationId: await this.organizationOwningTeam(teamId),
             repositoryId,
         });
     }
