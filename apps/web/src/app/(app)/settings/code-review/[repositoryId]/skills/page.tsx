@@ -20,7 +20,7 @@ import { toast } from "@components/ui/toaster/use-toast";
 import {
     CUSTOM_AGENT_LIMITS,
     isLinked,
-    normalizeKnowledgePath,
+    knowledgeItemFromPath,
     setKnowledgeLink,
 } from "@services/custom-agents/drafts";
 import { useResolveCustomAgent } from "@services/custom-agents/hooks";
@@ -60,7 +60,6 @@ function SkillsContent() {
         repositoryId,
     );
     const [path, setPath] = useState("");
-    const [kind, setKind] = useState<KnowledgeItem["kind"]>("doc");
     const report = useResolveCustomAgent({
         teamId,
         repositoryId,
@@ -82,11 +81,16 @@ function SkillsContent() {
     const candidates = (knowledgeReport?.candidates ?? []).filter(
         (candidate) => !registered.has(candidate.path),
     );
-    const targets: Array<{ target: KnowledgeLinkTarget; label: string }> = [
+    const targets: Array<{
+        target: KnowledgeLinkTarget;
+        label: string;
+        color?: string;
+    }> = [
         { target: KNOWLEDGE_MAIN_REVIEW_TARGET, label: "Main review" },
         ...agents.map((agent) => ({
             target: { agentId: agent.id },
             label: agent.name,
+            color: agent.presentation.tag.color,
         })),
     ];
     const reviewScopeHref = `/settings/code-review/${repositoryId}/review-scope${
@@ -103,6 +107,8 @@ function SkillsContent() {
         },
     });
 
+    // A file with an extension is a doc; a folder or a SKILL.md is a skill.
+    const typedItem = knowledgeItemFromPath(path);
     const register = (item: Pick<KnowledgeItem, "path" | "kind">) => {
         if (registered.has(item.path)) return;
         setKnowledge([
@@ -261,7 +267,7 @@ function SkillsContent() {
                                     <Button
                                         size="icon-sm"
                                         variant="cancel"
-                                        aria-label="Remove"
+                                        aria-label={`Remove ${itemReport?.name ?? item.path}`}
                                         disabled={!canEdit}
                                         onClick={() =>
                                             setKnowledge(
@@ -274,7 +280,7 @@ function SkillsContent() {
                                     </Button>
                                 </div>
                                 <div className="flex flex-wrap gap-x-4 gap-y-1.5 pl-6">
-                                    {targets.map(({ target, label }) => {
+                                    {targets.map(({ target, label, color }) => {
                                         const id = `link-${item.path}-${typeof target === "string" ? target : target.agentId}`;
                                         return (
                                             <label
@@ -283,6 +289,7 @@ function SkillsContent() {
                                                 className="text-text-secondary flex cursor-pointer items-center gap-1.5 text-xs">
                                                 <Checkbox
                                                     id={id}
+                                                    aria-label={`${itemReport?.name ?? item.path} for ${label}`}
                                                     disabled={!canEdit}
                                                     checked={isLinked(
                                                         item,
@@ -302,6 +309,16 @@ function SkillsContent() {
                                                         )
                                                     }
                                                 />
+                                                {color && (
+                                                    <span
+                                                        aria-hidden
+                                                        className="size-2 rounded-full"
+                                                        style={{
+                                                            backgroundColor:
+                                                                color,
+                                                        }}
+                                                    />
+                                                )}
                                                 {label}
                                             </label>
                                         );
@@ -380,6 +397,7 @@ function SkillsContent() {
                                 size="xs"
                                 variant="helper"
                                 leftIcon={<PlusIcon />}
+                                aria-label={`Add ${candidate.name ?? candidate.path}`}
                                 disabled={!canEdit}
                                 onClick={() => register(candidate)}>
                                 Add
@@ -405,25 +423,16 @@ function SkillsContent() {
                         </div>
                         <Button
                             size="sm"
-                            variant={kind === "doc" ? "primary" : "helper"}
-                            onClick={() => setKind("doc")}>
-                            Doc
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant={kind === "skill" ? "primary" : "helper"}
-                            onClick={() => setKind("skill")}>
-                            Skill
-                        </Button>
-                        <Button
-                            size="sm"
                             variant="secondary"
-                            disabled={!canEdit || !path.trim()}
+                            aria-label={
+                                typedItem
+                                    ? `Add the ${typedItem.kind} ${typedItem.path}`
+                                    : "Add path"
+                            }
+                            disabled={!canEdit || !typedItem}
                             onClick={() => {
-                                register({
-                                    path: normalizeKnowledgePath(path),
-                                    kind,
-                                });
+                                if (!typedItem) return;
+                                register(typedItem);
                                 setPath("");
                             }}>
                             Add

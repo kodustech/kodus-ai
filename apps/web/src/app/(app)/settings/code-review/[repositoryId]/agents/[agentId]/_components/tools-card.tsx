@@ -83,6 +83,7 @@ const McpPluginRow = ({
                 <Switch
                     id={switchId}
                     size="sm"
+                    aria-label={`Use ${integration.name}`}
                     checked={on}
                     disabled={!canEdit || !reachable}
                     onCheckedChange={(checked) => {

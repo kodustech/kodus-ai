@@ -79,13 +79,24 @@ export const Choice = <T extends string>({
     options,
     onChange,
     disabled,
+    label,
+    size = "md",
 }: {
     value: T;
     options: Array<{ value: T; label: string }>;
     onChange: (value: T) => void;
     disabled?: boolean;
+    /** Names the group when no visible label does. */
+    label?: string;
+    size?: "sm" | "md";
 }) => (
-    <div className="bg-card-lv2 inline-flex w-fit gap-1 rounded-lg p-1">
+    <div
+        role="group"
+        aria-label={label}
+        className={cn(
+            "bg-card-lv2 inline-flex w-fit rounded-lg",
+            size === "sm" ? "gap-0.5 p-0.5" : "gap-1 p-1",
+        )}>
         {options.map((option) => (
             <button
                 key={option.value}
@@ -94,7 +105,8 @@ export const Choice = <T extends string>({
                 disabled={disabled}
                 onClick={() => onChange(option.value)}
                 className={cn(
-                    "rounded-md px-3 py-1 text-xs font-medium transition-colors disabled:opacity-60",
+                    "rounded-md text-xs font-medium transition-colors disabled:opacity-60",
+                    size === "sm" ? "px-2 py-0.5" : "px-3 py-1",
                     value === option.value
                         ? "bg-card-lv1 text-text-primary"
                         : "text-text-secondary hover:text-text-primary",

@@ -4,20 +4,22 @@ import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
-import { Switch } from "@components/ui/switch";
 import {
+    followedBy,
     knowledgeChoices,
-    normalizeKnowledgePath,
+    knowledgeItemFromPath,
     setAgentKnowledge,
+    skillFolderName,
 } from "@services/custom-agents/drafts";
 import type {
     CustomAgentResolveReport,
     KnowledgeItem,
     KnowledgeItemReport,
 } from "@services/custom-agents/types";
-import { BookOpenIcon, PlusIcon, SparklesIcon } from "lucide-react";
+import { BookOpenIcon, PlusIcon, SparklesIcon, XIcon } from "lucide-react";
+import { cn } from "src/core/utils/components";
 
-import { Chip, Choice, Field, Section } from "./field";
+import { Chip, Field, Section } from "./field";
 
 export const KnowledgeStatusChips = ({
     report,
@@ -54,9 +56,9 @@ export const KnowledgeStatusChips = ({
 };
 
 /**
- * The skills and docs one agent follows, chosen on the agent itself: every
- * file the config has or the branch offers, each with its own switch, and a
- * path field for one that was not found.
+ * The skills and docs one agent follows: only what it follows, each with a
+ * way to stop, and a picker to add what the branch offers or a path typed
+ * by hand. Skills open on demand; docs load whole.
  */
 export const AgentKnowledgeField = ({
     agentId,
@@ -71,111 +73,99 @@ export const AgentKnowledgeField = ({
     canEdit: boolean;
     onChange: (next: KnowledgeItem[]) => void;
 }) => {
-    const [path, setPath] = useState("");
-    const [kind, setKind] = useState<KnowledgeItem["kind"]>("doc");
+    const [adding, setAdding] = useState(false);
     const resolved =
         report?.knowledge.status === "ok" ? report.knowledge : null;
-    const choices = knowledgeChoices(
-        knowledge,
-        resolved?.candidates ?? [],
-        agentId,
-    );
+    const unavailable =
+        report?.knowledge.status === "unavailable"
+            ? report.knowledge.reason
+            : null;
+    const candidates = resolved?.candidates ?? [];
     const reportOf = (item: Pick<KnowledgeItem, "path" | "kind">) =>
         resolved?.items.find(
             (entry) => entry.path === item.path && entry.kind === item.kind,
         );
-    const budget = resolved?.budgets.find((entry) => entry.target === agentId);
-    const addPath = () => {
-        const next = normalizeKnowledgePath(path);
-        if (!next) return;
-        onChange(
-            setAgentKnowledge(knowledge, { path: next, kind }, agentId, true),
+    const candidateOf = (item: Pick<KnowledgeItem, "path" | "kind">) =>
+        candidates.find(
+            (entry) => entry.path === item.path && entry.kind === item.kind,
         );
-        setPath("");
-    };
-    const addId = `agent-${agentId}-knowledge-path`;
+    const named = [...(resolved?.items ?? []), ...candidates];
+    const { skills, docs } = followedBy(knowledge, agentId, named);
+    const available = knowledgeChoices(knowledge, candidates, agentId).filter(
+        (choice) => !choice.linked,
+    );
+    const budget = resolved?.budgets.find((entry) => entry.target === agentId);
+    const follow = (item: Pick<KnowledgeItem, "path" | "kind">, on: boolean) =>
+        onChange(setAgentKnowledge(knowledge, item, agentId, on));
+    const descriptionOf = (item: Pick<KnowledgeItem, "path" | "kind">) =>
+        reportOf(item)?.description ?? candidateOf(item)?.description;
 
     return (
         <div className="flex flex-col gap-3">
-            {report?.knowledge.status === "unavailable" && (
-                <p className="text-text-secondary text-xs">
-                    {report.knowledge.reason}
-                </p>
+            {unavailable && (
+                <p className="text-text-secondary text-xs">{unavailable}</p>
             )}
-            {choices.length === 0 ? (
+            {skills.length === 0 && docs.length === 0 ? (
                 <p className="text-text-secondary text-xs">
-                    {resolved
-                        ? "No skills or docs found on the branch. Add one by path below."
-                        : "None yet. Add one by path below."}
+                    Not following any skill or doc yet.
                 </p>
             ) : (
-                <div className="border-card-lv3/60 divide-card-lv3/60 flex flex-col divide-y rounded-lg border">
-                    {choices.map((choice) => {
-                        const id = `agent-${agentId}-use-${choice.kind}-${choice.path}`;
-                        const itemReport = reportOf(choice);
-                        return (
-                            <div
-                                key={`${choice.kind}:${choice.path}`}
-                                className="flex items-start gap-2 px-3 py-2">
-                                {choice.kind === "skill" ? (
-                                    <SparklesIcon
-                                        aria-label="Skill"
-                                        className="text-text-tertiary mt-0.5 size-4 shrink-0"
-                                    />
-                                ) : (
-                                    <BookOpenIcon
-                                        aria-label="Doc"
-                                        className="text-text-tertiary mt-0.5 size-4 shrink-0"
-                                    />
+                <ul className="flex flex-col gap-1.5">
+                    {skills.map((skill) => (
+                        <li
+                            key={`skill:${skill.path}`}
+                            className="bg-card-lv2 flex items-start gap-2 rounded-lg px-3 py-2">
+                            <SparklesIcon
+                                aria-hidden
+                                className="text-text-tertiary mt-0.5 size-4 shrink-0"
+                            />
+                            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                <span className="text-text-primary text-xs font-medium">
+                                    {skill.name}
+                                </span>
+                                {descriptionOf(skill) && (
+                                    <span className="text-text-secondary text-xs">
+                                        {descriptionOf(skill)}
+                                    </span>
                                 )}
-                                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                    <span className="text-text-primary text-xs font-medium">
-                                        {itemReport?.name ??
-                                            choice.name ??
-                                            choice.path}
-                                    </span>
-                                    <span className="text-text-tertiary truncate font-mono text-xs">
-                                        {choice.path}
-                                    </span>
-                                    <span className="flex flex-wrap gap-1">
-                                        <KnowledgeStatusChips
-                                            report={itemReport}
-                                        />
-                                        {!itemReport &&
-                                            choice.kodyRuleSource && (
-                                                <Chip tone="warning">
-                                                    Also a Kody Rules source
-                                                </Chip>
-                                            )}
-                                    </span>
+                                <span className="text-text-tertiary truncate font-mono text-xs">
+                                    {skill.path}
                                 </span>
-                                <span className="flex shrink-0 items-center gap-2 self-center">
-                                    <label
-                                        htmlFor={id}
-                                        className="text-text-secondary cursor-pointer text-xs">
-                                        Use
-                                    </label>
-                                    <Switch
-                                        id={id}
-                                        size="sm"
-                                        checked={choice.linked}
-                                        disabled={!canEdit}
-                                        onCheckedChange={(on) =>
-                                            onChange(
-                                                setAgentKnowledge(
-                                                    knowledge,
-                                                    choice,
-                                                    agentId,
-                                                    on,
-                                                ),
-                                            )
-                                        }
+                                <span className="flex flex-wrap gap-1 empty:hidden">
+                                    <KnowledgeStatusChips
+                                        report={reportOf(skill)}
                                     />
                                 </span>
-                            </div>
-                        );
-                    })}
-                </div>
+                            </span>
+                            <StopFollowing
+                                name={skill.name}
+                                disabled={!canEdit}
+                                onClick={() => follow(skill, false)}
+                            />
+                        </li>
+                    ))}
+                    {docs.map((doc) => (
+                        <li
+                            key={`doc:${doc.path}`}
+                            className="flex items-center gap-2 px-3 py-1">
+                            <BookOpenIcon
+                                aria-hidden
+                                className="text-text-tertiary size-4 shrink-0"
+                            />
+                            <span className="text-text-primary min-w-0 flex-1 truncate font-mono text-xs">
+                                {doc.path}
+                            </span>
+                            <span className="flex shrink-0 flex-wrap gap-1">
+                                <KnowledgeStatusChips report={reportOf(doc)} />
+                            </span>
+                            <StopFollowing
+                                name={doc.path}
+                                disabled={!canEdit}
+                                onClick={() => follow(doc, false)}
+                            />
+                        </li>
+                    ))}
+                </ul>
             )}
             {budget && budget.over.length > 0 && (
                 <p className="text-warning text-xs">
@@ -184,46 +174,184 @@ export const AgentKnowledgeField = ({
                     {budget.docTokens.toLocaleString()} doc tokens.
                 </p>
             )}
-            <Field
-                label="Add by path"
-                htmlFor={addId}
-                hint="A Markdown doc, or a skill folder with a SKILL.md, on the target branch.">
-                <div className="flex flex-wrap items-center gap-2">
-                    <div className="min-w-[12rem] flex-1">
-                        <Input
-                            id={addId}
-                            size="md"
-                            placeholder="e.g. docs/payments.md or .claude/skills/ledger"
-                            value={path}
-                            disabled={!canEdit}
-                            onChange={(e) => setPath(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key !== "Enter") return;
-                                e.preventDefault();
-                                addPath();
-                            }}
-                        />
-                    </div>
-                    <Choice
-                        value={kind}
+            {unavailable ? (
+                <AddByPath
+                    agentId={agentId}
+                    disabled={!canEdit}
+                    onAdd={(item) => follow(item, true)}
+                />
+            ) : adding ? (
+                <div className="border-card-lv3/60 flex flex-col gap-3 border-t pt-3">
+                    {!resolved ? (
+                        <p className="text-text-secondary text-xs">
+                            Reading the branch…
+                        </p>
+                    ) : available.length === 0 ? (
+                        <p className="text-text-secondary text-xs">
+                            Nothing else found on the branch. Add one by path.
+                        </p>
+                    ) : (
+                        <ul className="flex flex-col gap-1">
+                            {available.map((choice) => {
+                                const name =
+                                    choice.kind === "skill"
+                                        ? (reportOf(choice)?.name ??
+                                          choice.name ??
+                                          skillFolderName(choice.path))
+                                        : choice.path;
+                                const description = descriptionOf(choice);
+                                return (
+                                    <li key={`${choice.kind}:${choice.path}`}>
+                                        <button
+                                            type="button"
+                                            aria-label={`Follow ${name}`}
+                                            disabled={!canEdit}
+                                            onClick={() => follow(choice, true)}
+                                            className="hover:bg-card-lv2 flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left disabled:opacity-60">
+                                            {choice.kind === "skill" ? (
+                                                <SparklesIcon
+                                                    aria-hidden
+                                                    className="text-text-tertiary mt-0.5 size-4 shrink-0"
+                                                />
+                                            ) : (
+                                                <BookOpenIcon
+                                                    aria-hidden
+                                                    className="text-text-tertiary mt-0.5 size-4 shrink-0"
+                                                />
+                                            )}
+                                            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                                <span
+                                                    className={cn(
+                                                        "text-text-primary text-xs font-medium",
+                                                        choice.kind === "doc" &&
+                                                            "font-mono",
+                                                    )}>
+                                                    {name}
+                                                </span>
+                                                {description && (
+                                                    <span className="text-text-secondary text-xs">
+                                                        {description}
+                                                    </span>
+                                                )}
+                                                {choice.kodyRuleSource && (
+                                                    <span className="text-warning text-xs">
+                                                        Also a Kody Rules source
+                                                    </span>
+                                                )}
+                                            </span>
+                                            <PlusIcon
+                                                aria-hidden
+                                                className="text-text-secondary mt-0.5 size-4 shrink-0"
+                                            />
+                                        </button>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    )}
+                    <AddByPath
+                        agentId={agentId}
                         disabled={!canEdit}
-                        onChange={setKind}
-                        options={[
-                            { value: "doc", label: "Doc" },
-                            { value: "skill", label: "Skill" },
-                        ]}
+                        onAdd={(item) => follow(item, true)}
                     />
                     <Button
-                        size="sm"
+                        size="xs"
                         variant="helper"
-                        leftIcon={<PlusIcon />}
-                        disabled={!canEdit || !normalizeKnowledgePath(path)}
-                        onClick={addPath}>
-                        Add
+                        className="w-fit"
+                        onClick={() => setAdding(false)}>
+                        Done
                     </Button>
                 </div>
-            </Field>
+            ) : (
+                canEdit && (
+                    <Button
+                        size="xs"
+                        variant="helper"
+                        className="w-fit"
+                        leftIcon={<PlusIcon />}
+                        onClick={() => setAdding(true)}>
+                        Add skill or doc
+                    </Button>
+                )
+            )}
         </div>
+    );
+};
+
+const StopFollowing = ({
+    name,
+    disabled,
+    onClick,
+}: {
+    name: string;
+    disabled: boolean;
+    onClick: () => void;
+}) => (
+    <Button
+        size="icon-sm"
+        variant="cancel"
+        className="shrink-0"
+        aria-label={`Stop following ${name}`}
+        disabled={disabled}
+        onClick={onClick}>
+        <XIcon />
+    </Button>
+);
+
+/** A path typed by hand; its kind comes from the path itself. */
+const AddByPath = ({
+    agentId,
+    disabled,
+    onAdd,
+}: {
+    agentId: string;
+    disabled: boolean;
+    onAdd: (item: Pick<KnowledgeItem, "path" | "kind">) => void;
+}) => {
+    const [path, setPath] = useState("");
+    const item = knowledgeItemFromPath(path);
+    const add = () => {
+        if (!item) return;
+        onAdd(item);
+        setPath("");
+    };
+    const id = `agent-${agentId}-knowledge-path`;
+    return (
+        <Field
+            label="Add by path"
+            htmlFor={id}
+            hint={
+                item
+                    ? `Adds the ${item.kind} ${item.path}`
+                    : "A doc file (e.g. docs/payments.md), or a skill folder with a SKILL.md, on the target branch."
+            }>
+            <div className="flex flex-wrap items-center gap-2">
+                <div className="min-w-[12rem] flex-1">
+                    <Input
+                        id={id}
+                        size="md"
+                        placeholder="e.g. docs/payments.md or .claude/skills/ledger"
+                        value={path}
+                        disabled={disabled}
+                        onChange={(e) => setPath(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key !== "Enter") return;
+                            e.preventDefault();
+                            add();
+                        }}
+                    />
+                </div>
+                <Button
+                    size="sm"
+                    variant="helper"
+                    leftIcon={<PlusIcon />}
+                    aria-label={item ? `Add ${item.path}` : "Add path"}
+                    disabled={disabled || !item}
+                    onClick={add}>
+                    Add
+                </Button>
+            </div>
+        </Field>
     );
 };
 
@@ -233,12 +361,13 @@ export const KnowledgeCard = ({
     ...props
 }: Parameters<typeof AgentKnowledgeField>[0] & { skillsHref: string }) => (
     <Section
-        title="Skills and docs this agent follows"
+        title="Follows"
         description={
             <>
-                Read from the pull request&apos;s target branch. Skills open on
-                demand; docs load whole up to the budget. Scripts in a skill
-                never run.{" "}
+                The team&apos;s skills and docs this reviewer follows, read from
+                the pull request&apos;s target branch. A skill opens when the
+                change needs it; a doc loads whole. Scripts in a skill never
+                run.{" "}
                 <Link
                     href={skillsHref}
                     className="text-primary-light hover:underline">

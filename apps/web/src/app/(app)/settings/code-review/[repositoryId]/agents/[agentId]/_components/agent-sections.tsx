@@ -12,6 +12,7 @@ import TagInput from "@components/ui/tag-input";
 import { Textarea } from "@components/ui/textarea";
 import {
     CUSTOM_AGENT_LIMITS,
+    nameCollisionHint,
     TAG_COLORS,
 } from "@services/custom-agents/drafts";
 import type {
@@ -59,7 +60,10 @@ export const WhatItDoes = ({
         <Section
             title="What this agent does"
             description="Write it like a brief to a reviewer who knows the codebase: what to look for, what to ignore, and what proof a finding needs.">
-            <Field label="Name" htmlFor="agent-name">
+            <Field
+                label="Name"
+                htmlFor="agent-name"
+                hint={nameCollisionHint(agent.name) ?? undefined}>
                 <Input
                     id="agent-name"
                     size="md"
@@ -347,6 +351,23 @@ export const HowItComments = ({
 
 const ROUTING_DEFAULT = "__routing";
 
+/** The organization's BYOK models, shared by every model picker and label. */
+export const useByokModels = () => {
+    const byok = useQuery({
+        queryKey: ["custom-agents-byok-models"],
+        queryFn: async () => ((await getBYOK()) ?? null) as BYOKConfig | null,
+        staleTime: 5 * 60 * 1000,
+        retry: false,
+    });
+    const models = byok.data?.models ?? [];
+    return {
+        models,
+        routing: byok.data?.routing,
+        isLoading: byok.isLoading,
+        nameOf: (id?: string) => models.find((model) => model.id === id)?.model,
+    };
+};
+
 /** Run and check model pickers, without the card around them. */
 export const ModelsFields = ({
     agent,
@@ -357,16 +378,8 @@ export const ModelsFields = ({
     canEdit: boolean;
     onChange: Patch;
 }) => {
-    const byok = useQuery({
-        queryKey: ["custom-agents-byok-models"],
-        queryFn: async () => ((await getBYOK()) ?? null) as BYOKConfig | null,
-        staleTime: 5 * 60 * 1000,
-        retry: false,
-    });
-    const models = byok.data?.models ?? [];
-    const routing = byok.data?.routing;
-    const labelOf = (id?: string) =>
-        models.find((model) => model.id === id)?.model;
+    const byok = useByokModels();
+    const { models, routing, nameOf: labelOf } = byok;
     const routed = (task: "customAgent" | "customAgentCheck") =>
         labelOf(routing?.taskOverrides?.[task] ?? routing?.defaultModelId);
 
@@ -389,7 +402,9 @@ export const ModelsFields = ({
             value={agent.models?.[key] ?? ROUTING_DEFAULT}
             disabled={!canEdit || !models.length}
             onValueChange={pick(key)}>
-            <SelectTrigger size="md">
+            <SelectTrigger
+                size="md"
+                aria-label={key === "run" ? "Run model" : "Check model"}>
                 <SelectValue />
             </SelectTrigger>
             <SelectContent>
