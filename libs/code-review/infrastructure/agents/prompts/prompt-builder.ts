@@ -89,6 +89,31 @@ export interface PromptAgentMeta {
     allowedLabels: Array<'bug' | 'security' | 'performance'>;
     /** Whether the agent emits per-finding labels (generalist). */
     supportsMixed: boolean;
+    /** Custom agents: the team guides linked to this agent. Present → the
+     *  system prompt asks guide-backed findings for kind + verbatim quote. */
+    conventionGuides?: string[];
+}
+
+/**
+ * Tells a custom agent how to report a finding that applies one of its linked
+ * team guides: `kind: "convention"` plus the guide's exact sentence. The quote
+ * is checked word for word against the guide on the PR's target branch before
+ * anything is posted, so a paraphrase is dropped (convention-check.ts). Empty
+ * without guides, so every other agent's prompt is unchanged.
+ */
+export function formatConventionFindingRules(guides?: string[]): string {
+    if (!guides?.length) return '';
+    return `
+  <TeamGuides>
+    This review enforces these team guides (read them with the tools):
+${guides.map((g) => `      - ${g}`).join('\n')}
+    Any finding that applies a rule from one of these guides MUST set kind "convention" and source:
+      - source.file: the guide's path, exactly as listed above;
+      - source.section: the heading of the section the rule is in;
+      - source.quote: the rule's exact sentence, copied verbatim from the guide — never paraphrase, summarize, merge sentences, or invent a rule. The quote is checked word for word against the guide; a finding whose quote is not found there is discarded.
+    A rule from a guide is a real finding even when it is about naming, structure, documentation, or a required element — the team chose to enforce it. Report it only when the changed code breaks the rule in a case the guide says it covers.
+    Every other finding (a defect not drawn from a guide) sets kind "bug" and no source.
+  </TeamGuides>`;
 }
 
 // ─── moved verbatim from BaseCodeReviewAgentProvider (Phase 3) ───────────────
@@ -582,7 +607,7 @@ export function buildSystemPrompt(input: ReviewAgentInput, meta: PromptAgentMeta
     readFile and grep return the FULL file, including code this PR did NOT touch. Those surrounding lines are context for understanding only — they are NOT part of the diff. Before reporting, confirm the line you cite appears as an added/modified line in the diff hunks; if a pattern you noticed (e.g. a rename, a legacy field, a pre-existing bug) is only visible via readFile and is not in the diff, do NOT report it as introduced by this PR.${SCOPE_CROSS_FILE_EXTRA}
   </Scope>
 ${formatCrossRepoBoundarySection(input) || ''}
-${overridesSection}
+${overridesSection}${formatConventionFindingRules(meta.conventionGuides)}
 
 ${memoryRulesSection}
 
@@ -614,7 +639,7 @@ export function buildCompactSystemPrompt(input: ReviewAgentInput, meta: PromptAg
   <Mindset>Assume each change is broken until you can name the input that proves it safe. Default to reporting when you have code-backed suspicion.</Mindset>
   <Workflow>For each changed function: grep callers and callees with the tools, read enough to confirm or dismiss, then submit via the submitResult tool.</Workflow>
   <Scope>Root cause must be in lines added or modified by this PR. Trace impact through callers but anchor the finding to a changed line — for cross-file bugs anchor on the changed trigger line, never a placeholder or non-diff path; if you can't anchor it to a changed line, omit it.</Scope>${crossRepoSection ? `\n${crossRepoSection}` : ''}
-${overridesSection}
+${overridesSection}${formatConventionFindingRules(meta.conventionGuides)}
 ${memoryRulesSection}
 </CodeReviewAgent>`;
     }
