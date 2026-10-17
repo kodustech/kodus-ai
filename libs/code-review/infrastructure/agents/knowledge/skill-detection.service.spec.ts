@@ -3,6 +3,7 @@ import {
     matchSkillCandidates,
     MAX_DETECTED_SKILLS,
     RepositorySkillDetectionService,
+    SKILL_READ_CONCURRENCY,
 } from './skill-detection.service';
 
 const organizationAndTeamData = { organizationId: 'org-1', teamId: 'team-1' };
@@ -134,5 +135,43 @@ describe('RepositorySkillDetectionService', () => {
         await expect(
             service.detect({ organizationAndTeamData, repository }),
         ).resolves.toEqual([]);
+    });
+
+    it('reads at most a few skill files from the provider at a time', async () => {
+        const paths = Array.from(
+            { length: 20 },
+            (_, i) => `.claude/skills/skill-${i}/SKILL.md`,
+        );
+        let inFlight = 0;
+        let peak = 0;
+        const service = new RepositorySkillDetectionService({
+            getDefaultBranch: jest.fn().mockResolvedValue('trunk'),
+            getRepositoryAllFiles: jest
+                .fn()
+                .mockResolvedValue(paths.map((path) => ({ path }))),
+            getRepositoryContentFile: jest.fn(async ({ file }) => {
+                inFlight += 1;
+                peak = Math.max(peak, inFlight);
+                await new Promise((resolve) => setImmediate(resolve));
+                inFlight -= 1;
+                const name = file.filename.split('/')[2];
+                return {
+                    data: {
+                        content: Buffer.from(
+                            skillMarkdown(name, 'A skill.'),
+                        ).toString('base64'),
+                        encoding: 'base64',
+                    },
+                };
+            }),
+        } as any);
+
+        const skills = await service.detect({
+            organizationAndTeamData,
+            repository,
+        });
+
+        expect(skills).toHaveLength(20);
+        expect(peak).toBeLessThanOrEqual(SKILL_READ_CONCURRENCY);
     });
 });

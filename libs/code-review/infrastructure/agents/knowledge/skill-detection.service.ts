@@ -1,5 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
+import pLimit from 'p-limit';
 
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -26,6 +27,8 @@ export const SKILL_DETECTION_PATTERNS = [
 
 /** Enough for any real repository; bounds the provider reads per request. */
 export const MAX_DETECTED_SKILLS = 50;
+/** Skill files read from the Git provider at once, to spare its rate limit. */
+export const SKILL_READ_CONCURRENCY = 5;
 
 export interface DetectedSkill {
     /** Value to store in `KnowledgeItem.path`: the skill folder, or the file for a single-file skill. */
@@ -99,9 +102,10 @@ export class RepositorySkillDetectionService {
                 baseBranch: branch,
             });
 
+            const limit = pLimit(SKILL_READ_CONCURRENCY);
             return await Promise.all(
                 matchSkillCandidates((files ?? []).map((f) => f.path)).map(
-                    (file) => detectOne(reader, file),
+                    (file) => limit(() => detectOne(reader, file)),
                 ),
             );
         } catch (error) {
