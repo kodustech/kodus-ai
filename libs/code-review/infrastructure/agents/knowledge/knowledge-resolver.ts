@@ -266,6 +266,8 @@ export class KnowledgeResolver {
                 ? (await this.list(location.folder))
                       .filter((f) => f !== location.skillFile)
                       .map((f) => f.slice(location.folder!.length + 1))
+                      // References are one level deep; deeper files are not served.
+                      .filter((f) => f.split('/').length <= 2)
                       .sort()
                 : [];
 

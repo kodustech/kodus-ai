@@ -38,7 +38,7 @@ export function renderKnowledgeDocs(docs: ResolvedDoc[], ref: string): string {
     const blocks = docs
         .map(
             (d) =>
-                `<team-doc path="${escapeAttr(d.path)}">\n${d.content}\n</team-doc>`,
+                `<team-doc path="${escapeAttr(d.path)}">\n${neutralizeClosingTag(d.content)}\n</team-doc>`,
         )
         .join('\n\n');
     return [
@@ -95,6 +95,11 @@ export function renderLoadedSkill(skill: ResolvedSkill, ref: string): string {
 
 function oneLine(text: string): string {
     return text.replace(/\s+/g, ' ').trim();
+}
+
+/** A doc must not end its own block and speak outside it. */
+function neutralizeClosingTag(content: string): string {
+    return content.replace(/<\/\s*team-doc\s*>/gi, '</team-doc\u200b>');
 }
 
 function escapeAttr(value: string): string {

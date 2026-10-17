@@ -89,6 +89,24 @@ describe('KnowledgeResolver', () => {
         expect(agent.warnings).toEqual([]);
     });
 
+    it('lists skill files only one level deep, as readSkillFile serves them', async () => {
+        const resolver = new KnowledgeResolver(
+            new InMemoryBaseBranchReader({
+                ...baseFiles(),
+                [`${SKILL_DIR}/references/deep/nested.md`]: 'too deep',
+                [`${SKILL_DIR}/NOTES.md`]: 'top-level note',
+            }),
+        );
+
+        const main = await resolver.resolve({ items, target: 'main-review' });
+
+        expect(main.skills[0].files).toEqual([
+            'NOTES.md',
+            'references/codes.md',
+            'scripts/check.sh',
+        ]);
+    });
+
     it('reads a skill linked to two targets once', async () => {
         const reader = new InMemoryBaseBranchReader(baseFiles());
         const resolver = new KnowledgeResolver(reader);
