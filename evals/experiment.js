@@ -339,9 +339,13 @@ function main() {
         const versions = { base: versionOf(baseSha, traces.base), candidate: versionOf(head, traces.candidate) };
         const allProd = [...new Set([...versions.base.prodBlobs.keys(), ...versions.candidate.prodBlobs.keys()])];
         const changedFiles = allProd.filter((f) => versions.base.prodBlobs.get(f) !== versions.candidate.prodBlobs.get(f)).sort();
-        // The production files the step loads: a change to any of them on main
-        // after the base, or on the branch after the candidate, dates this result.
-        const stepFiles = [...allProd].sort();
+        // The production files the step loads, with their content on each side
+        // (git blob ids): a file that later differs on main from the base, or on
+        // the branch from the candidate, dates this result.
+        const stepBlobs = {
+            base: Object.fromEntries([...versions.base.prodBlobs].sort()),
+            candidate: Object.fromEntries([...versions.candidate.prodBlobs].sort()),
+        };
         const phases = Object.fromEntries(
             Object.entries(measured).map(([phase, { entries, results }]) => {
                 const evals = entries.map((entry) => {
@@ -373,7 +377,7 @@ function main() {
             base: { sha: baseSha, version: strip(versions.base) },
             candidate: { sha: head, version: strip(versions.candidate) },
             changedFiles,
-            stepFiles,
+            stepBlobs,
             phases,
             decision,
             exits,
@@ -407,7 +411,8 @@ function main() {
                     eval_version: versions.candidate.eval,
                     dataset_version: versions.candidate.dataset,
                     changed_files: changedFiles,
-                    step_files: stepFiles,
+                    // once per phase, on its main eval's row
+                    ...(e.role === 'primary' ? { step_blobs: stepBlobs } : {}),
                     comparison: { ...e.comparison, worse: e.comparison.worse.slice(0, 20), better: e.comparison.better.slice(0, 20), worseCount: e.comparison.worse.length, betterCount: e.comparison.better.length },
                     sides: e.sides,
                     run_values: e.runValues,
