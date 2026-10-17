@@ -340,3 +340,49 @@ describe('convention findings: HV2 path vs convention path (same findings)', () 
         expect(r.keptParseMode[astIdx]).toBe('proof');
     });
 });
+
+describe('convention findings: the judge runs on the check model', () => {
+    it('sends the convention verify calls to the verify runner, not the finder runner', async () => {
+        const astGrepLog = new AstGrepOutputLog();
+        const registry = recordAstGrepOutputs(tools(), astGrepLog);
+        const finderSpec = buildFinderAgentSpec({
+            systemPrompt: 'review valves against the team guides',
+            modelId: 'mock',
+            tools: registry,
+            coverageLedger: ledger,
+            acceptsConventions: true,
+        });
+        finderStep = 0;
+        const runner = new AiSdkAgentRunner(undefined);
+        const verifyRunner = new AiSdkAgentRunner(undefined);
+        const finderRun = jest.spyOn(runner, 'run');
+        const checkRun = jest.spyOn(verifyRunner, 'run');
+        const conventionCalls = (spy: jest.SpyInstance) =>
+            spy.mock.calls.filter(([spec]) =>
+                String(spec?.runName ?? '').endsWith('convention-verify'),
+            );
+
+        await runFinderWithVerify(
+            {
+                runner,
+                verifyRunner,
+                verifyModelId: 'check-model',
+                finderSpec,
+                modelId: 'mock',
+                tools: registry,
+                skipHeavyPasses: true,
+                conventionCheck: {
+                    readGuide: async (file: string) =>
+                        file === GUIDE ? GUIDE_TEXT : null,
+                    guideFiles: [GUIDE],
+                    astGrepLog,
+                },
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        expect(conventionCalls(finderRun)).toHaveLength(0);
+        expect(conventionCalls(checkRun)).toHaveLength(2);
+    });
+});

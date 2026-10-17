@@ -879,12 +879,13 @@ export async function runFinderWithVerify(
     // which would drop them as style.
     let conventionUsage: VerifyUsage = ZERO_VERIFY_USAGE;
     if (route.conventions.length > 0) {
-        const conventionVerifier = new ConventionVerifier(params.runner, {
-            modelId: params.modelId,
-            fallbackModelId: params.fallbackModelId,
+        // Judged on the check model, like the HV2 verifier above.
+        const conventionVerifier = new ConventionVerifier(verify.runner, {
+            modelId: verify.modelId,
+            fallbackModelId: verify.fallbackModelId,
             tools: params.tools,
             sectionOf: (f) => route.sectionOf.get(f),
-            providerOptions: params.providerOptions,
+            providerOptions: verify.providerOptions,
             telemetryMetadata: params.telemetryMetadata,
             agentName: params.agentName,
             usageRunName: params.usageRunName,
