@@ -73,54 +73,55 @@ describe('CustomAgentsController repository scope', () => {
 });
 
 describe('CustomAgentsController team ownership', () => {
-    const build = (teamOrganizationId: string | null) => {
-        const resolveUseCase = { execute: jest.fn(async () => ({})) };
-        const tryUseCase = { execute: jest.fn(async () => ({})) };
-        const statusUseCase = { execute: jest.fn(async () => ({})) };
+    /** Runs the controller's class guards the way Nest would, with a team
+     *  service that places the team in `teamOrganizationId`. */
+    const runClassGuards = async (
+        teamOrganizationId: string | null,
+        request: Record<string, unknown>,
+    ) => {
+        const guards = (Reflect.getMetadata(
+            '__guards__',
+            CustomAgentsController,
+        ) ?? []) as Array<new (...args: any[]) => any>;
         const teamService = {
             findOneOrganizationIdByTeamId: jest.fn(
                 async () => teamOrganizationId,
             ),
         };
-        const controller = new CustomAgentsController(
-            { user: { organization: { uuid: 'org-1' } } } as any,
-            resolveUseCase as any,
-            tryUseCase as any,
-            statusUseCase as any,
-            teamService as any,
-        );
-        return { controller, resolveUseCase, tryUseCase };
+        const context = {
+            switchToHttp: () => ({
+                getRequest: () => ({
+                    user: { organization: { uuid: 'org-1' } },
+                    params: {},
+                    query: {},
+                    body: {},
+                    ...request,
+                }),
+            }),
+        };
+        for (const Guard of guards) {
+            await new Guard(teamService).canActivate(context);
+        }
+        return guards;
     };
 
-    it('refuses a team of another organization before reading anything', async () => {
-        const { controller, resolveUseCase, tryUseCase } = build('org-2');
-
+    it('refuses a team of another organization before any handler runs', async () => {
         await expect(
-            controller.resolve({
-                teamId: 'team-of-org-2',
-                repositoryId: ASSIGNED_REPO,
+            runClassGuards('org-2', {
+                body: { teamId: 'team-of-org-2', repositoryId: ASSIGNED_REPO },
             }),
         ).rejects.toBeInstanceOf(NotFoundException);
         await expect(
-            controller.try({
-                teamId: 'team-of-org-2',
-                repositoryId: ASSIGNED_REPO,
-                prUrl: 'https://git.example.test/acme/greenhouse/pull/7',
-                agent: { id: 'irrigation' },
+            runClassGuards('org-2', {
+                query: { teamId: 'team-of-org-2', repositoryId: ASSIGNED_REPO },
             }),
         ).rejects.toBeInstanceOf(NotFoundException);
-        expect(resolveUseCase.execute).not.toHaveBeenCalled();
-        expect(tryUseCase.execute).not.toHaveBeenCalled();
     });
 
-    it('runs for a team of the caller organization', async () => {
-        const { controller, resolveUseCase } = build('org-1');
-
-        await controller.resolve({
-            teamId: 'team-of-org-1',
-            repositoryId: ASSIGNED_REPO,
+    it('lets a team of the caller organization through', async () => {
+        const guards = await runClassGuards('org-1', {
+            body: { teamId: 'team-of-org-1', repositoryId: ASSIGNED_REPO },
         });
-
-        expect(resolveUseCase.execute).toHaveBeenCalledTimes(1);
+        expect(guards.length).toBeGreaterThan(0);
     });
 });

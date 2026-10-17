@@ -4,7 +4,6 @@ import {
     Controller,
     Get,
     Inject,
-    NotFoundException,
     Post,
     Query,
     UseGuards,
@@ -34,12 +33,9 @@ import {
     checkPermissions,
     checkRepoPermissions,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
-import {
-    ITeamService,
-    TEAM_SERVICE_TOKEN,
-} from '@libs/organization/domain/team/contracts/team.service.contract';
 
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
+import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 
 const canReadSettings = checkPermissions({
     action: Action.Read,
@@ -59,6 +55,9 @@ const canEditSettings = checkRepoPermissions({
 @ApiBearerAuth('jwt')
 @ApiStandardResponses()
 @Controller('code-review/custom-agents')
+// The stored config is looked up by team id alone: the team from the request
+// must belong to the caller's organization.
+@UseGuards(TenantScopeGuard)
 export class CustomAgentsController {
     constructor(
         @Inject(REQUEST)
@@ -66,26 +65,12 @@ export class CustomAgentsController {
         private readonly resolveCustomAgent: ResolveCustomAgentUseCase,
         private readonly tryCustomAgent: TryCustomAgentUseCase,
         private readonly customAgentsStatus: GetCustomAgentsStatusUseCase,
-        @Inject(TEAM_SERVICE_TOKEN)
-        private readonly teamService: ITeamService,
     ) {}
 
     private organizationId(): string {
         const organizationId = this.request?.user?.organization?.uuid;
         if (!organizationId) {
             throw new BadRequestException('Organization not found');
-        }
-        return organizationId;
-    }
-
-    /** The caller's organization, once the team from the request is known to
-     *  belong to it: the stored config is looked up by team alone. */
-    private async organizationOwningTeam(teamId: string): Promise<string> {
-        const organizationId = this.organizationId();
-        const teamOrganizationId =
-            await this.teamService.findOneOrganizationIdByTeamId(teamId);
-        if (!teamOrganizationId || teamOrganizationId !== organizationId) {
-            throw new NotFoundException('Team not found');
         }
         return organizationId;
     }
@@ -115,7 +100,7 @@ export class CustomAgentsController {
         }
         return this.resolveCustomAgent.execute({
             organizationAndTeamData: {
-                organizationId: await this.organizationOwningTeam(body.teamId),
+                organizationId: this.organizationId(),
                 teamId: body.teamId,
             },
             repositoryId: body.repositoryId,
@@ -155,7 +140,7 @@ export class CustomAgentsController {
         }
         return this.tryCustomAgent.execute({
             organizationAndTeamData: {
-                organizationId: await this.organizationOwningTeam(body.teamId),
+                organizationId: this.organizationId(),
                 teamId: body.teamId,
             },
             repositoryId: body.repositoryId,
@@ -185,7 +170,7 @@ export class CustomAgentsController {
             );
         }
         return this.customAgentsStatus.execute({
-            organizationId: await this.organizationOwningTeam(teamId),
+            organizationId: this.organizationId(),
             repositoryId,
         });
     }
