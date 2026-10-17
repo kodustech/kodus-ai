@@ -1,8 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@components/ui/button";
 import { Checkbox } from "@components/ui/checkbox";
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleIndicator,
+    CollapsibleTrigger,
+} from "@components/ui/collapsible";
 import { Input } from "@components/ui/input";
+import { Link } from "@components/ui/link";
+import { Skeleton } from "@components/ui/skeleton";
 import { Switch } from "@components/ui/switch";
 import TagInput from "@components/ui/tag-input";
 import { Textarea } from "@components/ui/textarea";
@@ -11,17 +20,188 @@ import {
     CUSTOM_AGENT_LIMITS,
     newCliTool,
 } from "@services/custom-agents/drafts";
+import {
+    mcpPluginSelection,
+    setMcpPlugin,
+    toggleMcpTool,
+} from "@services/custom-agents/mcp-selection";
 import type {
     CliToolConfig,
     CliToolSecret,
     CustomAgent,
+    CustomAgentMcpTools,
     CustomAgentResolveReport,
+    ReadOnlyMcpIntegration,
 } from "@services/custom-agents/types";
-import { KeyRoundIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { KeyRoundIcon, PlusIcon, SearchIcon, Trash2Icon } from "lucide-react";
+import { cn } from "src/core/utils/components";
 
 import { Chip, Field, Section } from "./field";
 
 type Patch = (patch: (agent: CustomAgent) => CustomAgent) => void;
+
+/** One plugin: on grants every read tool; Customize narrows it. */
+const McpPluginRow = ({
+    integration,
+    mcp,
+    canEdit,
+    onChange,
+}: {
+    integration: ReadOnlyMcpIntegration;
+    mcp: CustomAgentMcpTools[];
+    canEdit: boolean;
+    onChange: (mcp: CustomAgentMcpTools[]) => void;
+}) => {
+    const available = integration.tools.map((tool) => tool.name);
+    const { on, all, selected } = mcpPluginSelection(
+        mcp,
+        integration.integrationId,
+        available,
+    );
+    const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState("");
+    const reachable = available.length > 0;
+    const needle = query.trim().toLowerCase();
+    const shown = needle
+        ? integration.tools.filter(
+              (tool) =>
+                  tool.name.toLowerCase().includes(needle) ||
+                  tool.description?.toLowerCase().includes(needle),
+          )
+        : integration.tools;
+    const switchId = `mcp-${integration.integrationId}`;
+
+    return (
+        <Collapsible
+            open={on && open}
+            onOpenChange={setOpen}
+            className={cn(
+                "rounded-xl transition-colors",
+                on ? "bg-card-lv2" : "bg-card-lv2/50",
+            )}>
+            <div className="flex items-center gap-3 px-4 py-3">
+                <Switch
+                    id={switchId}
+                    size="sm"
+                    checked={on}
+                    disabled={!canEdit || !reachable}
+                    onCheckedChange={(checked) => {
+                        onChange(
+                            setMcpPlugin(
+                                mcp,
+                                integration.integrationId,
+                                checked,
+                            ),
+                        );
+                        if (!checked) setOpen(false);
+                    }}
+                />
+                <label
+                    htmlFor={switchId}
+                    className="flex min-w-0 flex-1 cursor-pointer flex-col">
+                    <span className="text-text-primary text-sm font-medium">
+                        {integration.name}
+                    </span>
+                    <span className="text-text-secondary text-xs">
+                        {!reachable
+                            ? "Unreachable right now, so no tools to offer"
+                            : on && !all
+                              ? `${selected.length} of ${available.length} read tools`
+                              : `${available.length} read ${available.length === 1 ? "tool" : "tools"}`}
+                    </span>
+                </label>
+                {on && (
+                    <CollapsibleTrigger asChild>
+                        <Button
+                            size="xs"
+                            variant="cancel"
+                            rightIcon={<CollapsibleIndicator />}>
+                            {all ? "Customize" : "Customized"}
+                        </Button>
+                    </CollapsibleTrigger>
+                )}
+            </div>
+            <CollapsibleContent>
+                <div className="flex flex-col gap-2 px-4 pb-4">
+                    <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                            <Input
+                                size="md"
+                                leftIcon={<SearchIcon />}
+                                placeholder={`Filter ${available.length} tools`}
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                            />
+                        </div>
+                        {!all && (
+                            <Button
+                                size="xs"
+                                variant="helper"
+                                disabled={!canEdit}
+                                onClick={() =>
+                                    onChange(
+                                        setMcpPlugin(
+                                            mcp,
+                                            integration.integrationId,
+                                            true,
+                                        ),
+                                    )
+                                }>
+                                Use every tool
+                            </Button>
+                        )}
+                    </div>
+                    <ul
+                        aria-label={`${integration.name} tools`}
+                        className="flex max-h-72 flex-col overflow-y-auto">
+                        {shown.map((tool) => {
+                            const id = `${switchId}-${tool.name}`;
+                            return (
+                                <li key={tool.name}>
+                                    <label
+                                        htmlFor={id}
+                                        title={tool.description}
+                                        className="hover:bg-card-lv3/40 flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5">
+                                        <Checkbox
+                                            id={id}
+                                            size="icon-xs"
+                                            disabled={!canEdit}
+                                            checked={selected.includes(
+                                                tool.name,
+                                            )}
+                                            onCheckedChange={(checked) =>
+                                                onChange(
+                                                    toggleMcpTool(
+                                                        mcp,
+                                                        integration.integrationId,
+                                                        tool.name,
+                                                        checked === true,
+                                                        available,
+                                                    ),
+                                                )
+                                            }
+                                        />
+                                        <span className="text-text-primary min-w-0 shrink truncate font-mono text-xs sm:w-56 sm:shrink-0">
+                                            {tool.name}
+                                        </span>
+                                        <span className="text-text-tertiary hidden min-w-0 flex-1 truncate text-xs sm:block">
+                                            {tool.description}
+                                        </span>
+                                    </label>
+                                </li>
+                            );
+                        })}
+                        {shown.length === 0 && (
+                            <li className="text-text-tertiary px-2 py-1.5 text-xs">
+                                No tool matches “{query.trim()}”.
+                            </li>
+                        )}
+                    </ul>
+                </div>
+            </CollapsibleContent>
+        </Collapsible>
+    );
+};
 
 const McpTools = ({
     agent,
@@ -34,36 +214,19 @@ const McpTools = ({
     canEdit: boolean;
     onChange: Patch;
 }) => {
-    const selected = (integrationId: string, tool: string) =>
-        !!agent.tools.mcp
-            ?.find((entry) => entry.integrationId === integrationId)
-            ?.tools.includes(tool);
-    const toggle = (integrationId: string, tool: string, on: boolean) =>
-        onChange((current) => {
-            const mcp = [...(current.tools.mcp ?? [])];
-            const index = mcp.findIndex(
-                (entry) => entry.integrationId === integrationId,
-            );
-            const tools = new Set(index >= 0 ? mcp[index].tools : []);
-            if (on) tools.add(tool);
-            else tools.delete(tool);
-            const entry = { integrationId, tools: [...tools] };
-            if (index >= 0) mcp[index] = entry;
-            else mcp.push(entry);
-            return {
-                ...current,
-                tools: {
-                    ...current.tools,
-                    mcp: mcp.filter((item) => item.tools.length > 0),
-                },
-            };
-        });
+    const mcp = agent.tools.mcp ?? [];
+    const setMcp = (next: CustomAgentMcpTools[]) =>
+        onChange((current) => ({
+            ...current,
+            tools: { ...current.tools, mcp: next },
+        }));
 
     if (!report) {
         return (
-            <p className="text-text-secondary text-xs">
-                Reading the connected plugins…
-            </p>
+            <div className="flex flex-col gap-2">
+                <Skeleton className="h-14 w-full rounded-xl" />
+                <Skeleton className="h-14 w-full rounded-xl" />
+            </div>
         );
     }
     if (report.mcp.status === "unavailable") {
@@ -72,61 +235,45 @@ const McpTools = ({
     if (!report.mcp.integrations.length) {
         return (
             <p className="text-text-secondary text-xs">
-                No connected plugin has read-only tools. Connect one under
-                Plugins.
+                No plugin with read tools is connected.{" "}
+                <Link href="/settings/plugins">Connect one in Plugins</Link>.
             </p>
         );
     }
     return (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
             {report.mcp.integrations.map((integration) => (
-                <div
+                <McpPluginRow
                     key={integration.integrationId}
-                    className="flex flex-col gap-1.5">
-                    <span className="text-text-primary text-xs font-medium">
-                        {integration.name}
-                    </span>
-                    <div className="grid grid-cols-1 gap-1.5 md:grid-cols-2">
-                        {integration.tools.map((tool) => {
-                            const id = `mcp-${integration.integrationId}-${tool.name}`;
-                            return (
-                                <label
-                                    key={tool.name}
-                                    htmlFor={id}
-                                    className="flex cursor-pointer items-start gap-2 text-xs">
-                                    <Checkbox
-                                        id={id}
-                                        disabled={!canEdit}
-                                        checked={selected(
-                                            integration.integrationId,
-                                            tool.name,
-                                        )}
-                                        onCheckedChange={(checked) =>
-                                            toggle(
-                                                integration.integrationId,
-                                                tool.name,
-                                                checked === true,
-                                            )
-                                        }
-                                    />
-                                    <span className="flex flex-col">
-                                        <span className="text-text-primary font-mono">
-                                            {tool.name}
-                                        </span>
-                                        {tool.description && (
-                                            <span className="text-text-tertiary line-clamp-2">
-                                                {tool.description}
-                                            </span>
-                                        )}
-                                    </span>
-                                </label>
-                            );
-                        })}
-                    </div>
-                </div>
+                    integration={integration}
+                    mcp={mcp}
+                    canEdit={canEdit}
+                    onChange={setMcp}
+                />
             ))}
         </div>
     );
+};
+
+/** "Linear, Azure DevOps · 54 tools", or nothing when no plugin is on. */
+const mcpSummary = (
+    agent: CustomAgent,
+    report?: CustomAgentResolveReport,
+) => {
+    if (report?.mcp.status !== "ok") return undefined;
+    const on = report.mcp.integrations
+        .map((integration) => ({
+            name: integration.name,
+            ...mcpPluginSelection(
+                agent.tools.mcp ?? [],
+                integration.integrationId,
+                integration.tools.map((tool) => tool.name),
+            ),
+        }))
+        .filter((plugin) => plugin.on);
+    if (!on.length) return undefined;
+    const tools = on.reduce((total, plugin) => total + plugin.selected.length, 0);
+    return `${on.map((plugin) => plugin.name).join(", ")} · ${tools} ${tools === 1 ? "tool" : "tools"}`;
 };
 
 /**
@@ -421,15 +568,22 @@ export const ToolsCard = ({
                 />
             </Field>
 
-            <Field
-                label="MCP tools (read-only)"
-                hint="Only tools a plugin marks read-only are listed; write tools are never offered.">
+            <Field label="Plugins">
+                <span className="text-text-tertiary -mt-1 text-xs">
+                    Systems the agent may look things up in while it reviews.
+                    Only read tools are offered; write tools never are.
+                </span>
                 <McpTools
                     agent={agent}
                     report={report}
                     canEdit={canEdit}
                     onChange={onChange}
                 />
+                {mcpSummary(agent, report) && (
+                    <span className="text-text-secondary text-xs">
+                        On: {mcpSummary(agent, report)}
+                    </span>
+                )}
             </Field>
 
             <Field

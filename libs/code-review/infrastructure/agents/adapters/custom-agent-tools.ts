@@ -16,6 +16,7 @@ import type {
     MCPAdapterConfig,
     MCPServerConfig,
 } from '@libs/mcp-server/mcp-adapter';
+import { KODUS_MCP_INTEGRATION_ID } from '@libs/mcp-server/services/mcp-manager.service';
 import { buildAstGrepTool } from './ast-grep.tool';
 import {
     buildCustomAgentMcpTools,
@@ -128,6 +129,9 @@ export async function loadCustomAgentMcpServers(
         (c) =>
             c.organizationId === organizationAndTeamData.organizationId &&
             !!c.integrationId &&
+            // The review already gives every agent the code, the pull request
+            // and the memories the Kodus MCP would read.
+            c.integrationId !== KODUS_MCP_INTEGRATION_ID &&
             wanted.has(c.integrationId),
     );
     if (owned.length === 0) return [];

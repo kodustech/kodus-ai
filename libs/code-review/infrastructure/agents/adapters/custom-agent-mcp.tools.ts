@@ -28,7 +28,10 @@ import type {
     ToolResult,
 } from '@libs/agent-harness/domain/contracts/tool.contract';
 import type { JSONSchema } from '@libs/agent-harness/domain/contracts/json-schema.contract';
-import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    MCP_ALL_READ_TOOLS,
+    type CustomAgentConfig,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { createLogger } from '@libs/core/log/logger';
 import {
     createMCPAdapter,
@@ -191,6 +194,7 @@ export async function buildCustomAgentMcpTools(params: {
     for (const selection of params.selections ?? []) {
         const wanted = new Set(selection.tools ?? []);
         if (wanted.size === 0) continue;
+        const wantsAll = wanted.has(MCP_ALL_READ_TOOLS);
         const server = params.servers.find(
             (s) => s.integrationId === selection.integrationId,
         );
@@ -237,7 +241,7 @@ export async function buildCustomAgentMcpTools(params: {
 
         const marks = serverMarksReadOnly(listed);
         for (const raw of listed) {
-            if (!wanted.has(raw.name)) continue;
+            if (!wantsAll && !wanted.has(raw.name)) continue;
             if (connectionAllows && !connectionAllows.has(raw.name)) continue;
             if (!isReadOnlyMcpTool(raw, marks)) continue;
 

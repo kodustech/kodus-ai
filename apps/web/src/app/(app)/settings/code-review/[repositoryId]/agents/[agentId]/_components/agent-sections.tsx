@@ -51,10 +51,7 @@ export const WhatItDoes = ({
     );
     const skills = linked.filter((item) => item.kind === "skill").length;
     const docs = linked.filter((item) => item.kind === "doc").length;
-    const mcpTools = (agent.tools.mcp ?? []).reduce(
-        (total, entry) => total + entry.tools.length,
-        0,
-    );
+    const plugins = agent.tools.mcp?.length ?? 0;
     const clis = agent.tools.cli?.length ?? 0;
     const rules = report?.astGrep.ruleCount ?? 0;
 
@@ -107,7 +104,11 @@ export const WhatItDoes = ({
                         ast-grep · {rules} {rules === 1 ? "rule" : "rules"}
                     </Chip>
                 )}
-                {mcpTools > 0 && <Chip>{mcpTools} MCP tools</Chip>}
+                {plugins > 0 && (
+                    <Chip>
+                        {plugins} {plugins === 1 ? "plugin" : "plugins"}
+                    </Chip>
+                )}
                 {clis > 0 && (
                     <Chip>
                         {clis} {clis === 1 ? "CLI" : "CLIs"}

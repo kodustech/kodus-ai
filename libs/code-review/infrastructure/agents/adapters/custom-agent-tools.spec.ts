@@ -9,6 +9,7 @@ import {
     loadCustomAgentMcpServers,
     sandboxFileWriter,
 } from '@libs/code-review/infrastructure/agents/adapters/custom-agent-tools';
+import { KODUS_MCP_INTEGRATION_ID } from '@libs/mcp-server/services/mcp-manager.service';
 
 const remoteCommands = {
     grep: jest.fn(),
@@ -138,6 +139,35 @@ describe('loadCustomAgentMcpServers', () => {
         expect(servers).toEqual([
             { name: 'Tracker', type: 'http', integrationId: 'int-tracker' },
         ]);
+    });
+
+    it('never offers the Kodus MCP: the review already gives the agent the code, the pull request and the memories', async () => {
+        const getConnections = jest.fn(async (_o: any, format?: boolean) =>
+            format
+                ? [
+                      { name: 'Kodus MCP', type: 'http' },
+                      { name: 'Tracker', type: 'http' },
+                  ]
+                : [
+                      {
+                          organizationId: 'org-a',
+                          integrationId: KODUS_MCP_INTEGRATION_ID,
+                          appName: 'Kodus MCP',
+                      },
+                      {
+                          organizationId: 'org-a',
+                          integrationId: 'int-tracker',
+                          appName: 'Tracker',
+                      },
+                  ],
+        );
+
+        const servers = await loadCustomAgentMcpServers(
+            { getConnections },
+            org,
+            [KODUS_MCP_INTEGRATION_ID, 'int-tracker'],
+        );
+        expect(servers.map((s) => s.integrationId)).toEqual(['int-tracker']);
     });
 
     it('does not fetch credentials when nothing selected belongs to the organization', async () => {

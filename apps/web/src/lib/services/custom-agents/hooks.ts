@@ -66,6 +66,9 @@ export const useResolveCustomAgent = (params: {
             !!params.repositoryId &&
             params.repositoryId !== "global" &&
             params.enabled !== false,
+        // Every edit is a new draft to check; keep the last report on screen
+        // meanwhile so the sections do not fall back to loading.
+        placeholderData: (previous) => previous,
         staleTime: 30 * 1000,
         retry: false,
     });

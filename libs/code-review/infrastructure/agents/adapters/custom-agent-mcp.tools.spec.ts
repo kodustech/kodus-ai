@@ -170,6 +170,24 @@ describe('buildCustomAgentMcpTools', () => {
         });
     });
 
+    it('"*" offers every read-only tool of the plugin, including ones added later', async () => {
+        const adapter = fakeAdapter([
+            tool('get_ticket', { readOnlyHint: true }),
+            tool('search_tickets', { readOnlyHint: true }),
+            tool('create_ticket', { readOnlyHint: false }),
+        ]);
+        const set = await buildCustomAgentMcpTools({
+            selections: [{ integrationId: 'int-tracker', tools: ['*'] }],
+            servers: [TRACKER],
+            createAdapter: () => adapter,
+        });
+
+        expect(set.tools.map((t) => t.name)).toEqual([
+            'Tracker__get_ticket',
+            'Tracker__search_tickets',
+        ]);
+    });
+
     it('never offers a write tool even when the agent selected it and the server marks nothing', async () => {
         const adapter = fakeAdapter([tool('get_page'), tool('update_page')]);
         const set = await buildCustomAgentMcpTools({

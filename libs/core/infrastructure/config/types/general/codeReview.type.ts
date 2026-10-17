@@ -391,6 +391,9 @@ export const cliToolConfigSchema = z.object({
     timeoutSec: z.number().int().positive().optional(),
 });
 
+/** In `tools.mcp[].tools`: every read-only tool the plugin offers, now or later. */
+export const MCP_ALL_READ_TOOLS = '*';
+
 export const customAgentMcpToolsSchema = z.object({
     integrationId: z.string().min(1),
     tools: z.array(z.string().min(1)),
