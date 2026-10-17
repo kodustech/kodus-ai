@@ -1,11 +1,28 @@
 {
     "__doc": [
-        "No floor yet: this stage is measured against the known bugs of today's dataset, which is being relabeled (#2114). Until it lands the nightly reports the value as ungated (measured, no alert); then the floor is set from two runs on the new dataset.",
-        "Observed, not a floor: deepseek-v4-flash@fireworks on the managed route, snapshot built 2026-10-17 (57ef595ce), 42 of 43 and 43 of 43 known bugs kept in two runs."
+        "Floors per set and model for the share of known bugs reaching verify kept, with the step's control checks (run.js --gate), as ratios. controlled: the snapshot's PRs of the finder's controlled set, the nightly and every tier-0 model's weekly run; full: every snapshot PR, DeepSeek's weekly run.",
+        "floor = min(mean - 2 binomial SE, (n - 2) / n) over the n checks of one run, rounded down: a pair of perfect runs still leaves room for 2 checks, like evals/conversation/targets.json.",
+        "deepseek-v4-flash@fireworks, controlled: calibrated 2026-10-17 from 2 local runs on a725253d6 (managed route, snapshot built on 57ef595ce, one run at a time: two in parallel hit the Fireworks rate limit and left PRs unmeasured): 31/32 and 32/32, mean 0.984. floor 0.93.",
+        "gpt-6-sol: calibrated 2026-10-17 from 2 local runs on a725253d6: 31/32 and 31/32, mean 0.969. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.9.",
+        "claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 32/32 and 32/32, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.93.",
+        "The relabeled dataset (#2114) changes the known bugs: a new snapshot and two runs per set recalibrate these floors in the same PR."
     ],
     "sets": {
         "controlled": {
-            "models": {}
+            "models": {
+                "deepseek-v4-flash@fireworks": {
+                    "floor": 0.93,
+                    "observed": 0.984
+                },
+                "gpt-6-sol": {
+                    "floor": 0.9,
+                    "observed": 0.969
+                },
+                "claude-sonnet-5-5": {
+                    "floor": 0.93,
+                    "observed": 1
+                }
+            }
         },
         "full": {
             "models": {

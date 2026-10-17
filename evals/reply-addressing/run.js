@@ -81,7 +81,11 @@ function infra(msg) {
 
 const { countTokens, tokensUsed } = require('../shared/eval-kit');
 const { evalQuestion } = require('../shared/eval-result');
-const TARGET = (require('./targets.json').models || {})[MODEL] || {};
+// Floors per dataset and model: `models` holds cases.json's (the nightly and every
+// model's weekly run), `datasets.<name>.models` any other's (repo-cases: DeepSeek's
+// weekly full set).
+const TARGETS = require('./targets.json');
+const TARGET = ((DATASET === 'cases' ? TARGETS.models : TARGETS.datasets?.[DATASET]?.models) || {})[MODEL] || {};
 const { resolveRoute, EVAL_ORG, evalPermissionService } = require('../shared/model-route');
 let ROUTE;
 try {

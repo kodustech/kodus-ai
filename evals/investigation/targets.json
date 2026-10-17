@@ -1,11 +1,11 @@
 {
     "__doc": [
         "Per-model quality floors for the finder-recall eval (--set=pr, 8 PRs).",
-        "Gate = RUN MEAN vs floor \u2014 never per-PR (per-PR recall sd is 0.14-0.23;",
+        "Gate = RUN MEAN vs floor — never per-PR (per-PR recall sd is 0.14-0.23;",
         "individual PRs scoring 0 is normal).",
         "",
-        "recallFloor  = observed recall_mean \u2212 2\u00b7SEM (SEM = cross-PR sd / \u221a8).",
-        "minMeanFindings / minMeanToolCalls = ~half the observed per-case mean \u2014",
+        "recallFloor  = observed recall_mean − 2·SEM (SEM = cross-PR sd / √8).",
+        "minMeanFindings / minMeanToolCalls = ~half the observed per-case mean —",
         "low-noise collapse detectors: they don't move on recall noise, they trip",
         "when the engine breaks (prompt lost, tools dead, findings not parsed).",
         "",
@@ -16,14 +16,14 @@
         "",
         "JUDGE (#1447): floors were calibrated under the claude-sonnet-4-6 judge;",
         "the judge is now claude-haiku-4-5. Validated invariant in the agreement",
-        "study (evals/investigation/agreement/): per-PR recall mean shifts \u22120.3pp \u2014",
-        "far inside cross-PR noise (SEM ~5-6pp) \u2014 so these floors stay valid as-is."
+        "study (evals/investigation/agreement/): per-PR recall mean shifts −0.3pp —",
+        "far inside cross-PR noise (SEM ~5-6pp) — so these floors stay valid as-is."
     ],
     "set": "pr",
     "models": {
         "gpt-5.4": {
             "recallFloor": 0.06,
-            "minMeanFindings": 1.0,
+            "minMeanFindings": 1,
             "minMeanToolCalls": 15,
             "observed": {
                 "recall_mean": 0.163,
@@ -45,7 +45,7 @@
         },
         "kimi-k2.7-code": {
             "recallFloor": 0.16,
-            "minMeanFindings": 3.0,
+            "minMeanFindings": 3,
             "minMeanToolCalls": 25,
             "observed": {
                 "recall_mean": 0.315,
@@ -61,7 +61,7 @@
             "observed": {
                 "recall_mean": 0.315,
                 "sd": 0.231,
-                "meanFindings": 3.0,
+                "meanFindings": 3,
                 "meanToolCalls": 48.3
             }
         },
@@ -147,6 +147,8 @@
             "__doc": [
                 "The controlled set (recall-tests.js CONTROLLED_CASES, 15 PRs: three per repository of the light set, the three with the most known bugs, 61 of its 95): the nightly, and every tier-0 model's weekly run (evals/weekly.js). Floors per model, each under the judge below; noise as in nightly-compare.js nightNoise: sdPerPrRunDiff / sqrt(2) / sqrt(15), times sqrt(1.5) for a two-run baseline.",
                 "deepseek-v4-flash@fireworks, calibrated 2026-10-17 from 2 local runs on a725253d6 (the managed route, judge gpt-5.6-luna low): recall 0.460 and 0.437 (one PR of the second run not measured, rate limit; 14 PRs paired), mean 0.448, sdPerPrRunDiff 0.246, sigma 0.057. recallFloor = mean - 2.2 sigma = 0.32. Collapse floors at about half the observed means: 3.61 findings and 40.5 tool calls per PR.",
+                "gpt-6-sol, calibrated 2026-10-17 from 2 local runs on a725253d6 (judge gpt-5.6-luna low): recall 0.494 and 0.484 (15 PRs paired), mean 0.489, sdPerPrRunDiff 0.266, sigma 0.059. recallFloor = mean - 2.2 sigma = 0.35. Collapse floors at about half the observed means: 5.37 findings and 69.7 tool calls per PR.",
+                "claude-sonnet-5-5, calibrated 2026-10-17 from 2 local runs on a725253d6 (judge gpt-5.6-luna low): recall 0.348 and 0.428 (15 PRs paired), mean 0.388, sdPerPrRunDiff 0.197, sigma 0.044. recallFloor = mean - 2.2 sigma = 0.29. Collapse floors at about half the observed means: 2.87 findings and 25 tool calls per PR.",
                 "RATCHET: a PR that moves recall on purpose recalibrates here, with two runs as evidence."
             ],
             "cases": 15,
@@ -167,6 +169,38 @@
                         "precision_mean": 0.528,
                         "meanFindings": 3.61,
                         "meanToolCalls": 40.5
+                    }
+                },
+                "gpt-6-sol": {
+                    "recallFloor": 0.35,
+                    "minMeanFindings": 2.6,
+                    "minMeanToolCalls": 34,
+                    "observed": {
+                        "recall_mean": 0.489,
+                        "runs": [
+                            0.494,
+                            0.484
+                        ],
+                        "sdPerPrRunDiff": 0.266,
+                        "precision_mean": 0.374,
+                        "meanFindings": 5.37,
+                        "meanToolCalls": 69.7
+                    }
+                },
+                "claude-sonnet-5-5": {
+                    "recallFloor": 0.29,
+                    "minMeanFindings": 1.4,
+                    "minMeanToolCalls": 12,
+                    "observed": {
+                        "recall_mean": 0.388,
+                        "runs": [
+                            0.348,
+                            0.428
+                        ],
+                        "sdPerPrRunDiff": 0.197,
+                        "precision_mean": 0.582,
+                        "meanFindings": 2.87,
+                        "meanToolCalls": 25
                     }
                 }
             }

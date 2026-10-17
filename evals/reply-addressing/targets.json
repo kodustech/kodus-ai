@@ -7,10 +7,23 @@
         "first CI run of the shared nightly job (66 of 70, run 38658146036). Mean 96.4%. No reply meant for someone else",
         "was answered in the local runs. One CI run already moved 2 cases, so the margin is the binomial SE, not zero.",
         "2026-10-16, cloud route: the model now comes from the org's cloud route (evals/shared/model-route.js) instead of the self-hosted env route (applyModelEnv); on deepseek the request bodies are identical but for reasoning_effort, which the env route sent as high and the managed route leaves unset. Two runs on it: 69 and 68 of 70 (pr-template-text missed in both, rhetorical-comment in one), mean 97.9%. floor = 0.979 - 2 x 0.017 (binomial SE over 70) = 0.944, rounded down to 0.94.",
+        "gpt-6-sol: calibrated 2026-10-17 from 2 local runs on a725253d6: 68/70 and 70/70, mean 0.986. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 70, rounded down: 0.95.",
+        "claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 69/70 and 69/70, mean 0.986. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 70, rounded down: 0.95.",
         "RATCHET: when a PR moves this on purpose, recalibrate here with two runs as evidence.",
         "2026-10-16: the eval now runs the use case's own path (reply-thread.ts: the thread rebuilt from GitHub-shaped comments, the gate, the conversation route through PermissionValidationService). The prompt is identical on 441 of the 443 cases of both datasets; the two that differ are bot replies, now named by their GitHub login. deepseek on it: 67 and 68 of 70 (rhetorical-comment and pr-template-text missed in both, push-notification once), inside the runs above; the floor stays."
     ],
     "models": {
-        "deepseek-v4-flash@fireworks": { "floor": 0.94, "observed": 0.979 }
+        "deepseek-v4-flash@fireworks": {
+            "floor": 0.94,
+            "observed": 0.979
+        },
+        "gpt-6-sol": {
+            "floor": 0.95,
+            "observed": 0.986
+        },
+        "claude-sonnet-5-5": {
+            "floor": 0.95,
+            "observed": 0.986
+        }
     }
 }

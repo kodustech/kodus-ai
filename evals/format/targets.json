@@ -3,10 +3,26 @@
         "Floors per model for the share of findings formatted right on cases.json (run.js --gate), as ratios.",
         "eval-fake (the wiring smoke, every PR): the scripted model answers nothing usable, so the local fallback ships, shaped like production, and is scored on its own rules (labels, code names, code block). Deterministic: two runs of the same commit gave 543 of 555 on every case alike; the 12 misses are 3 findings whose code names sit past the two-sentence cap, in the 4 configurations the cap applies to. floor = observed rounded down to 3 decimals, so a PR that leaves one label or loses the names of one more finding fails.",
         "deepseek-v4-flash@fireworks (the nightly model): recalibrated 2026-10-16 once the eval scored what ships (the stage's shaping after the formatter, and a too-short text no longer failing its language): 2 local runs on main 675a05c11's formatter, 517 and 520 of 555 (mean 93.4%). floor = mean - 2 binomial SE over the 555 findings, rounded down, like evals/reply-addressing/targets.json. With the team language dropped from the formatter: 206 of 555, below the floor.",
+        "gpt-6-sol: calibrated 2026-10-17 from 2 local runs on a725253d6: 538/555 and 535/555, mean 0.967. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 555, rounded down: 0.95.",
+        "claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 524/555 and 521/555, mean 0.941. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 555, rounded down: 0.92.",
         "RATCHET: a PR that moves the value on purpose (a formatter or prompt change, cases rebuilt) recalibrates here in the same PR, with its runs as evidence."
     ],
     "models": {
-        "eval-fake": { "floor": 0.978, "observed": 0.978 },
-        "deepseek-v4-flash@fireworks": { "floor": 0.91, "observed": 0.934 }
+        "eval-fake": {
+            "floor": 0.978,
+            "observed": 0.978
+        },
+        "deepseek-v4-flash@fireworks": {
+            "floor": 0.91,
+            "observed": 0.934
+        },
+        "gpt-6-sol": {
+            "floor": 0.95,
+            "observed": 0.967
+        },
+        "claude-sonnet-5-5": {
+            "floor": 0.92,
+            "observed": 0.941
+        }
     }
 }
