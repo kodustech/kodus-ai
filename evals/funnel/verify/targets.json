@@ -3,6 +3,7 @@
         "Floors per set and model for the share of known bugs reaching verify kept, with the step's control checks (run.js --gate), as ratios. controlled: the snapshot's PRs of the finder's controlled set, the nightly and every tier-0 model's weekly run; full: every snapshot PR, DeepSeek's weekly run.",
         "floor = min(mean - 2 binomial SE, (n - 2) / n) over the n checks of one run, rounded down: a pair of perfect runs still leaves room for 2 checks, like evals/conversation/targets.json.",
         "deepseek-v4-flash@fireworks, controlled: calibrated 2026-10-17 from 2 local runs on a725253d6 (managed route, snapshot built on 57ef595ce, one run at a time: two in parallel hit the Fireworks rate limit and left PRs unmeasured): 31/32 and 32/32, mean 0.984. floor 0.93.",
+        "deepseek-v4-flash@fireworks, full: calibrated 2026-10-17 from 2 local runs on a725253d6, one at a time: 45/45 and 45/45, mean 1.0. floor 0.95.",
         "gpt-6-sol: calibrated 2026-10-17 from 2 local runs on a725253d6: 31/32 and 31/32, mean 0.969. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.9.",
         "claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 32/32 and 32/32, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.93.",
         "The relabeled dataset (#2114) changes the known bugs: a new snapshot and two runs per set recalibrate these floors in the same PR."
@@ -27,8 +28,8 @@
         "full": {
             "models": {
                 "deepseek-v4-flash@fireworks": {
-                    "floor": null,
-                    "observed": 0.988
+                    "floor": 0.95,
+                    "observed": 1.0
                 }
             }
         }
