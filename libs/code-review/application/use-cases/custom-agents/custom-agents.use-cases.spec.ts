@@ -164,6 +164,41 @@ describe('ResolveCustomAgentUseCase', () => {
         expect(report.knowledge.status).toBe('unavailable');
     });
 
+    it('at the global level lists the plugins and leaves skills and docs to each repository', async () => {
+        const knowledgeReader = { resolve: jest.fn(), discover: jest.fn() };
+        const toolCatalog = {
+            listReadOnlyMcpTools: jest
+                .fn()
+                .mockResolvedValue([
+                    { integrationId: 'linear', name: 'Linear', tools: [] },
+                ]),
+        };
+        const useCase = new ResolveCustomAgentUseCase(
+            parametersService(storedConfig()) as any,
+            codeManagementService as any,
+            knowledgeReader,
+            toolCatalog as any,
+        );
+
+        const report = await useCase.execute({
+            organizationAndTeamData,
+            repositoryId: 'global',
+            agent: ledgerAgent(),
+            knowledge: [
+                { path: 'docs/ledger.md', kind: 'doc', linkedTo: [] },
+            ],
+            discover: true,
+        });
+
+        expect(report.mcp).toMatchObject({
+            status: 'ok',
+            integrations: [{ name: 'Linear' }],
+        });
+        expect(report.knowledge).toMatchObject({ status: 'unavailable' });
+        expect(knowledgeReader.resolve).not.toHaveBeenCalled();
+        expect(report.repository).toBeUndefined();
+    });
+
     it('refuses a repository the team does not have', async () => {
         const useCase = new ResolveCustomAgentUseCase(
             parametersService(storedConfig()) as any,

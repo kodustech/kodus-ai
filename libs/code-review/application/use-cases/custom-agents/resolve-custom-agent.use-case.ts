@@ -39,7 +39,8 @@ type Section<T> =
     ({ status: 'ok' } & T) | { status: 'unavailable'; reason: string };
 
 export type CustomAgentResolveReport = {
-    repository: CustomAgentRepositoryRef;
+    /** Unset at the global level, which has no repository to read. */
+    repository?: CustomAgentRepositoryRef;
     /** Problems with the draft agent itself (schema, limits). */
     agentIssues: string[];
     astGrep: AstGrepRuleReport;
@@ -62,6 +63,9 @@ const NOT_BOUND = 'Not available on this server yet.';
  * Checks a draft agent and the skills and docs it links against the
  * repository's default branch, before anything is saved (#2172).
  */
+const GLOBAL_KNOWLEDGE =
+    'Skills and docs are files of each repository: they are read from the pull request\'s target branch when a review runs there.';
+
 @Injectable()
 export class ResolveCustomAgentUseCase {
     private readonly logger = createLogger(ResolveCustomAgentUseCase.name);
@@ -91,12 +95,18 @@ export class ResolveCustomAgentUseCase {
             this.parametersService,
             organizationAndTeamData,
         );
-        const repository = await resolveRepositoryRef({
-            configValue,
-            codeManagementService: this.codeManagementService,
-            organizationAndTeamData,
-            repositoryId: params.repositoryId,
-        });
+        // The global level has no repository: plugins are the organization's
+        // and are listed, while skills and docs are files of each repository,
+        // read when a review runs there.
+        const repository =
+            params.repositoryId === 'global'
+                ? undefined
+                : await resolveRepositoryRef({
+                      configValue,
+                      codeManagementService: this.codeManagementService,
+                      organizationAndTeamData,
+                      repositoryId: params.repositoryId,
+                  });
 
         const knowledge = Array.isArray(params.knowledge)
             ? params.knowledge
@@ -106,12 +116,17 @@ export class ResolveCustomAgentUseCase {
         )?.tools?.astGrepConfig;
 
         const [knowledgeSection, mcpSection] = await Promise.all([
-            this.resolveKnowledge(
-                organizationAndTeamData,
-                repository,
-                knowledge,
-                params.discover === true,
-            ),
+            repository
+                ? this.resolveKnowledge(
+                      organizationAndTeamData,
+                      repository,
+                      knowledge,
+                      params.discover === true,
+                  )
+                : Promise.resolve({
+                      status: 'unavailable' as const,
+                      reason: GLOBAL_KNOWLEDGE,
+                  }),
             this.listMcpTools(organizationAndTeamData),
         ]);
 
