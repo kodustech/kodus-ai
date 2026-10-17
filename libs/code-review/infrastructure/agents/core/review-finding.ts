@@ -26,7 +26,7 @@
 import type { FinderSuggestion, FinderWithVerifyResult } from './finder.agent';
 import type { ToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 
-export type Gate = 'found' | 'dedup' | 'verify' | 'severity' | 'post';
+export type Gate = 'found' | 'dedup' | 'quote' | 'verify' | 'severity' | 'post';
 export type GateOutcome =
     | 'survived'
     | 'merged'
@@ -142,7 +142,25 @@ export function buildFindingsFromVerify(
         ],
     }));
 
-    return [...kept, ...dropped, ...unverified];
+    // A convention finding whose quote is not in the cited guide on the target
+    // branch dies before verify, at its own gate.
+    const misquoted: ReviewFinding[] = (result.droppedByQuoteCheck ?? []).map(
+        (q) => ({
+            id: makeFindingId(q.finding, provenance.agent),
+            payload: q.finding,
+            provenance: prov(q.finding),
+            gates: [
+                { gate: 'found', outcome: 'survived' },
+                {
+                    gate: 'quote',
+                    outcome: 'dropped',
+                    reason: `${q.reason}: ${q.detail}`,
+                },
+            ],
+        }),
+    );
+
+    return [...kept, ...dropped, ...unverified, ...misquoted];
 }
 
 export interface FunnelSlice {

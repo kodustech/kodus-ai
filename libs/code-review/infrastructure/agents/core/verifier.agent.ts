@@ -82,6 +82,9 @@ export interface BuildVerifierSpecParams {
     maxSteps?: number;
     /** Provider options (reasoning/thinking config) forwarded to the model. */
     providerOptions?: Readonly<Record<string, unknown>>;
+    /** System prompt override — the convention verifier passes its own. The
+     *  HV2 prompt when absent. */
+    systemPrompt?: string;
     /** Provider options attached to the system message (e.g. Anthropic prompt
      *  caching) so the verifier's system prompt is cached across steps. */
 }
@@ -91,7 +94,7 @@ export function buildVerifierAgentSpec(
 ): AgentSpec {
     // The HV2 system prompt is static (the per-finding evidence goes in the
     // run prompt), so we build it once with a placeholder bundle.
-    const { system } = buildVerifierPrompt('', 0);
+    const system = params.systemPrompt ?? buildVerifierPrompt('', 0).system;
     const tools = new InMemoryToolRegistry([
         ...params.tools.list(),
         // Strict/structured done-tool for strict-capable models (Gemini
