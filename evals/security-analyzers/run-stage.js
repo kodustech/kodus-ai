@@ -77,15 +77,21 @@ function buildStage() {
 function localRepoOf(sample) {
     const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'analyzer-fixture-'));
     const git = (...a) => execFileSync('git', ['-C', dir, ...a], { stdio: 'ignore', env: { ...process.env, GIT_AUTHOR_NAME: 'dev', GIT_AUTHOR_EMAIL: 'dev@example.com', GIT_COMMITTER_NAME: 'dev', GIT_COMMITTER_EMAIL: 'dev@example.com' } });
-    git('init', '-q', '-b', 'main');
-    for (const f of sample.files) {
-        if (typeof f.content !== 'string') throw new Error(`${sample.id}: no vulnerable commit and no file content`);
-        fs.mkdirSync(path.dirname(path.join(dir, f.path)), { recursive: true });
-        fs.writeFileSync(path.join(dir, f.path), f.content);
+    // A fixture that fails halfway is removed before the error goes on.
+    try {
+        git('init', '-q', '-b', 'main');
+        for (const f of sample.files) {
+            if (typeof f.content !== 'string') throw new Error(`${sample.id}: no vulnerable commit and no file content`);
+            fs.mkdirSync(path.dirname(path.join(dir, f.path)), { recursive: true });
+            fs.writeFileSync(path.join(dir, f.path), f.content);
+        }
+        git('add', '-A');
+        git('commit', '-q', '-m', 'sample');
+        return dir;
+    } catch (error) {
+        fs.rmSync(dir, { recursive: true, force: true });
+        throw error;
     }
-    git('add', '-A');
-    git('commit', '-q', '-m', 'sample');
-    return dir;
 }
 
 async function checkout(sample) {

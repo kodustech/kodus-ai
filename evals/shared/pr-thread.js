@@ -112,9 +112,10 @@ async function runThread(t, { index, kodus, id = `t${index}`, rules = [] }) {
     const org = orgOf(index);
     const suggestionId = `s-${id}`;
     const pr = writePullRequestRemote({ files: t.repo, changed: [t.kodyComment.file] });
-    const githubRest = await startGithubRest({ pr, owner: OWNER, repository: REPOSITORY });
+    let githubRest;
     let sandbox;
     try {
+        githubRest = await startGithubRest({ pr, owner: OWNER, repository: REPOSITORY });
         kodus.addOrganization({ organizationAndTeamData: org, language: t.language, github: { host: githubRest.host, owner: OWNER }, repository: REPOSITORY, pullRequest: pullRequestRecord(t, pr, suggestionId), rules });
         // The clone params the chat use case builds (buildSandboxCloneParams),
         // with the PR's remote as the clone URL and no token.
@@ -134,7 +135,7 @@ async function runThread(t, { index, kodus, id = `t${index}`, rules = [] }) {
         };
     } finally {
         await sandbox?.cleanup();
-        await githubRest.close();
+        await githubRest?.close();
         pr.cleanup();
     }
 }
