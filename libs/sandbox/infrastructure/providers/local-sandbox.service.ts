@@ -733,9 +733,12 @@ export class LocalSandboxService implements ISandboxProvider {
                 const repoRealForArgs = await realpath(repoDir);
                 for (const { args } of validated) {
                     for (const arg of args) {
-                        if (arg.startsWith('-')) {
-                            continue; // flags, already screened above
-                        }
+                        // Check EVERY argument, including `-`-prefixed ones: a
+                        // committed symlink can be named `-foo` and read with
+                        // `cat -- -foo`, and skipping dashes here let it escape
+                        // the clone. A genuine flag (`-n`, `--color`) simply does
+                        // not exist on disk, so realpath throws and it is skipped
+                        // by the catch below — only a real path is ever checked.
                         let real: string;
                         try {
                             real = await realpath(join(repoDir, arg));

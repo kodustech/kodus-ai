@@ -28,6 +28,8 @@ describe('LocalSandboxService exec — flag/path boundary', () => {
         await writeFile(join(outside, 'secret.txt'), 'OUTSIDE_SECRET\n');
         await writeFile(join(repo, 'a.txt'), 'bait line in-repo\n');
         await symlink(join(outside, 'secret.txt'), join(repo, 'slink'));
+        // a committed symlink whose name starts with '-' (read via `cat -- -x`)
+        await symlink(join(outside, 'secret.txt'), join(repo, '-dashlink'));
         // hard link inside the repo to the outside file (same tmpfs)
         execFileSync('ln', [join(outside, 'secret.txt'), join(repo, 'hlink')]);
         exec = (svc as any).buildRemoteCommands(repo).exec;
@@ -64,6 +66,14 @@ describe('LocalSandboxService exec — flag/path boundary', () => {
 
         it('blocks a hard link that escapes the repo', async () => {
             const r = await exec('cat hlink');
+            expect(isBlocked(r)).toBe(true);
+            expect(leaks(r)).toBe(false);
+        });
+
+        it('blocks a dash-named symlink read past the options terminator', async () => {
+            // `-dashlink` starts with '-', so a naive flag skip would never
+            // realpath-check it; `cat -- -dashlink` then reads outside the clone.
+            const r = await exec('cat -- -dashlink');
             expect(isBlocked(r)).toBe(true);
             expect(leaks(r)).toBe(false);
         });
