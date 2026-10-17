@@ -122,7 +122,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
             commentManagerService.updateOverallComment,
         ).toHaveBeenCalledTimes(1);
         const args = commentManagerService.updateOverallComment.mock.calls[0];
-        expect(args[args.length - 1]).toEqual(reviewWarnings);
+        expect(args[args.length - 2]).toEqual(reviewWarnings);
     });
 
     // The stage forwards the warnings from THREE call sites, one per message
@@ -154,7 +154,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
         await (stage as any).executeStage(context);
 
         const args = commentManagerService.updateOverallComment.mock.calls[0];
-        expect(args[args.length - 1]).toEqual(reviewWarnings);
+        expect(args[args.length - 2]).toEqual(reviewWarnings);
     });
 
     it('forwards context.reviewWarnings on the createComment branch (KRC-16)', async () => {

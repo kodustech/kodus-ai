@@ -1,4 +1,7 @@
-import type { ContextLayer, ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
+import type {
+    ContextLayer,
+    ContextPack,
+} from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
@@ -229,6 +232,12 @@ export type CodeSuggestion = {
         section?: string;
         quote: string;
     };
+    /**
+     * Why a finding the review kept was not posted, when `priorityStatus`
+     * alone does not say: a shadow-mode custom agent's finding, or one past
+     * its agent's `maxComments` (#2172).
+     */
+    notSentReason?: 'custom-agent-shadow' | 'custom-agent-max-comments';
 
     isCommittable?: boolean;
     validatedData?: {

@@ -472,6 +472,9 @@ export interface AgentLoopSecrets {
      */
     remoteCommands: RemoteCommands | undefined;
     byokConfig?: NormalizedModel;
+    /** Slot the verify pass runs on when it differs from `byokConfig` (a
+     *  custom agent's check model, #2172). Unset: verify uses `byokConfig`. */
+    verifyByokConfig?: NormalizedModel;
     gitHubToken?: string;
     /** Cross-repo linked-repo access for agent tools (#1576). */
     linkedRepoAccess?: LinkedRepoAccess;

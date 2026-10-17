@@ -1,3 +1,4 @@
+import type { CustomAgentRunSummary } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
 import { readAttemptedSlot } from '@libs/llm/model-failover';
 import type {
     ContextEvidence,
@@ -209,6 +210,15 @@ export interface CodeReviewPipelineContext extends PipelineContext {
      * the automatic validation runs once per PR instead of once per push.
      */
     businessLogicValidatedAt?: string;
+
+    /**
+     * `@kody -v <agent-slug>`: run only that custom agent on this review
+     * (#2172). Unset on every other review.
+     */
+    onlyCustomAgent?: string;
+
+    /** What each custom agent did on this review, for the end-review comment. */
+    customAgentRuns?: CustomAgentRunSummary[];
 
     /**
      * SHA-256 hash of the PR body at the time of the last successful business

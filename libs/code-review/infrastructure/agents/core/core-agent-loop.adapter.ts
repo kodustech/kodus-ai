@@ -233,8 +233,47 @@ export async function runAgentLoopViaCore(
         parentSignal: input.parentSignal,
     });
 
+    // A custom agent checks its findings on its own model (#2172). Same slot
+    // as the finder, or none given: verify stays on the finder's runner.
+    const verifySlot = secrets.verifyByokConfig;
+    const verifyOnOwnModel =
+        !!verifySlot &&
+        (verifySlot.provider !== secrets.byokConfig?.provider ||
+            verifySlot.model !== secrets.byokConfig?.model);
+    const verifyParams = verifyOnOwnModel
+        ? {
+              verifyRunner: new AiSdkAgentRunner(verifySlot, {
+                  organizationId: input.telemetryMetadata?.organizationId,
+                  provider:
+                      typeof verifySlot.provider === 'string'
+                          ? verifySlot.provider
+                          : undefined,
+                  queueTimeoutMs: secrets.byokQueueTimeoutMs,
+                  reporter: secrets.byokErrorReporter,
+              }),
+              verifyModelId: verifySlot.model ?? 'resolved',
+              verifyFallbackModelId: verifySlot.fallback?.model,
+              verifyProviderOptions: buildProviderOptions(
+                  `${input.agentName ?? 'finder'}/verify`,
+                  input.telemetryMetadata,
+                  {
+                      reasoningEffort: verifySlot.reasoningEffort,
+                      reasoningConfigOverride:
+                          verifySlot.reasoningConfigOverride,
+                      byokProvider: verifySlot.provider,
+                      modelName: verifySlot.model,
+                      openrouterProviderOrder:
+                          verifySlot.openrouterProviderOrder,
+                      openrouterAllowFallbacks:
+                          verifySlot.openrouterAllowFallbacks,
+                  },
+              ),
+          }
+        : {};
+
     const r = await runFinderWithVerify(
         {
+            ...verifyParams,
             runner: finderRunner,
             finderSpec,
             makeResampleSpec,

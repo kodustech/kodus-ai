@@ -565,6 +565,15 @@ export interface RunFinderWithVerifyParams {
     fallbackModelId?: string;
     /** Investigation tools shared with the verifier. */
     tools: ToolRegistry;
+    /** Runner for the verify pass when it runs on its own model (a custom
+     *  agent's check slot, #2172). Defaults to `runner`. */
+    verifyRunner?: AgentRunner;
+    /** Model id of `verifyRunner`'s slot; `modelId` when unset. */
+    verifyModelId?: string;
+    /** Failover target of `verifyRunner`'s slot. */
+    verifyFallbackModelId?: string;
+    /** Provider options built for `verifyRunner`'s model. */
+    verifyProviderOptions?: Readonly<Record<string, unknown>>;
     /** Verify concurrency (default 4). */
     concurrency?: number;
     /** Provider options (reasoning/thinking config) forwarded to verifier runs. */
@@ -663,6 +672,30 @@ const ZERO_VERIFY_USAGE: VerifyUsage = {
     reasoningTokens: 0,
     cacheReadTokens: 0,
 };
+
+/** The runner and model the verify pass uses: its own when the caller gave
+ *  one (a custom agent's check slot), the finder's otherwise. */
+function verifyModelOf(params: RunFinderWithVerifyParams): {
+    runner: AgentRunner;
+    modelId: string;
+    fallbackModelId?: string;
+    providerOptions?: Readonly<Record<string, unknown>>;
+} {
+    if (!params.verifyRunner) {
+        return {
+            runner: params.runner,
+            modelId: params.modelId,
+            fallbackModelId: params.fallbackModelId,
+            providerOptions: params.providerOptions,
+        };
+    }
+    return {
+        runner: params.verifyRunner,
+        modelId: params.verifyModelId ?? params.modelId,
+        fallbackModelId: params.verifyFallbackModelId,
+        providerOptions: params.verifyProviderOptions,
+    };
+}
 
 /**
  * Runs the finder, then verifies each finding on the SAME runner (HV2
@@ -774,11 +807,12 @@ export async function runFinderWithVerify(
 
     // Verify each finding (HV2 refute-to-drop) with the confidence SPLIT inside
     // LlmVerifier: high-confidence → light depth, low-confidence → full depth.
-    const verifier = new LlmVerifier(params.runner, {
-        modelId: params.modelId,
-        fallbackModelId: params.fallbackModelId,
+    const verify = verifyModelOf(params);
+    const verifier = new LlmVerifier(verify.runner, {
+        modelId: verify.modelId,
+        fallbackModelId: verify.fallbackModelId,
         tools: params.tools,
-        providerOptions: params.providerOptions,
+        providerOptions: verify.providerOptions,
         telemetryMetadata: params.telemetryMetadata,
         agentName: params.agentName,
         usageRunName: params.usageRunName,
@@ -807,12 +841,12 @@ export async function runFinderWithVerify(
         (f) => !fileWasInvestigated(investigated, f.relevantFile),
     );
     if (unevidenced.length > 0) {
-        const fullVerifier = new LlmVerifier(params.runner, {
-            modelId: params.modelId,
-            fallbackModelId: params.fallbackModelId,
+        const fullVerifier = new LlmVerifier(verify.runner, {
+            modelId: verify.modelId,
+            fallbackModelId: verify.fallbackModelId,
             tools: params.tools,
             forceFull: true,
-            providerOptions: params.providerOptions,
+            providerOptions: verify.providerOptions,
             telemetryMetadata: params.telemetryMetadata,
             agentName: params.agentName,
             usageRunName: params.usageRunName,

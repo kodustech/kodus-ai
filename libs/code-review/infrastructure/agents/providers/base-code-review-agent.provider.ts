@@ -11,7 +11,10 @@ import { ByokErrorCounter } from '@libs/notifications/application/byok-error-cou
 
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
-import { assignFileTiers, computeFileScores } from '@libs/code-review/infrastructure/agents/engine/file-priority-scorer';
+import {
+    assignFileTiers,
+    computeFileScores,
+} from '@libs/code-review/infrastructure/agents/engine/file-priority-scorer';
 import {
     PROMPT_BUDGET_RATIO,
     assertContextWindowFitsOverhead,
@@ -45,7 +48,9 @@ import { mapAgentFindings } from '@libs/code-review/infrastructure/agents/collab
 import {
     resolveReviewAgentModel,
     type AgentModelParams,
+    type ResolvedAgentModel,
 } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { providerErrorFromResult } from '@libs/code-review/infrastructure/agents/collaborators/provider-error';
 import { runAgentWithTrace } from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
 import { runChunkedReview } from '@libs/code-review/infrastructure/agents/collaborators/batch-runner';
@@ -122,6 +127,23 @@ export abstract class BaseCodeReviewAgentProvider {
         return ['bug'];
     }
 
+    /** Cost-span run name of this agent's model calls (`code-review*` buckets
+     *  to the `review` area). */
+    protected getUsageRunName(): string {
+        return `code-review-${this.getCategoryLabel()}`;
+    }
+
+    /**
+     * The run's model and, when the agent checks its findings on a model of
+     * its own, the check slot (#2172). The built-in agents route `codeReview`
+     * and verify on the same model.
+     */
+    protected async resolveModels(
+        input: ReviewAgentInput,
+    ): Promise<ResolvedAgentModel & { checkByokConfig?: NormalizedModel }> {
+        return resolveReviewAgentModel(input, this.permissionValidationService);
+    }
+
     /**
      * Execute the agent against the provided changed files.
      */
@@ -194,10 +216,11 @@ export abstract class BaseCodeReviewAgentProvider {
 
         // Resolve BYOK config + model (org config → per-repo override → trial
         // default). Scoped locally to prevent cross-review races. → ModelFactory.
-        const { byokConfig, main: mainModel } = await resolveReviewAgentModel(
-            input,
-            this.permissionValidationService,
-        );
+        const {
+            byokConfig,
+            main: mainModel,
+            checkByokConfig,
+        } = await this.resolveModels(input);
         // Preflight (context window + warnings) runs against the resolved model.
         // `effectiveModelName` tracks the model that actually ran (there is one
         // model per run now — no fallback provider swap).
@@ -525,6 +548,7 @@ export abstract class BaseCodeReviewAgentProvider {
             const loopSecrets: AgentLoopSecrets = {
                 remoteCommands: input.remoteCommands,
                 byokConfig,
+                verifyByokConfig: checkByokConfig,
                 gitHubToken: input.gitHubToken,
                 linkedRepoAccess: input.linkedRepoAccess,
                 documentationSearchService: this.documentationSearchService,
@@ -562,7 +586,7 @@ export abstract class BaseCodeReviewAgentProvider {
                     // LLM.run records the ONE usage span per call under this name;
                     // deriveArea buckets `code-review*` to the `review` area. No
                     // separate aggregate span is emitted (that double-counted).
-                    usageRunName: `code-review-${this.getCategoryLabel()}`,
+                    usageRunName: this.getUsageRunName(),
                     telemetryMetadata: {
                         organizationId:
                             input.organizationAndTeamData?.organizationId,
@@ -598,7 +622,8 @@ export abstract class BaseCodeReviewAgentProvider {
                     // Context window is sized against the resolved model.
                     contextWindowTokens: contextWindow,
                     reasoningEffort: modelParams.reasoningEffort,
-                    reasoningConfigOverride: modelParams.reasoningConfigOverride,
+                    reasoningConfigOverride:
+                        modelParams.reasoningConfigOverride,
                     byokProvider: modelParams.byokProvider,
                     // Without this the reasoning mapper can't tell an Opus 5
                     // from a Sonnet 4.5 and has to guess the thinking shape —
@@ -606,7 +631,8 @@ export abstract class BaseCodeReviewAgentProvider {
                     modelName: modelParams.modelName,
                     // Drives the BYOK concurrency limiter bucket + wrapper role.
                     byokRole: modelParams.role,
-                    openrouterProviderOrder: modelParams.openrouterProviderOrder,
+                    openrouterProviderOrder:
+                        modelParams.openrouterProviderOrder,
                     openrouterAllowFallbacks:
                         modelParams.openrouterAllowFallbacks,
                     parentSignal: input.parentSignal,

@@ -67,6 +67,20 @@ import {
 } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
 import { preferAnalyzerKeep } from '@libs/code-review/infrastructure/agents/engine/prefer-analyzer-keep';
 import {
+    capCustomAgentComments,
+    collectSingleComments,
+    customAgentSeverityVerdict,
+    customAgentWriting,
+    indexCustomAgents,
+    isCustomAgentFinding,
+    preferCustomAgentKeep,
+    splitShadowFindings,
+    stripCustomAgentFixes,
+    type CustomAgentsById,
+} from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-presentation';
+import { summarizeCustomAgentRuns } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
+import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
     bothFromAnalyzers,
     restatesAnalyzerFinding,
 } from '@libs/code-review/infrastructure/agents/engine/restates-analyzer-finding';
@@ -401,6 +415,47 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     }
 
     /**
+     * The custom agents this review may dispatch (#2172): the configured
+     * ones, only when the org has the `custom-agents` beta. A gate that
+     * cannot be evaluated runs none, so a review never changes shape on an
+     * outage.
+     */
+    async resolveCustomAgents(
+        context: CodeReviewPipelineContext,
+    ): Promise<CustomAgentConfig[]> {
+        const configured = context.codeReviewConfig?.customAgents ?? [];
+        const wanted = context.onlyCustomAgent
+            ? configured
+            : configured.filter((agent) => agent?.enabled);
+        if (!wanted.length) {
+            return [];
+        }
+        const org = context.organizationAndTeamData;
+        try {
+            const releaseTrack = await this.organizationService.getReleaseTrack(
+                org.organizationId,
+            );
+            const enabled = await this.featureGate.isEnabled(
+                FEATURE_KEYS.customAgents,
+                {
+                    identifier: org.organizationId,
+                    organizationAndTeamData: org,
+                    releaseTrack,
+                },
+            );
+            return enabled ? wanted : [];
+        } catch (err) {
+            this.logger.warn({
+                message: `[AGENT] Custom agents gate could not be evaluated, running none`,
+                context: this.stageName,
+                error: err,
+                metadata: { organizationId: org?.organizationId },
+            });
+            return [];
+        }
+    }
+
+    /**
      * Resolve whether HEAVY mode actually runs: the per-review opt-in (CLI
      * `--heavy` / `@kody review --heavy`) AND the `heavy-review` feature gate,
      * which is an ALPHA feature — cloud gates it by the org's release track +
@@ -716,8 +771,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     changedFiles,
                 );
 
-            const result = await this.reviewOrchestrator.execute(
-                buildOrchestratorInput(context, {
+            const customAgents = await this.resolveCustomAgents(context);
+            const customAgentsById: CustomAgentsById =
+                indexCustomAgents(customAgents);
+            const result = await this.reviewOrchestrator.execute({
+                ...buildOrchestratorInput(context, {
                     changedFiles,
                     prNumber,
                     repositoryId,
@@ -730,7 +788,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     kodyRules: await this.prepareKodyRulesForReview(context),
                     linkedRepoAccess,
                 }),
-            );
+                customAgents,
+                onlyCustomAgent: context.onlyCustomAgent,
+            });
 
             // Snapshot linked-repo metadata after the review so clone status
             // (ready/failed) reflects what the agent actually used. When the
@@ -814,6 +874,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             ]);
 
             for (const failure of result.failures || []) {
+                // A shadow agent posts nothing, so its failure cannot leave
+                // the review incomplete; a posting one is auxiliary, like
+                // kody-rules.
+                if (failure.customAgent?.mode === 'shadow') {
+                    continue;
+                }
                 const severity = CRITICAL_AGENTS.has(failure.agentName)
                     ? 'critical'
                     : 'partial';
@@ -845,7 +911,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // completeness. Core agents only — kody-rules is auxiliary and its
             // truncation shouldn't gate the whole review.
             for (const cut of result.incomplete || []) {
-                if (!CRITICAL_AGENTS.has(cut.agentName)) {
+                if (
+                    !CRITICAL_AGENTS.has(cut.agentName) &&
+                    cut.customAgent?.mode !== 'post'
+                ) {
                     continue;
                 }
 
@@ -878,7 +947,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // They were not published, so the review did not check everything
             // it found: 'partial', same as a cut-short agent (#2171).
             for (const gap of result.unverified || []) {
-                if (!CRITICAL_AGENTS.has(gap.agentName)) {
+                if (
+                    !CRITICAL_AGENTS.has(gap.agentName) &&
+                    gap.customAgent?.mode !== 'post'
+                ) {
                     continue;
                 }
 
@@ -1166,8 +1238,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     deliveryStatus: DeliveryStatus.NOT_SENT,
                 });
             }
+            // A shadow agent's findings are kept for the summary and the
+            // dashboard but never reach the PR, and leave before dedup so
+            // one cannot absorb a native finding it would then not post.
+            const shadowSplit = splitShadowFindings(
+                repeatCheck.kept,
+                customAgentsById,
+            );
+            allDiscarded.push(...shadowSplit.shadow);
             const severityNormalized: Partial<CodeSuggestion>[] =
-                repeatCheck.kept;
+                shadowSplit.active;
 
             // Deduplicate Kody Rules deterministically by ruleUuid.
             // No LLM call needed — the ruleUuid unambiguously identifies
@@ -1267,7 +1347,32 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 });
             }
 
-            let deduped = [...dedupedNonRules, ...kodyRulesForDedup];
+            // A custom agent's finding and a Kody Rule on the same problem:
+            // the team asked that agent for it, so the agent's finding is the
+            // one kept (#2172). Native findings still yield to the rule above.
+            let keptKodyRules = kodyRulesForDedup;
+            const customAgentFindings =
+                dedupedNonRules.filter(isCustomAgentFinding);
+            if (customAgentFindings.length && kodyRulesForDedup.length) {
+                try {
+                    keptKodyRules =
+                        await this.crossDedupSuggestionsAgainstKodyRules(
+                            kodyRulesForDedup,
+                            customAgentFindings,
+                            prNumber,
+                            context.codeReviewConfig?.byokConfig,
+                            telemetryMeta,
+                        );
+                } catch (crossErr) {
+                    this.logger.warn({
+                        message: `[DEDUP-CROSS] PR#${prNumber}: custom agent vs Kody Rules dedup failed, keeping all`,
+                        context: this.stageName,
+                        error: crossErr,
+                    });
+                }
+            }
+
+            let deduped = [...dedupedNonRules, ...keptKodyRules];
 
             // NOTE: Kody Rule link enrichment happens AFTER the content
             // formatter (see block further below). Doing it before would
@@ -1348,6 +1453,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     acceptedLevels[severityFilter] || acceptedLevels.low;
                 const before = deduped.length;
                 const keeps = (s: Partial<CodeSuggestion>) =>
+                    customAgentSeverityVerdict(s, customAgentsById) ??
                     survivesSeverityFilter(
                         s,
                         accepted,
@@ -1368,6 +1474,36 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         context: this.stageName,
                     });
                 }
+            }
+
+            // A custom agent's own severity floor applies whatever the
+            // team's filter is (#2172); then its comment limit and fix policy.
+            if (customAgentsById.size > 0) {
+                const belowAgentFloor = deduped.filter(
+                    (s) =>
+                        customAgentSeverityVerdict(s, customAgentsById) ===
+                        false,
+                );
+                if (belowAgentFloor.length) {
+                    deduped = deduped.filter(
+                        (s) => !belowAgentFloor.includes(s),
+                    );
+                    for (const s of belowAgentFloor) {
+                        allDiscarded.push({
+                            ...s,
+                            priorityStatus:
+                                PriorityStatus.DISCARDED_BY_SEVERITY,
+                            deliveryStatus: DeliveryStatus.NOT_SENT,
+                        });
+                    }
+                }
+                const capped = capCustomAgentComments(
+                    deduped,
+                    customAgentsById,
+                );
+                deduped = capped.kept;
+                allDiscarded.push(...capped.overflow);
+                stripCustomAgentFixes(deduped, customAgentsById);
             }
 
             // The formatter shortens the body for people reading the PR; the
@@ -1429,45 +1565,68 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 // reflowed it into one paragraph — losing the per-package
                 // lines and appending remediation advice the scanner never
                 // said. There is no WHAT/WHY/HOW scaffolding here to strip.
-                const formatTargets = deduped
+                const allFormatTargets = deduped
                     .map((s, i) => (isAnalyzerSuggestion(s) ? -1 : i))
                     .filter((i) => i >= 0);
-                const formatted = await formatSuggestionContent(
-                    formatTargets.map((i) => ({
-                        title: deduped[i].oneSentenceSummary || '',
-                        suggestionContent: deduped[i].suggestionContent || '',
-                        existingCode: deduped[i].existingCode || '',
-                        improvedCode: deduped[i].improvedCode || '',
-                        relevantFile: deduped[i].relevantFile || '',
-                        language: deduped[i].language || '',
-                    })),
-                    {
-                        // A saved copy of a shipped default is not the team's
-                        // own text; only a real edit outranks the formatter's rules.
-                        customWritingGuidelines: writingGuidelines.isCustom
-                            ? writingGuidelines.text
-                            : undefined,
-                        byokConfig: context.codeReviewConfig?.byokConfig,
-                        languageResultPrompt:
-                            context.codeReviewConfig?.languageResultPrompt,
-                        organizationId:
-                            context.organizationAndTeamData?.organizationId,
-                    },
-                );
-                for (const [i, fmt] of formatted) {
-                    const target = formatTargets[i];
-                    if (
-                        target !== undefined &&
-                        deduped[target] &&
-                        fmt.suggestionContent?.trim()
-                    ) {
-                        formattedTargets.add(deduped[target]);
-                        deduped[target].suggestionContent =
-                            fmt.suggestionContent;
+                // A custom agent's writing instructions replace the team's
+                // for its own findings (#2172): one formatter call per voice.
+                const targetsByWriting = new Map<
+                    string | undefined,
+                    number[]
+                >();
+                for (const i of allFormatTargets) {
+                    const writing = customAgentWriting(
+                        deduped[i],
+                        customAgentsById,
+                    );
+                    if (!targetsByWriting.has(writing)) {
+                        targetsByWriting.set(writing, []);
                     }
+                    targetsByWriting.get(writing)!.push(i);
+                }
+                let formattedCount = 0;
+                for (const [agentWriting, formatTargets] of targetsByWriting) {
+                    const formatted = await formatSuggestionContent(
+                        formatTargets.map((i) => ({
+                            title: deduped[i].oneSentenceSummary || '',
+                            suggestionContent:
+                                deduped[i].suggestionContent || '',
+                            existingCode: deduped[i].existingCode || '',
+                            improvedCode: deduped[i].improvedCode || '',
+                            relevantFile: deduped[i].relevantFile || '',
+                            language: deduped[i].language || '',
+                        })),
+                        {
+                            // A saved copy of a shipped default is not the team's
+                            // own text; only a real edit outranks the formatter's rules.
+                            customWritingGuidelines:
+                                agentWriting ??
+                                (writingGuidelines.isCustom
+                                    ? writingGuidelines.text
+                                    : undefined),
+                            byokConfig: context.codeReviewConfig?.byokConfig,
+                            languageResultPrompt:
+                                context.codeReviewConfig?.languageResultPrompt,
+                            organizationId:
+                                context.organizationAndTeamData?.organizationId,
+                        },
+                    );
+                    for (const [i, fmt] of formatted) {
+                        const target = formatTargets[i];
+                        if (
+                            target !== undefined &&
+                            deduped[target] &&
+                            fmt.suggestionContent?.trim()
+                        ) {
+                            formattedTargets.add(deduped[target]);
+                            deduped[target].suggestionContent =
+                                fmt.suggestionContent;
+                        }
+                    }
+                    formattedCount += formatted.size;
                 }
                 this.logger.log({
-                    message: `[AGENT] Formatted ${formatted.size}/${formatTargets.length} suggestion contents`,
+                    message: `[AGENT] Formatted ${formattedCount}/${allFormatTargets.length} suggestion contents`,
                     context: this.stageName,
                 });
             } catch (err) {
@@ -1703,6 +1862,20 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     s.fileAnchored === true ||
                     (!s.relevantLinesStart &&
                         changedFilesByName.has(s.relevantFile)));
+            // Agents set to `single-comment` publish one PR-level comment
+            // gathering their findings instead of inline comments (#2172).
+            const singleComments = collectSingleComments(
+                deduped,
+                customAgentsById,
+            );
+            deduped = singleComments.inline;
+            const customAgentSummaries = summarizeCustomAgentRuns(
+                result.customAgentRuns,
+                {
+                    posted: [...deduped, ...singleComments.grouped],
+                    shadow: shadowSplit.shadow,
+                },
+            );
             const prLevelSuggestions = deduped.filter(isPrLevelSuggestion);
             const fileLevelSuggestions = deduped.filter(
                 (s) => !isPrLevelSuggestion(s),
@@ -1868,6 +2041,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             deliveryStatus: DeliveryStatus.NOT_SENT,
                         })),
                     );
+                }
+
+                if (singleComments.prLevel.length > 0) {
+                    if (!draft.validSuggestionsByPR) {
+                        draft.validSuggestionsByPR = [];
+                    }
+                    draft.validSuggestionsByPR.push(...singleComments.prLevel);
+                }
+                if (customAgentSummaries.length > 0) {
+                    draft.customAgentRuns = customAgentSummaries;
                 }
 
                 draft.dedupTrace = dedupTrace;
@@ -2434,7 +2617,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const groups: Array<{
                 keep: number;
                 duplicates: number[];
-            }> = preferAnalyzerKeep(normalizedDedup?.groups || [], suggestions);
+            }> = preferCustomAgentKeep(
+                preferAnalyzerKeep(normalizedDedup?.groups || [], suggestions),
+                suggestions,
+            );
             const unique: number[] = normalizedDedup?.unique || [];
 
             // Semantic tier of the content guard (PR #1527): when lexical overlap
