@@ -53,10 +53,14 @@ class Semaforo {
 const semaforo = new Semaforo(Number(process.env.RECALL_CLAUDE_SDK_MAX_PAR || 24));
 
 // Chave de API da Anthropic para os modelos '@sdk-api' (o SDK cobra na API, nao na
-// assinatura): do ambiente ou, se faltar, so essa chave do .env do repo.
+// assinatura): a do .env do repo e, se faltar, a do ambiente. O .env vem antes porque
+// o dedup-runner sobrescreve o ambiente com ~/.kodus-dev/config, que pode ter outra.
 function chaveApiAnthropic() {
-    if (process.env.API_ANTHROPIC_API_KEY) return process.env.API_ANTHROPIC_API_KEY;
-    try { return require('dotenv').parse(fs.readFileSync(path.join(__dirname, '..', '..', '.env'))).API_ANTHROPIC_API_KEY; } catch { return undefined; }
+    try {
+        const k = require('dotenv').parse(fs.readFileSync(path.join(__dirname, '..', '..', '.env'))).API_ANTHROPIC_API_KEY;
+        if (k) return k;
+    } catch {}
+    return process.env.API_ANTHROPIC_API_KEY;
 }
 
 function envDoProcesso() {
