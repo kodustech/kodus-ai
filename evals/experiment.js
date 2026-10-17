@@ -320,10 +320,20 @@ function affectedSteps(changed, filesOf, steps = STEP_EVALS) {
 function main() {
     const args = parseArgs(process.argv.slice(2));
     if (args.affected) {
-        const lines = (file) => (file && fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean) : []);
-        const changed = lines(args.changed);
-        console.log(JSON.stringify(affectedSteps(changed, (name) => lines(path.join(String(args['files-dir'] || ''), `${name}.txt`)))));
-        return 0;
+        // A missing list means the impact is unknown, never that nothing changed.
+        const lines = (file) => {
+            if (!file || !fs.existsSync(file)) throw new Error(`cannot tell which steps changed: ${file || 'no file given'} is missing`);
+            return fs.readFileSync(file, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean);
+        };
+        try {
+            const changed = lines(args.changed && String(args.changed));
+            const dir = String(args['files-dir'] || '');
+            console.log(JSON.stringify(affectedSteps(changed, (name) => lines(dir && path.join(dir, `${name}.txt`)))));
+            return 0;
+        } catch (error) {
+            console.error(error.message);
+            return 2;
+        }
     }
     const step = args.step;
     const plan = STEP_EVALS[step];

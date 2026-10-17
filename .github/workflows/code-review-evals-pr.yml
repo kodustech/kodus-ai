@@ -56,7 +56,8 @@ on:
     workflow_dispatch:
 
 concurrency:
-    group: code-review-evals-pr-${{ github.ref }}
+    # A label that asks for nothing gets a group of its own: it must not cancel a running experiment.
+    group: code-review-evals-pr-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'experiment:full' && format('-label-{0}', github.event.label.name) || '' }}
     cancel-in-progress: true
 
 jobs:
@@ -69,7 +70,8 @@ jobs:
         outputs:
             steps: ${{ steps.affected.outputs.steps }}
         steps:
-            # The whole history: which steps a PR touches is measured against where it left its base.
+            # The whole history: which steps the PR touches is measured from its
+            # head against where it left its base (the smoke runs the merge).
             - uses: actions/checkout@v6.0.2
               with:
                   fetch-depth: 0
@@ -99,8 +101,9 @@ jobs:
               if: github.event_name == 'pull_request'
               env:
                   BASE: ${{ github.base_ref }}
+                  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
               run: |
-                  git diff --name-only "origin/$BASE...HEAD" > changed-files.txt
+                  git diff --name-only "origin/$BASE...$HEAD_SHA" > changed-files.txt
                   steps=$(node evals/experiment.js --affected --files-dir=eval-files --changed=changed-files.txt)
                   echo "steps=$steps" >> "$GITHUB_OUTPUT"
                   echo "experiments to run: $steps"
@@ -131,8 +134,11 @@ jobs:
             matrix:
                 step: ${{ fromJSON(needs.wiring.outputs.steps) }}
         steps:
+            # The candidate is the branch's head, and the base where it left main
+            # (evals/README.md, "What it compares"), not GitHub's synthetic merge.
             - uses: actions/checkout@v6.0.2
               with:
+                  ref: ${{ github.event.pull_request.head.sha }}
                   fetch-depth: 0
             - uses: pnpm/action-setup@v4
             - uses: actions/setup-node@v4
@@ -187,7 +193,19 @@ jobs:
                   RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
               run: |
                   marker="<!-- kodus-experiment:$STEP -->"
-                  { echo "$marker"; cat experiment/summary.md; echo; echo "[Run]($RUN_URL) · [Quality: experiments](https://quality.kodus.io/experiments) · add the label \`experiment:full\` to also ask whether it is better."; } > comment.md
+                  # The summary is the experiment's output, data written from the branch's code: fenced as such.
+                  {
+                      echo "$marker"
+                      echo "The experiment's own report, as data:"
+                      echo
+                      echo "<blockquote>"
+                      echo
+                      cat experiment/summary.md
+                      echo
+                      echo "</blockquote>"
+                      echo
+                      echo "[Run]($RUN_URL) · [Quality: experiments](https://quality.kodus.io/experiments) · add the label \`experiment:full\` to also ask whether it is better."
+                  } > comment.md
                   id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -1)
                   if [ -n "$id" ]; then gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@comment.md > /dev/null; else gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F body=@comment.md > /dev/null; fi
             - name: Report to the quality panel

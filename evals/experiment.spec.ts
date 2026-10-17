@@ -121,6 +121,10 @@ describe('evals/experiment.js main refuses what it cannot compare', () => {
         expect(run(['--step=dedup', '--model=gpt-unknown'])).toMatchObject({ code: 2, said: expect.stringContaining('tier0-models.js') });
     });
 
+    it('an affected-steps query whose inputs are missing: unknown, not "nothing changed"', () => {
+        expect(run(['--affected', '--files-dir=/nonexistent', '--changed=/nonexistent/changed.txt'])).toMatchObject({ code: 2, said: expect.stringContaining('cannot tell which steps changed') });
+    });
+
     it('the decision phase without the regression phase', () => {
         expect(run(['--step=dedup', '--phases=decision'])).toMatchObject({ code: 2, said: expect.stringContaining('needs regression') });
     });
