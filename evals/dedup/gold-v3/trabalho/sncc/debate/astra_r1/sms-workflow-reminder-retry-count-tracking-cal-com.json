@@ -1,0 +1,12 @@
+{
+ "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+ "items": [
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01",
+   "class": "TP",
+   "subclass": "nit",
+   "severity": "low",
+   "reply": "I change my classification to TP/nit, low. The new retry tracking omits the false branch of `if (message?.length && message?.length > 0 && sendTo)`, but that branch makes no Twilio call. These rows are merely re-evaluated until the scheduled-date cleanup deletes them, so the demonstrated impact is minor redundant cron work, not repeated failed SMS attempts."
+  }
+ ]
+}

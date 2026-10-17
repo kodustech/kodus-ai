@@ -1,0 +1,26 @@
+{
+ "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+ "items": [
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "src/sentry/api/paginator.py:182-184 leaves negative offsets unchanged for previous cursors and passes them into Django queryset slicing, which rejects them. Cursor parsing accepts negative integers at src/sentry/utils/cursors.py:58-59, and src/sentry/api/base.py:540 catches only BadPaginationError around pagination. Although this failure existed previously, the PR directly changes the implicated slicing code; the claim about every paginated endpoint is overly broad.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-02",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "The added comment at src/sentry/utils/cursors.py:26-27 claims efficient reverse pagination, but line 28 merely stores an integer, and src/sentry/api/paginator.py:182-184 passes negative reverse offsets into unsupported queryset slicing. Accepting negative integers is real; the advertised pagination capability is inaccurate documentation with no behavioral effect from the comment itself.",
+   "severity": "low"
+  },
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-03",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "src/sentry/api/paginator.py:182 guarantees start_offset equals offset whenever cursor.is_prev is true. The trimming check at lines 186-192 only executes for previous cursors, so the claimed mismatch cannot occur in that branch.",
+   "severity": "medium"
+  }
+ ]
+}

@@ -1,0 +1,9 @@
+{
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01": {
+  "class": "TP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede TP. Astra's chain can happen. buffer.py:207-214 runs add-buffer.lua once per span. When a span arrives before its parent is known, add-buffer.lua:30-38 resolves nothing and :40 writes span_id -> parent_span_id. So spans that arrive bottom-up build a redirect chain one hop per level, and nothing ever flattens it: zpopmin at :62-63 trims only the sorted set, never the redirect hash. The PR's diff changes :30 from `for i = 0, 10000` to `for i = 0, 1000`. A later child of s0 therefore stops at an intermediate node, and :45 places it in a separate set_key, which splits the segment. The old bound handled depths 1001-10000 correctly, so this PR introduced the regression. No code shows that the split is intended: the 1000-span cap limits payload size, not the redirect walk. The trees involved are very deep and uncommon, so the severity is medium."
+ }
+}

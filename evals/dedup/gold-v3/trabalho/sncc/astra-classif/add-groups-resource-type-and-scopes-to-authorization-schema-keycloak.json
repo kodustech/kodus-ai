@@ -1,0 +1,19 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "UsersResource.java:453 passes search results to toRepresentation, which still applies userModels.filter(usersEvaluator::canView) at line 460. With no group restriction, line 459 also disables grantIfNoPermission, so an empty group set does not bypass per-user authorization.",
+   "severity": "critical"
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "GroupPermissionsV2.java:121-125 scans every Groups resource and calls hasPermission, which invokes a separate policy evaluation at line 152. MgmtPermissions.java:351 creates each evaluator independently, and IterablePermissionEvaluator.java:59 allocates a fresh decision cache, preventing reuse across groups. UsersResource.java:398 and :448 invoke this work for counts and searches, introducing a meaningful performance problem as configured group resources grow.",
+   "severity": "medium"
+  }
+ ]
+}

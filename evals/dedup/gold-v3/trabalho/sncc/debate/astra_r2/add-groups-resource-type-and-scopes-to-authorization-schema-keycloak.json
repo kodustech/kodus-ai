@@ -1,0 +1,12 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+   "class": "TP",
+   "subclass": "nit",
+   "severity": "medium",
+   "reply": "I change to TP/nit. GroupPermissionsV2.java:121\u2013125 performs per-resource permission checks, but V1 already uses the same loop and evaluation mechanism, including separate decision caches. The global-view guard and iteration over authorization resources limit the affected work; linear evaluation alone does not establish a meaningful performance defect. Batching is an optimisation suggestion, and my earlier classification overstated the demonstrated impact."
+  }
+ ]
+}

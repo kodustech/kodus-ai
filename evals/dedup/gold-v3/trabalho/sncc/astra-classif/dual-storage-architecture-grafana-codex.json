@@ -1,0 +1,12 @@
+{
+ "caseId": "dual-storage-architecture-grafana-codex",
+ "items": [
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#sncc-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "At head, pkg/apiserver/rest/dualwriter_mode3.go:100-104 returns on every unified-storage delete error, including NotFound, so the legacy delete at line 112 is skipped. The base version explicitly tolerated NotFound at lines 58-65 and continued to legacy deletion; this change leaves legacy-only objects persisted after deletion attempts.",
+   "severity": "high"
+  }
+ ]
+}

@@ -1,0 +1,26 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The new comparison in src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:153-155 compares the unconverted nodestore timestamp from line 115 with the recording timestamp. Error timestamps use seconds (src/sentry/eventstore/models.py:117-118), while recording timestamps use milliseconds (src/sentry/replays/testutils.py:326), causing errors to precede earlier breadcrumbs.",
+   "severity": "high"
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-02",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The matcher at static/app/views/explore/hooks/useGetTraceItemAttributeValues.spec.tsx:120 does use the wrong parameter, but removing the guard would not let the test pass. An unmatched request never resolves its promise (static/app/__mocks__/api.tsx:216-225,237-254), so the await at the test\u2019s line 144 would time out before reaching the assertion.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-03",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "static/app/views/explore/charts/index.tsx:153-154 now constructs dedupedYAxes as [yAxis], replacing the previous deduplication call. The stale name has no behavioral effect; it is only a naming cleanup.",
+   "severity": "low"
+  }
+ ]
+}

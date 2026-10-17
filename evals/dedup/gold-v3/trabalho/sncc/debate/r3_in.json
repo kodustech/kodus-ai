@@ -1,0 +1,70 @@
+{
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "28e3db2520d4ea28c57b08da57b83917ba7b2e15",
+  "head": "eb9623b4e787303a3bd15e10bbbdb78d59875ac6",
+  "issues": {
+   "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01": {
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S2",
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       30,
+       30
+      ],
+      "texto": "WHAT: the redirect-walk limit was reduced from 10000 to 1000 iterations, and the comment documenting the limit was removed. WHY: trees deeper than 1000 stop resolving to the correct set root, so segments may be split or joined incorrectly. This change is unrelated to span eviction. HOW: restore the 10000 limit unless the reduction is intentional."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "add-buffer.lua:30 does lower the redirect-walk loop from 10000 to 1000 and drops the comment. This is part of the PR's insertion-cost optimisation: the same script now caps each set at 1000 spans with zpopmin (lines 62-64). Bounding the per-insert redirect walk is a deliberate tradeoff for pathological traces, not an accidental change."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "src/sentry/scripts/spans/add-buffer.lua:30 reduces traversal from 10,001 to 1,001 iterations, then uses the potentially intermediate node as the destination at line 45. Descendant-first arrivals across batches can build longer redirect chains; eviction at lines 62\u201363 removes payloads without shortening those chains, allowing subsequent spans to form a separate segment."
+     },
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The loop bound change is in the PR's own optimisation and is paired with a new 1000 cap on set size (add-buffer.lua:62-64 `if span_count > 1000 then redis.call(\"zpopmin\", ...)`). Redirect chains are kept flat: each span is written straight to its resolved root at :40 `redis.call(\"hset\", main_redirect_key, span_id, set_span_id)`. So depth grows only when a whole set root is itself re-parented, and a chain over 1000 needs more than 1000 nested levels arriving strictly bottom-up in separate batches. The removed comment documented the same accepted limitation at 10k. This is a deliberate tradeoff for pathological traces, not a defect.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "I retain TP: writing each arriving span\u2019s redirect does not flatten existing descendants when their root is subsequently re-parented. Separate bottom-up batches can create s0\u2192s1\u2192\u2026\u2192s1002; a later child of s0 resolves to s1001 under the new loop, whereas the previous limit reaches s1002. Eviction removes sorted-set payloads without shortening the redirect hash, so the 1000-span cap does not prevent this incorrect segment assignment. This is an uncommon-input correctness regression; an optimisation motive alone does not establish that it is intended behavior."
+     },
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "Keep FP. Astra's chain is possible, but it needs a single segment with more than 1000 nested levels arriving strictly bottom-up across batches, and any such segment already holds more than 1000 spans. The same PR deliberately truncates every segment to 1000 spans (add-buffer.lua:62-64 `if span_count > 1000 then redis.call(\"zpopmin\", set_key, span_count - 1000)`). So lowering the walk bound to 1000 (:30 `for i = 0, 1000 do`) only affects traces the PR has already decided not to assemble in full. The old removed comment shows the depth cap was always an accepted limitation. Moving it from 10k to 1k together with the 1000-span cap is a consistent, intended tradeoff, not an accidental regression.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "I retain TP: limiting retained payloads does not make incorrect segment assignment harmless. The hset at line 40 updates only the arriving span, while zpopmin removes payloads without shortening existing redirect chains. For s0\u2192s1\u2192\u2026\u2192s1002, a later child of s0 stops at s1001 under the new bound and creates a separate buffer instead of joining s1002, even if its timestamp would keep it among the retained 1000 spans. The previous bound resolves this case correctly; accepting payload truncation does not establish that this additional correctness regression is intended."
+     }
+    ]
+   }
+  }
+ }
+}

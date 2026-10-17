@@ -1,0 +1,19 @@
+{
+ "caseId": "frontend-asset-optimization-grafana-codex",
+ "items": [
+  {
+   "issueId": "frontend-asset-optimization-grafana-codex#sncc-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The unconditional assignment at pkg/api/webassets/webassets.go:69-70 already exists in the base commit; this PR adds synchronization. Development mode deliberately bypasses cached values at lines 45-46, and retaining nil after a cold-start failure necessarily requires retrying, so the proposed guard provides no recovery benefit.",
+   "severity": "low"
+  },
+  {
+   "issueId": "frontend-asset-optimization-grafana-codex#sncc-02",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The new exclusive lock at pkg/api/webassets/webassets.go:48-49 remains held through manifest loading at line 60, including file opening at line 75 and JSON decoding at line 106. Since development mode bypasses the cache at line 45, concurrent requests using this function, including index rendering at pkg/api/index.go:82, serialize their entire manifest loads.",
+   "severity": "medium"
+  }
+ ]
+}

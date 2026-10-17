@@ -1,0 +1,548 @@
+{
+ "feature-automatically-downsize-large-images-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+  "head": "ffbaf8c54269df2ce510de91245760fddce09896",
+  "prTitle": "FEATURE: automatically downsize large images",
+  "issues": [
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       246,
+       247
+      ],
+      "texto": "The 413 handler now tells the user the maximum size is a hard-coded 10 MB. That number is not the limit the server enforces, which comes from the site settings or the web server config, so the message can be false. Derive the value from the configured setting, or use a message that doesn't state a number."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-localization-fallbacks-server-side-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "728845d008f06828630a632e5c7d67e11bf15deb",
+  "head": "ecfa17b5a79dfdc91e7a4d50b42ae78a35d0a293",
+  "prTitle": "FEATURE: Localization fallbacks (server-side)",
+  "issues": [
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S1",
+      "file": "lib/freedom_patches/translate_accelerator.rb",
+      "lines": [
+       62,
+       65
+      ],
+      "texto": "WHAT: `ensure_loaded!` initializes and reads `@loaded_locales` outside LOAD_MUTEX. WHY: it can race with `reload!` and `load_locale`, which write that array under the mutex or reassign it. Concurrent requests can then see a half-reset state or replace the array while another thread is populating it. HOW: do the `||=` and the include? check inside the mutex, or simply call `load_locale locale` and let it do the guarded check."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "56abd247e1829cb6de82dfcc8ce04deb5f0d1e91",
+  "head": "6669a2d94d76eea3b99b8c476d12b1eb66726b07",
+  "prTitle": "FEATURE: per-topic unsubscribe option in emails",
+  "issues": [
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S5",
+      "file": "app/models/topic.rb",
+      "lines": [
+       719,
+       721
+      ],
+      "texto": "Topic#unsubscribe_url is built from the relative Topic#url, but it is interpolated into the email's unsubscribe_link as a markdown link target. The email therefore contains a link with no scheme or host, which mail clients cannot open. Prefix it with Discourse.base_url, either here or where the mailer passes it."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "prTitle": "fix: handle collective multiple host on destinationCalendar",
+  "issues": [
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S4",
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       423,
+       461
+      ],
+      "texto": "WHAT: the recurring-event deletion block, which deletes events for all remaining bookings across all calendar credentials, now runs inside the loop over every calendar reference. WHY: with N calendar references the same events are deleted N times, producing duplicate API calls and errors for events that are already gone. HOW: run the recurring deletion once outside the reference loop."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S5",
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       735,
+       740
+      ],
+      "texto": "WHAT: the rewritten loadUsers dropped the `organization: { select: { slug } }` selection for dynamic-user bookings. WHY: downstream code that reads `user.organization` for these users now gets undefined, a regression in the query result. HOW: restore the organization select."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-03",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S7",
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       757,
+       762
+      ],
+      "texto": "The new catch in loadUsers forwards `error.message` from Prisma.PrismaClientKnownRequestError to the client in a 400 HttpError. Prisma messages contain internal details such as model names, columns and query info. Log the error server-side and return a generic message instead."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fixing-re-authentication-with-passkeys-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "744e031019af8dbaacf407e792fbb3756364e2b4",
+  "head": "25bf964a844ea0bc64dc838bff038345048cb1fa",
+  "prTitle": "Fixing Re-authentication with passkeys",
+  "issues": [
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S2",
+      "file": "themes/src/main/resources/theme/base/login/passkeys.ftl",
+      "lines": [
+       11,
+       17
+      ],
+      "texto": "The password page now renders the selected user's passkey credential IDs as hidden inputs before the user has authenticated, in the username-first flow. This discloses account-specific credential metadata to anyone who only knows a username. Emit the IDs only for re-authentication, where the user is already authenticated."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "frontend-asset-optimization-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "3ce1a5b0caab215346a51629b0344b90d67e9478",
+  "head": "b1613e320acff00623e6efc59f00ee68c7684a97",
+  "prTitle": "Frontend Asset Optimization",
+  "issues": [
+   {
+    "issueId": "frontend-asset-optimization-grafana-codex#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S1",
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       69,
+       70
+      ],
+      "texto": "WHAT: The cache is assigned unconditionally, so a failed read stores nil in entryPointAssetsCache. WHY: In non-Dev mode a transient manifest read error discards a previously valid cache entry, and the next call has to re-read the manifest. HOW: Only assign the cache when err == nil && result != nil."
+     },
+     {
+      "gid": "sonnet-cc:S2",
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       69,
+       70
+      ],
+      "texto": "The cache is written unconditionally, so when reading the manifest fails, a nil result overwrites the cached assets. In Dev mode a transient read error discards a previously good cache. In non-Dev mode a cold-start failure is stored as nil, so every caller keeps hitting the file read. Only assign entryPointAssetsCache when err == nil and result != nil."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "frontend-asset-optimization-grafana-codex#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "webassets.go",
+      "lines": [
+       51,
+       69
+      ],
+      "texto": "After a cache miss, every caller takes the exclusive lock and holds it through the whole load (file read and parse). In Dev mode the cache is deliberately bypassed, so every request now serializes behind a global mutex. Do the load outside the exclusive lock, or avoid taking the lock at all when the cache is bypassed in Dev mode. The reviewer did not read the function body (lines 51-68), so the actual lock hold time is unconfirmed."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "github-oauth-security-enhancement-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "344aa102e7818606e29426ebe69d5a680d8727c6",
+  "head": "bb75657fc8f13923c1d7983f422290908a1e7310",
+  "prTitle": "GitHub OAuth Security Enhancement",
+  "issues": [
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       412,
+       413
+      ],
+      "texto": "The OAuth `state` is the secret that ties the callback to the pipeline, but it is compared with `!=`, which leaks timing information. Use `constant_time_compare` from django.utils.crypto, and treat a missing state as a mismatch."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S8",
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       448,
+       454
+      ],
+      "texto": "The mismatch test asserts only the generic 'Invalid installation request.' text. A state mismatch or OAuth failure produces the same text, so the test cannot show that the sender-login comparison is what rejected the request. Assert the pipeline got past the state check, for example by checking that the user endpoint was called and the failure came from the login mismatch."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "implement-access-token-context-encoding-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "c22f76867f595f0f7c327376a66a08dca01949e8",
+  "head": "daffb05b5ad091d3ec09933c3c99c2b54f448696",
+  "prTitle": "Implement access token context encoding framework",
+  "issues": [
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+      "lines": [
+       54,
+       55
+      ],
+      "texto": "WHAT: getTokenContextFromClientSessionContext now calls the static getShouldUseLightweightToken(session), which dereferences session.getContext().getClient(), on every token creation. WHY: token creation paths where the session context has no client set would throw an NPE in initToken, where previously only mappers invoked this code. HOW: null-guard the client lookup, or take the client from clientSessionContext.getClientSession().getClient()."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "85737f52b59aa2e3403c9b8e48acf71ccc5bfae3",
+  "head": "ce2dcc537b4b1f98a335e88cfe8e0b804483252a",
+  "prTitle": "Implement recovery key support for user storage providers",
+  "issues": [
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S1",
+      "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+      "lines": [
+       119,
+       125
+      ],
+      "texto": "WHAT: The plaintext recovery codes (generatedCodes) are serialized to JSON and sent to the user storage provider via updateCredential. The local path stores only the hashed credentialModel. WHY: Any federated or external store that accepts the credential now holds usable one-time recovery codes in clear text, which weakens the hashing the local path provides. HOW: Pass the hashed credential data (the credentialModel's credential data) to user storage, or confirm the user storage contract explicitly requires plaintext codes and document it."
+     },
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+      "lines": [
+       117,
+       125
+      ],
+      "texto": "The plaintext recovery codes are serialized to JSON and passed to the user storage provider's updateCredential. The local path stores only hashed codes, so the user-storage path exposes raw one-time secrets to external systems, which may persist or log them. Send hashed or derived credential data to federated storage, or restrict this to providers explicitly trusted to protect secrets."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "notification-rule-processing-engine-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "47e5bd23163e6037fc0741068ac78930bba2769f",
+  "head": "8df850371034b73dc4dd9908cc30fa09f12a1f97",
+  "prTitle": "Notification Rule Processing Engine",
+  "issues": [
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "unknown",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The menu test counts exactly 4 items while its comment lists \"4 actions\", but the `menuItems` map also includes delete. The count may not match the actual number of menu items. The reviewer could not confirm this is a defect; if it fails, it fails loudly, so it is not a false-pass case. Verify the expected count and update the comment or assertion to reflect whether delete is included."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "28e3db2520d4ea28c57b08da57b83917ba7b2e15",
+  "head": "eb9623b4e787303a3bd15e10bbbdb78d59875ac6",
+  "prTitle": "Optimize spans buffer insertion with eviction during insert",
+  "issues": [
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S2",
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       30,
+       30
+      ],
+      "texto": "WHAT: the redirect-walk limit was reduced from 10000 to 1000 iterations, and the comment documenting the limit was removed. WHY: trees deeper than 1000 stop resolving to the correct set root, so segments may be split or joined incorrectly. This change is unrelated to span eviction. HOW: restore the 10000 limit unless the reduction is intentional."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S5",
+      "file": "src/sentry/spans/consumers/process/factory.py",
+      "lines": [
+       141,
+       141
+      ],
+      "texto": "Indexing val[\"end_timestamp_precise\"] raises KeyError if a span lacks the field, which fails the whole batch in the consumer. The neighbouring fields use .get() for optional values. Fall back to a default such as the message timestamp when the field is absent."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "58ba11ecbd60863e2bfc6e32f0399ed4feb3927a",
+  "head": "303cdc2caf256aa5df660611120c2e3f7392365d",
+  "prTitle": "Plugins: Chore: Renamed instrumentation middleware to metrics middleware",
+  "issues": [
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S1",
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       101,
+       109
+      ],
+      "texto": "The `shouldInstrumentRequestSize` flag is only checked when true, so the CheckHealth and CollectMetrics cases never verify that request size is not recorded. Add an else branch asserting `testutil.CollectAndCount(promRegistry, metricRequestSize) == 0` so that wrongly instrumenting size for those endpoints fails the test."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S2",
+      "file": "pkg/plugins/log/ifaces.go",
+      "lines": [
+       22,
+       23
+      ],
+      "texto": "The FromContext doc is copied from New() and misdescribes the method. It does not add a 'given context' of key/values. It returns a logger carrying the contextual attributes stored in the context.Context (e.g. via log.WithContextualAttributes). Reword it so callers know that attributes set by middleware are what get attached."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "replays-self-serve-bulk-delete-system-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "49a275847631e231672d01b5dcd66558c069d25b",
+  "head": "ea188e2d736fd6ed27c1dba8aae63b7268e2a7a9",
+  "prTitle": "Replays Self-Serve Bulk Delete System",
+  "issues": [
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "WHAT: error event timestamps from nodestore (seconds) are compared directly with replay recording event timestamps (rrweb, typically milliseconds) in `gen_request_data`. WHY: if the units differ, every error sorts before all breadcrumbs and the chronological interleaving is wrong. HOW: normalize both timestamps to the same unit before comparing."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S5",
+      "file": "static/app/views/explore/hooks/useGetTraceItemAttributeValues.spec.tsx",
+      "lines": [
+       114,
+       147
+      ],
+      "texto": "The number-type test's mock matches on `query.query === 'search-query'`, but the hook sends the search as `substringMatch`, so the mock can never match. As a result, `expect(searchQueryMock).not.toHaveBeenCalled()` passes even if the `type === 'number'` early return is removed. Match on `query.substringMatch` so the assertion can fail when the guard is broken."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-03",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S8",
+      "file": "static/app/views/explore/charts/index.tsx",
+      "lines": [
+       153,
+       154
+      ],
+      "texto": "`dedupedYAxes` no longer comes from deduplication. It is now just `[yAxis]`, so the name misdescribes the code. Rename it (for example `yAxes`) or drop the array."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "917c7b0764f4c6bfdca95db2c5f73dbfdbe11757",
+  "head": "c790227e0cda780e6fea9bb03af27948d9e286b9",
+  "prTitle": "SMS workflow reminder retry count tracking",
+  "issues": [
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       158,
+       188
+      ],
+      "texto": "WHAT: retryCount is only incremented when twilio returns a falsy result or an exception is thrown. It is not incremented when `message` is empty or `sendTo` is missing, for example an invalid or missing phone number. WHY: those reminders are re-attempted on every cron run until scheduledDate, which is the behaviour this PR is meant to stop. HOW: Add an else branch to the `if (message?.length && sendTo)` check that increments retryCount."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "unified-storage-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "871af07203177ce59a24e742107119409274f48a",
+  "head": "26fed312840cd76b766cbd2158e17a7e6c0ec548",
+  "prTitle": "Unified Storage Performance Optimizations",
+  "issues": [
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "pkg/server/module_server_test.go",
+      "lines": [
+       35,
+       38
+      ],
+      "texto": "Skipping this test on postgres means it can never fail there, in the same PR that makes NewResourceServer run Init eagerly. A startup regression from that change on postgres would go unnoticed. Find the cause of the Drone failure, for example by checking whether it comes from the new eager Init, and fix it rather than skipping the test."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S4",
+      "file": "pkg/storage/unified/resource/server.go",
+      "lines": [
+       258,
+       262
+      ],
+      "texto": "NewResourceServer now runs s.Init(ctx) synchronously and returns (nil, err) if it fails. Construction used to be side-effect free, with init handled separately by callers and the lifecycle. Callers of NewResourceServer, and tests that still call Init explicitly, now see a constructor that blocks on search-index build and watcher startup and can refuse to return a server. Keep initialization in its original lazy or explicit path, or update every caller to expect and handle construction-time failure."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ }
+}

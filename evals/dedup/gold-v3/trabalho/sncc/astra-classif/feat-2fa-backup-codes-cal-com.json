@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "items": [
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#sncc-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The PR adds decryption of stored backup codes and compares them directly with user input using Array.indexOf in packages/features/auth/lib/next-auth-options.ts:139-145. Neither string equality nor the early-exiting search provides constant-time secret comparison, creating the reported timing weakness; the rate-limit check at lines 109-111 restricts probing but does not eliminate it.",
+   "severity": "high"
+  }
+ ]
+}

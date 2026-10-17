@@ -132,7 +132,51 @@ for pasta, chave in RODADAS.items():
             (golden if o['class'] == 'TP' else fps).setdefault(cid, []).append(reg)
             cont[(f'{pasta}:agreed', o['class'], o['subclass'])] += 1
 
-meta = {'versao': 'v3', 'prs': len(A), 'modelos': list(ABR.values()) + list(RODADAS.values()), 'classificadores': ['claude-opus-5.5', 'gpt-6-astra'],
+# Rodadas pontuadas pelo juiz Opus contra os TPs do gold v3 (o padrao desde 17/10/26): a sugestao
+# que o juiz casou com um TP herda o TP; o que ele marcou como novo foi agrupado por problema e
+# classificado por Opus e Astra as cegas, com debate (trabalho/<pasta>/debate/estado.json).
+RODADAS_JUIZ = {'sncc': 'sonnet-5.5@cc'}
+for pasta, chave in RODADAS_JUIZ.items():
+    R = f'{W}/{pasta}'
+    if not os.path.exists(f'{R}/debate/estado.json'):
+        continue
+    import glob
+    op, oc = {}, {}
+    for f in glob.glob(f'{R}/opus-out*.json'): op.update(json.load(open(f)))
+    for f in glob.glob(f'{R}/opus-classif*.json'): oc.update(json.load(open(f)))
+    ac = {x['issueId']: x for f in glob.glob(f'{R}/astra-classif/*.json') for x in json.load(open(f))['items']}
+    D2 = json.load(open(f'{R}/debate/estado.json'))
+    novos = json.load(open(f'{R}/classif-in.json'))
+    porId = {r['issueId']: r for d in (golden, fps, revisao) for l in d.values() for r in l}
+    for cid, L in op.items():
+        for x in L:
+            if x['match'] != 'new':
+                sugestoes[f'{chave}|{cid}|{x["id"]}'] = x['match']
+                porId[x['match']].setdefault('foundBy', {}).setdefault(chave, []).append(x['id'])
+    for cid, p in novos.items():
+        for it in p['issues']:
+            k = it['issueId']; o = oc[k]; a = ac[k]
+            reg = {'issueId': k, 'caseId': cid, 'comment': o['comment'], 'commentOpus': o['comment'], 'source': 'kodus', 'martianRef': [],
+                   'foundBy': {chave: [c['gid'].split(':')[1] for c in it['comentarios']]},
+                   'reason_opus': o['reason'], 'reason_astra': a['reason'],
+                   'class_opus_inicial': o['class'], 'subclass_opus_inicial': o['subclass'],
+                   'class_astra_inicial': a['class'], 'subclass_astra_inicial': sub(a['subclass']), 'rodada': pasta}
+            if k in D2:
+                d = D2[k]
+                assert d.get('fechado'), f'{k}: debate em aberto'
+                fo = next(h for h in reversed(d['hist']) if h['who'] == 'opus')
+                cls, sc, sev, status = fo['class'], sub(fo['subclass']), fo['severity'], 'agreed_after_debate'
+                reg['debate'] = [{'quem': h['who'], 'class': h['class'], 'subclass': sub(h['subclass']), 'severity': sub(h['severity']), 'texto': h['text']} for h in d['hist']]
+            else:
+                assert (o['class'], o['subclass']) == (a['class'], sub(a['subclass'])), f'{k}: classe sem consenso'
+                cls, sc, sev, status = o['class'], o['subclass'], o['severity'], 'agreed'
+            reg.update({'class': cls, 'subclass': sc, 'status': status, 'severity': sev, 'category': o['category'] if cls == 'TP' else None})
+            for c in it['comentarios']:
+                sugestoes[f'{chave}|{cid}|{c["gid"].split(":")[1]}'] = k
+            (golden if cls == 'TP' else fps).setdefault(cid, []).append(reg)
+            cont[(f'{pasta}:{status}', cls, sc)] += 1
+
+meta = {'versao': 'v3', 'prs': len(A), 'modelos': list(ABR.values()) + list(RODADAS.values()) + list(RODADAS_JUIZ.values()), 'classificadores': ['claude-opus-5.5', 'gpt-6-astra'],
         'regua': 'TP = o problema existe no codigo do head e o PR o introduz ou mexe no codigo envolvido; FP = nao ha problema a reportar no PR'}
 for nome, dados in [('golden', golden), ('fps-conhecidos', fps), ('revisao-humana', revisao)]:
     json.dump({**meta, 'prs': dados}, open(f'{AQUI}/{nome}.json', 'w'), indent=1, ensure_ascii=False)

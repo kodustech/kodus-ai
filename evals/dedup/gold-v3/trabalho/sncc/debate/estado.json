@@ -1,0 +1,1083 @@
+{
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-01": {
+  "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+  "issue": {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-01",
+   "comentarios": [
+    {
+     "gid": "sonnet-cc:S7",
+     "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "lines": [
+      83,
+      93
+     ],
+     "texto": "The commit scan starts at max(last_committed + 1, min_offset). Once mark_committed prunes already-committed offsets, min_offset jumps past any missing offset, so the next pass treats the gap as contiguous and commits beyond it. For example, with offsets 100, 102 and 103 where 101 never arrived, 100 is committed first and then 103. This contradicts the 'highest contiguous offset' docstring and the gap tests. Start at last_committed + 1 when it is known, and only use min_offset for the first commit."
+    },
+    {
+     "gid": "sonnet-cc:S9",
+     "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "lines": [
+      86,
+      93
+     ],
+     "texto": "The contiguity scan starts at max(last_committed + 1, min_offset). After mark_committed trims all_offsets, min_offset exceeds last_committed + 1 whenever a gap exists, so the gap is skipped on the next cycle. The first cycle stops at the gap and later cycles commit past it, so the 'contiguous' guarantee holds only by timing. Pick one rule and apply it consistently: either start at last_committed + 1 and treat missing offsets as gaps (or Kafka-compacted offsets) deliberately, or start at min_offset every time."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "get_committable_offsets starts at max(last_committed + 1, min_offset) (queue_consumer.py:86), and mark_committed prunes offsets <= committed (line 105). So with 100, 102 and 103 the first pass commits 100 and the next pass starts at 102 and commits 103 past the missing 101, which contradicts the 'contiguous' docstring. Kafka delivers a partition in order, though, so a missing offset never arrives later and the only effect is inconsistent stalling."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "queue_consumer.py:86 starts at the greater of last_committed + 1 and min_offset, while queue_consumer.py:105 removes committed offsets. Executing the new tracker with completed offsets 100, 102, and 103 confirms successive scans return 100 then 103 without receiving 101, violating the gap-blocking contract tested in tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py:351-372."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "The jump past a gap is real (queue_consumer.py:86 `start = max(last_committed + 1, min_offset)`, :105 prunes <= committed), but a gap can never be filled later in production: offsets enter the tracker only via submit (queue_consumer.py:211 and :302/:320), called by the Arroyo consumer in partition order, so a missing offset is one Kafka never delivers (compaction/txn marker) and committing past it is correct. The only scenario where it matters is test_offset_gaps_block_commits (test_queue_consumer.py:351-372), which submits 101 out of order, something the real consumer cannot do. Effect: docstring/test contract mismatch and a one-cycle stall, not lost messages. Nit.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "Changed to TP/nit: pruning does let the next scan skip a missing offset, contradicting the documented numerical-contiguity guarantee. However, submit registers offsets synchronously before queuing work, and outstanding offsets still block commits; ordered partition delivery cannot produce the test\u2019s late-arriving 101. The demonstrated problem is therefore a documentation/test-contract mismatch rather than unsafe production commits. Severity remains medium for the edge-case commit defect as stated."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02": {
+  "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+  "issue": {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02",
+   "comentarios": [
+    {
+     "gid": "sonnet-cc:S11",
+     "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+     "lines": [
+      1861,
+      1870
+     ],
+     "texto": "The wait loop breaks as soon as any commit is recorded, but the test then asserts the committed offset is exactly 105. A commit fired by the 1s loop mid-processing can commit a lower offset, so the test is flaky. Wait until the committed value reaches 105 before asserting."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "The wait loop in test_thread_queue_parallel_offset_commit (test_results_consumer.py:1861-1867) breaks once total_items == 0 and any commit exists, then asserts == 105 (line 1870). The commit loop first fires 1s after start (queue_consumer.py:275), so a mid-processing commit is only a narrow theoretical race with the mocked processor; this is test tidying."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "tests/sentry/uptime/consumers/test_results_consumer.py:1864 exits when queues are empty and any commit exists, then line 1870 requires offset 105. The independent one-second commit loop in queue_consumer.py:273-289 can publish a partial offset before processing finishes; empty queues do not guarantee another commit has published the final offset, making the new test timing-dependent."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "The race needs processing of five mocked items to straddle the first commit tick. The commit thread waits 1s before its first scan (queue_consumer.py:275 `self.shutdown_event.wait(1.0)`), while the test submits offsets 100-104 to a mocked `__call__` (test_results_consumer.py:1841) that returns instantly, so all five complete in milliseconds, long before the first tick. Then the first commit already carries the final offset. The loop condition at test_results_consumer.py:1864 is loose, but the flake is theoretical: test tidying.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I retain TP: the one-second timer starts before message construction and submission, and mocking the processor provides no synchronization with that timer. A partial commit can occur, processing can then finish, and the wait condition at line 1864 can exit before the next commit updates the offset to 105. Fast execution makes this unlikely, but scheduling delays can expose an actual false test failure, so this is more than test tidying."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "Concede. The commit thread starts in SimpleQueueProcessingStrategy.__init__ (queue_consumer.py:270-271), before the test builds and submits offsets 100-104, so the 1s tick (queue_consumer.py:276 `self.shutdown_event.wait(1.0)`) is not anchored to the submissions and can land mid-batch on a loaded CI runner. Once any partial commit exists, the exit condition at test_results_consumer.py:1864 `if stats[\"total_items\"] == 0 and len(committed_offsets) > 0` lets the loop leave before the final commit, and :1870 asserts == 105. Rare, but a real false-failure path in the new test, not just tidying.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-01": {
+  "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "issue": {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-01",
+   "comentarios": [
+    {
+     "gid": "sonnet-cc:S2",
+     "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+     "lines": [
+      138,
+      142
+     ],
+     "texto": "WHAT: getClientsWithPermission runs a full policy evaluation (root.evaluatePermission) for every client resource of type Clients. WHY: Listing clients costs one evaluation per client, so a realm with many clients gets a large slowdown. HOW: Evaluate once with all client resources and scopes, or bound or batch the lookup."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "getClientsWithPermission runs root.evaluatePermission once per Clients-type resource (ClientPermissionsV2.java:138-142, hasGrantedPermission at 274-276). Resources exist only for clients that have specific permissions, and V1 ClientPermissions.getClientsWithPermission uses the same per-resource pattern, so the cost is bounded and not a meaningful regression."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "ClientPermissionsV2.java:138 and :276 do evaluate each resource separately, but the claimed listing slowdown is unreachable through existing callers. The only caller is AvailableRoleMappingResource.java:229, whose calling branches require V1 enabled (:71, :108, :145, :184, :217); Profile.java:283-306 prevents enabling V1 alongside V2. The client listing endpoint in ClientsResource.java:120-165 does not call this method."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "Concede. The only caller, getRoleIdsWithPermissions (AvailableRoleMappingResource.java:229), sits in else branches guarded by `|| !Profile.isFeatureEnabled(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ)` (:71, :108, :145, :184, :217). V1 and V2 are versions of the same feature (Profile.java:56/58), so with V2 on that branch is never reached, and it is a role-mapping lookup, not client listing. The described slowdown cannot happen.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01": {
+  "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+  "issue": {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01",
+   "comentarios": [
+    {
+     "gid": "sonnet-cc:S3",
+     "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+     "lines": [
+      158,
+      188
+     ],
+     "texto": "WHAT: retryCount is only incremented when twilio returns a falsy result or an exception is thrown. It is not incremented when `message` is empty or `sendTo` is missing, for example an invalid or missing phone number. WHY: those reminders are re-attempted on every cron run until scheduledDate, which is the behaviour this PR is meant to stop. HOW: Add an else branch to the `if (message?.length && sendTo)` check that increments retryCount."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "scheduleSMSReminders.ts:158-188 increments retryCount only when twilio.scheduleSMS returns falsy or throws. When message is empty or sendTo is missing, the reminder is skipped without incrementing. It is re-evaluated each cron run until its scheduledDate passes and the delete query removes it. No SMS or external call is made in that case, so the only effect is redundant cron work."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "In packages/features/ee/workflows/api/scheduleSMSReminders.ts:158\u2013188, an empty message or missing recipient skips scheduling without updating retryCount; increments occur only on a falsy provider result or an exception (lines 178\u2013195). These reminders remain eligible for selection at lines 48\u201354 and evade the new retry-limit cleanup at lines 38\u201340, so the PR\u2019s retry tracking leaves this failure path unbounded until scheduledDate."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "The skip is real, but nothing is retried in that path. When `if (message?.length && message?.length > 0 && sendTo)` (scheduleSMSReminders.ts:158) is false, no Twilio call is made, so there is no failing external attempt for the retry limit to stop. The row is just re-read on the next cron run and is removed by the existing deleteMany once `scheduledDate: { lte: now }` (:29-36). This behaviour is identical to before the PR; retryCount was added to stop repeated failed provider calls (:178-195), and that goal is met. The only cost is redundant cron work for a row that can never send. Nit.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "I change my classification to TP/nit, low. The new retry tracking omits the false branch of `if (message?.length && message?.length > 0 && sendTo)`, but that branch makes no Twilio call. These rows are merely re-evaluated until the scheduled-date cleanup deletes them, so the demonstrated impact is minor redundant cron work, not repeated failed SMS attempts."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01": {
+  "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+  "issue": {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+   "comentarios": [
+    {
+     "gid": "sonnet-cc:S1",
+     "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+     "lines": [
+      169,
+      171
+     ],
+     "texto": "WHAT: readLength returns -1 for indefinite-length encoding, and readInteger and readNext pass it straight to read(int), which allocates `new byte[-1]`. WHY: a malformed or indefinite-length DER signature throws an unchecked NegativeArraySizeException instead of the IOException that callers expect. HOW: reject negative lengths in read(int) or in the callers by throwing an IOException."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "ASN1Decoder.readLength returns -1 for 0x80 (ASN1Decoder.java:133-135) and readInteger passes it straight to read(length) (ASN1Decoder.java:71-72), which does new byte[length] (line 170). A DER signature with indefinite length therefore throws NegativeArraySizeException instead of IOException."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "ASN1Decoder.java:80-82 adds the consumed header length before calling read(), so readNext does not pass -1 straight through as claimed. AuthzClientCryptoProvider.java:128-134 calls readInteger only on those extracted elements; an indefinite-length integer loses its length byte during extraction and fails with IOException, rather than reaching the negative allocation."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "Concede. readNext does not pass -1 through: ASN1Decoder.java:80-82 `int length = readLength(); length += reset(); return read(length);` turns -1 into 1 (header bytes counted). An indefinite outer SEQUENCE leaves `while (length > 0)` (:57) unexecuted, so the size check at AuthzClientCryptoProvider.java:129 throws IOException. An indefinite element becomes a 1-byte slice, and readInteger on it hits EOFException in readLength. The only caller never reaches new byte[-1].",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02": {
+  "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+  "issue": {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02",
+   "comentarios": [
+    {
+     "gid": "sonnet-cc:S4",
+     "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+     "lines": [
+      60,
+      67
+     ],
+     "texto": "`getBouncyCastleProvider()` is documented in the CryptoProvider interface as returning the BouncyCastle provider, but this implementation returns the JDK default KeyStore provider (e.g. SUN). Callers that rely on the name will get a non-BC provider. Either document the deviation on this override or return null, as WildFlyElytronProvider does when it has no BC."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "low",
+    "text": "getBouncyCastleProvider returns KeyStore.getInstance(default).getProvider() (AuthzClientCryptoProvider.java:61-66). Its only consumer, BouncyIntegration.loadProvider (common/.../BouncyIntegration.java:33-39), just needs a provider name and would fall back to Security.getProviders()[0] on null anyway; the authz client has no BC, so this fallback is intended."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:61-63 returns the default KeyStore provider, contradicting common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java:35. However, common/src/main/java/org/keycloak/common/util/BouncyIntegration.java:34-39 already permits a non-BC fallback, so the demonstrated issue is documentation accuracy rather than broken behavior."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "Concede to nit. AuthzClientCryptoProvider.java:63 returns `KeyStore.getInstance(KeyStore.getDefaultType()).getProvider()`, which contradicts the interface doc `@return BouncyCastle security provider` (CryptoProvider.java:35). The only consumer, BouncyIntegration.loadProvider (:34-39), works with any provider, so there is no behaviour change. It is a documentation mismatch, a nit rather than FP.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-03": {
+  "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+  "issue": {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-03",
+   "comentarios": [
+    {
+     "gid": "sonnet-cc:S7",
+     "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+     "lines": [
+      151,
+      163
+     ],
+     "texto": "integerToBytes silently truncates r/s values longer than the curve size, so malformed or non-canonical DER signatures are accepted as a different valid-looking value (signature malleability). Reject values that exceed qLength after stripping a single leading sign byte instead of truncating."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "integerToBytes truncation (AuthzClientCryptoProvider.java:151-163) mirrors BC's X9IntegerConverter used by BCECDSACryptoProvider.java:62-63. asn1derToConcatenatedRS is only used on the signing side (core/.../ECDSASignatureSignerContext.java:33) to convert a locally produced signature, so no signature is 'accepted' and malleability is not reachable."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:151-156 unconditionally discards excess high-order bytes, without checking whether they represent actual magnitude or merely sign padding. The conversion invokes this helper for both decoded integers at lines 133-137, allowing oversized values to become different, potentially valid signature components."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "The truncation exists (AuthzClientCryptoProvider.java:151-156), but no signature is ever 'accepted' through it. asn1derToConcatenatedRS has a single production caller, the signing side: core/.../ECDSASignatureSignerContext.java:33 `return ECDSAAlgorithm.asn1derToConcatenatedRS(super.sign(data), size);`, which converts a signature the local JCA just produced. All verifiers (ECDSASignatureVerifierContext.java:30, ClientECDSASignatureVerifierContext.java:58, ServerECDSASignatureVerifierContext.java:19) use the opposite direction, concatenatedRSToASN1DER. It also mirrors BC's X9IntegerConverter.integerToBytes used by BCECDSACryptoProvider. No malleability path.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "I change my classification to FP: the truncation exists, but oversized untrusted integers cannot reach it through the production callers. ECDSASignatureSignerContext.java:33 passes a locally generated JCA signature into asn1derToConcatenatedRS; all three verification contexts use concatenatedRSToASN1DER instead. The proposed rejection therefore guards an unreachable state in the current flow, rather than fixing signature acceptance or malleability. Severity remains high assuming the claimed security weakness were true, as the rubric requires."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-01": {
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "issue": {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-01",
+   "comentarios": [
+    {
+     "gid": "sonnet-cc:S1",
+     "file": "app/views/embed/best.html.erb",
+     "lines": [
+      6,
+      6
+     ],
+     "texto": "WHAT: `<%- end if %>` on line 6 is not valid Ruby, because `end if` has no condition. WHY: the template will most likely raise a SyntaxError and the embed page will fail to render. HOW: use `<%- end %>`."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "high",
+    "text": "`<%- end if %>` on its own line (app/views/embed/best.html.erb:6) is compiled by Erubis with the trailing newline, giving `end if\\n<next append>`, which Ruby parses as a modifier if whose condition is the next statement; it is valid Ruby and renders. Only stdlib ERB (which appends ';') would fail, and Rails does not use it."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "The new template contains a conditionless `<%- end if %>` at app/views/embed/best.html.erb:6; compiling its generated Ruby confirms a SyntaxError. Existing-topic requests reach this template through app/controllers/embed_controller.rb:12\u201313, so embedded discussions fail to render."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "high",
+    "text": "Discourse here is Rails 3.2.12 with erubis 2.7.0 (Gemfile.lock:148, :308), not stdlib ERB. A stand-alone `<%- end if %>` line is trimmed by Erubis into a statement that ends with its newline, and Erubis's add_stmt only appends ';' when the code does not end in '\\n'. So the generated Ruby is `end if \\n@output_buffer.safe_concat('\\n  ');...`, which Ruby parses as a modifier-if whose condition is the next (truthy) append. I compiled that generated shape with Ruby 2.6 and it runs. Only stdlib ERB (which emits `end if ;`) raises SyntaxError, which is probably what your check compiled. The template (best.html.erb:6) renders: ugly code, no crash.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "high",
+    "text": "I change my classification: the claimed SyntaxError does not occur with this application's rendering engine. Gemfile.lock pins Rails 3.2.12 and Erubis 2.7.0; the [Rails handler](https://raw.githubusercontent.com/rails/rails/v3.2.12/actionpack/lib/action_view/template/handlers/erb.rb) uses Erubis with trimming enabled. Erubis preserves the statement's trailing newline, allowing the following buffer append to serve as the modifier-if condition. I compiled and executed that generated Ruby shape for both branches successfully, so my earlier stdlib ERB check did not establish a defect."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor#sncc-01": {
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "issue": {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+   "comentarios": [
+    {
+     "gid": "sonnet-cc:S3",
+     "file": "app/assets/javascripts/discourse/lib/utilities.js",
+     "lines": [
+      246,
+      247
+     ],
+     "texto": "The 413 handler now tells the user the maximum size is a hard-coded 10 MB. That number is not the limit the server enforces, which comes from the site settings or the web server config, so the message can be false. Derive the value from the configured setting, or use a message that doesn't state a number."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "utilities.js:246 now hard-codes 10 MB for the 413 case, matching the limit the PR sets everywhere else: uploads_controller.rb downloads with 10.megabytes and the server now downsizes images above max_image_size_kb instead of rejecting them, and config/nginx.sample.conf:61 ships client_max_body_size 10m. The 413 comes from the web server, so the message matches the shipped configuration. This is the intended design."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The PR replaces the configured value with 10 * 1024 for every HTTP 413 response in app/assets/javascripts/discourse/lib/utilities.js:245-247; config/locales/client.en.yml:1297 displays it as the maximum allowed size. Although config/nginx.sample.conf:61 defaults to 10m, a deployment with a lower web-server limit will reject uploads while this message incorrectly advertises 10 MB."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The PR deliberately moves the whole upload path to a 10 MB cap: utilities.js:182 `var maxSizeKB = 10 * 1024; // 10MB` for the client check, uploads_controller.rb:55 `FileHelper.download(url, 10.megabytes, ...)`, and server-side downsizing of anything above max_image_size_kb (uploads_controller.rb:63-70). The 413 message at utilities.js:246 matches that cap and the shipped config/nginx.sample.conf:61 `client_max_body_size 10m`. The value it replaced (max_image_size_kb) was not the web-server limit either, so a custom lower nginx limit was misreported before this PR too. Intended design, nothing new to report.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The shipped nginx configuration matches 10 MB, but the changed code introduces a mismatch for deployments with lower limits. For example, with both max_image_size_kb and nginx set to 2 MB, the previous client check rejected a 3 MB image with the correct limit; the new check allows it through, and nginx\u2019s 413 now produces an incorrect 10 MB message. This newly reachable misleading failure is not merely the pre-existing inability to discover nginx\u2019s limit."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "Concede. Hard-coding 10 MB is intended, but the side effect is new: the PR also replaced the client pre-check with the constant (utilities.js:182 `var maxSizeKB = 10 * 1024; // 10MB`), so on a deployment whose web-server limit is below 10 MB, a file between that limit and 10 MB now passes the client and gets a 413, and utilities.js:246 tells the user the limit is 10 MB. Before the PR the client check rejected it with the configured value. The misleading message for non-default configs is newly reachable through changed lines: a real, edge-case defect.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "frontend-asset-optimization-grafana-codex#sncc-01": {
+  "caseId": "frontend-asset-optimization-grafana-codex",
+  "issue": {
+   "issueId": "frontend-asset-optimization-grafana-codex#sncc-01",
+   "comentarios": [
+    {
+     "gid": "sonnet-cc:S1",
+     "file": "pkg/api/webassets/webassets.go",
+     "lines": [
+      69,
+      70
+     ],
+     "texto": "WHAT: The cache is assigned unconditionally, so a failed read stores nil in entryPointAssetsCache. WHY: In non-Dev mode a transient manifest read error discards a previously valid cache entry, and the next call has to re-read the manifest. HOW: Only assign the cache when err == nil && result != nil."
+    },
+    {
+     "gid": "sonnet-cc:S2",
+     "file": "pkg/api/webassets/webassets.go",
+     "lines": [
+      69,
+      70
+     ],
+     "texto": "The cache is written unconditionally, so when reading the manifest fails, a nil result overwrites the cached assets. In Dev mode a transient read error discards a previously good cache. In non-Dev mode a cold-start failure is stored as nil, so every caller keeps hitting the file read. Only assign entryPointAssetsCache when err == nil and result != nil."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "webassets.go:45-47 returns the cache early whenever Env != Dev and the cache is non-nil, so in non-Dev mode the load path, and the write at line 69, only runs when the cache is already nil. A valid entry can never be overwritten. In Dev mode the cache is never served, so overwriting it has no effect, and storing nil on a cold failure just retries, which is the pre-existing behaviour."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "low",
+    "text": "The unconditional assignment at pkg/api/webassets/webassets.go:69-70 already exists in the base commit; this PR adds synchronization. Development mode deliberately bypasses cached values at lines 45-46, and retaining nil after a cold-start failure necessarily requires retrying, so the proposed guard provides no recovery benefit."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "low",
+    "text": "Concede. `entryPointAssetsCache = result` (webassets.go:69) is unchanged from base, and the PR only adds the mutex. My 'can never be overwritten' was slightly too strong: two cold callers can both pass the nil check, because there is no re-check after Lock at :48. The worst case is still a nil cache that the next call re-reads, so there is no recovery problem. Pre-existing assignment, FP none.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "frontend-asset-optimization-grafana-codex#sncc-02": {
+  "caseId": "frontend-asset-optimization-grafana-codex",
+  "issue": {
+   "issueId": "frontend-asset-optimization-grafana-codex#sncc-02",
+   "comentarios": [
+    {
+     "gid": "sonnet-cc:S3",
+     "file": "webassets.go",
+     "lines": [
+      51,
+      69
+     ],
+     "texto": "After a cache miss, every caller takes the exclusive lock and holds it through the whole load (file read and parse). In Dev mode the cache is deliberately bypassed, so every request now serializes behind a global mutex. Do the load outside the exclusive lock, or avoid taking the lock at all when the cache is bypassed in Dev mode. The reviewer did not read the function body (lines 51-68), so the actual lock hold time is unconfirmed."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "webassets.go:49-50 takes the exclusive Lock and holds it (defer Unlock) through the manifest file read/parse. In Dev mode the cache is never returned, so every call serializes on the global mutex. This only affects development mode, and the operation is a small local file read, so the user impact is negligible."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The new exclusive lock at pkg/api/webassets/webassets.go:48-49 remains held through manifest loading at line 60, including file opening at line 75 and JSON decoding at line 106. Since development mode bypasses the cache at line 45, concurrent requests using this function, including index rendering at pkg/api/index.go:82, serialize their entire manifest loads."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "Agreed on the mechanics: Lock at webassets.go:48-49 is held through readWebAssetsFromFile (:60). But outside Dev the read lock fast path returns the cache (:41-47), so the exclusive section runs only on a cold cache, where serializing the load is actually desirable (it avoids duplicate reads). The serialization on every call happens only with `cfg.Env == setting.Dev` (:45), a developer's local instance, and the work is one local JSON file read. No user-facing impact: nit.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "Changed to TP/nit, low. The added exclusive lock does cover the manifest read and JSON decoding, and Dev mode bypasses the cache on every call. However, production cache hits return before acquiring the exclusive lock, and the cited development-only contention does not establish a meaningful performance regression. One correction to the other reviewer's argument: concurrent cold-cache callers can still repeat the load because the cache is not rechecked after acquiring the exclusive lock."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02": {
+  "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "issue": {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+   "comentarios": [
+    {
+     "gid": "sonnet-cc:S3",
+     "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+     "lines": [
+      121,
+      125
+     ],
+     "texto": "WHAT: getGroupIdsWithViewPermission iterates every group resource and runs a full permission evaluation for each one. WHY: it is called on every user search and user count for non-global viewers, so the cost grows as O(groups) policy evaluations per request. HOW: evaluate permissions once for the scopes across the Groups resource type and collect the matching resources, or cache the result per request."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "getGroupIdsWithViewPermission runs hasPermission per Groups-type resource (GroupPermissionsV2.java:121-125), but V2 resources exist only for groups referenced by permissions and V1 GroupPermissions.getGroupIdsWithViewPermission (GroupPermissions.java:313-317) has the same per-resource loop, so this is an optimisation, not a regression."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "GroupPermissionsV2.java:121-125 scans every Groups resource and calls hasPermission, which invokes a separate policy evaluation at line 152. MgmtPermissions.java:351 creates each evaluator independently, and IterablePermissionEvaluator.java:59 allocates a fresh decision cache, preventing reuse across groups. UsersResource.java:398 and :448 invoke this work for counts and searches, introducing a meaningful performance problem as configured group resources grow."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "The loop is reachable (UsersResource.java:448, also :398/:425/:430), but it is the established design, not a regression: V1 does exactly the same, GroupPermissions.java:313-314 `resourceStore.findByType(server, \"Group\", resource -> { if (hasPermission(resource, null, VIEW_MEMBERS_SCOPE, MANAGE_MEMBERS_SCOPE))`. V2 copies it at GroupPermissionsV2.java:121-122. It returns early when the admin has global view (:107 `if (root.users().canView()) return Collections.emptySet();`), and V2 resources exist only for groups that are named in a permission, not for every group. So the cost scales with permissioned groups, the same as today. An optimisation suggestion: nit.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I retain TP: GroupPermissionsV2.java:121\u2013125 performs a separate permission evaluation for each configured Groups resource, with a fresh decision cache per evaluation. The global-view guard and restriction to permissioned groups narrow the affected requests but do not bound this repeated work. V1 has the same inefficiency, but this PR adds and wires a new V2 implementation with different resource lookup logic; this is not merely moved or re-indented code. Repeated full policy evaluations on user searches and counts constitute a meaningful scaling problem that batching could reduce."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "Keep nit. V2 does reuse the algorithm, not just the shape: GroupPermissionsV2.java:121-122 `resourceStore.findByType(server, AdminPermissionsSchema.GROUPS_RESOURCE_TYPE, groupResource -> { if (hasPermission(...` is V1's per-resource loop over the same bounded set (resources that exist only for groups named in a permission), behind the same early return for global viewers (:107). Users who opt into V2 get the same cost as V1 today, so the PR adds no performance regression. Batching the evaluation is an optimisation suggestion. Per-evaluation decision caches were already used in V1 too.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "I change to TP/nit. GroupPermissionsV2.java:121\u2013125 performs per-resource permission checks, but V1 already uses the same loop and evaluation mechanism, including separate decision caches. The global-view guard and iteration over authorization resources limit the affected work; linear evaluation alone does not establish a meaningful performance defect. Batching is an optimisation suggestion, and my earlier classification overstated the demonstrated impact."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#sncc-01": {
+  "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+  "issue": {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#sncc-01",
+   "comentarios": [
+    {
+     "gid": "sonnet-cc:S1",
+     "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+     "lines": [
+      213,
+      223
+     ],
+     "texto": "WHAT: When immediateDelete is true the function cancels the SendGrid batch and returns without deleting or flagging the WorkflowReminder row. WHY: Reminders of rescheduled bookings, deleted workflows and deleted steps stay in the DB as scheduled=true with a referenceId, leaving orphan rows. In the reschedule case they stay attached to the old booking. HOW: Delete the reminder row (prisma.workflowReminder.delete) after the successful cancel request in the immediateDelete branch."
+    },
+    {
+     "gid": "sonnet-cc:S4",
+     "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+     "lines": [
+      213,
+      223
+     ],
+     "texto": "With immediateDelete=true, the function cancels the SendGrid batch and returns without deleting the WorkflowReminder row. Callers that used to delete the row (reschedule, workflow delete, step delete) no longer do, and the cron only deletes rows with cancelled=true. The reminder rows are therefore left in the database permanently. Delete the DB row after the cancel request succeeds."
+    },
+    {
+     "gid": "sonnet-cc:S5",
+     "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+     "lines": [
+      213,
+      223
+     ],
+     "texto": "The immediateDelete branch cancels the SendGrid batch and returns without deleting the WorkflowReminder row. Callers used to delete the row themselves, and the PR removed that code, so the reschedule path in handleNewBooking now leaves an orphaned reminder row. Delete the row after the cancel request in this branch."
+    },
+    {
+     "gid": "sonnet-cc:S7",
+     "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+     "lines": [
+      213,
+      223
+     ],
+     "texto": "With immediateDelete=true, the function cancels the SendGrid batch and returns without deleting the WorkflowReminder row or setting cancelled. The handleNewBooking reschedule caller expects the reminder to be removed, as deleteScheduledSMSReminder does, so email reminder rows of the original booking stay behind with cancelled=null. Delete the row after the successful cancel request."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "In the immediateDelete branch, deleteScheduledEmailReminder only POSTs the SendGrid cancel and returns (emailReminderManager.ts:213-223), without deleting the row or setting cancelled. The new reschedule path (handleNewBooking.ts:965-969) uses it, so the original booking's WorkflowReminder rows stay scheduled=true with cancelled=null, and the cron only cleans cancelled=true rows (scheduleEmailReminders.ts:43-51). The workflow and step deletes are covered by the onDelete Cascade on workflowStep (schema.prisma:643)."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "high",
+    "text": "The immediate branch does return without updating the row (packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:213-222), but the claimed permanent orphaning is false: the cron deletes expired email reminders regardless of cancelled status (packages/features/ee/workflows/api/scheduleEmailReminders.ts:34-40). Workflow and step deletion also cascade to reminders (packages/prisma/schema.prisma:587,643), while rescheduling merely retains the cancelled batch's row until its scheduled date passes."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "high",
+    "text": "Concede. I misread the cron: scheduleEmailReminders.ts:34-41 deletes every EMAIL reminder with `scheduledDate: { lte: now }` regardless of `cancelled`. Rows left by the immediateDelete branch (emailReminderManager.ts:213-222) are removed once their date passes, and workflow/step deletes cascade (schema.prisma:643). The 'permanent orphan' premise is false.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01": {
+  "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+  "issue": {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+   "comentarios": [
+    {
+     "gid": "sonnet-cc:S2",
+     "file": "src/sentry/scripts/spans/add-buffer.lua",
+     "lines": [
+      30,
+      30
+     ],
+     "texto": "WHAT: the redirect-walk limit was reduced from 10000 to 1000 iterations, and the comment documenting the limit was removed. WHY: trees deeper than 1000 stop resolving to the correct set root, so segments may be split or joined incorrectly. This change is unrelated to span eviction. HOW: restore the 10000 limit unless the reduction is intentional."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "add-buffer.lua:30 does lower the redirect-walk loop from 10000 to 1000 and drops the comment. This is part of the PR's insertion-cost optimisation: the same script now caps each set at 1000 spans with zpopmin (lines 62-64). Bounding the per-insert redirect walk is a deliberate tradeoff for pathological traces, not an accidental change."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "src/sentry/scripts/spans/add-buffer.lua:30 reduces traversal from 10,001 to 1,001 iterations, then uses the potentially intermediate node as the destination at line 45. Descendant-first arrivals across batches can build longer redirect chains; eviction at lines 62\u201363 removes payloads without shortening those chains, allowing subsequent spans to form a separate segment."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The loop bound change is in the PR's own optimisation and is paired with a new 1000 cap on set size (add-buffer.lua:62-64 `if span_count > 1000 then redis.call(\"zpopmin\", ...)`). Redirect chains are kept flat: each span is written straight to its resolved root at :40 `redis.call(\"hset\", main_redirect_key, span_id, set_span_id)`. So depth grows only when a whole set root is itself re-parented, and a chain over 1000 needs more than 1000 nested levels arriving strictly bottom-up in separate batches. The removed comment documented the same accepted limitation at 10k. This is a deliberate tradeoff for pathological traces, not a defect.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I retain TP: writing each arriving span\u2019s redirect does not flatten existing descendants when their root is subsequently re-parented. Separate bottom-up batches can create s0\u2192s1\u2192\u2026\u2192s1002; a later child of s0 resolves to s1001 under the new loop, whereas the previous limit reaches s1002. Eviction removes sorted-set payloads without shortening the redirect hash, so the 1000-span cap does not prevent this incorrect segment assignment. This is an uncommon-input correctness regression; an optimisation motive alone does not establish that it is intended behavior."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "Keep FP. Astra's chain is possible, but it needs a single segment with more than 1000 nested levels arriving strictly bottom-up across batches, and any such segment already holds more than 1000 spans. The same PR deliberately truncates every segment to 1000 spans (add-buffer.lua:62-64 `if span_count > 1000 then redis.call(\"zpopmin\", set_key, span_count - 1000)`). So lowering the walk bound to 1000 (:30 `for i = 0, 1000 do`) only affects traces the PR has already decided not to assemble in full. The old removed comment shows the depth cap was always an accepted limitation. Moving it from 10k to 1k together with the 1000-span cap is a consistent, intended tradeoff, not an accidental regression.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I retain TP: limiting retained payloads does not make incorrect segment assignment harmless. The hset at line 40 updates only the arriving span, while zpopmin removes payloads without shortening existing redirect chains. For s0\u2192s1\u2192\u2026\u2192s1002, a later child of s0 stops at s1001 under the new bound and creates a separate buffer instead of joining s1002, even if its timestamp would keep it among the retained 1000 spans. The previous bound resolves this case correctly; accepting payload truncation does not establish that this additional correctness regression is intended."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "Concede TP. Astra's chain can happen. buffer.py:207-214 runs add-buffer.lua once per span. When a span arrives before its parent is known, add-buffer.lua:30-38 resolves nothing and :40 writes span_id -> parent_span_id. So spans that arrive bottom-up build a redirect chain one hop per level, and nothing ever flattens it: zpopmin at :62-63 trims only the sorted set, never the redirect hash. The PR's diff changes :30 from `for i = 0, 10000` to `for i = 0, 1000`. A later child of s0 therefore stops at an intermediate node, and :45 places it in a separate set_key, which splits the segment. The old bound handled depths 1001-10000 correctly, so this PR introduced the regression. No code shows that the split is intended: the 1000-span cap limits payload size, not the redirect walk. The trees involved are very deep and uncommon, so the severity is medium.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-02": {
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "issue": {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-02",
+   "comentarios": [
+    {
+     "gid": "sonnet-cc:S5",
+     "file": "packages/features/bookings/lib/handleNewBooking.ts",
+     "lines": [
+      735,
+      740
+     ],
+     "texto": "WHAT: the rewritten loadUsers dropped the `organization: { select: { slug } }` selection for dynamic-user bookings. WHY: downstream code that reads `user.organization` for these users now gets undefined, a regression in the query result. HOW: restore the organization select."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The rewritten loadUsers (handleNewBooking.ts:731-739) did drop the organization { slug } select for dynamic users. However, nothing in handleNewBooking reads user.organization: the only mentions are the hosts select (line 321) and the IsFixedAwareUser type (line 355), and the code uses organizationId from userSelect. So no downstream behaviour changes."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "high",
+    "text": "The organization selection was removed at packages/features/bookings/lib/handleNewBooking.ts:735\u2013739, but the claimed downstream dependency on user.organization does not exist in this booking path. Organization handling uses organizationId, retained by packages/prisma/selects/user.ts:48; packages/lib/server/getBookerUrl.ts:4\u20136 uses that ID to fetch branding separately."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "high",
+    "text": "Concede to hallucination. The select was removed (handleNewBooking.ts:735-739), but `git grep '\\.organization\\b'` on handleNewBooking.ts at head finds no reader. Org handling uses organizationId from userSelect. The comment's premise that downstream code reads user.organization is false, so the described regression cannot happen.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "replays-self-serve-bulk-delete-system-sentry#sncc-02": {
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "issue": {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-02",
+   "comentarios": [
+    {
+     "gid": "sonnet-cc:S5",
+     "file": "static/app/views/explore/hooks/useGetTraceItemAttributeValues.spec.tsx",
+     "lines": [
+      114,
+      147
+     ],
+     "texto": "The number-type test's mock matches on `query.query === 'search-query'`, but the hook sends the search as `substringMatch`, so the mock can never match. As a result, `expect(searchQueryMock).not.toHaveBeenCalled()` passes even if the `type === 'number'` early return is removed. Match on `query.substringMatch` so the assertion can fail when the guard is broken."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "Fact is right: the mock matches query.query === 'search-query' while the hook sends substringMatch (useGetTraceItemAttributeValues.tsx:53), so the not.toHaveBeenCalled assertion is vacuous. But that matcher is unchanged by this PR: the spec is a rename whose only edits are the hook name and removing the attributeKey prop. So this is a pre-existing test defect."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "The matcher at static/app/views/explore/hooks/useGetTraceItemAttributeValues.spec.tsx:120 does use the wrong parameter, but removing the guard would not let the test pass. An unmatched request never resolves its promise (static/app/__mocks__/api.tsx:216-225,237-254), so the await at the test\u2019s line 144 would time out before reaching the assertion."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "Concede to hallucination. Besides being pre-existing (the rename diff of the spec only changes the hook name and drops attributeKey; the matcher `return query.query === 'search-query';` at :120 is untouched), the premise is false. An unmatched request in static/app/__mocks__/api.tsx:237-253 only records Client.errors and never calls success/error, so the requestPromise (:216-226) never resolves. `await result.current(tag, 'search-query')` (spec :144) would hang and fail the test if the number guard were removed.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "github-oauth-security-enhancement-sentry#sncc-01": {
+  "caseId": "github-oauth-security-enhancement-sentry",
+  "issue": {
+   "issueId": "github-oauth-security-enhancement-sentry#sncc-01",
+   "comentarios": [
+    {
+     "gid": "sonnet-cc:S3",
+     "file": "src/sentry/integrations/github/integration.py",
+     "lines": [
+      412,
+      413
+     ],
+     "texto": "The OAuth `state` is the secret that ties the callback to the pipeline, but it is compared with `!=`, which leaks timing information. Use `constant_time_compare` from django.utils.crypto, and treat a missing state as a mismatch."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "integration.py:412 compares request.GET.get(\"state\") != pipeline.signature with a non-constant-time comparison. This is real, but the OAuth state is a per-pipeline CSRF token returned in the URL, so a remote timing attack on it is not practical. Sentry's generic OAuth2 callback (identity/oauth2.py:325) uses the same != check, and a missing state is handled at line 401 by redirecting to authorize."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "high",
+    "text": "src/sentry/pipeline/base.py:132-133 computes pipeline.signature solely from the pipeline view names, so the compared value is a public deterministic hash, not the claimed secret. src/sentry/integrations/github/integration.py:401-408 redirects missing-state requests into authorization without accepting a callback; constant-time comparison would not address the actual state-design weakness."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "high",
+    "text": "Concede. pipeline.signature is not a secret: pipeline/base.py:132-133 `pipe_ids = [f\"{type(v).__module__}.{type(v).__name__}\" ...]; self.signature = md5_text(*pipe_ids).hexdigest()`, a constant hash of view class names (the test even hardcodes it at test_integration.py:445). A timing leak of a public value is meaningless, and a missing state already redirects (integration.py:401-409).",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "github-oauth-security-enhancement-sentry#sncc-02": {
+  "caseId": "github-oauth-security-enhancement-sentry",
+  "issue": {
+   "issueId": "github-oauth-security-enhancement-sentry#sncc-02",
+   "comentarios": [
+    {
+     "gid": "sonnet-cc:S8",
+     "file": "tests/sentry/integrations/github/test_integration.py",
+     "lines": [
+      448,
+      454
+     ],
+     "texto": "The mismatch test asserts only the generic 'Invalid installation request.' text. A state mismatch or OAuth failure produces the same text, so the test cannot show that the sender-login comparison is what rejected the request. Assert the pipeline got past the state check, for example by checking that the user endpoint was called and the failure came from the login mismatch."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "In the new mismatch test, test_integration.py:448-454 only asserts the generic 'Invalid installation request.' text. error() (integration.py:132) emits that same default text for a state mismatch, a missing access_token, a missing login and the sender-login mismatch (integration.py:412-433, 500-505). So the test passes even if the rejection does not come from the new sender-login check it was written for."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The state supplied at tests/sentry/integrations/github/test_integration.py:445 matches the hash computed at src/sentry/pipeline/base.py:132-133, and the mocks at test_integration.py:116-123 provide successful OAuth responses. The test sets sender.login to 'attacker' at line 417 against authenticated 'octocat', reaching the rejection at src/sentry/integrations/github/integration.py:501-505; sharing an error message does not establish that this test misses its intended behavior."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "Concede. The test fixes the state to the real signature (test_integration.py:445), stubs OAuth success (_stub_github), creates the integration via the webhook with sender 'attacker' (:417-426), and so reaches integration.py:501-505. If the sender check were removed, pipeline.next_step() would run and the failed-template assertions (:451-454) would fail. The test does verify the new check; the shared message is not a defect.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "advanced-sql-analytics-framework-grafana-codex#sncc-01": {
+  "caseId": "advanced-sql-analytics-framework-grafana-codex",
+  "issue": {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#sncc-01",
+   "comentarios": [
+    {
+     "gid": "sonnet-cc:S1",
+     "file": "pkg/expr/reader.go",
+     "lines": [
+      194,
+      200
+     ],
+     "texto": "WHAT: enableSqlExpressions returns false on every path, and the result of the FlagSqlExpressions check is discarded. WHY: the feature flag has no effect, so SQL expressions stay disabled even when it is enabled, and the inverted `enabled` variable hides that. HOW: if the hard disable is intended, return false with a comment and drop the flag lookup. Otherwise return `h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`."
+    },
+    {
+     "gid": "sonnet-cc:S2",
+     "file": "pkg/expr/reader.go",
+     "lines": [
+      194,
+      200
+     ],
+     "texto": "enableSqlExpressions negates the flag into `enabled` and then returns false on both paths, so the computed value is never used. SQL expressions are rejected even when FlagSqlExpressions is enabled. Return the flag's actual value."
+    },
+    {
+     "gid": "sonnet-cc:S3",
+     "file": "pkg/expr/reader.go",
+     "lines": [
+      194,
+      200
+     ],
+     "texto": "enableSqlExpressions returns false on every path, so ReadQuery rejects every SQL expression even when FlagSqlExpressions is enabled. Callers that could use SQL expressions with the flag on now always get an error. Return the flag's actual value."
+    },
+    {
+     "gid": "sonnet-cc:S4",
+     "file": "pkg/expr/reader.go",
+     "lines": [
+      194,
+      200
+     ],
+     "texto": "enableSqlExpressions reads as 'is the SQL expressions feature enabled', but the local `enabled` is the negation of the flag and both branches return false. The function is constant-false, so the name and variable misstate the behavior and the flag has no effect. Return the flag value directly, or rename the function and variable to say that SQL expressions are unconditionally disabled."
+    },
+    {
+     "gid": "sonnet-cc:S5",
+     "file": "pkg/expr/reader.go",
+     "lines": [
+      194,
+      200
+     ],
+     "texto": "enableSqlExpressions returns false on every path. The flag is negated into `enabled`, and the fallthrough also returns false. SQL expressions are therefore rejected even when FlagSqlExpressions is enabled. Return the flag's value directly."
+    },
+    {
+     "gid": "sonnet-cc:S6",
+     "file": "pkg/expr/reader.go",
+     "lines": [
+      194,
+      200
+     ],
+     "texto": "enableSqlExpressions returns false on every path: the `enabled` variable is inverted and both branches return false. The feature flag therefore has no effect, and every SQL expression query fails to parse with \"not implemented\". Return the flag's actual value."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "enableSqlExpressions (pkg/expr/reader.go:194-200) negates the flag into `enabled` and returns false on both branches, so ReadQuery always returns 'sqlExpressions is not implemented' for QueryTypeSQL (reader.go:129-131) even with FlagSqlExpressions on."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "pkg/expr/reader.go:194-199 does always return false, causing rejection at reader.go:129-131, but this PR intentionally disables SQL expressions. The same change replaces the SQL backend with unimplemented methods at pkg/expr/sql/db.go:16-21; returning the flag value would therefore expose an unavailable backend rather than restore working SQL expressions."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "Concede. The constant false is intentional. The same PR drops the SQL engine dependency (go.mod/go.sum) and stubs the backend: pkg/expr/sql/db.go:16-21 `return nil, errors.New(\"not implemented\")` for TablesList/RunCommands/QueryFramesInto. Returning the flag value would only move the failure later. The rejection at reader.go:129-131 is the intended disablement.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ }
+}

@@ -1,0 +1,194 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01": {
+  "class": "TP",
+  "subclass": null,
+  "reason": "ASN1Decoder.readLength returns -1 for 0x80 (ASN1Decoder.java:133-135) and readInteger passes it straight to read(length) (ASN1Decoder.java:71-72), which does new byte[length] (line 170). A DER signature with indefinite length therefore throws NegativeArraySizeException instead of IOException.",
+  "category": "bug",
+  "comment": "ASN1Decoder.readInteger passes the -1 returned by readLength for indefinite-length encoding to read(int), which allocates new byte[-1] and throws an unchecked NegativeArraySizeException instead of an IOException on malformed DER input.",
+  "severity": "medium"
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02": {
+  "class": "FP",
+  "subclass": null,
+  "reason": "getBouncyCastleProvider returns KeyStore.getInstance(default).getProvider() (AuthzClientCryptoProvider.java:61-66). Its only consumer, BouncyIntegration.loadProvider (common/.../BouncyIntegration.java:33-39), just needs a provider name and would fall back to Security.getProviders()[0] on null anyway; the authz client has no BC, so this fallback is intended.",
+  "category": null,
+  "comment": "getBouncyCastleProvider in AuthzClientCryptoProvider returns the JDK default KeyStore provider instead of BouncyCastle, contrary to the CryptoProvider contract.",
+  "severity": "low"
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-03": {
+  "class": "FP",
+  "subclass": null,
+  "reason": "integerToBytes truncation (AuthzClientCryptoProvider.java:151-163) mirrors BC's X9IntegerConverter used by BCECDSACryptoProvider.java:62-63. asn1derToConcatenatedRS is only used on the signing side (core/.../ECDSASignatureSignerContext.java:33) to convert a locally produced signature, so no signature is 'accepted' and malleability is not reachable.",
+  "category": null,
+  "comment": "integerToBytes silently truncates r/s values longer than the curve size, so non-canonical DER signatures are accepted as different values (signature malleability).",
+  "severity": "medium"
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-01": {
+  "class": "TP",
+  "subclass": "nit",
+  "reason": "getClientsWithPermission runs root.evaluatePermission once per Clients-type resource (ClientPermissionsV2.java:138-142, hasGrantedPermission at 274-276). Resources exist only for clients that have specific permissions, and V1 ClientPermissions.getClientsWithPermission uses the same per-resource pattern, so the cost is bounded and not a meaningful regression.",
+  "category": "perf",
+  "comment": "ClientPermissionsV2.getClientsWithPermission runs a full policy evaluation for every client resource of type Clients, so listing clients costs one evaluation per client resource.",
+  "severity": "medium"
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "reason": "The listener only runs when ADMIN_FINE_GRAINED_AUTHZ (v1) is enabled (AdminPermissions.java:77), while management() returns V2 only when ADMIN_FINE_GRAINED_AUTHZ_V2 is enabled (AdminPermissions.java:66-70). Both are versions of the same feature and Profile rejects enabling multiple versions (Profile.java:285-286), so the throwing V2 setPermissionsEnabled can never be reached from this listener.",
+  "category": null,
+  "comment": "On ClientRemovedEvent the AdminPermissions listener calls clients().setPermissionsEnabled(client, false), which throws UnsupportedOperationException in ClientPermissionsV2 when V1 and V2 are both enabled, so client deletion fails.",
+  "severity": "high"
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "reason": "The canView filter was not removed: searchForUser now delegates to toRepresentation, which applies userModels.filter(usersEvaluator::canView) (UsersResource.java:453, 459-460), and grantIfNoPermission is only set when the GROUPS attribute is present. A caller with no view permission and no group grants still has every user filtered out.",
+  "category": null,
+  "comment": "searchForUser no longer filters results with usersEvaluator::canView, so an admin with query access but no view permission and no group grants gets an unrestricted user list.",
+  "severity": "critical"
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02": {
+  "class": "TP",
+  "subclass": "nit",
+  "reason": "getGroupIdsWithViewPermission runs hasPermission per Groups-type resource (GroupPermissionsV2.java:121-125), but V2 resources exist only for groups referenced by permissions and V1 GroupPermissions.getGroupIdsWithViewPermission (GroupPermissions.java:313-317) has the same per-resource loop, so this is an optimisation, not a regression.",
+  "category": "perf",
+  "comment": "GroupPermissionsV2.getGroupIdsWithViewPermission runs a full permission evaluation for every group resource on each user search and count, costing O(groups) policy evaluations per request.",
+  "severity": "medium"
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com#sncc-01": {
+  "class": "TP",
+  "subclass": null,
+  "reason": "addGuests.handler.ts:55 throws FORBIDDEN with message 'you_do_not_have_permission', a key that exists nowhere else in the repo at head, and AddGuestsDialog.tsx:43 renders t(err.message). Users who are not allowed get the raw key in the error toast.",
+  "category": "bug",
+  "comment": "The addGuests FORBIDDEN error uses the translation key you_do_not_have_permission, which is missing from the locale files, so the dialog shows the raw key to users.",
+  "severity": "low"
+ },
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#sncc-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "reason": "The organizer schedule already has a non-UTC timezone (IstWorkHoursWithDateOverride, timeZone +5:30, getSchedule.test.ts:107-128) and the new case uses invitee +6:00 (lines 788-797). The old slots.ts used the override's raw UTC minutes with no invitee/organizer offset, so with a 30-minute offset it yields shifted slots and the assertion would fail without the fix.",
+  "category": null,
+  "comment": "The new different-timezone date-override test expects the same UTC slots as the existing case and would still pass if the offset fix in slots.ts were reverted.",
+  "severity": "medium"
+ },
+ "advanced-sql-analytics-framework-grafana-codex#sncc-01": {
+  "class": "TP",
+  "subclass": null,
+  "reason": "enableSqlExpressions (pkg/expr/reader.go:194-200) negates the flag into `enabled` and returns false on both branches, so ReadQuery always returns 'sqlExpressions is not implemented' for QueryTypeSQL (reader.go:129-131) even with FlagSqlExpressions on.",
+  "category": "bug",
+  "comment": "enableSqlExpressions returns false on every path (the flag is negated and both branches return false), so SQL expressions are rejected even when FlagSqlExpressions is enabled.",
+  "severity": "high"
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex#sncc-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "reason": "ProvideAnonDBStore(sqlStore, deviceLimit int64) is still listed in pkg/server/wire.go:374, but nothing in the injected graph consumes AnonStore any more: ProvideAnonymousDeviceService now builds the store itself (impl.go:43). Wire only resolves the inputs of providers that are needed, so an unused provider inside a nested set does not break generation or the build.",
+  "category": null,
+  "comment": "ProvideAnonDBStore gained an int64 deviceLimit parameter but is still registered as a wire provider in pkg/server/wire.go, which has no provider for int64, so wire generation or compilation fails.",
+  "severity": "high"
+ },
+ "async-import-of-the-appstore-packages-cal-com#sncc-01": {
+  "class": "TP",
+  "subclass": null,
+  "reason": "packages/app-store/index.ts:1-31 builds the appStore object with eager `import(\"./x\")` calls, so every app module starts loading as soon as the file is imported; only the result type changes to promises. The lazy-loading goal of the PR is not achieved.",
+  "category": "perf",
+  "comment": "Each import(...) in the appStore object literal runs when app-store/index.ts is imported, so all integrations still load at startup instead of lazily, while every entry becomes a promise.",
+  "severity": "medium"
+ },
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#sncc-01": {
+  "class": "TP",
+  "subclass": null,
+  "reason": "In the immediateDelete branch, deleteScheduledEmailReminder only POSTs the SendGrid cancel and returns (emailReminderManager.ts:213-223), without deleting the row or setting cancelled. The new reschedule path (handleNewBooking.ts:965-969) uses it, so the original booking's WorkflowReminder rows stay scheduled=true with cancelled=null, and the cron only cleans cancelled=true rows (scheduleEmailReminders.ts:43-51). The workflow and step deletes are covered by the onDelete Cascade on workflowStep (schema.prisma:643).",
+  "category": "data",
+  "comment": "With immediateDelete=true, deleteScheduledEmailReminder cancels the SendGrid batch and returns without deleting or flagging the WorkflowReminder row, and the callers no longer delete it, so reminder rows are left orphaned in the database.",
+  "severity": "medium"
+ },
+ "dual-storage-architecture-grafana-codex#sncc-01": {
+  "class": "TP",
+  "subclass": null,
+  "reason": "At base, Delete tolerated apierrors.IsNotFound from Storage and still deleted from Legacy. At head (dualwriter_mode3.go:100-105), any Storage error, NotFound included, returns before the legacy delete goroutine runs (lines 108-114). Objects present only in legacy are never removed there.",
+  "category": "bug",
+  "comment": "DualWriterMode3.Delete now returns on any unified-storage error, including NotFound, before deleting from legacy, so objects that exist only in legacy can no longer be deleted.",
+  "severity": "high"
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "reason": "`<%- end if %>` on its own line (app/views/embed/best.html.erb:6) is compiled by Erubis with the trailing newline, giving `end if\\n<next append>`, which Ruby parses as a modifier if whose condition is the next statement; it is valid Ruby and renders. Only stdlib ERB (which appends ';') would fail, and Rails does not use it.",
+  "category": null,
+  "comment": "`<%- end if %>` in embed/best.html.erb is not valid Ruby, so the template raises a SyntaxError and the embed page fails to render.",
+  "severity": "high"
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-02": {
+  "class": "TP",
+  "subclass": "nit",
+  "reason": "feed_key (app/jobs/scheduled/poll_feed.rb:20-22) is defined but never referenced; poll_feed re-reads the feed each hour and TopicEmbed.import handles existing content. It is dead code with no user effect.",
+  "category": "style",
+  "comment": "PollFeed.feed_key computes a per-feed cache key that is never used, so the feed is re-fetched and re-processed every hour without a modified-since check.",
+  "severity": "low"
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03": {
+  "class": "TP",
+  "subclass": null,
+  "reason": "app/views/layouts/embed.html.erb:4 calls stylesheet_link_tag 'embed', but config/application.rb:61 precompiles only vendor/common/desktop/mobile/admin and similar assets, not embed.css/embed.js, and production.rb:23 sets config.assets.compile = false. In production the embed layout fails to resolve the asset and embed.js is never served.",
+  "category": "bug",
+  "comment": "The embed layout references the 'embed' stylesheet and embed.js, but neither is in config.assets.precompile, so with precompiled assets in production the embed page fails to load them.",
+  "severity": "high"
+ },
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01": {
+  "class": "TP",
+  "subclass": null,
+  "reason": "paginator.py:182 clamps the offset only when not cursor.is_prev and passes a negative offset unchanged into queryset[start_offset:stop] for prev cursors; Cursor accepts any int offset (cursors.py:28). Django rejects negative slicing, so a crafted prev cursor returns a 500, and the PR's added comment (lines 179-181) wrongly claims this is safe.",
+  "category": "bug",
+  "comment": "BasePaginator.get_result clamps negative offsets only for next cursors; a prev cursor with a negative offset is passed straight into the queryset slice, which Django rejects with an error (500) on every paginated endpoint.",
+  "severity": "medium"
+ },
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-02": {
+  "class": "TP",
+  "subclass": "nit",
+  "reason": "The added comment in Cursor.__init__ (src/sentry/utils/cursors.py:26-27) says negative offsets enable efficient reverse pagination, but the constructor only does int(offset) with no handling. It is a misleading comment with no behaviour change.",
+  "category": "doc_defect",
+  "comment": "The new comment in Cursor says negative offsets are allowed to enable efficient reverse pagination, but the constructor only calls int(offset) and provides no such behaviour.",
+  "severity": "low"
+ },
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-03": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "reason": "The trimming check `len(results) == offset + limit + extra` (paginator.py:192) only runs when cursor.is_prev, and for prev cursors start_offset is exactly offset (paginator.py:182; the same holds in OptimizedCursorPaginator). The two values never differ in that branch, so the check always matches the real slice.",
+  "category": null,
+  "comment": "The prev-cursor trimming check still uses the raw offset instead of start_offset, so when they differ it drops or keeps the wrong row.",
+  "severity": "medium"
+ },
+ "feat-2fa-backup-codes-cal-com#sncc-01": {
+  "class": "TP",
+  "subclass": null,
+  "reason": "next-auth-options.ts:144 checks the supplied backup code with backupCodes.indexOf(...), a short-circuiting string comparison against the decrypted secrets, instead of a constant-time comparison. It is a timing side channel on a 2FA secret, though it needs a correct password first (lines 121-128).",
+  "category": "security",
+  "comment": "The backup code is compared with the stored codes through Array.indexOf, which is not constant-time and leaks timing information about the secret backup codes.",
+  "severity": "medium"
+ },
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#sncc-01": {
+  "class": "FP",
+  "subclass": null,
+  "reason": "The errors dataset builders (ErrorsQueryBuilder and ErrorsTimeseriesQueryBuilder in builder/errors.py:119,155) subclass the Discover builders and run on Dataset.Events (snuba/errors.py:68,121). DiscoverQueryBuilder.load_config returns DiscoverDatasetConfig for Dataset.Events (builder/discover.py:64-71), so upsampled_count resolves; this is a 'confirm' request with no defect.",
+  "category": null,
+  "comment": "upsampled_count is registered only in DiscoverDatasetConfig, so if the errors dataset resolves functions through another config, the upsampled_count() query fails as an unknown function.",
+  "severity": "high"
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-01": {
+  "class": "TP",
+  "subclass": "nit",
+  "reason": "get_committable_offsets starts at max(last_committed + 1, min_offset) (queue_consumer.py:86), and mark_committed prunes offsets <= committed (line 105). So with 100, 102 and 103 the first pass commits 100 and the next pass starts at 102 and commits 103 past the missing 101, which contradicts the 'contiguous' docstring. Kafka delivers a partition in order, though, so a missing offset never arrives later and the only effect is inconsistent stalling.",
+  "category": "bug",
+  "comment": "OffsetTracker.get_committable_offsets starts scanning at max(last_committed + 1, min_offset); after mark_committed prunes offsets, a gap is skipped on the next cycle, so offsets are committed past a missing offset, contrary to the 'highest contiguous offset' guarantee.",
+  "severity": "medium"
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02": {
+  "class": "TP",
+  "subclass": "nit",
+  "reason": "The wait loop in test_thread_queue_parallel_offset_commit (test_results_consumer.py:1861-1867) breaks once total_items == 0 and any commit exists, then asserts == 105 (line 1870). The commit loop first fires 1s after start (queue_consumer.py:275), so a mid-processing commit is only a narrow theoretical race with the mocked processor; this is test tidying.",
+  "category": "test_gap",
+  "comment": "The test's wait loop stops at the first recorded commit but asserts the committed offset is exactly 105, so a commit fired mid-processing can record a lower offset and make the test flaky.",
+  "severity": "low"
+ }
+}

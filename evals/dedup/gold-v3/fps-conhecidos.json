@@ -271,6 +271,109 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+    "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+    "comment": "ASN1Decoder.readInteger passes the -1 returned by readLength for indefinite-length encoding to read(int), which allocates new byte[-1] and throws an unchecked NegativeArraySizeException instead of an IOException on malformed DER input.",
+    "commentOpus": "ASN1Decoder.readInteger passes the -1 returned by readLength for indefinite-length encoding to read(int), which allocates new byte[-1] and throws an unchecked NegativeArraySizeException instead of an IOException on malformed DER input.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S1"
+     ]
+    },
+    "reason_opus": "ASN1Decoder.readLength returns -1 for 0x80 (ASN1Decoder.java:133-135) and readInteger passes it straight to read(length) (ASN1Decoder.java:71-72), which does new byte[length] (line 170). A DER signature with indefinite length therefore throws NegativeArraySizeException instead of IOException.",
+    "reason_astra": "ASN1Decoder.java:80-82 adds the consumed header length before calling read(), so readNext does not pass -1 straight through as claimed. AuthzClientCryptoProvider.java:128-134 calls readInteger only on those extracted elements; an indefinite-length integer loses its length byte during extraction and fails with IOException, rather than reaching the negative allocation.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "sncc",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "ASN1Decoder.readLength returns -1 for 0x80 (ASN1Decoder.java:133-135) and readInteger passes it straight to read(length) (ASN1Decoder.java:71-72), which does new byte[length] (line 170). A DER signature with indefinite length therefore throws NegativeArraySizeException instead of IOException."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "texto": "ASN1Decoder.java:80-82 adds the consumed header length before calling read(), so readNext does not pass -1 straight through as claimed. AuthzClientCryptoProvider.java:128-134 calls readInteger only on those extracted elements; an indefinite-length integer loses its length byte during extraction and fails with IOException, rather than reaching the negative allocation."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "texto": "Concede. readNext does not pass -1 through: ASN1Decoder.java:80-82 `int length = readLength(); length += reset(); return read(length);` turns -1 into 1 (header bytes counted). An indefinite outer SEQUENCE leaves `while (length > 0)` (:57) unexecuted, so the size check at AuthzClientCryptoProvider.java:129 throws IOException. An indefinite element becomes a 1-byte slice, and readInteger on it hits EOFException in readLength. The only caller never reaches new byte[-1]."
+     }
+    ],
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed_after_debate",
+    "severity": "medium",
+    "category": null
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-03",
+    "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+    "comment": "integerToBytes silently truncates r/s values longer than the curve size, so non-canonical DER signatures are accepted as different values (signature malleability).",
+    "commentOpus": "integerToBytes silently truncates r/s values longer than the curve size, so non-canonical DER signatures are accepted as different values (signature malleability).",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S7"
+     ]
+    },
+    "reason_opus": "integerToBytes truncation (AuthzClientCryptoProvider.java:151-163) mirrors BC's X9IntegerConverter used by BCECDSACryptoProvider.java:62-63. asn1derToConcatenatedRS is only used on the signing side (core/.../ECDSASignatureSignerContext.java:33) to convert a locally produced signature, so no signature is 'accepted' and malleability is not reachable.",
+    "reason_astra": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:151-156 unconditionally discards excess high-order bytes, without checking whether they represent actual magnitude or merely sign padding. The conversion invokes this helper for both decoded integers at lines 133-137, allowing oversized values to become different, potentially valid signature components.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "sncc",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "integerToBytes truncation (AuthzClientCryptoProvider.java:151-163) mirrors BC's X9IntegerConverter used by BCECDSACryptoProvider.java:62-63. asn1derToConcatenatedRS is only used on the signing side (core/.../ECDSASignatureSignerContext.java:33) to convert a locally produced signature, so no signature is 'accepted' and malleability is not reachable."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:151-156 unconditionally discards excess high-order bytes, without checking whether they represent actual magnitude or merely sign padding. The conversion invokes this helper for both decoded integers at lines 133-137, allowing oversized values to become different, potentially valid signature components."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "The truncation exists (AuthzClientCryptoProvider.java:151-156), but no signature is ever 'accepted' through it. asn1derToConcatenatedRS has a single production caller, the signing side: core/.../ECDSASignatureSignerContext.java:33 `return ECDSAAlgorithm.asn1derToConcatenatedRS(super.sign(data), size);`, which converts a signature the local JCA just produced. All verifiers (ECDSASignatureVerifierContext.java:30, ClientECDSASignatureVerifierContext.java:58, ServerECDSASignatureVerifierContext.java:19) use the opposite direction, concatenatedRSToASN1DER. It also mirrors BC's X9IntegerConverter.integerToBytes used by BCECDSACryptoProvider. No malleability path."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "I change my classification to FP: the truncation exists, but oversized untrusted integers cannot reach it through the production callers. ECDSASignatureSignerContext.java:33 passes a locally generated JCA signature into asn1derToConcatenatedRS; all three verification contexts use concatenatedRSToASN1DER instead. The proposed rejection therefore guards an unreachable state in the current flow, rather than fixing signature acceptance or malleability. Severity remains high assuming the claimed security weakness were true, as the rubric requires."
+     }
+    ],
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "high",
+    "category": null
    }
   ],
   "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
@@ -715,6 +818,80 @@
     "subclass_opus_inicial": "hallucination",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination"
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-01",
+    "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+    "comment": "ClientPermissionsV2.getClientsWithPermission runs a full policy evaluation for every client resource of type Clients, so listing clients costs one evaluation per client resource.",
+    "commentOpus": "ClientPermissionsV2.getClientsWithPermission runs a full policy evaluation for every client resource of type Clients, so listing clients costs one evaluation per client resource.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S2"
+     ]
+    },
+    "reason_opus": "getClientsWithPermission runs root.evaluatePermission once per Clients-type resource (ClientPermissionsV2.java:138-142, hasGrantedPermission at 274-276). Resources exist only for clients that have specific permissions, and V1 ClientPermissions.getClientsWithPermission uses the same per-resource pattern, so the cost is bounded and not a meaningful regression.",
+    "reason_astra": "ClientPermissionsV2.java:138 and :276 do evaluate each resource separately, but the claimed listing slowdown is unreachable through existing callers. The only caller is AvailableRoleMappingResource.java:229, whose calling branches require V1 enabled (:71, :108, :145, :184, :217); Profile.java:283-306 prevents enabling V1 alongside V2. The client listing endpoint in ClientsResource.java:120-165 does not call this method.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "sncc",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "texto": "getClientsWithPermission runs root.evaluatePermission once per Clients-type resource (ClientPermissionsV2.java:138-142, hasGrantedPermission at 274-276). Resources exist only for clients that have specific permissions, and V1 ClientPermissions.getClientsWithPermission uses the same per-resource pattern, so the cost is bounded and not a meaningful regression."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "texto": "ClientPermissionsV2.java:138 and :276 do evaluate each resource separately, but the claimed listing slowdown is unreachable through existing callers. The only caller is AvailableRoleMappingResource.java:229, whose calling branches require V1 enabled (:71, :108, :145, :184, :217); Profile.java:283-306 prevents enabling V1 alongside V2. The client listing endpoint in ClientsResource.java:120-165 does not call this method."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "texto": "Concede. The only caller, getRoleIdsWithPermissions (AvailableRoleMappingResource.java:229), sits in else branches guarded by `|| !Profile.isFeatureEnabled(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ)` (:71, :108, :145, :184, :217). V1 and V2 are versions of the same feature (Profile.java:56/58), so with V2 on that branch is never reached, and it is a role-mapping lookup, not client listing. The described slowdown cannot happen."
+     }
+    ],
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed_after_debate",
+    "severity": "medium",
+    "category": null
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+    "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+    "comment": "On ClientRemovedEvent the AdminPermissions listener calls clients().setPermissionsEnabled(client, false), which throws UnsupportedOperationException in ClientPermissionsV2 when V1 and V2 are both enabled, so client deletion fails.",
+    "commentOpus": "On ClientRemovedEvent the AdminPermissions listener calls clients().setPermissionsEnabled(client, false), which throws UnsupportedOperationException in ClientPermissionsV2 when V1 and V2 are both enabled, so client deletion fails.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S7",
+      "S8"
+     ]
+    },
+    "reason_opus": "The listener only runs when ADMIN_FINE_GRAINED_AUTHZ (v1) is enabled (AdminPermissions.java:77), while management() returns V2 only when ADMIN_FINE_GRAINED_AUTHZ_V2 is enabled (AdminPermissions.java:66-70). Both are versions of the same feature and Profile rejects enabling multiple versions (Profile.java:285-286), so the throwing V2 setPermissionsEnabled can never be reached from this listener.",
+    "reason_astra": "common/src/main/java/org/keycloak/common/Profile.java:283-306 rejects enabling multiple versions and enables only the selected version, so V1 and V2 cannot both be enabled. services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java:77 guards the deletion cleanup with V1, preventing its call at :91 from reaching the V2 implementation.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "sncc",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "high",
+    "category": null
    }
   ],
   "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
@@ -964,6 +1141,34 @@
     "subclass_opus_inicial": "hallucination",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination"
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-01",
+    "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+    "comment": "searchForUser no longer filters results with usersEvaluator::canView, so an admin with query access but no view permission and no group grants gets an unrestricted user list.",
+    "commentOpus": "searchForUser no longer filters results with usersEvaluator::canView, so an admin with query access but no view permission and no group grants gets an unrestricted user list.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S2",
+      "S8",
+      "S9",
+      "S10"
+     ]
+    },
+    "reason_opus": "The canView filter was not removed: searchForUser now delegates to toRepresentation, which applies userModels.filter(usersEvaluator::canView) (UsersResource.java:453, 459-460), and grantIfNoPermission is only set when the GROUPS attribute is present. A caller with no view permission and no group grants still has every user filtered out.",
+    "reason_astra": "UsersResource.java:453 passes search results to toRepresentation, which still applies userModels.filter(usersEvaluator::canView) at line 460. With no group restriction, line 459 also disables grantIfNoPermission, so an empty group set does not bypass per-user authorization.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "sncc",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "critical",
+    "category": null
    }
   ],
   "add-guest-management-functionality-to-existing-bookings-cal-com": [
@@ -1324,6 +1529,31 @@
     "subclass_opus_inicial": "hallucination",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination"
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#sncc-01",
+    "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+    "comment": "The new different-timezone date-override test expects the same UTC slots as the existing case and would still pass if the offset fix in slots.ts were reverted.",
+    "commentOpus": "The new different-timezone date-override test expects the same UTC slots as the existing case and would still pass if the offset fix in slots.ts were reverted.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S9"
+     ]
+    },
+    "reason_opus": "The organizer schedule already has a non-UTC timezone (IstWorkHoursWithDateOverride, timeZone +5:30, getSchedule.test.ts:107-128) and the new case uses invitee +6:00 (lines 788-797). The old slots.ts used the override's raw UTC minutes with no invitee/organizer offset, so with a 30-minute offset it yields shifted slots and the assertion would fail without the fix.",
+    "reason_astra": "The organizer already uses Asia/Kolkata (UTC+5:30), with a 14:00–18:00 override (apps/web/test/lib/getSchedule.test.ts:123–128), while the new request uses UTC+6 (line 794). The offset adjustment adds 30 minutes (packages/lib/slots.ts:212–223), and slots are constructed relative to invitee midnight (lines 107–110); reverting it would produce 08:00Z instead of the asserted 08:30Z, so this test does distinguish the fix.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "sncc",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
    }
   ],
   "advanced-query-processing-architecture-grafana-codex": [
@@ -1741,6 +1971,59 @@
     "subclass_opus_inicial": "hallucination",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination"
+   },
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#sncc-01",
+    "caseId": "advanced-sql-analytics-framework-grafana-codex",
+    "comment": "enableSqlExpressions returns false on every path (the flag is negated and both branches return false), so SQL expressions are rejected even when FlagSqlExpressions is enabled.",
+    "commentOpus": "enableSqlExpressions returns false on every path (the flag is negated and both branches return false), so SQL expressions are rejected even when FlagSqlExpressions is enabled.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S1",
+      "S2",
+      "S3",
+      "S4",
+      "S5",
+      "S6"
+     ]
+    },
+    "reason_opus": "enableSqlExpressions (pkg/expr/reader.go:194-200) negates the flag into `enabled` and returns false on both branches, so ReadQuery always returns 'sqlExpressions is not implemented' for QueryTypeSQL (reader.go:129-131) even with FlagSqlExpressions on.",
+    "reason_astra": "pkg/expr/reader.go:194-199 does always return false, causing rejection at reader.go:129-131, but this PR intentionally disables SQL expressions. The same change replaces the SQL backend with unimplemented methods at pkg/expr/sql/db.go:16-21; returning the flag value would therefore expose an unavailable backend rather than restore working SQL expressions.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "sncc",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "enableSqlExpressions (pkg/expr/reader.go:194-200) negates the flag into `enabled` and returns false on both branches, so ReadQuery always returns 'sqlExpressions is not implemented' for QueryTypeSQL (reader.go:129-131) even with FlagSqlExpressions on."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "pkg/expr/reader.go:194-199 does always return false, causing rejection at reader.go:129-131, but this PR intentionally disables SQL expressions. The same change replaces the SQL backend with unimplemented methods at pkg/expr/sql/db.go:16-21; returning the flag value would therefore expose an unavailable backend rather than restore working SQL expressions."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "Concede. The constant false is intentional. The same PR drops the SQL engine dependency (go.mod/go.sum) and stubs the backend: pkg/expr/sql/db.go:16-21 `return nil, errors.New(\"not implemented\")` for TablesList/RunCommands/QueryFramesInto. Returning the flag value would only move the failure later. The rejection at reader.go:129-131 is the intended disablement."
+     }
+    ],
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "high",
+    "category": null
    }
   ],
   "anonymous-add-configurable-device-limit-grafana-codex": [
@@ -2011,6 +2294,32 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination"
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#sncc-01",
+    "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+    "comment": "ProvideAnonDBStore gained an int64 deviceLimit parameter but is still registered as a wire provider in pkg/server/wire.go, which has no provider for int64, so wire generation or compilation fails.",
+    "commentOpus": "ProvideAnonDBStore gained an int64 deviceLimit parameter but is still registered as a wire provider in pkg/server/wire.go, which has no provider for int64, so wire generation or compilation fails.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S1",
+      "S6"
+     ]
+    },
+    "reason_opus": "ProvideAnonDBStore(sqlStore, deviceLimit int64) is still listed in pkg/server/wire.go:374, but nothing in the injected graph consumes AnonStore any more: ProvideAnonymousDeviceService now builds the store itself (impl.go:43). Wire only resolves the inputs of providers that are needed, so an unused provider inside a nested set does not break generation or the build.",
+    "reason_astra": "Although pkg/server/wire.go:374-375 retains the provider and binding, pkg/services/anonymous/anonimpl/impl.go:36-43 removes the injected AnonStore dependency and constructs it directly with cfg.AnonymousDeviceLimit. The API also receives that store directly at impl.go:61, leaving the registered store provider unreachable; [Wire’s dependency solver](https://github.com/google/wire/blob/v0.5.0/internal/wire/analyze.go#L87-L164) therefore never requests its int64 argument, so the claimed generation/build failure does not follow.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "sncc",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "high",
+    "category": null
    }
   ],
   "async-import-of-the-appstore-packages-cal-com": [
@@ -2766,6 +3075,57 @@
     "subclass_opus_inicial": "nit",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#sncc-01",
+    "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+    "comment": "With immediateDelete=true, deleteScheduledEmailReminder cancels the SendGrid batch and returns without deleting or flagging the WorkflowReminder row, and the callers no longer delete it, so reminder rows are left orphaned in the database.",
+    "commentOpus": "With immediateDelete=true, deleteScheduledEmailReminder cancels the SendGrid batch and returns without deleting or flagging the WorkflowReminder row, and the callers no longer delete it, so reminder rows are left orphaned in the database.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S1",
+      "S4",
+      "S5",
+      "S7"
+     ]
+    },
+    "reason_opus": "In the immediateDelete branch, deleteScheduledEmailReminder only POSTs the SendGrid cancel and returns (emailReminderManager.ts:213-223), without deleting the row or setting cancelled. The new reschedule path (handleNewBooking.ts:965-969) uses it, so the original booking's WorkflowReminder rows stay scheduled=true with cancelled=null, and the cron only cleans cancelled=true rows (scheduleEmailReminders.ts:43-51). The workflow and step deletes are covered by the onDelete Cascade on workflowStep (schema.prisma:643).",
+    "reason_astra": "The immediate branch does return without updating the row (packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:213-222), but the claimed permanent orphaning is false: the cron deletes expired email reminders regardless of cancelled status (packages/features/ee/workflows/api/scheduleEmailReminders.ts:34-40). Workflow and step deletion also cascade to reminders (packages/prisma/schema.prisma:587,643), while rescheduling merely retains the cancelled batch's row until its scheduled date passes.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "sncc",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "In the immediateDelete branch, deleteScheduledEmailReminder only POSTs the SendGrid cancel and returns (emailReminderManager.ts:213-223), without deleting the row or setting cancelled. The new reschedule path (handleNewBooking.ts:965-969) uses it, so the original booking's WorkflowReminder rows stay scheduled=true with cancelled=null, and the cron only cleans cancelled=true rows (scheduleEmailReminders.ts:43-51). The workflow and step deletes are covered by the onDelete Cascade on workflowStep (schema.prisma:643)."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "texto": "The immediate branch does return without updating the row (packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:213-222), but the claimed permanent orphaning is false: the cron deletes expired email reminders regardless of cancelled status (packages/features/ee/workflows/api/scheduleEmailReminders.ts:34-40). Workflow and step deletion also cascade to reminders (packages/prisma/schema.prisma:587,643), while rescheduling merely retains the cancelled batch's row until its scheduled date passes."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "texto": "Concede. I misread the cron: scheduleEmailReminders.ts:34-41 deletes every EMAIL reminder with `scheduledDate: { lte: now }` regardless of `cancelled`. Rows left by the immediateDelete branch (emailReminderManager.ts:213-222) are removed once their date passes, and workflow/step deletes cascade (schema.prisma:643). The 'permanent orphan' premise is false."
+     }
+    ],
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed_after_debate",
+    "severity": "high",
+    "category": null
    }
   ],
   "database-performance-optimizations-grafana-codex": [
@@ -3572,6 +3932,61 @@
     "subclass_opus_inicial": "hallucination",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination"
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-01",
+    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "comment": "`<%- end if %>` in embed/best.html.erb is not valid Ruby, so the template raises a SyntaxError and the embed page fails to render.",
+    "commentOpus": "`<%- end if %>` in embed/best.html.erb is not valid Ruby, so the template raises a SyntaxError and the embed page fails to render.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S1"
+     ]
+    },
+    "reason_opus": "`<%- end if %>` on its own line (app/views/embed/best.html.erb:6) is compiled by Erubis with the trailing newline, giving `end if\\n<next append>`, which Ruby parses as a modifier if whose condition is the next statement; it is valid Ruby and renders. Only stdlib ERB (which appends ';') would fail, and Rails does not use it.",
+    "reason_astra": "The new template contains a conditionless `<%- end if %>` at app/views/embed/best.html.erb:6; compiling its generated Ruby confirms a SyntaxError. Existing-topic requests reach this template through app/controllers/embed_controller.rb:12–13, so embedded discussions fail to render.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "sncc",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "texto": "`<%- end if %>` on its own line (app/views/embed/best.html.erb:6) is compiled by Erubis with the trailing newline, giving `end if\\n<next append>`, which Ruby parses as a modifier if whose condition is the next statement; it is valid Ruby and renders. Only stdlib ERB (which appends ';') would fail, and Rails does not use it."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "The new template contains a conditionless `<%- end if %>` at app/views/embed/best.html.erb:6; compiling its generated Ruby confirms a SyntaxError. Existing-topic requests reach this template through app/controllers/embed_controller.rb:12–13, so embedded discussions fail to render."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "texto": "Discourse here is Rails 3.2.12 with erubis 2.7.0 (Gemfile.lock:148, :308), not stdlib ERB. A stand-alone `<%- end if %>` line is trimmed by Erubis into a statement that ends with its newline, and Erubis's add_stmt only appends ';' when the code does not end in '\\n'. So the generated Ruby is `end if \\n@output_buffer.safe_concat('\\n  ');...`, which Ruby parses as a modifier-if whose condition is the next (truthy) append. I compiled that generated shape with Ruby 2.6 and it runs. Only stdlib ERB (which emits `end if ;`) raises SyntaxError, which is probably what your check compiled. The template (best.html.erb:6) renders: ugly code, no crash."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "texto": "I change my classification: the claimed SyntaxError does not occur with this application's rendering engine. Gemfile.lock pins Rails 3.2.12 and Erubis 2.7.0; the [Rails handler](https://raw.githubusercontent.com/rails/rails/v3.2.12/actionpack/lib/action_view/template/handlers/erb.rb) uses Erubis with trimming enabled. Erubis preserves the statement's trailing newline, allowing the following buffer append to serve as the modifier-if condition. I compiled and executed that generated Ruby shape for both branches successfully, so my earlier stdlib ERB check did not establish a defect."
+     }
+    ],
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed_after_debate",
+    "severity": "high",
+    "category": null
    }
   ],
   "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
@@ -3650,6 +4065,31 @@
     "subclass_opus_inicial": "hallucination",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination"
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-03",
+    "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+    "comment": "The prev-cursor trimming check still uses the raw offset instead of start_offset, so when they differ it drops or keeps the wrong row.",
+    "commentOpus": "The prev-cursor trimming check still uses the raw offset instead of start_offset, so when they differ it drops or keeps the wrong row.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S13"
+     ]
+    },
+    "reason_opus": "The trimming check `len(results) == offset + limit + extra` (paginator.py:192) only runs when cursor.is_prev, and for prev cursors start_offset is exactly offset (paginator.py:182; the same holds in OptimizedCursorPaginator). The two values never differ in that branch, so the check always matches the real slice.",
+    "reason_astra": "src/sentry/api/paginator.py:182 guarantees start_offset equals offset whenever cursor.is_prev is true. The trimming check at lines 186-192 only executes for previous cursors, so the claimed mismatch cannot occur in that branch.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "sncc",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
    }
   ],
   "feat-2fa-backup-codes-cal-com": [
@@ -4367,6 +4807,31 @@
     "subclass_opus_inicial": "hallucination",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination"
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#sncc-01",
+    "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+    "comment": "upsampled_count is registered only in DiscoverDatasetConfig, so if the errors dataset resolves functions through another config, the upsampled_count() query fails as an unknown function.",
+    "commentOpus": "upsampled_count is registered only in DiscoverDatasetConfig, so if the errors dataset resolves functions through another config, the upsampled_count() query fails as an unknown function.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S2"
+     ]
+    },
+    "reason_opus": "The errors dataset builders (ErrorsQueryBuilder and ErrorsTimeseriesQueryBuilder in builder/errors.py:119,155) subclass the Discover builders and run on Dataset.Events (snuba/errors.py:68,121). DiscoverQueryBuilder.load_config returns DiscoverDatasetConfig for Dataset.Events (builder/discover.py:64-71), so upsampled_count resolves; this is a 'confirm' request with no defect.",
+    "reason_astra": "The errors dataset shares the Discover function configuration: src/sentry/snuba/errors.py:67 constructs ErrorsQueryBuilder with Dataset.Events, and that builder inherits DiscoverQueryBuilder at src/sentry/search/events/builder/errors.py:119. DiscoverQueryBuilder.load_config explicitly maps Dataset.Events to DiscoverDatasetConfig at src/sentry/search/events/builder/discover.py:65-71, which registers upsampled_count at src/sentry/search/events/datasets/discover.py:1041-1050. The comment’s conditional concern therefore requires no additional registration.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "sncc",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "high",
+    "category": null
    }
   ],
   "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
@@ -4901,6 +5366,31 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#sncc-01",
+    "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+    "comment": "I18n.ensure_loaded! reads and initializes @loaded_locales outside LOAD_MUTEX, racing with reload!/load_locale under concurrent requests.",
+    "commentOpus": "I18n.ensure_loaded! reads and initializes @loaded_locales outside LOAD_MUTEX, racing with reload!/load_locale under concurrent requests.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S1"
+     ]
+    },
+    "reason_opus": "translate_accelerator.rb:62-65 ensure_loaded! does an unlocked include? check and then calls load_locale, which re-checks @loaded_locales.include? inside LOAD_MUTEX (line 48). So a stale read only causes a redundant call that returns early. This double-checked pattern is the same one translate (line 68) already used, and reload! reassigning the array without the mutex is pre-existing.",
+    "reason_astra": "In lib/freedom_patches/translate_accelerator.rb:63-64, ||= preserves an existing array, and load_locale rechecks membership under LOAD_MUTEX at lines 47-48 before loading and appending at lines 56-58. The unsynchronized reset in reload! at lines 39-42 and the equivalent unlocked check in translate at line 68 both exist in the base commit; the reload race is pre-existing and would not be fixed by moving this new check inside LOAD_MUTEX.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "sncc",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
    }
   ],
   "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
@@ -5022,6 +5512,31 @@
     "subclass_opus_inicial": "hallucination",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination"
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#sncc-01",
+    "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+    "comment": "The per-topic unsubscribe link in notification emails is built from a relative topic URL, so it has no scheme or host and cannot be opened from mail clients.",
+    "commentOpus": "The per-topic unsubscribe link in notification emails is built from a relative topic URL, so it has no scheme or host and cannot be opened from mail clients.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S5"
+     ]
+    },
+    "reason_opus": "Topic#unsubscribe_url (topic.rb:719-721) is built from Topic#url, which calls self.url and builds \"#{Discourse.base_url}/t/#{slug}/#{id}\" (topic.rb:703-704). It is therefore absolute and includes scheme and host. Only relative_url uses base_uri.",
+    "reason_astra": "Topic#url delegates to Topic.url, which explicitly prefixes Discourse.base_url (app/models/topic.rb:703–710). Therefore unsubscribe_url appends /unsubscribe to an absolute URL (app/models/topic.rb:719–720), and the mailer passes that absolute URL into the email (app/mailers/user_notifications.rb:295); the claimed relative URL does not exist.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "sncc",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
    }
   ],
   "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
@@ -5098,6 +5613,54 @@
     "subclass_opus_inicial": "nit",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-02",
+    "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+    "comment": "loadUsers no longer selects organization.slug for dynamic-user bookings, so code reading user.organization gets undefined.",
+    "commentOpus": "loadUsers no longer selects organization.slug for dynamic-user bookings, so code reading user.organization gets undefined.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S5"
+     ]
+    },
+    "reason_opus": "The rewritten loadUsers (handleNewBooking.ts:731-739) did drop the organization { slug } select for dynamic users. However, nothing in handleNewBooking reads user.organization: the only mentions are the hosts select (line 321) and the IsFixedAwareUser type (line 355), and the code uses organizationId from userSelect. So no downstream behaviour changes.",
+    "reason_astra": "The organization selection was removed at packages/features/bookings/lib/handleNewBooking.ts:735–739, but the claimed downstream dependency on user.organization does not exist in this booking path. Organization handling uses organizationId, retained by packages/prisma/selects/user.ts:48; packages/lib/server/getBookerUrl.ts:4–6 uses that ID to fetch branding separately.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "sncc",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "The rewritten loadUsers (handleNewBooking.ts:731-739) did drop the organization { slug } select for dynamic users. However, nothing in handleNewBooking reads user.organization: the only mentions are the hosts select (line 321) and the IsFixedAwareUser type (line 355), and the code uses organizationId from userSelect. So no downstream behaviour changes."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "texto": "The organization selection was removed at packages/features/bookings/lib/handleNewBooking.ts:735–739, but the claimed downstream dependency on user.organization does not exist in this booking path. Organization handling uses organizationId, retained by packages/prisma/selects/user.ts:48; packages/lib/server/getBookerUrl.ts:4–6 uses that ID to fetch branding separately."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "texto": "Concede to hallucination. The select was removed (handleNewBooking.ts:735-739), but `git grep '\\.organization\\b'` on handleNewBooking.ts at head finds no reader. Org handling uses organizationId from userSelect. The comment's premise that downstream code reads user.organization is false, so the described regression cannot happen."
+     }
+    ],
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed_after_debate",
+    "severity": "high",
+    "category": null
    }
   ],
   "fix-proper-handling-of-group-memberships-discourse-cursor": [
@@ -5882,6 +6445,31 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#sncc-01",
+    "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+    "comment": "The password page now renders an identified user's passkey credential IDs as hidden inputs in the username-first flow before authentication, disclosing credential metadata to anyone who knows a username.",
+    "commentOpus": "The password page now renders an identified user's passkey credential IDs as hidden inputs in the username-first flow before authentication, disclosing credential metadata to anyone who knows a username.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S2"
+     ]
+    },
+    "reason_opus": "Facts hold: PasswordForm.authenticate now calls webauthnAuth.fillContextForm when the identified user has passkeys, and passkeys.ftl:11-17 renders authenticators' credentialIds. But WebAuthnAuthenticator.fillContextForm exposes ALLOWED_AUTHENTICATORS for any identified user by design: WebAuthn needs allowCredentials to authenticate a known user, and the existing passwordless WebAuthn step after a username form already does this. This is intended protocol behaviour, not a new disclosure defect.",
+    "reason_astra": "The IDs are rendered before authentication at themes/src/main/resources/theme/base/login/passkeys.ftl:11-17, but this supports the intended username-first WebAuthn flow. themes/src/main/resources/theme/base/login/resources/js/webauthnAuthenticate.js:31-49 consumes them as allowCredentials, matching the existing rendering in themes/src/main/resources/theme/base/login/webauthn-authenticate.ftl:19-24. These are credential selectors, not authentication secrets; services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnAuthenticator.java:224-243 still validates the signed assertion.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "sncc",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
    }
   ],
   "frontend-asset-optimization-grafana-codex": [
@@ -5969,6 +6557,55 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "frontend-asset-optimization-grafana-codex#sncc-01",
+    "caseId": "frontend-asset-optimization-grafana-codex",
+    "comment": "GetWebAssets assigns entryPointAssetsCache unconditionally, so a failed manifest read overwrites a previously valid cache with nil.",
+    "commentOpus": "GetWebAssets assigns entryPointAssetsCache unconditionally, so a failed manifest read overwrites a previously valid cache with nil.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S1",
+      "S2"
+     ]
+    },
+    "reason_opus": "webassets.go:45-47 returns the cache early whenever Env != Dev and the cache is non-nil, so in non-Dev mode the load path, and the write at line 69, only runs when the cache is already nil. A valid entry can never be overwritten. In Dev mode the cache is never served, so overwriting it has no effect, and storing nil on a cold failure just retries, which is the pre-existing behaviour.",
+    "reason_astra": "The unconditional assignment at pkg/api/webassets/webassets.go:69-70 already exists in the base commit; this PR adds synchronization. Development mode deliberately bypasses cached values at lines 45-46, and retaining nil after a cold-start failure necessarily requires retrying, so the proposed guard provides no recovery benefit.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "sncc",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "texto": "webassets.go:45-47 returns the cache early whenever Env != Dev and the cache is non-nil, so in non-Dev mode the load path, and the write at line 69, only runs when the cache is already nil. A valid entry can never be overwritten. In Dev mode the cache is never served, so overwriting it has no effect, and storing nil on a cold failure just retries, which is the pre-existing behaviour."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "low",
+      "texto": "The unconditional assignment at pkg/api/webassets/webassets.go:69-70 already exists in the base commit; this PR adds synchronization. Development mode deliberately bypasses cached values at lines 45-46, and retaining nil after a cold-start failure necessarily requires retrying, so the proposed guard provides no recovery benefit."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "low",
+      "texto": "Concede. `entryPointAssetsCache = result` (webassets.go:69) is unchanged from base, and the PR only adds the mutex. My 'can never be overwritten' was slightly too strong: two cold callers can both pass the nil check, because there is no re-check after Lock at :48. The worst case is still a nil cache that the next call re-reads, so there is no recovery problem. Pre-existing assignment, FP none."
+     }
+    ],
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "low",
+    "category": null
    }
   ],
   "github-oauth-security-enhancement-sentry": [
@@ -6133,6 +6770,102 @@
     "subclass_opus_inicial": "nit",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#sncc-01",
+    "caseId": "github-oauth-security-enhancement-sentry",
+    "comment": "The GitHub OAuth state parameter is compared with != instead of a constant-time comparison, leaking timing information.",
+    "commentOpus": "The GitHub OAuth state parameter is compared with != instead of a constant-time comparison, leaking timing information.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S3"
+     ]
+    },
+    "reason_opus": "integration.py:412 compares request.GET.get(\"state\") != pipeline.signature with a non-constant-time comparison. This is real, but the OAuth state is a per-pipeline CSRF token returned in the URL, so a remote timing attack on it is not practical. Sentry's generic OAuth2 callback (identity/oauth2.py:325) uses the same != check, and a missing state is handled at line 401 by redirecting to authorize.",
+    "reason_astra": "src/sentry/pipeline/base.py:132-133 computes pipeline.signature solely from the pipeline view names, so the compared value is a public deterministic hash, not the claimed secret. src/sentry/integrations/github/integration.py:401-408 redirects missing-state requests into authorization without accepting a callback; constant-time comparison would not address the actual state-design weakness.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "sncc",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "texto": "integration.py:412 compares request.GET.get(\"state\") != pipeline.signature with a non-constant-time comparison. This is real, but the OAuth state is a per-pipeline CSRF token returned in the URL, so a remote timing attack on it is not practical. Sentry's generic OAuth2 callback (identity/oauth2.py:325) uses the same != check, and a missing state is handled at line 401 by redirecting to authorize."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "texto": "src/sentry/pipeline/base.py:132-133 computes pipeline.signature solely from the pipeline view names, so the compared value is a public deterministic hash, not the claimed secret. src/sentry/integrations/github/integration.py:401-408 redirects missing-state requests into authorization without accepting a callback; constant-time comparison would not address the actual state-design weakness."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "texto": "Concede. pipeline.signature is not a secret: pipeline/base.py:132-133 `pipe_ids = [f\"{type(v).__module__}.{type(v).__name__}\" ...]; self.signature = md5_text(*pipe_ids).hexdigest()`, a constant hash of view class names (the test even hardcodes it at test_integration.py:445). A timing leak of a public value is meaningless, and a missing state already redirects (integration.py:401-409)."
+     }
+    ],
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed_after_debate",
+    "severity": "high",
+    "category": null
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#sncc-02",
+    "caseId": "github-oauth-security-enhancement-sentry",
+    "comment": "The installation sender-login mismatch test asserts only the generic error text, which state mismatch and OAuth failures also produce, so it cannot show the login check caused the rejection.",
+    "commentOpus": "The installation sender-login mismatch test asserts only the generic error text, which state mismatch and OAuth failures also produce, so it cannot show the login check caused the rejection.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S8"
+     ]
+    },
+    "reason_opus": "In the new mismatch test, test_integration.py:448-454 only asserts the generic 'Invalid installation request.' text. error() (integration.py:132) emits that same default text for a state mismatch, a missing access_token, a missing login and the sender-login mismatch (integration.py:412-433, 500-505). So the test passes even if the rejection does not come from the new sender-login check it was written for.",
+    "reason_astra": "The state supplied at tests/sentry/integrations/github/test_integration.py:445 matches the hash computed at src/sentry/pipeline/base.py:132-133, and the mocks at test_integration.py:116-123 provide successful OAuth responses. The test sets sender.login to 'attacker' at line 417 against authenticated 'octocat', reaching the rejection at src/sentry/integrations/github/integration.py:501-505; sharing an error message does not establish that this test misses its intended behavior.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "sncc",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "In the new mismatch test, test_integration.py:448-454 only asserts the generic 'Invalid installation request.' text. error() (integration.py:132) emits that same default text for a state mismatch, a missing access_token, a missing login and the sender-login mismatch (integration.py:412-433, 500-505). So the test passes even if the rejection does not come from the new sender-login check it was written for."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "The state supplied at tests/sentry/integrations/github/test_integration.py:445 matches the hash computed at src/sentry/pipeline/base.py:132-133, and the mocks at test_integration.py:116-123 provide successful OAuth responses. The test sets sender.login to 'attacker' at line 417 against authenticated 'octocat', reaching the rejection at src/sentry/integrations/github/integration.py:501-505; sharing an error message does not establish that this test misses its intended behavior."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Concede. The test fixes the state to the real signature (test_integration.py:445), stubs OAuth success (_stub_github), creates the integration via the webhook with sender 'attacker' (:417-426), and so reaches integration.py:501-505. If the sender check were removed, pipeline.next_step() would run and the failed-template assertions (:451-454) would fail. The test does verify the new check; the shared message is not a defect."
+     }
+    ],
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "medium",
+    "category": null
    }
   ],
   "implement-access-token-context-encoding-framework-keycloak": [
@@ -6207,6 +6940,31 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#sncc-01",
+    "caseId": "implement-access-token-context-encoding-framework-keycloak",
+    "comment": "Token context encoding calls getShouldUseLightweightToken on every token creation, which dereferences the session context client and would NPE where no client is set.",
+    "commentOpus": "Token context encoding calls getShouldUseLightweightToken on every token creation, which dereferences the session context client and would NPE where no client is set.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S3"
+     ]
+    },
+    "reason_opus": "DefaultTokenContextEncoderProvider.java:54 does call AbstractOIDCProtocolMapper.getShouldUseLightweightToken(session), which dereferences session.getContext().getClient() (AbstractOIDCProtocolMapper.java:86). But the same method already runs on token creation through transformAccessToken (line 91) for every access-token mapper, and token endpoints set the context client. No token-creation path with a null context client is shown, so this is a guard for an unreached state.",
+    "reason_astra": "The unconditional lookup exists at services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java:54, but no reachable null-client token-creation path was found. Callers establish the context client through oidc/utils/AuthorizeClientUtil.java:83, oidc/endpoints/AuthorizationEndpoint.java:299, oidc/grants/PreAuthorizedCodeGrantType.java:85, and services/resources/admin/ClientsResource.java:251 (all under services/src/main/java/org/keycloak/protocol or org/keycloak respectively). The proposed null guard therefore addresses a hypothetical state rather than a demonstrated regression.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "sncc",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "high",
+    "category": null
    }
   ],
   "implement-recovery-key-support-for-user-storage-providers-keycloak": [
@@ -6295,6 +7053,32 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#sncc-01",
+    "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+    "comment": "Plaintext recovery codes are serialized and sent to user storage providers via updateCredential, while the local path stores only hashed codes.",
+    "commentOpus": "Plaintext recovery codes are serialized and sent to user storage providers via updateCredential, while the local path stores only hashed codes.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S1",
+      "S3"
+     ]
+    },
+    "reason_opus": "CredentialHelper.java:117-125 does serialize the plaintext generatedCodes into the UserCredentialModel passed to updateCredential. This matches the user-storage contract: updateCredential receives raw credential input, as for passwords and the OTP secret in the same class (line 96). A federated store needs the raw codes to hash and validate them itself, so this is intended design rather than a defect.",
+    "reason_astra": "CredentialHelper.java:119-125 does pass raw recovery codes, but updateCredential receives credential input, consistent with plaintext passwords in server-spi/src/main/java/org/keycloak/models/UserCredentialModel.java:83-89. model/storage/src/main/java/org/keycloak/credential/UserCredentialManager.java:86-92 routes this only to the user's configured, enabled provider supporting that credential type. The provider controls hashing and persistence; receiving plaintext input does not establish insecure storage or unauthorized disclosure.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "sncc",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "high",
+    "category": null
    }
   ],
   "notification-rule-processing-engine-grafana-codex": [
@@ -6345,6 +7129,31 @@
     "subclass_opus_inicial": "hallucination",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination"
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#sncc-01",
+    "caseId": "notification-rule-processing-engine-grafana-codex",
+    "comment": "The menu test asserts exactly 4 menu items although the menuItems map also includes delete, so the count or comment may not match the real menu.",
+    "commentOpus": "The menu test asserts exactly 4 menu items although the menuItems map also includes delete, so the count or comment may not match the real menu.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S3"
+     ]
+    },
+    "reason_opus": "GrafanaGroupLoader.test.tsx asserts exactly 4 menuitems after granting AlertingRuleDelete, and AlertRuleMenu.tsx:165 renders Delete only when canDelete && rulerRule. The comment itself says the defect is unconfirmed and that a wrong count would fail loudly. It is a 'verify the count' request, not a demonstrated defect.",
+    "reason_astra": "GrafanaGroupLoader.test.tsx:37-42 defines selector helpers, so including a delete selector does not add a rendered menu item. GrafanaRuleListItem.tsx:47 supplies only promRule, while AlertRuleMenu.tsx:165 requires rulerRule to render Delete; therefore the four-item assertion at GrafanaGroupLoader.test.tsx:207 is consistent with this rendering path.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "sncc",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "low",
+    "category": null
    }
   ],
   "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
@@ -6802,6 +7611,31 @@
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination",
     "goldenDeOutroPr": true
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-02",
+    "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+    "comment": "process_batch indexes end_timestamp_precise directly, so a span without the field raises KeyError and fails the whole consumer batch.",
+    "commentOpus": "process_batch indexes end_timestamp_precise directly, so a span without the field raises KeyError and fails the whole consumer batch.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S5"
+     ]
+    },
+    "reason_opus": "factory.py:141 indexes val[\"end_timestamp_precise\"], but that field is required in the ingest-spans SpanEvent schema the payload is cast to. Downstream span consumers also index it directly (process_segments/enrichment.py:89,117,162; message.py:121). Only genuinely optional fields such as parent_span_id use .get().",
+    "reason_astra": "This consumer reads INGEST_SPANS (src/sentry/consumers/__init__.py:427), whose span processing already expects precise end timestamps: src/sentry/spans/consumers/process_segments/message.py:244 unconditionally reads the field for every span. The new access at src/sentry/spans/consumers/process/factory.py:141 follows that existing contract; optional parent and remote-marker fields do not establish that timestamps may also be absent.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "sncc",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "high",
+    "category": null
    }
   ],
   "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
@@ -7139,6 +7973,31 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#sncc-01",
+    "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+    "comment": "The metrics middleware test never asserts that request size is not recorded for CheckHealth and CollectMetrics.",
+    "commentOpus": "The metrics middleware test never asserts that request size is not recorded for CheckHealth and CollectMetrics.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S1"
+     ]
+    },
+    "reason_opus": "In metrics_middleware_test.go:101-109, the request-size assertion only runs when shouldInstrumentRequestSize is true. That test body is unchanged by this PR: the file is a rename whose only edit is newInstrumentationMiddleware -> newMetricsMiddleware at line 78. So the gap is pre-existing.",
+    "reason_astra": "The missing negative assertion at pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go:101-109 already exists verbatim in the base commit's instrumentation_middleware_test.go:101-109. This PR only renames the test file and changes the constructor call at line 78, so the reported coverage gap is pre-existing.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "sncc",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
    }
   ],
   "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": [
@@ -7675,6 +8534,54 @@
     "subclass_opus_inicial": "nit",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-02",
+    "caseId": "replays-self-serve-bulk-delete-system-sentry",
+    "comment": "The number-type test mock matches on query.query while the hook sends substringMatch, so the mock can never match and the not-called assertion cannot fail.",
+    "commentOpus": "The number-type test mock matches on query.query while the hook sends substringMatch, so the mock can never match and the not-called assertion cannot fail.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S5"
+     ]
+    },
+    "reason_opus": "Fact is right: the mock matches query.query === 'search-query' while the hook sends substringMatch (useGetTraceItemAttributeValues.tsx:53), so the not.toHaveBeenCalled assertion is vacuous. But that matcher is unchanged by this PR: the spec is a rename whose only edits are the hook name and removing the attributeKey prop. So this is a pre-existing test defect.",
+    "reason_astra": "The matcher at static/app/views/explore/hooks/useGetTraceItemAttributeValues.spec.tsx:120 does use the wrong parameter, but removing the guard would not let the test pass. An unmatched request never resolves its promise (static/app/__mocks__/api.tsx:216-225,237-254), so the await at the test’s line 144 would time out before reaching the assertion.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "sncc",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Fact is right: the mock matches query.query === 'search-query' while the hook sends substringMatch (useGetTraceItemAttributeValues.tsx:53), so the not.toHaveBeenCalled assertion is vacuous. But that matcher is unchanged by this PR: the spec is a rename whose only edits are the hook name and removing the attributeKey prop. So this is a pre-existing test defect."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "texto": "The matcher at static/app/views/explore/hooks/useGetTraceItemAttributeValues.spec.tsx:120 does use the wrong parameter, but removing the guard would not let the test pass. An unmatched request never resolves its promise (static/app/__mocks__/api.tsx:216-225,237-254), so the await at the test’s line 144 would time out before reaching the assertion."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "texto": "Concede to hallucination. Besides being pre-existing (the rename diff of the spec only changes the hook name and drops attributeKey; the matcher `return query.query === 'search-query';` at :120 is untouched), the premise is false. An unmatched request in static/app/__mocks__/api.tsx:237-253 only records Client.errors and never calls success/error, so the requestPromise (:216-226) never resolves. `await result.current(tag, 'search-query')` (spec :144) would hang and fail the test if the number guard were removed."
+     }
+    ],
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed_after_debate",
+    "severity": "medium",
+    "category": null
    }
   ],
   "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
@@ -8024,6 +8931,31 @@
     "subclass_opus_inicial": "hallucination",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination"
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#sncc-02",
+    "caseId": "unified-storage-performance-optimizations-grafana-codex",
+    "comment": "NewResourceServer now runs Init synchronously and fails construction on init error, blocking on index build and watcher startup and changing the constructor contract for callers.",
+    "commentOpus": "NewResourceServer now runs Init synchronously and fails construction on init error, blocking on index build and watcher startup and changing the constructor contract for callers.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@cc": [
+      "S4"
+     ]
+    },
+    "reason_opus": "server.go:258-262 does run s.Init(ctx) in NewResourceServer and return (nil, err) on failure. That is the purpose of this performance PR: Init is removed from every request path (Create/Read/List/Watch/Search...), so initialization moves to construction. Init stays guarded by a once, so explicit Init callers remain safe. This is an intended design change, not a defect.",
+    "reason_astra": "Eager initialization at pkg/storage/unified/resource/server.go:258 is real, but callers already handle constructor errors, including pkg/storage/unified/sql/server.go:77-79 and pkg/storage/unified/client.go:67-74. Repeated Init calls are protected by sync.Once at pkg/storage/unified/resource/server.go:294; the comment identifies no broken caller or contract requiring lazy initialization.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "sncc",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
    }
   ],
   "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
@@ -8153,7 +9085,8 @@
   "gpt-6.1-sol",
   "sonnet-5.5",
   "muse-spark-1.3",
-  "gpt-6.1-sol@e2b"
+  "gpt-6.1-sol@e2b",
+  "sonnet-5.5@cc"
  ],
  "classificadores": [
   "claude-opus-5.5",

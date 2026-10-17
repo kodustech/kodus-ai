@@ -1,0 +1,19 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#sncc-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "pkg/server/module_server_test.go:36-37 unconditionally skips PostgreSQL before the storage-server startup and metrics assertions at lines 47-63. This removes PostgreSQL integration coverage while pkg/storage/unified/resource/server.go:258 changes startup initialization, creating a real test coverage gap without establishing what caused the Drone failure.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#sncc-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "Eager initialization at pkg/storage/unified/resource/server.go:258 is real, but callers already handle constructor errors, including pkg/storage/unified/sql/server.go:77-79 and pkg/storage/unified/client.go:67-74. Repeated Init calls are protected by sync.Once at pkg/storage/unified/resource/server.go:294; the comment identifies no broken caller or contract requiring lazy initialization.",
+   "severity": "high"
+  }
+ ]
+}

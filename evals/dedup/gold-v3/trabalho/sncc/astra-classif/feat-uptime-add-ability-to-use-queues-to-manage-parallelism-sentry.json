@@ -1,0 +1,19 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "queue_consumer.py:86 starts at the greater of last_committed + 1 and min_offset, while queue_consumer.py:105 removes committed offsets. Executing the new tracker with completed offsets 100, 102, and 103 confirms successive scans return 100 then 103 without receiving 101, violating the gap-blocking contract tested in tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py:351-372.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "tests/sentry/uptime/consumers/test_results_consumer.py:1864 exits when queues are empty and any commit exists, then line 1870 requires offset 105. The independent one-second commit loop in queue_consumer.py:273-289 can publish a partial offset before processing finishes; empty queues do not guarantee another commit has published the final offset, making the new test timing-dependent.",
+   "severity": "medium"
+  }
+ ]
+}

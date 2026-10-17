@@ -1,0 +1,194 @@
+{
+  "feature-automatically-downsize-large-images-discourse-cursor#sncc-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "utilities.js:246 now hard-codes 10 MB for the 413 case, matching the limit the PR sets everywhere else: uploads_controller.rb downloads with 10.megabytes and the server now downsizes images above max_image_size_kb instead of rejecting them, and config/nginx.sample.conf:61 ships client_max_body_size 10m. The 413 comes from the web server, so the message matches the shipped configuration. This is the intended design.",
+    "category": null,
+    "comment": "The 413 upload error message states a hard-coded 10 MB maximum that may not match the limit the server or web server actually enforces.",
+    "severity": "medium"
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor#sncc-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "translate_accelerator.rb:62-65 ensure_loaded! does an unlocked include? check and then calls load_locale, which re-checks @loaded_locales.include? inside LOAD_MUTEX (line 48). So a stale read only causes a redundant call that returns early. This double-checked pattern is the same one translate (line 68) already used, and reload! reassigning the array without the mutex is pre-existing.",
+    "category": null,
+    "comment": "I18n.ensure_loaded! reads and initializes @loaded_locales outside LOAD_MUTEX, racing with reload!/load_locale under concurrent requests.",
+    "severity": "medium"
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#sncc-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "Topic#unsubscribe_url (topic.rb:719-721) is built from Topic#url, which calls self.url and builds \"#{Discourse.base_url}/t/#{slug}/#{id}\" (topic.rb:703-704). It is therefore absolute and includes scheme and host. Only relative_url uses base_uri.",
+    "category": null,
+    "comment": "The per-topic unsubscribe link in notification emails is built from a relative topic URL, so it has no scheme or host and cannot be opened from mail clients.",
+    "severity": "medium"
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "handleCancelBooking.ts:423-461 now iterates over every _calendar reference (filter instead of find), and the recurring-event branch inside the loop deletes events for all updatedBookings across all user calendar credentials. With N calendar references (the collective multi-host case this PR adds), that deletion runs N times, issuing duplicate deleteEvent calls that fail for already-deleted events.",
+    "category": "bug",
+    "comment": "When cancelling a recurring booking with multiple calendar references, the recurring-event deletion over all remaining bookings and credentials runs once per reference, causing duplicate delete calls and errors.",
+    "severity": "medium"
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The rewritten loadUsers (handleNewBooking.ts:731-739) did drop the organization { slug } select for dynamic users. However, nothing in handleNewBooking reads user.organization: the only mentions are the hosts select (line 321) and the IsFixedAwareUser type (line 355), and the code uses organizationId from userSelect. So no downstream behaviour changes.",
+    "category": null,
+    "comment": "loadUsers no longer selects organization.slug for dynamic-user bookings, so code reading user.organization gets undefined.",
+    "severity": "medium"
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-03": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "handleNewBooking.ts:757-759: the new catch rethrows Prisma.PrismaClientKnownRequestError as HttpError({statusCode: 400, message: error.message}), returning raw Prisma error text, including model/query details, to the booking API client. Previously Prisma errors were not mapped into a client-facing message here.",
+    "category": "security",
+    "comment": "loadUsers forwards raw Prisma error messages to the client in a 400 response, exposing internal model and query details.",
+    "severity": "medium"
+  },
+  "fixing-re-authentication-with-passkeys-keycloak#sncc-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "Facts hold: PasswordForm.authenticate now calls webauthnAuth.fillContextForm when the identified user has passkeys, and passkeys.ftl:11-17 renders authenticators' credentialIds. But WebAuthnAuthenticator.fillContextForm exposes ALLOWED_AUTHENTICATORS for any identified user by design: WebAuthn needs allowCredentials to authenticate a known user, and the existing passwordless WebAuthn step after a username form already does this. This is intended protocol behaviour, not a new disclosure defect.",
+    "category": null,
+    "comment": "The password page now renders an identified user's passkey credential IDs as hidden inputs in the username-first flow before authentication, disclosing credential metadata to anyone who knows a username.",
+    "severity": "medium"
+  },
+  "frontend-asset-optimization-grafana-codex#sncc-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "webassets.go:45-47 returns the cache early whenever Env != Dev and the cache is non-nil, so in non-Dev mode the load path, and the write at line 69, only runs when the cache is already nil. A valid entry can never be overwritten. In Dev mode the cache is never served, so overwriting it has no effect, and storing nil on a cold failure just retries, which is the pre-existing behaviour.",
+    "category": null,
+    "comment": "GetWebAssets assigns entryPointAssetsCache unconditionally, so a failed manifest read overwrites a previously valid cache with nil.",
+    "severity": "medium"
+  },
+  "frontend-asset-optimization-grafana-codex#sncc-02": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "webassets.go:49-50 takes the exclusive Lock and holds it (defer Unlock) through the manifest file read/parse. In Dev mode the cache is never returned, so every call serializes on the global mutex. This only affects development mode, and the operation is a small local file read, so the user impact is negligible.",
+    "category": "perf",
+    "comment": "GetWebAssets holds a global exclusive mutex through the whole manifest load, so in Dev mode, where the cache is bypassed, every request serializes behind it.",
+    "severity": "low"
+  },
+  "github-oauth-security-enhancement-sentry#sncc-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "integration.py:412 compares request.GET.get(\"state\") != pipeline.signature with a non-constant-time comparison. This is real, but the OAuth state is a per-pipeline CSRF token returned in the URL, so a remote timing attack on it is not practical. Sentry's generic OAuth2 callback (identity/oauth2.py:325) uses the same != check, and a missing state is handled at line 401 by redirecting to authorize.",
+    "category": "security",
+    "comment": "The GitHub OAuth state parameter is compared with != instead of a constant-time comparison, leaking timing information.",
+    "severity": "medium"
+  },
+  "github-oauth-security-enhancement-sentry#sncc-02": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "In the new mismatch test, test_integration.py:448-454 only asserts the generic 'Invalid installation request.' text. error() (integration.py:132) emits that same default text for a state mismatch, a missing access_token, a missing login and the sender-login mismatch (integration.py:412-433, 500-505). So the test passes even if the rejection does not come from the new sender-login check it was written for.",
+    "category": "test_gap",
+    "comment": "The installation sender-login mismatch test asserts only the generic error text, which state mismatch and OAuth failures also produce, so it cannot show the login check caused the rejection.",
+    "severity": "medium"
+  },
+  "implement-access-token-context-encoding-framework-keycloak#sncc-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "DefaultTokenContextEncoderProvider.java:54 does call AbstractOIDCProtocolMapper.getShouldUseLightweightToken(session), which dereferences session.getContext().getClient() (AbstractOIDCProtocolMapper.java:86). But the same method already runs on token creation through transformAccessToken (line 91) for every access-token mapper, and token endpoints set the context client. No token-creation path with a null context client is shown, so this is a guard for an unreached state.",
+    "category": null,
+    "comment": "Token context encoding calls getShouldUseLightweightToken on every token creation, which dereferences the session context client and would NPE where no client is set.",
+    "severity": "high"
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak#sncc-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "CredentialHelper.java:117-125 does serialize the plaintext generatedCodes into the UserCredentialModel passed to updateCredential. This matches the user-storage contract: updateCredential receives raw credential input, as for passwords and the OTP secret in the same class (line 96). A federated store needs the raw codes to hash and validate them itself, so this is intended design rather than a defect.",
+    "category": null,
+    "comment": "Plaintext recovery codes are serialized and sent to user storage providers via updateCredential, while the local path stores only hashed codes.",
+    "severity": "high"
+  },
+  "notification-rule-processing-engine-grafana-codex#sncc-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "GrafanaGroupLoader.test.tsx asserts exactly 4 menuitems after granting AlertingRuleDelete, and AlertRuleMenu.tsx:165 renders Delete only when canDelete && rulerRule. The comment itself says the defect is unconfirmed and that a wrong count would fail loudly. It is a 'verify the count' request, not a demonstrated defect.",
+    "category": null,
+    "comment": "The menu test asserts exactly 4 menu items although the menuItems map also includes delete, so the count or comment may not match the real menu.",
+    "severity": "low"
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "add-buffer.lua:30 does lower the redirect-walk loop from 10000 to 1000 and drops the comment. This is part of the PR's insertion-cost optimisation: the same script now caps each set at 1000 spans with zpopmin (lines 62-64). Bounding the per-insert redirect walk is a deliberate tradeoff for pathological traces, not an accidental change.",
+    "category": null,
+    "comment": "The span redirect-walk limit was cut from 10000 to 1000 iterations, so trees deeper than 1000 may not resolve to the correct segment root.",
+    "severity": "medium"
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "factory.py:141 indexes val[\"end_timestamp_precise\"], but that field is required in the ingest-spans SpanEvent schema the payload is cast to. Downstream span consumers also index it directly (process_segments/enrichment.py:89,117,162; message.py:121). Only genuinely optional fields such as parent_span_id use .get().",
+    "category": null,
+    "comment": "process_batch indexes end_timestamp_precise directly, so a span without the field raises KeyError and fails the whole consumer batch.",
+    "severity": "high"
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#sncc-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "In metrics_middleware_test.go:101-109, the request-size assertion only runs when shouldInstrumentRequestSize is true. That test body is unchanged by this PR: the file is a rename whose only edit is newInstrumentationMiddleware -> newMetricsMiddleware at line 78. So the gap is pre-existing.",
+    "category": null,
+    "comment": "The metrics middleware test never asserts that request size is not recorded for CheckHealth and CollectMetrics.",
+    "severity": "medium"
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#sncc-02": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "ifaces.go:22 (added in this PR) documents FromContext as 'returns a new contextual Logger that has this logger's context plus the given context', copied from New(). FromContext actually takes a context.Context and attaches the contextual attributes stored in it. This is an inaccurate doc comment with no behavioural effect.",
+    "category": "doc_defect",
+    "comment": "The FromContext doc comment is copied from New() and misdescribes the method, which attaches attributes stored in the context.Context.",
+    "severity": "low"
+  },
+  "replays-self-serve-bulk-delete-system-sentry#sncc-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "project_replay_summarize_breadcrumbs.py: fetch_error_details takes the nodestore event 'timestamp' (epoch seconds), and gen_request_data compares it with each recording event's event.get('timestamp'), which for rrweb events is epoch milliseconds. Every error timestamp is therefore smaller and all errors are emitted before the first breadcrumb, which breaks the intended chronological interleaving. The new tests use seconds on both sides, so they hide this.",
+    "category": "bug",
+    "comment": "Error event timestamps (seconds) are compared with replay recording event timestamps (milliseconds), so errors are not interleaved chronologically with breadcrumbs.",
+    "severity": "medium"
+  },
+  "replays-self-serve-bulk-delete-system-sentry#sncc-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "Fact is right: the mock matches query.query === 'search-query' while the hook sends substringMatch (useGetTraceItemAttributeValues.tsx:53), so the not.toHaveBeenCalled assertion is vacuous. But that matcher is unchanged by this PR: the spec is a rename whose only edits are the hook name and removing the attributeKey prop. So this is a pre-existing test defect.",
+    "category": null,
+    "comment": "The number-type test mock matches on query.query while the hook sends substringMatch, so the mock can never match and the not-called assertion cannot fail.",
+    "severity": "medium"
+  },
+  "replays-self-serve-bulk-delete-system-sentry#sncc-03": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "charts/index.tsx:153-154 now sets const dedupedYAxes = [yAxis] after dedupeArray was removed, so the variable name no longer reflects any deduplication. This is a pure naming issue with no behavioural effect.",
+    "category": "style",
+    "comment": "dedupedYAxes is now just [yAxis], so its name misdescribes the code.",
+    "severity": "low"
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "scheduleSMSReminders.ts:158-188 increments retryCount only when twilio.scheduleSMS returns falsy or throws. When message is empty or sendTo is missing, the reminder is skipped without incrementing. It is re-evaluated each cron run until its scheduledDate passes and the delete query removes it. No SMS or external call is made in that case, so the only effect is redundant cron work.",
+    "category": "perf",
+    "comment": "retryCount is not incremented when a reminder has no message or no sendTo number, so such reminders are reprocessed on every cron run until their scheduled date.",
+    "severity": "low"
+  },
+  "unified-storage-performance-optimizations-grafana-codex#sncc-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "module_server_test.go:35-38 (added by this PR) skips TestIntegrationWillRunInstrumentationServerWhenTargetHasNoHttpServer on postgres ('not working in Drone'). The same PR makes NewResourceServer call Init eagerly (server.go:258-262). The integration test therefore no longer exercises storage-server startup on postgres, and a regression from that change would go unnoticed there.",
+    "category": "test_gap",
+    "comment": "The PR skips the storage-server module integration test on postgres instead of fixing the failure, removing coverage of the new eager initialization on postgres.",
+    "severity": "medium"
+  },
+  "unified-storage-performance-optimizations-grafana-codex#sncc-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "server.go:258-262 does run s.Init(ctx) in NewResourceServer and return (nil, err) on failure. That is the purpose of this performance PR: Init is removed from every request path (Create/Read/List/Watch/Search...), so initialization moves to construction. Init stays guarded by a once, so explicit Init callers remain safe. This is an intended design change, not a defect.",
+    "category": null,
+    "comment": "NewResourceServer now runs Init synchronously and fails construction on init error, blocking on index build and watcher startup and changing the constructor contract for callers.",
+    "severity": "medium"
+  }
+}

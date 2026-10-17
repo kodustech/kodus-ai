@@ -1,0 +1,12 @@
+{
+ "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+ "items": [
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "In packages/features/ee/workflows/api/scheduleSMSReminders.ts:158\u2013188, an empty message or missing recipient skips scheduling without updating retryCount; increments occur only on a falsy provider result or an exception (lines 178\u2013195). These reminders remain eligible for selection at lines 48\u201354 and evade the new retry-limit cleanup at lines 38\u201340, so the PR\u2019s retry tracking leaves this failure path unbounded until scheduledDate.",
+   "severity": "medium"
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "items": [
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#sncc-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The immediate branch does return without updating the row (packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:213-222), but the claimed permanent orphaning is false: the cron deletes expired email reminders regardless of cancelled status (packages/features/ee/workflows/api/scheduleEmailReminders.ts:34-40). Workflow and step deletion also cascade to reminders (packages/prisma/schema.prisma:587,643), while rescheduling merely retains the cancelled batch's row until its scheduled date passes.",
+   "severity": "high"
+  }
+ ]
+}

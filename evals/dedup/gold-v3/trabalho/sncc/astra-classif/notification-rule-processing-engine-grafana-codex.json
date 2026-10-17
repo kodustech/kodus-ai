@@ -1,0 +1,12 @@
+{
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "items": [
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#sncc-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "GrafanaGroupLoader.test.tsx:37-42 defines selector helpers, so including a delete selector does not add a rendered menu item. GrafanaRuleListItem.tsx:47 supplies only promRule, while AlertRuleMenu.tsx:165 requires rulerRule to render Delete; therefore the four-item assertion at GrafanaGroupLoader.test.tsx:207 is consistent with this rendering path.",
+   "severity": "low"
+  }
+ ]
+}

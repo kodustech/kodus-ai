@@ -1,0 +1,12 @@
+{
+ "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#sncc-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "Topic#url delegates to Topic.url, which explicitly prefixes Discourse.base_url (app/models/topic.rb:703\u2013710). Therefore unsubscribe_url appends /unsubscribe to an absolute URL (app/models/topic.rb:719\u2013720), and the mailer passes that absolute URL into the email (app/mailers/user_notifications.rb:295); the claimed relative URL does not exist.",
+   "severity": "high"
+  }
+ ]
+}

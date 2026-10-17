@@ -1,0 +1,12 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "I retain TP: limiting retained payloads does not make incorrect segment assignment harmless. The hset at line 40 updates only the arriving span, while zpopmin removes payloads without shortening existing redirect chains. For s0\u2192s1\u2192\u2026\u2192s1002, a later child of s0 stops at s1001 under the new bound and creates a separate buffer instead of joining s1002, even if its timestamp would keep it among the retained 1000 spans. The previous bound resolves this case correctly; accepting payload truncation does not establish that this additional correctness regression is intended."
+  }
+ ]
+}

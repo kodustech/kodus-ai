@@ -1,0 +1,135 @@
+{
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-01": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "medium",
+  "concede": false,
+  "text": "The jump past a gap is real (queue_consumer.py:86 `start = max(last_committed + 1, min_offset)`, :105 prunes <= committed), but a gap can never be filled later in production: offsets enter the tracker only via submit (queue_consumer.py:211 and :302/:320), called by the Arroyo consumer in partition order, so a missing offset is one Kafka never delivers (compaction/txn marker) and committing past it is correct. The only scenario where it matters is test_offset_gaps_block_commits (test_queue_consumer.py:351-372), which submits 101 out of order, something the real consumer cannot do. Effect: docstring/test contract mismatch and a one-cycle stall, not lost messages. Nit."
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "low",
+  "concede": false,
+  "text": "The race needs processing of five mocked items to straddle the first commit tick. The commit thread waits 1s before its first scan (queue_consumer.py:275 `self.shutdown_event.wait(1.0)`), while the test submits offsets 100-104 to a mocked `__call__` (test_results_consumer.py:1841) that returns instantly, so all five complete in milliseconds, long before the first tick. Then the first commit already carries the final offset. The loop condition at test_results_consumer.py:1864 is loose, but the flake is theoretical: test tidying."
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede. The only caller, getRoleIdsWithPermissions (AvailableRoleMappingResource.java:229), sits in else branches guarded by `|| !Profile.isFeatureEnabled(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ)` (:71, :108, :145, :184, :217). V1 and V2 are versions of the same feature (Profile.java:56/58), so with V2 on that branch is never reached, and it is a role-mapping lookup, not client listing. The described slowdown cannot happen."
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "low",
+  "concede": false,
+  "text": "The skip is real, but nothing is retried in that path. When `if (message?.length && message?.length > 0 && sendTo)` (scheduleSMSReminders.ts:158) is false, no Twilio call is made, so there is no failing external attempt for the retry limit to stop. The row is just re-read on the next cron run and is removed by the existing deleteMany once `scheduledDate: { lte: now }` (:29-36). This behaviour is identical to before the PR; retryCount was added to stop repeated failed provider calls (:178-195), and that goal is met. The only cost is redundant cron work for a row that can never send. Nit."
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede. readNext does not pass -1 through: ASN1Decoder.java:80-82 `int length = readLength(); length += reset(); return read(length);` turns -1 into 1 (header bytes counted). An indefinite outer SEQUENCE leaves `while (length > 0)` (:57) unexecuted, so the size check at AuthzClientCryptoProvider.java:129 throws IOException. An indefinite element becomes a 1-byte slice, and readInteger on it hits EOFException in readLength. The only caller never reaches new byte[-1]."
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "low",
+  "concede": true,
+  "text": "Concede to nit. AuthzClientCryptoProvider.java:63 returns `KeyStore.getInstance(KeyStore.getDefaultType()).getProvider()`, which contradicts the interface doc `@return BouncyCastle security provider` (CryptoProvider.java:35). The only consumer, BouncyIntegration.loadProvider (:34-39), works with any provider, so there is no behaviour change. It is a documentation mismatch, a nit rather than FP."
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-03": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "high",
+  "concede": false,
+  "text": "The truncation exists (AuthzClientCryptoProvider.java:151-156), but no signature is ever 'accepted' through it. asn1derToConcatenatedRS has a single production caller, the signing side: core/.../ECDSASignatureSignerContext.java:33 `return ECDSAAlgorithm.asn1derToConcatenatedRS(super.sign(data), size);`, which converts a signature the local JCA just produced. All verifiers (ECDSASignatureVerifierContext.java:30, ClientECDSASignatureVerifierContext.java:58, ServerECDSASignatureVerifierContext.java:19) use the opposite direction, concatenatedRSToASN1DER. It also mirrors BC's X9IntegerConverter.integerToBytes used by BCECDSACryptoProvider. No malleability path."
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "high",
+  "concede": false,
+  "text": "Discourse here is Rails 3.2.12 with erubis 2.7.0 (Gemfile.lock:148, :308), not stdlib ERB. A stand-alone `<%- end if %>` line is trimmed by Erubis into a statement that ends with its newline, and Erubis's add_stmt only appends ';' when the code does not end in '\\n'. So the generated Ruby is `end if \\n@output_buffer.safe_concat('\\n  ');...`, which Ruby parses as a modifier-if whose condition is the next (truthy) append. I compiled that generated shape with Ruby 2.6 and it runs. Only stdlib ERB (which emits `end if ;`) raises SyntaxError, which is probably what your check compiled. The template (best.html.erb:6) renders: ugly code, no crash."
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor#sncc-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "The PR deliberately moves the whole upload path to a 10 MB cap: utilities.js:182 `var maxSizeKB = 10 * 1024; // 10MB` for the client check, uploads_controller.rb:55 `FileHelper.download(url, 10.megabytes, ...)`, and server-side downsizing of anything above max_image_size_kb (uploads_controller.rb:63-70). The 413 message at utilities.js:246 matches that cap and the shipped config/nginx.sample.conf:61 `client_max_body_size 10m`. The value it replaced (max_image_size_kb) was not the web-server limit either, so a custom lower nginx limit was misreported before this PR too. Intended design, nothing new to report."
+ },
+ "frontend-asset-optimization-grafana-codex#sncc-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "low",
+  "concede": true,
+  "text": "Concede. `entryPointAssetsCache = result` (webassets.go:69) is unchanged from base, and the PR only adds the mutex. My 'can never be overwritten' was slightly too strong: two cold callers can both pass the nil check, because there is no re-check after Lock at :48. The worst case is still a nil cache that the next call re-reads, so there is no recovery problem. Pre-existing assignment, FP none."
+ },
+ "frontend-asset-optimization-grafana-codex#sncc-02": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "low",
+  "concede": false,
+  "text": "Agreed on the mechanics: Lock at webassets.go:48-49 is held through readWebAssetsFromFile (:60). But outside Dev the read lock fast path returns the cache (:41-47), so the exclusive section runs only on a cold cache, where serializing the load is actually desirable (it avoids duplicate reads). The serialization on every call happens only with `cfg.Env == setting.Dev` (:45), a developer's local instance, and the work is one local JSON file read. No user-facing impact: nit."
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "medium",
+  "concede": false,
+  "text": "The loop is reachable (UsersResource.java:448, also :398/:425/:430), but it is the established design, not a regression: V1 does exactly the same, GroupPermissions.java:313-314 `resourceStore.findByType(server, \"Group\", resource -> { if (hasPermission(resource, null, VIEW_MEMBERS_SCOPE, MANAGE_MEMBERS_SCOPE))`. V2 copies it at GroupPermissionsV2.java:121-122. It returns early when the admin has global view (:107 `if (root.users().canView()) return Collections.emptySet();`), and V2 resources exist only for groups that are named in a permission, not for every group. So the cost scales with permissioned groups, the same as today. An optimisation suggestion: nit."
+ },
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#sncc-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "high",
+  "concede": true,
+  "text": "Concede. I misread the cron: scheduleEmailReminders.ts:34-41 deletes every EMAIL reminder with `scheduledDate: { lte: now }` regardless of `cancelled`. Rows left by the immediateDelete branch (emailReminderManager.ts:213-222) are removed once their date passes, and workflow/step deletes cascade (schema.prisma:643). The 'permanent orphan' premise is false."
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "The loop bound change is in the PR's own optimisation and is paired with a new 1000 cap on set size (add-buffer.lua:62-64 `if span_count > 1000 then redis.call(\"zpopmin\", ...)`). Redirect chains are kept flat: each span is written straight to its resolved root at :40 `redis.call(\"hset\", main_redirect_key, span_id, set_span_id)`. So depth grows only when a whole set root is itself re-parented, and a chain over 1000 needs more than 1000 nested levels arriving strictly bottom-up in separate batches. The removed comment documented the same accepted limitation at 10k. This is a deliberate tradeoff for pathological traces, not a defect."
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-02": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "high",
+  "concede": true,
+  "text": "Concede to hallucination. The select was removed (handleNewBooking.ts:735-739), but `git grep '\\.organization\\b'` on handleNewBooking.ts at head finds no reader. Org handling uses organizationId from userSelect. The comment's premise that downstream code reads user.organization is false, so the described regression cannot happen."
+ },
+ "replays-self-serve-bulk-delete-system-sentry#sncc-02": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede to hallucination. Besides being pre-existing (the rename diff of the spec only changes the hook name and drops attributeKey; the matcher `return query.query === 'search-query';` at :120 is untouched), the premise is false. An unmatched request in static/app/__mocks__/api.tsx:237-253 only records Client.errors and never calls success/error, so the requestPromise (:216-226) never resolves. `await result.current(tag, 'search-query')` (spec :144) would hang and fail the test if the number guard were removed."
+ },
+ "github-oauth-security-enhancement-sentry#sncc-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "high",
+  "concede": true,
+  "text": "Concede. pipeline.signature is not a secret: pipeline/base.py:132-133 `pipe_ids = [f\"{type(v).__module__}.{type(v).__name__}\" ...]; self.signature = md5_text(*pipe_ids).hexdigest()`, a constant hash of view class names (the test even hardcodes it at test_integration.py:445). A timing leak of a public value is meaningless, and a missing state already redirects (integration.py:401-409)."
+ },
+ "github-oauth-security-enhancement-sentry#sncc-02": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede. The test fixes the state to the real signature (test_integration.py:445), stubs OAuth success (_stub_github), creates the integration via the webhook with sender 'attacker' (:417-426), and so reaches integration.py:501-505. If the sender check were removed, pipeline.next_step() would run and the failed-template assertions (:451-454) would fail. The test does verify the new check; the shared message is not a defect."
+ },
+ "advanced-sql-analytics-framework-grafana-codex#sncc-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "high",
+  "concede": true,
+  "text": "Concede. The constant false is intentional. The same PR drops the SQL engine dependency (go.mod/go.sum) and stubs the backend: pkg/expr/sql/db.go:16-21 `return nil, errors.New(\"not implemented\")` for TablesList/RunCommands/QueryFramesInto. Returning the flag value would only move the failure later. The rejection at reader.go:129-131 is the intended disablement."
+ }
+}

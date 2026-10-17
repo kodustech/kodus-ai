@@ -1,0 +1,12 @@
+{
+ "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#sncc-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "In lib/freedom_patches/translate_accelerator.rb:63-64, ||= preserves an existing array, and load_locale rechecks membership under LOAD_MUTEX at lines 47-48 before loading and appending at lines 56-58. The unsynchronized reset in reload! at lines 39-42 and the equivalent unlocked check in translate at line 68 both exist in the base commit; the reload race is pre-existing and would not be fixed by moving this new check inside LOAD_MUTEX.",
+   "severity": "medium"
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "I retain TP: writing each arriving span\u2019s redirect does not flatten existing descendants when their root is subsequently re-parented. Separate bottom-up batches can create s0\u2192s1\u2192\u2026\u2192s1002; a later child of s0 resolves to s1001 under the new loop, whereas the previous limit reaches s1002. Eviction removes sorted-set payloads without shortening the redirect hash, so the 1000-span cap does not prevent this incorrect segment assignment. This is an uncommon-input correctness regression; an optimisation motive alone does not establish that it is intended behavior."
+  }
+ ]
+}

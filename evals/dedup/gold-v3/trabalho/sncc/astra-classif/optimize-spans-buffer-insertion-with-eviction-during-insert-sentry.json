@@ -1,0 +1,19 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "src/sentry/scripts/spans/add-buffer.lua:30 reduces traversal from 10,001 to 1,001 iterations, then uses the potentially intermediate node as the destination at line 45. Descendant-first arrivals across batches can build longer redirect chains; eviction at lines 62\u201363 removes payloads without shortening those chains, allowing subsequent spans to form a separate segment.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "This consumer reads INGEST_SPANS (src/sentry/consumers/__init__.py:427), whose span processing already expects precise end timestamps: src/sentry/spans/consumers/process_segments/message.py:244 unconditionally reads the field for every span. The new access at src/sentry/spans/consumers/process/factory.py:141 follows that existing contract; optional parent and remote-marker fields do not establish that timestamps may also be absent.",
+   "severity": "high"
+  }
+ ]
+}

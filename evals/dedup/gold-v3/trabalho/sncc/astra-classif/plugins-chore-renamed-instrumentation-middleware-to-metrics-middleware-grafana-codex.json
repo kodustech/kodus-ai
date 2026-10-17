@@ -1,0 +1,19 @@
+{
+ "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+ "items": [
+  {
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#sncc-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The missing negative assertion at pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go:101-109 already exists verbatim in the base commit's instrumentation_middleware_test.go:101-109. This PR only renames the test file and changes the constructor call at line 78, so the reported coverage gap is pre-existing.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#sncc-02",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "The newly added documentation at pkg/plugins/log/ifaces.go:22 repeats New's wording without explaining which context attributes are attached. The implementation delegates at pkg/plugins/log/logger.go:49 to pkg/infra/log/log.go:203-216, which extracts attributes through context providers; clarifying this is a documentation-only improvement.",
+   "severity": "low"
+  }
+ ]
+}

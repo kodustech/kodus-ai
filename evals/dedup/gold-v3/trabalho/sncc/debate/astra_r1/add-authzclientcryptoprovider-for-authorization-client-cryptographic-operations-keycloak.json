@@ -1,0 +1,12 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-03",
+   "class": "FP",
+   "subclass": "none",
+   "severity": "high",
+   "reply": "I change my classification to FP: the truncation exists, but oversized untrusted integers cannot reach it through the production callers. ECDSASignatureSignerContext.java:33 passes a locally generated JCA signature into asn1derToConcatenatedRS; all three verification contexts use concatenatedRSToASN1DER instead. The proposed rejection therefore guards an unreachable state in the current flow, rather than fixing signature acceptance or malleability. Severity remains high assuming the claimed security weakness were true, as the rubric requires."
+  }
+ ]
+}

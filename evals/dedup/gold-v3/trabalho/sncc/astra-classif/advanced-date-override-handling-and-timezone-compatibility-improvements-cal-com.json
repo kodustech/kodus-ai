@@ -1,0 +1,12 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "items": [
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#sncc-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The organizer already uses Asia/Kolkata (UTC+5:30), with a 14:00\u201318:00 override (apps/web/test/lib/getSchedule.test.ts:123\u2013128), while the new request uses UTC+6 (line 794). The offset adjustment adds 30 minutes (packages/lib/slots.ts:212\u2013223), and slots are constructed relative to invitee midnight (lines 107\u2013110); reverting it would produce 08:00Z instead of the asserted 08:30Z, so this test does distinguish the fix.",
+   "severity": "medium"
+  }
+ ]
+}

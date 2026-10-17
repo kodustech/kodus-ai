@@ -1,0 +1,214 @@
+{
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+  "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+  "issues": {
+   "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02": {
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S11",
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1861,
+       1870
+      ],
+      "texto": "The wait loop breaks as soon as any commit is recorded, but the test then asserts the committed offset is exactly 105. A commit fired by the 1s loop mid-processing can commit a lower offset, so the test is flaky. Wait until the committed value reaches 105 before asserting."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "The wait loop in test_thread_queue_parallel_offset_commit (test_results_consumer.py:1861-1867) breaks once total_items == 0 and any commit exists, then asserts == 105 (line 1870). The commit loop first fires 1s after start (queue_consumer.py:275), so a mid-processing commit is only a narrow theoretical race with the mocked processor; this is test tidying."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "tests/sentry/uptime/consumers/test_results_consumer.py:1864 exits when queues are empty and any commit exists, then line 1870 requires offset 105. The independent one-second commit loop in queue_consumer.py:273-289 can publish a partial offset before processing finishes; empty queues do not guarantee another commit has published the final offset, making the new test timing-dependent."
+     },
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "The race needs processing of five mocked items to straddle the first commit tick. The commit thread waits 1s before its first scan (queue_consumer.py:275 `self.shutdown_event.wait(1.0)`), while the test submits offsets 100-104 to a mocked `__call__` (test_results_consumer.py:1841) that returns instantly, so all five complete in milliseconds, long before the first tick. Then the first commit already carries the final offset. The loop condition at test_results_consumer.py:1864 is loose, but the flake is theoretical: test tidying.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "I retain TP: the one-second timer starts before message construction and submission, and mocking the processor provides no synchronization with that timer. A partial commit can occur, processing can then finish, and the wait condition at line 1864 can exit before the next commit updates the offset to 105. Fast execution makes this unlikely, but scheduling delays can expose an actual false test failure, so this is more than test tidying."
+     }
+    ]
+   }
+  }
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+  "head": "ffbaf8c54269df2ce510de91245760fddce09896",
+  "issues": {
+   "feature-automatically-downsize-large-images-discourse-cursor#sncc-01": {
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       246,
+       247
+      ],
+      "texto": "The 413 handler now tells the user the maximum size is a hard-coded 10 MB. That number is not the limit the server enforces, which comes from the site settings or the web server config, so the message can be false. Derive the value from the configured setting, or use a message that doesn't state a number."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "utilities.js:246 now hard-codes 10 MB for the 413 case, matching the limit the PR sets everywhere else: uploads_controller.rb downloads with 10.megabytes and the server now downsizes images above max_image_size_kb instead of rejecting them, and config/nginx.sample.conf:61 ships client_max_body_size 10m. The 413 comes from the web server, so the message matches the shipped configuration. This is the intended design."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The PR replaces the configured value with 10 * 1024 for every HTTP 413 response in app/assets/javascripts/discourse/lib/utilities.js:245-247; config/locales/client.en.yml:1297 displays it as the maximum allowed size. Although config/nginx.sample.conf:61 defaults to 10m, a deployment with a lower web-server limit will reject uploads while this message incorrectly advertises 10 MB."
+     },
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The PR deliberately moves the whole upload path to a 10 MB cap: utilities.js:182 `var maxSizeKB = 10 * 1024; // 10MB` for the client check, uploads_controller.rb:55 `FileHelper.download(url, 10.megabytes, ...)`, and server-side downsizing of anything above max_image_size_kb (uploads_controller.rb:63-70). The 413 message at utilities.js:246 matches that cap and the shipped config/nginx.sample.conf:61 `client_max_body_size 10m`. The value it replaced (max_image_size_kb) was not the web-server limit either, so a custom lower nginx limit was misreported before this PR too. Intended design, nothing new to report.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The shipped nginx configuration matches 10 MB, but the changed code introduces a mismatch for deployments with lower limits. For example, with both max_image_size_kb and nginx set to 2 MB, the previous client check rejected a 3 MB image with the correct limit; the new check allows it through, and nginx\u2019s 413 now produces an incorrect 10 MB message. This newly reachable misleading failure is not merely the pre-existing inability to discover nginx\u2019s limit."
+     }
+    ]
+   }
+  }
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+  "head": "7355f05e6aafe2a7acc6434fb40c686665416606",
+  "issues": {
+   "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02": {
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       121,
+       125
+      ],
+      "texto": "WHAT: getGroupIdsWithViewPermission iterates every group resource and runs a full permission evaluation for each one. WHY: it is called on every user search and user count for non-global viewers, so the cost grows as O(groups) policy evaluations per request. HOW: evaluate permissions once for the scopes across the Groups resource type and collect the matching resources, or cache the result per request."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "text": "getGroupIdsWithViewPermission runs hasPermission per Groups-type resource (GroupPermissionsV2.java:121-125), but V2 resources exist only for groups referenced by permissions and V1 GroupPermissions.getGroupIdsWithViewPermission (GroupPermissions.java:313-317) has the same per-resource loop, so this is an optimisation, not a regression."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "GroupPermissionsV2.java:121-125 scans every Groups resource and calls hasPermission, which invokes a separate policy evaluation at line 152. MgmtPermissions.java:351 creates each evaluator independently, and IterablePermissionEvaluator.java:59 allocates a fresh decision cache, preventing reuse across groups. UsersResource.java:398 and :448 invoke this work for counts and searches, introducing a meaningful performance problem as configured group resources grow."
+     },
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "text": "The loop is reachable (UsersResource.java:448, also :398/:425/:430), but it is the established design, not a regression: V1 does exactly the same, GroupPermissions.java:313-314 `resourceStore.findByType(server, \"Group\", resource -> { if (hasPermission(resource, null, VIEW_MEMBERS_SCOPE, MANAGE_MEMBERS_SCOPE))`. V2 copies it at GroupPermissionsV2.java:121-122. It returns early when the admin has global view (:107 `if (root.users().canView()) return Collections.emptySet();`), and V2 resources exist only for groups that are named in a permission, not for every group. So the cost scales with permissioned groups, the same as today. An optimisation suggestion: nit.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "I retain TP: GroupPermissionsV2.java:121\u2013125 performs a separate permission evaluation for each configured Groups resource, with a fresh decision cache per evaluation. The global-view guard and restriction to permissioned groups narrow the affected requests but do not bound this repeated work. V1 has the same inefficiency, but this PR adds and wires a new V2 implementation with different resource lookup logic; this is not merely moved or re-indented code. Repeated full policy evaluations on user searches and counts constitute a meaningful scaling problem that batching could reduce."
+     }
+    ]
+   }
+  }
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "28e3db2520d4ea28c57b08da57b83917ba7b2e15",
+  "head": "eb9623b4e787303a3bd15e10bbbdb78d59875ac6",
+  "issues": {
+   "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01": {
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S2",
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       30,
+       30
+      ],
+      "texto": "WHAT: the redirect-walk limit was reduced from 10000 to 1000 iterations, and the comment documenting the limit was removed. WHY: trees deeper than 1000 stop resolving to the correct set root, so segments may be split or joined incorrectly. This change is unrelated to span eviction. HOW: restore the 10000 limit unless the reduction is intentional."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "add-buffer.lua:30 does lower the redirect-walk loop from 10000 to 1000 and drops the comment. This is part of the PR's insertion-cost optimisation: the same script now caps each set at 1000 spans with zpopmin (lines 62-64). Bounding the per-insert redirect walk is a deliberate tradeoff for pathological traces, not an accidental change."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "src/sentry/scripts/spans/add-buffer.lua:30 reduces traversal from 10,001 to 1,001 iterations, then uses the potentially intermediate node as the destination at line 45. Descendant-first arrivals across batches can build longer redirect chains; eviction at lines 62\u201363 removes payloads without shortening those chains, allowing subsequent spans to form a separate segment."
+     },
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The loop bound change is in the PR's own optimisation and is paired with a new 1000 cap on set size (add-buffer.lua:62-64 `if span_count > 1000 then redis.call(\"zpopmin\", ...)`). Redirect chains are kept flat: each span is written straight to its resolved root at :40 `redis.call(\"hset\", main_redirect_key, span_id, set_span_id)`. So depth grows only when a whole set root is itself re-parented, and a chain over 1000 needs more than 1000 nested levels arriving strictly bottom-up in separate batches. The removed comment documented the same accepted limitation at 10k. This is a deliberate tradeoff for pathological traces, not a defect.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "I retain TP: writing each arriving span\u2019s redirect does not flatten existing descendants when their root is subsequently re-parented. Separate bottom-up batches can create s0\u2192s1\u2192\u2026\u2192s1002; a later child of s0 resolves to s1001 under the new loop, whereas the previous limit reaches s1002. Eviction removes sorted-set payloads without shortening the redirect hash, so the 1000-span cap does not prevent this incorrect segment assignment. This is an uncommon-input correctness regression; an optimisation motive alone does not establish that it is intended behavior."
+     }
+    ]
+   }
+  }
+ }
+}

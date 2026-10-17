@@ -1,0 +1,12 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The PR replaces the configured value with 10 * 1024 for every HTTP 413 response in app/assets/javascripts/discourse/lib/utilities.js:245-247; config/locales/client.en.yml:1297 displays it as the maximum allowed size. Although config/nginx.sample.conf:61 defaults to 10m, a deployment with a lower web-server limit will reject uploads while this message incorrectly advertises 10 MB.",
+   "severity": "medium"
+  }
+ ]
+}

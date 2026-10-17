@@ -1,0 +1,12 @@
+{
+ "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+ "items": [
+  {
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#sncc-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The IDs are rendered before authentication at themes/src/main/resources/theme/base/login/passkeys.ftl:11-17, but this supports the intended username-first WebAuthn flow. themes/src/main/resources/theme/base/login/resources/js/webauthnAuthenticate.js:31-49 consumes them as allowCredentials, matching the existing rendering in themes/src/main/resources/theme/base/login/webauthn-authenticate.ftl:19-24. These are credential selectors, not authentication secrets; services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnAuthenticator.java:224-243 still validates the signed assertion.",
+   "severity": "high"
+  }
+ ]
+}

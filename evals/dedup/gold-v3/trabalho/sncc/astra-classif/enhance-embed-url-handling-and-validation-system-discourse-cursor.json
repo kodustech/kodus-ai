@@ -1,0 +1,26 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The new template contains a conditionless `<%- end if %>` at app/views/embed/best.html.erb:6; compiling its generated Ruby confirms a SyntaxError. Existing-topic requests reach this template through app/controllers/embed_controller.rb:12\u201313, so embedded discussions fail to render.",
+   "severity": "high"
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-02",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "app/jobs/scheduled/poll_feed.rb:20\u201322 introduces an unused feed_key method, while line 29 fetches the feed unconditionally. However, app/models/topic_embed.rb:34 skips revisions for unchanged content, so the demonstrated issue is dead code and optional caching, without an established meaningful performance impact.",
+   "severity": "low"
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The new layout requests embed.css at app/views/layouts/embed.html.erb:4, but config/application.rb:57\u201370 does not select either new embed asset for precompilation. Production disables runtime compilation at config/environments/production.rb:23, leaving the stylesheet and iframe-creating script at app/assets/javascripts/embed.js:5\u201312 unavailable in precompiled deployments.",
+   "severity": "high"
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "I retain TP: GroupPermissionsV2.java:121\u2013125 performs a separate permission evaluation for each configured Groups resource, with a fresh decision cache per evaluation. The global-view guard and restriction to permissioned groups narrow the affected requests but do not bound this repeated work. V1 has the same inefficiency, but this PR adds and wires a new V2 implementation with different resource lookup logic; this is not merely moved or re-indented code. Repeated full policy evaluations on user searches and counts constitute a meaningful scaling problem that batching could reduce."
+  }
+ ]
+}

@@ -1,0 +1,26 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "ASN1Decoder.java:80-82 adds the consumed header length before calling read(), so readNext does not pass -1 straight through as claimed. AuthzClientCryptoProvider.java:128-134 calls readInteger only on those extracted elements; an indefinite-length integer loses its length byte during extraction and fails with IOException, rather than reaching the negative allocation.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:61-63 returns the default KeyStore provider, contradicting common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java:35. However, common/src/main/java/org/keycloak/common/util/BouncyIntegration.java:34-39 already permits a non-BC fallback, so the demonstrated issue is documentation accuracy rather than broken behavior.",
+   "severity": "low"
+  },
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-03",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:151-156 unconditionally discards excess high-order bytes, without checking whether they represent actual magnitude or merely sign padding. The conversion invokes this helper for both decoded integers at lines 133-137, allowing oversized values to become different, potentially valid signature components.",
+   "severity": "high"
+  }
+ ]
+}

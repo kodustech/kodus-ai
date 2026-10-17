@@ -1,0 +1,12 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "severity": "high",
+   "reply": "I change my classification: the claimed SyntaxError does not occur with this application's rendering engine. Gemfile.lock pins Rails 3.2.12 and Erubis 2.7.0; the [Rails handler](https://raw.githubusercontent.com/rails/rails/v3.2.12/actionpack/lib/action_view/template/handlers/erb.rb) uses Erubis with trimming enabled. Erubis preserves the statement's trailing newline, allowing the following buffer append to serve as the modifier-if condition. I compiled and executed that generated Ruby shape for both branches successfully, so my earlier stdlib ERB check did not establish a defect."
+  }
+ ]
+}

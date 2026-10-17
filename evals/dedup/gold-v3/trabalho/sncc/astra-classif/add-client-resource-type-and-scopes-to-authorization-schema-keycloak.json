@@ -1,0 +1,19 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "ClientPermissionsV2.java:138 and :276 do evaluate each resource separately, but the claimed listing slowdown is unreachable through existing callers. The only caller is AvailableRoleMappingResource.java:229, whose calling branches require V1 enabled (:71, :108, :145, :184, :217); Profile.java:283-306 prevents enabling V1 alongside V2. The client listing endpoint in ClientsResource.java:120-165 does not call this method.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "common/src/main/java/org/keycloak/common/Profile.java:283-306 rejects enabling multiple versions and enables only the selected version, so V1 and V2 cannot both be enabled. services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java:77 guards the deletion cleanup with V1, preventing its call at :91 from reaching the V2 implementation.",
+   "severity": "high"
+  }
+ ]
+}

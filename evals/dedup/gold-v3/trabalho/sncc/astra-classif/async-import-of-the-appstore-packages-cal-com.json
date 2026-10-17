@@ -1,0 +1,12 @@
+{
+ "caseId": "async-import-of-the-appstore-packages-cal-com",
+ "items": [
+  {
+   "issueId": "async-import-of-the-appstore-packages-cal-com#sncc-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "packages/app-store/index.ts:3-30 invokes all 28 active dynamic imports during module initialization, so loading is not deferred until an integration is selected. The lookup at packages/app-store/_utils/getCalendar.ts:15 only awaits an already-started import; unused integrations still load dependencies such as googleapis (packages/app-store/googlecalendar/lib/CalendarService.ts:3). This affects the loading mechanism rewritten by this PR, although eager loading also occurred before and dynamic imports can still create separate bundle chunks.",
+   "severity": "medium"
+  }
+ ]
+}

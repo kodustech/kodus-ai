@@ -1,0 +1,12 @@
+{
+ "caseId": "frontend-asset-optimization-grafana-codex",
+ "items": [
+  {
+   "issueId": "frontend-asset-optimization-grafana-codex#sncc-02",
+   "class": "TP",
+   "subclass": "nit",
+   "severity": "low",
+   "reply": "Changed to TP/nit, low. The added exclusive lock does cover the manifest read and JSON decoding, and Dev mode bypasses the cache on every call. However, production cache hits return before acquiring the exclusive lock, and the cited development-only contention does not establish a meaningful performance regression. One correction to the other reviewer's argument: concurrent cold-cache callers can still repeat the load because the cache is not rechecked after acquiring the exclusive lock."
+  }
+ ]
+}

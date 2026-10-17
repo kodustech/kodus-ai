@@ -1,0 +1,1211 @@
+{
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+  "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+  "prTitle": "feat(uptime): Add ability to use queues to manage parallelism",
+  "issues": [
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S7",
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       83,
+       93
+      ],
+      "texto": "The commit scan starts at max(last_committed + 1, min_offset). Once mark_committed prunes already-committed offsets, min_offset jumps past any missing offset, so the next pass treats the gap as contiguous and commits beyond it. For example, with offsets 100, 102 and 103 where 101 never arrived, 100 is committed first and then 103. This contradicts the 'highest contiguous offset' docstring and the gap tests. Start at last_committed + 1 when it is known, and only use min_offset for the first commit."
+     },
+     {
+      "gid": "sonnet-cc:S9",
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       86,
+       93
+      ],
+      "texto": "The contiguity scan starts at max(last_committed + 1, min_offset). After mark_committed trims all_offsets, min_offset exceeds last_committed + 1 whenever a gap exists, so the gap is skipped on the next cycle. The first cycle stops at the gap and later cycles commit past it, so the 'contiguous' guarantee holds only by timing. Pick one rule and apply it consistently: either start at last_committed + 1 and treat missing offsets as gaps (or Kafka-compacted offsets) deliberately, or start at min_offset every time."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S11",
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1861,
+       1870
+      ],
+      "texto": "The wait loop breaks as soon as any commit is recorded, but the test then asserts the committed offset is exactly 105. A commit fired by the 1s loop mid-processing can commit a lower offset, so the test is flaky. Wait until the committed value reaches 105 before asserting."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "b8c1cd410f4499c77a8b372decfe1718b80ccfd2",
+  "head": "1950a511026d520a7329c7b6b9ee60a4af8f8b55",
+  "prTitle": "Add Client resource type and scopes to authorization schema",
+  "issues": [
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S2",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       138,
+       142
+      ],
+      "texto": "WHAT: getClientsWithPermission runs a full policy evaluation (root.evaluatePermission) for every client resource of type Clients. WHY: Listing clients costs one evaluation per client, so a realm with many clients gets a large slowdown. HOW: Evaluate once with all client resources and scopes, or bound or batch the lookup."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S7",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       192,
+       195
+      ],
+      "texto": "AdminPermissions' removal listener runs when ADMIN_FINE_GRAINED_AUTHZ is enabled and calls management(...).clients().setPermissionsEnabled(client, false) on ClientRemovedEvent. When V2 is also enabled, management() returns the V2 implementation, so the call throws UnsupportedOperationException and client deletion fails. Make V2's setPermissionsEnabled a no-op, or skip the cleanup in the listener when V2 is enabled."
+     },
+     {
+      "gid": "sonnet-cc:S8",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java",
+      "lines": [
+       77,
+       91
+      ],
+      "texto": "The ClientRemovedEvent handler still calls clients().setPermissionsEnabled(client, false). In V2 that now throws UnsupportedOperationException, because ClientPermissionsV2 stubs the method. The new guard only checks the V1 feature flag, so with V2 enabled (and V1 also on) deleting a client can fail. Skip this cleanup when V2 is enabled, or make the V2 implementation a no-op."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "917c7b0764f4c6bfdca95db2c5f73dbfdbe11757",
+  "head": "c790227e0cda780e6fea9bb03af27948d9e286b9",
+  "prTitle": "SMS workflow reminder retry count tracking",
+  "issues": [
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       158,
+       188
+      ],
+      "texto": "WHAT: retryCount is only incremented when twilio returns a falsy result or an exception is thrown. It is not incremented when `message` is empty or `sendTo` is missing, for example an invalid or missing phone number. WHY: those reminders are re-attempted on every cron run until scheduledDate, which is the behaviour this PR is meant to stop. HOW: Add an else branch to the `if (message?.length && sendTo)` check that increments retryCount."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "10aca5552314d6e5c9226f3c6d0107861c38c693",
+  "head": "79d11c4890cc4792e3dc3535af59e4e5f7a2739d",
+  "prTitle": "Add AuthzClientCryptoProvider for authorization client cryptographic operations",
+  "issues": [
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S1",
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+      "lines": [
+       169,
+       171
+      ],
+      "texto": "WHAT: readLength returns -1 for indefinite-length encoding, and readInteger and readNext pass it straight to read(int), which allocates `new byte[-1]`. WHY: a malformed or indefinite-length DER signature throws an unchecked NegativeArraySizeException instead of the IOException that callers expect. HOW: reject negative lengths in read(int) or in the callers by throwing an IOException."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S4",
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       60,
+       67
+      ],
+      "texto": "`getBouncyCastleProvider()` is documented in the CryptoProvider interface as returning the BouncyCastle provider, but this implementation returns the JDK default KeyStore provider (e.g. SUN). Callers that rely on the name will get a non-BC provider. Either document the deviation on this override or return null, as WildFlyElytronProvider does when it has no BC."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-03",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S7",
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       151,
+       163
+      ],
+      "texto": "integerToBytes silently truncates r/s values longer than the curve size, so malformed or non-canonical DER signatures are accepted as a different valid-looking value (signature malleability). Reject values that exceed qLength after stripping a single leading sign byte instead of truncating."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "56abd247e1829cb6de82dfcc8ce04deb5f0d1e91",
+  "head": "6669a2d94d76eea3b99b8c476d12b1eb66726b07",
+  "prTitle": "FEATURE: per-topic unsubscribe option in emails",
+  "issues": [
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S5",
+      "file": "app/models/topic.rb",
+      "lines": [
+       719,
+       721
+      ],
+      "texto": "Topic#unsubscribe_url is built from the relative Topic#url, but it is interpolated into the email's unsubscribe_link as a markdown link target. The email therefore contains a link with no scheme or host, which mail clients cannot open. Prefix it with Discourse.base_url, either here or where the mailer passes it."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "58ba11ecbd60863e2bfc6e32f0399ed4feb3927a",
+  "head": "303cdc2caf256aa5df660611120c2e3f7392365d",
+  "prTitle": "Plugins: Chore: Renamed instrumentation middleware to metrics middleware",
+  "issues": [
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S1",
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       101,
+       109
+      ],
+      "texto": "The `shouldInstrumentRequestSize` flag is only checked when true, so the CheckHealth and CollectMetrics cases never verify that request size is not recorded. Add an else branch asserting `testutil.CollectAndCount(promRegistry, metricRequestSize) == 0` so that wrongly instrumenting size for those endpoints fails the test."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S2",
+      "file": "pkg/plugins/log/ifaces.go",
+      "lines": [
+       22,
+       23
+      ],
+      "texto": "The FromContext doc is copied from New() and misdescribes the method. It does not add a 'given context' of key/values. It returns a logger carrying the contextual attributes stored in the context.Context (e.g. via log.WithContextualAttributes). Reword it so callers know that attributes set by middleware are what get attached."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "62db063e1e1abe691313ab42682a68f796d63769",
+  "head": "4f8aed295a29954023b2849c060ef4fb299d1b5d",
+  "prTitle": "Enhance embed URL handling and validation system",
+  "issues": [
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S1",
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       6,
+       6
+      ],
+      "texto": "WHAT: `<%- end if %>` on line 6 is not valid Ruby, because `end if` has no condition. WHY: the template will most likely raise a SyntaxError and the embed page will fail to render. HOW: use `<%- end %>`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S11",
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       20,
+       22
+      ],
+      "texto": "feed_key computes a per-feed 'feed-modified:' cache key that is never used. poll_feed re-fetches and re-processes the whole feed every hour with no modified-since check. Either use the key to skip unchanged feeds or remove the dead method."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S12",
+      "file": "app/views/layouts/embed.html.erb",
+      "lines": [
+       4,
+       4
+      ],
+      "texto": "The layout requests the 'embed' stylesheet, but config/application.rb's assets.precompile list (not touched by this PR) does not include 'embed.css' or 'embed.js'. With precompiled assets in production, the embed iframe layout will fail to resolve the stylesheet and embed.js will not be served. Add 'embed.css' and 'embed.js' to config.assets.precompile."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+  "head": "ffbaf8c54269df2ce510de91245760fddce09896",
+  "prTitle": "FEATURE: automatically downsize large images",
+  "issues": [
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       246,
+       247
+      ],
+      "texto": "The 413 handler now tells the user the maximum size is a hard-coded 10 MB. That number is not the limit the server enforces, which comes from the site settings or the web server config, so the message can be false. Derive the value from the configured setting, or use a message that doesn't state a number."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "unified-storage-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "871af07203177ce59a24e742107119409274f48a",
+  "head": "26fed312840cd76b766cbd2158e17a7e6c0ec548",
+  "prTitle": "Unified Storage Performance Optimizations",
+  "issues": [
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "pkg/server/module_server_test.go",
+      "lines": [
+       35,
+       38
+      ],
+      "texto": "Skipping this test on postgres means it can never fail there, in the same PR that makes NewResourceServer run Init eagerly. A startup regression from that change on postgres would go unnoticed. Find the cause of the Drone failure, for example by checking whether it comes from the new eager Init, and fix it rather than skipping the test."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S4",
+      "file": "pkg/storage/unified/resource/server.go",
+      "lines": [
+       258,
+       262
+      ],
+      "texto": "NewResourceServer now runs s.Init(ctx) synchronously and returns (nil, err) if it fails. Construction used to be side-effect free, with init handled separately by callers and the lifecycle. Callers of NewResourceServer, and tests that still call Init explicitly, now see a constructor that blocks on search-index build and watcher startup and can refuse to return a server. Keep initialization in its original lazy or explicit path, or update every caller to expect and handle construction-time failure."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "frontend-asset-optimization-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "3ce1a5b0caab215346a51629b0344b90d67e9478",
+  "head": "b1613e320acff00623e6efc59f00ee68c7684a97",
+  "prTitle": "Frontend Asset Optimization",
+  "issues": [
+   {
+    "issueId": "frontend-asset-optimization-grafana-codex#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S1",
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       69,
+       70
+      ],
+      "texto": "WHAT: The cache is assigned unconditionally, so a failed read stores nil in entryPointAssetsCache. WHY: In non-Dev mode a transient manifest read error discards a previously valid cache entry, and the next call has to re-read the manifest. HOW: Only assign the cache when err == nil && result != nil."
+     },
+     {
+      "gid": "sonnet-cc:S2",
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       69,
+       70
+      ],
+      "texto": "The cache is written unconditionally, so when reading the manifest fails, a nil result overwrites the cached assets. In Dev mode a transient read error discards a previously good cache. In non-Dev mode a cold-start failure is stored as nil, so every caller keeps hitting the file read. Only assign entryPointAssetsCache when err == nil and result != nil."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "frontend-asset-optimization-grafana-codex#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "webassets.go",
+      "lines": [
+       51,
+       69
+      ],
+      "texto": "After a cache miss, every caller takes the exclusive lock and holds it through the whole load (file read and parse). In Dev mode the cache is deliberately bypassed, so every request now serializes behind a global mutex. Do the load outside the exclusive lock, or avoid taking the lock at all when the cache is bypassed in Dev mode. The reviewer did not read the function body (lines 51-68), so the actual lock hold time is unconfirmed."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "dual-storage-architecture-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "66c4dff17e9147b11fb9b14c6ed63089a599da65",
+  "head": "e369f24665ec70e1e3700f457d25ef83301d931a",
+  "prTitle": "Dual Storage Architecture",
+  "issues": [
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S6",
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       101,
+       105
+      ],
+      "texto": "Delete used to ignore NotFound from unified storage and still delete from legacy. Now any storage error, including NotFound, returns before legacy is touched. Objects that exist only in legacy can no longer be deleted, and legacy keeps stale data. Restore the NotFound tolerance so the legacy delete still runs."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "a5d290951def84afdcc4c88d2f1f20023fc36e2a",
+  "head": "8ab88145113dd23a930e23b9cbbcf8b30e4c0b17",
+  "prTitle": "Enhanced Pagination Performance for High-Volume Audit Logs",
+  "issues": [
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S2",
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       179,
+       184
+      ],
+      "texto": "WHAT: BasePaginator.get_result still passes the raw negative offset to the queryset slice whenever cursor.is_prev is true. WHY: This affects every paginated endpoint, and a user-supplied prev cursor with a negative offset raises ValueError (500). The added comment wrongly says the queryset handles boundaries. HOW: clamp or reject negative offsets for all cursors."
+     },
+     {
+      "gid": "sonnet-cc:S6",
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       179,
+       184
+      ],
+      "texto": "The clamp `max(0, offset)` is skipped when cursor.is_prev is true, so a negative offset from a crafted prev cursor is passed directly as the slice start in BasePaginator.get_result. Django rejects negative slicing, so this raises ValueError and returns a 500 for every paginated endpoint. Always clamp the offset to >= 0."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S10",
+      "file": "src/sentry/utils/cursors.py",
+      "lines": [
+       26,
+       27
+      ],
+      "texto": "The comment says Cursor allows negative offsets for reverse pagination. The constructor only calls int(offset) and has no handling for negative values, so the comment promises behavior the code does not provide. Remove it."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-03",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S13",
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       182,
+       184
+      ],
+      "texto": "The slice start is now start_offset, but the prev-cursor trimming code a few lines below still compares len(results) against offset + limit + extra using the raw offset. If start_offset differs from offset, the trimming check no longer matches the real slice and can drop or keep the wrong row. Use start_offset in that check."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+  "head": "7355f05e6aafe2a7acc6434fb40c686665416606",
+  "prTitle": "Add Groups resource type and scopes to authorization schema",
+  "issues": [
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S2",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java",
+      "lines": [
+       448,
+       453
+      ],
+      "texto": "WHAT: searchForUser no longer filters results with usersEvaluator::canView, and the group restriction is now applied only when the group id set is non-empty. WHY: an admin who can query users but has no view permission and no group grants has an empty group set, so the search may return every user in the realm. HOW: keep the per-user filter, e.g. `.filter(usersEvaluator::canView)`, on the search stream."
+     },
+     {
+      "gid": "sonnet-cc:S8",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java",
+      "lines": [
+       448,
+       453
+      ],
+      "texto": "The per-user `usersEvaluator::canView` filter was removed from user search. The search is now limited only by the GROUPS session attribute, which is set only when the caller has group view grants. A caller with query access but no view permission and no group grants may therefore get an unrestricted user list, exposing user data. Keep the per-user canView filter (or confirm that toRepresentation enforces it)."
+     },
+     {
+      "gid": "sonnet-cc:S9",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java",
+      "lines": [
+       448,
+       453
+      ],
+      "texto": "An empty set from getGroupIdsWithViewPermission() is now indistinguishable from 'caller may view everything'. When the caller cannot view users and has no viewable groups, UserModel.GROUPS is never set. The search then runs unrestricted, and the removed `.filter(usersEvaluator::canView)` no longer catches it. Restore the per-user canView filter, or explicitly return no results when canView() is false and the set is empty."
+     },
+     {
+      "gid": "sonnet-cc:S10",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java",
+      "lines": [
+       447,
+       453
+      ],
+      "texto": "getGroupIdsWithViewPermission() returns an empty set both for 'can view all users' and for 'no viewable groups'. searchForUser now sets no group restriction when the set is empty and no longer applies usersEvaluator::canView. A caller who can only query, or who has per-user view permission, may therefore get unfiltered search results. Keep the per-user canView filter, or restore the canView() guard so the empty set is only treated as 'unrestricted' for callers who can view all users."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       121,
+       125
+      ],
+      "texto": "WHAT: getGroupIdsWithViewPermission iterates every group resource and runs a full permission evaluation for each one. WHY: it is called on every user search and user count for non-global viewers, so the cost grows as O(groups) policy evaluations per request. HOW: evaluate permissions once for the scopes across the Groups resource type and collect the matching resources, or cache the result per request."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "93cb21f55a2a40d9116c014741f5679fbeff5fd9",
+  "head": "ee38fd295fd294b9fc787eba482bde24bbfea69b",
+  "prTitle": "Advanced date override handling and timezone compatibility improvements",
+  "issues": [
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S9",
+      "file": "apps/web/test/lib/getSchedule.test.ts",
+      "lines": [
+       788,
+       804
+      ],
+      "texto": "The new different-timezone test expects the same UTC slots as the existing UTC case. The old slots.ts code, which used the override's raw UTC hours, likely produces those same slots, so reverting the offset fix would not make this test fail. Give the organizer's schedule a non-UTC timezone and use a case where the invitee/organizer offset changes the result, so the assertion fails without the fix."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "d1440bb5d2f2190ad7ae1d26c165f970055b5370",
+  "head": "6048e2a86b50e81e1e3b1b467dfea5a895add3dc",
+  "prTitle": "Comprehensive workflow reminder management for booking lifecycle events",
+  "issues": [
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S1",
+      "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+      "lines": [
+       213,
+       223
+      ],
+      "texto": "WHAT: When immediateDelete is true the function cancels the SendGrid batch and returns without deleting or flagging the WorkflowReminder row. WHY: Reminders of rescheduled bookings, deleted workflows and deleted steps stay in the DB as scheduled=true with a referenceId, leaving orphan rows. In the reschedule case they stay attached to the old booking. HOW: Delete the reminder row (prisma.workflowReminder.delete) after the successful cancel request in the immediateDelete branch."
+     },
+     {
+      "gid": "sonnet-cc:S4",
+      "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+      "lines": [
+       213,
+       223
+      ],
+      "texto": "With immediateDelete=true, the function cancels the SendGrid batch and returns without deleting the WorkflowReminder row. Callers that used to delete the row (reschedule, workflow delete, step delete) no longer do, and the cron only deletes rows with cancelled=true. The reminder rows are therefore left in the database permanently. Delete the DB row after the cancel request succeeds."
+     },
+     {
+      "gid": "sonnet-cc:S5",
+      "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+      "lines": [
+       213,
+       223
+      ],
+      "texto": "The immediateDelete branch cancels the SendGrid batch and returns without deleting the WorkflowReminder row. Callers used to delete the row themselves, and the PR removed that code, so the reschedule path in handleNewBooking now leaves an orphaned reminder row. Delete the row after the cancel request in this branch."
+     },
+     {
+      "gid": "sonnet-cc:S7",
+      "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+      "lines": [
+       213,
+       223
+      ],
+      "texto": "With immediateDelete=true, the function cancels the SendGrid batch and returns without deleting the WorkflowReminder row or setting cancelled. The handleNewBooking reschedule caller expects the reminder to be removed, as deleteScheduledSMSReminder does, so email reminder rows of the original booking stay behind with cancelled=null. Delete the row after the successful cancel request."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "28e3db2520d4ea28c57b08da57b83917ba7b2e15",
+  "head": "eb9623b4e787303a3bd15e10bbbdb78d59875ac6",
+  "prTitle": "Optimize spans buffer insertion with eviction during insert",
+  "issues": [
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S2",
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       30,
+       30
+      ],
+      "texto": "WHAT: the redirect-walk limit was reduced from 10000 to 1000 iterations, and the comment documenting the limit was removed. WHY: trees deeper than 1000 stop resolving to the correct set root, so segments may be split or joined incorrectly. This change is unrelated to span eviction. HOW: restore the 10000 limit unless the reduction is intentional."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S5",
+      "file": "src/sentry/spans/consumers/process/factory.py",
+      "lines": [
+       141,
+       141
+      ],
+      "texto": "Indexing val[\"end_timestamp_precise\"] raises KeyError if a span lacks the field, which fails the whole batch in the consumer. The neighbouring fields use .get() for optional values. Fall back to a default such as the message timestamp when the field is absent."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fixing-re-authentication-with-passkeys-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "744e031019af8dbaacf407e792fbb3756364e2b4",
+  "head": "25bf964a844ea0bc64dc838bff038345048cb1fa",
+  "prTitle": "Fixing Re-authentication with passkeys",
+  "issues": [
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S2",
+      "file": "themes/src/main/resources/theme/base/login/passkeys.ftl",
+      "lines": [
+       11,
+       17
+      ],
+      "texto": "The password page now renders the selected user's passkey credential IDs as hidden inputs before the user has authenticated, in the username-first flow. This discloses account-specific credential metadata to anyone who only knows a username. Emit the IDs only for re-authentication, where the user is already authenticated."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "e805e472f4a80017957e2fbec975ea78c6ee45ed",
+  "head": "71826eb08fc7ea35a5925ad223296feadd5c5e29",
+  "prTitle": "feat(upsampling) - Support upsampled error count with performance optimizations",
+  "issues": [
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S2",
+      "file": "src/sentry/search/events/datasets/discover.py",
+      "lines": [
+       1041,
+       1050
+      ],
+      "texto": "error_upsampling.py emits `upsampled_count() as count` for the errors dataset, but `upsampled_count` is registered only in DiscoverDatasetConfig. If the errors dataset resolves functions through a different config, the query fails with an unknown-function error. Register `upsampled_count` in that config too, or confirm the errors dataset shares this function set."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "prTitle": "fix: handle collective multiple host on destinationCalendar",
+  "issues": [
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S4",
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       423,
+       461
+      ],
+      "texto": "WHAT: the recurring-event deletion block, which deletes events for all remaining bookings across all calendar credentials, now runs inside the loop over every calendar reference. WHY: with N calendar references the same events are deleted N times, producing duplicate API calls and errors for events that are already gone. HOW: run the recurring deletion once outside the reference loop."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S5",
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       735,
+       740
+      ],
+      "texto": "WHAT: the rewritten loadUsers dropped the `organization: { select: { slug } }` selection for dynamic-user bookings. WHY: downstream code that reads `user.organization` for these users now gets undefined, a regression in the query result. HOW: restore the organization select."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-03",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S7",
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       757,
+       762
+      ],
+      "texto": "The new catch in loadUsers forwards `error.message` from Prisma.PrismaClientKnownRequestError to the client in a 400 HttpError. Prisma messages contain internal details such as model names, columns and query info. Log the error server-side and return a generic message instead."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "b004587262e8221083bafbe9a0c515e7becaa7b3",
+  "head": "92f44dcea7ff19e9123a30c63c167a2938df5a55",
+  "prTitle": "Add guest management functionality to existing bookings",
+  "issues": [
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S11",
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       55,
+       55
+      ],
+      "texto": "The FORBIDDEN error uses the message key \"you_do_not_have_permission\", which a grep of en/common.json did not find, and this PR does not add it. The dialog passes err.message to t(), so users would see the raw key. Add the key to the locale file or use an existing one."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "replays-self-serve-bulk-delete-system-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "49a275847631e231672d01b5dcd66558c069d25b",
+  "head": "ea188e2d736fd6ed27c1dba8aae63b7268e2a7a9",
+  "prTitle": "Replays Self-Serve Bulk Delete System",
+  "issues": [
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "WHAT: error event timestamps from nodestore (seconds) are compared directly with replay recording event timestamps (rrweb, typically milliseconds) in `gen_request_data`. WHY: if the units differ, every error sorts before all breadcrumbs and the chronological interleaving is wrong. HOW: normalize both timestamps to the same unit before comparing."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S5",
+      "file": "static/app/views/explore/hooks/useGetTraceItemAttributeValues.spec.tsx",
+      "lines": [
+       114,
+       147
+      ],
+      "texto": "The number-type test's mock matches on `query.query === 'search-query'`, but the hook sends the search as `substringMatch`, so the mock can never match. As a result, `expect(searchQueryMock).not.toHaveBeenCalled()` passes even if the `type === 'number'` early return is removed. Match on `query.substringMatch` so the assertion can fail when the guard is broken."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-03",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S8",
+      "file": "static/app/views/explore/charts/index.tsx",
+      "lines": [
+       153,
+       154
+      ],
+      "texto": "`dedupedYAxes` no longer comes from deduplication. It is now just `[yAxis]`, so the name misdescribes the code. Rename it (for example `yAxes`) or drop the array."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "50f4e78a39914711d0d231a501ba215becf17ebc",
+  "head": "bbd8c507cdf56f6b884373809e0b24abd4a2353d",
+  "prTitle": "Anonymous: Add configurable device limit",
+  "issues": [
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S1",
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       52,
+       54
+      ],
+      "texto": "WHAT: ProvideAnonDBStore gained an int64 deviceLimit parameter, but pkg/server/wire.go:374 still registers it as a wire provider. WHY: wire has no provider for a bare int64, so dependency injection generation or compilation fails. HOW: remove the provider and the AnonStore Bind from wire.go, since ProvideAnonymousDeviceService now builds the store itself. Alternatively, add a provider that returns cfg.AnonymousDeviceLimit."
+     },
+     {
+      "gid": "sonnet-cc:S6",
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       52,
+       54
+      ],
+      "texto": "ProvideAnonDBStore now requires a deviceLimit int64, but pkg/server/wire.go:374 still lists it as a wire provider. Wire cannot satisfy a bare int64 parameter, so injector generation or build breaks. Remove it from the wire set, since ProvideAnonymousDeviceService now constructs the store itself, or give it a provider for the limit."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "async-import-of-the-appstore-packages-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "ba9688a04a8398c9a8332ee7061bfae2f2efd524",
+  "head": "820d7fa87e0c824c5dee8082a33efadb1a2566f7",
+  "prTitle": "Async import of the appStore packages",
+  "issues": [
+   {
+    "issueId": "async-import-of-the-appstore-packages-cal-com#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S1",
+      "file": "packages/app-store/index.ts",
+      "lines": [
+       1,
+       31
+      ],
+      "texto": "WHAT: Each `import(...)` is called while the appStore object literal is built, so every app module starts loading as soon as app-store/index.ts is imported. WHY: The PR aims to load apps lazily, but all 29 integrations (and their SDKs) are still loaded on startup and in every bundle that imports appStore, and the entries are now promises that callers must await. HOW: Make each entry a thunk (`() => import(\"./x\")`) and call it only on lookup, or use a keyed async loader function."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "notification-rule-processing-engine-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "47e5bd23163e6037fc0741068ac78930bba2769f",
+  "head": "8df850371034b73dc4dd9908cc30fa09f12a1f97",
+  "prTitle": "Notification Rule Processing Engine",
+  "issues": [
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "unknown",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The menu test counts exactly 4 items while its comment lists \"4 actions\", but the `menuItems` map also includes delete. The count may not match the actual number of menu items. The reviewer could not confirm this is a defect; if it fails, it fails loudly, so it is not a false-pass case. Verify the expected count and update the comment or assertion to reflect whether delete is included."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-localization-fallbacks-server-side-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "728845d008f06828630a632e5c7d67e11bf15deb",
+  "head": "ecfa17b5a79dfdc91e7a4d50b42ae78a35d0a293",
+  "prTitle": "FEATURE: Localization fallbacks (server-side)",
+  "issues": [
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S1",
+      "file": "lib/freedom_patches/translate_accelerator.rb",
+      "lines": [
+       62,
+       65
+      ],
+      "texto": "WHAT: `ensure_loaded!` initializes and reads `@loaded_locales` outside LOAD_MUTEX. WHY: it can race with `reload!` and `load_locale`, which write that array under the mutex or reassign it. Concurrent requests can then see a half-reset state or replace the array while another thread is populating it. HOW: do the `||=` and the include? check inside the mutex, or simply call `load_locale locale` and let it do the guarded check."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "implement-access-token-context-encoding-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "c22f76867f595f0f7c327376a66a08dca01949e8",
+  "head": "daffb05b5ad091d3ec09933c3c99c2b54f448696",
+  "prTitle": "Implement access token context encoding framework",
+  "issues": [
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+      "lines": [
+       54,
+       55
+      ],
+      "texto": "WHAT: getTokenContextFromClientSessionContext now calls the static getShouldUseLightweightToken(session), which dereferences session.getContext().getClient(), on every token creation. WHY: token creation paths where the session context has no client set would throw an NPE in initToken, where previously only mappers invoked this code. HOW: null-guard the client lookup, or take the client from clientSessionContext.getClientSession().getClient()."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-2fa-backup-codes-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "efa6d464a38e60ceeeb88f40668c1c4ac4bfaf54",
+  "head": "54486a059cd2032042189bb565646ba4e0f6bd61",
+  "prTitle": "feat: 2fa backup codes",
+  "issues": [
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S4",
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       143,
+       145
+      ],
+      "texto": "The user-supplied backup code is compared with the stored secrets through Array.indexOf, which is a short-circuiting string comparison and is not constant-time. This leaks timing information about the secret codes. Compare each stored code with crypto.timingSafeEqual on equal-length buffers and go through the whole list without exiting early."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "github-oauth-security-enhancement-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "344aa102e7818606e29426ebe69d5a680d8727c6",
+  "head": "bb75657fc8f13923c1d7983f422290908a1e7310",
+  "prTitle": "GitHub OAuth Security Enhancement",
+  "issues": [
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       412,
+       413
+      ],
+      "texto": "The OAuth `state` is the secret that ties the callback to the pipeline, but it is compared with `!=`, which leaks timing information. Use `constant_time_compare` from django.utils.crypto, and treat a missing state as a mismatch."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#sncc-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S8",
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       448,
+       454
+      ],
+      "texto": "The mismatch test asserts only the generic 'Invalid installation request.' text. A state mismatch or OAuth failure produces the same text, so the test cannot show that the sender-login comparison is what rejected the request. Assert the pipeline got past the state check, for example by checking that the user endpoint was called and the failure came from the login mismatch."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "advanced-sql-analytics-framework-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "cbe1e7d63f098e306058c0fbcab2f5c30602fa7d",
+  "head": "f3317b329b4eb8fd96f99dd86525bc4a22d20248",
+  "prTitle": "Advanced SQL Analytics Framework",
+  "issues": [
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S1",
+      "file": "pkg/expr/reader.go",
+      "lines": [
+       194,
+       200
+      ],
+      "texto": "WHAT: enableSqlExpressions returns false on every path, and the result of the FlagSqlExpressions check is discarded. WHY: the feature flag has no effect, so SQL expressions stay disabled even when it is enabled, and the inverted `enabled` variable hides that. HOW: if the hard disable is intended, return false with a comment and drop the flag lookup. Otherwise return `h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`."
+     },
+     {
+      "gid": "sonnet-cc:S2",
+      "file": "pkg/expr/reader.go",
+      "lines": [
+       194,
+       200
+      ],
+      "texto": "enableSqlExpressions negates the flag into `enabled` and then returns false on both paths, so the computed value is never used. SQL expressions are rejected even when FlagSqlExpressions is enabled. Return the flag's actual value."
+     },
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "pkg/expr/reader.go",
+      "lines": [
+       194,
+       200
+      ],
+      "texto": "enableSqlExpressions returns false on every path, so ReadQuery rejects every SQL expression even when FlagSqlExpressions is enabled. Callers that could use SQL expressions with the flag on now always get an error. Return the flag's actual value."
+     },
+     {
+      "gid": "sonnet-cc:S4",
+      "file": "pkg/expr/reader.go",
+      "lines": [
+       194,
+       200
+      ],
+      "texto": "enableSqlExpressions reads as 'is the SQL expressions feature enabled', but the local `enabled` is the negation of the flag and both branches return false. The function is constant-false, so the name and variable misstate the behavior and the flag has no effect. Return the flag value directly, or rename the function and variable to say that SQL expressions are unconditionally disabled."
+     },
+     {
+      "gid": "sonnet-cc:S5",
+      "file": "pkg/expr/reader.go",
+      "lines": [
+       194,
+       200
+      ],
+      "texto": "enableSqlExpressions returns false on every path. The flag is negated into `enabled`, and the fallthrough also returns false. SQL expressions are therefore rejected even when FlagSqlExpressions is enabled. Return the flag's value directly."
+     },
+     {
+      "gid": "sonnet-cc:S6",
+      "file": "pkg/expr/reader.go",
+      "lines": [
+       194,
+       200
+      ],
+      "texto": "enableSqlExpressions returns false on every path: the `enabled` variable is inverted and both branches return false. The feature flag therefore has no effect, and every SQL expression query fails to parse with \"not implemented\". Return the flag's actual value."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "85737f52b59aa2e3403c9b8e48acf71ccc5bfae3",
+  "head": "ce2dcc537b4b1f98a335e88cfe8e0b804483252a",
+  "prTitle": "Implement recovery key support for user storage providers",
+  "issues": [
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#sncc-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-cc:S1",
+      "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+      "lines": [
+       119,
+       125
+      ],
+      "texto": "WHAT: The plaintext recovery codes (generatedCodes) are serialized to JSON and sent to the user storage provider via updateCredential. The local path stores only the hashed credentialModel. WHY: Any federated or external store that accepts the credential now holds usable one-time recovery codes in clear text, which weakens the hashing the local path provides. HOW: Pass the hashed credential data (the credentialModel's credential data) to user storage, or confirm the user storage contract explicitly requires plaintext codes and document it."
+     },
+     {
+      "gid": "sonnet-cc:S3",
+      "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+      "lines": [
+       117,
+       125
+      ],
+      "texto": "The plaintext recovery codes are serialized to JSON and passed to the user storage provider's updateCredential. The local path stores only hashed codes, so the user-storage path exposes raw one-time secrets to external systems, which may persist or log them. Send hashed or derived credential data to federated storage, or restrict this to providers explicitly trusted to protect secrets."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ }
+}

@@ -1,0 +1,1386 @@
+{
+ "model": "sonnet-5.5",
+ "sourcePools": [
+  "17.10.26_sonnetcc-light",
+  "17.10.26_sonnetcc-holdout"
+ ],
+ "origem": [
+  "09.10.26",
+  "ho"
+ ],
+ "sdkPreset": true,
+ "tec": "G",
+ "prs": {
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/core/EventManager.ts",
+     "relevantLinesStart": 118,
+     "relevantLinesEnd": 119,
+     "suggestionContent": "WHAT: `mainHostDestinationCalendar.integration` is accessed without optional chaining after destructuring from an array that may be null or empty. WHY: when location is Google Meet and the event has no destination calendar (the `[]` or null default), this throws a TypeError and booking creation fails. HOW: use `mainHostDestinationCalendar?.integration`."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 254,
+     "relevantLinesEnd": 256,
+     "suggestionContent": "WHAT: the fallback in updateEvent/deleteEvent searches `event.destinationCalendar` for an entry whose externalId equals `externalCalendarId`, but the fallback only runs when `externalCalendarId` is falsy. WHY: the lookup always returns undefined, so the previous fallback to the destination calendar's externalId is lost. HOW: fall back to the first destination calendar's externalId, e.g. `event.destinationCalendar?.[0]?.externalId`."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/app-store/office365calendar/lib/CalendarService.ts",
+     "relevantLinesStart": 73,
+     "relevantLinesEnd": 77,
+     "suggestionContent": "WHAT: Office365 createEvent always uses the first destination calendar and ignores the credential it is called with. WHY: for collective events, each host's credential creates its event in the first host's calendar id, which fails or lands on the wrong calendar. HOW: accept the credentialId parameter and select the destination calendar whose credentialId matches, as the Google service does."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/features/bookings/lib/handleCancelBooking.ts",
+     "relevantLinesStart": 423,
+     "relevantLinesEnd": 461,
+     "suggestionContent": "WHAT: the recurring-event deletion block, which deletes events for all remaining bookings across all calendar credentials, now runs inside the loop over every calendar reference. WHY: with N calendar references the same events are deleted N times, producing duplicate API calls and errors for events that are already gone. HOW: run the recurring deletion once outside the reference loop."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/features/bookings/lib/handleNewBooking.ts",
+     "relevantLinesStart": 735,
+     "relevantLinesEnd": 740,
+     "suggestionContent": "WHAT: the rewritten loadUsers dropped the `organization: { select: { slug } }` selection for dynamic-user bookings. WHY: downstream code that reads `user.organization` for these users now gets undefined, a regression in the query result. HOW: restore the organization select."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/features/bookings/lib/handleNewBooking.ts",
+     "relevantLinesStart": 1077,
+     "relevantLinesEnd": 1079,
+     "suggestionContent": "WHAT: team members' destination calendars are pushed with `evt.destinationCalendar?.push(...)`, which does nothing when destinationCalendar is null. WHY: if neither the event type nor the organizer has a destination calendar, the collective hosts' calendars are silently dropped. HOW: initialize the array from the team calendars when it is null."
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+     "relevantLinesStart": 46,
+     "relevantLinesEnd": 48,
+     "suggestionContent": "WHAT: The team permission check combines isTeamAdmin and isTeamOwner with `&&`. WHY: Only users who are both admin and owner pass, so team admins who are not owners are denied. When teamId is null the check runs against team 0. HOW: Use `||`, and skip the team check when the event type has no teamId."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+     "relevantLinesStart": 168,
+     "relevantLinesEnd": 168,
+     "suggestionContent": "WHAT: sendAddGuestsEmails is called with the raw `guests` input instead of `uniqueGuests`. WHY: Guests who were filtered out as duplicates or blacklisted, and who may already be attendees, still match `newGuests.includes(...)`. They then get a 'scheduled' email instead of the 'guests added' email. HOW: Pass `uniqueGuests`."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+     "relevantLinesStart": 74,
+     "relevantLinesEnd": 78,
+     "suggestionContent": "WHAT: The blacklist and duplicate filters compare guest emails case-sensitively. The blacklist entries are lowercased but the guest is not. WHY: An email like `Blocked@X.com` bypasses BLACKLISTED_GUEST_EMAILS, and `A@x.com` is added again when `a@x.com` is already an attendee. HOW: Lowercase the guest before both comparisons."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+     "relevantLinesStart": 165,
+     "relevantLinesEnd": 165,
+     "suggestionContent": "WHAT: The attendees are persisted to the DB before `eventManager.updateCalendarAttendees` runs, and that call is not wrapped in error handling. WHY: If the calendar update throws, the request fails and the UI shows an error, but the guests are already stored and no emails are sent. A retry then hits the 'emails_must_be_unique_valid' error. HOW: Catch calendar errors and still send the emails, or roll back the attendee insert on failure."
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 97,
+     "relevantLinesEnd": 97,
+     "suggestionContent": "WHAT: `parseRefreshTokenResponse` returns a zod `safeParse` result (`{success, data}`), but its return value is saved directly as the credential `key`. It is also given `googleCredentials` instead of the token response. WHY: the DB key becomes `{success:true,data:{...}}`, which breaks every later Google credential parse. In sync mode `res?.data` is also undefined, because `refreshOAuthTokens` returns a fetch Response. HOW: use `parsed.data` as the key and parse the actual token payload (`await res.json()` in sync mode)."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+     "relevantLinesStart": 5,
+     "relevantLinesEnd": 11,
+     "suggestionContent": "WHAT: `minimumTokenResponseSchema` uses computed keys `[z.string().toString()]`, which evaluate to the literal string \"[object Object]\" and not a catch-all schema. WHY: with credential sync enabled, the schema requires a numeric property named \"[object Object]\", so every parse fails and refresh throws \"Invalid refreshed tokens were returned\". HOW: use `z.object({access_token: z.string()}).passthrough()` and check the expiry separately."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+     "relevantLinesStart": 25,
+     "relevantLinesEnd": 27,
+     "suggestionContent": "WHAT: a missing `refresh_token` in the response is replaced with the literal string \"refresh_token\". WHY: callers spread the parsed data over the stored credential (e.g. Office365 calendar), so providers that omit refresh_token on refresh overwrite the real refresh token with a dummy, and the credential is permanently broken. HOW: only apply the placeholder in sync mode, or leave the field undefined and keep the existing token."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+     "relevantLinesStart": 85,
+     "relevantLinesEnd": 94,
+     "suggestionContent": "WHAT: `credentialId` is passed as the `userId` argument of `refreshOAuthTokens`. WHY: in sync mode the sync endpoint is asked for the credentials of the user whose id equals the credential id, so it can fetch and apply another user's tokens. HOW: pass the credential's `userId`."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "apps/web/pages/api/webhook/app-credential.ts",
+     "relevantLinesStart": 24,
+     "relevantLinesEnd": 29,
+     "suggestionContent": "WHAT: the webhook secret is compared with `!==`, which is not constant-time. WHY: this allows timing attacks to recover the secret on an endpoint that can overwrite any user's app credentials. HOW: compare with `crypto.timingSafeEqual` on equal-length buffers, and reject array or undefined header values."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "performance",
+     "relevantFile": "packages/app-store/salesforce/lib/CalendarService.ts",
+     "relevantLinesStart": 75,
+     "relevantLinesEnd": 99,
+     "suggestionContent": "WHAT: a Salesforce token refresh request and a credential DB update now run unconditionally every time the connection is created. The refresh also bypasses `refreshOAuthTokens`, so sync mode is ignored. WHY: this adds an extra network round trip and a write to every Salesforce operation, risks rate limits and token rotation races, and the `statusText !== \"OK\"` check fails on HTTP/2 where statusText is empty. HOW: refresh only when the token is expired or on auth failure, route it through `refreshOAuthTokens`, and check `response.ok`."
+    }
+   ]
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+     "relevantLinesStart": 31,
+     "relevantLinesEnd": 43,
+     "suggestionContent": "WHAT: The `retryCount: { gt: 1 }` branch of the OR clause has no `method: WorkflowMethods.SMS` condition, so the deleteMany matches reminders of every method (email, WhatsApp). WHY: the SMS cron job can delete non-SMS workflow reminders once their retryCount exceeds 1, which is data loss outside the job's scope. HOW: Move the method filter outside the OR so that it applies to both branches."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+     "relevantLinesStart": 189,
+     "relevantLinesEnd": 199,
+     "suggestionContent": "WHAT: The `prisma.workflowReminder.update` call inside the catch block is not guarded. WHY: if it throws (row deleted concurrently, or a DB error), the exception escapes the for loop, aborts processing of all remaining reminders and returns a 500. HOW: Wrap the update in its own try/catch, or log and continue on failure."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+     "relevantLinesStart": 158,
+     "relevantLinesEnd": 188,
+     "suggestionContent": "WHAT: retryCount is only incremented when twilio returns a falsy result or an exception is thrown. It is not incremented when `message` is empty or `sendTo` is missing, for example an invalid or missing phone number. WHY: those reminders are re-attempted on every cron run until scheduledDate, which is the behaviour this PR is meant to stop. HOW: Add an else branch to the `if (message?.length && sendTo)` check that increments retryCount."
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
+     "relevantLinesStart": 147,
+     "relevantLinesEnd": 156,
+     "suggestionContent": "WHAT: The backup code is checked and then invalidated with a non-atomic read-modify-write of the whole encrypted blob. WHY: Two concurrent logins using the same code both find it before either write lands, so a single-use code authenticates twice, and the last write can also resurrect a code consumed by another request. HOW: Consume the code atomically, for example inside a transaction with a row lock, or with a conditional update that matches the previously read backupCodes value and fails if no row is updated."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+     "relevantLinesStart": 71,
+     "relevantLinesEnd": 75,
+     "suggestionContent": "WHAT: resetState runs only from the Cancel and Close buttons, and it does not clear backupCodes, secret, dataUri or the blob URL. WHY: Dismissing the dialog through onOpenChange (Esc or overlay click) at the backup-codes step leaves step=DisplayBackupCodes with stale codes, so reopening the modal skips password confirmation and shows old codes. HOW: Call resetState, clear backupCodes, secret and dataUri, and revoke the blob URL in a wrapper around onOpenChange when the dialog closes."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+     "relevantLinesStart": 61,
+     "relevantLinesEnd": 61,
+     "suggestionContent": "WHAT: req.body.backupCode.replaceAll is called without checking that the value is a string. WHY: A truthy non-string JSON value, such as a number or an object, throws a TypeError and returns a 500 instead of IncorrectBackupCode. HOW: Check `typeof req.body.backupCode === \"string\"` and return 400 IncorrectBackupCode otherwise."
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "suggestions": []
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/views/embed/best.html.erb",
+     "relevantLinesStart": 6,
+     "relevantLinesEnd": 6,
+     "suggestionContent": "WHAT: `<%- end if %>` on line 6 is not valid Ruby, because `end if` has no condition. WHY: the template will most likely raise a SyntaxError and the embed page will fail to render. HOW: use `<%- end %>`."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/jobs/scheduled/poll_feed.rb",
+     "relevantLinesStart": 35,
+     "relevantLinesEnd": 35,
+     "suggestionContent": "WHAT: `i.content.scrub` is called without a nil check. WHY: a feed item with no content (for example only a summary or description) raises NoMethodError and aborts the whole import, including the synchronous poll in TopicRetriever. HOW: use `(i.content || i.description || '').scrub` or skip items with blank content."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "app/models/topic_embed.rb",
+     "relevantLinesStart": 22,
+     "relevantLinesEnd": 22,
+     "suggestionContent": "WHAT: Feed or scraped HTML is stored with cook_method raw_html, and Post#cook returns it unsanitized, so it is rendered with `raw` in the embed view and on topic pages. WHY: script or event-handler HTML in a feed item or a fetched page becomes stored XSS on the forum origin. The URL is also interpolated into an href without escaping. HOW: sanitize the HTML with a whitelist (for example Sanitize) before saving, and escape the URL in the footer."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "app/assets/javascripts/embed.js",
+     "relevantLinesStart": 17,
+     "relevantLinesEnd": 17,
+     "suggestionContent": "WHAT: The origin check uses `discourseUrl.indexOf(e.origin) === -1`, a substring match. WHY: any origin that is a substring of discourseUrl passes the check, for example `http://a` against `http://a.example.com/`, so a spoofed message could set the iframe height. HOW: compare for equality with the origin derived from discourseUrl."
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/models/embeddable_host.rb",
+     "relevantLinesStart": 17,
+     "relevantLinesEnd": 17,
+     "suggestionContent": "WHAT: record_for_host compares `lower(host)` with the unlowered `uri.host`. WHY: a referer or URL with uppercase letters, for example http://EvilTrout.com, never matches a stored host, so legitimate embeds are rejected. HOW: compare against `host.downcase`."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/models/embeddable_host.rb",
+     "relevantLinesStart": 5,
+     "relevantLinesEnd": 8,
+     "suggestionContent": "WHAT: the before_validation callback calls the mutating `sub!` on self.host. WHY: it raises NoMethodError when host is nil, for example when the controller assigns a missing param, so the request returns a 500 instead of a validation error. HOW: assign the result with `self.host = host.to_s.sub(...)`, or return early when host is nil."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/controllers/admin/embeddable_hosts_controller.rb",
+     "relevantLinesStart": 10,
+     "relevantLinesEnd": 16,
+     "suggestionContent": "WHAT: update and destroy call `.first` on a lookup that can return nil and then use the result without a guard. WHY: an unknown id raises NoMethodError and returns a 500 instead of a 404. HOW: use `EmbeddableHost.find(params[:id])`, which raises RecordNotFound."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+     "relevantLinesStart": 9,
+     "relevantLinesEnd": 16,
+     "suggestionContent": "WHAT: the migration indexes `execute(...)[0]['id']` on a query that returns no rows when embed_category is unset. WHY: `[0]` is nil, so `nil['id']` raises NoMethodError and the migration aborts on sites that never set embed_category. HOW: use `.first`, guard against nil, and fall back to the uncategorized setting."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+     "relevantLinesStart": 25,
+     "relevantLinesEnd": 25,
+     "suggestionContent": "WHAT: migrated host strings are interpolated into raw SQL and are not stripped or escaped. WHY: a value containing a quote breaks the INSERT and aborts the migration, and a value with a trailing carriage return stores a bad host. HOW: use `ActiveRecord::Base.connection.quote(h.strip)`, and skip blank lines."
+    },
+    {
+     "id": "S6",
+     "finderIndex": 5,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "spec/fabricators/embeddable_host_fabricator.rb",
+     "relevantLinesStart": 1,
+     "relevantLinesEnd": 27,
+     "suggestionContent": "WHAT: the category fabricators were moved into the embeddable_host fabricator file, and category_fabricator.rb now defines the :embeddable_host fabricator. WHY: Fabricate(:category) and the related fabricators are only defined if embeddable_host_fabricator.rb is loaded, and the file naming no longer matches its contents. The change looks like a swapped-contents mistake. HOW: restore category_fabricator.rb and put only the :embeddable_host fabricator in embeddable_host_fabricator.rb."
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "suggestions": []
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/models/optimized_image.rb",
+     "relevantLinesStart": 145,
+     "relevantLinesEnd": 151,
+     "suggestionContent": "WHAT: `self.downsize` is defined twice, and the second definition (from, to, dimensions, opts) overwrites the first (from, to, max_width, max_height, opts). WHY: the existing caller `OptimizedImage.downsize(path, path, 100, 100, opts)` in app/jobs/regular/resize_emoji.rb now passes 5 arguments to a method that accepts at most 4, so it raises ArgumentError and emoji resizing breaks. HOW: update the resize_emoji caller to `downsize(path, path, \"100x100\", opts)`, or give the new method a different name, and remove the dead duplicate definition."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/controllers/uploads_controller.rb",
+     "relevantLinesStart": 64,
+     "relevantLinesEnd": 70,
+     "suggestionContent": "WHAT: the downsize loop passes the percentage \"80%\" with allow_animation, which sends GIFs to gifsicle's `--resize-fit 80%`, and the result of `downsize` is ignored. WHY: gifsicle's --resize-fit expects WxH, so the call can fail for GIFs. The loop then runs five times without shrinking the file, and the oversized file goes on to Upload.create_for. HOW: check the return value of downsize and break on failure, and use a GIF-compatible scale option (for example `--scale 0.8`) for animated files."
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+     "relevantLinesStart": 13,
+     "relevantLinesEnd": 13,
+     "suggestionContent": "WHAT: totalPages is computed as floor(user_count / limit) + 1, which adds an extra empty page whenever user_count is an exact multiple of limit. WHY: with 50 users and a limit of 50, totalPages is 2 and showingLast is false on page 1, so 'next' loads an empty page and the pager shows a nonexistent page. HOW: use Math.ceil(user_count / limit)."
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "lib/freedom_patches/translate_accelerator.rb",
+     "relevantLinesStart": 62,
+     "relevantLinesEnd": 65,
+     "suggestionContent": "WHAT: `ensure_loaded!` initializes and reads `@loaded_locales` outside LOAD_MUTEX. WHY: it can race with `reload!` and `load_locale`, which write that array under the mutex or reassign it. Concurrent requests can then see a half-reset state or replace the array while another thread is populating it. HOW: do the `||=` and the include? check inside the mutex, or simply call `load_locale locale` and let it do the guarded check."
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+     "relevantLinesStart": 52,
+     "relevantLinesEnd": 54,
+     "suggestionContent": "WHAT: ProvideAnonDBStore gained an int64 deviceLimit parameter, but pkg/server/wire.go:374 still registers it as a wire provider. WHY: wire has no provider for a bare int64, so dependency injection generation or compilation fails. HOW: remove the provider and the AnonStore Bind from wire.go, since ProvideAnonymousDeviceService now builds the store itself. Alternatively, add a provider that returns cfg.AnonymousDeviceLimit."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "pkg/services/anonymous/anonimpl/impl.go",
+     "relevantLinesStart": 144,
+     "relevantLinesEnd": 148,
+     "suggestionContent": "WHAT: tagDeviceUI marks the device in localCache before CreateOrUpdateDevice runs, and TagDevice now returns the error (including ErrDeviceLimitReached). WHY: after the first rejection, the same device hits the cache for about 29 minutes, gets nil, and authenticates as anonymous, which bypasses the device limit. HOW: call SetDefault only after CreateOrUpdateDevice succeeds, or delete the cache key when it returns an error."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+     "relevantLinesStart": 108,
+     "relevantLinesEnd": 118,
+     "suggestionContent": "WHAT: The limit check counts devices and then inserts in separate, non-atomic statements. WHY: concurrent requests from many new devices can all see count < limit and all insert, so the limit is exceeded. HOW: make the check and insert atomic, for example with a conditional INSERT ... SELECT ... WHERE (SELECT COUNT(*)) < limit, or with a transaction or lock."
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "pkg/api/webassets/webassets.go",
+     "relevantLinesStart": 69,
+     "relevantLinesEnd": 70,
+     "suggestionContent": "WHAT: The cache is assigned unconditionally, so a failed read stores nil in entryPointAssetsCache. WHY: In non-Dev mode a transient manifest read error discards a previously valid cache entry, and the next call has to re-read the manifest. HOW: Only assign the cache when err == nil && result != nil."
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "suggestions": []
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 50,
+     "relevantLinesEnd": 57,
+     "suggestionContent": "WHAT: The async legacy goroutines derive their timeout context from the request ctx. WHY: The request ctx is cancelled once the handler returns, so the legacy write is cancelled or fails and legacy storage silently stops receiving writes. HOW: Build the goroutine ctx from context.WithoutCancel(ctx) before applying the 10s timeout. Apply this in Create, Delete, Update and DeleteCollection."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 134,
+     "relevantLinesEnd": 141,
+     "suggestionContent": "WHAT: Update passes the raw objInfo to the async Legacy.Update instead of wrapping the object Storage produced. WHY: UpdatedObject runs again against legacy's own old object, so legacy can get different content than unified storage. It also runs concurrently with the finished request, which breaks the earlier guarantee that both stores get the same object. HOW: Wrap the result in updateWrapper{upstream: objInfo, updated: res} before the goroutine, as the previous code did."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 106,
+     "relevantLinesEnd": 106,
+     "suggestionContent": "WHAT: The metrics calls use the wrong recorder or label in several places. Create and Update error paths call recordLegacyDuration for a storage failure. Delete success passes `name` as the kind label. The DeleteCollection goroutine records legacy timing with recordStorageDuration. WHY: Storage and legacy metrics are mixed up and label cardinality is polluted by object names. HOW: Use recordStorageDuration on the storage error paths, options.Kind in Delete, and recordLegacyDuration in the DeleteCollection goroutine."
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "pkg/storage/unified/resource/search.go",
+     "relevantLinesStart": 216,
+     "relevantLinesEnd": 216,
+     "suggestionContent": "WHAT: the new `s.search.TotalDocs()` call in init() reads bleveBackend.cache with no lock (bleve.go:146). WHY: the watch-event goroutine has already started by then and can call BuildIndex, which now writes the map under cacheMu only. That is a concurrent map read/write, which can crash the process with a fatal error. HOW: take b.cacheMu.RLock() inside bleveBackend.TotalDocs."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "pkg/storage/unified/search/bleve.go",
+     "relevantLinesStart": 137,
+     "relevantLinesEnd": 139,
+     "suggestionContent": "WHAT: removing the lock around BuildIndex lets two builds of the same key run concurrently. WHY: the file-backed bleve.New(dir) can fail on the same directory. If both finish, the later one overwrites b.cache[key] and the earlier index leaks without being closed. HOW: serialize builds per key (a per-key mutex or singleflight), and re-check the cache before storing."
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+     "relevantLinesStart": 309,
+     "relevantLinesEnd": 313,
+     "suggestionContent": "WHAT: useAllGrafanaPromRuleAbilities reports Duplicate as supported (and allowed with the Grafana create permission) even when rule is undefined (skipToken). WHY: AlertRuleMenu ORs this with the ruler ability, so cloud (Mimir/Loki) rules show Duplicate whenever the user has Grafana rule-create permission, regardless of the data source permission or ruler support. HOW: When rule is undefined, make every ability unsupported, e.g. compute `MaybeSupported = !rule || loading ? NotSupported : AlwaysSupported`."
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+     "relevantLinesStart": 480,
+     "relevantLinesEnd": 484,
+     "suggestionContent": "WHAT: isAccessTokenId uses `substring(3, 5)` and returns false when it equals the expected shortcut, so the condition is inverted and the index is wrong. WHY: the grant shortcut occupies chars 4-5 of the 6-char prefix, so the matcher rejects correct token IDs, and it can accept an ID with a wrong grant type. Tests using expectCodeToToken, expectRefresh and similar would fail or pass for the wrong reason. HOW: compare `items[0].substring(4, 6)` and return false when it does NOT equal the expected shortcut."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+     "relevantLinesStart": 73,
+     "relevantLinesEnd": 73,
+     "suggestionContent": "WHAT: The constructor calls requireNonNull(grantType) a second time with the 'rawTokenId' message, so rawTokenId is never validated. WHY: a null rawTokenId is accepted and gets encoded into the token ID as the string 'null'. HOW: change the second call to validate rawTokenId."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+     "relevantLinesStart": 54,
+     "relevantLinesEnd": 55,
+     "suggestionContent": "WHAT: getTokenContextFromClientSessionContext now calls the static getShouldUseLightweightToken(session), which dereferences session.getContext().getClient(), on every token creation. WHY: token creation paths where the session context has no client set would throw an NPE in initToken, where previously only mappers invoked this code. HOW: null-guard the client lookup, or take the client from clientSessionContext.getClientSession().getClient()."
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+     "relevantLinesStart": 139,
+     "relevantLinesEnd": 157,
+     "suggestionContent": "WHAT: The reader thread is never joined before the assertion on caughtExceptions. WHY: A request still in flight after deletedAll is set can throw after the assertion has passed, so the concurrency regression is missed and the thread leaks into later tests. HOW: Keep the Thread reference, call join() after deletedAll.set(true), then assert."
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+     "relevantLinesStart": 101,
+     "relevantLinesEnd": 111,
+     "suggestionContent": "WHAT: The prefix and suffix trimming loops can overlap, so `sanitized.substring(start, sanitized.length() - end)` can get an end index smaller than start. WHY: When the sanitizer removes a segment that repeats a prefix or suffix of the value (value 'abab', sanitized 'ab' gives start=2, end=2), a StringIndexOutOfBoundsException aborts the verification instead of reporting 'Illegal HTML'. HOW: Cap the suffix scan so that start + end never exceeds the shorter string length, e.g. `end < Math.min(sanitized.length(), value.length()) - start`."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+     "relevantLinesStart": 71,
+     "relevantLinesEnd": 71,
+     "suggestionContent": "WHAT: loginTotpStep1 in the Lithuanian bundle was replaced with Italian text ('Installa una delle seguenti applicazioni sul tuo cellulare:'). WHY: Lithuanian users now see an Italian sentence on the TOTP setup page, and the same wrong text was added to the Lithuanian account bundle. HOW: Use a Lithuanian translation, or fall back to the original Lithuanian text with the anchors removed."
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java",
+     "relevantLinesStart": 77,
+     "relevantLinesEnd": 95,
+     "suggestionContent": "WHAT: The role, client and group removal listener is now gated only on Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ (V1). WHY: With only V2 enabled, permission cleanup on removal is skipped, which leaves stale resources. If both features are enabled, the V2 `clients()` call throws UnsupportedOperationException from ClientPermissionsV2.setPermissionsEnabled during client removal. HOW: Gate on the V1 feature being enabled and V2 being disabled, or make the V2 implementations clean up their own resources on removal events."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "performance",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+     "relevantLinesStart": 138,
+     "relevantLinesEnd": 142,
+     "suggestionContent": "WHAT: getClientsWithPermission runs a full policy evaluation (root.evaluatePermission) for every client resource of type Clients. WHY: Listing clients costs one evaluation per client, so a realm with many clients gets a large slowdown. HOW: Evaluate once with all client resources and scopes, or bound or batch the lookup."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+     "relevantLinesStart": 215,
+     "relevantLinesEnd": 221,
+     "suggestionContent": "WHAT: hasPermission(client, scope) calls AdminPermissionsSchema.SCHEMA.getResourceTypeResource, which probably creates the type resource when it is absent. WHY: A read-only permission check can then write to the authorization store, and the null check on the result is missing. HOW: Look up the type resource read-only with resourceStore.findByName and return false if it is null."
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java",
+     "relevantLinesStart": 63,
+     "relevantLinesEnd": 63,
+     "suggestionContent": "WHAT: PasswordForm.configuredFor now returns true for any user with a passkey, even a user with no password credential. WHY: Flows that use configuredFor to decide whether the password step applies (alternative or conditional executions, required-action setup) will treat passkey-only users as password-configured. They then show a password form the user cannot satisfy instead of moving to the next step. HOW: Keep configuredFor limited to password and passwordless credentials. Show the passkey UI based on isConditionalPasskeysEnabled in authenticate() without changing configuredFor."
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "suggestions": []
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+     "relevantLinesStart": 118,
+     "relevantLinesEnd": 119,
+     "suggestionContent": "WHAT: `zip(error_ids, events.values())` pairs ids with results by position, but `nodestore.get_multi` returns a dict containing only the nodes that exist. WHY: if any node is missing, every later event gets the wrong `id`, and the `data is not None` filter never fires because absent keys are not returned. HOW: iterate over `error_ids`, look up `events.get(node_id)` by each id's node key, and skip it when the result is None."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+     "relevantLinesStart": 47,
+     "relevantLinesEnd": 60,
+     "suggestionContent": "WHAT: `age` and `timestamp` are both `required=False`, and the cross-field validators only run when a field is present and only reject the case where both are set. WHY: a report with neither field passes validation, even though the spec requires exactly one. Falsy values such as `age=0` also bypass the mutual-exclusion check, because `initial_data.get(...)` is tested for truthiness. HOW: add a `validate()` method that requires exactly one of the two keys, and compare with `in` instead of truthiness."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+     "relevantLinesStart": 153,
+     "relevantLinesEnd": 155,
+     "suggestionContent": "WHAT: error event timestamps from nodestore (seconds) are compared directly with replay recording event timestamps (rrweb, typically milliseconds) in `gen_request_data`. WHY: if the units differ, every error sorts before all breadcrumbs and the chronological interleaving is wrong. HOW: normalize both timestamps to the same unit before comparing."
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+     "relevantLinesStart": 253,
+     "relevantLinesEnd": 257,
+     "suggestionContent": "WHAT: the kill is gated on isinstance(process, multiprocessing.Process), but the processes are SpawnProcess instances created via mp_context.Process, which do not subclass multiprocessing.Process. WHY: a hung flusher process is never killed before a replacement is spawned, so hung processes accumulate and keep consuming the same Redis shards. HOW: check isinstance(process, multiprocessing.process.BaseProcess), or `not isinstance(process, threading.Thread)`."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+     "relevantLinesStart": 336,
+     "relevantLinesEnd": 347,
+     "suggestionContent": "WHAT: join() breaks out of the loop once the deadline expires, which skips terminate() for the current and all remaining processes. WHY: flusher child processes can outlive the consumer shutdown when the timeout is hit. HOW: do not break; always run the terminate step for every process, skipping only the wait loop when the deadline has passed."
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/integrations/services/assignment_source.py",
+     "relevantLinesStart": 18,
+     "relevantLinesEnd": 18,
+     "suggestionContent": "WHAT: `queued` defaults to `timezone.now()`, which is evaluated once when the module is imported. WHY: every AssignmentSource shares the same stale process-start timestamp, so the `queued` value is wrong for any consumer that reads it. HOW: use `field(default_factory=timezone.now)`."
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "src/sentry/integrations/github/integration.py",
+     "relevantLinesStart": 481,
+     "relevantLinesEnd": 482,
+     "suggestionContent": "WHAT: When no Integration row exists for the installation_id, GitHubInstallation advances the pipeline without comparing the authenticated GitHub user to the installer. WHY: An attacker can claim an installation whose webhook has not yet been processed, or whose row is absent, and skip the user-validation check this PR adds. HOW: Reject the DoesNotExist case, or defer the sender check until the sender is known, instead of calling next_step()."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/integrations/github/integration.py",
+     "relevantLinesStart": 501,
+     "relevantLinesEnd": 504,
+     "suggestionContent": "WHAT: integration.metadata['sender']['login'] is indexed without a guard. WHY: Integrations that lack sender metadata raise KeyError, which returns a 500 during installation. HOW: Read the value with .get() and treat a missing sender as a validation failure."
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/incidents/grouptype.py",
+     "relevantLinesStart": 11,
+     "relevantLinesEnd": 12,
+     "suggestionContent": "WHAT: MetricAlertDetectorHandler subclasses StatefulDetectorHandler with an empty body, so none of the abstract methods (counter_names, get_dedupe_value, get_group_key_values, build_occurrence_and_event_data) are implemented. WHY: the handler is registered as `detector_handler` on the metric alert GroupType, so instantiating it raises TypeError and process_detectors crashes for those detectors. Before this PR it was a working stub that returned []. HOW: implement the abstract methods, or revert to a DetectorHandler stub whose evaluate returns {}."
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "suggestions": []
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+     "relevantLinesStart": 141,
+     "relevantLinesEnd": 142,
+     "suggestionContent": "WHAT: `end` is computed with the same expression as `start` (`slotStartTime.hour() * 60 + slotStartTime.minute()`), so the slot end time is never checked against `workingHour.endTime`. WHY: a slot that starts inside working hours but runs past their end is treated as available, so the check does not do what it was written to do. In addition, `slotStartTime` is UTC while `workingHour.startTime/endTime` are in the organizer's timezone, so the comparison is wrong for non-UTC hosts. HOW: compute `end` from `slotEndTime`, and convert the slot into the host's timezone before comparing."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+     "relevantLinesStart": 114,
+     "relevantLinesEnd": 116,
+     "suggestionContent": "WHAT: `dayjs(...).add(...) === dayjs(...).add(...)` compares two distinct objects by reference, so it is always false. WHY: the guard meant to catch zero-length overrides, which should mark the day as unavailable, never fires. HOW: compare with `.isSame(...)`."
+    }
+   ]
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "performance",
+     "relevantFile": "packages/app-store/index.ts",
+     "relevantLinesStart": 1,
+     "relevantLinesEnd": 31,
+     "suggestionContent": "WHAT: Each `import(...)` is called while the appStore object literal is built, so every app module starts loading as soon as app-store/index.ts is imported. WHY: The PR aims to load apps lazily, but all 29 integrations (and their SDKs) are still loaded on startup and in every bundle that imports appStore, and the entries are now promises that callers must await. HOW: Make each entry a thunk (`() => import(\"./x\")`) and call it only on lookup, or use a keyed async loader function."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings.tsx",
+     "relevantLinesStart": 553,
+     "relevantLinesEnd": 556,
+     "suggestionContent": "WHAT: `forEach(async ...)` with `await getCalendar(...)` inside means the `deleteEvent` promises are never awaited. WHY: Calendar deletions can still be running when the handler returns. Rejections become unhandled and are not caught by the surrounding try/catch. HOW: Collect the promises with `map` and `await Promise.all(...)`, or use a `for...of` loop with `await`. The same change applies to the matching hunks in vital/lib/reschedule.ts and wipemycalother/lib/reschedule.ts."
+    }
+   ]
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+     "relevantLinesStart": 213,
+     "relevantLinesEnd": 223,
+     "suggestionContent": "WHAT: When immediateDelete is true the function cancels the SendGrid batch and returns without deleting or flagging the WorkflowReminder row. WHY: Reminders of rescheduled bookings, deleted workflows and deleted steps stay in the DB as scheduled=true with a referenceId, leaving orphan rows. In the reschedule case they stay attached to the old booking. HOW: Delete the reminder row (prisma.workflowReminder.delete) after the successful cancel request in the immediateDelete branch."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "performance",
+     "relevantFile": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+     "relevantLinesStart": 56,
+     "relevantLinesEnd": 74,
+     "suggestionContent": "WHAT: The cron handler awaits one SendGrid request per cancelled reminder in a serial loop, with no limit on the query. WHY: The runtime grows linearly with the backlog, and one failed request throws to the catch and aborts the remaining cancels and all deletes. HOW: Add a `take` limit, and run the requests with Promise.allSettled, or handle errors per reminder."
+    }
+   ]
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 1023,
+     "relevantLinesEnd": 1024,
+     "suggestionContent": "WHAT: `updateManyByCredentialId(this.credential.id, {})` passes empty data and expects `@updatedAt` to be bumped. WHY: Prisma typically skips the write when the update data is empty, so `SelectedCalendar.updatedAt` is not refreshed and the intended side effect is lost. HOW: Set the timestamp explicitly, e.g. `{ updatedAt: new Date() }`."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts",
+     "relevantLinesStart": 17,
+     "relevantLinesEnd": 26,
+     "suggestionContent": "WHAT: The handler only accepts credentials with `userId === ctx.user.id`, while the UI shows 'Delete cached data' for any credential with cache (team and delegation credentials too). WHY: Deleting the cache for those credentials always throws a plain Error, which tRPC returns as an internal server error and the user sees 'Error deleting cache'. HOW: Hide the action for credentials the user does not own, or extend the authorization to team admins and delegation credentials, and throw a TRPCError."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "scripts/test-gcal-webhooks.sh",
+     "relevantLinesStart": 68,
+     "relevantLinesEnd": 68,
+     "suggestionContent": "WHAT: `sed -i ''` is BSD/macOS syntax. WHY: On GNU sed (Linux), the empty string is read as the script and the command fails, so GOOGLE_WEBHOOK_URL is never updated while the script still prints success. HOW: Write to a temp file and move it into place, or detect the platform."
+    }
+   ]
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/models/blocked_email.rb",
+     "relevantLinesStart": 12,
+     "relevantLinesEnd": 12,
+     "suggestionContent": "WHAT: `should_block?` looks up the blocked email with a case-sensitive exact match and no normalization. WHY: a blocked address such as bad@spam.org can be bypassed at signup by submitting Bad@Spam.org, since email local parts and domains are routinely entered in mixed case. HOW: normalize on both sides, for example by downcasing the email on save and querying with `where('lower(email) = ?', email.to_s.downcase)`."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "lib/validators/email_validator.rb",
+     "relevantLinesStart": 13,
+     "relevantLinesEnd": 15,
+     "suggestionContent": "WHAT: the validator calls `BlockedEmail.should_block?`, which writes to the database (increments match_count and sets last_match_at), on every validation run. WHY: any `valid?` call or save with a changed email (including repeated validations in the same request) inflates the block statistics, and it also writes during validation, which can be inside a transaction that is later rolled back. HOW: split the lookup from the stat update, and record the stats only when the signup is actually rejected."
+    }
+   ]
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/controllers/topics_controller.rb",
+     "relevantLinesStart": 105,
+     "relevantLinesEnd": 107,
+     "suggestionContent": "WHAT: TopicUser.find_by can return nil, and `tu.notification_level` is then called on it. WHY: a user who is notified about a topic without a topic_users row (for example via category or tag watching) gets a NoMethodError and a 500 when they click the email's unsubscribe link. HOW: use find_or_initialize_by or TopicUser.change to create the row, and handle a nil notification_level."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "app/controllers/topics_controller.rb",
+     "relevantLinesStart": 113,
+     "relevantLinesEnd": 115,
+     "suggestionContent": "WHAT: The unsubscribe action changes the user's notification level on a GET request, and the route is declared as a GET. WHY: any page, image tag or link prefetcher can mute or unwatch topics for a logged-in user without their intent, and the action is outside CSRF protection. HOW: make GET only render a confirmation page, and perform the state change through a PUT/POST request that is CSRF-protected."
+    }
+   ]
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/assets/stylesheets/desktop/topic-post.scss",
+     "relevantLinesStart": 291,
+     "relevantLinesEnd": 291,
+     "suggestionContent": "WHAT: The light-theme argument was changed from scale-color($primary, $lightness: 30%) to 70%. WHY: Link text in this block becomes much lighter in the default light theme, which is a visual and contrast regression. HOW: Use 30% for the light value and 70% for the secondary value."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/assets/stylesheets/mobile/modal.scss",
+     "relevantLinesStart": 102,
+     "relevantLinesEnd": 102,
+     "suggestionContent": "WHAT: The light-theme argument was changed from 70% to 30%, and the secondary argument is 70%. WHY: The light theme becomes much darker than before, and the dark theme gets the opposite shade to the pairing used elsewhere. HOW: Use scale-color($primary, $lightness: 70%) with scale-color($secondary, $lightness: 30%)."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/assets/stylesheets/desktop/user.scss",
+     "relevantLinesStart": 522,
+     "relevantLinesEnd": 522,
+     "suggestionContent": "WHAT: The `.name` colour changed from primary 30% to primary 50%/secondary 50%. WHY: This alters the light theme and does not match the 30%/70% pairing used for the same colour elsewhere. HOW: Use dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+    },
+    {
+     "id": "S4",
+     "finderIndex": 3,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/assets/stylesheets/mobile/user.scss",
+     "relevantLinesStart": 497,
+     "relevantLinesEnd": 497,
+     "suggestionContent": "WHAT: The `.name` colour changed from primary 30% to primary 50%/secondary 50%. WHY: This alters the light theme and does not match the 30%/70% pairing used for the same colour elsewhere. HOW: Use dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+    },
+    {
+     "id": "S5",
+     "finderIndex": 4,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/assets/stylesheets/mobile/topic-post.scss",
+     "relevantLinesStart": 182,
+     "relevantLinesEnd": 182,
+     "suggestionContent": "WHAT: The h3 colour changed from primary 20% to primary 50%/secondary 50%. WHY: The light-theme heading becomes noticeably lighter, and the dark value does not match the 20%/80% pairing. HOW: Use dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%))."
+    }
+   ]
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/serializers/user_serializer.rb",
+     "relevantLinesStart": 43,
+     "relevantLinesEnd": 43,
+     "suggestionContent": "WHAT: `website_name` is not listed in `untrusted_attributes`, although `website` is. WHY: for untrusted users, the website value is stripped from the response, but `website_name` still exposes the host and path, and the template now renders `website_name` instead of `website`. HOW: add `:website_name` to the `untrusted_attributes` list."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "app/serializers/user_serializer.rb",
+     "relevantLinesStart": 144,
+     "relevantLinesEnd": 149,
+     "suggestionContent": "WHAT: the same-domain branches match too loosely. The sibling check only compares everything after the first label, and the parent check uses `ends_with?` on the host. WHY: unrelated sites such as `a.co.uk` and `b.co.uk` are treated as the same instance, so the full path is shown when it should not be."
+    }
+   ]
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "public/app/plugins/datasource/loki/querySplitting.ts",
+     "relevantLinesStart": 296,
+     "relevantLinesEnd": 299,
+     "suggestionContent": "WHAT: applyTemplateVariables is called with request.filters before splitting, but the split sub-requests still carry `filters`/`scopedVars`, and datasource.runQuery -> super.query() applies applyTemplateVariables again. WHY: ad hoc filters are injected into the expression twice, giving duplicate matchers, and escaping in interpolateQueryExpr may be applied twice. HOW: after pre-interpolating, strip `filters` from the request passed to the sub-requests (for example `{ ...request, filters: [] }`), or skip ad hoc filters in this pre-interpolation step."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "public/app/plugins/datasource/loki/shardQuerySplitting.ts",
+     "relevantLinesStart": 49,
+     "relevantLinesEnd": 52,
+     "suggestionContent": "WHAT: runShardSplitQuery pre-applies applyTemplateVariables with request.filters, but the sharded sub-requests still carry the filters and go through runQuery -> super.query(), which interpolates again. WHY: ad hoc filter matchers are added to the shard selector twice, and the expression is escaped twice. HOW: clear `filters` on the sub-requests after pre-interpolation."
+    }
+   ]
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "pkg/expr/reader.go",
+     "relevantLinesStart": 194,
+     "relevantLinesEnd": 200,
+     "suggestionContent": "WHAT: enableSqlExpressions returns false on every path, and the result of the FlagSqlExpressions check is discarded. WHY: the feature flag has no effect, so SQL expressions stay disabled even when it is enabled, and the inverted `enabled` variable hides that. HOW: if the hard disable is intended, return false with a comment and drop the flag lookup. Otherwise return `h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`."
+    }
+   ]
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "pkg/services/authz/rbac/cache.go",
+     "relevantLinesStart": 30,
+     "relevantLinesEnd": 32,
+     "suggestionContent": "WHAT: userPermDenialCacheKey concatenates name and parent with '_' without escaping, so different (name, parent) pairs can produce the same key. WHY: a cached denial for one resource can wrongly deny a different resource the user is permitted to access, for example (name='a_b', parent='c') and (name='a', parent='b_c'). HOW: use a separator that cannot appear in names, or length-prefix or hash the name and parent components."
+    }
+   ]
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "performance",
+     "relevantFile": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+     "relevantLinesStart": 534,
+     "relevantLinesEnd": 537,
+     "suggestionContent": "WHAT: Debug logging at Error level on every batch dumps the full ID slice and the condition, and does so even when there is no error. WHY: Each cleanup batch emits large error-level log lines (up to batch-size IDs), which floods the logs and falsely triggers error alerting. HOW: Remove these r.log.Error calls, or log only the counts at Debug level."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "pkg/services/cleanup/cleanup.go",
+     "relevantLinesStart": 77,
+     "relevantLinesEnd": 77,
+     "suggestionContent": "WHAT: The cleanup ticker interval was changed from 10 minutes to 1 minute. WHY: The whole cleanup job, including annotation cleanup, now runs 10x as often, so heavy deletes can run back-to-back against a 9-minute job timeout and increase DB load and lock contention. HOW: Restore the original `time.Minute * 10` interval."
+    }
+   ]
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+     "relevantLinesStart": 169,
+     "relevantLinesEnd": 171,
+     "suggestionContent": "WHAT: readLength returns -1 for indefinite-length encoding, and readInteger and readNext pass it straight to read(int), which allocates `new byte[-1]`. WHY: a malformed or indefinite-length DER signature throws an unchecked NegativeArraySizeException instead of the IOException that callers expect. HOW: reject negative lengths in read(int) or in the callers by throwing an IOException."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java",
+     "relevantLinesStart": 44,
+     "relevantLinesEnd": 44,
+     "suggestionContent": "WHAT: `order()` is added as an abstract method with no default implementation. WHY: every other CryptoProvider implementation outside this PR's module updates stops compiling, and any provider already compiled against the old interface throws AbstractMethodError when `order()` is called during the sort in CryptoIntegration. HOW: make it a default method, for example `default int order() { return 0; }`."
+    }
+   ]
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+     "relevantLinesStart": 65,
+     "relevantLinesEnd": 71,
+     "suggestionContent": "WHAT: canManage() grants manage access when the caller only holds the VIEW scope on all groups, because it checks VIEW and MANAGE together. WHY: an admin with view-only permission on groups can create groups, update groups and map roles to them, which is privilege escalation. HOW: check only AdminPermissionsSchema.MANAGE."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java",
+     "relevantLinesStart": 448,
+     "relevantLinesEnd": 453,
+     "suggestionContent": "WHAT: searchForUser no longer filters results with usersEvaluator::canView, and the group restriction is now applied only when the group id set is non-empty. WHY: an admin who can query users but has no view permission and no group grants has an empty group set, so the search may return every user in the realm. HOW: keep the per-user filter, e.g. `.filter(usersEvaluator::canView)`, on the search stream."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "performance",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+     "relevantLinesStart": 121,
+     "relevantLinesEnd": 125,
+     "suggestionContent": "WHAT: getGroupIdsWithViewPermission iterates every group resource and runs a full permission evaluation for each one. WHY: it is called on every user search and user count for non-global viewers, so the cost grows as O(groups) policy evaluations per request. HOW: evaluate permissions once for the scopes across the Groups resource type and collect the matching resources, or cache the result per request."
+    }
+   ]
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "suggestions": []
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "security",
+     "relevantFile": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+     "relevantLinesStart": 119,
+     "relevantLinesEnd": 125,
+     "suggestionContent": "WHAT: The plaintext recovery codes (generatedCodes) are serialized to JSON and sent to the user storage provider via updateCredential. The local path stores only the hashed credentialModel. WHY: Any federated or external store that accepts the credential now holds usable one-time recovery codes in clear text, which weakens the hashing the local path provides. HOW: Pass the hashed credential data (the credentialModel's credential data) to user storage, or confirm the user storage contract explicitly requires plaintext codes and document it."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+     "relevantLinesStart": 80,
+     "relevantLinesEnd": 80,
+     "suggestionContent": "WHAT: The credential is now looked up with RecoveryAuthnCodesUtils.getCredential, which can return a federated credential. The code after it still handles the credential as a local one (it updates or removes the used code through local stored-credential APIs). WHY: When recovery codes live in user storage, consuming a code may fail or touch the wrong store, so used codes are not invalidated or login throws. HOW: Make the consume/update step in this authenticator work with the credential's actual source, using the user storage update path for federated credentials."
+    }
+   ]
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 877,
+     "relevantLinesEnd": 882,
+     "suggestionContent": "WHAT: OptimizedCursorPaginator slices the queryset with a negative start offset taken directly from the user-supplied cursor. WHY: Django querysets raise ValueError('Negative indexing is not supported.'), so a crafted cursor such as `0:-5:0` returns a 500 instead of a 400. HOW: reject negative offsets (raise BadPaginationError or clamp with max(0, offset)) and remove the negative-offset branch."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/paginator.py",
+     "relevantLinesStart": 179,
+     "relevantLinesEnd": 184,
+     "suggestionContent": "WHAT: BasePaginator.get_result still passes the raw negative offset to the queryset slice whenever cursor.is_prev is true. WHY: This affects every paginated endpoint, and a user-supplied prev cursor with a negative offset raises ValueError (500). The added comment wrongly says the queryset handles boundaries. HOW: clamp or reject negative offsets for all cursors."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/endpoints/organization_auditlogs.py",
+     "relevantLinesStart": 70,
+     "relevantLinesEnd": 71,
+     "suggestionContent": "WHAT: `organization_context.member.has_global_access` is evaluated on every request, even when optimized_pagination is not set, and `member` can be None. WHY: A non-superuser whose member is None raises AttributeError and breaks the audit log endpoint that previously worked. HOW: evaluate the check only when use_optimized is true and guard against a None member."
+    }
+   ]
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/api/endpoints/organization_events_stats.py",
+     "relevantLinesStart": 218,
+     "relevantLinesEnd": 220,
+     "suggestionContent": "WHAT: `is_errors_query_for_error_upsampled_projects` is given the outer `dataset` instead of the `scoped_dataset` parameter of `_get_event_stats`. WHY: the factory calls `_get_event_stats` with other scoped datasets for the dashboard split flow, so a transactions or errors sub-query can be upsampled or skipped based on the wrong dataset. HOW: pass `scoped_dataset` to the helper."
+    }
+   ]
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 335,
+     "relevantLinesEnd": 342,
+     "suggestionContent": "WHAT: SimpleQueueProcessingStrategy.close()/terminate() shut down the FixedQueuePool, but the pool is created once in the factory and shared by every strategy instance. WHY: after the first rebalance, the next create_with_partitions reuses a pool whose workers have exited and whose queues are shut down, so queue.put raises ShutDown, submit() swallows it and marks the offset complete, and messages are dropped and committed. HOW: have the strategy not own the pool (leave shutdown to ResultsStrategyFactory.shutdown), or create a new FixedQueuePool in create_thread_queue_parallel_worker for each strategy."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 86,
+     "relevantLinesEnd": 93,
+     "suggestionContent": "WHAT: get_committable_offsets only advances through strictly contiguous offsets starting at last_committed + 1. WHY: Kafka offsets can have gaps (transaction markers, compaction, rebalance to a different start offset), and the first missing offset makes the loop break, so commits for that partition stall forever and the whole backlog is reprocessed after a restart. HOW: compute the committable offset from the outstanding set instead: commit up to min(outstanding) - 1, or up to max(all_offsets) when nothing is outstanding."
+    },
+    {
+     "id": "S3",
+     "finderIndex": 2,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "performance",
+     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+     "relevantLinesStart": 185,
+     "relevantLinesEnd": 185,
+     "suggestionContent": "WHAT: The per-worker queues are created with queue.Queue() and no maxsize, and submit() never blocks, so the claimed backpressure does not exist. WHY: a slow item in one queue lets the consumer keep polling Kafka and enqueueing without limit, so memory grows without bound and uncommitted work piles up. HOW: use queue.Queue(maxsize=N) and have submit handle a full queue, for example by raising MessageRejected so arroyo pauses consumption."
+    }
+   ]
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "suggestions": [
+    {
+     "id": "S1",
+     "finderIndex": 0,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/scripts/spans/add-buffer.lua",
+     "relevantLinesStart": 47,
+     "relevantLinesEnd": 53,
+     "suggestionContent": "WHAT: zunionstore uses the default AGGREGATE SUM, so a member present in both merged sets gets its scores added together. WHY: the inflated score makes the member look newer than it is, so zpopmin evicts by the wrong order instead of by end timestamp. HOW: pass `AGGREGATE MAX` (or MIN) to both zunionstore calls."
+    },
+    {
+     "id": "S2",
+     "finderIndex": 1,
+     "producedBy": "generalist-base",
+     "technique": "G",
+     "label": "bug",
+     "relevantFile": "src/sentry/scripts/spans/add-buffer.lua",
+     "relevantLinesStart": 30,
+     "relevantLinesEnd": 30,
+     "suggestionContent": "WHAT: the redirect-walk limit was reduced from 10000 to 1000 iterations, and the comment documenting the limit was removed. WHY: trees deeper than 1000 stop resolving to the correct set root, so segments may be split or joined incorrectly. This change is unrelated to span eviction. HOW: restore the 10000 limit unless the reduction is intentional."
+    }
+   ]
+  }
+ }
+}

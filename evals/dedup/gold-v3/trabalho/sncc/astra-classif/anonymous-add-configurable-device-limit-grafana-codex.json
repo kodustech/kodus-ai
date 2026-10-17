@@ -1,0 +1,12 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "items": [
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#sncc-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "Although pkg/server/wire.go:374-375 retains the provider and binding, pkg/services/anonymous/anonimpl/impl.go:36-43 removes the injected AnonStore dependency and constructs it directly with cfg.AnonymousDeviceLimit. The API also receives that store directly at impl.go:61, leaving the registered store provider unreachable; [Wire\u2019s dependency solver](https://github.com/google/wire/blob/v0.5.0/internal/wire/analyze.go#L87-L164) therefore never requests its int64 argument, so the claimed generation/build failure does not follow.",
+   "severity": "high"
+  }
+ ]
+}

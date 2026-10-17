@@ -1,0 +1,12 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#sncc-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The newly added handler throws \"you_do_not_have_permission\" at packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:55, but that translation key is absent; apps/web/public/static/locales/en/common.json:1628 instead defines \"dont_have_permission\". apps/web/components/dialog/AddGuestsDialog.tsx:43\u201344 translates err.message and displays it, exposing the raw key on permission failures.",
+   "severity": "medium"
+  }
+ ]
+}

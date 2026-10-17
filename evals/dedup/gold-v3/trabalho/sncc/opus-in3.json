@@ -1,0 +1,2412 @@
+{
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     17,
+     17
+    ],
+    "texto": "WHAT: record_for_host compares `lower(host)` with the unlowered `uri.host`. WHY: a referer or URL with uppercase letters, for example http://EvilTrout.com, never matches a stored host, so legitimate embeds are rejected. HOW: compare against `host.downcase`."
+   },
+   {
+    "id": "S2",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     5,
+     8
+    ],
+    "texto": "WHAT: the before_validation callback calls the mutating `sub!` on self.host. WHY: it raises NoMethodError when host is nil, for example when the controller assigns a missing param, so the request returns a 500 instead of a validation error. HOW: assign the result with `self.host = host.to_s.sub(...)`, or return early when host is nil."
+   },
+   {
+    "id": "S3",
+    "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+    "lines": [
+     10,
+     16
+    ],
+    "texto": "WHAT: update and destroy call `.first` on a lookup that can return nil and then use the result without a guard. WHY: an unknown id raises NoMethodError and returns a 500 instead of a 404. HOW: use `EmbeddableHost.find(params[:id])`, which raises RecordNotFound."
+   },
+   {
+    "id": "S4",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     9,
+     16
+    ],
+    "texto": "WHAT: the migration indexes `execute(...)[0]['id']` on a query that returns no rows when embed_category is unset. WHY: `[0]` is nil, so `nil['id']` raises NoMethodError and the migration aborts on sites that never set embed_category. HOW: use `.first`, guard against nil, and fall back to the uncategorized setting."
+   },
+   {
+    "id": "S5",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     25,
+     25
+    ],
+    "texto": "WHAT: migrated host strings are interpolated into raw SQL and are not stripped or escaped. WHY: a value containing a quote breaks the INSERT and aborts the migration, and a value with a trailing carriage return stores a bad host. HOW: use `ActiveRecord::Base.connection.quote(h.strip)`, and skip blank lines."
+   },
+   {
+    "id": "S6",
+    "file": "spec/fabricators/embeddable_host_fabricator.rb",
+    "lines": [
+     1,
+     27
+    ],
+    "texto": "WHAT: the category fabricators were moved into the embeddable_host fabricator file, and category_fabricator.rb now defines the :embeddable_host fabricator. WHY: Fabricate(:category) and the related fabricators are only defined if embeddable_host_fabricator.rb is loaded, and the file naming no longer matches its contents. The change looks like a swapped-contents mistake. HOW: restore category_fabricator.rb and put only the :embeddable_host fabricator in embeddable_host_fabricator.rb."
+   },
+   {
+    "id": "S7",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     14,
+     17
+    ],
+    "texto": "The lookup lowercases the stored host in SQL (`lower(host)`) but compares it with `uri.host`, which is not downcased. A referer or embed URL with uppercase letters, such as `http://EvilTrout.com`, therefore never matches an allowed host. This is inconsistent normalization. Downcase the incoming host before the comparison."
+   },
+   {
+    "id": "S8",
+    "file": "spec/fabricators/embeddable_host_fabricator.rb",
+    "lines": [
+     1,
+     27
+    ],
+    "texto": "The file names and contents are swapped: embeddable_host_fabricator.rb defines the category fabricators and category_fabricator.rb defines :embeddable_host. Anyone looking for either fabricator by file name will look in the wrong file. Put the category fabricators back in category_fabricator.rb and the :embeddable_host fabricator in embeddable_host_fabricator.rb."
+   },
+   {
+    "id": "S9",
+    "file": "spec/models/topic_spec.rb",
+    "lines": [
+     1403,
+     1405
+    ],
+    "texto": "The test name \"is false if embeddable_host is blank\" is now untrue. expandable_first_post? no longer checks embeddable hosts. The example only returns false because has_topic_embed? is false, so it misleadingly implies host-gating is still tested. Rename it, or drop it as redundant with the has_topic_embed? case."
+   },
+   {
+    "id": "S10",
+    "file": "spec/models/topic_spec.rb",
+    "lines": [
+     1401,
+     1405
+    ],
+    "texto": "The test 'is false if embeddable_host is blank' passes for the wrong reason. `has_topic_embed?` is not stubbed in this scope, so the unsaved topic has no embed and `expandable_first_post?` is false whatever the hosts table holds. Stub `has_topic_embed?` to true and set `embed_truncate` to true in this case, then assert the result against the host condition. Otherwise rename or remove the test."
+   },
+   {
+    "id": "S11",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     9,
+     16
+    ],
+    "texto": "The migration indexes `[0]` on query results that are empty when the site has no `embed_category` row (the default), so `nil['id']` raises NoMethodError. The `category_id == 0` fallback is never reached and the migration aborts. Guard the first-row access, for example with `row = execute(...).first; row ? row['id'].to_i : 0`."
+   },
+   {
+    "id": "S12",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     9,
+     16
+    ],
+    "texto": "The migration calls `execute(...)[0]['id']` on a join of categories and the embed_category setting. If that setting row is absent (the default, or a fresh install), the result is empty and `[0]` is nil, so `nil['id']` raises NoMethodError and the migration aborts. The uncategorized_category_id lookup at line 15 has the same problem. Use `.first` with a nil guard, e.g. `row = execute(...).first; category_id = row ? row['id'].to_i : 0`."
+   },
+   {
+    "id": "S13",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     5,
+     8
+    ],
+    "texto": "The before_validation callback calls `self.host.sub!` without a nil check. A create or update request with no `host` param, or a blank new host, makes host nil and raises NoMethodError (a 500) instead of a validation error. Guard with `return if host.blank?` or use `self.host = host.to_s.sub(...)`. A blank host then fails the format validation normally."
+   },
+   {
+    "id": "S14",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     22,
+     27
+    ],
+    "texto": "The migration inserts raw setting lines (which may be 'http://x.com' or 'https://x.com/path') directly via SQL, bypassing the model's before_validation that strips scheme and path. EmbeddableHost.record_for_host compares lower(host) to the bare hostname, so migrated hosts with a scheme or path never match and embedding breaks after upgrade. Normalize each line (strip scheme and path, trim whitespace, downcase) before the INSERT."
+   },
+   {
+    "id": "S15",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     10,
+     18
+    ],
+    "texto": "record_for_host compares lower(host) to uri.host without lowercasing the input. A referer with uppercase letters, such as http://Example.COM/page, never matches a stored host and is wrongly rejected. Downcase the parsed host before the query."
+   },
+   {
+    "id": "S16",
+    "file": "spec/fabricators/category_fabricator.rb",
+    "lines": [
+     1,
+     4
+    ],
+    "texto": "The fabricator contents are swapped between files. category_fabricator.rb now defines :embeddable_host, and embeddable_host_fabricator.rb defines the category fabricators. Restore the category fabricators to category_fabricator.rb and put the :embeddable_host definition in embeddable_host_fabricator.rb."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+    "descricao": "EmbeddableHost's before_validation calls self.host.sub! unconditionally, so saving a record with a nil host raises NoMethodError instead of returning a validation error.",
+    "textoGolden": "The EmbeddableHost model's before_validation callback calls self.host.sub! to strip http://, https://, and path segments, but if self.host is nil, this raises NoMethodError.",
+    "comentarios": [
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       5,
+       7
+      ],
+      "texto": "The before_validation callback calls `sub!` on host without guarding nil. Creating a host with a missing or null host field reaches this callback from save_host and raises NoMethodError instead of returning a validation error. Guard nil during normalization and let presence/format validation reject it."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       5,
+       8
+      ],
+      "texto": "WHAT: `before_validation` calls `self.host.sub!(...)` unconditionally, so a record with a nil host raises NoMethodError (`nil.sub!`) instead of producing a normal format-invalid result. WHY: `Admin::EmbeddableHostsController#save_host` assigns `params[:embeddable_host][:host]` directly; any request that omits the host value makes the save raise a 500 instead of returning the `render_json_error(host)` validation response. HOW: guard the mutation, e.g. `return if host.blank?` at the top of the before_validation block (or use `self.host = self.host.to_s` before stripping)."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       5,
+       8
+      ],
+      "texto": "before_validation calls self.host.sub!(...) on a possibly-nil host before validates_format_of runs. The controller assigns host.host = params[:embeddable_host][:host], so a request without a host key leaves it nil and nil.sub! raises NoMethodError at save time instead of the format validation producing a normal error response. Add a presence guard so validation reports the failure."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+    "descricao": "update and destroy in Admin::EmbeddableHostsController fetch the host with where(id:).first and never check for nil, so an unknown id raises NoMethodError and returns a 500 instead of not-found.",
+    "textoGolden": "The update and destroy methods in Admin::EmbeddableHostsController do not validate the existence of the EmbeddableHost record retrieved by ID. If EmbeddableHost.where(id: params[:id]).first returns nil (i.e., the host does not exist), attempting to call methods on the nil object (e.g., save_host or destroy) will result in a NoMethodError.",
+    "comentarios": [
+     {
+      "file": "",
+      "lines": [
+       15,
+       16
+      ],
+      "texto": "In the destroy action, the nil-host case (line 15-16) would raise NoMethodError. Consider adding a nil check to handle the case where the host is not found."
+     },
+     {
+      "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+      "lines": [
+       9,
+       18
+      ],
+      "texto": "update and destroy fetch the record with EmbeddableHost.where(id: params[:id]).first but never check for nil, then immediately use it (save_host(host) does host.host = ... / host.save; destroy does host.destroy). A stale or already-deleted id, or an interleaving where a concurrent delete removes the row first, makes host nil and the first call on it raises NoMethodError -> unhandled 500. Guard with a nil/404 check before use."
+     },
+     {
+      "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+      "lines": [
+       10,
+       11
+      ],
+      "texto": "Update passes the nullable result of where(...).first directly to save_host, which immediately assigns host.host. Updating a nonexistent or concurrently deleted record returns an internal error instead of a not-found response; destroy has the same lookup failure. Use find or explicitly raise a not-found error before dereferencing the lookup result."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+    "descricao": "record_for_host compares lower(host) against the un-lowercased URI host, so mixed-case referer hosts fail to match allowed hosts and embedding is rejected.",
+    "textoGolden": "record_for_host compares lower(host) = ? but does not normalize the parameter\u2019s case, so mixed\u2011case referer hosts may fail to match even though comparison intends to be case\u2011insensitive.",
+    "comentarios": [
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "Normalize the parsed hostname before comparing it with lower(host). URI parsing preserves hostname case, so an allowed entry such as example.com does not match https://EXAMPLE.com/page even though DNS hostnames are case-insensitive. This makes valid embedding requests fail the host authorization check and makes category lookup inconsistent for equivalent domain identities. Compare against host.downcase (or normalize both operands equivalently), and add a mixed-case URL test."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "The query compares lower(host) to the un-downcased uri.host. A referer such as http://EvilTrout.com never matches the stored lowercase host, so embedding is wrongly denied. Fix: use where(\"lower(host) = ?\", host.downcase)."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "The query compares lower(host) in the database with uri.host, which is not lowercased, so the comparison normalizes only one side. A referer or URL with uppercase letters (e.g. http://EvilTrout.com) will not match the stored host. Compare against host.downcase, i.e. where('lower(host) = ?', host.downcase)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+    "descricao": "The migration copies the legacy embeddable_hosts values into the new table without stripping scheme and path, so hosts stored as http://example.com no longer match the bare-host lookup and previously allowed embeds are rejected after upgrade.",
+    "textoGolden": "Because this migration inserts embeddable_hosts rows with raw SQL, any existing embeddable_hosts values that include http:// or /https:// or path segments won\u2019t go through the EmbeddableHost model\u2019s normalization, so the new host lookup (which compares only the bare host) may fail for migrated data. Consider ensuring that migrated hosts are normalized to the same format as newly created EmbeddableHost records so existing embedding configurations keep working.",
+    "comentarios": [
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       24,
+       26
+      ],
+      "texto": "WHAT: migration inserts raw embeddable_hosts lines (e.g. http://example.com/123) without stripping scheme/path like the model does. WHY: migrated rows never match EmbeddableHost.record_for_host which compares bare uri.host, silently breaking previously allowed embeds."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "Migration INSERTs raw embeddable_hosts lines with scheme/path intact, but EmbeddableHost normalizes to bare domain (before_validation strips protocol/path, record_for_host looks up by URI.host). Strip protocol and path before INSERT or migrated hosts will never satisfy host_allowed?."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       24,
+       25
+      ],
+      "texto": "Legacy hosts are inserted verbatim instead of applying the new model's scheme/path normalization. Existing values such as http://discourse.org or https://example.com/1234 remain in the table, while record_for_host compares only URI.host, so previously configured embedding hosts stop working after upgrade. Normalize migrated entries to the same representation used by the model before inserting them."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+    "descricao": "The contents of category_fabricator.rb and embeddable_host_fabricator.rb are swapped, so each file defines the other's fabricators.",
+    "textoGolden": "The contents of `category_fabricator.rb` and `embeddable_host_fabricator.rb` have been swapped, resulting in the loss of original category fabricators and potentially causing errors in fabricator usage.",
+    "comentarios": [
+     {
+      "file": "spec/fabricators/category_fabricator.rb",
+      "lines": [
+       1,
+       4
+      ],
+      "texto": "File named category_fabricator.rb now defines Fabricator(:embeddable_host) while Fabricator(:category) was moved to embeddable_host_fabricator.rb. Filenames disagree with contents \u2014 swap contents back so each file defines the fabricator its name states."
+     },
+     {
+      "file": "spec/fabricators/embeddable_host_fabricator.rb",
+      "lines": [
+       1,
+       27
+      ],
+      "texto": "The file names and contents are swapped. embeddable_host_fabricator.rb defines the category fabricators (:category, :diff_category, :happy_category, :private_category), and category_fabricator.rb defines :embeddable_host. Restore category_fabricator.rb to the original category fabricators and put the :embeddable_host fabricator in embeddable_host_fabricator.rb."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+    "descricao": "The migration builds its INSERT by interpolating each legacy host value into the SQL string instead of quoting or binding it, so a value with a quote breaks the statement.",
+    "textoGolden": "The SQL query in the `app/controllers/admin/embeddable_hosts_controller.rb` file uses string interpolation (`'#{h}'`) to insert values, which is vulnerable to SQL injection. It should use parameter binding or proper quoting to prevent this security vulnerability.",
+    "comentarios": [
+     {
+      "file": "",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The migration's INSERT statement uses string interpolation: VALUES ('#{h}', ...). This is a SQL-injection concern and should be fixed by using parameterized queries or proper escaping."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       25,
+       25
+      ],
+      "texto": "WHAT: migration interpolates raw host string into SQL: VALUES ('#{h}', ...). WHY: a host value containing a single quote breaks the statement and allows SQL injection via site_settings value."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+    "descricao": "The migration reads execute(...)[0]['id'] for embed_category without checking for an empty result, so installs without that setting stored crash the migration instead of falling back to the uncategorized category.",
+    "textoGolden": "The migration accesses execute(...)[0]['id'] without checking if the query returned any rows, which causes a crash when no embed_category setting exists. This can lead to a broken feature when attempting to edit category/host relationships.",
+    "comentarios": [
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       9,
+       12
+      ],
+      "texto": "WHAT: migration does execute(...)[0]['id'] with no guard when embed_category setting/category is missing. WHY: nil[0] dereference crashes the migration and blocks deploy on instances without that setting."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       9,
+       16
+      ],
+      "texto": "Migration does execute(...)[0]['id'] without checking empty result; missing site_settings row throws NoMethodError and fails migration. Check for nil row."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       9,
+       11
+      ],
+      "texto": "The migration indexes the first category-query result before checking whether any row was returned. An installation without a persisted embed_category setting, or with no matching category name, aborts migration before reaching the uncategorized fallback. Check whether the result contains a row before accessing its id and handle missing fallback settings as well."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+    "descricao": "The spec 'is false if embeddable_host is blank' no longer sets up any host condition and passes only because embed_truncate defaults to false, so its name no longer matches what it tests.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/models/topic_spec.rb",
+      "lines": [
+       1399,
+       1406
+      ],
+      "texto": "Test 'is false if embeddable_host is blank' does not establish the true-branch preconditions (embed_truncate true, has_topic_embed true) nor control host presence, so it passes regardless of host logic and would still pass if host checking were broken/removed. Set truncate true + stub embed true with no hosts for the false case."
+     },
+     {
+      "file": "spec/models/topic_spec.rb",
+      "lines": [
+       1401,
+       1404
+      ],
+      "texto": "The test named \"is false if embeddable_host is blank\" now uses an ordinary built topic without setting embed_truncate or making has_topic_embed? true. It therefore returns false for reasons unrelated to the missing host, and passes even with the new implementation that never checks host availability. If blank-host behavior remains the intended contract, arrange all the other prerequisites before asserting false; if the contract intentionally changed, replace this case with a test of the actual intended behavior rather than retaining a misleading passing test."
+     },
+     {
+      "file": "spec/models/topic_spec.rb",
+      "lines": [
+       1403,
+       1404
+      ],
+      "texto": "The description \"is false if embeddable_host is blank\" no longer matches the code. This PR changed Topic#expandable_first_post? (app/models/topic.rb:869) to `SiteSetting.embed_truncate? && has_topic_embed?`, removing the embeddable_hosts condition entirely, and removed the `SiteSetting.embeddable_hosts` setup from this test. The assertion now passes only because `has_topic_embed?` is unstubbed (false) and embed_truncate is unset, so the name states a cause the method no longer has \u2014 rename it (e.g. \"is false when there is no topic embed\") or set up the precondition it claims to test."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#10",
+    "descricao": "The 'find embedded' test requests fruit 2 but the pretender always returns fruit 1, so it asserts fruit 1's colors and would not notice a find that ignores the id.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "test/javascripts/models/store-test.js.es6",
+      "lines": [
+       109,
+       121
+      ],
+      "texto": "Test requests fruit id 2 but pretender returns fruits[0] unconditionally, so assertions on colors [1,2] never cover fruit 2's color_ids [3]. Make pretender honor :id or request id 1 / assert single-element case to actually verify plural _ids hydration."
+     },
+     {
+      "file": "test/javascripts/models/store-test.js.es6",
+      "lines": [
+       111,
+       117
+      ],
+      "texto": "This test now requests fruit 2 but expects fruit 1's two colors. The /fruits/:id Pretender handler always returns fruits[0], so the test passes while hydrating the wrong record and would not catch a find implementation that ignores the requested ID. Make the handler select the requested fruit and assert its ID and corresponding colors (fruit 2 has only color 3), or request fruit 1 if testing its two-color hydration is the goal."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11",
+    "descricao": "After saving a host, the component overwrites its category with findById(categoryId); when no category was chosen this is null even though the server saved the uncategorized category, so the row shows no category until reload.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+      "lines": [
+       38,
+       38
+      ],
+      "texto": "The save callback overwrites the category using categoryId even when the server substituted the uncategorized category for a blank selection. Adding a host without choosing a category therefore leaves its category badge empty, and editing it reads an undefined category id despite a valid category_id having been returned. Resolve the category from the saved response's category_id rather than the submitted selection."
+     },
+     {
+      "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+      "lines": [
+       37,
+       38
+      ],
+      "texto": "When categoryId is null (the default for a new row, or a cleared selection), the controller saves SiteSetting.uncategorized_category_id and returns that category_id. This callback instead overwrites host.category with findById(null), making the displayed category disagree with the saved category. Use the category from the save response or its returned category_id rather than the pre-save selection."
+     },
+     {
+      "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+      "lines": [
+       37,
+       38
+      ],
+      "texto": "Use the saved response's category rather than overwriting it from categoryId after saving. For a new host with no category selected, categoryId is null, while the new controller deliberately saves SiteSetting.uncategorized_category_id and returns that ID through the serializer. This callback replaces the hydrated category with findById(null), leaving the row without its actual category until reload (and reopening edit also initializes from that incorrect relationship)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+    "descricao": "Hosts saved with a port (allowed by the validation regex) are stored as host:port, but lookup compares only URI.host, so those configured hosts never match and embedding fails for them.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "Host lookup compares URI.host against a stored value that validation explicitly permits to include a port. Saving example.com:8080 succeeds, but a request from http://example.com:8080 produces URI.host equal to example.com and never matches that record, disabling embedding and retrieval for the configured host. Use a consistent port representation in both storage and lookup."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "The validator accepts hosts such as `example.com:8080`, but record_for_host extracts only URI.host (`example.com`) and compares it to the stored port-qualified string. An accepted and saved host therefore never authorizes its corresponding URLs. Normalize the stored and queried authority consistently, including a deliberate port policy."
+     }
+    ]
+   }
+  ]
+ },
+ "implement-access-token-context-encoding-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "daffb05b5ad091d3ec09933c3c99c2b54f448696",
+  "base": "c22f76867f595f0f7c327376a66a08dca01949e8",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     480,
+     484
+    ],
+    "texto": "WHAT: isAccessTokenId uses `substring(3, 5)` and returns false when it equals the expected shortcut, so the condition is inverted and the index is wrong. WHY: the grant shortcut occupies chars 4-5 of the 6-char prefix, so the matcher rejects correct token IDs, and it can accept an ID with a wrong grant type. Tests using expectCodeToToken, expectRefresh and similar would fail or pass for the wrong reason. HOW: compare `items[0].substring(4, 6)` and return false when it does NOT equal the expected shortcut."
+   },
+   {
+    "id": "S2",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     73,
+     73
+    ],
+    "texto": "WHAT: The constructor calls requireNonNull(grantType) a second time with the 'rawTokenId' message, so rawTokenId is never validated. WHY: a null rawTokenId is accepted and gets encoded into the token ID as the string 'null'. HOW: change the second call to validate rawTokenId."
+   },
+   {
+    "id": "S3",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+    "lines": [
+     54,
+     55
+    ],
+    "texto": "WHAT: getTokenContextFromClientSessionContext now calls the static getShouldUseLightweightToken(session), which dereferences session.getContext().getClient(), on every token creation. WHY: token creation paths where the session context has no client set would throw an NPE in initToken, where previously only mappers invoked this code. HOW: null-guard the client lookup, or take the client from clientSessionContext.getClientSession().getClient()."
+   },
+   {
+    "id": "S4",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     483,
+     483
+    ],
+    "texto": "The token id prefix is sessionType(2)+tokenType(2)+grant(2), so the grant shortcut is at indices 4..6. substring(3,5) extracts the last char of the token type and the first char of the grant (e.g. 'ta' from 'onrtac'), so it never equals the expected shortcut."
+   },
+   {
+    "id": "S5",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     483,
+     483
+    ],
+    "texto": "The grant shortcut check uses substring(3,5) instead of substring(4,6) and returns false on equality instead of on inequality, so it can never fail for a wrong grant type. Compare substring(4,6) and return false when it does not equal the expected shortcut."
+   },
+   {
+    "id": "S6",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     483,
+     483
+    ],
+    "texto": "The grant shortcut check in isAccessTokenId uses the wrong offset (substring(3,5) instead of (4,6)) and the condition is inverted. It rejects tokens with the expected grant and accepts tokens with a different one, so the event assertions don't verify the grant type. Compare chars 4-6 and return false when they are NOT equal."
+   },
+   {
+    "id": "S7",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     483,
+     483
+    ],
+    "texto": "The matcher's condition is inverted. It returns false when the grant shortcut equals the expected one, so a correct token id is rejected and a wrong one is accepted. It should return false when the shortcut does not equal the expected value."
+   },
+   {
+    "id": "S8",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     483
+    ],
+    "texto": "The matcher reads the wrong substring. The encoded context is sessionType (chars 0-1), tokenType (2-3) and grantType (4-5), so the grant shortcut is substring(4,6). The code uses substring(3,5), which spans the last character of the token type and the first character of the grant shortcut."
+   },
+   {
+    "id": "S9",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     73,
+     73
+    ],
+    "texto": "The null check for rawTokenId tests grantType, which was already checked on the line above. A null rawTokenId is therefore accepted, and the id would be encoded as \"...:null\"."
+   },
+   {
+    "id": "S10",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     73,
+     73
+    ],
+    "texto": "The null check labelled \"Null rawTokenId not allowed\" actually tests grantType, so the message does not match the code. A null rawTokenId is never rejected."
+   },
+   {
+    "id": "S11",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     483
+    ],
+    "texto": "The comment describes the grant shortcut offset as the 4th char, but the encoded id is sessionType(2)+tokenType(2)+grant(2), so the grant is at indexes 4-6. The code uses substring(3,5), and it returns false when the shortcut equals the expected value, which is the opposite of what the matcher name implies."
+   },
+   {
+    "id": "S12",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     480,
+     484
+    ],
+    "texto": "isAccessTokenId has inverted logic and the wrong offsets. It returns false when the substring equals the expected shortcut, and it reads chars 3-5 although the grant shortcut sits at chars 4-6. Correct tokens fail the match and wrong ones can pass. Use `!items[0].substring(4, 6).equals(expectedGrantShortcut)`, after checking that items[0] has length 6."
+   },
+   {
+    "id": "S13",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     73,
+     73
+    ],
+    "texto": "The rawTokenId null check actually tests grantType, so a null rawTokenId is accepted. encodeTokenId can then produce an id ending in \":null\"."
+   },
+   {
+    "id": "S14",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     483
+    ],
+    "texto": "The token ID format is sessionType(2)+tokenType(2)+grant(2), so the grant shortcut sits at indexes 4-6, not 3-5. The check is also negated, so it rejects IDs whose grant matches. Use substring(4,6) and return false when it does NOT equal the expected shortcut."
+   },
+   {
+    "id": "S15",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     480,
+     484
+    ],
+    "texto": "isAccessTokenId was updated for the new \"<sessionType><tokenType><grant>:<uuid>\" token ID format but is wrong in two ways. It reads the grant shortcut with substring(3,5) when the shortcut occupies indices 4-6, and it returns false when the shortcut equals the expected one. The matcher therefore rejects correct token IDs and accepts wrong ones, so the event assertions that use it fail or check nothing."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#01",
+    "descricao": "The AccessTokenContext constructor checks grantType twice instead of rawTokenId, so a null rawTokenId passes validation and is encoded as ':null'.",
+    "textoGolden": "In AccessTokenContext constructor, the fourth Objects.requireNonNull validates grantType twice instead of validating rawTokenId, allowing null rawTokenId values to pass validation.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       73,
+       73
+      ],
+      "texto": "WHAT: the constructor validates `grantType` a second time instead of `rawTokenId` (`Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")`). WHY: a null `rawTokenId` is silently accepted, so `encodeTokenId` produces a token id ending in `:null` and any later consumer of the raw id gets an invalid value instead of an early failure. HOW: change the argument to `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")`."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       69,
+       78
+      ],
+      "texto": "Line 73 calls Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\") \u2014 it validates grantType a second time (line 72 already does) with a message naming a different field. rawTokenId is never validated, so a null rawTokenId is accepted at construction and the advertised check/message is wrong. It should be Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       73,
+       73
+      ],
+      "texto": "The null-check message names the wrong parameter: `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")` validates `grantType` but reports `rawTokenId`, and it duplicates the check on line 72 while `rawTokenId` is never validated at all. The message that reaches the reader contradicts the code it guards; it should be `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")`."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#02",
+    "descricao": "isAccessTokenId reads the grant shortcut at the wrong offset (3,5 instead of 4,6) and inverts the comparison, so the event assertions never verify the token's grant type.",
+    "textoGolden": "In isAccessTokenId, the substring for the grant shortcut and the equality check look inverted: the grant shortcut occupies indices 4\u20135 (substring(4,6)), and a match should return true (combined with UUID check), not false.",
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       483,
+       483
+      ],
+      "texto": "WHAT: `isAccessTokenId` reads the grant shortcut from the wrong offset and inverts the comparison \u2014 `if (items[0].substring(3, 5).equals(expectedGrantShortcut)) return false;`. WHY: for the encoded id `ssttgg:raw` the grant shortcut occupies 0-based indices 4-5, so `substring(3,5)` inspects the token-type/grant boundary and can never equal the expected shortcut; combined with the inverted `return false`, the equality branch is unreachable and the matcher validates only the UUID part. As a result the new assertions in `expectCodeToToken`/`expectRefresh`/`expectDeviceCodeToToken`/`expectAuthReqIdToToken` do not actually assert the grant type and would pass even if the grant shortcut were wrong. HOW: use `items[0].substring(4, 6)` and negate the condition (`if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`)."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       476,
+       492
+      ],
+      "texto": "The matcher logic is inverted: line 483 returns false when the extracted grant shortcut EQUALS expectedGrantShortcut, so a token that actually carries the expected grant fails the matcher, while a token with any other grant shortcut falls through and passes. The condition should be negated: `if (!items[0].substring(3,5).equals(expectedGrantShortcut)) return false;`. Also note the encode site writes the grant shortcut at chars 4-6 (substring(4,6)); substring(3,5) reads one character early into the token-type field, so the offset is off by one relative to TokenManager.encodeTokenId."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       482,
+       483
+      ],
+      "texto": "The comment 'Grant type shortcut starts at character 4th char' disagrees with the encoding that this PR defines (sessionType chars 1-2, tokenType 3-4, grantType 5-6, e.g. 'trltcc'), and the code reads substring(3,5) \u2014 the 4th-5th chars, i.e. the token-type second char plus the grant first char, never the grant shortcut. The comment (and the index) should point at the 5th char / substring(4,6)."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#03",
+    "descricao": "getShortcut() Javadoc says shortcuts are usually 3 letters, but the encoding requires exactly 2-character shortcuts.",
+    "textoGolden": "Javadoc mentions \"usually like 3-letters shortcut\" but some implementations use 2-letter shortcuts (\"ac\", \"cc\", \"rt\", \"te\", \"pc\", \"ci\", \"ro\"). Consider updating documentation to reflect actual usage pattern.",
+    "comentarios": [
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The Javadoc says getShortcut() returns 'usually like 3-letters shortcut', but every implementation introduced in this PR returns a 2-character shortcut ('ac','cc','pg','pc','rt','ro','te','ci','dg') and the encoder relies on exactly 2 chars (encoded context length 6 = 2+2+2). The doc states a length the code does not produce; it should say 2-character shortcut."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Grant shortcuts are registered without enforcing the two-character length required by the decoder. A custom grant returning a three-character shortcut, which the new OAuth2GrantTypeFactory documentation explicitly suggests, produces a seven-character prefix that getTokenContextFromTokenId rejects, breaking encode/decode round trips for that grant. Validate shortcut length during registration and dynamic refresh, and document the required two-character format."
+     },
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The new contract describes getShortcut() as usually returning a three-letter shortcut, but DefaultTokenContextEncoderProvider requires exactly two characters for the grant field (six total prefix characters, decoded with substring(4, 6)). An extension author following this documentation can produce token IDs that the default decoder rejects. Document the required two-character length rather than advertising three letters."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#04",
+    "descricao": "testIncorrectGrantType catches any RuntimeException, so it passes on a NullPointerException from the unset sessionFactory rather than verifying the unknown-grant IllegalArgumentException.",
+    "textoGolden": " Catching generic RuntimeException is too broad. The implementation throws IllegalArgumentException specifically - catch that instead for more precise testing.",
+    "comentarios": [
+     {
+      "file": "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java",
+      "lines": [
+       77,
+       83
+      ],
+      "texto": "Catching RuntimeException allows this negative test to pass for an unrelated fixture failure. The fixture constructs the factory without postInit, leaving sessionFactory null; resolving the unregistered `ac` shortcut calls sessionFactory.getProviderFactoriesStream and throws NullPointerException before the decoder's intended unknown-grant IllegalArgumentException. Catch/assert IllegalArgumentException specifically and provide a factory fixture whose lookup returns no matching grant, so removing the decoder's validation would fail the test."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#05",
+    "descricao": "Client-credentials (and UMA permission) token issuance never sets the GRANT_TYPE attribute, so their access token ids are encoded with the unknown grant 'na' instead of their shortcut.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+      "lines": [
+       57,
+       60
+      ],
+      "texto": "The new grant metadata falls back to 'na' for client-credentials and UMA tokens because their issuance paths never set Constants.GRANT_TYPE on their fresh ClientSessionContext. ClientCredentialsGrantType calls responseBuilder.generateAccessToken directly, and PermissionGrantType delegates to AuthorizationTokenService, so neither executes the new assignment in createTokenResponse; tokens from these known grants therefore carry unknown grant context. Set the grant attribute in both issuance paths before generating the access token."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#06",
+    "descricao": "Lazy registration of newly deployed grants does not check shortcut uniqueness, so a grant reusing an existing shortcut silently overwrites the reverse mapping and older tokens decode to the wrong grant.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+      "lines": [
+       112,
+       114
+      ],
+      "texto": "Enforce shortcut uniqueness during lazy registration rather than overwriting grantsByShortcuts. If a newly deployed grant B uses existing grant A's shortcut, this path replaces shortcut\u2192A with shortcut\u2192B while retaining both forward entries. Previously issued A tokens then decode as B. Concurrent registrations of two new grants with the same shortcut likewise both succeed, with the last inverse-map write winning. Use collision-aware atomic registration and reject the conflicting grant before publishing its forward mapping."
+     }
+    ]
+   }
+  ]
+ },
+ "feat-2fa-backup-codes-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "54486a059cd2032042189bb565646ba4e0f6bd61",
+  "base": "efa6d464a38e60ceeeb88f40668c1c4ac4bfaf54",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     147,
+     156
+    ],
+    "texto": "WHAT: The backup code is checked and then invalidated with a non-atomic read-modify-write of the whole encrypted blob. WHY: Two concurrent logins using the same code both find it before either write lands, so a single-use code authenticates twice, and the last write can also resurrect a code consumed by another request. HOW: Consume the code atomically, for example inside a transaction with a row lock, or with a conditional update that matches the previously read backupCodes value and fails if no row is updated."
+   },
+   {
+    "id": "S2",
+    "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+    "lines": [
+     71,
+     75
+    ],
+    "texto": "WHAT: resetState runs only from the Cancel and Close buttons, and it does not clear backupCodes, secret, dataUri or the blob URL. WHY: Dismissing the dialog through onOpenChange (Esc or overlay click) at the backup-codes step leaves step=DisplayBackupCodes with stale codes, so reopening the modal skips password confirmation and shows old codes. HOW: Call resetState, clear backupCodes, secret and dataUri, and revoke the blob URL in a wrapper around onOpenChange when the dialog closes."
+   },
+   {
+    "id": "S3",
+    "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+    "lines": [
+     61,
+     61
+    ],
+    "texto": "WHAT: req.body.backupCode.replaceAll is called without checking that the value is a string. WHY: A truthy non-string JSON value, such as a number or an object, throws a TypeError and returns a 500 instead of IncorrectBackupCode. HOW: Check `typeof req.body.backupCode === \"string\"` and return 400 IncorrectBackupCode otherwise."
+   },
+   {
+    "id": "S4",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     143,
+     145
+    ],
+    "texto": "The user-supplied backup code is compared with the stored secrets through Array.indexOf, which is a short-circuiting string comparison and is not constant-time. This leaks timing information about the secret codes. Compare each stored code with crypto.timingSafeEqual on equal-length buffers and go through the whole list without exiting early."
+   },
+   {
+    "id": "S5",
+    "file": "apps/web/playwright/login.2fa.e2e.ts",
+    "lines": [
+     112,
+     122
+    ],
+    "texto": "The new backup-code copy and download steps would pass even if the codes were wrong or not copied. The download check only asserts the static filename from the `download` attribute, and the copy check only waits for a toast that the modal shows unconditionally without awaiting `clipboard.writeText`. Read the downloaded file and the clipboard, and assert they contain the displayed codes in XXXXX-XXXXX format."
+   },
+   {
+    "id": "S6",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     143,
+     156
+    ],
+    "texto": "Backup code consumption is a non-atomic read-check-write: concurrent logins with the same code both find it in the decrypted list and both succeed, which breaks the 'usable exactly once' invariant. Make the consume step atomic, for example with an optimistic conditional update (updateMany where backupCodes equals the value originally read, and fail the login if count is 0) or a row lock in a transaction."
+   },
+   {
+    "id": "S7",
+    "file": "apps/web/components/auth/BackupCode.tsx",
+    "lines": [
+     7,
+     7
+    ],
+    "texto": "The default-exported component in BackupCode.tsx is named `TwoFactor`, copied from TwoFactor.tsx, but it renders the backup code input. The name misleads readers and stack traces and collides with the real TwoFactor component. Rename it to `BackupCode`."
+   },
+   {
+    "id": "S8",
+    "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+    "lines": [
+     49,
+     52
+    ],
+    "texto": "The error message says \"cannot proceed with backup code login\", but this endpoint disables two-factor auth and does not log anyone in. The message was copied from next-auth-options.ts and misleads whoever reads the logs. Reword it to refer to disabling 2FA with a backup code."
+   },
+   {
+    "id": "S9",
+    "file": "BackupCode component",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The `BackupCode` component's function is named `TwoFactor`, which is misleading. Rename it to match the component name (e.g. `BackupCode`). This is a cosmetic issue only."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#01",
+    "descricao": "The credentials authorize() skips the password check when any totpCode is present, and the new backup-code branch never validates that totpCode, so a backup code plus a dummy totpCode logs in without the account password.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       131,
+       156
+      ],
+      "texto": "The new backup-code branch authenticates without guaranteeing the password check ran: password verification at line 121 is gated on `!credentials.totpCode`, and the branch at line 131 triggers on any truthy `credentials.backupCode` regardless of that gate. A POST to the credentials callback supplying a valid backup code together with any non-empty totpCode therefore takes the backup branch (skipping TOTP validation) while line 121 skips password verification \u2014 granting a session using only a second-factor backup code, with no account password. Require the password check before the backup branch, or include backupCode in the guard at line 121 (e.g. `if (user.password && !credentials.totpCode && !credentials.backupCode)`)."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       131,
+       145
+      ],
+      "texto": "The backup-code branch accepts a valid backup code even when an arbitrary nonempty totpCode has skipped password verification. The preceding guards at lines 113\u2013125 trust the presence of totpCode, but this new branch does not validate it, allowing a holder of a backup code to log in to a password account without knowing its password by submitting both fields. Require password verification for backup-code authentication rather than allowing an unverified totpCode to bypass it."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       131,
+       145
+      ],
+      "texto": "WHAT: The new backup-code login branch authenticates without verifying the password when credentials also contain any totpCode value (password check at line 121 is skipped when totpCode is truthy, and the backup branch never checks it). WHY: An attacker holding only a backup code can add a dummy totpCode to the credentials callback and log in without the password, reducing two factors to one. HOW: Verify the password whenever backupCode is used (or decouple the password check from totpCode presence)."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#02",
+    "descricao": "After enabling 2FA, onEnable is only called from the backup-codes Close button; dismissing the dialog by Escape/overlay never notifies the parent, so the settings page keeps showing 2FA disabled.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       134,
+       136
+      ],
+      "texto": "On a successful enable (response.status === 200) the modal no longer calls onEnable(); it only advances to SetupStep.DisplayBackupCodes, and onEnable() is now invoked solely from the 'close' button (line 269). If the user dismisses the Dialog via ESC or an overlay click, DialogContent's onOpenChange fires (wired to a plain setEnableModalOpen toggle at apps/web/pages/settings/security/two-factor-auth.tsx:64 and the conditional render at apps/web/components/security/TwoFactorAuthSection.tsx:36), so onEnable never runs. The parent callbacks (setEnableModalOpen(false) + utils.viewer.me.invalidate() / setEnabled(true)) are skipped, leaving the 2FA Switch unchecked and the UI showing 2FA as disabled even though the server has enabled it. Call onEnable() from the dismiss path (onOpenChange) or when transitioning into DisplayBackupCodes, not only from the Close button."
+     },
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       134,
+       136
+      ],
+      "texto": "Successful enablement no longer invokes onEnable until the backup-code screen's explicit Close button is clicked. Dismissing that screen through the dialog's onOpenChange instead only closes it in the parent and does not invalidate viewer.me, leaving the settings switch showing disabled even though the server has enabled 2FA. Ensure dismissal after successful enablement also invokes the completion callback and resets the setup state."
+     },
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       132,
+       136
+      ],
+      "texto": "After a successful enable, `onEnable()` is no longer called and is only called from the backup-codes Close button. If the user dismisses the dialog by Escape or overlay click (`onOpenChange`) while the codes are displayed, the parent is never notified that 2FA is enabled. The modal also keeps its step state and the plaintext backup codes. Call `onEnable` when 2FA is enabled, or make the dialog's `onOpenChange(false)` on the DisplayBackupCodes step run the same handler as Close, which resets state and clears `backupCodes`."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#04",
+    "descricao": "The default export in BackupCode.tsx is named TwoFactor, a copy-paste leftover from the TOTP component.",
+    "textoGolden": "The exported function TwoFactor handles backup codes and is in BackupCode.tsx. Inconsistent naming.",
+    "comentarios": [
+     {
+      "file": "apps/web/components/auth/BackupCode.tsx",
+      "lines": [
+       7,
+       7
+      ],
+      "texto": "The default export is named `TwoFactor` but this file (BackupCode.tsx) renders the backup-code field and is imported as `BackupCode` by callers. The copied identifier misstates what the component is; rename the function to `BackupCode` so the name matches the file, the imports and the rendered content."
+     },
+     {
+      "file": "apps/web/components/auth/BackupCode.tsx",
+      "lines": [
+       7,
+       7
+      ],
+      "texto": "The default export in BackupCode.tsx is named `TwoFactor`, which is the name of the separate TOTP component. It is a copy-paste leftover and misleads readers and stack traces. Rename it to `BackupCode`."
+     },
+     {
+      "file": "apps/web/components/auth/BackupCode.tsx",
+      "lines": [
+       7,
+       7
+      ],
+      "texto": "Component in BackupCode.tsx is named `TwoFactor` (`export default function TwoFactor`) while the file is BackupCode.tsx and it is imported as `BackupCode`. The name disagrees with the code's contract and duplicates the real TwoFactor component, misleading callers/readers. Rename to `BackupCode`."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#05",
+    "descricao": "The backup-code copy e2e test only waits for the success toast, which is shown unconditionally, so it never verifies the clipboard content.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       119,
+       122
+      ],
+      "texto": "This 'copy' test does not verify the copy behaviour it names: it clicks backup-codes-copy and then only waits for the toast-success element. The handler (EnableTwoFactorModal) runs navigator.clipboard.writeText(...) without awaiting it and then calls showToast(...) unconditionally, so the toast appears even when the clipboard write is removed or fails. The assertion therefore passes with the backup-code copy feature broken; assert the actual effect (clipboard content, or that the formatted codes reached writeText) instead of the toast."
+     },
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       119,
+       122
+      ],
+      "texto": "The copy test only waits for a success toast, but the implementation emits that toast unconditionally without awaiting navigator.clipboard.writeText. Removing the clipboard write entirely, copying an empty string, or rejecting the write would still pass this test. Read the clipboard after the click and compare its contents with the displayed backup codes so the test verifies the actual copy effect."
+     },
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       119,
+       122
+      ],
+      "texto": "Copy test only waits for toast-success, explicitly TODOing clipboard check. Broken writeText (wrong format/empty) still passes; assert clipboard content equals formatted backup codes."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#07",
+    "descricao": "Backup-code consumption is a non-atomic read-modify-write, so concurrent logins can accept the same backup code more than once or overwrite each other's removal.",
+    "textoGolden": "Because backupCodes are decrypted and mutated in memory before being written back, two concurrent login requests using the same backupCode could both pass this check and update, so a single backup code may effectively be accepted more than once if used concurrently, weakening the intended one-time-use semantics.",
+    "comentarios": [
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       144,
+       156
+      ],
+      "texto": "Backup-code consumption is a non-atomic read-modify-write: the code is validated with indexOf (line 144) and only then persisted via prisma.user.update (line 149), with no unique constraint or lock. Two concurrent login requests sending the same valid backup code both read the unchanged row, both pass the indexOf check, and both obtain a session, violating the 'each backup code can be used exactly once' invariant. Consume the code atomically (e.g. a conditional update on the raw encrypted value / a dedicated used-backup-codes table with a unique index) so only one request can succeed."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       144,
+       156
+      ],
+      "texto": "Backup-code consumption is a non-atomic read-modify-write, breaking the stated invariant that each backup code is single-use. Two concurrent login requests with the same backup code both read the same user.backupCodes array and both pass `index !== -1` before either `prisma.user.update` commits; both then persist a stale array (each nulling only its own index), so the code authenticates twice. Make consumption atomic (e.g. compare-and-swap on the encrypted value/updatedAt, a transaction with a conditional update, or an optimistic-locking retry) so exactly one request can claim a given code."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       148,
+       156
+      ],
+      "texto": "Backup-code consumption overwrites the encrypted list by user ID without checking that the stored list still matches the value read before verification. Concurrent requests can both authenticate with the same single-use code, and requests using different codes can overwrite each other's removals and restore a consumed code. Use a conditional atomic update matching the original backupCodes ciphertext and reject or retry authentication if no row was updated."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#12",
+    "descricao": "The copy button shows a success toast without awaiting clipboard.writeText, so a failed copy still tells the user their backup codes were saved.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       276,
+       279
+      ],
+      "texto": "The handler shows \u201cBackup codes copied!\u201d immediately after calling `navigator.clipboard.writeText`, without awaiting its promise. If clipboard access is denied or the write otherwise rejects, the user still receives a success message and may close the dialog believing their recovery codes were saved. Await the clipboard write and show the success toast only after it resolves; handle rejection with an appropriate translated failure message."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#13",
+    "descricao": "The download e2e test checks only the filename, not that the file contains the displayed backup codes.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       113,
+       117
+      ],
+      "texto": "The download assertion checks only the static filename from the anchor's download attribute. It still passes if the blob contains empty or incorrect backup codes, leaving the essential recovery-code export behavior unverified. Read the downloaded file and compare its contents to the displayed codes, including their formatting."
+     },
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       112,
+       117
+      ],
+      "texto": "Download test only asserts suggestedFilename, explicitly TODOing file-content check. Empty/wrong backupCodes blob with correct filename still passes; assert downloaded file lines equal displayed/formatted backup codes."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#14",
+    "descricao": "The disable endpoint's error log says 'backup code login' although it is disabling 2FA.",
+    "textoGolden": "Error message mentions 'backup code login' but this is a disable endpoint, not login",
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+      "lines": [
+       50,
+       50
+      ],
+      "texto": "The error log says \"cannot proceed with backup code login\", but this endpoint disables two-factor authentication and does not log in. Change the message to describe disabling 2FA with a backup code."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#15",
+    "descricao": "resetState does not clear backup codes/secret or revoke the backup-codes object URL, leaving a small blob URL leaked per setup cycle.",
+    "textoGolden": "Object URL for backup codes is not revoked on component unmount, leading to a potential memory leak. This can cause increased memory usage over time, especially if the component is mounted and unmounted frequently.",
+    "comentarios": [
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       71,
+       75
+      ],
+      "texto": "WHAT: resetState() clears only password/error/step and never clears backupCodes, secret, dataUri, nor revokes backupCodesUrl. WHY: Closing the modal after setup leaves TOTP secret and backup codes in memory and leaks the Blob object URL on every setup/close cycle. HOW: Clear those states and call URL.revokeObjectURL in resetState and on unmount."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#16",
+    "descricao": "The disable endpoint calls replaceAll on req.body.backupCode without checking it is a string, so non-string input throws a 500.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+      "lines": [
+       60,
+       64
+      ],
+      "texto": "WHAT: req.body.backupCode.replaceAll assumes a string with no type guard. WHY: A non-string JSON value (number/array) throws TypeError and returns 500 instead of the 400 IncorrectBackupCode contract, breaking error handling and enabling error-probing. HOW: Validate typeof backupCode === 'string' (or String(...)) before replaceAll."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#17",
+    "descricao": "Backup codes are matched case-sensitively against lowercase hex, so a user typing the code in uppercase is rejected.",
+    "textoGolden": "Backup code validation is case-sensitive due to the use of indexOf(). This causes validation to fail if a user enters uppercase hex characters, as backup codes should be case-insensitive for a better user experience.",
+    "comentarios": []
+   }
+  ]
+ },
+ "github-oauth-security-enhancement-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "bb75657fc8f13923c1d7983f422290908a1e7310",
+  "base": "344aa102e7818606e29426ebe69d5a680d8727c6",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     481,
+     482
+    ],
+    "texto": "WHAT: When no Integration row exists for the installation_id, GitHubInstallation advances the pipeline without comparing the authenticated GitHub user to the installer. WHY: An attacker can claim an installation whose webhook has not yet been processed, or whose row is absent, and skip the user-validation check this PR adds. HOW: Reject the DoesNotExist case, or defer the sender check until the sender is known, instead of calling next_step()."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     501,
+     504
+    ],
+    "texto": "WHAT: integration.metadata['sender']['login'] is indexed without a guard. WHY: Integrations that lack sender metadata raise KeyError, which returns a 500 during installation. HOW: Read the value with .get() and treat a missing sender as a validation failure."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     412,
+     413
+    ],
+    "texto": "The OAuth `state` is the secret that ties the callback to the pipeline, but it is compared with `!=`, which leaks timing information. Use `constant_time_compare` from django.utils.crypto, and treat a missing state as a mismatch."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     129,
+     146
+    ],
+    "texto": "error() calls _(error_short) on a variable. Message extraction only sees string literals, so the short messages (\"Invalid installation request.\", \"GitHub installation pending deletion.\", \"Github installed on another Sentry organization.\") are no longer extracted for translation. Previously they were literals inside _(). Make the short messages translatable constants, or wrap the literals in _() at the call sites."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     500,
+     505
+    ],
+    "texto": "The new check reads integration.metadata[\"sender\"][\"login\"] directly. Integrations whose metadata has no \"sender\" (for example the installation webhook hasn't been processed yet, or older records) now raise KeyError and the request fails with a 500. Previously this path succeeded. Read it defensively with .get and treat a missing sender as a failed verification."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     500,
+     505
+    ],
+    "texto": "`integration.metadata[\"sender\"][\"login\"]` is indexed directly, but `sender` is only set by the installation webhook. An existing Integration without that metadata raises KeyError and the user gets a 500 instead of the error page. Read it defensively and return `error(...)` when it is missing."
+   },
+   {
+    "id": "S7",
+    "file": "tests/sentry/integrations/github/test_integration.py",
+    "lines": [
+     388,
+     396
+    ],
+    "texto": "The test sends a state ('ddd023d8...') that differs from the pipeline signature. The OAuth state check rejects it with 'Invalid installation request.' before GitHubInstallation runs, so the missing-installation branch is never exercised. Use the valid signature state so the request reaches GitHubInstallation, and assert on that branch's outcome."
+   },
+   {
+    "id": "S8",
+    "file": "tests/sentry/integrations/github/test_integration.py",
+    "lines": [
+     448,
+     454
+    ],
+    "texto": "The mismatch test asserts only the generic 'Invalid installation request.' text. A state mismatch or OAuth failure produces the same text, so the test cannot show that the sender-login comparison is what rejected the request. Assert the pipeline got past the state check, for example by checking that the user endpoint was called and the failure came from the login mismatch."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#01",
+    "descricao": "error() calls _(error_short) on a variable and callers pass plain literals, so the short error strings are no longer extractable for translation.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       129,
+       146
+      ],
+      "texto": "The helper calls `_(error_short)` on a variable, and callers pass plain string literals. The translation extractor cannot see these strings, so the short error messages sent to the user are no longer translatable; the old code wrapped the literals directly in `_()`. Mark the literals with gettext_lazy at the call sites and the default, and pass them through without wrapping again."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       129,
+       146
+      ],
+      "texto": "error_short strings bypass translation extraction: _(error_short) uses a variable so makemessages cannot collect them. Wrap literals at definition/call sites, e.g. error_short=_(\"Invalid installation request.\") and pass _(\"...\") literals, then use data error value directly without re-wrapping."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       132,
+       141
+      ],
+      "texto": "Translate the short-message literals at their definition/call sites instead of calling `_(error_short)` on a variable. Django's message extraction cannot extract the default `\"Invalid installation request.\"` or the plain-string arguments at the two call sites from this dynamic gettext invocation. The existing pending-deletion and already-installed messages previously appeared directly inside `_()`; this refactor removes their extraction sites, and the new default message cannot enter translation catalogs. Use a translated default and translated arguments, then place `error_short` directly into the payload so these user-facing errors remain localizable."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#02",
+    "descricao": "The org parameter of error()/get_document_origin is actually the active-organization context, not an Organization, so the name is misleading.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       149,
+       152
+      ],
+      "texto": "The parameter is named `org` but the code treats it as the pipeline's active-organization context: it dereferences `org.organization` and every caller (error() and the GitHubInstallation sites) passes `self.active_organization`, not an Organization. The name misstates the argument's type/contract \u2014 a caller following the name and passing a real Organization would hit AttributeError on `.organization`. Rename the parameter (e.g. `active_organization`) and correct the corresponding name in `error()` at line 131 so the two signatures match what is actually passed."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#03",
+    "descricao": "The GitHub OAuth state is pipeline.signature, a static md5 of the pipeline view names, instead of a per-attempt random nonce, so it gives no CSRF protection.",
+    "textoGolden": "OAuth state uses pipeline.signature (static) instead of a per-request random value",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       401,
+       412
+      ],
+      "texto": "The OAuth state is pipeline.signature, which Pipeline.__init__ computes solely from pipeline view class names and therefore shares across all users and installation attempts. An attacker can obtain an OAuth code for their own GitHub account and send a callback using this known state to a victim with an active installation pipeline, binding the attacker's GitHub identity to the victim's flow instead of rejecting the forged callback. Generate a random per-attempt nonce, store it in pipeline state, and validate that nonce on the OAuth callback."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       401,
+       413
+      ],
+      "texto": "Do not use pipeline.signature as OAuth state. It is a deterministic MD5 of the pipeline identifiers, not an unpredictable nonce tied to this user's authorization attempt (the tests reuse it across users). An attacker can know the expected state and submit a callback containing a code authorized under the attacker's GitHub account, defeating the OAuth login-CSRF protection and the intended binding to the installing user. Generate a cryptographically random per-attempt state, store it in the session/pipeline, and validate and consume it on callback."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#05",
+    "descricao": "The new OAuth step's token exchange and user lookup are not wrapped in error handling, so GitHub/network failures surface as 500s instead of the installation-failed page.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       423,
+       425
+      ],
+      "texto": "The token request is executed outside the try block. If GitHub's token endpoint is unavailable or the request fails with a connection/timeout error, safe_urlopen raises before the guarded response parsing is reached, and this new installation step returns an unhandled server error instead of the installation-failed response. Include the request itself in the error handling and handle the relevant transport exceptions."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       423,
+       436
+      ],
+      "texto": "WHAT: safe_urlopen token exchange and get_user_info() (which calls resp.raise_for_status()) are called with no exception handling. WHY: Any network error, timeout, or non-2xx from GitHub bubbles up as an unhandled exception and 500s the install instead of rendering the invalid-request page. HOW: Wrap the exchange plus get_user_info in try/except and return error() on failure."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       422,
+       436
+      ],
+      "texto": "safe_urlopen() and get_user_info() are called outside any try/except, so network errors, non-2xx responses, or API failures raise unhandled exceptions instead of returning error(). Wrap the token exchange + user-info fetch in try/except and return error() on failure, matching the handled missing-access_token path."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#06",
+    "descricao": "When no Integration exists yet for the installation_id the pipeline advances without comparing the OAuth user to the installer, bypassing the new ownership check.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "The missing Integration branch advances the pipeline without verifying that github_authenticated_user installed the supplied installation_id. When the installation webhook has not created a record, or the local record was deleted, finish_pipeline calls build_integration using app credentials and attaches the installation without checking the OAuth user's access, allowing a user with another account's installation ID to bypass the new ownership check. Fail closed until trusted installer information is available and apply the ownership check before every successful next_step."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "The record-absent path advances the pipeline before checking whether the authenticated GitHub user installed this app. Installation IDs arrive from the request, and a missing Integration record (for example before the installation webhook is processed) does not establish ownership. As a result, this path can attach an installation belonging to a different GitHub user despite the new authenticity check. Verify the authenticated user's authorization for the installation before advancing in this branch too, rather than relying on the webhook-created record existing."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "When no Integration row exists for the installation_id, the code calls next_step() without comparing the OAuth-authenticated GitHub user to the installer. An attacker can supply an installation_id they do not own before the installation webhook has created the row, and bypass the new verification. Do not skip the check in this branch. Either fail closed, or verify ownership another way, for example by confirming the user can access the installation through the GitHub API."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#09",
+    "descricao": "The installer check indexes integration.metadata['sender']['login'] without checking that sender exists, raising KeyError for integrations created without sender metadata.",
+    "textoGolden": "The code attempts to access integration.metadata[sender][login] without checking for the existence of the sender key. This causes a KeyError for integrations where the sender metadata was not set during creation",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       500,
+       505
+      ],
+      "texto": "integration.metadata[\"sender\"][\"login\"] is indexed without checking that \"sender\" exists, so an ACTIVE integration whose metadata has no sender raises KeyError (500) here. metadata[\"sender\"] is only populated when state.get(\"sender\") is set (integration.py:376-377), and the only writer of that state is the installation webhook (webhook.py:202-208); integrations created through the pipeline itself carry no sender (confirmed by installation.py:44 which explicitly guards `if \"sender\" not in integration.metadata`, and by the pipeline-created integration in test_integration.py:730-743). Previously this branch only bound state and called pipeline.next_step(), so this crash is newly introduced. Fix: guard the lookup, e.g. `if pipeline.fetch_state(\"github_authenticated_user\") != (integration.metadata.get(\"sender\") or {}).get(\"login\"):` and decide the desired fallback when sender is absent."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       500,
+       505
+      ],
+      "texto": "`integration.metadata[\"sender\"][\"login\"]` can raise KeyError. build_integration (line 376-377) only sets metadata[\"sender\"] when state.get(\"sender\") is truthy, so an existing Integration without a sender entry makes this subscripting throw an unhandled KeyError (500) instead of routing to the intended error page. Use `integration.metadata.get(\"sender\", {}).get(\"login\")` (and treat a missing sender as a failed verification) so the mismatch/absence case returns error() rather than crashing."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       501,
+       503
+      ],
+      "texto": "The new ownership check indexes integration.metadata['sender']['login'] even though GitHubIntegrationProvider.build_integration omits sender for normal pipeline-created integrations. Reconnecting an existing active integration without an OrganizationIntegration and without webhook-populated sender now raises KeyError and returns a server error rather than an installation failure. Handle missing sender explicitly and return the invalid-installation response when trusted installer metadata is unavailable."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#10",
+    "descricao": "test_installation_not_found uses a wrong OAuth state, so it fails at the state check and never reaches the installation-not-found path it is meant to test.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       385,
+       396
+      ],
+      "texto": "First response (installation_id) is overwritten by second response (bad state) with no assertion, so the Integration.DoesNotExist / not-ACTIVE branch in GitHubInstallation is never verified. Keep/assert the first flow through a valid OAuth step to reach the installation check instead of only asserting the OAuth state-mismatch error."
+     },
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       388,
+       396
+      ],
+      "texto": "This test no longer verifies the \"installation not found\" path it exists for. The second GET supplies state=ddd023d87a913d5226e2a882c4c4cc05, which is not the github pipeline signature (that is the 9cae5e88803f35ed7970fc131e6e65d3 asserted in test_github_setup and reused elsewhere). OAuthLoginView.dispatch (integration.py:412-413) therefore returns error() before GitHubInstallation runs, producing the same generic \"Invalid installation request.\" message and the same failed template via the state-mismatch branch. The Integration.DoesNotExist handling at integration.py:493-498 is never reached, so the test would still pass if that handling were removed or broken. Use the real pipeline state so the request advances into GitHubInstallation, or assert on something that distinguishes the state-mismatch branch from the missing-installation branch."
+     },
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       388,
+       396
+      ],
+      "texto": "The replacement assertion no longer verifies that a nonexistent installation is rejected: 'Invalid installation request.' is also returned for a state mismatch, missing access token, or missing authenticated login before GitHubInstallation is reached. This test can therefore pass with installation-not-found handling broken if the callback fails OAuth validation instead. Establish a successful OAuth exchange with the actual pipeline state and verify that the nonexistent installation lookup is reached and rejected, rather than accepting this shared authentication-error message alone."
+     }
+    ]
+   }
+  ]
+ },
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "3162ad68a5c87666788b27a44eb31235025091a9",
+  "base": "de11fb0166a7244115bb066edd65ec0d6b7e365c",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     253,
+     257
+    ],
+    "texto": "WHAT: the kill is gated on isinstance(process, multiprocessing.Process), but the processes are SpawnProcess instances created via mp_context.Process, which do not subclass multiprocessing.Process. WHY: a hung flusher process is never killed before a replacement is spawned, so hung processes accumulate and keep consuming the same Redis shards. HOW: check isinstance(process, multiprocessing.process.BaseProcess), or `not isinstance(process, threading.Thread)`."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     336,
+     347
+    ],
+    "texto": "WHAT: join() breaks out of the loop once the deadline expires, which skips terminate() for the current and all remaining processes. WHY: flusher child processes can outlive the consumer shutdown when the timeout is hit. HOW: do not break; always run the terminate step for every process, skipping only the wait loop when the deadline has passed."
+   },
+   {
+    "id": "S3",
+    "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+    "lines": [
+     60,
+     62
+    ],
+    "texto": "The added `time.sleep(0.1)` is a no-op because the test patches `time.sleep` to do nothing, so it does not wait for the flusher threads. The test still synchronises on timing and can race on a slow machine. Wait on a condition instead, such as polling until `messages` is non-empty with a real clock or a deadline loop, or save the real sleep before patching."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     31,
+     32
+    ],
+    "texto": "The docstring says one process is created per shard, but max_processes caps the count and shards are shared round-robin across processes. Reword it to say shards are distributed across up to max_processes processes."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     199,
+     199
+    ],
+    "texto": "The wait_produce timer tags with \"shards\" while the other new metrics in the same loop use \"shard\" for the same value, so the two can't be grouped together. Use the same tag key."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     199,
+     199
+    ],
+    "texto": "The wait_produce timer is tagged \"shards\", while the other flusher metrics in this change (produce timer, segment_size_bytes, flusher_unhealthy) use the tag \"shard\". Queries or dashboards grouping by \"shard\" will miss this timer. Use the same tag key, \"shard\", for all of them."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     337,
+     347
+    ],
+    "texto": "In `join`, once the deadline has passed the loop `break`s out of the for loop. The remaining processes are then never terminated, because `terminate()` sits inside the loop body. Spawned flusher processes can be left running after shutdown. Replace the `break` with `continue` or skip the wait, and always call `terminate()` on every multiprocessing process."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+    "descricao": "The wait_produce timer is tagged with 'shards' while sibling flusher metrics use 'shard' for the same value, so per-shard dashboards miss it.",
+    "textoGolden": "In the SpanFlusher flush loop, metric tags inconsistently use 'shard' (e.g., in spans.buffer.flusher.produce and spans.buffer.segment_size_bytes) and 'shards' (in spans.buffer.flusher.wait_produce) for the same shard identifier value. This prevents correct metric aggregation across flush stages \u2014 dashboards and alerts filtering by tag 'shard' will miss data tagged as 'shards' and vice versa.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The `spans.buffer.flusher.wait_produce` timer is tagged with the key `\"shards\"`, while the other two metrics emitted in this same loop (`spans.buffer.flusher.produce` at line 185 and `spans.buffer.segment_size_bytes` at line 195) use the key `\"shard\"`. All three carry the same `shard_tag` value, so this is a pure key-name disagreement: any dashboard or alert that groups/filters by the `shard` tag will silently receive no data from `wait_produce`. Rename the tag key to `\"shard\"` so all flusher metrics share one tag."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The `spans.buffer.flusher.wait_produce` timer is tagged with key `shards` while every sibling metric introduced/updated in the same method (`spans.buffer.flusher.produce`, `spans.buffer.segment_size_bytes`) uses the singular key `shard`. Anything consuming this metric family by the `shard` tag (dashboards, alerts, tag-based aggregation) will silently receive no data for `wait_produce`, and per-shard breakdowns of produce latency will be incomplete. Change the tag to `tags={\"shard\": shard_tag}` so the tag contract matches the other flusher metrics."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The wait_produce timer tags with \"shards\", while the sibling metrics in the same loop use \"shard\" for the same value (shard_tag). Use one tag key, \"shard\", so queries and dashboards that group by it cover all of these metrics."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+    "descricao": "The time.sleep(0.1) added to test_basic to let flusher threads process is a no-op because the test monkeypatches time.sleep.",
+    "textoGolden": "The test_basic function in test_consumer.py uses a monkeypatched time.sleep that returns immediately, but then calls time.sleep(0.1) expecting it to actually wait.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "WHAT: The added synchronization point `time.sleep(0.1)` added after the second `step.poll()` is neutralized by the test's own `monkeypatch.setattr(\"time.sleep\", lambda _: None)` at line 15 (same `time` module), so it does not actually wait. WHY: The comment says it 'Give[s] flusher threads time to process after drift change', but the call is a no-op, so the test still races the background flusher thread before `step.join()` and is liable to be flaky / to not exercise the intended post-drift flush path. HOW: Use a non-monkeypatched wait (e.g. capture the real sleep before patching, or use the flusher's thread/process join, or poll until `messages` is non-empty with a real timeout)."
+     },
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "The added `time.sleep(0.1)` does not wait: line 15 of the same test does `monkeypatch.setattr(\"time.sleep\", lambda _: None)`, which replaces `sleep` on the global `time` module, so this call (and the flusher's own `time.sleep`) is a no-op. The comment 'Give flusher threads time to process after drift change' is therefore false \u2014 the call returns instantly and provides no synchronisation, so the test does not actually wait for the flusher to process after the drift change. Either synchronise on a real condition (e.g. wait until the expected message is produced) or, if the original `time.sleep` is needed here, patch a module-scoped reference instead of the global `time.sleep`."
+     },
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "The added `time.sleep(0.1)` is a no-op because the test patches `time.sleep` to `lambda _: None`, so nothing waits for the flusher threads before `step.join()` and the `messages` assertion. Replace it with a condition-based wait, such as polling until `messages` is non-empty with a deadline. Use the real sleep saved before patching if a delay is needed."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+    "descricao": "The restart path only kills a hung flusher if it is a multiprocessing.Process, but spawn-context workers are SpawnProcess, so hung processes are never killed and a duplicate flusher is started for the same shards.",
+    "textoGolden": "Because flusher processes are created via multiprocessing.get_context('spawn').Process, they are instances of multiprocessing.context.SpawnProcess, which on POSIX is not a subclass of multiprocessing.Process, so this isinstance check will always be false and hung processes won't be killed here.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       253,
+       255
+      ],
+      "texto": "The new isinstance(process, multiprocessing.Process) guard does not match the SpawnProcess instances created by self.mp_context.Process. When a worker hangs, the guard skips kill() and the replacement starts while the original worker remains alive, allowing overlapping flushing of the same shards if the original resumes and leaking hung workers. Check against multiprocessing.process.BaseProcess or self.mp_context.Process, and kill and join the old worker before replacing it."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       253,
+       255
+      ],
+      "texto": "The workers are created with get_context(\"spawn\").Process, which produces SpawnProcess instances; these are not instances of multiprocessing.Process (the default-context Process class). Consequently this guard skips kill() for actual production workers. When a worker hangs, the replacement starts while the original remains alive and can resume flushing the same shards. Use multiprocessing.process.BaseProcess or the spawn-context Process class for the check, and fix the identical check in join() so shutdown also terminates surviving workers."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       254,
+       255
+      ],
+      "texto": "Workers created by multiprocessing.get_context(\"spawn\").Process are SpawnProcess instances, not instances of the separate multiprocessing.Process class. Consequently this guard skips kill() for production workers. When a live worker exceeds max-unhealthy-seconds, the code starts a replacement and overwrites its handle while the original is still running. If the original resumes, both workers flush the same shards, and repeated hangs can exceed the configured process limit. Check against multiprocessing.process.BaseProcess (or explicitly distinguish threads) and stop the old worker before replacing it."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+    "descricao": "join() breaks out of the per-process loop when the shared deadline expires, skipping termination of the remaining flusher processes and leaving them running after shutdown.",
+    "textoGolden": "Breaking out of the loop when the deadline has elapsed can skip terminating remaining flusher processes, potentially leaving them running after shutdown; consider ensuring termination is attempted even if the deadline is exceeded.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       338,
+       341
+      ],
+      "texto": "join() breaks out of the worker loop when the shared deadline expires, skipping cleanup for every remaining worker. If next_step.join consumes the timeout or an earlier worker exhausts it, remaining flushers can continue running after shutdown or partition reassignment. Use the deadline only to limit waiting and still terminate and reap every remaining process."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       337,
+       341
+      ],
+      "texto": "Do not break out of worker cleanup when the join deadline expires. If the first worker consumes the timeout, the next iteration breaks before terminating that worker or any subsequent workers. They may still be blocked in Redis or producer calls despite the shared stopped flag, leaving old workers running after strategy shutdown/reassignment. Apply the deadline only to waiting, and perform termination cleanup for every worker regardless of remaining time (using a type check that recognizes spawn-context workers)."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       337,
+       344
+      ],
+      "texto": "join() waits for processes sequentially against a single shared deadline and breaks without terminating remaining processes once it expires, leaking them."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+    "descricao": "The SpanFlusher docstring says it creates one process per shard, but shards are distributed across at most max_processes processes.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       30,
+       32
+      ],
+      "texto": "The docstring says the flusher \"Creates one process per shard for parallel processing,\" but the code at lines 60-66 shares shards across a capped number of processes (num_processes = min(self.max_processes, len(buffer.assigned_shards)); each shard assigned via i % self.num_processes). With the new --flusher-processes default of 1, a single process handles every shard, so the documented contract is the opposite of the behaviour this PR introduces (confirmed by test_flusher_processes_limit, which asserts 4 shards served by 2 processes). Update the docstring to say shards are distributed across up to max_processes flusher processes."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       31,
+       32
+      ],
+      "texto": "The new docstring says this creates one process per shard, but workers are capped by max_processes and shards are distributed among them. In particular, the CLI default of 1 means all assigned shards share one process. Describe capped workers with potentially multiple shards per worker so callers do not rely on per-shard process isolation."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       31,
+       32
+      ],
+      "texto": "The docstring says the flusher 'Creates one process per shard', but the number of processes is capped by max_processes (--flusher-processes), and shards are shared across processes via i % num_processes. Reword it to say that shards are distributed across at most max_processes processes."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#06",
+    "descricao": "max_processes uses a truthiness fallback, so --flusher-processes 0 silently becomes one process per shard instead of being rejected.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "`max_processes or len(buffer.assigned_shards)` treats a falsy value as 'not provided'. The new `--flusher-processes` click option is `type=int`, so a user can pass `0`; that legitimate-but-falsy value is discarded and the flusher silently spawns one process per shard instead of honoring the requested limit. Use an explicit None check, e.g. `self.max_processes = max_processes if max_processes is not None else len(buffer.assigned_shards)` (and validate/reject 0 upstream)."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "An explicit max_processes=0 is treated as an omitted limit by `or`, so passing `--flusher-processes 0` starts one process per assigned shard instead of respecting or rejecting the supplied zero limit. The CLI accepts zero as an integer and the factory forwards it unchanged. Default only when max_processes is None, and explicitly validate that supplied process limits are positive so zero cannot silently enable potentially many workers."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "`max_processes or len(buffer.assigned_shards)` uses a truthiness test, so an explicit 0 is treated as 'unset' and silently expands to one process per shard. Use `max_processes if max_processes is not None else len(buffer.assigned_shards)` and reject values below 1."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#07",
+    "descricao": "A negative --flusher-processes value is not validated and makes SpanFlusher construction fail with KeyError.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       60,
+       66
+      ],
+      "texto": "`flusher_processes` is not validated to be >= 1. `self.max_processes = max_processes or len(buffer.assigned_shards)` lets a negative value through (it is truthy), so `self.num_processes = min(self.max_processes, len(...))` becomes negative and `range(self.num_processes)` is empty, leaving `process_to_shards_map` as `{}`. The following loop computes `process_index = i % self.num_processes`, which for any negative divisor is 0, so `self.process_to_shards_map[0].append(shard)` raises KeyError and the consumer fails to construct. Since `flusher_processes` is exposed as an int CLI option (`--flusher-processes`), a negative value is reachable from configuration. Guard with `max(1, self.num_processes)` / validate the input."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       60,
+       66
+      ],
+      "texto": "negative max_processes flows through `or` guard into min() -> empty map -> KeyError on i % num_processes; empty assigned_shards yields zero processes."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+    "descricao": "submit() queries cluster-wide Redis memory once per flusher buffer, repeating identical INFO calls per process on every submit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       299,
+       301
+      ],
+      "texto": "The new loop calls get_memory_info() once per flusher buffer even though SpansBuffer.get_memory_info delegates to iter_cluster_memory_usage(self.client), which fetches INFO for the entire Redis cluster regardless of assigned_shards. With P flusher processes and memory backpressure enabled, each submitted batch now performs P identical cluster-wide memory queries on the consumer thread instead of one, increasing Redis traffic and blocking ingestion. Fetch cluster memory information once from a single buffer."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       299,
+       301
+      ],
+      "texto": "submit() loop calls buffer.get_memory_info() per flusher but each call is cluster-wide from same client, repeating identical INFO N\u00d7 per submit."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#10",
+    "descricao": "_create_process_for_shard is added but never called.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       127,
+       132
+      ],
+      "texto": "WHAT: `_create_process_for_shard(self, shard)` is newly added but has no caller anywhere (grep for `_create_process_for_shard(` finds only its definition); the restart path actually used is `_create_process_for_shards(process_index, shards)`. WHY: This is dead code that indicates the intended per-shard restart wiring was left incomplete \u2014 any future caller relying on restarting only the process owning a given shard will silently do nothing, and it is confusing which restart path is authoritative. HOW: Remove `_create_process_for_shard`, or wire it into `_ensure_processes_alive` if per-shard restart was intended."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#12",
+    "descricao": "test_flusher_processes_limit counts assigned shards instead of checking that each shard is assigned exactly once.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       119,
+       121
+      ],
+      "texto": "The assertion counts shard entries rather than verifying shard assignment. A broken distribution such as {0: [0, 1], 1: [0, 1]} still passes all assertions in this test while shards 2 and 3 are never flushed. Assert that the flattened mapping contains exactly the expected assigned shards, with no duplicates (and verify each worker's shard buffer uses that mapping), rather than only asserting a total of four."
+     }
+    ]
+   }
+  ]
+ },
+ "advanced-sql-analytics-framework-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "f3317b329b4eb8fd96f99dd86525bc4a22d20248",
+  "base": "cbe1e7d63f098e306058c0fbcab2f5c30602fa7d",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "WHAT: enableSqlExpressions returns false on every path, and the result of the FlagSqlExpressions check is discarded. WHY: the feature flag has no effect, so SQL expressions stay disabled even when it is enabled, and the inverted `enabled` variable hides that. HOW: if the hard disable is intended, return false with a comment and drop the flag lookup. Otherwise return `h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "enableSqlExpressions negates the flag into `enabled` and then returns false on both paths, so the computed value is never used. SQL expressions are rejected even when FlagSqlExpressions is enabled. Return the flag's actual value."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "enableSqlExpressions returns false on every path, so ReadQuery rejects every SQL expression even when FlagSqlExpressions is enabled. Callers that could use SQL expressions with the flag on now always get an error. Return the flag's actual value."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "enableSqlExpressions reads as 'is the SQL expressions feature enabled', but the local `enabled` is the negation of the flag and both branches return false. The function is constant-false, so the name and variable misstate the behavior and the flag has no effect. Return the flag value directly, or rename the function and variable to say that SQL expressions are unconditionally disabled."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "enableSqlExpressions returns false on every path. The flag is negated into `enabled`, and the fallthrough also returns false. SQL expressions are therefore rejected even when FlagSqlExpressions is enabled. Return the flag's value directly."
+   },
+   {
+    "id": "S6",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "enableSqlExpressions returns false on every path: the `enabled` variable is inverted and both branches return false. The feature flag therefore has no effect, and every SQL expression query fails to parse with \"not implemented\". Return the flag's actual value."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#06",
+    "descricao": "The variable in TablesList is still named duckDB although it no longer holds a DuckDB instance.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/expr/sql/parser.go",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "After replacing `duck.NewInMemoryDB()` with local `NewInMemoryDB()` and removing the duck import, the local `duckDB` still carries the old implementation name though it is no longer a duck DB. Rename to `db`/`sqlDB` (as done in sql_command.go) so identifier matches code."
+     }
+    ]
+   }
+  ]
+ },
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "5fd11f9faa79c4aefd39975d1b0e963e5034f793",
+  "base": "30a92a4d66b417f7c19dee2b343099adc6e88aa6",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     1023,
+     1024
+    ],
+    "texto": "WHAT: `updateManyByCredentialId(this.credential.id, {})` passes empty data and expects `@updatedAt` to be bumped. WHY: Prisma typically skips the write when the update data is empty, so `SelectedCalendar.updatedAt` is not refreshed and the intended side effect is lost. HOW: Set the timestamp explicitly, e.g. `{ updatedAt: new Date() }`."
+   },
+   {
+    "id": "S2",
+    "file": "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts",
+    "lines": [
+     17,
+     26
+    ],
+    "texto": "WHAT: The handler only accepts credentials with `userId === ctx.user.id`, while the UI shows 'Delete cached data' for any credential with cache (team and delegation credentials too). WHY: Deleting the cache for those credentials always throws a plain Error, which tRPC returns as an internal server error and the user sees 'Error deleting cache'. HOW: Hide the action for credentials the user does not own, or extend the authorization to team admins and delegation credentials, and throw a TRPCError."
+   },
+   {
+    "id": "S3",
+    "file": "scripts/test-gcal-webhooks.sh",
+    "lines": [
+     68,
+     68
+    ],
+    "texto": "WHAT: `sed -i ''` is BSD/macOS syntax. WHY: On GNU sed (Linux), the empty string is read as the script and the command fails, so GOOGLE_WEBHOOK_URL is never updated while the script still prints success. HOW: Write to a temp file and move it into place, or detect the platform."
+   },
+   {
+    "id": "S4",
+    "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+    "lines": [
+     89,
+     92
+    ],
+    "texto": "The cache timestamp is formatted with a hard-coded \"en-US\" locale, so non-English users see US-style dates in an otherwise translated UI. Use the user's locale from useLocale (i18n.language) instead."
+   },
+   {
+    "id": "S5",
+    "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+    "lines": [
+     89,
+     92
+    ],
+    "texto": "The cache timestamp is formatted with a hardcoded \"en-US\" locale, so non-English users see US-style dates even though the surrounding text is localized. Use the user's locale from useLocale (i18n.language) in Intl.DateTimeFormat."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+    "descricao": "fetchAvailabilityAndSetCache calls SelectedCalendarRepository.updateManyByCredentialId with an empty data object, so Prisma does not refresh the @updatedAt timestamp and SelectedCalendar.updatedAt never reflects the cache refresh.",
+    "textoGolden": "The updateManyByCredentialId call uses an empty data object, which prevents Prisma's @updatedAt decorator from updating the updatedAt timestamp. This results in inaccurate cache status tracking, as the timestamp isn't updated when the cache is refreshed. To fix this, explicitly set the updatedAt field.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       1023,
+       1024
+      ],
+      "texto": "WHAT: updateManyByCredentialId is called with empty data {} to bump SelectedCalendar.updatedAt. WHY: Prisma updateMany rejects empty data (validation error) or no-ops without touching @updatedAt, so the refresh path throws or silently leaves updatedAt stale. HOW: pass an explicit touch field e.g. { updatedAt: new Date() }."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       1023,
+       1024
+      ],
+      "texto": "Comment claims \"Update SelectedCalendar.updatedAt\" but call passes empty object {} as data, so nothing is updated (Prisma updateMany with empty data is a no-op/error). Fix comment or pass { updatedAt: new Date() } to match the stated intent."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       1023,
+       1024
+      ],
+      "texto": "updateManyByCredentialId is called with empty data {}. Prisma updateMany throws when data is empty, so this line throws on every resync after the cache write. Pass an explicit touch e.g. { updatedAt: new Date() } instead of {}."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+    "descricao": "After deleting the calendar cache, CredentialActionsDropdown does not invalidate the connectedCalendars query, so where no parent refetch callback is passed the stale cache status and delete action remain visible.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+      "lines": [
+       42,
+       50
+      ],
+      "texto": "WHAT: `deleteCacheMutation`'s `onSuccess` only calls `onSuccess?.()` and never invalidates the `viewer.calendars.connectedCalendars` query, while the sibling `disconnectMutation` explicitly invalidates it in `onSettled`. WHY: the 'Cache Status' row in the dropdown is rendered from the cached `connectedCalendars` result; after deleting the cache the query is not refetched, so the deleted status/last-updated entry stays visible and stale in the UI. HOW: invalidate the query in the cache-deletion mutation as well, e.g. `const utils = trpc.useUtils(); onSuccess: async () => { ...; await utils.viewer.calendars.connectedCalendars.invalidate(); }`."
+     },
+     {
+      "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+      "lines": [
+       42,
+       50
+      ],
+      "texto": "WHAT: deleteCacheMutation onSuccess only calls onSuccess?.() and never invalidates viewer.calendars.connectedCalendars, unlike disconnectMutation onSettled. WHY: cacheUpdatedAt stays stale after deletion so UI keeps showing old Last updated and delete action until manual refetch. HOW: add onSettled invalidate of connectedCalendars like disconnect does."
+     },
+     {
+      "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+      "lines": [
+       43,
+       46
+      ],
+      "texto": "Successful cache deletion does not invalidate the connectedCalendars query that supplies cacheUpdatedAt. The wrapper forwards only an optional parent onChanged callback and disables window-focus refetch, so the deleted cache continues to appear present with its old timestamp and delete action. Invalidate utils.viewer.calendars.connectedCalendars on successful deletion."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#04",
+    "descricao": "The cache 'last updated' timestamp is formatted with a hard-coded en-US locale instead of the user's locale, so non-US users see US-style dates in an otherwise translated label.",
+    "textoGolden": "Date is formatted with hardcoded 'en-US' locale instead of using the user's locale from useLocale, which can lead to incorrect date representation for users in different locales.",
+    "comentarios": [
+     {
+      "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+      "lines": [
+       88,
+       94
+      ],
+      "texto": "The 'Last updated' timestamp is formatted with a hard-coded \"en-US\" locale (new Intl.DateTimeFormat(\"en-US\", ...)), so every user \u2014 regardless of their locale \u2014 sees a US-style date/time while the surrounding label is translated. Use the app's locale-aware date formatting helper (the user's current locale) instead of pinning en-US."
+     },
+     {
+      "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+      "lines": [
+       88,
+       94
+      ],
+      "texto": "Date format hard-coded to \"en-US\" via Intl.DateTimeFormat while surrounding strings use t()/useLocale. Users in other locales see US short date/time. Use the active locale from useLocale/i18n instead of hard-coding \"en-US\"."
+     },
+     {
+      "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+      "lines": [
+       89,
+       92
+      ],
+      "texto": "The cache timestamp is always formatted with \"en-US\", even though the surrounding label uses the user's selected translation locale. Users in other locales therefore see US month/day ordering and time conventions inside an otherwise localized message, potentially misreading the last-update date. Use the active application locale for Intl.DateTimeFormat instead of hard-coding en-US."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#05",
+    "descricao": "The calendar cache migration keeps a generated warning saying updatedAt has no default and cannot be added to a non-empty table, although the SQL adds it with DEFAULT NOW().",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/prisma/migrations/20250715160635_add_calendar_cache_updated_at/migration.sql",
+      "lines": [
+       4,
+       4
+      ],
+      "texto": "This warning says updatedAt is added without a default and cannot be added to a nonempty table, but the migration actually supplies DEFAULT NOW(), explicitly handling existing rows. Remove or correct the warning so operators reviewing the migration are not incorrectly told that existing data makes it unsafe to run."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#06",
+    "descricao": "The test-gcal-webhooks.sh cleanup function always exits 0, including when called from the failure paths, so the script reports success when the tunnel could not be set up.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "scripts/test-gcal-webhooks.sh",
+      "lines": [
+       10,
+       18
+      ],
+      "texto": "`cleanup` always runs `exit 0`, and it is also called on the failure paths (rate limit hit, failed to extract the URL). The script therefore reports success even though the tunnel failed and GOOGLE_WEBHOOK_URL was never updated. Have `cleanup` take an exit code, and pass 1 from the failure paths."
+     },
+     {
+      "file": "scripts/test-gcal-webhooks.sh",
+      "lines": [
+       11,
+       18
+      ],
+      "texto": "cleanup() always ends in `exit 0`, and both failure paths (rate-limit at lines 46-50 and 'Failed to extract Tunnelmole URL' at lines 56-59) call cleanup. So a script named test-gcal-webhooks that did not actually obtain the tunnel URL / update GOOGLE_WEBHOOK_URL still exits with status 0, letting any automation treat the run as successful even though the setup it verifies failed. On the failure branches the script should exit non-zero (e.g. `exit 1`) so failure is observable; only the SIGINT/SIGTERM interactive shutdown should exit 0."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+    "descricao": "The webhook test script updates .env with the macOS-only `sed -i ''` syntax, which fails on Linux GNU sed and leaves GOOGLE_WEBHOOK_URL unchanged.",
+    "textoGolden": "logic: macOS-specific sed syntax with empty string after -i flag will fail on Linux systems",
+    "comentarios": [
+     {
+      "file": "scripts/test-gcal-webhooks.sh",
+      "lines": [
+       67,
+       68
+      ],
+      "texto": "WHAT: `sed -i '' -E 's|^GOOGLE_WEBHOOK_URL=.*|...|' \"$ENV_FILE\"` uses the BSD/macOS `sed -i ''` form. WHY: under GNU sed (typical Linux dev/CI environment) the empty `''` is consumed as the script operand and the command errors, so the existing `GOOGLE_WEBHOOK_URL` line is never replaced and the tunnel URL is not written to the env file. HOW: use a portable invocation, e.g. `sed -i.bak -E \"s|^GOOGLE_WEBHOOK_URL=.*|GOOGLE_WEBHOOK_URL=$TUNNEL_URL|\" \"$ENV_FILE\"` (or branch on `uname`)."
+     },
+     {
+      "file": "scripts/test-gcal-webhooks.sh",
+      "lines": [
+       67,
+       68
+      ],
+      "texto": "The environment update uses BSD sed's `-i ''` syntax, which fails with GNU sed on Linux. When GOOGLE_WEBHOOK_URL already exists, the script leaves the previous URL unchanged but still prints that it was updated, preventing webhooks from reaching the new tunnel. Use a portable replacement strategy or select the in-place syntax based on the available sed implementation and check its exit status."
+     },
+     {
+      "file": "scripts/test-gcal-webhooks.sh",
+      "lines": [
+       67,
+       73
+      ],
+      "texto": "When GOOGLE_WEBHOOK_URL already exists, `sed -i ''` uses BSD/macOS syntax and fails under GNU sed on Linux. The script nevertheless prints that the URL was updated and keeps the tunnel running, leaving webhooks configured with the old URL. Use a portable replacement approach (or select the appropriate sed syntax) and only announce success after the edit succeeds."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#08",
+    "descricao": "deleteCacheHandler throws a plain Error when the credential is missing or not owned by the user, so tRPC returns a 500 instead of a structured FORBIDDEN/NOT_FOUND error.",
+    "textoGolden": "Throwing a generic Error for authentication failures results in a 500 response in tRPC. Instead, it should return a structured TRPCError with an appropriate code, such as FORBIDDEN, to accurately reflect the error type.",
+    "comentarios": []
+   }
+  ]
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "ce2dcc537b4b1f98a335e88cfe8e0b804483252a",
+  "base": "85737f52b59aa2e3403c9b8e48acf71ccc5bfae3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+    "lines": [
+     119,
+     125
+    ],
+    "texto": "WHAT: The plaintext recovery codes (generatedCodes) are serialized to JSON and sent to the user storage provider via updateCredential. The local path stores only the hashed credentialModel. WHY: Any federated or external store that accepts the credential now holds usable one-time recovery codes in clear text, which weakens the hashing the local path provides. HOW: Pass the hashed credential data (the credentialModel's credential data) to user storage, or confirm the user storage contract explicitly requires plaintext codes and document it."
+   },
+   {
+    "id": "S2",
+    "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+    "lines": [
+     80,
+     80
+    ],
+    "texto": "WHAT: The credential is now looked up with RecoveryAuthnCodesUtils.getCredential, which can return a federated credential. The code after it still handles the credential as a local one (it updates or removes the used code through local stored-credential APIs). WHY: When recovery codes live in user storage, consuming a code may fail or touch the wrong store, so used codes are not invalidated or login throws. HOW: Make the consume/update step in this authenticator work with the credential's actual source, using the user storage update path for federated credentials."
+   },
+   {
+    "id": "S3",
+    "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+    "lines": [
+     117,
+     125
+    ],
+    "texto": "The plaintext recovery codes are serialized to JSON and passed to the user storage provider's updateCredential. The local path stores only hashed codes, so the user-storage path exposes raw one-time secrets to external systems, which may persist or log them. Send hashed or derived credential data to federated storage, or restrict this to providers explicitly trusted to protect secrets."
+   },
+   {
+    "id": "S4",
+    "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+    "lines": [
+     80,
+     88
+    ],
+    "texto": "getCredential() can now return a credential that lives in user storage, but the code that follows still removes an exhausted credential with removeStoredCredentialById(), which only affects the local DB. For a federated credential, once all codes are used the removal is a no-op and the stale credential stays in user storage. Route the removal through a user-storage-aware path, matching how creation now works."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+    "descricao": "The test user-storage provider validates recovery codes without consuming the used code, so the same code can be replayed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       326,
+       340
+      ],
+      "texto": "WHAT: The new recovery-codes branch of isValid only checks whether the submitted code appears in the stored list and never removes the consumed entry. WHY: Unlike the local RecoveryAuthnCodesCredentialProvider.isValid (which calls removeRecoveryAuthnCode()+updateStoredCredential), the federated path never consumes a code and allCodesUsed() can never become true, so a used recovery code remains valid and can be replayed indefinitely. HOW: On a successful match, remove that entry from the stored codes (rewrite recoveryCodes.credentialData), mirroring the local provider's consume-on-success semantics."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       340,
+       340
+      ],
+      "texto": "The new recovery-code validator accepts any code in the original list without consuming the accepted code. Repeating a successful login with the same code succeeds indefinitely, while getCredentials reconstructs all original codes so the login form never advances or detects exhaustion. Validate the next unused code and persist its consumption before returning success."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       340,
+       340
+      ],
+      "texto": "The new federated recovery-code validator accepts any code in the original list but never removes a successfully used code from myUser.recoveryCodes. Consequently the same recovery code remains valid on subsequent logins, and getCredentials reconstructs the full original set every time. Consume and persist the successfully validated code (and test a second login/replay), so federated recovery codes retain their one-time semantics."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#02",
+    "descricao": "getCredentials rebuilds the recovery-codes credential without copying the stored credential id, so the returned federated credential has a null id and cannot be targeted by id-based removal.",
+    "textoGolden": "After creating the RecoveryAuthnCodesCredentialModel, consider setting its id from the stored credential (e.g., myUser.recoveryCodes.getId()); otherwise getId() will be null and downstream removal by id (e.g., removeStoredCredentialById in the authenticator flow) may not work.",
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       237,
+       242
+      ],
+      "texto": "WHAT: getCredentials builds the RecoveryAuthnCodesCredentialModel via createFromValues but never sets its id from the stored myUser.recoveryCodes.getId() (createFromValues does not populate id). WHY: The returned federated model has a null id, so callers that identify/delete the credential by id \u2014 e.g. RecoveryAuthnCodesFormAuthenticator.removeStoredCredentialById(recoveryCodeCredentialModel.getId()) when all codes are used, or federated-credential deletion via getFederatedCredentialsStream \u2014 cannot target the actual credential. HOW: call model.setId(myUser.recoveryCodes.getId()) after createFromValues."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       237,
+       242
+      ],
+      "texto": "getCredentials rebuilds the recovery-code model without copying the ID assigned during updateCredential. createFromValues does not assign an ID, so the exposed federated credential has a null ID and CredentialDeleteHelper cannot resolve it by the stored credential ID for account deletion. Copy myUser.recoveryCodes.getId() to the reconstructed model before returning it."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       237,
+       242
+      ],
+      "texto": "The CredentialModel returned from getCredentials for recovery codes is built with createFromValues and never gets the stored credential's id (myUser.recoveryCodes.getId()). RecoveryAuthnCodesFormAuthenticator later calls removeStoredCredentialById(model.getId()) once all codes are used, and this would pass a null id. Fix: call model.setId(myUser.recoveryCodes.getId()) after creating the model."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
+    "descricao": "Creating recovery codes in external storage does not remove a previously stored local recovery-codes credential, and validation falls back to local storage, so the replaced codes still authenticate.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+      "lines": [
+       125,
+       129
+      ],
+      "texto": "Successful recovery-code creation in external storage leaves any existing locally stored recovery-code credential active. For a federated user who previously stored codes locally and now has an external provider supporting this type, regeneration no longer calls RecoveryAuthnCodesCredentialProvider.createCredential's replacement cleanup; UserCredentialManager.isValid falls back to the local validator when external validation rejects an old code, so the supposedly replaced codes still authenticate. Remove the previous local recovery-code credential after successful external creation."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+    "descricao": "Exhausted recovery codes are removed with removeStoredCredentialById, which only covers local storage, so a federated recovery-codes credential is never removed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+      "lines": [
+       80,
+       88
+      ],
+      "texto": "RecoveryAuthnCodesUtils.getCredential() can now return a credential from user storage (federated), but this code still calls removeStoredCredentialById() on it once all codes are used. That removal only targets local stored credentials, so a federated credential may not be removed. The user could then be left with an exhausted credential in user storage. Remove federated credentials through the federated path, or confirm the removal reaches user storage."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+      "lines": [
+       80,
+       88
+      ],
+      "texto": "RecoveryAuthnCodesUtils.getCredential can now return a credential from user storage, but exhausted codes are cleaned up with removeStoredCredentialById, which only targets the local DB. For a federated credential (possibly with a null id), the exhausted credential is never removed or the call misbehaves, so the user keeps a dead credential. Remove federated credentials through a path that covers user storage, for example by checking where the credential came from."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+      "lines": [
+       80,
+       89
+      ],
+      "texto": "RecoveryAuthnCodesUtils.getCredential can now return a federated credential. The authenticator still removes an exhausted one with removeStoredCredentialById(getId()), which only deletes from the local store, and the federated model's id may be null. Remove the credential through the path that matches where it was found, for example by checking whether it came from the federated stream and using the federated removal."
+     }
+    ]
+   }
+  ]
+ },
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "267d8be1f556ed59639ced396c885bb44586da19",
+  "base": "7a5fbae060bd0d3e29f3a4b5c6f2bfd8b2914dc7",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/serializers/user_serializer.rb",
+    "lines": [
+     43,
+     43
+    ],
+    "texto": "WHAT: `website_name` is not listed in `untrusted_attributes`, although `website` is. WHY: for untrusted users, the website value is stripped from the response, but `website_name` still exposes the host and path, and the template now renders `website_name` instead of `website`. HOW: add `:website_name` to the `untrusted_attributes` list."
+   },
+   {
+    "id": "S2",
+    "file": "app/serializers/user_serializer.rb",
+    "lines": [
+     144,
+     149
+    ],
+    "texto": "WHAT: the same-domain branches match too loosely. The sibling check only compares everything after the first label, and the parent check uses `ends_with?` on the host. WHY: unrelated sites such as `a.co.uk` and `b.co.uk` are treated as the same instance, so the full path is shown when it should not be."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#01",
+    "descricao": "website_name compares hostnames case-sensitively, so an uppercase website host matching the instance domain shows only the host instead of the full path.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       137,
+       151
+      ],
+      "texto": "The new `website_name` compares two domain names case-sensitively. `URI(website.to_s).host` preserves the letter case written by the user, whereas `Discourse.current_hostname` is the canonical lower-cased host, and no side is down-cased before the comparison at lines 141, 144-146 and 149 (including the `ends_with?` suffix check). Because DNS host names are case-insensitive identity values, `http://EXAMPLE.com/user` and `http://example.com/user` denote the same host but take different branches, so the same-site check is decided by letter case: the wrong arm is chosen and the full-path form is dropped. Normalise both sides before comparing, e.g. `website_host = URI(website.to_s).host&.downcase` (or use `URI(...).hostname`, which down-cases) and compare against `Discourse.current_hostname.to_s.downcase`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       138,
+       141
+      ],
+      "texto": "Hostname comparisons are case-sensitive even though DNS hostnames are case-insensitive. With an instance hostname of example.com and a valid website of http://EXAMPLE.COM/user, neither the exact-host nor suffix comparison matches, so the profile displays only EXAMPLE.COM instead of the requested path. Normalize both hostnames to lowercase for comparison while preserving the desired display spelling."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04",
+    "descricao": "website_name strips only the first label to decide same-domain, so unrelated hosts under multi-label public suffixes (co.uk, github.io) are treated as the instance domain and shown with full path.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       144,
+       146
+      ],
+      "texto": "WHAT: the `elsif` branch treats the last two dot-segments as the registrable domain, so multi-part public suffixes are mis-compared. WHY: for e.g. website_host='example.co.uk' and discourse_host='forum.co.uk' both have 3 segments, the branch compares `'co.uk' == 'co.uk'`, concludes the domains match, and returns `website_host + path`, even though example.co.uk and forum.co.uk are unrelated sites \u2014 the display then shows a path that does not belong to the instance domain, defeating the feature's purpose. HOW: compare against a public-suffix-aware registrable domain (e.g. use the PublicSuffix list) or require at least the full suffix before treating hosts as the same domain, instead of blindly taking `split('.')[1..-1]`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       144,
+       146
+      ],
+      "texto": "Comparing all labels except the first incorrectly treats unrelated domains under multi-label public suffixes as the same domain. For example, with instance host `forum.co.uk` and website `https://unrelated.co.uk/user`, this returns `unrelated.co.uk/user` rather than the unrelated-site host-only label. Both hosts have three labels and their suffixes are `co.uk`, so this branch mistakes the public suffix for a shared site domain. Use registrable-domain-aware comparison (or a narrower explicit host relationship) before including the path."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       144,
+       146
+      ],
+      "texto": "The same-label-count branch treats two hosts as the same domain when everything after the first label matches. Unrelated hosts on shared suffixes, such as `a.github.io` and `b.github.io`, are treated as the same domain, so the full path is shown for an unrelated website. Compare against the registrable domain, for example with the PublicSuffix gem, or drop this heuristic branch."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#05",
+    "descricao": "Claims website_name should also show the full path when the website is a subdomain of the instance host.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       147,
+       150
+      ],
+      "texto": "WHAT: Else branch only tests `discourse_host.ends_with?('.'+website_host)` (discourse child of website) and misses the reverse (website subdomain of instance). WHY: With instance `example.com` and website `http://sub.example.com/page`, it returns `sub.example.com` instead of `sub.example.com/page`, contradicting the PR intent to show the full path for same-base-domain URLs. HOW: Also return host+path when `website_host` ends with `.`+discourse_host or shares the same registrable domain."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+    "descricao": "website_name is not marked untrusted, so the host/path of a TL0 user's website, which is hidden from anonymous viewers, is still exposed through the new field.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "WHAT: website_name re-exposes the user's website for profiles where it is intentionally hidden \u2014 the attribute is added to the public `attributes` list (line 43) but not to `untrusted_attributes`, and `include_website_name` only checks `website.present?` instead of `scope.restrict_user_fields?(object)`. WHY: `website` is an untrusted attribute gated by `restrict_user_fields?` (lib/guardian/user_guardian.rb:58-60), which is true for a TL0 user viewed by an anonymous visitor; `website_name` derives `website_host + path` from the same `object.user_profile.website`, so the URL that `include_website?` suppresses is still disclosed through the new key (the existing spec at spec/serializers/user_serializer_spec.rb:11-14 only asserts the listed untrusted keys are absent, so this leak is not covered). HOW: add `:website_name` to the `untrusted_attributes` list (or have `include_website_name` return false when `scope.restrict_user_fields?(object)`), mirroring the `website` handling."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       137,
+       155
+      ],
+      "texto": "`website_name` is derived from the same `object.user_profile.website` value that `:website` protects via `untrusted_attributes` (lines 105-111), but it is only gated by `include_website_name` -> `website.present?`. Since the untrusted filter removes `website` for some viewers while `website_name` is still emitted, and in the same-domain / subdomain branches it returns host *plus* `URI(website).path` (lines 143/146/149), the user's full website URL still leaves in the response for viewers the filter was supposed to strip it from. Either add `:website_name` to `untrusted_attributes` or gate `include_website_name` with the same trust condition as `website`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "The new `website_name` field is gated only on `website.present?`, ignoring the visibility constraint this file declares for its source attribute: lines 105-111 put `:website` in `untrusted_attributes`, so `website` is omitted for viewers not allowed to see profile fields, but `website_name` is still serialized because `include_website_name` never consults that condition. Those viewers now receive the user's URL host, and when the host equals (lines 141-143) or is a parent of (144-149) the instance host they receive host + path, i.e. the complete URL that `website` was supposed to hide. Fix by adding `:website_name` to the `untrusted_attributes` list (105-111) \u2014 or make the guard reuse `website`'s own inclusion condition instead of a bare presence check."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+    "descricao": "include_website_name lacks the '?' suffix that ActiveModelSerializers requires, so the conditional-inclusion guard is never called.",
+    "textoGolden": "The include_website_name method is missing the required ? suffix. Rails serializers expect include_ methods to end with ? for conditional attribute inclusion, a convention followed by other methods in this serializer. Without it, the website_name attribute may not be conditionally included as intended. Additionally, the '.' << website_host string concatenation should be replaced with '.' + website_host or '.#{website_host}' to avoid mutating string literals, which can lead to issues.",
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       153
+      ],
+      "texto": "WHAT: `include_website_name` is missing the trailing `?` required by ActiveModelSerializers. WHY: every other conditional-inclusion guard in this file uses the `?` form (`define_method \"include_#{attr}?\"` at lines 9/18/27, `include_email?` at line 117), and AMS 0.8.3 resolves the guard as `include_<attr>?`; because this method lacks the `?` it is never invoked, so the intended `website.present?` condition is silently ignored and `website_name` is always serialized. HOW: rename to `def include_website_name?`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "The guard method is named `include_website_name`, but ActiveModelSerializers (and this file's own convention, e.g. `include_email?` at line 117) resolves per-attribute guards via `include_<attribute>?`. Because the name lacks the trailing `?`, the framework never invokes it: the `website.present?` guard is dead code and `website_name` is serialized unconditionally, emitting `website_name: null` for users without a website. Rename to `include_website_name?`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "The conditional-inclusion guard is named `include_website_name`, but ActiveModelSerializers resolves these guards as `include_<attribute>?` (the sibling in this very file is `include_email?` at line 117). As written the method is never called, so the guard is dead and the `:website_name` attribute declared at line 43 is serialized unconditionally. That defeats the intent of the guard (`website.present?`): the payload now always carries `website_name`, including for the scopes where `website` itself is withheld by the `untrusted_attributes` list (line 109), leaking the user's site host/path to viewers who were never meant to receive the website. Rename the method to `include_website_name?` so the serializer base class honors it."
+     }
+    ]
+   }
+  ]
+ },
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "5b229316ee4c661836ed1161139692a3e8527444",
+  "base": "98fa098e6fade3097a11fe7f99a98a4e6ffb4728",
+  "sugestoes": [],
+  "issues": [
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#01",
+    "descricao": "The flex-item styles target the inner .extra-info-wrapper instead of the component's root div, so in the flexbox header a long topic title keeps its full width and pushes the navigation panel out instead of being truncated.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/base/topic.scss",
+      "lines": [
+       29,
+       30
+      ],
+      "texto": "The flex-item styling targets the inner .extra-info-wrapper rather than the outer div generated by header-extra-info's Ember.Component. With .contents now using flexbox, that outer div retains its automatic minimum width, so a long nowrap topic title cannot shrink to the available space and pushes the navigation panel outside the header instead of being ellipsized by the existing desktop truncation rules. Move the extra-info-wrapper class onto the component's root element and set min-width: 0 on that flex item so ordering and truncation apply to the actual header child."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#02",
+    "descricao": "The align-items mixin emits no -moz-box-align, so on old Firefox versions using the display:-moz-box fallback the advertised vertical centering is not applied.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+      "lines": [
+       117,
+       122
+      ],
+      "texto": "The alignment mixin does not match the Mozilla fallback emitted by flexbox(): when display: -moz-box is selected, neither align-items nor the WebKit/MS declarations control its cross-axis alignment. Consequently @include align-items(center) in the header and small-action leaves those children at the legacy default instead of vertically centering them. Emit -moz-box-align: $alignment alongside -webkit-box-align so the advertised fallback produces the same alignment."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#03",
+    "descricao": "The align-items mixin emits -ms-align-items, which never existed in IE/Edge; the legacy property is -ms-flex-align, so the declaration is dead.",
+    "textoGolden": "-ms-align-items never existed in any version of IE/Edge; the correct legacy property is -ms-flex-align.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+      "lines": [
+       117,
+       123
+      ],
+      "texto": "WHAT: align-items() mixin emits -ms-align-items: $alignment which is not a valid IE10/11 property (only -ms-flex-align exists). WHY: dead declaration shows wrong contract and leaves IE alignment dependent solely on -ms-flex-align, which also breaks for flex-start/flex-end values. HOW: remove the -ms-align-items line and map flex-start/flex-end to start/end for -ms-flex-align/-webkit-box-align."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#05",
+    "descricao": "Removing the float-based right alignment of .d-header .panel leaves the server-rendered (no-JS) header's login panel, which sits inside .row and is not a flex item, no longer right-aligned next to the title.",
+    "textoGolden": "Mixing float: left with flexbox causes layout issues. Further this PR removes the float-based right alignment for .d-header .panel, which may cause the login panel in the non-Ember/noscript header (where .panel is nested inside .row and not a flex item) to stack under the title instead of remaining right-aligned.",
+    "comentarios": []
+   }
+  ]
+ },
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "62bf98939eda58f0d0a1a41a58aa6d4ecdc24dba",
+  "base": "8671f860469d6d95e54df3e13f77ebc401249489",
+  "sugestoes": [],
+  "issues": [
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#03",
+    "descricao": "testFeatureNotEnabled only covers the metadata subcommand, so the feature guard in the check subcommand is untested.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "testFeatureNotEnabled only launches the `metadata` subcommand and never the `check` subcommand. Removing the feature guard from UpdateCompatibilityCheck.run() would therefore not fail any test. It also doesn't assert the exit code (FEATURE_DISABLED=4). Add a case for `check` and assert the exit code on both."
+     },
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "WHAT: testFeatureNotEnabled only exercises the metadata subcommand disabled path and never the check subcommand. WHY: the feature gate in UpdateCompatibilityCheck.run can be removed or broken without failing any test since no assertion covers its disabled message/exit code. HOW: also launch/assert the check command without --features (e.g. parameterize over metadata and check subcommands or add a second Launch)."
+     },
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "testFeatureNotEnabled only exercises the metadata subcommand, leaving the identical ROLLING_UPDATES gate in UpdateCompatibilityCheck unverified. If the Check gate were removed, the suite still passes. Parameterize/add a second @Launch for {UpdateCompatibility.NAME, UpdateCompatibilityCheck.NAME} (with required --file or not) asserting the disabled message and FEATURE_DISABLED exit code."
+     }
+    ]
+   },
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#04",
+    "descricao": "The disabled-feature test checks only the error message, not that the command exits with FEATURE_DISABLED (4).",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "The new disabled-feature test only verifies the error text, not the failure exit status. If the metadata command still prints this diagnostic but exits with 0 (or another incorrect code) instead of FEATURE_DISABLED (4), this test would still pass. Assert that cliResult.exitCode() equals CompatibilityResult.FEATURE_DISABLED so the test actually protects the new disabled-feature failure contract."
+     }
+    ]
+   }
+  ]
+ }
+}

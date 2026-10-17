@@ -1,0 +1,19 @@
+{
+ "caseId": "github-oauth-security-enhancement-sentry",
+ "items": [
+  {
+   "issueId": "github-oauth-security-enhancement-sentry#sncc-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "src/sentry/pipeline/base.py:132-133 computes pipeline.signature solely from the pipeline view names, so the compared value is a public deterministic hash, not the claimed secret. src/sentry/integrations/github/integration.py:401-408 redirects missing-state requests into authorization without accepting a callback; constant-time comparison would not address the actual state-design weakness.",
+   "severity": "high"
+  },
+  {
+   "issueId": "github-oauth-security-enhancement-sentry#sncc-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The state supplied at tests/sentry/integrations/github/test_integration.py:445 matches the hash computed at src/sentry/pipeline/base.py:132-133, and the mocks at test_integration.py:116-123 provide successful OAuth responses. The test sets sender.login to 'attacker' at line 417 against authenticated 'octocat', reaching the rejection at src/sentry/integrations/github/integration.py:501-505; sharing an error message does not establish that this test misses its intended behavior.",
+   "severity": "medium"
+  }
+ ]
+}

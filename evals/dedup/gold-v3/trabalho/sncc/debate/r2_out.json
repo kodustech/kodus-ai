@@ -1,0 +1,30 @@
+{
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02": {
+  "class": "TP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede. The commit thread starts in SimpleQueueProcessingStrategy.__init__ (queue_consumer.py:270-271), before the test builds and submits offsets 100-104, so the 1s tick (queue_consumer.py:276 `self.shutdown_event.wait(1.0)`) is not anchored to the submissions and can land mid-batch on a loaded CI runner. Once any partial commit exists, the exit condition at test_results_consumer.py:1864 `if stats[\"total_items\"] == 0 and len(committed_offsets) > 0` lets the loop leave before the final commit, and :1870 asserts == 105. Rare, but a real false-failure path in the new test, not just tidying."
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor#sncc-01": {
+  "class": "TP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede. Hard-coding 10 MB is intended, but the side effect is new: the PR also replaced the client pre-check with the constant (utilities.js:182 `var maxSizeKB = 10 * 1024; // 10MB`), so on a deployment whose web-server limit is below 10 MB, a file between that limit and 10 MB now passes the client and gets a 413, and utilities.js:246 tells the user the limit is 10 MB. Before the PR the client check rejected it with the configured value. The misleading message for non-default configs is newly reachable through changed lines: a real, edge-case defect."
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "medium",
+  "concede": false,
+  "text": "Keep nit. V2 does reuse the algorithm, not just the shape: GroupPermissionsV2.java:121-122 `resourceStore.findByType(server, AdminPermissionsSchema.GROUPS_RESOURCE_TYPE, groupResource -> { if (hasPermission(...` is V1's per-resource loop over the same bounded set (resources that exist only for groups named in a permission), behind the same early return for global viewers (:107). Users who opt into V2 get the same cost as V1 today, so the PR adds no performance regression. Batching the evaluation is an optimisation suggestion. Per-evaluation decision caches were already used in V1 too."
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "Keep FP. Astra's chain is possible, but it needs a single segment with more than 1000 nested levels arriving strictly bottom-up across batches, and any such segment already holds more than 1000 spans. The same PR deliberately truncates every segment to 1000 spans (add-buffer.lua:62-64 `if span_count > 1000 then redis.call(\"zpopmin\", set_key, span_count - 1000)`). So lowering the walk bound to 1000 (:30 `for i = 0, 1000 do`) only affects traces the PR has already decided not to assemble in full. The old removed comment shows the depth cap was always an accepted limitation. Moving it from 10k to 1k together with the 1000-span cap is a consistent, intended tradeoff, not an accidental regression."
+ }
+}

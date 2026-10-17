@@ -1,0 +1,12 @@
+{
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "items": [
+  {
+   "issueId": "implement-access-token-context-encoding-framework-keycloak#sncc-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The unconditional lookup exists at services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java:54, but no reachable null-client token-creation path was found. Callers establish the context client through oidc/utils/AuthorizeClientUtil.java:83, oidc/endpoints/AuthorizationEndpoint.java:299, oidc/grants/PreAuthorizedCodeGrantType.java:85, and services/resources/admin/ClientsResource.java:251 (all under services/src/main/java/org/keycloak/protocol or org/keycloak respectively). The proposed null guard therefore addresses a hypothetical state rather than a demonstrated regression.",
+   "severity": "high"
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-01",
+   "class": "TP",
+   "subclass": "nit",
+   "severity": "medium",
+   "reply": "Changed to TP/nit: pruning does let the next scan skip a missing offset, contradicting the documented numerical-contiguity guarantee. However, submit registers offsets synchronously before queuing work, and outstanding offsets still block commits; ordered partition delivery cannot produce the test\u2019s late-arriving 101. The demonstrated problem is therefore a documentation/test-contract mismatch rather than unsafe production commits. Severity remains medium for the edge-case commit defect as stated."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "I retain TP: the one-second timer starts before message construction and submission, and mocking the processor provides no synchronization with that timer. A partial commit can occur, processing can then finish, and the wait condition at line 1864 can exit before the next commit updates the offset to 105. Fast execution makes this unlikely, but scheduling delays can expose an actual false test failure, so this is more than test tidying."
+  }
+ ]
+}

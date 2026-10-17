@@ -1,0 +1,12 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "items": [
+  {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#sncc-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "pkg/expr/reader.go:194-199 does always return false, causing rejection at reader.go:129-131, but this PR intentionally disables SQL expressions. The same change replaces the SQL backend with unimplemented methods at pkg/expr/sql/db.go:16-21; returning the flag value would therefore expose an unavailable backend rather than restore working SQL expressions.",
+   "severity": "high"
+  }
+ ]
+}

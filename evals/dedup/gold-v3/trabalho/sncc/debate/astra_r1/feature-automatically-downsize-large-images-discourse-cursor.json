@@ -1,0 +1,12 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "The shipped nginx configuration matches 10 MB, but the changed code introduces a mismatch for deployments with lower limits. For example, with both max_image_size_kb and nginx set to 2 MB, the previous client check rejected a 3 MB image with the correct limit; the new check allows it through, and nginx\u2019s 413 now produces an incorrect 10 MB message. This newly reachable misleading failure is not merely the pre-existing inability to discover nginx\u2019s limit."
+  }
+ ]
+}

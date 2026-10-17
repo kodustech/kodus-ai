@@ -1,0 +1,12 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#sncc-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "CredentialHelper.java:119-125 does pass raw recovery codes, but updateCredential receives credential input, consistent with plaintext passwords in server-spi/src/main/java/org/keycloak/models/UserCredentialModel.java:83-89. model/storage/src/main/java/org/keycloak/credential/UserCredentialManager.java:86-92 routes this only to the user's configured, enabled provider supporting that credential type. The provider controls hashing and persistence; receiving plaintext input does not establish insecure storage or unauthorized disclosure.",
+   "severity": "high"
+  }
+ ]
+}

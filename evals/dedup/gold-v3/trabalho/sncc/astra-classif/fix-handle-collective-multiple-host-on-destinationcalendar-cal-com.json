@@ -1,0 +1,26 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "packages/features/bookings/lib/handleCancelBooking.ts:423 introduces a loop over all calendar references, while lines 449\u2013457 repeat the entire recurring-booking deletion batch independently of the current reference. Multiple valid references therefore repeat external deletion requests, causing unnecessary API traffic and potentially already-deleted errors caught at lines 464\u2013466.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-02",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The organization selection was removed at packages/features/bookings/lib/handleNewBooking.ts:735\u2013739, but the claimed downstream dependency on user.organization does not exist in this booking path. Organization handling uses organizationId, retained by packages/prisma/selects/user.ts:48; packages/lib/server/getBookerUrl.ts:4\u20136 uses that ID to fetch branding separately.",
+   "severity": "high"
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-03",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "packages/features/bookings/lib/handleNewBooking.ts:758\u2013759 wraps the raw Prisma message in HttpError, bypassing the Prisma-instance redaction in packages/lib/redactError.ts:7\u201323. The resulting message survives getServerErrorFromUnknown.ts:54\u201362 and is returned to the client by packages/lib/server/defaultResponder.ts:19\u201321, introducing disclosure of database error details.",
+   "severity": "high"
+  }
+ ]
+}

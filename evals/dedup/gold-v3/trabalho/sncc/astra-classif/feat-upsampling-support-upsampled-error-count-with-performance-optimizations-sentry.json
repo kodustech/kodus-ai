@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "items": [
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#sncc-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The errors dataset shares the Discover function configuration: src/sentry/snuba/errors.py:67 constructs ErrorsQueryBuilder with Dataset.Events, and that builder inherits DiscoverQueryBuilder at src/sentry/search/events/builder/errors.py:119. DiscoverQueryBuilder.load_config explicitly maps Dataset.Events to DiscoverDatasetConfig at src/sentry/search/events/builder/discover.py:65-71, which registers upsampled_count at src/sentry/search/events/datasets/discover.py:1041-1050. The comment\u2019s conditional concern therefore requires no additional registration.",
+   "severity": "high"
+  }
+ ]
+}
