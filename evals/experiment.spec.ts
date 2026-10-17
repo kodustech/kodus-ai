@@ -244,3 +244,13 @@ describe('evals/shared/quality-client.js', () => {
         expect(await client.recordedExperiments('dedup', 'feat/x')).toBeNull();
     });
 });
+
+describe('evals/experiment.js run names', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { runName } = require('./experiment');
+
+    it('names a run after its branch and candidate commit, so two runs never share rows', () => {
+        expect(runName('feat/dedup-v2', '896fa156c1234')).toBe('feat-dedup-v2-896fa156c');
+        expect(runName('feat/dedup-v2', '27c191cd7aaaa')).not.toBe(runName('feat/dedup-v2', '896fa156c1234'));
+    });
+});

@@ -349,6 +349,12 @@ function measuredAlready(recorded, { phaseIds, model, runs, evalsTree }, blobsOf
     }) || null;
 }
 
+// One run, one name: the branch (or --name) and the candidate commit. A later
+// run on the same branch writes rows of its own instead of overwriting some of
+// this run's and leaving the rest (a regression-only check after a full run
+// would otherwise mix two runs in one experiment).
+const runName = (branchOrName, head) => `${slug(branchOrName)}-${String(head).slice(0, 9)}`;
+
 async function main() {
     const args = parseArgs(process.argv.slice(2));
     if (args.affected) {
@@ -412,7 +418,7 @@ async function main() {
         console.error(`not comparable: the evals differ between the two sides; land the eval change on ${baseRef} first:\n${evalDiff}`);
         return 2;
     }
-    const name = slug(args.name || branch);
+    const name = runName(args.name || branch, head);
     if (args['if-new']) {
         const recorded = await recordedExperiments(step, branch);
         const identity = { phaseIds, model, runs, evalsTree: git(['rev-parse', `${head}:evals`]) };
@@ -625,4 +631,4 @@ if (require.main === module) {
         });
 }
 
-module.exports = { main, measuredAlready, compare, comparisonOf, deriveRuns, perCase, decide, phaseVerdict, affectedSteps, PHASES, STEP_EVALS };
+module.exports = { main, runName, measuredAlready, compare, comparisonOf, deriveRuns, perCase, decide, phaseVerdict, affectedSteps, PHASES, STEP_EVALS };
