@@ -7,7 +7,8 @@
 //
 //   node evals/weekly.js --model=<id> --set=controlled|full [--only=<eval id,…>] [--tests] --out=<dir>
 //   node evals/weekly.js --plan                 the workflow's matrix (JSON)
-//   node evals/weekly.js --report=<dir>         the message, from every job's summary.json under <dir>
+//   node evals/weekly.js --report=<dir> [--expected=<plan JSON>]
+//                                               the message, from every job's summary.json under <dir>
 //
 // Every tier-0 model runs the controlled set; DeepSeek also runs the full one.
 // Writes, under <dir>: <eval id>/{first,confirm,final}.json, rows.json (the
@@ -58,7 +59,9 @@ function plan(models = tier0()) {
 const SIGN = { pass: '🟢', oscillation: '🟡', ungated: '⚪', regression: '🔴', 'still-red': '🔴', infra: '⚠️' };
 
 // The week's message: what fell below a floor, what did not measure, per model.
-function report(dir) {
+// `expected` is the plan the workflow ran: a job that ended before its upload
+// (install failure, timeout) leaves its evals not measured, not a silent gap.
+function report(dir, expected = []) {
     const summaries = [];
     const walk = (d) => {
         for (const name of fs.existsSync(d) ? fs.readdirSync(d) : []) {
@@ -69,9 +72,17 @@ function report(dir) {
     };
     walk(dir);
     const cells = summaries.filter(Boolean).flatMap((s) => s.results.map((r) => ({ ...r, model: s.model, set: s.set })));
+    const seen = new Set(cells.map((c) => `${c.model}|${c.set}|${c.id}`));
+    for (const job of expected) {
+        for (const id of job.only.split(',')) {
+            if (seen.has(`${job.model}|${job.set}|${id}`)) continue;
+            const stage = WEEKLY_EVALS.find((e) => e.id === id)?.stage || id;
+            cells.push({ id, stage, verdict: 'infra', value: null, floor: null, model: job.model, set: job.set, missing: true });
+        }
+    }
     const red = cells.filter((c) => c.verdict === 'regression' || c.verdict === 'still-red');
     const infra = cells.filter((c) => c.verdict === 'infra');
-    const line = (c) => `${SIGN[c.verdict] || '·'} \`${c.model}\` ${c.stage}${c.set === 'full' ? ' (full set)' : ''}${Number.isFinite(c.value) ? ` ${Math.round(c.value * 100)}%` : ''}${Number.isFinite(c.floor) ? ` · floor ${Math.round(c.floor * 100)}%` : ''}`;
+    const line = (c) => `${SIGN[c.verdict] || '·'} \`${c.model}\` ${c.stage}${c.set === 'full' ? ' (full set)' : ''}${Number.isFinite(c.value) ? ` ${Math.round(c.value * 100)}%` : ''}${Number.isFinite(c.floor) ? ` · floor ${Math.round(c.floor * 100)}%` : ''}${c.missing ? ' · its job ended before reporting' : ''}`;
     const models = [...new Set(cells.map((c) => c.model))];
     const status = red.length ? 'failure' : infra.length || !cells.length ? 'cancelled' : 'success';
     const title = !cells.length
@@ -113,8 +124,10 @@ function finderVerdict(entry, set, files, firstCode, measure) {
     const first = readJson(files.first);
     if (firstCode === 0) return { verdict: 'pass', final: files.first };
     if (firstCode === 2) {
-        // No floor for this model on this set: measured, not compared.
-        const ungated = first && first.gate?.status === 'skipped' && /^no target/.test(first.gate.reason || '');
+        // No floor for this model on this set: measured, not compared. A run past
+        // its unmeasured budget did not measure, whatever its gate says.
+        const measured = first && Number.isFinite(first.metrics?.recall_mean) && first.unmeasured <= first.infraBudget;
+        const ungated = measured && first.gate?.status === 'skipped' && /^no target/.test(first.gate.reason || '');
         return { verdict: ungated ? 'ungated' : 'infra', final: files.first };
     }
     measure(files.confirm);
@@ -157,7 +170,7 @@ function main() {
         return 0;
     }
     if (args.report) {
-        const r = report(String(args.report));
+        const r = report(String(args.report), args.expected ? JSON.parse(String(args.expected)) : []);
         if (process.env.GITHUB_OUTPUT) {
             const eof = `EOF_${Date.now()}`;
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `status=${r.status}\ntitle=${r.title}\ndescription<<${eof}\n${r.description}\n${eof}\n`);
@@ -178,7 +191,16 @@ function main() {
     }
     fs.mkdirSync(out, { recursive: true });
     const entries = WEEKLY_EVALS.filter((e) => e.sets[set] && (!only || only.has(e.id)));
-    const results = entries.map((e) => runEval(e, { model, set, out }));
+    // An eval that throws (its directory, its result) is that eval not measured;
+    // the evals already run keep their results.
+    const results = entries.map((e) => {
+        try {
+            return runEval(e, { model, set, out });
+        } catch (error) {
+            console.error(`${e.id} did not measure: ${error instanceof Error ? error.message : String(error)}`);
+            return { id: e.id, stage: e.stage, verdict: 'infra', value: null, floor: null, rows: weeklyRows(null, 'infra', { stageId: e.stage, model, set }) };
+        }
+    });
     if (args.tests && set === 'controlled') {
         for (const stage of STAGES) for (const test of stage.tests.filter((t) => t.weekly)) results.push(runTest(stage, test, { model }));
     }
@@ -193,4 +215,4 @@ function main() {
 
 if (require.main === module) process.exit(main());
 
-module.exports = { main, plan, report, PARTS, FULL_MODEL };
+module.exports = { main, plan, report, finderVerdict, PARTS, FULL_MODEL };

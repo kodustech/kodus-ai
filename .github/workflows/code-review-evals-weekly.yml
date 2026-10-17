@@ -163,7 +163,10 @@ jobs:
                   path: weekly-results
             - name: Report
               id: report
-              run: node evals/weekly.js --report=weekly-results
+              # The planned jobs: one that died before its upload shows as not measured.
+              env:
+                  JOBS: ${{ needs.plan.outputs.jobs }}
+              run: node evals/weekly.js --report=weekly-results --expected="$JOBS"
             - name: Notify Discord
               uses: ./.github/actions/discord-notify
               with:
