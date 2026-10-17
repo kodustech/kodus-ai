@@ -170,8 +170,10 @@ export async function loadCustomAgentMcpServers(
 
     const servers: CustomAgentMcpServer[] = [];
     for (const connection of owned) {
+        // By the connection's integration id: two connections can share a
+        // name, and a name match would hand one the other's credentials.
         const config = (formatted ?? []).find(
-            (f) => f.name === connection.appName,
+            (f) => f.integrationId === connection.integrationId,
         );
         if (config) {
             servers.push({

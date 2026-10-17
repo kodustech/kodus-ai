@@ -173,9 +173,12 @@ describe('loadCustomAgentMcpServers', () => {
         const getConnections = jest.fn(async (_o: any, format?: boolean) =>
             format
                 ? [
-                      { name: 'Tracker', type: 'http' },
-                      { name: 'Wiki', type: 'http' },
-                      { name: 'Other Org Tracker', type: 'http' },
+                      {
+                          name: 'Tracker',
+                          type: 'http',
+                          integrationId: 'int-tracker',
+                      },
+                      { name: 'Wiki', type: 'http', integrationId: 'int-wiki' },
                   ]
                 : [
                       {
@@ -210,8 +213,16 @@ describe('loadCustomAgentMcpServers', () => {
         const getConnections = jest.fn(async (_o: any, format?: boolean) =>
             format
                 ? [
-                      { name: 'Kodus MCP', type: 'http' },
-                      { name: 'Tracker', type: 'http' },
+                      {
+                          name: 'Kodus MCP',
+                          type: 'http',
+                          integrationId: KODUS_MCP_INTEGRATION_ID,
+                      },
+                      {
+                          name: 'Tracker',
+                          type: 'http',
+                          integrationId: 'int-tracker',
+                      },
                   ]
                 : [
                       {
@@ -233,6 +244,50 @@ describe('loadCustomAgentMcpServers', () => {
             [KODUS_MCP_INTEGRATION_ID, 'int-tracker'],
         );
         expect(servers.map((s) => s.integrationId)).toEqual(['int-tracker']);
+    });
+
+    it('matches each connection to its own server even when two share a name', async () => {
+        const getConnections = jest.fn(async (_o: any, format?: boolean) =>
+            format
+                ? [
+                      {
+                          name: 'Tracker',
+                          type: 'http',
+                          url: 'https://staging.tracker.example',
+                          integrationId: 'int-staging',
+                      },
+                      {
+                          name: 'Tracker',
+                          type: 'http',
+                          url: 'https://tracker.example',
+                          integrationId: 'int-tracker',
+                      },
+                  ]
+                : [
+                      {
+                          organizationId: 'org-a',
+                          integrationId: 'int-staging',
+                          appName: 'Tracker',
+                      },
+                      {
+                          organizationId: 'org-a',
+                          integrationId: 'int-tracker',
+                          appName: 'Tracker',
+                      },
+                  ],
+        );
+
+        const servers = await loadCustomAgentMcpServers(
+            { getConnections },
+            org,
+            ['int-tracker'],
+        );
+        expect(servers).toEqual([
+            expect.objectContaining({
+                url: 'https://tracker.example',
+                integrationId: 'int-tracker',
+            }),
+        ]);
     });
 
     it('does not fetch credentials when nothing selected belongs to the organization', async () => {
