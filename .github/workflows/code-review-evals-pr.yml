@@ -9,11 +9,17 @@ name: "Evals: wiring smoke (PR)"
 # post-merge as "INFRA error" on every model, looked like a bad key, and the
 # suite was eventually switched off.
 #
-# Quality is not measured on PRs. It is measured by:
+# A PR that changes the production files of a step an experiment is wired for
+# (evals/experiment.js STEP_EVALS) also runs that experiment's first question,
+# "did it break anything?", against where the branch left main: the result is
+# a comment on the PR and a row on the quality panel, and the check fails when
+# something got worse. The label `experiment:full` also asks "is it better?".
+# Otherwise quality is measured by:
 #   code-review-evals-nightly.yml  DeepSeek on the controlled set, nightly, when the engine changed
-#   code-review-evals-weekly.yml   every tier-0 model's controlled set and DeepSeek's full set, Friday with the release train
+#   code-review-evals-weekly.yml   every tier-0 model's controlled set, Friday with the release train
 #
-# Secrets: none. Safe for fork PRs.
+# Secrets: none for the smoke (safe for fork PRs); the experiment needs the
+# model keys, so it runs on PRs from this repository only.
 
 permissions:
     contents: read
@@ -25,6 +31,7 @@ on:
     # list missed them. evals/wiring-smoke.js records what each eval loads and
     # fails if a file falls outside these paths.
     pull_request:
+        types: [opened, synchronize, reopened, labeled]
         paths:
             - "libs/**"
             - "evals/**"
@@ -55,10 +62,17 @@ concurrency:
 jobs:
     wiring:
         name: "eval wiring smoke (no keys)"
+        # A label re-runs it only when it asks for the full experiment.
+        if: github.event.action != 'labeled' || github.event.label.name == 'experiment:full'
         runs-on: ubuntu-latest
         timeout-minutes: 25
+        outputs:
+            steps: ${{ steps.affected.outputs.steps }}
         steps:
+            # The whole history: which steps a PR touches is measured against where it left its base.
             - uses: actions/checkout@v6.0.2
+              with:
+                  fetch-depth: 0
             - uses: pnpm/action-setup@v4
             - uses: actions/setup-node@v4
               with:
@@ -77,7 +91,19 @@ jobs:
                   export const environment = devEnvironment;
                   EOF
             - name: Run wiring smoke
-              run: node evals/wiring-smoke.js
+              run: node evals/wiring-smoke.js --eval-files-dir=eval-files
+
+            # The steps whose production files this PR changed: the experiments to run.
+            - name: Steps this PR changes
+              id: affected
+              if: github.event_name == 'pull_request'
+              env:
+                  BASE: ${{ github.base_ref }}
+              run: |
+                  git diff --name-only "origin/$BASE...HEAD" > changed-files.txt
+                  steps=$(node evals/experiment.js --affected --files-dir=eval-files --changed=changed-files.txt)
+                  echo "steps=$steps" >> "$GITHUB_OUTPUT"
+                  echo "experiments to run: $steps"
 
             - name: Report quality signal
               if: always()
@@ -88,3 +114,101 @@ jobs:
                   gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
                   gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
                   gcp_project: ${{ vars.GCP_PROJECT }}
+
+    experiment:
+        needs: wiring
+        # The model keys are repository secrets: not on PRs from forks.
+        if: needs.wiring.outputs.steps != '' && needs.wiring.outputs.steps != '[]' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        name: "experiment · ${{ matrix.step }}"
+        runs-on: ubuntu-latest
+        timeout-minutes: 120
+        permissions:
+            contents: read
+            id-token: write # the experiment's rows (report-signal action, WIF)
+            pull-requests: write # the result as a comment on the PR
+        strategy:
+            fail-fast: false
+            matrix:
+                step: ${{ fromJSON(needs.wiring.outputs.steps) }}
+        steps:
+            - uses: actions/checkout@v6.0.2
+              with:
+                  fetch-depth: 0
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+                  cache: "pnpm"
+            - name: Install deps
+              run: pnpm install --frozen-lockfile
+            - uses: ./.github/actions/eval-sandbox
+              with:
+                  repositories: "true"
+            - name: Create environment.ts (gitignored EE config)
+              run: |
+                  cat <<'EOF' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+
+                  export const environment = devEnvironment;
+                  EOF
+            - name: Run the experiment
+              id: run
+              env:
+                  STEP: ${{ matrix.step }}
+                  BASE: ${{ github.base_ref }}
+                  NAME: ${{ github.head_ref }}
+                  FULL: ${{ contains(github.event.pull_request.labels.*.name, 'experiment:full') }}
+                  BYOK_OPENAI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  BYOK_ANTHROPIC_API_KEY: ${{ secrets.BYOK_ANTHROPIC_API_KEY }}
+                  BYOK_GOOGLE_API_KEY: ${{ secrets.BYOK_GOOGLE_API_KEY }}
+                  BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
+                  BYOK_OPENROUTER_API_KEY: ${{ secrets.BYOK_OPENROUTER_API_KEY }}
+                  JUDGE_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+              run: |
+                  phases=regression
+                  [ "$FULL" = "true" ] && phases=regression,decision
+                  set +e
+                  node evals/experiment.js --step="$STEP" --base="origin/$BASE" --phases="$phases" --name="$NAME" --out=experiment
+                  code=$?
+                  set -e
+                  echo "code=$code" >> "$GITHUB_OUTPUT"
+                  [ "$code" = "2" ] && echo "::warning::the experiment did not measure (a key, a quota or a crash); not a quality result"
+                  exit 0
+            - name: Job summary
+              if: always() && hashFiles('experiment/summary.md') != ''
+              run: cat experiment/summary.md >> "$GITHUB_STEP_SUMMARY"
+            - name: Comment on the PR
+              if: always() && hashFiles('experiment/summary.md') != ''
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  STEP: ${{ matrix.step }}
+                  PR: ${{ github.event.pull_request.number }}
+                  RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+              run: |
+                  marker="<!-- kodus-experiment:$STEP -->"
+                  { echo "$marker"; cat experiment/summary.md; echo; echo "[Run]($RUN_URL) · [Quality: experiments](https://quality.kodus.io/experiments) · add the label \`experiment:full\` to also ask whether it is better."; } > comment.md
+                  id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -1)
+                  if [ -n "$id" ]; then gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@comment.md > /dev/null; else gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F body=@comment.md > /dev/null; fi
+            - name: Report to the quality panel
+              if: always() && hashFiles('experiment/rows.json') != ''
+              uses: ./.github/actions/report-signal
+              with:
+                  rows: experiment/rows.json
+                  gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
+                  gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
+                  gcp_project: ${{ vars.GCP_PROJECT }}
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: experiment-${{ matrix.step }}
+                  path: |
+                      experiment/
+                      !experiment/base-tree/
+                  if-no-files-found: ignore
+                  retention-days: 30
+            - name: Fail when it broke something
+              if: steps.run.outputs.code == '1'
+              run: |
+                  echo "::error::the regression phase found a drop: see the comment on the PR"
+                  exit 1
