@@ -196,12 +196,17 @@ function dyingSandbox(mode, counter) {
         kind === 'dead-for' && String(command || '').includes(norm(arg))
             ? arg
             : undefined;
+    // A search's lines from that file, in ripgrep's shapes: `path:12:` for a
+    // match, `path-11-` for its context, `path` alone for names only.
+    const unreachableLine = new RegExp(
+        `^(\\./)?${norm(arg).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(:|-\\d+-|$)`,
+    );
     const withoutUnreachable = (out) =>
         kind !== 'dead-for'
             ? out
             : String(out || '')
                   .split('\n')
-                  .filter((line) => norm(line.split(':')[0]) !== norm(arg))
+                  .filter((line) => !unreachableLine.test(line))
                   .join('\n');
     return (handle) => {
         const rc = handle.remoteCommands;
@@ -222,9 +227,14 @@ function dyingSandbox(mode, counter) {
                 guard();
                 return rc.listDir(...a);
             },
+            // A command naming the file dies; one searching the whole tree
+            // (production's grep runs `rg … '.'`) answers without its lines.
             exec: async (command, ...rest) => {
                 guard(mentions(command));
-                return rc.exec(command, ...rest);
+                const out = await rc.exec(command, ...rest);
+                return kind === 'dead-for' && typeof out?.stdout === 'string'
+                    ? { ...out, stdout: withoutUnreachable(out.stdout) }
+                    : out;
             },
         };
         // A sandbox gone before the review fails the stage's own commands too

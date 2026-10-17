@@ -159,7 +159,11 @@ async function startServices(world) {
             },
         );
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-        res.on('close', () => { transport.close(); server.close(); });
+        // Each close on its own: a failing one neither escapes nor skips the other.
+        res.on('close', () => {
+            Promise.resolve().then(() => transport.close()).catch((error) => console.warn('fake Atlassian MCP: transport close failed', error));
+            Promise.resolve().then(() => server.close()).catch((error) => console.warn('fake Atlassian MCP: server close failed', error));
+        });
         await server.connect(transport);
         await transport.handleRequest(req, res, req.body);
     });

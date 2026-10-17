@@ -51,17 +51,14 @@ main({
             const mapped = [];
             let offset = 0;
             for (const agent of frozen.agents) {
-                const raw = agent.candidates.map((x) => ({ ...x.finding }));
-                const { suggestions } = mapAgentFindings({ findings: { reasoning: '', suggestions: raw } }, { ...agent.params, changedFiles: context.changedFiles });
-                // The mapper keeps its input's order and copies each description:
-                // that maps each finding it returns to the one it came from.
-                let r = 0;
-                for (const s of suggestions) {
-                    while (r < raw.length && raw[r].suggestionContent !== s.suggestionContent) r++;
-                    mapped.push({ ...s, evalIndex: offset + r });
-                    r++;
-                }
-                offset += raw.length;
+                // The mapper filters and maps each finding on its own, so mapping
+                // one at a time returns the same suggestions and keeps which
+                // finding each came from, even when two share a description.
+                agent.candidates.forEach((x, i) => {
+                    const { suggestions } = mapAgentFindings({ findings: { reasoning: '', suggestions: [{ ...x.finding }] } }, { ...agent.params, changedFiles: context.changedFiles });
+                    for (const s of suggestions) mapped.push({ ...s, evalIndex: offset + i });
+                });
+                offset += agent.candidates.length;
             }
             const out = stage.anchorSuggestionsToDiff(mapped, context.changedFiles, frozen.kodyRules || [], []);
             const kept = new Set(out.map((s) => s.evalIndex));

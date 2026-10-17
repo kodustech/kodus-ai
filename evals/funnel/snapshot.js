@@ -59,6 +59,8 @@ async function snapshotCase(caseId, route, judgeKey) {
         observeSteps: true,
     });
     if (review.skipped) throw new Error(`production skipped the review: ${review.skipped}`);
+    const failure = review.context?.lastReviewError;
+    if (failure) throw new Error(`production review failed: ${failure.category} ${String(failure.providerMessage || failure.friendlyMessage || '').slice(0, 160)}`);
     const failed = review.loops.map((l) => l.result).filter((r) => r?.finishReason === 'error');
     if (failed.length) throw new Error(`an agent loop failed: ${String(failed[0].errorMessage || 'error').slice(0, 160)}`);
     const steps = review.steps || {};
@@ -150,7 +152,8 @@ async function main() {
             }
         }
     };
-    await Promise.all(Array.from({ length: Math.max(1, Number(args.concurrency) || 4) }, worker));
+    // At most one worker per PR, as run-recall.js does.
+    await Promise.all(Array.from({ length: Math.max(1, Math.min(Number(args.concurrency) || 4, caseIds.length)) }, worker));
     if (failed.length) {
         console.error(`not written: ${failed.length} of ${caseIds.length} PRs failed (see above); a snapshot must hold every PR. The others are kept: rerun to resume.`);
         return 2;

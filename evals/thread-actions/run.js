@@ -83,11 +83,19 @@ function withRule(c, index) {
 
 const mentionsIn = (r, word) => !word || `${r.title || ''} ${r.rule || ''}`.toLowerCase().includes(word.toLowerCase());
 
+// The rule no longer covers the finding's file: its path stops matching it
+// (production's matcher), or its text excludes that directory.
+const { fileMatchesRulePath } = require('../../libs/common/utils/kody-rules/file-patterns.ts');
+const narrowedOff = (r, file) => {
+    const dir = file.split('/')[0];
+    return (!!r.path && !fileMatchesRulePath(file, r.path)) || `${r.title || ''} ${r.rule || ''}`.includes(`${dir}/`);
+};
+
 // The write the developer asked for, read from the org's stores.
 function actedAsAsked(c, written, rules) {
     if (c.kind === 'memory') return written.created.some((r) => r.type === 'memory' && mentionsIn(r, c.mentions));
     if (c.kind === 'rule-create') return written.created.some((r) => r.type !== 'memory' && mentionsIn(r, c.mentions));
-    return written.updated.some((r) => r.uuid === rules[0]?.uuid);
+    return written.updated.some((r) => r.uuid === rules[0]?.uuid && narrowedOff(r, c.kodyComment.file));
 }
 
 async function runCase(c, i, judgeKey, kodus) {

@@ -277,7 +277,7 @@ export function getOriginalKodyComment(
                 }
                 return undefined;
             default:
-                logger.warn({ message: `Unsupported platform type: ${platformType}`, context: 'ChatWithKodyFromGitUseCase' });
+                logger.warn({ message: `Unsupported platform type: ${platformType}`, context: 'ChatWithKodyFromGitUseCase', metadata: { platformType, commentId: comment?.id } });
                 return undefined;
         }
     }
@@ -385,7 +385,7 @@ export function getOthersReplies(
                         !isKodyComment(reply, platformType),
                 );
             default:
-                logger.warn({ message: `Plataforma nu00e3o suportada: ${platformType}`, context: 'ChatWithKodyFromGitUseCase' });
+                logger.warn({ message: `Plataforma nu00e3o suportada: ${platformType}`, context: 'ChatWithKodyFromGitUseCase', metadata: { platformType, commentId: comment?.id } });
                 return [];
         }
     }

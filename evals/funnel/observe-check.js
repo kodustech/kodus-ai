@@ -2,12 +2,14 @@
 // The snapshot observes a production review (evals/shared/review-stage.js
 // observeTheReview); observing must not change it. Reviews the wiring smoke's
 // written repository twice on the scripted model, unobserved and observed, and
-// fails unless both ship the same and every step after the agents was recorded.
+// fails unless both post the same comments and every step after the agents
+// was recorded.
 // Run by finder-parity.spec.ts in plain node: the wrappers patch the modules'
 // exports, which the spec runner's own transform makes read-only.
 //
 // Exit: 0 same review, 1 the observation changed it or missed a step, 2 did not run.
 const path = require('path');
+const { isDeepStrictEqual } = require('node:util');
 const { startFakeLlmServer } = require('../shared/fake-llm-server');
 
 const STEPS = ['anchorSuggestionsToDiff', 'dedupSuggestionStreams', 'mapper', 'reclassifyAndFilterSeverity', 'verify'];
@@ -26,8 +28,21 @@ async function main() {
         const plain = await run(false);
         const observed = await run(true);
         const recorded = Object.keys(observed.steps || {}).sort();
-        console.log(JSON.stringify({ shippedPlain: plain.shipped.length, shippedObserved: observed.shipped.length, recorded }));
-        return plain.shipped.length > 0 && observed.shipped.length === plain.shipped.length && JSON.stringify(recorded) === JSON.stringify(STEPS) ? 0 : 1;
+        // What a posted comment carries; ids and timestamps differ run to run.
+        const posted = (shipped) =>
+            shipped.map((s) => ({
+                file: s.relevantFile,
+                lines: [s.relevantLinesStart, s.relevantLinesEnd],
+                severity: s.severity,
+                label: s.label,
+                summary: s.oneSentenceSummary,
+                content: s.suggestionContent,
+                existingCode: s.existingCode,
+                improvedCode: s.improvedCode,
+            }));
+        const same = isDeepStrictEqual(posted(observed.shipped), posted(plain.shipped));
+        console.log(JSON.stringify({ shippedPlain: plain.shipped.length, shippedObserved: observed.shipped.length, same, recorded }));
+        return plain.shipped.length > 0 && same && JSON.stringify(recorded) === JSON.stringify(STEPS) ? 0 : 1;
     } finally {
         await server.close();
     }

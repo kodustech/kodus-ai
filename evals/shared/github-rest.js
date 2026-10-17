@@ -27,7 +27,9 @@ function startGithubRest({ pr, owner, repository, author = { login: 'dev', id: 1
             }
             return answer instanceof NotFound ? send(res, 404, answer.payload) : send(res, 200, answer);
         } catch (error) {
-            return send(res, 500, { message: String(error.message || error) });
+            // The cause goes to the eval's log; the response says only that it failed.
+            console.error(`github-rest: ${req.method} ${req.url} failed:`, error);
+            return send(res, 500, { message: 'Internal Server Error' });
         }
     });
     let origin;

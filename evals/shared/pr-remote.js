@@ -22,7 +22,7 @@ function writePullRequestRemote({ files, changed, number = 7, base = 'main', hea
     // sandboxEnv drops GIT_DIR and the other variables that outrank -C: run from
     // a git hook, git would otherwise work on the caller's repository.
     const env = sandboxEnv({ GIT_AUTHOR_NAME: 'dev', GIT_AUTHOR_EMAIL: 'dev@example.com', GIT_COMMITTER_NAME: 'dev', GIT_COMMITTER_EMAIL: 'dev@example.com', GIT_AUTHOR_DATE: DATE, GIT_COMMITTER_DATE: DATE });
-    const git = (dir, ...a) => execFileSync('git', ['-C', dir, ...a], { env, encoding: 'utf8' }).trim();
+    const git = (dir, ...a) => execFileSync('git', ['-C', dir, ...a], { env, encoding: 'utf8', timeout: 60_000 }).trim();
     const write = (only) => {
         for (const [file, content] of Object.entries(files)) {
             if (!only(file)) continue;
@@ -30,31 +30,37 @@ function writePullRequestRemote({ files, changed, number = 7, base = 'main', hea
             fs.writeFileSync(path.join(work, file), content);
         }
     };
-    fs.mkdirSync(work);
-    git(work, 'init', '-q', '-b', base);
-    write((file) => !changed.includes(file));
-    git(work, 'add', '-A');
-    git(work, 'commit', '-q', '--allow-empty', '-m', 'base');
-    git(work, 'checkout', '-q', '-b', head);
-    write((file) => changed.includes(file));
-    git(work, 'add', '-A');
-    git(work, 'commit', '-q', '-m', message);
-    git(root, 'init', '-q', '--bare', remote);
-    git(work, 'push', '-q', remote, `${base}:refs/heads/${base}`, `${head}:refs/heads/${head}`, `${head}:refs/pull/${number}/head`);
-    return {
-        remote,
-        number,
-        base,
-        head,
-        message,
-        baseSha: git(remote, 'rev-parse', `refs/heads/${base}`),
-        headSha: git(remote, 'rev-parse', `refs/pull/${number}/head`),
-        date: DATE,
-        git: (...a) => git(remote, ...a),
-        // A blob's bytes, untrimmed.
-        read: (spec) => execFileSync('git', ['-C', remote, 'show', spec], { env }),
-        cleanup: () => fs.rmSync(root, { recursive: true, force: true }),
-    };
+    // A remote that fails halfway is removed before the error goes on.
+    try {
+        fs.mkdirSync(work);
+        git(work, 'init', '-q', '-b', base);
+        write((file) => !changed.includes(file));
+        git(work, 'add', '-A');
+        git(work, 'commit', '-q', '--allow-empty', '-m', 'base');
+        git(work, 'checkout', '-q', '-b', head);
+        write((file) => changed.includes(file));
+        git(work, 'add', '-A');
+        git(work, 'commit', '-q', '-m', message);
+        git(root, 'init', '-q', '--bare', remote);
+        git(work, 'push', '-q', remote, `${base}:refs/heads/${base}`, `${head}:refs/heads/${head}`, `${head}:refs/pull/${number}/head`);
+        return {
+            remote,
+            number,
+            base,
+            head,
+            message,
+            baseSha: git(remote, 'rev-parse', `refs/heads/${base}`),
+            headSha: git(remote, 'rev-parse', `refs/pull/${number}/head`),
+            date: DATE,
+            git: (...a) => git(remote, ...a),
+            // A blob's bytes, untrimmed.
+            read: (spec) => execFileSync('git', ['-C', remote, 'show', spec], { env, timeout: 60_000 }),
+            cleanup: () => fs.rmSync(root, { recursive: true, force: true }),
+        };
+    } catch (error) {
+        fs.rmSync(root, { recursive: true, force: true });
+        throw error;
+    }
 }
 
 module.exports = { writePullRequestRemote };

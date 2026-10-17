@@ -12,9 +12,9 @@ const path = require('path');
 
 // ── The model, routed as production routes it ──────────────────────────────
 // Production hands the finder no model. execute() routes the codeReview task to
-// a slot (resolveReviewAgentModel → permissionValidationService.resolveTaskSlot,
-// model-factory.ts:61-110), and LLM.run builds the model from that slot, or from
-// the managed default when there is none (ai-sdk-agent-runner.ts:245-246).
+// a slot (model-factory.ts resolveReviewAgentModel → permissionValidationService
+// .resolveTaskSlot), and LLM.run builds the model from that slot, or from the
+// managed default when there is none (AiSdkAgentRunner's call to LLM.run).
 //
 // So the eval routes the way a cloud org does (tier0-models.js applyPlatformEnv
 // sets the platform's own keys, and no self-hosted env model):
@@ -22,7 +22,7 @@ const path = require('path');
 //     Fireworks) with no stored config, the route of an org without BYOK;
 //   - any other model, or a run that asks for a reasoning effort: a stored BYOK
 //     config (version 2) holding that model, read by production's getBYOKConfig
-//     (permissionValidation.service.ts:1170-1186) and routed by resolveTaskSlot,
+//     (permissionValidation.service.ts) and routed by resolveTaskSlot,
 //     like a customer's BYOK model and its effort.
 // The model's key is in the stored config, never in API_OPEN_AI_API_KEY: that
 // variable is the platform's OpenAI key, which the dedup's embedder reads.
@@ -30,14 +30,14 @@ const path = require('path');
 // organization-parameters read); the routing and the model are production's.
 
 // A UUID: getBYOKConfig reads an org's config only for one
-// (permissionValidation.service.ts:1173-1177).
+// (permissionValidation.service.ts).
 const EVAL_ORG = {
     organizationId: '00000000-0000-4000-8000-00000000e7a1',
     teamId: 'eval-team',
 };
 
 // Provider ids of evals/shared/tier0-models.js →
-// BYOKProvider (libs/llm/model-providers.ts:15-35).
+// BYOKProvider (libs/llm/model-providers.ts).
 const BYOK_PROVIDER = {
     google: 'google_gemini',
     openai: 'openai',
@@ -68,7 +68,7 @@ function storedByokConfig({ provider, model, apiKey, baseURL, reasoningEffort, o
                 id: 'eval-credential',
                 provider: byokProvider,
                 apiKey: encrypt(apiKey),
-                // Where resolveModelSlot reads them (resolve-model-slot.ts:86-99).
+                // Where resolveModelSlot reads them (resolve-model-slot.ts).
                 settings: {
                     ...(baseURL ? { baseURL } : {}),
                     ...(openrouterProviderOrder?.length

@@ -196,6 +196,10 @@ class InvestigationAgentProvider {
             stage = 'run-review';
             const review = await reviewPullRequest({ pr: prOf(caseData), team: teamOf(caseData), route, permissionService });
             if (review.skipped) throw new Error(`production skipped the review: ${review.skipped}`);
+            // The stage records a failed agent or step and goes on with what it has:
+            // a review that failed measured the failure, not the finder.
+            const failure = review.context?.lastReviewError;
+            if (failure) throw new Error(`production review failed: ${failure.category} ${String(failure.providerMessage || failure.friendlyMessage || '').slice(0, 200)}`);
             const failedAgents = (review.context?.errors || []).filter((e) => /agent|review/i.test(String(e?.stage || e?.message || '')));
             if (!review.loops.length) {
                 throw new Error(

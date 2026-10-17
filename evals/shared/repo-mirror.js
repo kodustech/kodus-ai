@@ -89,6 +89,10 @@ async function mirrorFor({ repo, prNumber, headSha, baseRef, baseSha }) {
         const view = path.join(ROOT, `${name}.views`, `${prNumber || headSha}.git`);
         await ensureBare(view);
         fs.writeFileSync(path.join(view, 'objects', 'info', 'alternates'), `${path.join(dir, 'objects')}\n`);
+        // The mirror's commits are depth 1: the view borrowing them says so too,
+        // or git would look for parents it never fetched.
+        const shallow = path.join(dir, 'shallow');
+        if (fs.existsSync(shallow)) fs.copyFileSync(shallow, path.join(view, 'shallow'));
         const resolve = async (ref) => (await git(dir, ['rev-parse', ref])).stdout.trim();
         await git(view, ['update-ref', headRef, headSha || (await resolve(headRef))]);
         if (baseRef) await git(view, ['update-ref', `refs/heads/${baseRef}`, baseSha || (await resolve(`refs/heads/${baseRef}`))]);
@@ -188,10 +192,13 @@ async function contentAt(cloneUrl, ref, filePath) {
         const { stdout } = await execFileAsync('git', ['-C', dir, 'show', `${ref}:${filePath}`], {
             encoding: 'buffer',
             maxBuffer: 64 * 1024 * 1024,
+            timeout: 60_000,
             env: gitEnv(),
         });
         return { data: { content: Buffer.from(stdout).toString('base64'), encoding: 'base64' } };
-    } catch {
+    } catch (error) {
+        // A git that did not answer is a failure, not a file the ref lacks.
+        if (error.killed) throw new Error(`git show ${ref}:${filePath} in ${dir} did not answer in 60s`);
         return null;
     }
 }

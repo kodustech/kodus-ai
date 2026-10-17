@@ -164,7 +164,7 @@ const CASES = [
         {
             id: 'rule-update-act',
             reply: '@kody update this rule so it no longer applies to files under test/.',
-            // The rule may be narrowed by its path or by its text: any change counts.
+            // Narrowed by its path or by its text, it no longer covers test/.
             expect: { act: true },
         },
         "@kody I'll add the JSDoc. Is the rest of the helper fine?",
