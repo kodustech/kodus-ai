@@ -6,7 +6,7 @@
 // reconciliation and @@PATH_MISMATCH@@ drop. Tools are served from a
 // deterministic replay (no sandbox / GitHub), exactly like the finder eval.
 //
-//   node evals/kody-rules/real-agent.js [--runs=3] [--model=gpt-5.4-mini]
+//   node evals/kody-rules/real-agent.js [--runs=3] [--model=gpt-5.4-mini] [--gate] [--output=<result.json>]
 //
 // The model is driven through the real `buildModelFromSlot` self-hosted path:
 // API_LLM_PROVIDER_MODEL + API_OPEN_AI_API_KEY (+ optional API_OPENAI_FORCE_BASE_URL).
@@ -69,6 +69,8 @@ const MODELS = {
 };
 
 const allCases = require('./' + DATASET);
+const { evalQuestion } = require('../shared/eval-result');
+const { countTokens, tokensUsed, addCall } = require('../shared/eval-kit');
 // --limit=N caps how many cases run (CI scopes to a small PR set).
 const cases = args.limit ? allCases.slice(0, +args.limit) : allCases;
 
@@ -144,17 +146,10 @@ function buildProvider() {
         runInSpan: async (_n, fn) => (typeof fn === 'function' ? fn() : undefined),
         runLLMInSpan: async ({ exec }) => exec([]),
         startSpan: () => ({ end() {}, update() {} }),
-        // The refactored provider emits a post-hoc usage span; evals don't ship
-        // telemetry. Instead of a no-op, accumulate token usage so the run can
-        // report total cost (for the agentic-vs-sharded cost comparison, #1449).
-        recordAgentRunUsage: async (p) => {
-            const u = (p && p.usage) || {};
-            global.__EVAL_TOK = global.__EVAL_TOK || { in: 0, out: 0, cacheRead: 0, cacheWrite: 0 };
-            global.__EVAL_TOK.in += u.inputTokens ?? 0;
-            global.__EVAL_TOK.out += u.outputTokens ?? 0;
-            global.__EVAL_TOK.cacheRead += u.cacheReadTokens ?? 0;
-            global.__EVAL_TOK.cacheWrite += u.cacheWriteTokens ?? 0;
-        },
+        // A post-hoc usage span, if a provider still emits one: evals don't ship
+        // telemetry, so it is counted with the rest (eval-kit.js tokensUsed) for
+        // the run's cost (the agentic-vs-sharded comparison, #1449).
+        recordAgentRunUsage: async (p) => addCall((p && p.usage) || {}, (p && p.durationMs) || 0),
     };
     // Positional, and the positions moved: the constructor is
     // (permissionValidationService, observabilityService, ...). This call passed
@@ -285,6 +280,33 @@ function unifiedPatch(numbered) {
     return out.join('\n');
 }
 
+// One case in the shape every eval writes (evals/shared/eval-result.js): what
+// it checks, the violation sites it caught over the runs that measured, and
+// each site, ok only when caught in every one of them.
+function caseResult(c, caseLabel, targets, sites, violFiles, perRun, okRuns) {
+    const allSites = targets ? targets.flatMap((t) => t.sites) : sites;
+    const where = String(c.caseId || '').split('::')[0];
+    const rule = targets ? `${targets.length} rules` : `"${c.rule?.title || caseLabel}"`;
+    const measuredRuns = perRun.filter((p) => !p.errored);
+    if (!allSites.length) {
+        return {
+            id: caseLabel,
+            checks: `Flags every file that breaks ${rule}${where ? ` in ${where}` : ''}`,
+            hits: measuredRuns.reduce((a, p) => a + p.hit, 0),
+            total: violFiles.length * okRuns,
+            detail: [],
+        };
+    }
+    return {
+        id: caseLabel,
+        checks: `Flags every line that breaks ${rule}${where ? ` in ${where}` : ''}`,
+        hits: measuredRuns.reduce((a, p) => a + p.coveredSites, 0),
+        total: allSites.length * okRuns,
+        detail: allSites.map((g, i) => ({ what: `${g.file}:${g.line}`, ok: measuredRuns.length > 0 && measuredRuns.every((p) => p.siteOk?.[i]) })),
+        falseAlarms: measuredRuns.reduce((a, p) => a + p.falseOnClean, 0),
+    };
+}
+
 async function main() {
     // tier-0 model ids route through the shared seam (any supported provider);
     // legacy local presets (DO models) keep working via the registry below.
@@ -302,6 +324,7 @@ async function main() {
     }
 
     const provider = buildProvider();
+    countTokens();
 
     const LINE_TOL = 2; // a flag "lands" on a real site if within ±2 lines
     let multiTotalSites = 0, multiCaughtSites = 0, caughtAllRuns = 0, totalMultiRuns = 0;
@@ -312,6 +335,7 @@ async function main() {
     // runs — NOT real misses. Track them so a broken environment warns (infra)
     // instead of deflating recall into a false quality-gate failure.
     let erroredRuns = 0, totalRuns = 0;
+    const caseResults = [];
     const haveGT = cases.some((c) => c.groundTruth || c.groundTruthAll);
     // flatten groundTruth → [{file, line}]
     const gtSites = (c) => Object.entries(c.groundTruth || {})
@@ -339,6 +363,7 @@ async function main() {
                 // rules via brokenKodyRulesIds (mapAgentFindings re-homes the
                 // LLM's ruleUuid there — finding-mapper.ts).
                 let hit = 0, falseOnClean = 0, coveredSites = 0, flagsN = 0, lineNoise = 0;
+                const siteOk = [];
                 for (const t of targets) {
                     const tSugg = sugg.filter((s) =>
                         (s.brokenKodyRulesIds || []).includes(t.uuid) || s.ruleUuid === t.uuid);
@@ -346,11 +371,13 @@ async function main() {
                     const flaggedFiles = new Set(flags.map((x) => x.file));
                     hit += t.violFiles.filter((f) => flaggedFiles.has(f)).length;
                     falseOnClean += t.okFiles.filter((f) => flaggedFiles.has(f)).length;
-                    coveredSites += t.sites.filter((g) => flags.some((x) => x.file === g.file && Math.abs(x.line - g.line) <= LINE_TOL)).length;
+                    const tOk = t.sites.map((g) => flags.some((x) => x.file === g.file && Math.abs(x.line - g.line) <= LINE_TOL));
+                    siteOk.push(...tOk);
+                    coveredSites += tOk.filter(Boolean).length;
                     const onTarget = flags.filter((x) => t.sites.some((g) => x.file === g.file && Math.abs(x.line - g.line) <= LINE_TOL)).length;
                     flagsN += flags.length; lineNoise += flags.length - onTarget;
                 }
-                perRun.push({ hit, falseOnClean, coveredSites, flags: flagsN, lineNoise, errored, otherRuleFlags: 0 });
+                perRun.push({ hit, falseOnClean, coveredSites, flags: flagsN, lineNoise, errored, otherRuleFlags: 0, siteOk });
                 continue;
             }
 
@@ -369,9 +396,10 @@ async function main() {
             const falseOnClean = okFiles.filter((f) => flaggedFiles.has(f)).length;
             // occurrence-level: distinct real sites covered by some flag (±tol)
             const flags = sugg.map((s) => ({ file: normalizePath(s.relevantFile), line: s.relevantLinesStart })).filter((x) => x.file && Number.isFinite(x.line));
-            const coveredSites = sites.filter((g) => flags.some((x) => x.file === g.file && Math.abs(x.line - g.line) <= LINE_TOL)).length;
+            const siteOk = sites.map((g) => flags.some((x) => x.file === g.file && Math.abs(x.line - g.line) <= LINE_TOL));
+            const coveredSites = siteOk.filter(Boolean).length;
             const onTargetFlags = flags.filter((x) => sites.some((g) => x.file === g.file && Math.abs(x.line - g.line) <= LINE_TOL)).length;
-            perRun.push({ hit, falseOnClean, coveredSites, flags: flags.length, lineNoise: flags.length - onTargetFlags, errored, otherRuleFlags });
+            perRun.push({ hit, falseOnClean, coveredSites, flags: flags.length, lineNoise: flags.length - onTargetFlags, errored, otherRuleFlags, siteOk });
         }
         // v2 denominators span all (file,rule) pairs; v1 keeps the single rule.
         const N = targets ? targets.reduce((a, t) => a + t.violFiles.length, 0) : violFiles.length;
@@ -380,6 +408,7 @@ async function main() {
         // Count only runs that actually executed — an errored (infra) run must
         // not add its sites to any denominator as if they were real misses.
         const okRuns = perRun.filter((p) => !p.errored).length;
+        caseResults.push(caseResult(c, caseLabel, targets, sites, violFiles, perRun, okRuns));
         const allRuns = perRun.filter((p) => !p.errored && p.hit >= N).length;
         multiTotalSites += N * okRuns; multiCaughtSites += perRun.reduce((a, b) => a + (b.errored ? 0 : b.hit), 0);
         caughtAllRuns += allRuns; totalMultiRuns += okRuns;
@@ -401,8 +430,41 @@ async function main() {
         console.log(`line precision:       ${pct(flaggedTotal - lineNoiseTotal, flaggedTotal)}%  (${lineNoiseTotal}/${flaggedTotal} flags landed off any real site)`);
     }
     console.log(`specificity (files):  ${pct(cleanFiles - falseAlarmFiles, cleanFiles)}%  (${falseAlarmFiles}/${cleanFiles} clean files false-alarmed)`);
-    const tok = global.__EVAL_TOK || { in: 0, out: 0, cacheRead: 0, cacheWrite: 0 };
+    const tok = tokensUsed();
     console.log(`TOKENS: input=${tok.in}  output=${tok.out}  cacheRead=${tok.cacheRead}  cacheWrite=${tok.cacheWrite}  over ${totalRuns} agentic sessions`);
+
+    // --output: the result in the shape every eval writes
+    // (evals/shared/eval-result.js), plus the counts behind each rate so a
+    // confirming run can be pooled with the first (nightly-verdict.js).
+    if (args.output) {
+        const ratio = (a, b) => (b ? a / b : null);
+        const observed = MODEL_TARGET.observed || null;
+        const result = {
+            eval: 'kody-rules',
+            question: evalQuestion('evals/kody-rules'),
+            model: MODELKEY,
+            dataset: DATASET,
+            runs: RUNS,
+            metric: {
+                name: 'occurrence recall',
+                value: ratio(occCaught, occTotal),
+                floor: OCC_MIN / 100,
+                baseline: observed ? observed.occ / 100 : null,
+            },
+            specificity: {
+                value: cleanFiles ? (cleanFiles - falseAlarmFiles) / cleanFiles : null,
+                floor: SPEC_MIN / 100,
+                baseline: observed ? observed.spec / 100 : null,
+            },
+            linePrecision: ratio(flaggedTotal - lineNoiseTotal, flaggedTotal),
+            counts: { sites: occTotal, caught: occCaught, flagged: flaggedTotal, offSite: lineNoiseTotal, cleanFiles, falseAlarmFiles },
+            cases: caseResults,
+            tokens: tok,
+            infra: { errored: erroredRuns, total: totalRuns },
+        };
+        fs.mkdirSync(path.dirname(path.resolve(args.output)), { recursive: true });
+        fs.writeFileSync(args.output, `${JSON.stringify(result, null, 2)}\n`);
+    }
 
     if (GATE) {
         // Infra guard: if the environment (quota/rate-limit/key) broke enough

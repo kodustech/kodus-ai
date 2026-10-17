@@ -50,6 +50,7 @@ export function toRecord(suggestion: ISuggestion): PrDecisionRecord {
             suggestion.fullExplanation || suggestion.suggestionContent,
         label: suggestion.label,
         brokenKodyRulesIds: suggestion.brokenKodyRulesIds,
+        existingCode: suggestion.existingCode || undefined,
         outcome: toOutcome(suggestion.implementationStatus),
         decidedAt: suggestion.createdAt,
     };
@@ -113,22 +114,23 @@ export class PrDecisionStoreService implements PrDecisionStore {
     async load(
         params: LoadPrDecisionsParams,
     ): Promise<readonly PrDecisionRecord[]> {
+        const limit = params.limit ?? MAX_PR_DECISIONS;
         const [fileScoped, prLevel] = await Promise.allSettled([
             this.pullRequestsRepository.findSuggestionsOnPR(
                 params.prNumber,
                 params.repositoryFullName,
                 params.organizationId,
                 DeliveryStatus.SENT,
-                MAX_PR_DECISIONS,
+                limit,
             ),
-            // Same cap as the file-level read: the most recent
-            // MAX_PR_DECISIONS on the whole PR, PR-level included.
+            // Same cap as the file-level read: the most recent `limit` on
+            // the whole PR, PR-level included.
             this.pullRequestsRepository.findPrLevelSuggestionsByPR(
                 params.prNumber,
                 params.repositoryFullName,
                 params.organizationId,
                 DeliveryStatus.SENT,
-                MAX_PR_DECISIONS,
+                limit,
             ),
         ]);
 

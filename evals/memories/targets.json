@@ -1,0 +1,12 @@
+{
+    "__doc": [
+        "Floors per model for the share of memory cases the review got right (run.js --gate), as ratios.",
+        "eval-fake (the wiring smoke, every PR): the scripted model's one finding names no file of the case, so every quiet case is right and every flag case wrong. Deterministic: two runs gave the same answer on every case. floor = observed.",
+        "deepseek-v4-flash@fireworks (the nightly model): calibrated 2026-10-15 from 2 local runs on the branch's base (main 4b5c881cd's finder), 10 and 9 of 10 (mean 95%). floor = mean - 2 binomial SE over the 10 cases (0.812), rounded down to a whole case: 8 of 10 still pass. The same cases with --no-memories scored 7 of 10: the three cases where a memory says the code is intended went wrong, so those three are decided by the memory.",
+        "RATCHET: a PR that adds cases or moves the value on purpose recalibrates here in the same PR, with its runs as evidence."
+    ],
+    "models": {
+        "eval-fake": { "floor": 0.5, "observed": 0.5 },
+        "deepseek-v4-flash@fireworks": { "floor": 0.8, "observed": 0.95 }
+    }
+}

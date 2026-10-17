@@ -16,10 +16,12 @@
 // It also records every repo file each step loads (shared/trace-loaded.js) and
 // fails if one falls outside the PR workflow's `paths` filter, so the check
 // can't stop firing for code the evals depend on. With --engine-files=<file> it
-// writes what finder-recall loaded: the nightly measures only when one of those
-// files changed.
+// writes what finder-recall loaded, and with --kody-rules-files=<file> what the
+// kody-rules eval loaded, and with --eval-files-dir=<dir> what every step
+// loaded (<dir>/<step>.txt, for evals/nightly-evals.js): the nightly measures
+// each one only when one of its files changed.
 //
-//   node evals/wiring-smoke.js [--engine-files=<file>] [--results=<file>]
+//   node evals/wiring-smoke.js [--engine-files=<file>] [--kody-rules-files=<file>] [--eval-files-dir=<dir>] [--results=<file>]
 //
 // --results writes one entry per step ({ step, ok, problem, ms, calls }), which
 // evals/stage-signals.js turns into one quality signal per review stage.
@@ -78,6 +80,8 @@ function readJson(file) {
 
 async function main() {
     const engineFilesOut = (process.argv.find((a) => a.startsWith('--engine-files=')) || '').split('=')[1];
+    const kodyRulesFilesOut = (process.argv.find((a) => a.startsWith('--kody-rules-files=')) || '').split('=')[1];
+    const evalFilesDir = (process.argv.find((a) => a.startsWith('--eval-files-dir=')) || '').split('=')[1];
     const resultsOut = (process.argv.find((a) => a.startsWith('--results=')) || '').split('=')[1];
     const server = await startFakeLlmServer();
     const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-wiring-'));
@@ -104,6 +108,8 @@ async function main() {
     // that exits 0 without calling it proves nothing about the engine path.
     const steps = [
         { name: 'preflight', args: ['evals/engine-gate.js', '--profile=harness'] },
+        // Replays recorded model output; only prose recovery reaches the model.
+        { name: 'parse', model: true, args: ['evals/parse/run.js', '--model=eval-fake', '--gate'] },
         { name: 'review-chain', args: ['evals/review-chain/run.js', '--gate'] },
         { name: 'shape-invariance', args: ['evals/review-chain/shape-invariance.js', '--gate'] },
         { name: 'verifier-verdict', args: ['evals/verifier-verdict/run.js', '--gate'] },
@@ -111,7 +117,10 @@ async function main() {
         // The live dedup runner goes through LLM.run like the stage does.
         { name: 'dedup-engine', model: true, args: ['evals/dedup/run.js', '--model=eval-fake'] },
         { name: 'severity', args: ['evals/severity/run.js', '--mock=heuristic', '--gate'] },
-        { name: 'format', args: ['evals/format/run.js', '--mock=perfect', '--gate'] },
+        // The scripted model answers nothing usable: this measures the local fallback.
+        { name: 'format', model: true, args: ['evals/format/run.js', '--model=eval-fake', '--gate'] },
+        // The cases bring their repository: the scripted model reads it through the local sandbox.
+        { name: 'memories', model: true, args: ['evals/memories/run.js', '--model=eval-fake', '--gate'] },
         {
             name: 'finder-recall',
             model: true,
@@ -127,6 +136,7 @@ async function main() {
         { name: 'anchoring', model: true, args: ['evals/anchoring/anchor-eval.js', '--model=eval-fake', '--limit=1'] },
         { name: 'pr-summary', model: true, args: ['evals/pr-summary/run.js', '--model=eval-fake', '--gate'] },
         { name: 'reply-addressing', model: true, args: ['evals/reply-addressing/run.js', '--model=eval-fake', '--limit=2'] },
+        { name: 'conversation', model: true, args: ['evals/conversation/run.js', '--model=eval-fake', '--gate'] },
         { name: 'review-rounds', model: true, args: ['evals/review-rounds/run.js', '--model=eval-fake', `--cases-file=${reviewCasesFile}`, '--case=R2,K1', '--reps=1', `--output=${path.join(scratch, 'review-rounds.json')}`] },
         { name: 'review-lifecycle', model: true, args: ['evals/review-rounds/lifecycle.js', '--model=eval-fake', '--reps=1', '--wiring-smoke', `--output=${path.join(scratch, 'review-lifecycle.json')}`] },
     ];
@@ -165,6 +175,19 @@ async function main() {
         const finderFiles = fs.existsSync(traceDir) ? readTrace(traceDir, 'finder-recall') : [];
         fs.writeFileSync(engineFilesOut, `${finderFiles.join('\n')}\n`);
         console.log(`   engine files for the nightly: ${finderFiles.length} → ${engineFilesOut}`);
+    }
+    if (evalFilesDir) {
+        fs.mkdirSync(evalFilesDir, { recursive: true });
+        for (const step of steps) {
+            const files = fs.existsSync(traceDir) ? readTrace(traceDir, step.name) : [];
+            fs.writeFileSync(path.join(evalFilesDir, `${step.name}.txt`), `${files.join('\n')}\n`);
+        }
+        console.log(`   files per step for the nightly: ${steps.length} lists → ${evalFilesDir}`);
+    }
+    if (kodyRulesFilesOut) {
+        const kodyRulesFiles = fs.existsSync(traceDir) ? readTrace(traceDir, 'kody-rules') : [];
+        fs.writeFileSync(kodyRulesFilesOut, `${kodyRulesFiles.join('\n')}\n`);
+        console.log(`   kody-rules files for the nightly: ${kodyRulesFiles.length} → ${kodyRulesFilesOut}`);
     }
     fs.rmSync(scratch, { recursive: true, force: true });
     if (resultsOut) {

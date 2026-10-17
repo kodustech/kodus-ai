@@ -1,9 +1,9 @@
 # review-rounds — what reaches the PR across rounds and sandbox failures
 
 > - **Answers:** When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, revisions linked, nothing already sent posted again?
-> - **Runs:** every engine PR on the scripted model (`evals/wiring-smoke.js`, one case); on demand with a real model.
+> - **Runs:** every engine PR on the scripted model (`evals/wiring-smoke.js`, one case); nightly on DeepSeek, `sets.nightly` of `targets.json` (`evals/nightly-evals.js`); the full set on demand.
 > - **Run it:** `node evals/review-rounds/run.js --model=deepseek-v4-flash@fireworks --byok-reasoning=none --reps=5` · `node evals/review-rounds/run.js --model=eval-fake --case=R2,K1`
-> - **Gate:** none yet (report-only). Floors per problem are set in the PR that fixes it, from two runs of the same commit.
+> - **Gate:** `--gate` with `--set=nightly`: the share of claims handled right against the model's floor in `targets.json`, which holds only for its set, judge and `--byok-reasoning`.
 > - **Cost:** one review per selected case in `cases.js` and rep, plus one judge call per delivered finding and claim.
 
 Issues #2040 (findings shipped on code nobody read), #2039 (a finding caused by
@@ -16,8 +16,10 @@ developer declined or fixed them.
 
 The chain the worker runs once the sandbox is up: `runAgentLoopViaCore` (finder,
 verifier, evidence gate) — or, for `agent: 'kody-rules'` cases, the production
-`KodyRulesAgentProvider` — → `classifySeverity` → `formatSuggestionContent` → the revision link
-(`engine/revision-link.ts`). Tools
+`KodyRulesAgentProvider` — → the repeat check (`engine/repeat-check.ts`, against
+the whole history, as `agent-review.stage.ts` runs it) → `classifySeverity` →
+`formatSuggestionContent` → the revision link (`engine/revision-link.ts`). What
+the repeat check keeps off the PR is in each row's `alreadyPosted`. Tools
 go through the production registry. Only `RemoteCommands` — the sandbox — is
 replaced. The agents get what `build-orchestrator-input.ts` gives them in
 production: the PR's commits (`commits` in a case), and the history through
@@ -83,7 +85,7 @@ which vendors this repository's own public history in `fixtures/kodus-2011/`.
 | K10 | K5 on a file new in the PR, so every round shows the whole file as added | same |
 | K12 | the developer answered with a fix that does not fix it (still UTC) and a comment claiming it does | same |
 | R15 | an earlier bug stored `implemented` because its line changed; the bug is still there | repeat → `not_deliver` |
-| R16 | an earlier fix undone by this diff | `deliver_linked` (one problem, one thread: #2097) |
+| R16 | an earlier fix undone by this diff | `not_deliver` (one problem, one thread: #2097; a fix that came back looks like one never complete) |
 | R17 | R15 with 10 earlier comments and 7 commits, most answering review | repeat → `not_deliver` |
 
 K5–K12 and R15–R17 reproduce repost shapes from a production sample (500
@@ -107,8 +109,8 @@ newer ones, which `capDecisions` drops), the rule set and commits, and the
 `-control` twin. `prod-shapes/check.js` (and `prod-shapes.spec.ts` in CI) refuse
 a spec whose claims fall outside the file or, for the rule judge, on lines the
 diff does not add. Ids are `P01`–`P42`; the guards (`P33`–`P42`) must be posted:
-the same rule at a new place, a fixed bug that came back, a bug the earlier fix
-caused.
+the same rule at a new place, a bug the earlier fix caused. P38, a fixed bug
+that came back, is the exception: not posted again (#2097).
 
 ### Reasoning effort
 

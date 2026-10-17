@@ -136,4 +136,24 @@ describe('BuildPreviousReviewDecisionsUseCase', () => {
         expect(result).toHaveLength(MAX_PR_DECISIONS);
         expect(result[0].suggestionId).toBe(`sug-${MAX_PR_DECISIONS + 4}`);
     });
+
+    // #2097: the repeat check reads past the prompts' cap.
+    it('keeps up to the requested limit and asks the store for it', async () => {
+        const decisions = Array.from({ length: MAX_PR_DECISIONS + 5 }, (_, i) =>
+            makeRecord({ suggestionId: `sug-${i}`, decidedAt: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString() }),
+        );
+        const store = { load: jest.fn().mockResolvedValue(decisions) };
+        const useCase = new BuildPreviousReviewDecisionsUseCase(store as any);
+        const params = {
+            organizationId: 'org-1',
+            prNumber: 1,
+            repositoryFullName: 'kodustech/kodus-ai',
+            limit: 500,
+        };
+
+        const result = await useCase.execute(params);
+
+        expect(store.load).toHaveBeenCalledWith(params);
+        expect(result).toHaveLength(MAX_PR_DECISIONS + 5);
+    });
 });

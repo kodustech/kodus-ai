@@ -13,6 +13,7 @@
 // 2 the confirmation could not measure (infra), so nothing is confirmed.
 const fs = require('fs');
 const { evaluateGate, avg } = require('./gate');
+const { poolTokens } = require('../shared/eval-result');
 
 const MEANS = ['recall', 'precision', 'f1', 'fairRecall', 'hitRate', 'totalCalls', 'tpFindings', 'fpFindings'];
 
@@ -67,6 +68,7 @@ function combineRuns(first, second, gateFor) {
             prompt: (first.tokens?.prompt || 0) + (second.tokens?.prompt || 0),
             completion: (first.tokens?.completion || 0) + (second.tokens?.completion || 0),
         },
+        ...(first.usage || second.usage ? { usage: poolTokens(first.usage, second.usage) } : {}),
         cases: rows.length,
         passed: rows.filter((row) => row.status === 'pass').length,
         failed: rows.filter((row) => row.status === 'fail').length,

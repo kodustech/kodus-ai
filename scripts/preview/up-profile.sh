@@ -16,12 +16,14 @@ HEAD_REF="${2:?usage: up-profile.sh <cloud|self-hosted> <branch>}"
 case "$PROFILE" in
     cloud)
         RECIPE=.kodus/workspace.preview.yaml
+        BILLING_OVERLAY="-f docker-compose.billing.yml"
         OVERLAY=docker-compose.preview.cloud.yml
         # billing runs from its own repository; MCP's health is the other optional probe
         READY="curl -fsS http://127.0.0.1:3101/health >/dev/null && curl -fsS http://127.0.0.1:3992/health/ready >/dev/null"
         ;;
     self-hosted)
         RECIPE=.kodus/workspace.preview.selfhosted.yaml
+        BILLING_OVERLAY=""
         OVERLAY=docker-compose.preview.selfhosted.yml
         READY="curl -fsS http://127.0.0.1:3101/health >/dev/null"
         ;;
@@ -34,7 +36,7 @@ runo() {
     while [ $# -gt 0 ] && [ "$1" != "--" ]; do own+=("$1"); shift; done
     $RUNO "${own[@]}" --branch "$HEAD_REF" --profile "$PROFILE" "$@"
 }
-compose="docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml -f $OVERLAY --profile mcp"
+compose="docker compose -f docker-compose.dev.yml $BILLING_OVERLAY -f docker-compose.preview.yml -f $OVERLAY --profile mcp"
 
 {
     echo "::group::preview [$PROFILE] up"

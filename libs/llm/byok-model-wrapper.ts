@@ -31,10 +31,11 @@ import { extractProviderMessage } from '@libs/llm/review-error-diagnostics';
 import { createLogger } from '@libs/core/log/logger';
 import {
     MAX_REFUSAL_RETRIES,
-    rejectedReasoningField,
+    rejectedReasoning,
     rememberRefusal,
     withoutReasoningField,
     withoutRefusedFields,
+    withReasoningOff,
 } from '@libs/llm/rejected-reasoning-field';
 
 const logger = createLogger('ByokModelWrapper');
@@ -128,15 +129,29 @@ export function wrapByokModel(
                         try {
                             return await call(attempt);
                         } catch (err) {
-                            const field = rejectedReasoningField(err);
+                            const refusal = rejectedReasoning(err);
                             const retry =
-                                field && retries < MAX_REFUSAL_RETRIES
-                                    ? withoutReasoningField(attempt, field)
+                                refusal && retries < MAX_REFUSAL_RETRIES
+                                    ? refusal.off
+                                        ? withReasoningOff(attempt, refusal.field)
+                                        : withoutReasoningField(
+                                              attempt,
+                                              refusal.field,
+                                          )
                                     : undefined;
-                            if (!retry) throw err;
-                            rememberRefusal(slot, opts.organizationId, field);
+                            if (!refusal || !retry) throw err;
+                            const { field, off } = refusal;
+                            rememberRefusal(
+                                slot,
+                                opts.organizationId,
+                                field,
+                                Date.now(),
+                                off,
+                            );
                             logger.warn({
-                                message: `Upstream refused \`${field}\`; asking again without it`,
+                                message: off
+                                    ? `Upstream refused \`${field}\` with tools; asking again with it off`
+                                    : `Upstream refused \`${field}\`; asking again without it`,
                                 context: 'ByokModelWrapper',
                                 metadata: {
                                     field,

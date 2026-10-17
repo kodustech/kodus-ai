@@ -1,0 +1,3417 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "65d8210f3d4ff1d5a5fa4e69740a3ec8f2c429d859a98bb946084efd8385a404"
+  },
+  "startedAt": "2026-10-15T00:56:00.362Z",
+  "updatedAt": "2026-10-15T01:40:04.455Z",
+  "complete": true,
+  "selectedCases": [
+    "R5-unrelated-same-area",
+    "K2-rule-reverses-prior",
+    "R16-fixed-then-reintroduced",
+    "P03-rule-nested-config-unguarded-after-reformat",
+    "P11-rule-generated-client-line-retouched",
+    "P19-rule-test-error-class-out-of-40",
+    "P27-poller-first-page-only",
+    "P35-hardcoded-term-new-messages"
+  ],
+  "casesSourceDigest": "0eac3cce139f30be850aeaaf10658c939145deb4cccad0e80ddadda8f0e0ab7b",
+  "summary": {
+    "measured": 40,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 25,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 25,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 34,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R5-unrelated-same-area · swapped-args [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "K2-rule-reverses-prior · result-first-violates-rule [if_delivered_linked]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "R16-fixed-then-reintroduced · qty-default-reintroduced-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P03-rule-nested-config-unguarded-after-reformat · nested-config-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P03-rule-nested-config-unguarded-after-reformat · nested-config-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P11-rule-generated-client-line-retouched · generated-client-hand-edit-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P11-rule-generated-client-line-retouched · console-error-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P19-rule-test-error-class-out-of-40 · rate-limited-plain-exception-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P19-rule-test-error-class-out-of-40 · refund-plain-exception-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P27-poller-first-page-only · poller-one-page-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P35-hardcoded-term-new-messages · invite-messages-term-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 67050,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The FailedError constructor arguments are swapped — `new FailedError(String(err), chargeId)` passes the stringified error as the `chargeId` field and the real charge id as `cause`, while the constructor is `(chargeId: string, cause?: unknown)`. WHY: `FailedError.chargeId` now holds an error message like \"Error: ...\" instead of the charge id, and `.cause` holds a charge id instead of the underlying error, so any consumer reading these fields (logging, retry keying, support tooling) gets wrong data; the pre-change call `new FailedError(chargeId, err)` was correct. HOW: restore the order to `throw new FailedError(chargeId, err);`.",
+          "keep": true,
+          "rationale": "Verified: FailedError constructor is (chargeId: string, cause?: unknown) at errors.ts:4, but status.ts:11 calls new FailedError(String(err), chargeId), passing the stringified error as chargeId and the real charge id as cause. This is a genuine argument-order inversion, not style. No upstream guard prevents it; the NotReadyError branch above only rethrows before this line. Consumers reading chargeId/cause get wrong data.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`FailedError.chargeId` currently holds a stringified error like `\"Error: ...\"` while `.cause` holds the charge id, so logging, retry keying, and support tooling read incorrect data. Restore the argument order to `new FailedError(chargeId, err)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 99421,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The arguments to FailedError are reversed — the changed line calls `new FailedError(String(err), chargeId)`, but the constructor is `constructor(readonly chargeId: string, readonly cause?: unknown)`. WHY: `FailedError.chargeId` and the Error message (`super(chargeId)`) now contain the stringified underlying error instead of the charge identifier, and `cause` contains the chargeId, breaking the error contract so any consumer (logging, alerting, associating a failure to a charge) reads the wrong values. HOW: restore the original argument order: `throw new FailedError(chargeId, err);`.",
+          "keep": true,
+          "rationale": "Confirmed against src/billing/errors.ts:3-4: FailedError constructor is (chargeId, cause?) with super(chargeId). Line 11 passes (String(err), chargeId), so chargeId and the error message hold the stringified error and cause holds the charge identifier — reversed. The described root cause and failure path are accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class FailedError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 20,
+                "path": "src/billing/errors.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The changed call passes `String(err)` as `chargeId` and `chargeId` as `cause`, so `FailedError.chargeId` and the `Error` message contain the stringified underlying error instead of the charge identifier, breaking logging, alerting, and charge association. Restore the original argument order with `throw new FailedError(chargeId, err);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 187094,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The `FailedError` constructor arguments are swapped — `new FailedError(String(err), chargeId)` passes the stringified error as `chargeId` and the real charge id as `cause`. WHY: `FailedError` is declared `constructor(readonly chargeId: string, readonly cause?: unknown)` (errors.ts:4), so `error.chargeId` now holds the error text (and `super(chargeId)` makes that the message) while the actual charge identifier is buried in `cause`; any caller or log that keys off `chargeId` reads the wrong value and the original error object is no longer preserved as the cause. HOW: restore the original order: `throw new FailedError(chargeId, err);`.",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts:4 declares `constructor(readonly chargeId: string, readonly cause?: unknown) { super(chargeId); }`, so the first argument is chargeId and the second is cause. The call at status.ts:11 `new FailedError(String(err), chargeId)` passes the stringified error as chargeId (and thus as the message via super) while the real charge id lands in cause — arguments are genuinely swapped. This is a concrete behavioral bug, not style, and is a different issue from the previously-decided NotReadyError propagation at line 8.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class FailedError|constructor\\(readonly",
+                "glob": "**/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The FailedError arguments are swapped — `new FailedError(String(err), chargeId)` passes the stringified error as the first (`chargeId`) parameter and the charge id as the second (`cause`) parameter. WHY: FailedError's constructor is `constructor(readonly chargeId: string, readonly cause?: unknown)`, so every consumer of `error.chargeId` now receives the stringified underlying error, `error.cause` receives the charge id, and the Error message (`super(chargeId)`) becomes the error text instead of the charge id, breaking the error contract and corrupting failure correlation/logging. HOW: restore the correct order: `throw new FailedError(chargeId, err);` (optionally `String(err)` only as the cause).",
+          "keep": true,
+          "rationale": "Confirmed: FailedError constructor is (chargeId, cause) with super(chargeId), but status.ts:11 calls new FailedError(String(err), chargeId), swapping the arguments so chargeId receives the stringified error and cause receives the charge id. The root cause and failure path are factually accurate and unguarded.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class FailedError|constructor",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 15
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `FailedError`'s constructor is `constructor(readonly chargeId: string, readonly cause?: unknown)`, swapping the arguments makes `error.chargeId` hold the stringified error, `error.cause` hold the charge id, and the `Error` message become the error text, breaking the error contract and failure correlation/logging. Restore the correct order with `throw new FailedError(chargeId, err)`, optionally passing `String(err)` only as the cause."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `FailedError` is declared `constructor(readonly chargeId: string, readonly cause?: unknown)` in errors.ts:4, swapping the arguments makes `error.chargeId` hold the error text and `super(chargeId)` make that the message, buries the actual charge identifier in `cause`, and stops preserving the original error object, so any caller or log keying off `chargeId` reads the wrong value. Restore the original order with `throw new FailedError(chargeId, err)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 149668,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: `new FailedError(String(err), chargeId)` passes the error message as the first argument, but FailedError's constructor is `constructor(readonly chargeId: string, readonly cause?: unknown)`, so the arguments are swapped. WHY: `error.chargeId` is now set to `String(err)` and the real charge id is buried in `cause`, so any caller/consumer that reads `err.chargeId` (e.g. poller.ts re-throws this unchanged at line 17) gets the error text instead of the charge id, breaking the error contract and the ability to correlate the failure to a charge. HOW: pass the chargeId first and the original error as the cause: `throw new FailedError(chargeId, err);`.",
+          "keep": true,
+          "rationale": "Confirmed: FailedError's constructor is `constructor(readonly chargeId: string, readonly cause?: unknown)` (src/billing/errors.ts:4), but status.ts:11 calls `new FailedError(String(err), chargeId)`. The arguments are genuinely swapped — `chargeId` is set to `String(err)` and the real charge id lands in `cause`. poller.ts:17 re-throws the error unchanged, so any consumer reading `err.chargeId` gets the error text. The root cause described is factually correct and the failure path is real.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class FailedError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "chargeId",
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: `new FailedError(String(err), chargeId)` passes the arguments in the wrong order — the constructor is `constructor(readonly chargeId: string, readonly cause?: unknown)` (src/billing/errors.ts:4), so the error text lands in the `chargeId` field and the real charge id lands in `cause`. WHY: every consumer that reads `FailedError.chargeId` (or the standard `cause`) now gets the wrong value — the failing charge can no longer be identified (e.g. for logging, reconciliation, or retry decisions) — whereas the pre-change code `new FailedError(chargeId, err)` had the correct order. HOW: restore the order: `throw new FailedError(chargeId, err);`.",
+          "keep": true,
+          "rationale": "Confirmed: FailedError's constructor is (chargeId, cause) but line 11 calls new FailedError(String(err), chargeId), swapping the two arguments. The error text becomes chargeId and the charge id becomes cause, so consumers reading FailedError.chargeId or cause get wrong values. The earlier review decision only covered NotReadyError propagation at lines 8-9 and does not touch this argument-order bug.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`new FailedError(String(err), chargeId)` reverses the constructor `constructor(readonly chargeId: string, readonly cause?: unknown)`, so `error.chargeId` is set to `String(err)` and the real charge id is buried in `cause`, breaking any consumer that reads `err.chargeId` (such as `poller.ts` re-throwing this unchanged at line 17). Pass the charge id first and the original error as the cause: `throw new FailedError(chargeId, err);`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The arguments are reversed against the constructor `constructor(readonly chargeId: string, readonly cause?: unknown)` at `src/billing/errors.ts:4`, so `FailedError.chargeId` holds the error text and `cause` holds the real charge id, leaving consumers unable to identify the failing charge for logging, reconciliation, or retry decisions. Restore the order with `throw new FailedError(chargeId, err);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 93320,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The FailedError constructor is called with its two arguments swapped — `new FailedError(String(err), chargeId)` passes the stringified error as `chargeId` and the actual charge id as `cause`, while `src/billing/errors.ts:4` defines `constructor(readonly chargeId: string, readonly cause?: unknown)` (chargeId first, cause second). WHY: Any consumer that reads `err.chargeId` (or the Error `message`, which is `super(chargeId)`) will receive the stringified gateway error instead of the charge identifier, and `err.cause` will hold the charge id instead of the original error — breaking the error contract and making failures impossible to attribute to a charge. Both arguments are strings, so TypeScript does not flag it. HOW: Restore the correct order: `throw new FailedError(chargeId, err);`.",
+          "keep": true,
+          "rationale": "Confirmed: src/billing/errors.ts:4 defines `constructor(readonly chargeId: string, readonly cause?: unknown)` (chargeId first, cause second), but src/billing/status.ts:11 calls `new FailedError(String(err), chargeId)`, swapping the two. Both arguments are strings, so TS won't flag it. This inverts the error contract: `message`/`chargeId` become the stringified gateway error and `cause` becomes the charge id. Real bug, not a style issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the arguments to `FailedError` are swapped, `err.chargeId` and the `Error` message receive the stringified gateway error while `err.cause` holds the charge id, so failures can no longer be attributed to a charge and TypeScript does not catch it since both arguments are strings. Restore the order from `src/billing/errors.ts:4` by throwing `new FailedError(chargeId, err)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K2-rule-reverses-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 3782,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-result-first",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-result-first",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "result-first-violates-rule",
+          "expect": "if_delivered_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K2-rule-reverses-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 3349,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-result-first",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-result-first",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "result-first-violates-rule",
+          "expect": "if_delivered_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K2-rule-reverses-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 3151,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 6,
+          "label": "kody_rules",
+          "earlierId": "round-a-result-first",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-result-first",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "result-first-violates-rule",
+          "expect": "if_delivered_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K2-rule-reverses-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 3460,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-result-first",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-result-first",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "result-first-violates-rule",
+          "expect": "if_delivered_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K2-rule-reverses-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 2887,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-result-first",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-result-first",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "result-first-violates-rule",
+          "expect": "if_delivered_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R16-fixed-then-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28855,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/cart/total.ts",
+          "claim": "WHAT: the rewritten loop multiplies by `item.qty` directly, dropping the `?? 1` default the earlier review round added. WHY: `qty` is optional in `Item` (src/cart/types.ts:1), so any item without qty makes `item.price * undefined` = NaN and the entire returned total NaN — a regression of the exact bug the prior fix addressed. HOW: restore the default: `sum += item.price * (item.qty ?? 1);`.",
+          "keep": true,
+          "rationale": "Verified src/cart/total.ts:5 uses `item.price * item.qty` with no default, while src/cart/types.ts:1 declares `qty?: number`. Any item without qty yields `number * undefined` = NaN, corrupting the entire returned total. This is a concrete regression of the previously implemented `item.qty ?? 1` fix. Root cause and failure path both confirmed in the actual code.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/total.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/types.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/cart/total.ts",
+          "claim": "WHAT: the rewritten loop multiplies by `item.qty` directly, dropping the `?? 1` default that the prior review round applied. WHY: `Item.qty` is optional (`src/cart/types.ts`), so any item without qty makes `item.price * undefined` NaN, and once one term is NaN the running `sum` is NaN — total() returns NaN for the entire cart instead of the sum of the remaining items. HOW: restore the default: `for (const item of items) sum += item.price * (item.qty ?? 1);`.",
+          "keep": true,
+          "rationale": "src/cart/total.ts:5 reads `sum += item.price * item.qty` with no default, and src/cart/types.ts:1 declares `qty?: number`. An item lacking qty yields `price * undefined === NaN`, which poisons the running sum so total() returns NaN. The previous review's `?? 1` default is not present in the current code, so the described regression is concretely confirmed.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/total.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/types.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/cart/total.ts",
+          "line": 5,
+          "label": "bug",
+          "earlierId": "round-a-default-qty",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-default-qty",
+          "by": "model"
+        },
+        {
+          "file": "src/cart/total.ts",
+          "line": 5,
+          "label": "bug",
+          "earlierId": "round-a-default-qty",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-default-qty",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 4,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "qty-default-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R16-fixed-then-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 41315,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/cart/total.ts",
+          "claim": "WHAT: `sum += item.price * item.qty` multiplies by `item.qty`, which is optional in `Item` (src/cart/types.ts:1), so an item without `qty` produces `NaN`. WHY: `undefined * price` is `NaN`, and adding it to `sum` makes the entire total `NaN` — this regresses the guard (`item.qty ?? 1`) that a prior review round added and that this diff removes. HOW: restore the default: `for (const item of items) sum += item.price * (item.qty ?? 1);`.",
+          "keep": true,
+          "rationale": "src/cart/types.ts:1 declares `qty?: number` (optional). src/cart/total.ts:5 multiplies `item.price * item.qty` with no default, so `undefined * price` yields NaN and poisons the entire sum. This exactly reverses the guard (`item.qty ?? 1`) that PreviousDecision round-a-default-qty marked implemented, so the described root cause and failure path are both real and confirmed by the code.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/total.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/types.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/cart/total.ts",
+          "line": 5,
+          "label": "bug",
+          "earlierId": "round-a-default-qty",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-default-qty",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "qty-default-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R16-fixed-then-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 125306,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/cart/total.ts",
+          "claim": "WHAT: The new loop multiplies `item.price * item.qty` without defaulting `qty`, but `qty` is optional in `Item` (`qty?: number`). WHY: For any item without `qty`, `price * undefined` is NaN, which poisons the running `sum` and makes `total()` return NaN for the whole cart — this reverses the earlier applied fix (`item.qty ?? 1`) and reintroduces the exact failure it corrected. HOW: restore the default: `for (const item of items) sum += item.price * (item.qty ?? 1);`.",
+          "keep": true,
+          "rationale": "Verified: `Item` is `{ price: number; qty?: number }` (src/cart/types.ts:1), so `qty` is optional. src/cart/total.ts:5 computes `sum += item.price * item.qty` with no default; for any item without `qty`, `price * undefined` is NaN and poisons `sum`, making `total()` return NaN for the whole cart. This matches the previously applied fix (`item.qty ?? 1`, outcome implemented) which the current diff reverses. Root cause and failure path are real and reachable; cannot refute.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/total.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "qty",
+                "glob": "**/total.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/cart/total.ts",
+          "line": 4,
+          "label": "bug",
+          "earlierId": "round-a-default-qty",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-default-qty",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "qty-default-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R16-fixed-then-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 73573,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/cart/total.ts",
+          "claim": "WHAT: The rewrite multiplies `item.price * item.qty` without the `?? 1` default, but `Item.qty` is optional (src/cart/types.ts:1 `qty?: number`). WHY: Any item with qty undefined produces `price * undefined === NaN`, and once NaN enters `sum` the entire cart total becomes NaN — reintroducing exactly the bug that the earlier `item.qty ?? 1` fix resolved. HOW: Default the optional field, e.g. `for (const item of items) sum += item.price * (item.qty ?? 1);`.",
+          "keep": true,
+          "rationale": "Confirmed: src/cart/total.ts:5 reads `sum += item.price * item.qty;` with no default, while src/cart/types.ts:1 declares `qty?: number`. A missing qty yields price * undefined === NaN, poisoning the whole sum. This is concrete evidence the previously 'implemented' `?? 1` change is absent/reverted in the current diff, so the finding stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/total.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/types.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/cart/total.ts",
+          "claim": "WHAT: The rewritten loop multiplies `item.price * item.qty` without the `?? 1` default, but `Item.qty` is optional (`src/cart/types.ts:1`). WHY: any cart item lacking `qty` makes `item.price * undefined` evaluate to `NaN`, which propagates through `sum +=` and makes the entire `total()` return `NaN` instead of a number. HOW: restore the default — `for (const item of items) sum += item.price * (item.qty ?? 1);`.",
+          "keep": true,
+          "rationale": "The claim is technically accurate. Item is defined as `{ price: number; qty?: number }` (types.ts:1), so `qty` is genuinely optional. The loop at total.ts:5 multiplies `item.price * item.qty` with no default; for any item missing `qty`, this is `number * undefined` → NaN, which propagates through `sum +=` and makes the whole `total()` return NaN. The previous review's `?? 1` fix is not present in the current code, so the earlier change is absent/reverted — concrete evidence that the bug is live. No guard upstream validates qty. Finding stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/total.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/types.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/cart/total.ts",
+          "line": 4,
+          "label": "bug",
+          "earlierId": "round-a-default-qty",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-default-qty",
+          "by": "model"
+        },
+        {
+          "file": "src/cart/total.ts",
+          "line": 5,
+          "label": "bug",
+          "earlierId": "round-a-default-qty",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "qty-default-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R16-fixed-then-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 56005,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/cart/total.ts",
+          "claim": "WHAT: the new loop uses `item.price * item.qty` without a default, but `qty` is optional in `Item` (`{ price: number; qty?: number }`), so any item lacking qty yields `price * undefined` = NaN. WHY: `sum += NaN` makes the returned total NaN for the whole cart, corrupting every downstream calculation that consumes the total. HOW: restore the default: `sum += item.price * (item.qty ?? 1);`.",
+          "keep": true,
+          "rationale": "Confirmed: src/cart/types.ts defines `Item = { price: number; qty?: number }`, so qty is optional, while src/cart/total.ts:5 computes `sum += item.price * item.qty` with no default. `price * undefined` yields NaN and `sum += NaN` corrupts the entire cart total. The prior decision round-a-default-qty (default `item.qty ?? 1`) is marked implemented, but the current diff shows no default present, giving concrete evidence the applied change is absent/reverted — so the finding is not resolved and cannot be refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/total.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "qty",
+                "glob": "*.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/cart/total.ts",
+          "line": 5,
+          "label": "bug",
+          "earlierId": "round-a-default-qty",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-default-qty",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 5,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "qty-default-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P03-rule-nested-config-unguarded-after-reformat",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28290,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P03-rule-nested-config-unguarded-after-reformat",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P03-rule-nested-config-unguarded-after-reformat",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "`escalate` can raise `NoMethodError` for a critical digest when `@workspace.config[:integrations]` or `[:pagerduty]` is nil, instead of degrading gracefully. Read the routing key with `@workspace.config.dig(:integrations, :pagerduty, :routing_key)` and guard the nil routing key before triggering the pager."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P03-rule-nested-config-unguarded-after-reformat",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 42095,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P03-rule-nested-config-unguarded-after-reformat",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P03-rule-nested-config-unguarded-after-reformat",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "Because `escalate` reads the PagerDuty routing key with `@workspace.config[:integrations][:pagerduty][:routing_key]` instead of safely reading optional integration settings, a workspace without `:integrations` or PagerDuty configured has nil at `[:integrations]` or `[:pagerduty]`, so escalating a critical digest raises `NoMethodError` instead of notifying anyone. Use `@workspace.config.dig(:integrations, :pagerduty, :routing_key)`, matching the fix already applied in `call` and the pattern in `send_hour`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P03-rule-nested-config-unguarded-after-reformat",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28510,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "When a critical digest fires in a workspace with no `[:integrations]` or `[:pagerduty]` settings, `escalate` raises `NoMethodError` because it indexes into `nil`. Read the routing key with `@workspace.config.dig(:integrations, :pagerduty, :routing_key)`, as the \"Read optional integration settings safely\" rule and `send_hour` do."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P03-rule-nested-config-unguarded-after-reformat",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18044,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "A workspace without integrations, or without PagerDuty configured, has nil at `[:integrations]` or `[:pagerduty]`, so escalating a critical digest raises NoMethodError. Read the routing key with `dig` instead, as the rest of the file now does."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P03-rule-nested-config-unguarded-after-reformat",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16474,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P03-rule-nested-config-unguarded-after-reformat",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P03-rule-nested-config-unguarded-after-reformat",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "Because `:integrations` and `:pagerduty` are optional, any workspace without PagerDuty configured has `nil` at `@workspace.config[:integrations][:pagerduty][:routing_key]`, so escalating a critical digest raises `NoMethodError` instead of skipping the page. Read the key with `@workspace.config.dig(:integrations, :pagerduty, :routing_key)` and return early when it is nil, as `send_hour` already does."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P11-rule-generated-client-line-retouched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 34870,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "label": "kody_rules",
+          "earlierId": "round-a-P11-rule-generated-client-line-retouched",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "Using `console.error` instead of the shared logger violates the \"No console logging in application code\" rule and bypasses centralized configuration. Use the shared logger from `src/lib/logger.ts` so log output stays structured and centrally configured."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-structured-logs"
+          ],
+          "marked": false,
+          "text": "Passing `invoiceId` and `err` as positional message arguments violates the \"Structured log fields\" rule. Pass them as a named object instead: `logger.warn('could not load invoice lines', { invoiceId, err })`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "Logging `invoiceId`, a document id, violates the \"No personal data in logs\" rule. Drop it from the logged context (or hash/redact it) and log only the error."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P11-rule-generated-client-line-retouched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14696,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "label": "kody_rules",
+          "earlierId": "round-a-P11-rule-generated-client-line-retouched",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "Using `console.error` here violates the rule against console logging in application code and loses the structured context the shared logger provides. Replace it with a `logger.warn` call using `invoiceId` and `err` in a structured context object, since this file already imports `logger` from `../lib/logger`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P11-rule-generated-client-line-retouched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 59981,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "label": "kody_rules",
+          "earlierId": "round-a-P11-rule-generated-client-line-retouched",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-P11-rule-generated-client-line-retouched",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "Using `console.error` violates the no-console-logging rule and also reverses a previously applied change that used `logger.warn`, reintroducing the console call that the existing `src/lib/logger.ts` import is meant to replace. Switch this line to the shared logger from `src/lib/logger.ts`, e.g. `logger.warn('could not load invoice lines', { invoiceId, err })`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-structured-logs"
+          ],
+          "marked": false,
+          "text": "Interpolating context into the log message instead of passing named fields violates the structured log fields rule and makes the log harder to query. Pass an object of named fields, e.g. `logger.warn('could not load invoice lines', { invoiceId, err })`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-swallow"
+          ],
+          "marked": false,
+          "text": "The catch block swallows the error because it neither rethrows nor returns an explicit error result, and logging via `console` does not satisfy the 'Do not swallow errors' rule's requirement to use the shared logger. Surface the failure by rethrowing, returning an explicit error result, or logging with the shared logger so the failure becomes observable."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P11-rule-generated-client-line-retouched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 29434,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "label": "kody_rules",
+          "earlierId": "round-a-P11-rule-generated-client-line-retouched",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "Using `console.error` instead of the shared logger violates the rule 'No console logging in application code' and reverts the previous `logger.warn` call, so failures are not captured consistently. Use the shared logger from `src/lib/logger.ts` for this failure."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-structured-logs"
+          ],
+          "marked": false,
+          "text": "Interpolating `invoiceId` and the error into the message string violates the rule 'Structured log fields'. Pass context as an object of named fields instead."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "Logging `err` may embed document/invoice identifiers from the failed request payload, and logging `invoiceId` directly violates the rule 'No personal data in logs'. Log a generic message with a non-identifying correlation id, or drop the identifier."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P11-rule-generated-client-line-retouched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 11394,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "label": "kody_rules",
+          "earlierId": "round-a-P11-rule-generated-client-line-retouched",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "text": "Using `console.error` in the catch block violates the no-console-logging rule and sends this failure outside the app's shared logging transport. Replace it with the shared `logger` from `src/lib/logger.ts`, which the file already imports, so the error follows the same path as the rest of the app."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P19-rule-test-error-class-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23922,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 9,
+          "label": "kody_rules",
+          "earlierId": "round-a-P19-rule-test-error-class-out-of-40",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 5,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "The fake won't be caught by `except RefundWindowClosedError` in tests because a plain `Exception` with bolted-on `status_code` and `charge_id` does not match what production raises. Replace it by importing or defining the real `RefundWindowClosedError` with `status_code`/`charge_id` in its constructor and return an instance of that class."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P19-rule-test-error-class-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 40657,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P19-rule-test-error-class-out-of-40",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 5,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Using a plain `Exception` with `status_code` and `charge_id` assigned afterwards means the production `except RefundWindowClosedError` will not match and those attributes are not guaranteed. Define or import the real error class, such as `RefundWindowClosedError(Exception)` that sets `status_code` and `charge_id` in its constructor, and raise it from `tests/helpers/refund_errors.py`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P19-rule-test-error-class-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19171,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P19-rule-test-error-class-out-of-40",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 5,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Because the helper raises a plain `Exception` with `status_code` and `charge_id` stapled on, tests using `except RefundWindowClosedError` or `isinstance` will never match and production error handling goes unexercised. Define or import the concrete error class production raises and return an instance of it, setting those attributes in its constructor or as class-defined fields instead of on a bare `Exception`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P19-rule-test-error-class-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 32572,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P19-rule-test-error-class-out-of-40",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 4,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Because `refund_window_closed` attaches `status_code` and `charge_id` to a bare `Exception`, assertions can pass even when production raises a differently typed error or no error at all. In `tests/helpers/refund_errors.py`, have `refund_window_closed` return the concrete production error class, such as `RefundWindowClosedError`, that already carries those fields."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P19-rule-test-error-class-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 50775,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P19-rule-test-error-class-out-of-40",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 5,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Per rule [1], this helper simulates a refund failure by raising a plain `Exception` with `status_code` and `charge_id` bolted on, so it never matches `except RefundWindowClosedError` in production and tests can pass against a shape the real code never produces. Define or import `RefundWindowClosedError` and raise or return that instance, setting `charge_id` on it."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 144222,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: pollOnce reads only the first page of events and then unconditionally advances the stored cursor to pollStartedAt, ignoring page.hasMore/nextCursor. WHY: events-client.ts:16 documents that the provider caps limit at 100 (PAGE_SIZE=500 returns at most 100), so the comment on lines 15-16 ('page.hasMore is never true') is false; when more than 100 events exist in the window, the rest are never read and the next poll starts after pollStartedAt, permanently losing those invoice events (markPaid/markVoided/markPastDue are never applied). HOW: page with nextCursor until hasMore is false before advancing the cursor, e.g. `let cursor: string | undefined; while (true) { const page = await client.listEvents({ createdAfter: since, createdBefore: pollStartedAt, limit: PAGE_SIZE, cursor }); for (const event of page.data) { await handleEvent(invoices, event); } if (!page.hasMore || !page.nextCursor) break; cursor = page.nextCursor; } await cursors.set(CURSOR_KEY, pollStartedAt);` This revises the earlier suggestion round-a-P27-poller-first-page-only: the change applied for it (PAGE_SIZE 500 + comment) does not actually paginate and leaves the data-loss bug in place.",
+          "keep": true,
+          "rationale": "The code at src/billing/poller.ts:11-17 calls listEvents once, iterates page.data, then unconditionally sets the cursor to pollStartedAt, ignoring page.hasMore/nextCursor. events-client.ts:16 explicitly documents that the provider caps limit at 100 regardless of the requested value, so PAGE_SIZE=500 cannot return every event in the window. The inline comment claiming 'page.hasMore is never true' is therefore false. When more than 100 events exist in the [since, pollStartedAt) window, the remainder are never processed and the cursor jumps past them, permanently losing invoice.paid/voided/payment_failed events. This refutes the premise of the previously applied fix (round-a-P27-poller-first-page-only) which only bumped PAGE_SIZE and added the incorrect comment rather than paginating; the candidate correctly revises that suggestion. Root cause and failure path are concretely supported by the code and documentation.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/events-client.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: pollOnce still reads only a single page (PAGE_SIZE=500) and then advances the cursor to pollStartedAt, while the added comment incorrectly asserts page.hasMore is never true. WHY: EventsClient.listEvents caps limit at 100 (events-client.ts:16-17: 'The provider caps limit at 100; a larger limit still returns at most 100 events'), so when more than 100 events match the window hasMore is true and nextCursor is non-null; the loop never consumes them and the cursor is moved past them, permanently losing those invoice.paid/voided/payment_failed events and leaving invoices in the wrong state. HOW: page through the results — pass nextCursor back as `cursor` and keep fetching until hasMore is false — before advancing the stored cursor, and remove the incorrect comment.",
+          "keep": true,
+          "rationale": "The claim is technically accurate. src/billing/poller.ts:11-17 reads a single page via listEvents and then advances the cursor to pollStartedAt. events-client.ts:16-17 documents that the provider caps limit at 100, so PAGE_SIZE=500 still returns at most 100 events and hasMore/nextCursor become true when more than 100 events match — meaning the added comment ('page.hasMore is never true') is wrong and events beyond the first 100 are permanently skipped. The prior decision (round-a-P27-poller-first-page-only, outcome 'implemented') claimed pagination was added, but the current diff shows no pagination loop and instead a new incorrect justification comment — concrete evidence the fix was reverted/reworked, so this is not a valid drop under the previous-decision rule.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/events-client.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 11,
+          "label": "bug",
+          "earlierId": "round-a-P27-poller-first-page-only",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P27-poller-first-page-only",
+          "by": "model"
+        },
+        {
+          "file": "src/billing/poller.ts",
+          "line": 11,
+          "label": "bug",
+          "earlierId": "round-a-P27-poller-first-page-only",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P27-poller-first-page-only",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 169318,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: `pollOnce` still reads only the first page of events and then advances the cursor to `pollStartedAt`, and the new comment claiming `page.hasMore` is never true is false because `EventsClient.listEvents` documents that the provider caps `limit` at 100 regardless of the requested value (events-client.ts:16), so `PAGE_SIZE = 500` does not hold every event since `since`. WHY: whenever more than 100 events were created in the window (e.g. a burst of invoice events), the events beyond the first page are never read and the cursor jumps past them, permanently losing those invoice state transitions (paid/voided/past-due never applied). HOW: keep requesting pages while `page.hasMore` is true, passing `cursor: page.nextCursor` in the query, and only advance the stored cursor to `pollStartedAt` once the last page has been drained.",
+          "keep": true,
+          "rationale": "events-client.ts:16 documents that the provider caps limit at 100 regardless of the requested value, so PAGE_SIZE = 500 does not hold every event since `since`. The current code (poller.ts:11-17) still reads only page.data once and then advances the cursor to pollStartedAt, so whenever >100 events exist in the window, page.hasMore is true and the overflow events are permanently skipped (their paid/voided/past-due transitions never applied). The comment claiming hasMore is never true is factually wrong per the interface doc. The prior review decision's fix (follow nextCursor until hasMore is false) is not present in the current diff, so the issue remains unresolved.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/events-client.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: `pollOnce` reads a single page and then advances the cursor to `pollStartedAt`, but `PAGE_SIZE = 500` does not make that page exhaustive — the EventsClient contract (events-client.ts:16-17) says the provider caps `limit` at 100 and still returns at most 100 events, so `page.hasMore` becomes true whenever >100 events exist in the window. WHY: The remaining events are never fetched and the cursor still jumps past them, so their invoices are never marked paid/voided/past-due — silent, permanent billing-state loss (the comment on lines 15-16 asserting hasMore is never true is false). HOW: loop until `hasMore` is false, passing `nextCursor` as `cursor`, before setting the cursor:\n```ts\nlet cursor: string | undefined;\nlet page;\ndo {\n  page = await client.listEvents({ createdAfter: since, createdBefore: pollStartedAt, limit: PAGE_SIZE, cursor });\n  for (const event of page.data) await handleEvent(invoices, event);\n  cursor = page.nextCursor ?? undefined;\n} while (page.hasMore);\nawait cursors.set(CURSOR_KEY, pollStartedAt);\n```",
+          "keep": true,
+          "rationale": "Confirmed against current code. events-client.ts:16-17 documents that the provider caps `limit` at 100, so a `PAGE_SIZE = 500` request still returns at most 100 events and `page.hasMore` becomes true whenever >100 events exist in the window. poller.ts:11-17 reads exactly one page, ignores `page.hasMore`/`page.nextCursor`, and unconditionally advances the cursor to `pollStartedAt`, so events beyond the first page are skipped permanently — silent billing-state loss. The comment on lines 15-16 asserting `hasMore` is never true is factually false. Although PreviousDecision round-a-P27-poller-first-page-only is marked 'implemented', the current diff still shows the exact single-page read with no loop, which is concrete evidence the applied change is absent/reverted — so the decision does not excuse the finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "limit|hasMore|nextCursor|PAGE_SIZE|maxLimit|100",
+                "path": "src/billing/events-client.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/events-client.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 6,
+          "label": "bug",
+          "earlierId": "round-a-P27-poller-first-page-only",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P27-poller-first-page-only",
+          "by": "model"
+        },
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "label": "bug",
+          "earlierId": "round-a-P27-poller-first-page-only",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P27-poller-first-page-only",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 27,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 182746,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: pollOnce still reads only a single page (limit: PAGE_SIZE) and unconditionally advances the cursor to pollStartedAt, while the added comment claims `page.hasMore is never true` — but EventsClient documents that the provider caps limit at 100, so a poll window containing more than 100 events returns hasMore=true and the rest of page.data is never processed. WHY: any invoice whose event falls beyond the first page is never marked paid/voided/past-due, and because the cursor is moved to pollStartedAt those events are skipped forever (silent data loss). HOW: page through the window before advancing the cursor, using page.nextCursor as the `cursor` query param and only calling cursors.set after the last page.",
+          "keep": true,
+          "rationale": "Confirmed by code: events-client.ts:16 documents the provider caps limit at 100, so PAGE_SIZE=500 returns at most 100 events and page.hasMore can be true. pollOnce (poller.ts:11-17) iterates only page.data and unconditionally sets the cursor to pollStartedAt, so any events beyond the first page are silently lost forever. The comment claiming 'page.hasMore is never true' directly contradicts the client contract. Although PreviousDecision index 1 claimed this was 'implemented', the current diff shows the paging fix was not applied (no loop over nextCursor, hasMore ignored), which is concrete evidence the applied change is absent/reverted — so the earlier decision does not refute this finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "PAGE_SIZE|hasMore|nextCursor|listEvents",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/events-client.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: pollOnce reads a single page with limit=PAGE_SIZE (500) and assumes page.hasMore is never true, but the provider caps results at 100 events per request (documented at events-client.ts:16), so a window with >100 events leaves the remainder unread. WHY: after handling only the first 100 events the cursor is advanced to pollStartedAt (line 17), so every event beyond the first 100 (e.g. invoices that should be marked paid/voided/past-due) is skipped permanently and the invoice state silently diverges. HOW: follow page.nextCursor while page.hasMore is true before advancing the cursor, e.g. loop `let cursor = undefined; do { const page = await client.listEvents({ createdAfter: since, createdBefore: pollStartedAt, limit: PAGE_SIZE, cursor }); for (const event of page.data) await handleEvent(invoices, event); cursor = page.nextCursor ?? undefined; } while (cursor);` and only then call cursors.set(CURSOR_KEY, pollStartedAt).",
+          "keep": true,
+          "rationale": "Confirmed against the code: poller.ts:11 issues one listEvents call with limit=PAGE_SIZE (500) and no cursor, then poller.ts:17 unconditionally advances the cursor to pollStartedAt. events-client.ts:16 documents the provider caps results at 100, and events-client.ts:8-13 provides hasMore/nextCursor specifically for reading more pages — neither is used. So a window with >100 events leaves the remainder unread, and the cursor jump makes them permanently skippable (lost invoice.paid/voided/payment_failed state). The claim is technically accurate and the inline comment asserting hasMore is never true is contradicted by the client's own docs. Although PreviousDecision index 1 raised this same issue with outcome 'implemented', the current file still shows the unfixed single-page read, which is concrete evidence the applied change is absent/reverted, so the drop condition is not met. KEEP.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/events-client.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 11,
+          "label": "bug",
+          "earlierId": "round-a-P27-poller-first-page-only",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P27-poller-first-page-only",
+          "by": "model"
+        },
+        {
+          "file": "src/billing/poller.ts",
+          "line": 11,
+          "label": "bug",
+          "earlierId": "round-a-P27-poller-first-page-only",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P27-poller-first-page-only",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 26,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 163562,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: pollOnce reads only the first page of events and then advances the stored cursor to pollStartedAt, discarding page.hasMore/nextCursor; the new comment claiming 'page.hasMore is never true' is false because EventsClient caps limit at 100 regardless of PAGE_SIZE=500. WHY: any poll window containing more than 100 events (the provider's hard cap) silently drops every event beyond the first page, so invoices are never marked paid/voided/past-due for good — the cursor moves past them. HOW: loop while page.hasMore, passing page.nextCursor as the cursor, and only advance the stored cursor to pollStartedAt after the last page is consumed.",
+          "keep": true,
+          "rationale": "Confirmed. PAGE_SIZE=500 (poller.ts:6) but the EventsClient contract caps results at 100 (\"a larger limit still returns at most 100 events\", events-client.ts:16). pollOnce reads a single page (poller.ts:11), ignores page.hasMore/page.nextCursor, then unconditionally sets the cursor to pollStartedAt (poller.ts:17). The comment asserting \"page.hasMore is never true\" is provably false: hasMore becomes true whenever >100 events fall in the window, so events beyond the first page are silently dropped and the cursor skips past them for good. The previous decision (round-a-P27) asked for exactly this loop, but the current diff still shows a single-page read with no loop, so that change is absent — no refutation. Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "listEvents|class EventsClient|limit",
+                "glob": "*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/events-client.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: PAGE_SIZE is set to 500 and the comment claims page.hasMore is never true, but EventsClient documents that the provider caps limit at 100 and still returns at most 100 events per call, so pollOnce reads only the first page and then advances the cursor to pollStartedAt. WHY: when more than 100 events exist between polls, the remaining events are never fetched and the stored cursor skips past them, so invoices are silently never marked paid/voided/past-due (permanent event loss). HOW: loop while page.hasMore, passing page.nextCursor as the cursor, and only advance the stored cursor after the final page — the earlier suggestion to follow nextCursor was not actually applied by this change.",
+          "keep": true,
+          "rationale": "Verified: events-client.ts:16 states the provider caps limit at 100 and returns at most 100 events per call, but poller.ts:6 sets PAGE_SIZE=500. pollOnce (poller.ts:11-17) issues a single listEvents call, iterates only page.data, and unconditionally advances the cursor to pollStartedAt without ever following page.nextCursor/page.hasMore (both exposed by the EventPage type). When more than 100 events exist in the window, the remainder are never fetched and the cursor skips past them, causing permanent event loss (invoices never marked paid/voided/past-due). The earlier decision describing a nextCursor loop is not present in the current code, so it does not refute the finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "hasMore|nextCursor|limit|listEvents|maxLimit|100",
+                "glob": "**/*events*"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/events-client.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 11,
+          "label": "bug",
+          "earlierId": "round-a-P27-poller-first-page-only",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        },
+        {
+          "file": "src/billing/poller.ts",
+          "line": 6,
+          "label": "bug",
+          "earlierId": "round-a-P27-poller-first-page-only",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P27-poller-first-page-only",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 159991,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: pollOnce reads a single page and then moves the cursor to pollStartedAt even though page.hasMore/nextCursor are ignored, and the inline comment's premise is false: events-client.ts:16 documents that the provider caps limit at 100, so PAGE_SIZE=500 still returns at most 100 events.\nWHY: when more than 100 events exist in the window, the remaining events are never read and the cursor jumps past them, so those invoice events (markPaid/markVoided/markPastDue) are lost permanently.\nHOW: loop pages, passing page.nextCursor as `cursor`, until page.hasMore is false, and only then advance the stored cursor:\n```\nlet cursor: string | undefined = undefined;\ndo {\n  const page = await client.listEvents({ createdAfter: since, createdBefore: pollStartedAt, limit: PAGE_SIZE, cursor });\n  for (const event of page.data) await handleEvent(invoices, event);\n  cursor = page.hasMore ? (page.nextCursor ?? undefined) : undefined;\n} while (cursor);\nawait cursors.set(CURSOR_KEY, pollStartedAt);\n```",
+          "keep": true,
+          "rationale": "The current code (poller.ts:11-17) still reads exactly one page via client.listEvents and never references page.hasMore/page.nextCursor, then unconditionally advances the cursor to pollStartedAt. The inline comment's premise is provably false: events-client.ts:16 documents that the provider caps limit at 100, so limit=PAGE_SIZE=500 still returns at most 100 events and hasMore can be true. Any events beyond the first page are skipped and the cursor jumps past them, losing markPaid/markVoided/markPastDue events. The prior 'implemented' decision for this exact issue is contradicted by the current diff, which shows the pagination loop was never actually applied (or was reverted), so the finding is not a duplicate of an applied change.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "listEvents|hasMore|nextCursor|PAGE_SIZE",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 25,
+                "path": "src/billing/events-client.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: pollOnce reads a single page of events and then advances the stored cursor to pollStartedAt without ever checking page.hasMore/nextCursor, so any events beyond the first page are never read. WHY: events-client.ts:16 documents that the provider caps limit at 100 regardless of PAGE_SIZE=500, so page.hasMore becomes true as soon as more than 100 events fall in the (since, pollStartedAt] window; the next poll starts after pollStartedAt, permanently dropping those invoice events so invoices are never marked paid/voided/past due. The comment on lines 15-16 asserting hasMore is never true is false. HOW: drain every page before advancing the cursor.",
+          "keep": true,
+          "rationale": "Verified: poller.ts:11-17 reads a single page, ignores page.hasMore/nextCursor, then advances the cursor to pollStartedAt. events-client.ts:16 documents the provider caps limit at 100, so with PAGE_SIZE=500 any window >100 events makes hasMore true and leaves events unread; the next poll starts after pollStartedAt, permanently dropping those events. The inline comment claiming hasMore is never true is false. The current code still shows the single-page loop, providing concrete evidence the previously \"implemented\" fix is not present in the diff, so the finding is not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "hasMore|nextCursor|listEvents",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/events-client.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 11,
+          "label": "bug",
+          "earlierId": "round-a-P27-poller-first-page-only",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P27-poller-first-page-only",
+          "by": "model"
+        },
+        {
+          "file": "src/billing/poller.ts",
+          "line": 11,
+          "label": "bug",
+          "earlierId": "round-a-P27-poller-first-page-only",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 28,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 96136,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage and alreadyMemberMessage hardcode the literal nouns \"workspace\" and \"member\" (and ignore the account parameter entirely), while the sibling seatLimitMessage uses term(account, 'workspace'/'member'). WHY: src/lib/terminology.ts documents that accounts can rename these nouns (e.g. a school calls a workspace a \"class\"), so an account that renamed them is told its \"workspace invite has expired\" and that the user is \"already a member of this workspace\" — wrong user-facing output and the unused account parameter signals the terminology lookup was dropped. HOW: build the strings with term(account, 'workspace') / term(account, 'member') / term(account, 'admin') instead of the literals.",
+          "keep": true,
+          "rationale": "Verified in src/invites/messages.ts: inviteExpiredMessage (line 8) and alreadyMemberMessage (line 12) return strings with hardcoded 'workspace'/'member'/'admin' literals and never call term(), while sibling seatLimitMessage (line 4) uses term(account, 'workspace'/'member'). src/lib/terminology.ts documents that accounts can rename these nouns (a school calls a workspace a 'class'), and its Noun type includes 'workspace', 'member', and 'admin'. The account parameter is therefore unused in both functions, exactly as claimed. The earlier implemented decision (index 4) covered only seatLimitMessage at lines 3-5, a different location/function, so this is not superseded.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Accounts that rename these nouns (for example a school that calls a workspace a class) are told their \"workspace invite has expired\" and that the user is \"already a member of this workspace\", and the unused `account` parameter signals the terminology lookup was dropped. Build both strings with `term(account, 'workspace')`, `term(account, 'member')`, and `term(account, 'admin')` as `seatLimitMessage` does, instead of the literals."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 86052,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage and alreadyMemberMessage hardcode the nouns 'workspace', 'member' and 'admin' instead of calling term(account, ...) as the sibling seatLimitMessage does. WHY: accounts can rename these nouns (src/lib/terminology.ts:1-11), so an account that calls its workspaces 'classes' is still told 'This workspace invite has expired' / 'already a member of this workspace' — the message contradicts the account's terminology. HOW: build both messages with term(account, 'workspace') and term(account, 'member'), e.g. `This ${term(account,'workspace')} invite has expired. Ask a ${term(account,'workspace')} ${term(account,'admin')} to send you a new one.` and `${email} is already a ${term(account,'member')} of this ${term(account,'workspace')}.` (note inviteExpiredMessage currently takes `account` but never uses it, confirming the term() call was dropped).",
+          "keep": true,
+          "rationale": "Confirmed. src/lib/terminology.ts:1-11 explicitly documents that user-facing text never hardcodes workspace/member/admin and must call term(); the Noun type includes all three. seatLimitMessage (lines 3-5) correctly calls term(), but inviteExpiredMessage (line 8) hardcodes 'workspace' twice and 'admin', and alreadyMemberMessage (line 12) hardcodes 'member' and 'workspace'. Both functions already receive `account`, and inviteExpiredMessage's unused `account` parameter corroborates the dropped term() call. An account renaming its nouns will therefore see contradictory copy. PreviousReviewDecision index 4 only resolved the seatLimitMessage lines (3-5) and does not cover lines 7-13, so it does not excuse this location. The root cause and failure path are accurate — not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `inviteExpiredMessage` and `alreadyMemberMessage` hardcode `workspace`, `member`, and `admin` instead of calling `term(account, ...)` like `seatLimitMessage`, accounts that rename those nouns in `src/lib/terminology.ts:1-11` see messages such as `This workspace invite has expired` and `already a member of this workspace` that contradict their terminology. Build both messages with `term(account, 'workspace')`, `term(account, 'member')`, and `term(account, 'admin')`, and note that `inviteExpiredMessage` currently takes `account` but never uses it, confirming the `term()` call was dropped."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 83831,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage hardcodes the nouns 'workspace' (twice) and 'admin' even though it receives an account, and its account parameter is never used. WHY: per the documented contract in src/lib/terminology.ts ('User-facing text never hardcodes these nouns; it asks term() for the account's word'), an account that renames its workspace to 'class' or its admin to 'coordinator' will be shown the literal word 'workspace admin', the same bug previously fixed in seatLimitMessage. HOW: build the string with term(account,'workspace') and term(account,'admin'), e.g. `This ${term(account,'workspace')} invite has expired. Ask a ${term(account,'admin')} to send you a new one.`",
+          "keep": true,
+          "rationale": "Confirmed. src/invites/messages.ts:7-9 defines inviteExpiredMessage(account) whose body returns a literal string 'This workspace invite has expired. Ask a workspace admin to send you a new one.' — the account parameter is never referenced, and 'workspace' (x2) plus 'admin' are hardcoded. src/lib/terminology.ts documents the contract that user-facing text must not hardcode these nouns and must call term(account, noun); 'admin' is even a defined Noun. The sibling seatLimitMessage (lines 3-5) was already fixed to use term(), matching the claim that this is the same class of bug left unfixed here. The suggested fix (term(account,'workspace') / term(account,'admin')) is directly supported by the API. No guard or upstream validation prevents the wrong output, and the root cause is factually accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: alreadyMemberMessage hardcodes 'member' and 'workspace' despite receiving an account. WHY: accounts can rename these nouns (src/lib/terminology.ts: 'an agency calls a member a collaborator'), so this message shows the wrong words and contradicts the same rule that was already fixed for seatLimitMessage in this file. HOW: use term(account,'member') and term(account,'workspace'), e.g. `${email} is already a ${term(account,'member')} of this ${term(account,'workspace')}.`",
+          "keep": true,
+          "rationale": "Confirmed: alreadyMemberMessage (src/invites/messages.ts:11-13) hardcodes 'member' and 'workspace' while taking an Account param. terminology.ts (lines 1-4) explicitly states user-facing text never hardcodes these nouns and must use term(); accounts may rename them (school=class, agency=collaborator). The sibling function seatLimitMessage in the same file was already fixed to use term(account,...), so this is a genuine wrong-output bug in a different, unguarded function — not resolved by the prior decision.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `inviteExpiredMessage` hardcodes 'workspace' and 'admin' while ignoring its `account` parameter, accounts that rename these nouns to 'class' or 'coordinator' are shown the literal word 'workspace admin', violating the contract in `src/lib/terminology.ts` and repeating the bug previously fixed in `seatLimitMessage`. Build the string with `term(account,'workspace')` and `term(account,'admin')` instead."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/invites/messages.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`alreadyMemberMessage` hardcodes 'member' and 'workspace' despite receiving an `account`, so accounts that rename these nouns (an agency calls a member a collaborator) are shown the wrong words, contradicting the rule already fixed for `seatLimitMessage` in this file. Use `term(account,'member')` and `term(account,'workspace')` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 69298,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: The new inviteExpiredMessage and alreadyMemberMessage hardcode 'workspace'/'member'/'admin' and ignore the `account` argument, even though src/lib/terminology.ts documents that user-facing text must resolve nouns via term(). WHY: For any account that renames these nouns (e.g. workspace->'class', member->'collaborator', admin->'teacher'), users are shown the wrong word ('This workspace invite has expired', 'is already a member of this workspace'), and inviteExpiredMessage's `account` parameter is silently unused — the same defect a previous review already forced out of seatLimitMessage. HOW: Build the strings with term(account, 'workspace'), term(account, 'member'), and term(account, 'admin').",
+          "keep": true,
+          "rationale": "Confirmed. src/lib/terminology.ts (lines 1-12) explicitly documents that user-facing text must resolve nouns via term(), and defines Noun = 'workspace' | 'member' | 'admin'. In src/invites/messages.ts, seatLimitMessage already uses term(account, ...), but the two functions cited hardcode 'workspace'/'member'/'admin' and never call term(). inviteExpiredMessage's `account` parameter is imported and typed but entirely unused. For any account that overrides nouns (e.g. workspace->'class', member->'collaborator', admin->'teacher'), users see the wrong words. This is the same defect a previous review forced out of seatLimitMessage, now left unaddressed in the newly added functions. The root cause is factually correct and the failure path is real; no guard prevents it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`inviteExpiredMessage` and `alreadyMemberMessage` in src/invites/messages.ts hardcode 'workspace', 'member', and 'admin' despite `src/lib/terminology.ts` requiring user-facing nouns to be resolved via `term()`, so accounts that rename these nouns (e.g. workspace->'class', member->'collaborator', admin->'teacher') see incorrect text and `inviteExpiredMessage`'s `account` parameter is silently unused, the same defect previously removed from `seatLimitMessage`. Build the strings with `term(account, 'workspace')`, `term(account, 'member')`, and `term(account, 'admin')`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 96592,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: The new functions inviteExpiredMessage and alreadyMemberMessage hardcode the nouns 'workspace', 'admin', and 'member' while accepting an unused `account: Account` parameter. WHY: src/lib/terminology.ts documents that user-facing text must resolve nouns via term(account, noun); an account that renamed its workspace to 'class' (or member to 'collaborator') gets the wrong wording, e.g. 'This workspace invite has expired' instead of 'This class invite has expired'. The sibling seatLimitMessage already uses term() for this reason. HOW: Build both messages with term(account, 'workspace'), term(account, 'admin'), and term(account, 'member').",
+          "keep": true,
+          "rationale": "src/lib/terminology.ts explicitly documents that user-facing text never hardcodes nouns but calls term(account, noun), and DEFAULT_NOUNS/term() provide account-specific renames. inviteExpiredMessage and alreadyMemberMessage hardcode 'workspace', 'admin', and 'member' and take an unused `account: Account` parameter, so an account that renamed these nouns receives the wrong wording (e.g. 'This workspace invite has expired' instead of 'This class invite has expired'). The sibling seatLimitMessage already uses term() for exactly this reason, confirming the pattern the new functions break. The prior decision only resolved seatLimitMessage; this is a distinct, still-unfixed violation on the newly added lines.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`inviteExpiredMessage` and `alreadyMemberMessage` hardcode 'workspace', 'admin', and 'member' while accepting an unused `account: Account`, so an account that renamed its workspace to 'class' or member to 'collaborator' sees incorrect wording such as 'This workspace invite has expired' instead of 'This class invite has expired'; `src/lib/terminology.ts` requires user-facing text to resolve nouns via `term(account, noun)`, and the sibling `seatLimitMessage` already does this. Build both messages with `term(account, 'workspace')`, `term(account, 'admin')`, and `term(account, 'member')`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

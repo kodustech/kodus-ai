@@ -202,18 +202,18 @@ function runMetaOf(args) {
                 args.model,
             provider:
                 (TIER0[args.model] && TIER0[args.model].provider) || 'unknown',
-            accessPath:
-                TIER0[args.model]?.provider === 'codex_subscription'
-                    ? 'subscription'
-                    : 'api',
+            // How the finder reached it (agent-provider.js resolveRoute): the
+            // env/managed route, or a BYOK config when an effort is set.
+            // A subscription model never runs (main exits 2 before it).
+            accessPath: process.env.RECALL_REASONING_EFFORT ? 'byok' : 'managed',
         },
         executionMode: 'replay',
         // heavy = passadas de resample ativadas. Eixo de regime: não comparar
         // entrada heavy com entrada normal sem rotular.
         heavy: process.env.RECALL_HEAVY === '1',
-        // RECALL_REASONING_EFFORT ja injeta o effort de verdade na chamada
-        // (ver withReasoningEffort em agent-provider.js); sem isto o artefato
-        // registrava 'vendor-default' mesmo quando o run era em thinking high.
+        // RECALL_REASONING_EFFORT reaches the finder as the BYOK model's
+        // reasoningEffort (agent-provider.js resolveRoute), which production
+        // maps per provider; without it the managed route runs the family default.
         reasoning: process.env.RECALL_REASONING_EFFORT
             ? {
                   config: 'explicit',
@@ -271,6 +271,16 @@ async function main() {
     if (args.listModels) {
         for (const model of defaultMatrix()) console.log(model);
         return;
+    }
+
+    // A subscription model has no production route: the finder would run
+    // another model under its name (agent-provider.js resolveRoute).
+    if (TIER0[args.model]?.provider === 'codex_subscription') {
+        console.error(
+            `not measured: ${args.model} runs on a ChatGPT subscription, which production has no route for ` +
+                '(libs/llm/codex-subscription-model.ts is used only by evals). Run its API model instead.',
+        );
+        process.exit(2);
     }
 
     // --no-judge: run the finder and SAVE its findings, score nothing. The finder
@@ -359,6 +369,11 @@ async function main() {
 
     const InvestigationAgentProvider = require('./agent-provider');
     const recallAssertion = require('./recall-assertion');
+    // Tokens and time of every model call (finder loop, verify, recovery),
+    // read like billing: summary.usage (evals/shared/eval-kit.js tokensUsed).
+    // After agent-provider, so its TypeScript hook is the one loaded.
+    const { countTokens, tokensUsed } = require('../shared/eval-kit');
+    countTokens();
     const provider = new InvestigationAgentProvider({
         config: providerConfigFor(args.model),
     });
@@ -573,6 +588,7 @@ async function main() {
         startedAt,
         finishedAt: new Date().toISOString(),
         tokens,
+        usage: tokensUsed(),
         cases: rows.length,
         passed: rows.filter((row) => row.status === 'pass').length,
         failed: qualityFailures,

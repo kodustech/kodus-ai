@@ -32,12 +32,18 @@
 //              its row is then `skipped` and `model` says how it is checked
 //   byHand   — evals that can measure it on a real model, but only when someone
 //              runs them by hand: what it takes to start measuring the stage
-//   nightly  — true when the nightly measures it with a real model; its row then
-//              comes only from the nightly, never from the wiring smoke
+//   nightly  — the result the nightly measures it with on a real model
+//              (stage-signals.js READERS); its row then comes only from the
+//              nightly, never from the wiring smoke
+//   metric   — what the measured number counts, shown under it
+//   set      — what the model reviews to produce it. The panel reads it after
+//              "<model> reviews <cases>", so it starts with a plural noun
+//   caveat   — what a green number does not prove
 //   friday   — when the Friday check (evals/tier0-smoke.js) runs it on every
 //              tier-0 model: the key of its outcome in that check's
 //              `evals.tier0.<model>` meta. Proves it still runs there, measures
-//              nothing
+//              nothing. Every stage the nightly measures has one, so Friday
+//              covers the same stages on every model
 //   history  — an older signal carrying the same number, for the panel's chart
 //              until this stage's own rows have a history
 //   note     — shown by the panel next to the status
@@ -78,7 +84,9 @@ const STAGES = [
         eval: 'evals/investigation',
         model: 'real',
         wiring: ['finder-recall'],
-        nightly: true,
+        nightly: 'finder-recall',
+        metric: 'of known bugs found',
+        set: 'real PRs whose bugs we know',
         friday: 'review',
         history: 'evals.nightly.recall',
         byHand: ['evals/trace-context'],
@@ -100,13 +108,18 @@ const STAGES = [
         id: 'parse',
         name: 'Output parsing',
         group: 'Finding issues',
-        label: 'Output recovery: every LLM call parses its answer',
+        label: "Parse: the end of each finder run becomes findings",
         pipeline: ['AgentReviewStage'],
-        eval: 'evals/review-chain',
-        model: 'mocked',
-        wiring: ['review-chain', 'shape-invariance'],
+        eval: 'evals/parse',
+        model: 'real',
+        wiring: ['parse', 'review-chain', 'shape-invariance'],
+        nightly: 'shared',
+        friday: 'parse',
+        metric: 'of written findings handled right by the parse',
+        set: 'recorded finder outputs from nine production models on public PRs, with the shapes production lost (#2112)',
+        caveat: 'Replays recorded model output: a model that changes how it writes its findings shows here once its runs are recorded again (evals/parse/capture.js).',
         byHand: ['evals/parser', 'evals/structured-outputs'],
-        note: 'deterministic: every call site wired to the shared recovery, every wire shape normalized',
+        note: 'every PR against the scripted model (the deterministic part); nightly on the real model when the parse or its payloads change',
     },
     {
         id: 'severity',
@@ -139,10 +152,14 @@ const STAGES = [
         label: 'Formatting of each suggestion',
         pipeline: ['AgentReviewStage'],
         eval: 'evals/format',
-        model: 'mocked',
+        model: 'real',
         wiring: ['format'],
-        byHand: ['evals/format'],
-        note: 'mock only on a schedule',
+        nightly: 'shared',
+        friday: 'format',
+        metric: 'of findings formatted right',
+        set: 'batches of findings: each of 31 real reviews under four team languages and a writing guideline',
+        caveat: 'Checks the text a reviewer sees, not whether the claim stayed the same.',
+        note: 'every PR against the scripted model (the local fallback); nightly on the real model when the formatter or its cases change',
     },
     {
         id: 'anchoring',
@@ -163,10 +180,14 @@ const STAGES = [
         label: 'Later review rounds: no reposts, nothing lost',
         pipeline: ['AgentReviewStage'],
         eval: 'evals/review-rounds',
-        model: 'scripted',
+        model: 'real',
         wiring: ['review-rounds', 'review-lifecycle'],
-        byHand: ['evals/review-rounds'],
-        note: 'scripted model only on a schedule; real-model runs are on demand',
+        nightly: 'shared',
+        friday: 'review_rounds',
+        metric: 'of claims handled right',
+        set: 'later rounds of a PR: reposts that must stay off it, new problems and revisions that must post',
+        caveat: 'The nightly runs one model on a subset (evals/nightly-evals.js, targets.json sets.nightly); the full set, the lifecycle chains and other models run by hand.',
+        note: 'targets.json sets.nightly in the nightly (evals/nightly-evals.js); the full set runs by hand',
     },
     {
         id: 'rules-learned',
@@ -213,6 +234,21 @@ const STAGES = [
         note: 'no AI, in the unit test suite: the agent is offered the memory action in those threads',
     },
     {
+        id: 'memories',
+        name: 'Following memories',
+        group: 'Kody Rules',
+        label: "Follows the team's memories: quiet where one says the code is intended, a finding where one says it is wrong",
+        pipeline: ['AgentReviewStage'],
+        eval: 'evals/memories',
+        model: 'real',
+        wiring: ['memories'],
+        nightly: 'shared',
+        friday: 'memories',
+        metric: 'of memory cases the review got right',
+        set: 'small invented pull requests, one per kind of memory production teams keep, each paired with a bug the memory must not silence',
+        note: 'every PR against the scripted model; nightly on the real model when the finder or its cases change',
+    },
+    {
         id: 'detectors',
         name: 'Detectors',
         group: 'Kody Rules',
@@ -230,10 +266,14 @@ const STAGES = [
         label: 'Kody Rules agent: flags every place a PR breaks a rule',
         pipeline: ['AgentReviewStage'],
         eval: 'evals/kody-rules',
-        model: 'scripted',
+        model: 'real',
         wiring: ['kody-rules'],
-        byHand: ['evals/kody-rules'],
-        note: 'scripted model only on a schedule; real-model runs are on demand',
+        nightly: 'kody-rules',
+        friday: 'kody_rules',
+        metric: 'of known rule violations flagged',
+        set: 'real PRs where we know every line that breaks a rule',
+        caveat: 'The set holds mechanical rules only (no console, no any, no process.env, no generic Error): a green night says the rule machinery works, not that Kody is good at harder rules.',
+        note: 'occurrence recall and clean-file specificity on github-cases against their floors, when its files changed',
     },
     {
         id: 'pr-comments',
@@ -264,11 +304,14 @@ const STAGES = [
         label: 'PR summary',
         pipeline: ['UpdateCommentsAndGenerateSummaryStage'],
         eval: 'evals/pr-summary',
-        model: 'scripted',
+        model: 'real',
         wiring: ['pr-summary'],
+        nightly: 'shared',
         friday: 'pr_summary',
-        byHand: ['evals/pr-summary'],
-        note: 'scripted model nightly; every tier-0 model on Friday',
+        metric: 'of PR-summary checks passed',
+        set: 'summary cases: pull requests under each behaviour for an existing description and a new commit, three with a title that says nothing',
+        caveat: 'Whether the summary speaks of the diff is read from its words, not judged.',
+        note: 'every PR against the scripted model (the contract); nightly on the real model when the summary path or its cases change',
     },
     {
         id: 'approval',
@@ -288,10 +331,29 @@ const STAGES = [
         label: 'Replies to Kody in PR threads',
         pipeline: null,
         eval: 'evals/reply-addressing',
-        model: 'scripted',
+        model: 'real',
         wiring: ['reply-addressing'],
-        byHand: ['evals/reply-addressing'],
-        note: 'scripted model only on a schedule',
+        nightly: 'shared',
+        friday: 'reply_addressing',
+        metric: 'of replies handled right',
+        set: 'conversations where someone replies in a Kody thread without @kody',
+        note: 'cases.json in the nightly (evals/nightly-evals.js); the real replies of repo-cases.json run by hand',
+    },
+    {
+        id: 'conversation',
+        name: 'Conversation replies',
+        group: 'Conversation with Kody',
+        label: 'Answers a developer in a PR thread from the code: a claimed fix, a decline, a question',
+        pipeline: null,
+        eval: 'evals/conversation',
+        model: 'real',
+        wiring: ['conversation'],
+        nightly: 'shared',
+        friday: 'conversation',
+        metric: 'of reply checks right',
+        set: 'invented threads where the developer is right or wrong about the code, in English and Portuguese',
+        caveat: 'A judge reads whether the reply asserts what the code shows (assertsClaim); writes through MCP are not covered.',
+        note: 'every PR against the scripted model; nightly on the real model when the agent or its cases change',
     },
 ];
 
