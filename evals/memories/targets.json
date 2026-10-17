@@ -5,6 +5,7 @@
         "deepseek-v4-flash@fireworks (the nightly model): calibrated 2026-10-16 from 2 local runs on parity/a-review-path 03bf13ba8, the review through production's stage (evals/shared/review-stage.js) with the memories written by KodyRulesService.createOrUpdate, the managed route: 9 and 9 of 10 (mean 90%), the same case wrong in both (config-read-through-config), so the paired per-case difference was 0 on every case. floor = mean - 2 binomial SE over the 10 cases (0.710), rounded down to a whole case: 7 of 10 still pass. Deliberate break (memories filtered out in KodyRulesValidationService, memoryRules=0 in all 10 prompts): 6 of 10, GATE FAILED, exit 1.",
         "gpt-6-sol: calibrated 2026-10-17 from 2 local runs on a725253d6: 9/10 and 9/10, mean 0.9. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 10, rounded down: 0.71.",
         "claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 10/10 and 10/10, mean 1. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 10, rounded down: 0.9.",
+        "kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3: 9/10 and 9/10, mean 0.9. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 10, rounded down: 0.71.",
         "RATCHET: a PR that adds cases or moves the value on purpose recalibrates here in the same PR, with its runs as evidence."
     ],
     "models": {
@@ -23,6 +24,10 @@
         "claude-sonnet-5-5": {
             "floor": 0.9,
             "observed": 1
+        },
+        "kimi-k2.7-code@openrouter": {
+            "floor": 0.71,
+            "observed": 0.9
         }
     }
 }

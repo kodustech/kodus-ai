@@ -8,6 +8,7 @@
         "2026-10-16, cloud route: the model now comes from the org's cloud route (evals/shared/model-route.js) instead of the self-hosted env route (applyModelEnv); on deepseek the request bodies are identical but for reasoning_effort, which the env route sent as high and the managed route leaves unset. Two runs on it, judge gpt-5.6-luna low: 27 and 27 of 27. The floor stands.",
         "gpt-6-sol: 20/27 and 23/27 (mean 0.796) in 2 local runs on a725253d6; the floor those give (0.64) is not above what the scripted model scores (0.6667), so it could not tell a broken stage from this model: no floor. In the cases it missed, the reply said it had not checked the commit, or answered with a condition, instead of reading the code. A fix to the model's behaviour recalibrates here.",
         "claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 26/27 and 26/27, mean 0.963. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 27, rounded down: 0.89.",
+        "kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3: 26/27 and 25/27, mean 0.944. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 27, rounded down: 0.85.",
         "RATCHET: a PR that adds cases, changes the judge or moves the value on purpose recalibrates here in the same PR, with its runs as evidence."
     ],
     "models": {
@@ -27,6 +28,10 @@
             "floor": null,
             "observed": 0.796,
             "noFloor": "Its replies said it had not checked the commit, or answered with a condition, instead of reading the code; a floor would not be above what the scripted model scores."
+        },
+        "kimi-k2.7-code@openrouter": {
+            "floor": 0.85,
+            "observed": 0.944
         }
     }
 }

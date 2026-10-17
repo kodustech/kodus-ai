@@ -9,6 +9,7 @@
         "2026-10-16, cloud route: the review's dedup now gets the platform's embedder key (applyModelEnv used to write the model's key over API_OPEN_AI_API_KEY, so the merge guard fell back to its lexical veto). Two runs of the nightly set: 32 and 33 of 36, mean 90.3%; the runs differ on R2, R8 and the P22 repeat. Paired per-case difference over the 13 cases: sd 0.208, against this 2-run baseline 0.208/sqrt(2)/sqrt(13) x sqrt(1.5) = 0.050; floor = 0.903 - 2.2 x 0.050 = 0.79.",
         "gpt-6-sol: calibrated 2026-10-17 from 2 local runs on a725253d6 (set nightly, judge gemini-3-flash-preview, --byok-reasoning=none): 36/36 and 36/36, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 36, rounded down: 0.94.",
         "claude-sonnet-5-5: 3 local runs on a725253d6 (set nightly, judge gemini-3-flash-preview, --byok-reasoning=none): every measured claim right, but 1, 4 and 2 of 26 cases did not measure, over the 5% a run may leave out: the repeat check (code-review-repeat-check) and a Kody Rules shard answered with no valid structured object on this model ([structured-output] reroute-json produced no valid object), each run on P40. No floor until that is fixed: the weekly run reports it as not measured.",
+        "kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3 (set nightly, judge gemini-3-flash-preview, --byok-reasoning=none): 32/35 and 36/36, mean 0.958. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 36, rounded down: 0.89.",
         "RATCHET: when a PR moves this on purpose, recalibrate here with two runs as evidence."
     ],
     "sets": {
@@ -48,8 +49,15 @@
             "judge": "gemini-3-flash-preview",
             "byokReasoning": "none",
             "floor": null,
-            "observed": 1.0,
+            "observed": 1,
             "noFloor": "In 3 runs, 1 to 4 of its 26 cases did not measure: on this model the repeat check's and the Kody Rules shard's structured output produced no valid object (reroute-json), every run on the same case (P40). A floor waits for that to be fixed."
+        },
+        "kimi-k2.7-code@openrouter": {
+            "set": "nightly",
+            "judge": "gemini-3-flash-preview",
+            "byokReasoning": "none",
+            "floor": 0.89,
+            "observed": 0.958
         }
     }
 }

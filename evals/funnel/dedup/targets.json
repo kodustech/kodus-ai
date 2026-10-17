@@ -7,7 +7,8 @@
         "Deliberate break, 2026-10-17 (local, deepseek, controlled): dedup keeping one finding per PR (dedupSuggestionStreams): 0.375, 11 of 30 known bugs and 1 of 2 controls kept, GATE FAILED, exit 1.",
         "The relabeled dataset (#2114) changes the known bugs: a new snapshot and two runs per set recalibrate these floors in the same PR.",
         "gpt-6-sol: calibrated 2026-10-17 from 2 local runs on a725253d6: 32/32 and 32/32, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.93.",
-        "claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 32/32 and 32/32, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.93."
+        "claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 32/32 and 32/32, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.93.",
+        "kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3: 32/32 and 32/32, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.93."
     ],
     "sets": {
         "controlled": {
@@ -21,6 +22,10 @@
                     "observed": 1
                 },
                 "claude-sonnet-5-5": {
+                    "floor": 0.93,
+                    "observed": 1
+                },
+                "kimi-k2.7-code@openrouter": {
                     "floor": 0.93,
                     "observed": 1
                 }

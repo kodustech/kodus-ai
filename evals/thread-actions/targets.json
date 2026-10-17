@@ -8,6 +8,8 @@
         "[memory] gpt-6-sol: 5/7 and 5/7 (mean 0.714) in 2 local runs on a725253d6; the floor those give (0.37) is not above what the scripted model scores (0.7143), so it could not tell a broken stage from this model: no floor. Asked to save a memory (memory-act), it wrote nothing in both runs. A fix to the model's behaviour recalibrates here.",
         "[rule] claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 12/12 and 10/12, mean 0.917. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 12, rounded down: 0.75.",
         "[memory] claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 7/7 and 7/7, mean 1. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 7, rounded down: 0.85.",
+        "[rule] kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3: 11/12 and 11/12, mean 0.917. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 12, rounded down: 0.75.",
+        "[memory] kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3: 7/7 and 7/7, mean 1. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 7, rounded down: 0.85.",
         "RATCHET: a PR that adds cases, changes the judge or moves the value on purpose recalibrates here in the same PR, with its runs as evidence."
     ],
     "models": {
@@ -51,6 +53,16 @@
                 "floor": null,
                 "observed": 0.714,
                 "noFloor": "Asked to save a memory, it wrote nothing in both runs: it scores what a model that never writes scores."
+            }
+        },
+        "kimi-k2.7-code@openrouter": {
+            "rule": {
+                "floor": 0.75,
+                "observed": 0.917
+            },
+            "memory": {
+                "floor": 0.85,
+                "observed": 1
             }
         }
     }

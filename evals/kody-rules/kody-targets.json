@@ -8,7 +8,8 @@
         "2026-10-16, cloud route: the model now comes from the org's cloud route (evals/shared/model-route.js) instead of the self-hosted env route (applyModelEnv); on deepseek the request bodies are identical but for reasoning_effort, which the env route sent as high and the managed route leaves unset. Two runs on it: 39 and 39 of 39 sites, 0 of 139 clean files flagged each. The floors stand.",
         "RATCHET: when a PR intentionally moves a model, refresh its floor here with two fresh runs as evidence.",
         "gpt-6-sol: calibrated 2026-10-17 from 2 local runs on a725253d6 (github-cases, --runs=1 each): occurrences 39/39 and 39/39 (100%), clean files 139/139 and 139/139 (100%). occMin 94, specMin 98 = observed - 2 binomial SE, at most 2 below a perfect pair.",
-        "claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6 (github-cases, --runs=1 each): occurrences 37/39 and 37/39 (94.9%), clean files 139/139 and 139/139 (100%). occMin 87, specMin 98 = observed - 2 binomial SE, at most 2 below a perfect pair."
+        "claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6 (github-cases, --runs=1 each): occurrences 37/39 and 37/39 (94.9%), clean files 139/139 and 139/139 (100%). occMin 87, specMin 98 = observed - 2 binomial SE, at most 2 below a perfect pair.",
+        "kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3 (github-cases, --runs=1 each): occurrences 39/39 and 39/39 (100%), clean files 139/139 and 139/139 (100%). occMin 94, specMin 98 = observed - 2 binomial SE, at most 2 below a perfect pair."
     ],
     "dataset": "github-cases",
     "models": {
@@ -33,6 +34,14 @@
             "specMin": 98,
             "observed": {
                 "occ": 94.9,
+                "spec": 100
+            }
+        },
+        "kimi-k2.7-code@openrouter": {
+            "occMin": 94,
+            "specMin": 98,
+            "observed": {
+                "occ": 100,
                 "spec": 100
             }
         }
