@@ -119,6 +119,20 @@ describe('runCli execute', () => {
         expect(decrypt).not.toHaveBeenCalled();
     });
 
+    it('drops the binary when the agent passes it as the first argument', async () => {
+        const sb = sandbox();
+        const tool = toolOf({ sandbox: sb, installed: [installed()], decrypt });
+        const out = await tool.execute({
+            cli: 'lintkit',
+            args: ['lintkit', 'check', '--format', 'json', 'src/a.ts'],
+        });
+        expect(out).not.toMatch(/not allowed/);
+        const [command] = sb.run.mock.calls[0];
+        expect(command).toContain(
+            `${installed().binaryPath}' 'check' '--format' 'json' 'src/a.ts'`,
+        );
+    });
+
     it('runs argv as the CLI user with secrets only in the process env', async () => {
         const sb = sandbox();
         const tool = toolOf({ sandbox: sb, installed: [installed()], decrypt });

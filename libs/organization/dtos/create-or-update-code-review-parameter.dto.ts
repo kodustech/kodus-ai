@@ -464,6 +464,28 @@ class CliToolConfigDto {
     @ArrayMinSize(1)
     @IsString({ each: true })
     @IsNotEmpty({ each: true })
+    // The runner ignores the binary in a prefix, so one that is only the
+    // binary would match no call at all.
+    @ValidateBy({
+        name: 'prefixNamesMoreThanTheBinary',
+        validator: {
+            validate: (prefixes: unknown, args) => {
+                const cli = args?.object as CliToolConfigDto;
+                return (
+                    !Array.isArray(prefixes) ||
+                    prefixes.every((prefix) => {
+                        const tokens = String(prefix).trim().split(/\s+/);
+                        return !(
+                            tokens.length === 1 &&
+                            (tokens[0] === cli?.binary || tokens[0] === cli?.name)
+                        );
+                    })
+                );
+            },
+            defaultMessage: () =>
+                'allowedPrefixes must name a subcommand or flag after the binary',
+        },
+    })
     allowedPrefixes: string[];
 
     @IsString()

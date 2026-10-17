@@ -298,6 +298,18 @@ export const cliIssues = (cli: CliToolConfig): string[] => {
     if (!cli.allowedPrefixes.filter((prefix) => prefix.trim()).length) {
         issues.push("Add at least one allowed command prefix");
     }
+    const binaryOnly = cli.allowedPrefixes.some((prefix) => {
+        const tokens = prefix.trim().split(/\s+/);
+        return (
+            tokens.length === 1 &&
+            (tokens[0] === cli.binary || tokens[0] === cli.name)
+        );
+    });
+    if (binaryOnly) {
+        issues.push(
+            `A prefix names a subcommand or flag after the binary, e.g. ${cli.binary || "tool"} check`,
+        );
+    }
     const secrets = cli.secrets ?? [];
     if (cli.runsProjectCode && secrets.length) {
         issues.push("A CLI that runs project code never receives secrets");

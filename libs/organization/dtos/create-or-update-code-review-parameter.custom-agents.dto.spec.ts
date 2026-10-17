@@ -274,6 +274,18 @@ describe('CreateOrUpdateCodeReviewParameterDto — custom agents', () => {
         expect(flat).toContain('"property":"allowedPrefixes"');
     });
 
+    it('rejects a prefix that only names the binary, which would allow no call at all', async () => {
+        const flat = await validateConfig({
+            customAgents: [
+                agent({
+                    tools: { cli: [cli({ allowedPrefixes: ['ledger-lint'] })] },
+                }),
+            ],
+        });
+        expect(flat).toContain('"property":"allowedPrefixes"');
+        expect(flat).toContain('name a subcommand or flag');
+    });
+
     it('rejects secrets on a CLI that runs project code', async () => {
         const secrets = [{ env: 'LEDGER_TOKEN', ciphertext: 'c' }];
         const flat = await validateConfig({

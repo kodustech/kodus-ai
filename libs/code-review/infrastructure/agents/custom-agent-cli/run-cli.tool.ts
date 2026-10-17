@@ -94,7 +94,12 @@ export async function executeRunCli(
 
     const argsError = validateCliArgs(input?.args);
     if (argsError) return `Error: ${argsError}.`;
-    const args = input.args as string[];
+    // Models often repeat the binary as argv[0]; it is never an argument.
+    const given = input.args as string[];
+    const args =
+        given[0] === cli.binary || given[0] === cli.name
+            ? given.slice(1)
+            : given;
 
     if (!matchesAllowedPrefix(args, cli)) {
         return `Error: these arguments are not allowed for ${cli.name}. args must start with one of: ${cli.allowedPrefixes

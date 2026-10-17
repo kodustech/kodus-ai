@@ -251,4 +251,10 @@ describe("custom agent drafts", () => {
             },
         ]);
     });
+
+    it("warns about a prefix that only names the binary", () => {
+        expect(cliIssues(cli({ allowedPrefixes: ["ledgerctl"] }))).toContain(
+            "A prefix names a subcommand or flag after the binary, e.g. ledgerctl check",
+        );
+    });
 });
