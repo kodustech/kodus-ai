@@ -15,6 +15,7 @@
 // beyond its interval (or ties and uses fewer tokens).
 //
 //   node evals/experiment.js --step=dedup [--phases=regression,decision] [--base=origin/main] [--runs=2] [--model=<id>] [--name=<label>] [--out=<dir>]
+//   node evals/experiment.js --step=dedup --if-new ...   the same, unless the panel already has this code measured
 //   node evals/experiment.js --affected --files-dir=<wiring smoke --eval-files-dir> --changed=<file of changed paths>
 //                                               the steps whose production files a change touched (JSON), for a PR's check
 //
@@ -32,7 +33,11 @@
 //
 // Writes, under --out: experiment.json, rows.json
 // (experiments.<step>.<phase>.<eval>.<name>, for the quality panel), summary.md
-// (the job summary in CI) and each run's result. Exit: 0 compared, 1 it broke
+// (the job summary in CI) and each run's result, and sends the rows to the
+// quality panel (evals/shared/quality-client.js). With --if-new, code the panel
+// already measured (the same content of every step file on both sides, the
+// same phases) is not run again: the summary points at that result.
+// Exit: 0 compared, 1 it broke
 // something (the regression phase found a drop), 2 could not compare.
 const fs = require('fs');
 const os = require('os');
@@ -42,6 +47,7 @@ const { spawnSync, execFileSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
 const { TIER0 } = require('./shared/tier0-models');
+const { sendExperimentRows, recordedExperiments, PANEL } = require('./shared/quality-client');
 // The nightly's model (evals/README.md): an experiment's default.
 const DEFAULT_MODEL = 'deepseek-v4-flash@fireworks';
 const DEFAULT_RUNS = 2;
@@ -317,7 +323,29 @@ function affectedSteps(changed, filesOf, steps = STEP_EVALS) {
         .map(([step]) => step);
 }
 
-function main() {
+// The content (git blob ids) of `files` at `sha`.
+function blobsAt(sha, files) {
+    if (!files.length) return {};
+    const out = git(['ls-tree', '-r', sha, '--', ...files]);
+    return Object.fromEntries(out.split('\n').filter(Boolean).map((l) => { const [meta, file] = l.split('\t'); return [file, meta.split(' ')[2]]; }));
+}
+
+// A recorded experiment that measured exactly this code: the same content of
+// every step file it recorded on both sides, and every phase asked for.
+function measuredAlready(recorded, phaseIds, blobsOf) {
+    return (recorded || []).find((x) => {
+        const blobs = x.step_blobs;
+        if (!blobs || !blobs.base || !blobs.candidate || !Object.keys(blobs.candidate).length) return false;
+        if (!phaseIds.every((p) => (x.phases || []).includes(p))) return false;
+        const same = (want, side) => {
+            const have = blobsOf(side, Object.keys(want));
+            return Object.entries(want).every(([file, blob]) => have[file] === blob);
+        };
+        return same(blobs.base, 'base') && same(blobs.candidate, 'candidate');
+    }) || null;
+}
+
+async function main() {
     const args = parseArgs(process.argv.slice(2));
     if (args.affected) {
         // A missing list means the impact is unknown, never that nothing changed.
@@ -368,7 +396,8 @@ function main() {
         return 2;
     }
     const head = git(['rev-parse', 'HEAD']);
-    const branch = git(['rev-parse', '--abbrev-ref', 'HEAD']);
+    // A PR's check runs on the head commit, detached: GitHub names the branch.
+    const branch = process.env.GITHUB_HEAD_REF || git(['rev-parse', '--abbrev-ref', 'HEAD']);
     const baseSha = git(['merge-base', head, baseRef]);
     if (baseSha === head) {
         console.error(`nothing to compare: HEAD is where it left ${baseRef}`);
@@ -380,6 +409,22 @@ function main() {
         return 2;
     }
     const name = slug(args.name || branch);
+    if (args['if-new']) {
+        const recorded = await recordedExperiments(step, branch);
+        const hit = recorded && measuredAlready(recorded, phaseIds, (side, files) => blobsAt(side === 'base' ? baseSha : head, files));
+        if (hit) {
+            const out = path.resolve(args.out || path.join(os.tmpdir(), 'kodus-experiments', `${step}-${name}-${Date.now()}`));
+            fs.mkdirSync(out, { recursive: true });
+            const verdicts = hit.phase_verdicts || {};
+            fs.writeFileSync(
+                path.join(out, 'summary.md'),
+                `### Experiment: ${step} · ${name}\n\nThis code was measured already, on ${String(hit.ts).slice(0, 10)} (${hit.candidate?.sha?.slice(0, 9) || 'a commit'} with the same content in every file of the step): not run again.\n\n**${hit.decision}**: ${hit.reason}\n\n${Object.entries(verdicts).map(([p, v]) => `- ${PHASES[p]?.question || p} ${v}`).join('\n')}\n\n${PANEL}/experiments\n`,
+            );
+            console.log(`measured already on ${hit.ts}: ${hit.decision} — ${hit.reason}\n${PANEL}/experiments`);
+            return verdicts.regression === 'regression' ? 1 : 0;
+        }
+        console.log(recorded === null ? 'the panel could not say whether this code was measured: running it' : 'not measured yet: running it');
+    }
     const out = path.resolve(args.out || path.join(os.tmpdir(), 'kodus-experiments', `${step}-${name}-${Date.now()}`));
     const trace = path.join(out, 'trace');
     const baseDir = path.join(out, 'base-tree');
@@ -518,6 +563,8 @@ function main() {
                     run_values: e.runValues,
                     decision: decision.decision,
                     decision_reason: decision.reason,
+                    // the CI run, when there is one (GitHub's own variables)
+                    ...(process.env.GITHUB_RUN_ID ? { run_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` } : {}),
                 },
             })),
         );
@@ -535,6 +582,8 @@ function main() {
             }
         }
         console.log(`\ndecision: ${decision.decision} — ${decision.reason}\n${path.join(out, 'experiment.json')}`);
+        const sent = await sendExperimentRows(rows);
+        console.log(sent.sent ? `sent to the quality panel: ${sent.url}` : `not sent to the quality panel: ${sent.reason}`);
         if (phases.regression?.verdict === 'regression') return 1;
         return Object.values(phases).every((p) => p.verdict !== 'not measured') ? 0 : 2;
     } finally {
@@ -546,6 +595,13 @@ function main() {
     }
 }
 
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+    main()
+        .then((code) => process.exit(code))
+        .catch((error) => {
+            console.error(error);
+            process.exit(2);
+        });
+}
 
-module.exports = { main, compare, comparisonOf, deriveRuns, perCase, decide, phaseVerdict, affectedSteps, PHASES, STEP_EVALS };
+module.exports = { main, measuredAlready, compare, comparisonOf, deriveRuns, perCase, decide, phaseVerdict, affectedSteps, PHASES, STEP_EVALS };

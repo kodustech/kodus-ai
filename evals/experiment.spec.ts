@@ -104,29 +104,30 @@ describe('evals/experiment.js affectedSteps', () => {
 });
 
 describe('evals/experiment.js main refuses what it cannot compare', () => {
-    const run = (argv: string[]) => {
+    const run = async (argv: string[]) => {
         const saved = process.argv;
         const error = jest.spyOn(console, 'error').mockImplementation(() => undefined);
         try {
             process.argv = ['node', 'experiment.js', ...argv];
             // eslint-disable-next-line @typescript-eslint/no-require-imports
-            return { code: require('./experiment').main(), said: error.mock.calls.map((c) => String(c[0])).join('\n') };
+            const code = await require('./experiment').main();
+            return { code, said: error.mock.calls.map((c) => String(c[0])).join('\n') };
         } finally {
             process.argv = saved;
             error.mockRestore();
         }
     };
 
-    it('a model outside tier0-models.js', () => {
-        expect(run(['--step=dedup', '--model=gpt-unknown'])).toMatchObject({ code: 2, said: expect.stringContaining('tier0-models.js') });
+    it('a model outside tier0-models.js', async () => {
+        expect(await run(['--step=dedup', '--model=gpt-unknown'])).toMatchObject({ code: 2, said: expect.stringContaining('tier0-models.js') });
     });
 
-    it('an affected-steps query whose inputs are missing: unknown, not "nothing changed"', () => {
-        expect(run(['--affected', '--files-dir=/nonexistent', '--changed=/nonexistent/changed.txt'])).toMatchObject({ code: 2, said: expect.stringContaining('cannot tell which steps changed') });
+    it('an affected-steps query whose inputs are missing: unknown, not "nothing changed"', async () => {
+        expect(await run(['--affected', '--files-dir=/nonexistent', '--changed=/nonexistent/changed.txt'])).toMatchObject({ code: 2, said: expect.stringContaining('cannot tell which steps changed') });
     });
 
-    it('the decision phase without the regression phase', () => {
-        expect(run(['--step=dedup', '--phases=decision'])).toMatchObject({ code: 2, said: expect.stringContaining('needs regression') });
+    it('the decision phase without the regression phase', async () => {
+        expect(await run(['--step=dedup', '--phases=decision'])).toMatchObject({ code: 2, said: expect.stringContaining('needs regression') });
     });
 });
 
@@ -158,5 +159,57 @@ describe('evals/experiment.js derived measures', () => {
         const sides = { base: { usage: { in: 1 } }, candidate: { usage: { in: 1 } } };
         const decision = { verdict: 'better', evals: [{ ...primary, sides }, { ...oneCaseWorse, comparison: { verdict: 'worse', worse: [] } }] };
         expect(decide({ regression: { verdict: 'no regression', evals: [primary] }, decision }, changed).decision).toBe('does not ship');
+    });
+});
+
+describe('evals/experiment.js measuredAlready', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { measuredAlready } = require('./experiment');
+    const recorded = [{ experiment: 'x', phases: ['regression', 'decision'], step_blobs: { base: { 'libs/a.ts': 'a1', 'libs/b.ts': 'b1' }, candidate: { 'libs/a.ts': 'a2', 'libs/b.ts': 'b1' } } }];
+    const blobsOf = (now: Record<string, Record<string, string>>) => (side: string, files: string[]) => Object.fromEntries(files.map((f) => [f, now[side][f]]));
+
+    it('finds the experiment that measured exactly this code', () => {
+        const now = { base: { 'libs/a.ts': 'a1', 'libs/b.ts': 'b1' }, candidate: { 'libs/a.ts': 'a2', 'libs/b.ts': 'b1' } };
+        expect(measuredAlready(recorded, ['regression'], blobsOf(now))).toBe(recorded[0]);
+    });
+
+    it('runs again when a step file differs on either side, or a phase was not measured', () => {
+        const branchChanged = { base: { 'libs/a.ts': 'a1', 'libs/b.ts': 'b1' }, candidate: { 'libs/a.ts': 'a3', 'libs/b.ts': 'b1' } };
+        const mainChanged = { base: { 'libs/a.ts': 'a1', 'libs/b.ts': 'b9' }, candidate: { 'libs/a.ts': 'a2', 'libs/b.ts': 'b1' } };
+        expect(measuredAlready(recorded, ['regression'], blobsOf(branchChanged))).toBeNull();
+        expect(measuredAlready(recorded, ['regression'], blobsOf(mainChanged))).toBeNull();
+        expect(measuredAlready([{ ...recorded[0], phases: ['regression'] }], ['regression', 'decision'], blobsOf({ base: recorded[0].step_blobs.base, candidate: recorded[0].step_blobs.candidate }))).toBeNull();
+    });
+});
+
+describe('evals/shared/quality-client.js', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const client = require('./shared/quality-client');
+    const saved = { ...process.env };
+    afterEach(() => {
+        process.env = { ...saved };
+        jest.restoreAllMocks();
+    });
+
+    it('does not send without a token, and says why', async () => {
+        delete process.env.KODUS_QUALITY_INGEST_TOKEN;
+        expect(await client.sendExperimentRows([{ name: 'experiments.x' }])).toMatchObject({ sent: false, reason: expect.stringContaining('KODUS_QUALITY_INGEST_TOKEN') });
+    });
+
+    it('posts the rows with the token, and reports a refusal without throwing', async () => {
+        process.env.KODUS_QUALITY_INGEST_TOKEN = 't';
+        process.env.KODUS_QUALITY_URL = 'https://panel.test/';
+        const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({ inserted: 1, url: 'https://panel.test/experiments' }), { status: 200 }));
+        expect(await client.sendExperimentRows([{ name: 'experiments.x' }])).toEqual({ sent: true, url: 'https://panel.test/experiments' });
+        expect(fetch.mock.calls[0][0]).toBe('https://panel.test/api/experiments');
+        expect((fetch.mock.calls[0][1] as RequestInit).headers).toMatchObject({ authorization: 'Bearer t' });
+        fetch.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'no writer' }), { status: 503 }));
+        expect(await client.sendExperimentRows([{ name: 'experiments.x' }])).toMatchObject({ sent: false, reason: 'the panel answered 503: no writer' });
+    });
+
+    it('cannot say what was measured when the panel does not answer', async () => {
+        process.env.KODUS_QUALITY_INGEST_TOKEN = 't';
+        jest.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('offline'));
+        expect(await client.recordedExperiments('dedup', 'feat/x')).toBeNull();
     });
 });

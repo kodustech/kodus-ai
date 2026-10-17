@@ -60,7 +60,7 @@ Is a change to a step better than what main has? An experiment answers it on you
 
 1. Branch from main, change the step, and commit. The command refuses uncommitted changes: the result must point at code that exists.
 2. Run `node evals/experiment.js --step=<step>` with the model keys in the environment (the same ones the evals use; the dedup also needs the platform's OpenAI key, `API_OPEN_AI_API_KEY`, for its embedder). In CI: the "Evals: experiment on a review step" workflow, dispatched on your branch.
-3. Read `summary.md` (or the quality panel, for a CI run): the decision, why, and each eval before → after.
+3. Read `summary.md` or the panel's Experiments tab: the run sends its rows there when `KODUS_QUALITY_INGEST_TOKEN` is set (`~/.kodus-dev/config`; the panel's `EXPERIMENTS_INGEST_TOKEN`).
 
 To change more, commit and run it again.
 
@@ -83,7 +83,7 @@ Each eval runs `--runs` times per side (2 by default), alternating. Per case, pa
 
 ### What it records
 
-Each side's step version (a hash of the production files its evals loaded, at their committed content: the same on both sides means the branch did not change this step), the files that differ, the eval and dataset versions, what each eval reports of its environment, and model use. Under `--out`: `experiment.json`, `summary.md`, and `rows.json` (`experiments.<step>.<phase>.<eval>.<name>`). The quality panel builds its Experiments tab and each step's experiments from those rows; they never replace a number main measured. Today the rows reach the panel from the CI workflow only; a local run prints them.
+Each side's step version (a hash of the production files its evals loaded, at their committed content: the same on both sides means the branch did not change this step), the files that differ, the eval and dataset versions, what each eval reports of its environment, and model use. Under `--out`: `experiment.json`, `summary.md`, and `rows.json` (`experiments.<step>.<phase>.<eval>.<name>`). Every run sends `rows.json` to the panel's experiments API (`evals/shared/quality-client.js`), which builds its Experiments tab and each step's experiments from them; they never replace a number main measured. With `--if-new` (a PR's check, the workflow), code the panel already measured, the same content in every step file on both sides and the same phases, is not run again: the summary points at that result. Run it on your machine and push: the PR does not pay for it twice.
 
 The panel dates each experiment by itself: **active** while its branch is open and nothing it measured has changed; **out of date** when main changed one of the step's production files after the base (rebase and run it again) or the branch changed one after the candidate; **merged** or **closed** with its pull request, kept under Archived as the evidence for that version. A newer run on the same branch keeps the earlier ones inside its card.
 

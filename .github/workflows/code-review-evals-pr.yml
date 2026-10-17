@@ -13,7 +13,8 @@ name: "Evals: wiring smoke (PR)"
 # (evals/experiment.js STEP_EVALS) also runs that experiment's first question,
 # "did it break anything?", against where the branch left main: the result is
 # a comment on the PR and a row on the quality panel, and the check fails when
-# something got worse. The label `experiment:full` also asks "is it better?".
+# something got worse. Code the panel already measured, from a laptop or an
+# earlier push, is not run again (--if-new). The label `experiment:full` also asks "is it better?".
 # Otherwise quality is measured by:
 #   code-review-evals-nightly.yml  DeepSeek on the controlled set, nightly, when the engine changed
 #   code-review-evals-weekly.yml   every tier-0 model's controlled set, Friday with the release train
@@ -127,7 +128,6 @@ jobs:
         timeout-minutes: 120
         permissions:
             contents: read
-            id-token: write # the experiment's rows (report-signal action, WIF)
             pull-requests: write # the result as a comment on the PR
         strategy:
             fail-fast: false
@@ -171,11 +171,14 @@ jobs:
                   BYOK_OPENROUTER_API_KEY: ${{ secrets.BYOK_OPENROUTER_API_KEY }}
                   JUDGE_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
                   API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  # The panel's experiments API: the result goes there, and code it
+                  # already measured (from a laptop or an earlier push) is not run again.
+                  KODUS_QUALITY_INGEST_TOKEN: ${{ secrets.KODUS_QUALITY_INGEST_TOKEN }}
               run: |
                   phases=regression
                   [ "$FULL" = "true" ] && phases=regression,decision
                   set +e
-                  node evals/experiment.js --step="$STEP" --base="origin/$BASE" --phases="$phases" --name="$NAME" --out=experiment
+                  node evals/experiment.js --step="$STEP" --base="origin/$BASE" --phases="$phases" --name="$NAME" --if-new --out=experiment
                   code=$?
                   set -e
                   echo "code=$code" >> "$GITHUB_OUTPUT"
@@ -208,14 +211,6 @@ jobs:
                   } > comment.md
                   id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -1)
                   if [ -n "$id" ]; then gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@comment.md > /dev/null; else gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F body=@comment.md > /dev/null; fi
-            - name: Report to the quality panel
-              if: always() && hashFiles('experiment/rows.json') != ''
-              uses: ./.github/actions/report-signal
-              with:
-                  rows: experiment/rows.json
-                  gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
-                  gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
-                  gcp_project: ${{ vars.GCP_PROJECT }}
             - uses: actions/upload-artifact@v4
               if: always()
               with:
