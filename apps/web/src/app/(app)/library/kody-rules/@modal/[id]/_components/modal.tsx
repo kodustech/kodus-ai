@@ -136,12 +136,47 @@ export const KodyRuleLibraryItemModal = ({
                 : selectedRepositoriesIds;
             const directoriesIds = importsGlobally ? [] : selectedDirectoriesIds;
 
-            const addedKodyRules = await addKodyRuleToRepositories({
-                rule: newRule,
-                repositoriesIds,
-                directoriesIds,
-                teamId,
-            });
+            let addedKodyRules: Awaited<
+                ReturnType<typeof addKodyRuleToRepositories>
+            >;
+            try {
+                addedKodyRules = await addKodyRuleToRepositories({
+                    rule: newRule,
+                    repositoriesIds,
+                    directoriesIds,
+                    teamId,
+                });
+            } catch (error) {
+                // e.g. a WAF 403 that answers before the API (WAF body
+                // inspection rejects XSS/SQLi-looking rule examples on some
+                // installs) — the modal previously swallowed it silently via
+                // useAsyncAction's `.finally`-only handling, leaving nothing
+                // on screen (#1886). Surface it so the user isn't baffled by a
+                // rule that just doesn't get added.
+                const detail =
+                    (error as { response?: { data?: unknown } })?.response
+                        ?.data;
+                const message =
+                    typeof detail === "object" &&
+                    detail !== null &&
+                    "message" in detail &&
+                    typeof (detail as { message?: unknown }).message ===
+                        "string"
+                        ? (detail as { message: string }).message
+                        : undefined;
+
+                toast({
+                    variant: "danger",
+                    title: `Could not add rule "${rule.title}"`,
+                    description:
+                        message ??
+                        ((error as { response?: { status?: number } })?.response
+                            ?.status === 403
+                            ? "The request was blocked by a security filter before reaching Kodus. Please try again later or contact support."
+                            : "Something went wrong while adding this rule. Please try again."),
+                });
+                return;
+            }
 
             if (isCentralizedPrResponse(addedKodyRules)) {
                 toast(
