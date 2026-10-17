@@ -103,12 +103,6 @@ describe('CreateSandboxStage custom agent CLIs', () => {
         expect(result.customAgentClis).toBeUndefined();
     });
 
-    it('does not install when the feature is off for the org', async () => {
-        const { stage, context } = build({ sandboxType: 'e2b', flag: false });
-        const result: any = await (stage as any).executeStage(context);
-        expect(provision).not.toHaveBeenCalled();
-        expect(result.customAgentClis).toBeUndefined();
-    });
 
     it('keeps the sandbox when provisioning throws', async () => {
         provision.mockRejectedValue(new Error('boom'));

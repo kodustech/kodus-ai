@@ -152,17 +152,8 @@ afterEach(() => {
 });
 
 describe('AgentReviewStage — custom agents (#2172)', () => {
-    it('dispatches no custom agent while the org lacks the beta', async () => {
-        const { stage, reviewOrchestrator } = makeStage(output([]), false);
 
-        await run(stage, makeContext([agent()]));
-
-        expect(
-            reviewOrchestrator.execute.mock.calls[0][0].customAgents,
-        ).toEqual([]);
-    });
-
-    it('dispatches the enabled agents when the org has the beta', async () => {
+    it('dispatches the enabled agents for every organization', async () => {
         const { stage, reviewOrchestrator, featureGate } = makeStage(
             output([]),
         );
@@ -173,11 +164,6 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
                 agent(),
                 agent({ id: 'off', name: 'Off', enabled: false }),
             ]),
-        );
-
-        expect(featureGate.isEnabled).toHaveBeenCalledWith(
-            'custom-agents',
-            expect.objectContaining({ identifier: 'org-1' }),
         );
         expect(
             reviewOrchestrator.execute.mock.calls[0][0].customAgents.map(
@@ -592,21 +578,6 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
             );
         });
 
-        it('reads nothing while the org lacks the beta', async () => {
-            const { stage, reviewOrchestrator, codeManagement } = makeStage(
-                output([]),
-                false,
-            );
-
-            await run(stage, withKnowledge());
-
-            expect(
-                reviewOrchestrator.execute.mock.calls[0][0].knowledgeByTarget,
-            ).toBeUndefined();
-            expect(
-                codeManagement.getRepositoryContentFile,
-            ).not.toHaveBeenCalled();
-        });
 
         it('hands the agents the sandbox and the CLIs installed for them', async () => {
             const { stage, reviewOrchestrator } = makeStage(output([]));

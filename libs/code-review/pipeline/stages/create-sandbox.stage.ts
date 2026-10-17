@@ -1,7 +1,7 @@
 import { CloneParamsResolverService } from '../services/clone-params-resolver.service';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { FeatureGateService, FEATURE_KEYS } from '@libs/feature-gate';
+import { FeatureGateService } from '@libs/feature-gate';
 import {
     IOrganizationService,
     ORGANIZATION_SERVICE_TOKEN,
@@ -261,7 +261,6 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
         const agents = context.codeReviewConfig?.customAgents ?? [];
         if (
             sandbox.type !== 'e2b' ||
-            !this.featureGate ||
             !agents.some(
                 (agent) =>
                     (agent?.enabled || context.onlyCustomAgent) &&
@@ -273,20 +272,6 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
 
         const org = context.organizationAndTeamData;
         try {
-            const releaseTrack =
-                await this.organizationService?.getReleaseTrack(
-                    org.organizationId,
-                );
-            const enabled = await this.featureGate.isEnabled(
-                FEATURE_KEYS.customAgents,
-                {
-                    identifier: org.organizationId,
-                    organizationAndTeamData: org,
-                    releaseTrack,
-                },
-            );
-            if (!enabled) return undefined;
-
             const provisioning = await provisionCustomAgentClis({
                 sandbox,
                 agents,

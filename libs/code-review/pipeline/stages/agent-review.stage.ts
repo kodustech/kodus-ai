@@ -440,33 +440,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         if (!wanted.length) {
             return [];
         }
-        return (await this.isCustomAgentsEnabled(context)) ? wanted : [];
-    }
-
-    /** The `custom-agents` beta gate. Fails closed: an unevaluable gate runs
-     *  no custom agent and loads no skill or doc. */
-    private async isCustomAgentsEnabled(
-        context: CodeReviewPipelineContext,
-    ): Promise<boolean> {
-        const org = context.organizationAndTeamData;
-        try {
-            const releaseTrack = await this.organizationService.getReleaseTrack(
-                org.organizationId,
-            );
-            return await this.featureGate.isEnabled(FEATURE_KEYS.customAgents, {
-                identifier: org.organizationId,
-                organizationAndTeamData: org,
-                releaseTrack,
-            });
-        } catch (err) {
-            this.logger.warn({
-                message: `[AGENT] Custom agents gate could not be evaluated, running none`,
-                context: this.stageName,
-                error: err,
-                metadata: { organizationId: org?.organizationId },
-            });
-            return false;
-        }
+        return wanted;
     }
 
     /**
@@ -486,14 +460,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     }> {
         const items = context.codeReviewConfig?.knowledge ?? [];
         if (!items.length) return { warnings: [] };
-        // Agents already passed the gate; knowledge for the main review alone
-        // still needs it.
-        if (
-            !customAgents.length &&
-            !(await this.isCustomAgentsEnabled(context))
-        ) {
-            return { warnings: [] };
-        }
         const baseBranch =
             context.pullRequest?.base?.ref ||
             context.sandboxHandle?.baseBranch ||
