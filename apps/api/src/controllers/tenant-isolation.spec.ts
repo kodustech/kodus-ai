@@ -6,7 +6,7 @@ import { CodeManagementController } from './codeManagement.controller';
 import { OrganizationParametersController } from './organizationParameters.controller';
 
 /**
- * GHSA-gg8q-h8qq-8pj9 / GHSA-vhp8-28q6-jvrj — these endpoints took the target
+ * Tenant isolation — these endpoints took the target
  * organizationId from the request (query/body), so any authenticated user
  * could read or write another organization's data. They must scope to the
  * caller's own organization, derived from the authenticated principal.
@@ -86,11 +86,11 @@ describe('tenant isolation — organizationId comes from the principal', () => {
 });
 
 /**
- * GHSA-vhp8-28q6-jvrj #1 — the generic create-or-update endpoint accepted the
+ * Key denylist — the generic create-or-update endpoint accepted the
  * full key enum, letting any member write privileged keys (spend limit,
  * license). It must refuse those while still allowing ordinary config keys.
  */
-describe('organization-parameters create-or-update — key denylist (GHSA-vhp8 #1)', () => {
+describe('organization-parameters create-or-update — key denylist', () => {
     const makeController = () => {
         const controller: any = Object.create(
             OrganizationParametersController.prototype,

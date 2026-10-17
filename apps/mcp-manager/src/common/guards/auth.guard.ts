@@ -30,7 +30,7 @@ export class AuthGuard implements CanActivate {
             // Verify the signature (and expiry) against the orchestrator's JWT
             // secret — the same key that minted this access token. `decode()`
             // only base64-parsed the payload, so any attacker could forge an
-            // `organizationId` and impersonate any org (GHSA-x89q-mgqp-xhpw).
+            // `organizationId` and impersonate any org.
             const decoded = await this.jwtService.verifyAsync(token);
 
             if (

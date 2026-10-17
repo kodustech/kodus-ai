@@ -8,11 +8,11 @@ import { AuthService } from './auth.service';
 jest.mock('axios');
 
 /**
- * GHSA-95hw-cx5j-2pg8 — the verification step `/auth/oauth` was missing:
+ * Provider email verification — the verification step `/auth/oauth` was missing:
  * resolve the identity from the provider's own API using the supplied access
  * token, and never accept a token the provider rejects.
  */
-describe('AuthService.verifyOAuthProviderEmail (GHSA-95hw)', () => {
+describe('AuthService.verifyOAuthProviderEmail', () => {
     const mockedGet = axios.get as unknown as jest.Mock;
 
     const makeService = () => {
@@ -117,7 +117,7 @@ describe('AuthService.verifyOAuthProviderEmail (GHSA-95hw)', () => {
         expect(out).toEqual({ email: 'Dev@Corp.com', name: 'Octo' });
     });
 
-    it('does NOT return the profile email when it is present but unverified — falls back to the primary verified (GHSA-95hw)', async () => {
+    it('does NOT return the profile email when it is present but unverified — falls back to the primary verified', async () => {
         // The profile email is only ever trusted when it also appears in the
         // verified list. A spoofed-but-unverified profile email must never win.
         const svc = makeService();
@@ -196,7 +196,7 @@ describe('AuthService.verifyOAuthProviderEmail (GHSA-95hw)', () => {
     });
 
     it('rejects a GitHub token whose only email is the unverified public profile email', async () => {
-        // The attack (GHSA-95hw): a real token that cannot read verified emails
+        // The scenario: a real token that cannot read verified emails
         // (no `user:email` scope, so /user/emails is denied) carrying a public
         // profile email set to the victim's address. The identity must NOT fall
         // back to that unverified email.

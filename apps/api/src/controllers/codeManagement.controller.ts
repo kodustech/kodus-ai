@@ -474,7 +474,7 @@ export class CodeManagementController {
         return await this.searchCodeManagementUsersUseCase.execute({
             // Scope to the caller's own organization. Trusting
             // query.organizationId let any logged-in user read another org's
-            // users (GHSA-gg8q-h8qq-8pj9 / GHSA-vhp8-28q6-jvrj).
+            // users.
             organizationId: this.request?.user?.organization?.uuid,
             teamId: query.teamId,
             query: query.q,
@@ -507,8 +507,7 @@ export class CodeManagementController {
         },
     ) {
         return await this.getCurrentCodeManagementUserUseCase.execute({
-            // Scope to the caller's own organization, not a query-supplied one
-            // (GHSA-gg8q-h8qq-8pj9 / GHSA-vhp8-28q6-jvrj).
+            // Scope to the caller's own organization, not a query-supplied one.
             organizationId: this.request?.user?.organization?.uuid,
             teamId: query.teamId,
         });

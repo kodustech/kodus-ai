@@ -1,7 +1,7 @@
 import { wrapToolHandler } from './mcp-protocol.utils';
 
 /**
- * GHSA-5rf5-5rj3-37cv #1 — MCP tools must take organizationId/teamId from the
+ * Tenant boundary — MCP tools must take organizationId/teamId from the
  * authenticated principal, never from the JSON-RPC arguments. That boundary has
  * a SINGLE owner: `McpToolAuthorizer` (see mcp-tool-authorizer.service.spec.ts),
  * which runs before the handler in both server factories, REJECTS a mismatched
@@ -9,7 +9,7 @@ import { wrapToolHandler } from './mcp-protocol.utils';
  * rewrite those fields — two rules on one boundary is how a silent-overwrite
  * path slips back in. These tests pin that the wrapper forwards args untouched.
  */
-describe('wrapToolHandler — does not own the tenant boundary (GHSA-5rf5 #1)', () => {
+describe('wrapToolHandler — does not own the tenant boundary', () => {
     const principalExtra = (principal: any) => ({
         authInfo: { extra: { principal } },
     });

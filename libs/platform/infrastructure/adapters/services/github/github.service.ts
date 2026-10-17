@@ -574,7 +574,7 @@ export class GithubService
             const authDetails = {
                 // Encrypt at rest like the PAT path (authenticateWithToken):
                 // the installation token is a live credential and must not be
-                // persisted in clear (GHSA-g5fx-w235-hhjq, finding 3). Every
+                // persisted in clear. Every
                 // reader already decrypt()s authToken.
                 authToken: installationToken ? encrypt(installationToken) : null,
                 installationId:
@@ -3521,7 +3521,7 @@ export class GithubService
             const authDetails = {
                 // Encrypt at rest like the PAT path (authenticateWithToken):
                 // the installation token is a live credential and must not be
-                // persisted in clear (GHSA-g5fx-w235-hhjq, finding 3). Every
+                // persisted in clear. Every
                 // reader already decrypt()s authToken.
                 authToken: installationToken ? encrypt(installationToken) : null,
                 installationId:

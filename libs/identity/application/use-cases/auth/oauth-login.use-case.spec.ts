@@ -5,12 +5,12 @@ import { AuthProvider } from '@libs/core/domain/enums/auth-provider.enum';
 import { OAuthLoginUseCase } from './oauth-login.use-case';
 
 /**
- * GHSA-95hw-cx5j-2pg8 — `/auth/oauth` issued a JWT based only on a
+ * Provider token gating — `/auth/oauth` issued a JWT based only on a
  * client-supplied email, never validating the OAuth token against the
  * provider. The use case must now (1) verify the token with the provider and
  * (2) key the account off the provider-returned email, never the request body.
  */
-describe('OAuthLoginUseCase — provider token gating (GHSA-95hw)', () => {
+describe('OAuthLoginUseCase — provider token gating', () => {
     const makeDeps = () => {
         const authService = {
             verifyOAuthProviderEmail: jest.fn(),

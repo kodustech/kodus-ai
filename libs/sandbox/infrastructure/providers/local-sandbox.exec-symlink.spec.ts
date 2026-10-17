@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { LocalSandboxService } from './local-sandbox.service';
 
 /**
- * GHSA-7844-qgp7-5259 — the local sandbox `read` refuses symlinks and checks
+ * Sandbox read boundary — the local sandbox `read` refuses symlinks and checks
  * the resolved path against the repo, but `exec` did neither: it validated
  * only the argument strings (`..`, absolute paths) and then ran a whitelisted
  * reader (`cat`, `head`, …) that follows symlinks. A symlink committed in a PR
@@ -15,7 +15,7 @@ import { LocalSandboxService } from './local-sandbox.service';
  *
  * These are the regression guards for both holes.
  */
-describe('LocalSandboxService exec — symlink escape (GHSA-7844)', () => {
+describe('LocalSandboxService exec — symlink escape', () => {
     let repo: string;
     let outside: string;
     let rc: any;
@@ -84,7 +84,7 @@ describe('LocalSandboxService exec — symlink escape (GHSA-7844)', () => {
  * accept flags that execute arbitrary programs (`find -exec`, `fd -x`) or
  * delete/write files. A whitelisted finder must not become a command runner.
  */
-describe('LocalSandboxService exec — blocks executor flags (GHSA-7844)', () => {
+describe('LocalSandboxService exec — blocks executor flags', () => {
     let repo: string;
     let rc: any;
 

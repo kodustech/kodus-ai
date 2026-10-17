@@ -412,7 +412,7 @@ export class AuthService implements IAuthService {
      * provider's own API with the access token the browser obtained during
      * the OAuth handshake. This is the authentication step the OAuth login
      * path was missing: without it, `/auth/oauth` trusted a client-supplied
-     * email and issued a JWT for any account (GHSA-95hw-cx5j-2pg8). The caller
+     * email and issued a JWT for any account. The caller
      * must use the returned email — not any email from the request body — as
      * the account identity. Any failure is surfaced as Unauthorized without
      * leaking provider detail.
@@ -468,8 +468,8 @@ export class AuthService implements IAuthService {
         // GitHub's /user `email` is the PUBLIC, user-settable, UNVERIFIED
         // profile email. Trusting it lets a token that cannot read verified
         // emails (no `user:email` scope, or a failed /user/emails call) set the
-        // public email to a victim's address and impersonate that account
-        // (GHSA-95hw-cx5j-2pg8). Only an address confirmed by /user/emails is
+        // public email to a victim's address and impersonate that account.
+        // Only an address confirmed by /user/emails is
         // acceptable — never seed the identity from the profile email alone.
         const profileEmail: string | undefined = profile.data?.email ?? undefined;
         let email: string | undefined;
@@ -487,7 +487,7 @@ export class AuthService implements IAuthService {
             // Keep the account's existing identity. The web historically keyed
             // the account on GitHub's public profile email (NextAuth
             // `user.email`), so when that address is itself verified, return it
-            // as-is — this is still the GHSA-95hw fix because the profile email
+            // as-is — this is still correct because the profile email
             // is only trusted once it appears in the verified list. Otherwise
             // fall back to the primary verified address, then any verified one.
             const profileVerified =

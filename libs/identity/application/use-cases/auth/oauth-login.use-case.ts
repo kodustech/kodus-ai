@@ -32,8 +32,7 @@ export class OAuthLoginUseCase implements IUseCase {
             // Authenticate the caller against the OAuth provider itself: the
             // access token must belong to the claimed account. The identity we
             // trust is the email the provider returns — NOT the `email` in the
-            // request body, which an unauthenticated caller fully controls
-            // (GHSA-95hw-cx5j-2pg8).
+            // request body, which an unauthenticated caller fully controls.
             const verified = await this.authService.verifyOAuthProviderEmail(
                 authProvider,
                 providerRefreshToken,

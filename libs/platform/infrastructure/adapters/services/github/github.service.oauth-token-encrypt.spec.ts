@@ -3,12 +3,12 @@ import { decrypt } from '@libs/common/utils/crypto';
 import { GithubService } from './github.service';
 
 /**
- * GHSA-g5fx-w235-hhjq (finding 3) — the GitHub App installation flow stored
+ * Token-at-rest encryption — the GitHub App installation flow stored
  * `installationAuthentication.token` in authDetails in clear, unlike the PAT
  * flow which encrypts. The token is a live credential; it must be encrypted at
  * rest so a DB read does not expose a usable credential.
  */
-describe('GithubService.authenticateWithCodeOauth — encrypts the installation token (GHSA-g5fx)', () => {
+describe('GithubService.authenticateWithCodeOauth — encrypts the installation token', () => {
     it('persists the installation token encrypted, not in clear', async () => {
         const rawToken = 'ghs_live_installation_token_value';
         const svc: any = Object.create(GithubService.prototype);

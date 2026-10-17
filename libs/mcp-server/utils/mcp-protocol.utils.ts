@@ -78,8 +78,7 @@ export function wrapToolHandler<I = any, O = any>(
             // pinned to the authenticated principal by McpToolAuthorizer, which
             // runs before this handler in both server factories and REJECTS a
             // mismatch instead of silently rewriting it. Do not re-pin them
-            // here: the tenant boundary has a single owner
-            // (GHSA-5rf5-5rj3-37cv #1).
+            // here: the tenant boundary has a single owner.
             const result = await handler(args, extra);
             const res = createToolResponse(result);
 

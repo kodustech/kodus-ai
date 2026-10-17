@@ -84,7 +84,7 @@ import { ApiBooleanResponseDto } from '../dtos/api-response.dto';
 import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 
 /**
- * Keys the generic create-or-update endpoint must refuse (GHSA-vhp8 #1).
+ * Keys the generic create-or-update endpoint must refuse.
  * These are privileged/system-managed and have their own controllers; the
  * frontend never writes them here. A denylist (not an allowlist) is used so
  * ordinary self-service config keys keep working — only these are blocked.
@@ -173,7 +173,7 @@ export class OrganizationParametersController {
         // Privileged keys must not be writable through this generic endpoint —
         // they are managed by dedicated controllers (license/billing) or set
         // by the system. Without this, any member could e.g. zero the spend
-        // limit or inject a license key (GHSA-vhp8-28q6-jvrj #1). The shared
+        // limit or inject a license key. The shared
         // use case still lets those dedicated flows set them.
         if (SENSITIVE_ORG_PARAM_KEYS.has(body.key)) {
             throw new ForbiddenException(
@@ -753,8 +753,7 @@ export class OrganizationParametersController {
         },
     ) {
         // Always the caller's own organization. Preferring body.organizationId
-        // let any logged-in user write another org's auto-license settings
-        // (GHSA-gg8q-h8qq-8pj9 / GHSA-vhp8-28q6-jvrj).
+        // let any logged-in user write another org's auto-license settings.
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {

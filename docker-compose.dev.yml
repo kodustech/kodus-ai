@@ -388,7 +388,7 @@ services:
             - API_MCP_MANAGER_CORS_ORIGINS=${API_MCP_MANAGER_CORS_ORIGINS:-*}
             - API_MCP_MANAGER_JWT_SECRET=${API_MCP_MANAGER_JWT_SECRET:-}
             # Secret used to VERIFY the orchestrator access tokens the web app
-            # forwards here (GHSA-x89q-mgqp-xhpw). Must match the API's
+            # forwards here. Must match the API's
             # API_JWT_SECRET or MCP requests fail auth.
             - API_JWT_SECRET=${API_JWT_SECRET:-}
             - API_MCP_MANAGER_ENCRYPTION_SECRET=${API_MCP_MANAGER_ENCRYPTION_SECRET:-}

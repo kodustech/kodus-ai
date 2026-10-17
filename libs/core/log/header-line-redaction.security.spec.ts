@@ -1,5 +1,5 @@
 /**
- * GHSA-rrvp-x7hh-wfxw — sensitive HTTP headers serialized into a single string
+ * Header redaction — sensitive HTTP headers serialized into a single string
  * (e.g. an Axios `error.request._header`) escaped key-based redaction because
  * the credential lives inside a string, not under a key named `authorization`.
  *
@@ -11,7 +11,7 @@ const { sanitizeString } = jest.requireActual('@libs/core/log/logger') as {
     sanitizeString: (value: string) => string;
 };
 
-describe('logger — serialized HTTP header lines are redacted (GHSA-rrvp)', () => {
+describe('logger — serialized HTTP header lines are redacted', () => {
     const rawHeaders = [
         'GET /_apis/projects HTTP/1.1',
         'Accept: application/json',

@@ -4,12 +4,12 @@ import { JwtService } from '@nestjs/jwt';
 import { AuthGuard } from './auth.guard';
 
 /**
- * GHSA-x89q-mgqp-xhpw — the guard used `jwtService.decode()`, which parses the
+ * Signature verification — the guard used `jwtService.decode()`, which parses the
  * payload without checking the signature, so any forged JWT carrying an
  * `organizationId` bypassed auth on every MCP endpoint. It must `verifyAsync`
  * against the orchestrator secret instead.
  */
-describe('mcp-manager AuthGuard — verifies signatures (GHSA-x89q)', () => {
+describe('mcp-manager AuthGuard — verifies signatures', () => {
     const secret = 'orchestrator-secret';
     const jwt = new JwtService({ secret });
     const guard = new AuthGuard(jwt);
