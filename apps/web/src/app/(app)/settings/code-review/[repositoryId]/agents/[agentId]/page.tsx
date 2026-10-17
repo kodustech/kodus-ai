@@ -15,7 +15,10 @@ import { Button } from "@components/ui/button";
 import { Page } from "@components/ui/page";
 import { Spinner } from "@components/ui/spinner";
 import { toast } from "@components/ui/toaster/use-toast";
-import { withoutSecretValues } from "@services/custom-agents/drafts";
+import {
+    pullRequestPlan,
+    withoutSecretValues,
+} from "@services/custom-agents/drafts";
 import {
     useCustomAgentsStatus,
     useResolveCustomAgent,
@@ -87,6 +90,14 @@ function AgentContent() {
         discover: true,
         enabled: !!draft,
     });
+
+    const named =
+        resolve.data?.knowledge.status === "ok"
+            ? [
+                  ...resolve.data.knowledge.items,
+                  ...(resolve.data.knowledge.candidates ?? []),
+              ]
+            : [];
 
     const reviewScopeHref = `/settings/code-review/${repositoryId}/review-scope${
         directoryId ? `?directoryId=${directoryId}` : ""
@@ -230,6 +241,9 @@ function AgentContent() {
                     </p>
                 ) : (
                     <>
+                        <p className="text-text-secondary text-sm">
+                            {pullRequestPlan(agent, knowledge, named)}
+                        </p>
                         <StatusStrip
                             agent={agent}
                             status={status.data?.agents.find(

@@ -54,6 +54,7 @@ export const NewAgentDialog = ({
         save,
     } = useCustomAgentsForm();
     const [tab, setTab] = useState<"templates" | "repository">("templates");
+    const isGlobal = repositoryId === "global";
     const [saving, setSaving] = useState(false);
     const discover = useResolveCustomAgent({
         teamId,
@@ -122,7 +123,7 @@ export const NewAgentDialog = ({
                     </p>
                 )}
 
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <Button
                         size="xs"
                         variant={tab === "templates" ? "primary" : "helper"}
@@ -132,10 +133,21 @@ export const NewAgentDialog = ({
                     <Button
                         size="xs"
                         variant={tab === "repository" ? "primary" : "helper"}
-                        disabled={repositoryId === "global"}
+                        disabled={isGlobal}
+                        aria-describedby={
+                            isGlobal ? "import-skill-global" : undefined
+                        }
                         onClick={() => setTab("repository")}>
                         Import from repository
                     </Button>
+                    {isGlobal && (
+                        <span
+                            id="import-skill-global"
+                            className="text-text-tertiary text-xs">
+                            Skills live in each repository — open a repository
+                            to import one.
+                        </span>
+                    )}
                 </div>
 
                 {tab === "templates" && (
@@ -171,9 +183,10 @@ export const NewAgentDialog = ({
                 {tab === "repository" && (
                     <div className="flex flex-col gap-2">
                         <p className="text-text-secondary text-xs">
-                            Skills found on the default branch. The agent loads
-                            the skill from the repository on every review, so
-                            edits there apply without coming back here.
+                            Skills found on the default branch. Each becomes a
+                            reviewer that follows it: the agent loads the skill
+                            from the repository on every review, so edits there
+                            apply without coming back here.
                         </p>
                         {discover.isLoading && (
                             <p className="text-text-secondary text-sm">

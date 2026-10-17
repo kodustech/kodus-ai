@@ -19,6 +19,8 @@ import {
     canAddAgent,
     CUSTOM_AGENT_LIMITS,
     describeAgent,
+    followsLine,
+    settingsSummary,
     withoutSecretValues,
 } from "@services/custom-agents/drafts";
 import {
@@ -30,16 +32,9 @@ import type { CustomAgent } from "@services/custom-agents/types";
 import { ArrowRightIcon, PlusIcon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
-import {
-    ModelsFields,
-    TagColorPicker,
-} from "../agents/[agentId]/_components/agent-sections";
-import { Choice, Field } from "../agents/[agentId]/_components/field";
+import { useByokModels } from "../agents/[agentId]/_components/agent-sections";
+import { Chip, Choice, Field } from "../agents/[agentId]/_components/field";
 import { AgentKnowledgeField } from "../agents/[agentId]/_components/knowledge-card";
-import {
-    ClisField,
-    PluginsField,
-} from "../agents/[agentId]/_components/tools-card";
 import { NewAgentDialog } from "./new-agent-dialog";
 import {
     agentPageHref,
@@ -48,8 +43,10 @@ import {
 } from "./use-custom-agents-form";
 
 /**
- * What most teams set on an agent, folded under its row. Mounted only while
- * the row is open, so only an open agent is checked against the branch.
+ * What most teams set on an agent, folded under its row: instructions, what
+ * it follows and where it runs. Tools, models and color are summarized and
+ * edited on the agent's page. Mounted only while the row is open, so only
+ * an open agent is checked against the branch.
  */
 const AgentInlineConfig = ({
     agent,
@@ -66,6 +63,7 @@ const AgentInlineConfig = ({
         setKnowledge,
         updateAgent,
     } = useCustomAgentsForm();
+    const byok = useByokModels();
     // Typed secrets never go to the draft check, only the fact they exist.
     const draft = useSettled(withoutSecretValues(agent));
     const settledKnowledge = useSettled(knowledge);
@@ -81,14 +79,22 @@ const AgentInlineConfig = ({
     const ids = {
         instructions: `agent-${agent.id}-instructions`,
         include: `agent-${agent.id}-include`,
+        exclude: `agent-${agent.id}-exclude`,
     };
+    const integrations =
+        resolve.data?.mcp.status === "ok" ? resolve.data.mcp.integrations : [];
+    const summary = settingsSummary(agent, {
+        pluginName: (id) =>
+            integrations.find((entry) => entry.integrationId === id)?.name,
+        modelName: byok.nameOf,
+    });
 
     return (
         <div className="border-card-lv3/60 flex flex-col gap-5 border-t py-4 pr-4 pl-14">
             <Field
                 label="Instructions"
                 htmlFor={ids.instructions}
-                hint="What this agent looks for and how it decides. It reads the change, the files it follows and its tools.">
+                hint="What this reviewer looks for and how it decides. It reads the change, the skills and docs it follows, and its tools.">
                 <Textarea
                     id={ids.instructions}
                     className="min-h-28 text-sm"
@@ -104,27 +110,13 @@ const AgentInlineConfig = ({
                 />
             </Field>
 
-            <Field
-                label="Runs on"
-                htmlFor={ids.include}
-                hint="Globs over the files a pull request changes, e.g. src/payments/**. Empty runs on every pull request.">
-                <TagInput
-                    id={ids.include}
-                    tags={agent.scope.include ?? []}
-                    disabled={!canEdit}
-                    placeholder="Add a glob and press Enter"
-                    onTagsChange={(include) =>
-                        patch((current) => ({
-                            ...current,
-                            scope: { ...current.scope, include },
-                        }))
-                    }
-                />
-            </Field>
-
             <div className="flex flex-col gap-1.5">
                 <span className="text-text-primary text-xs font-medium">
-                    Skills and docs this agent follows
+                    Follows
+                </span>
+                <span className="text-text-tertiary text-xs">
+                    The team&apos;s skills and docs this reviewer follows. A
+                    skill opens when the change needs it; a doc loads whole.
                 </span>
                 <AgentKnowledgeField
                     agentId={agent.id}
@@ -135,69 +127,72 @@ const AgentInlineConfig = ({
                 />
             </div>
 
-            <PluginsField
-                agent={agent}
-                report={resolve.data}
-                loading={resolve.isLoading}
-                canEdit={canEdit}
-                onChange={patch}
-            />
-            <ClisField agent={agent} canEdit={canEdit} onChange={patch} />
-
-            <div className="flex flex-col gap-1.5">
-                <span className="text-text-primary text-xs font-medium">
-                    Models
-                </span>
-                <ModelsFields
-                    agent={agent}
-                    canEdit={canEdit}
-                    onChange={patch}
-                />
-            </div>
-
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Tag color">
-                    <TagColorPicker
-                        value={agent.presentation.tag.color}
+                <Field
+                    label="Runs on"
+                    htmlFor={ids.include}
+                    hint="Globs over the files a pull request changes, e.g. src/payments/**. Empty runs on every pull request.">
+                    <TagInput
+                        id={ids.include}
+                        tags={agent.scope.include ?? []}
                         disabled={!canEdit}
-                        onChange={(color) =>
+                        placeholder="Add a glob and press Enter"
+                        onTagsChange={(include) =>
                             patch((current) => ({
                                 ...current,
-                                presentation: {
-                                    ...current.presentation,
-                                    tag: { color },
-                                },
+                                scope: { ...current.scope, include },
                             }))
                         }
                     />
                 </Field>
                 <Field
-                    label="Mode"
-                    hint="Shadow keeps findings for you to read without posting them.">
-                    <Choice
-                        value={agent.presentation.mode}
+                    label="Except"
+                    htmlFor={ids.exclude}
+                    hint="e.g. **/*.test.ts, **/generated/**">
+                    <TagInput
+                        id={ids.exclude}
+                        tags={agent.scope.exclude ?? []}
                         disabled={!canEdit}
-                        onChange={(mode) =>
+                        placeholder="Add a glob and press Enter"
+                        onTagsChange={(exclude) =>
                             patch((current) => ({
                                 ...current,
-                                presentation: { ...current.presentation, mode },
+                                scope: { ...current.scope, exclude },
                             }))
                         }
-                        options={[
-                            { value: "post", label: "Post" },
-                            { value: "shadow", label: "Shadow" },
-                        ]}
                     />
                 </Field>
             </div>
 
-            <Link
-                href={agentPageHref(repositoryId, agent.id, directoryId)}
-                className="text-text-secondary hover:text-text-primary flex w-fit items-center gap-1.5 text-xs">
-                More settings: comment format, severity, limits, writing,
-                structural search, try it
-                <ArrowRightIcon className="size-3.5" />
-            </Link>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <span className="flex flex-wrap items-center gap-1.5">
+                    {summary.map((chip) => (
+                        <Chip key={chip}>{chip}</Chip>
+                    ))}
+                </span>
+                <Choice
+                    size="sm"
+                    label={`Post or shadow: ${agent.name}`}
+                    value={agent.presentation.mode}
+                    disabled={!canEdit}
+                    onChange={(mode) =>
+                        patch((current) => ({
+                            ...current,
+                            presentation: { ...current.presentation, mode },
+                        }))
+                    }
+                    options={[
+                        { value: "post", label: "Post" },
+                        { value: "shadow", label: "Shadow" },
+                    ]}
+                />
+                <Link
+                    href={agentPageHref(repositoryId, agent.id, directoryId)}
+                    className="text-text-secondary hover:text-text-primary ml-auto flex items-center gap-1.5 text-xs">
+                    More settings
+                    <ArrowRightIcon className="size-3.5" />
+                </Link>
+            </div>
         </div>
     );
 };
@@ -208,8 +203,14 @@ const AgentInlineConfig = ({
  * above it. Everything saves with the rest of this page.
  */
 export const CustomAgentsSection = ({ canEdit }: { canEdit: boolean }) => {
-    const { teamId, repositoryId, directoryId, agents, updateAgent } =
-        useCustomAgentsForm();
+    const {
+        teamId,
+        repositoryId,
+        directoryId,
+        agents,
+        knowledge,
+        updateAgent,
+    } = useCustomAgentsForm();
     const [dialogOpen, setDialogOpen] = useState(false);
     const [openIds, setOpenIds] = useState<string[]>([]);
     const status = useCustomAgentsStatus({
@@ -217,6 +218,20 @@ export const CustomAgentsSection = ({ canEdit }: { canEdit: boolean }) => {
         repositoryId,
         enabled: repositoryId !== "global" && agents.length > 0,
     });
+    // Skill names from their frontmatter, for the "Follows" line of each row.
+    const discovered = useResolveCustomAgent({
+        teamId,
+        repositoryId,
+        discover: true,
+        enabled: repositoryId !== "global" && agents.length > 0,
+    });
+    const named =
+        discovered.data?.knowledge.status === "ok"
+            ? [
+                  ...discovered.data.knowledge.items,
+                  ...(discovered.data.knowledge.candidates ?? []),
+              ]
+            : [];
     const windowDays = status.data?.windowDays ?? 30;
     const statusOf = (agentId: string) =>
         status.data?.agents.find((entry) => entry.agentId === agentId);
@@ -245,26 +260,42 @@ export const CustomAgentsSection = ({ canEdit }: { canEdit: boolean }) => {
                         </Link>
                     </p>
                 </div>
-                <Button
-                    size="sm"
-                    variant="secondary"
-                    leftIcon={<PlusIcon />}
-                    disabled={!canEdit || !canAddAgent(agents)}
-                    onClick={() => setDialogOpen(true)}>
-                    New agent
-                </Button>
+                <div className="flex items-center gap-3">
+                    {!canAddAgent(agents) && (
+                        <span
+                            id="custom-agents-limit"
+                            className="text-text-tertiary text-xs">
+                            {agents.length}/{CUSTOM_AGENT_LIMITS.maxAgents}{" "}
+                            agents
+                        </span>
+                    )}
+                    <Button
+                        size="sm"
+                        variant="secondary"
+                        leftIcon={<PlusIcon />}
+                        aria-describedby={
+                            canAddAgent(agents)
+                                ? undefined
+                                : "custom-agents-limit"
+                        }
+                        disabled={!canEdit || !canAddAgent(agents)}
+                        onClick={() => setDialogOpen(true)}>
+                        New agent
+                    </Button>
+                </div>
             </div>
 
             {agents.length === 0 ? (
                 <div className="border-card-lv3/60 text-text-secondary rounded-xl border border-dashed px-4 py-6 text-center text-sm">
-                    No custom agents yet. Start from a template or from a skill
-                    in the repository.
+                    No custom agents yet. Start from a template, or turn one of
+                    the team&apos;s skills into a reviewer that follows it.
                 </div>
             ) : (
                 <div className="border-card-lv3/60 bg-card-lv1 divide-card-lv3/60 flex flex-col divide-y overflow-hidden rounded-xl border">
                     {agents.map((agent) => {
                         const switchId = `custom-agent-${agent.id}`;
                         const open = openIds.includes(agent.id);
+                        const follows = followsLine(knowledge, agent.id, named);
                         return (
                             <Collapsible
                                 key={agent.id}
@@ -316,6 +347,11 @@ export const CustomAgentsSection = ({ canEdit }: { canEdit: boolean }) => {
                                         <p className="text-text-secondary text-xs">
                                             {describeAgent(agent)}
                                         </p>
+                                        {follows && (
+                                            <p className="text-text-secondary text-xs">
+                                                {follows}
+                                            </p>
+                                        )}
                                         <p className="text-text-tertiary text-xs">
                                             {repositoryId === "global"
                                                 ? "Usage shows per repository"
@@ -344,11 +380,6 @@ export const CustomAgentsSection = ({ canEdit }: { canEdit: boolean }) => {
                         );
                     })}
                 </div>
-            )}
-            {!canAddAgent(agents) && (
-                <p className="text-text-tertiary text-xs">
-                    Up to {CUSTOM_AGENT_LIMITS.maxAgents} agents per repository.
-                </p>
             )}
 
             <NewAgentDialog
