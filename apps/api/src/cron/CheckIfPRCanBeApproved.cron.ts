@@ -31,7 +31,11 @@ import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
-import { CodeReviewConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    CodeReviewConfig,
+    DEFAULT_APPROVAL_LOOKBACK_DAYS,
+    MAX_APPROVAL_LOOKBACK_DAYS,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ConfigLevel } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 import {
@@ -196,9 +200,9 @@ export class CheckIfPRCanBeApprovedCronProvider {
 
             const automationUuid = codeReviewAutomation[0].uuid;
 
-            // Calculate once outside loop
-            const sevenDaysAgo = new Date();
-            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            // The end of the approval window is the same for every team. Its
+            // start depends on each team's `approvalLookbackDays`, so it is
+            // computed per team below, from this same instant.
             const now = new Date();
 
             // Both limiters are global for the run. teamLimit is the one
@@ -314,9 +318,23 @@ export class CheckIfPRCanBeApprovedCronProvider {
                             return;
                         }
 
+                        // A review completed before this instant is not
+                        // considered, so a PR whose review is older than the
+                        // team's lookback can never be auto-approved. The
+                        // window was a hardcoded seven days; a team that
+                        // keeps PRs open longer sets `approvalLookbackDays`.
+                        const approvalWindowStart = new Date(now);
+                        approvalWindowStart.setDate(
+                            approvalWindowStart.getDate() -
+                                this.resolveApprovalLookbackDays(
+                                    codeReviewConfig,
+                                    organizationAndTeamData,
+                                ),
+                        );
+
                         const eligiblePullRequestRefs =
                             await this.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId(
-                                sevenDaysAgo,
+                                approvalWindowStart,
                                 now,
                                 teamAutomation.uuid,
                             );
@@ -771,6 +789,61 @@ export class CheckIfPRCanBeApprovedCronProvider {
             Array.isArray(inProgressExecutions) &&
             inProgressExecutions.length > 0
         );
+    }
+
+    /**
+     * The number of days the approval window reaches back for a team.
+     *
+     * Takes the CODE_REVIEW_CONFIG parameter's `configValue` as stored, and
+     * reads `approvalLookbackDays` from its global settings delta,
+     * `configValue.configs` — where the update use-case writes it and where
+     * `CodeBaseConfigService` reads every other global setting from. The top
+     * level of `configValue` holds `id`, `configs` and `repositories`, never
+     * the settings themselves. Only the global value applies: the eligibility
+     * query runs once per team, before any repository is known, so a
+     * per-repository override has nothing to act on.
+     *
+     * A positive integer is used as-is up to `MAX_APPROVAL_LOOKBACK_DAYS`,
+     * and one above it is clamped to the maximum: the API now rejects such a
+     * value, so only rows saved before that validation can hold one, and a
+     * team that stored 36500 to mean "never expire" should get the widest
+     * window, not the narrowest. Anything else — unset, zero, negative,
+     * fractional, or not a number — yields the default. A value that was set
+     * but rejected is logged, since a team that configured 30 and silently
+     * got 7 would see the same symptom this setting exists to fix.
+     */
+    private resolveApprovalLookbackDays(
+        codeReviewParameterValue:
+            { configs?: { approvalLookbackDays?: unknown } } | undefined,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): number {
+        const configured =
+            codeReviewParameterValue?.configs?.approvalLookbackDays;
+
+        if (configured === undefined || configured === null) {
+            return DEFAULT_APPROVAL_LOOKBACK_DAYS;
+        }
+
+        if (
+            typeof configured === 'number' &&
+            Number.isInteger(configured) &&
+            configured >= 1
+        ) {
+            return Math.min(configured, MAX_APPROVAL_LOOKBACK_DAYS);
+        }
+
+        this.logger.warn({
+            message:
+                'Invalid approvalLookbackDays in code review config, using the default',
+            context: CheckIfPRCanBeApprovedCronProvider.name,
+            metadata: {
+                organizationAndTeamData,
+                configured,
+                default: DEFAULT_APPROVAL_LOOKBACK_DAYS,
+            },
+        });
+
+        return DEFAULT_APPROVAL_LOOKBACK_DAYS;
     }
 
     private getLastAnalyzedCommitSha(lastAnalyzedCommit?: any): string | null {
