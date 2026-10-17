@@ -36,8 +36,8 @@ const ROOT = path.join(__dirname, '..');
 // change is better, and the ones that must not get worse.
 const STEP_EVALS = {
     dedup: {
-        primary: { id: 'dedup-groups', run: ['evals/dedup-groups/run.js'], question: 'Does the dedup join the suggestions that report the same problem, and only those?' },
-        guards: [{ id: 'funnel-dedup', run: ['evals/funnel/dedup/run.js', '--set=full'], question: 'Of the known bugs reaching the dedup in a real review, how many does it keep?' }],
+        primary: { id: 'dedup-groups', label: 'Duplicate pairs joined', run: ['evals/dedup-groups/run.js'], question: 'Does the dedup join the suggestions that report the same problem, and only those?' },
+        guards: [{ id: 'funnel-dedup', label: 'Known bugs kept', run: ['evals/funnel/dedup/run.js', '--set=full'], question: 'Of the known bugs reaching the dedup in a real review, how many does it keep?' }],
     },
 };
 
@@ -307,6 +307,7 @@ function main() {
             const r = results[entry.id];
             return {
                 id: entry.id,
+                label: entry.label,
                 role: k === 0 ? 'primary' : 'guard',
                 question: entry.question,
                 metric: (r.candidate.find(Boolean) || r.base.find(Boolean) || {}).metric?.name || null,
@@ -346,6 +347,7 @@ function main() {
                 experiment: name,
                 branch,
                 eval: e.id,
+                label: e.label,
                 role: e.role,
                 question: e.question,
                 metric: e.metric,
