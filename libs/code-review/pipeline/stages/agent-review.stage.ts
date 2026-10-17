@@ -1548,7 +1548,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     }
                     const hasKodyRuleSeverity =
                         deduped[i].brokenKodyRulesIds?.length > 0;
-                    if (hasKodyRuleSeverity) {
+                    // A custom agent's severity is the team's call too: its
+                    // floor and comment limit were set against it, and the
+                    // bug-centric criteria would rank e.g. a missing test low.
+                    const hasCustomAgentSeverity = !!deduped[i].customAgent;
+                    if (hasKodyRuleSeverity || hasCustomAgentSeverity) {
                         continue;
                     }
                     deduped[i].severity = classified;

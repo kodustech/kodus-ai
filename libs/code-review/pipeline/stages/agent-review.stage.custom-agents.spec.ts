@@ -1,3 +1,4 @@
+import * as severityClassifier from '@libs/code-review/infrastructure/agents/engine/classify-severity';
 import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { AgentReviewStage } from './agent-review.stage';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
@@ -331,6 +332,74 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
             'Second entry also unbalanced.',
         );
         expect(result.customAgentRuns[0].posted).toBe(2);
+    });
+
+    it('posts the most severe finding of a single-comment agent capped at one', async () => {
+        const { stage } = makeStage(
+            output([
+                finding({
+                    severity: 'medium',
+                    suggestionContent: 'The new route has no e2e test.',
+                }),
+                finding({
+                    relevantLinesStart: 9,
+                    relevantLinesEnd: 9,
+                    severity: 'medium',
+                    suggestionContent: 'The route skips the service layer.',
+                }),
+            ]),
+        );
+
+        const result = await run(
+            stage,
+            makeContext([
+                agent({
+                    presentation: {
+                        mode: 'post',
+                        format: 'single-comment',
+                        maxComments: 1,
+                        minSeverity: 'medium',
+                        suggestedFix: 'never',
+                        tag: { color: '#0ea5e9' },
+                    },
+                }),
+            ]),
+        );
+
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            'The new route has no e2e test.',
+        );
+        expect(result.customAgentRuns[0].posted).toBe(1);
+    });
+
+    it("keeps the agent's own severity: Kody's bug-centric reclassification never pushes it under the agent floor", async () => {
+        const classify = jest
+            .spyOn(severityClassifier, 'classifySeverity')
+            .mockResolvedValue(new Map([[0, 'low']]) as any);
+        const { stage } = makeStage(
+            output([
+                finding({
+                    severity: 'medium',
+                    suggestionContent: 'The new route has no e2e test.',
+                }),
+            ]),
+        );
+
+        const result = await run(
+            stage,
+            makeContext([
+                agent({
+                    presentation: { mode: 'post', minSeverity: 'medium' },
+                }),
+            ]),
+        );
+
+        expect(contents(result.validSuggestions)).toEqual([
+            'The new route has no e2e test.',
+        ]);
+        expect(result.validSuggestions[0].severity).toBe('medium');
+        classify.mockRestore();
     });
 
     it('holds approval for a cut-short post agent but not for a shadow one', async () => {
