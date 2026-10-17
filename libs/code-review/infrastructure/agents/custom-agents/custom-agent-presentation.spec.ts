@@ -237,12 +237,25 @@ describe('custom agents summary', () => {
 
         const markdown = formatCustomAgentsSummary(summary);
 
-        expect(markdown).toContain(
-            '| Ledger \\| Rules | ran | 2 | 1 |',
-        );
+        expect(markdown).toContain('| Ledger \\| Rules | ran | 2 | 1 |');
         expect(markdown).toContain(
             '| Docs | not run: no matching files | 0 | 0 |',
         );
+    });
+
+    it('escapes a trailing backslash so it cannot unescape the pipe', () => {
+        const markdown = formatCustomAgentsSummary([
+            {
+                id: 'p',
+                name: 'Ledger\\| Rules',
+                slug: 'ledger-rules',
+                status: 'ran',
+                droppedByVerify: 0,
+                posted: 0,
+            },
+        ]);
+
+        expect(markdown).toContain('| Ledger\\\\\\| Rules | ran | 0 | 0 |');
     });
 
     it('renders nothing when no agent was configured', () => {

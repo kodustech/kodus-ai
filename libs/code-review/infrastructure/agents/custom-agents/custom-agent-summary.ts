@@ -37,7 +37,7 @@ const STATUS_TEXT: Record<CustomAgentRun['status'], string> = {
 };
 
 const escapeCell = (text: string): string =>
-    text.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+    text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 
 /** Markdown section for the end-review comment; empty when no agent was configured. */
 export function formatCustomAgentsSummary(
