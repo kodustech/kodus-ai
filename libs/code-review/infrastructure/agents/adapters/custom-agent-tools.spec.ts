@@ -4,6 +4,18 @@
  */
 import type { MCPAdapter, MCPTool } from '@libs/mcp-server/mcp-adapter';
 
+// One shared warn so the tests can read what the module logger wrote.
+const mockWarn = jest.fn();
+jest.mock('@libs/core/log/logger', () => ({
+    createLogger: () => ({
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: (...args: unknown[]) => mockWarn(...args),
+        debug: jest.fn(),
+        info: jest.fn(),
+    }),
+}));
+
 import {
     buildCustomAgentTools,
     loadCustomAgentMcpServers,
@@ -49,7 +61,8 @@ describe('buildCustomAgentTools', () => {
         const set = await buildCustomAgentTools(
             {
                 tools: {
-                    astGrepConfig: 'id: no-raw-sql\nlanguage: ts\nrule:\n  pattern: db.raw($Q)',
+                    astGrepConfig:
+                        'id: no-raw-sql\nlanguage: ts\nrule:\n  pattern: db.raw($Q)',
                     mcp: [
                         { integrationId: 'int-tracker', tools: ['get_ticket'] },
                     ],
@@ -120,6 +133,36 @@ describe('buildCustomAgentTools', () => {
         );
         expect(set.tools).toEqual([]);
         await expect(set.close()).resolves.toBeUndefined();
+    });
+
+    it('logs unavailable MCP tools with the review identifiers', async () => {
+        mockWarn.mockClear();
+        await buildCustomAgentTools(
+            {
+                tools: {
+                    mcp: [
+                        { integrationId: 'int-tracker', tools: ['get_ticket'] },
+                    ],
+                },
+            },
+            {
+                changedFiles: [],
+                logContext: { organizationId: 'org-1', prNumber: 7 },
+                mcp: {
+                    loadServers: jest.fn(async () => {
+                        throw new Error('mcp-manager down');
+                    }),
+                },
+            },
+        );
+        expect(mockWarn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    organizationId: 'org-1',
+                    prNumber: 7,
+                }),
+            }),
+        );
     });
 });
 

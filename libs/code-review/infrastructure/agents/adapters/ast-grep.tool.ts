@@ -22,6 +22,9 @@
  */
 import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contract';
 import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
+import { createLogger } from '@libs/core/log/logger';
+
+const logger = createLogger('AstGrepTool');
 
 export const AST_GREP_TOOL_NAME = 'astGrep';
 export const MAX_AST_GREP_MATCHES = 50;
@@ -49,6 +52,8 @@ export interface AstGrepToolDeps {
     readTargetFile?: (path: string) => Promise<string | null>;
     /** Temp directory name; random per run unless a test pins it. */
     workDirName?: string;
+    /** Review identifiers (organization, team, repository, PR, agent) for logs. */
+    logContext?: Record<string, unknown>;
 }
 
 export interface AstGrepInput {
@@ -337,6 +342,16 @@ export function buildAstGrepTool(
                     `for the pattern`,
                 );
             } catch (error) {
+                // The rules and pattern stay out of the log: only the mode.
+                logger.warn({
+                    message: 'astGrep failed',
+                    context: 'astGrepTool',
+                    error,
+                    metadata: {
+                        mode: args.useRules ? 'rules' : 'pattern',
+                        ...deps.logContext,
+                    },
+                });
                 return {
                     output: `astGrep failed: ${error instanceof Error ? error.message : String(error)}`,
                     isError: true,

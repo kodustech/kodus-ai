@@ -10,6 +10,18 @@ import {
     type AstGrepToolDeps,
 } from '@libs/code-review/infrastructure/agents/adapters/ast-grep.tool';
 
+// One shared warn so the test can read what the tool's module logger wrote.
+const mockWarn = jest.fn();
+jest.mock('@libs/core/log/logger', () => ({
+    createLogger: () => ({
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: (...args: unknown[]) => mockWarn(...args),
+        debug: jest.fn(),
+        info: jest.fn(),
+    }),
+}));
+
 const ctx = { runId: 'r' } as any;
 const WORK_DIR = '.kody-ast-grep-test';
 
@@ -214,6 +226,27 @@ describe('astGrep tool', () => {
         const r = await tool.execute({ pattern: 'x', language: 'ts' }, ctx);
         expect(r.isError).toBe(true);
         expect(r.output).toContain('sandbox gone');
+    });
+
+    it('logs a thrown exec with the review identifiers', async () => {
+        mockWarn.mockClear();
+        const { tool, exec } = setup({
+            logContext: { organizationId: 'org-1', prNumber: 7 },
+        });
+        exec.mockRejectedValueOnce(new Error('sandbox gone'));
+
+        await tool.execute({ pattern: 'x', language: 'ts' }, ctx);
+
+        expect(mockWarn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                error: expect.objectContaining({ message: 'sandbox gone' }),
+                metadata: expect.objectContaining({
+                    mode: 'pattern',
+                    organizationId: 'org-1',
+                    prNumber: 7,
+                }),
+            }),
+        );
     });
 
     describe('rules from the target branch', () => {

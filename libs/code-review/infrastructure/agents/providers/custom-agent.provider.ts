@@ -130,8 +130,16 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
         const reader = input.knowledgeReader;
         const org = input.organizationAndTeamData;
         const mcpManager = this.toolServices.mcpManager;
+        const logContext = {
+            organizationId: org?.organizationId,
+            teamId: org?.teamId,
+            repositoryId: input.repositoryId,
+            prNumber: input.prNumber,
+            agentId: this.agent.id,
+        };
 
         const toolset = await buildCustomAgentTools(this.agent, {
+            logContext,
             remoteCommands: input.remoteCommands,
             writeFile:
                 sandbox?.writeFile && sandbox.repoDir
@@ -163,6 +171,7 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
                 message: `Custom agent "${this.agent.name}" tools unavailable; running without them`,
                 context: CustomAgentProvider.name,
                 error,
+                metadata: logContext,
             });
             return { tools: [], close: async () => {} };
         });

@@ -39,6 +39,8 @@ export interface CustomAgentToolDeps {
         createAdapter?: (config: MCPAdapterConfig) => MCPAdapter;
         callTimeoutMs?: number;
     };
+    /** Review identifiers (organization, team, repository, PR, agent) for logs. */
+    logContext?: Record<string, unknown>;
 }
 
 export interface CustomAgentToolset {
@@ -48,6 +50,7 @@ export interface CustomAgentToolset {
 
 async function hasAstGrep(
     exec: NonNullable<RemoteCommands['exec']>,
+    logContext?: Record<string, unknown>,
 ): Promise<boolean> {
     try {
         const result = await exec('ast-grep --version');
@@ -56,8 +59,10 @@ async function hasAstGrep(
         // Reported below like a missing binary.
     }
     logger.warn({
-        message: 'ast-grep is not installed in the sandbox; astGrep is not offered',
+        message:
+            'ast-grep is not installed in the sandbox; astGrep is not offered',
         context: 'buildCustomAgentTools',
+        metadata: logContext,
     });
     return false;
 }
@@ -75,7 +80,7 @@ export async function buildCustomAgentTools(
     if (
         deps.remoteCommands?.exec &&
         deps.writeFile &&
-        (await hasAstGrep(deps.remoteCommands.exec))
+        (await hasAstGrep(deps.remoteCommands.exec, deps.logContext))
     ) {
         tools.push(
             buildAstGrepTool({
@@ -83,6 +88,7 @@ export async function buildCustomAgentTools(
                 writeFile: deps.writeFile,
                 changedFiles: deps.changedFiles,
                 rules: agent.tools?.astGrepConfig?.trim() || undefined,
+                logContext: deps.logContext,
             }) as AgentTool,
         );
     }
@@ -109,6 +115,7 @@ export async function buildCustomAgentTools(
                     'Custom agent MCP tools unavailable; running without them',
                 context: 'buildCustomAgentTools',
                 error,
+                metadata: deps.logContext,
             });
         }
     }
