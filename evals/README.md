@@ -51,3 +51,42 @@ A test passes or fails the same on every run: unit tests, and contract tests tha
 - **Nightly "oscilou":** the confirming run passed. Nothing to do.
 - **Nightly "caiu abaixo do piso":** the message lists the PRs, the bugs lost and the commits. Re-run before and after the suspect commit; an intended trade-off recalibrates in the PR that made it.
 - **Weekly 🔴 `model` step:** confirmed below that model's floor; a per-model decision, not a reason to stop the release. **⚠️:** it did not measure: its key or quota.
+
+## Experiments
+
+Is a change to a step better than what main has? An experiment answers it on your machine or in CI.
+
+### Run one
+
+1. Branch from main, change the step, and commit. The command refuses uncommitted changes: the result must point at code that exists.
+2. Run `node evals/experiment.js --step=<step>` with the model keys in the environment (the same ones the evals use; the dedup also needs the platform's OpenAI key, `API_OPEN_AI_API_KEY`, for its embedder). In CI: the "Evals: experiment on a review step" workflow, dispatched on your branch.
+3. Read `summary.md` or the panel's Experiments tab: the run sends its rows there when `KODUS_QUALITY_INGEST_TOKEN` is set (`~/.kodus-dev/config`; the panel's `EXPERIMENTS_INGEST_TOKEN`).
+
+To change more, commit and run it again.
+
+### What it compares
+
+- **The base** is the commit of main your branch last started from: `git merge-base HEAD origin/main`. Rebase or merge main into the branch and the base moves to that commit; your changes stay, and earlier experiments keep the commits they ran on.
+- **The candidate** is your branch's HEAD.
+- The command checks out the base in a temporary folder (`git worktree`), runs the same evals in both folders with the same cases, model and judge, compares the results case by case, and removes the folder. The evals' own files must be the same on both sides; land an eval change on main first.
+- Not main's tip on purpose: what others merged since you branched would count as yours.
+- `--base=<ref>` compares against another branch; `--phases=regression` runs the first question only.
+
+### What it answers
+
+1. **Did it break anything?** The main eval on its controlled set, and the evals that must not get worse. Fast; it catches a drop.
+2. **Is it better?** The main eval on its extended set: enough cases for a real change to clear its interval.
+
+Each eval runs `--runs` times per side (2 by default), alternating. Per case, paired: each side's pooled metric, the difference with a 95% bootstrap interval over the cases, and the cases that got worse or better. A difference counts only when its interval clears zero.
+
+**It ships when**, fixed before the run: the step's code changed (its step version differs), every eval measured on both sides (at most 5% of cases unmeasured), nothing got worse in question 1 (the main eval not worse beyond its interval, no case of a must-not-get-worse eval worse), and question 2 is better beyond its interval or ties with fewer tokens. A measure read from the main eval's own cases (`derived` in `STEP_EVALS`: for the dedup, how many of its merges were right) may not get worse beyond its interval in either question, so a change cannot win by merging everything. With question 1 alone, the answer is "no regression", never "ships".
+
+### What it records
+
+Each side's step version (a hash of the production files its evals loaded, at their committed content: the same on both sides means the branch did not change this step), the files that differ, the eval and dataset versions, what each eval reports of its environment, and model use. Under `--out`: `experiment.json`, `summary.md`, and `rows.json` (`experiments.<step>.<phase>.<eval>.<name>`). Every run sends `rows.json` to the panel's experiments API (`evals/shared/quality-client.js`), which builds its Experiments tab and each step's experiments from them; they never replace a number main measured. With `--if-new` (a PR's check, the workflow), code the panel already measured, the same content in every step file on both sides and the same phases, is not run again: the summary points at that result. Run it on your machine and push: the PR does not pay for it twice.
+
+The panel dates each experiment by itself: **active** while its branch is open and nothing it measured has changed; **out of date** when main changed one of the step's production files after the base (rebase and run it again) or the branch changed one after the candidate; **merged** or **closed** with its pull request, kept under Archived as the evidence for that version. A newer run on the same branch keeps the earlier ones inside its card.
+
+### Add a step
+
+Add it to `STEP_EVALS` in `evals/experiment.js`: its main eval (`id`, a short `label`, `run`, `question`) and the evals that must not get worse. The main eval must take `--set=controlled|full`, keep a stable `id` per case, and write the shared result (`evals/shared/eval-result.js`). A dataset is tied to what produced it: `evals/dedup-groups` scores the dedup on suggestions from the lean finder of #1821, so its numbers say how a dedup groups that finder's output, not today's.
