@@ -113,7 +113,8 @@ export const CUSTOM_AGENT_TEMPLATES: CustomAgentTemplate[] = [
     },
     {
         id: "security",
-        name: "Security",
+        // Not "Security": Kody's own category has that name.
+        name: "Security reviewer",
         description:
             "Injection, auth and tenant checks, secrets and unsafe input handling.",
         color: TAG_COLORS[4],
@@ -170,6 +171,22 @@ const blankAgent = (params: {
     },
 });
 
+/**
+ * The first tag color no agent uses yet, so every agent's comments stay
+ * distinguishable; once all are taken, colors repeat in order.
+ */
+export const nextTagColor = (
+    existing: Array<Pick<CustomAgent, "presentation">>,
+): string => {
+    const used = new Set(
+        existing.map((agent) => agent.presentation?.tag?.color),
+    );
+    return (
+        TAG_COLORS.find((color) => !used.has(color)) ??
+        TAG_COLORS[existing.length % TAG_COLORS.length]
+    );
+};
+
 export const createAgentFromTemplate = (
     templateId: CustomAgentTemplateId,
     existing: CustomAgent[],
@@ -177,18 +194,72 @@ export const createAgentFromTemplate = (
     const template =
         CUSTOM_AGENT_TEMPLATES.find((item) => item.id === templateId) ??
         CUSTOM_AGENT_TEMPLATES[CUSTOM_AGENT_TEMPLATES.length - 1];
+    const taken = existing.some(
+        (agent) => agent.presentation.tag.color === template.color,
+    );
     return blankAgent({
         id: uniqueId(template.id === "blank" ? "agent" : template.id, existing),
         name: template.name,
-        color: template.color,
+        color: taken ? nextTagColor(existing) : template.color,
         instructions: template.instructions,
         include: template.include,
     });
 };
 
-const humanize = (value: string) => {
-    const words = value.replace(/[-_]+/g, " ").trim();
-    return words.charAt(0).toUpperCase() + words.slice(1);
+/** Skill names usually start with what the skill does, not what it is. */
+const LEADING_VERBS = new Set([
+    "create",
+    "write",
+    "add",
+    "review",
+    "check",
+    "make",
+    "build",
+    "use",
+]);
+
+const ACRONYMS = new Set([
+    "e2e",
+    "api",
+    "apis",
+    "sql",
+    "ui",
+    "ux",
+    "cli",
+    "css",
+    "html",
+    "http",
+    "json",
+    "url",
+    "sdk",
+    "db",
+    "ci",
+    "pr",
+    "jwt",
+]);
+
+/**
+ * A skill's name as the reviewer that follows it: "create-e2e-tests"
+ * becomes "E2E tests reviewer".
+ */
+export const reviewerName = (skillName: string): string => {
+    let words = skillName
+        .split(/[-_\s]+/)
+        .map((word) => word.trim())
+        .filter(Boolean);
+    if (words.length > 1 && LEADING_VERBS.has(words[0].toLowerCase())) {
+        words = words.slice(1);
+    }
+    if (words.at(-1)?.toLowerCase() === "reviewer") words = words.slice(0, -1);
+    if (!words.length) return "Imported reviewer";
+    const cased = words.map((word, index) => {
+        const lower = word.toLowerCase();
+        if (ACRONYMS.has(lower)) return lower.toUpperCase();
+        return index === 0
+            ? lower.charAt(0).toUpperCase() + lower.slice(1)
+            : lower;
+    });
+    return `${cased.join(" ")} reviewer`;
 };
 
 /**
@@ -199,18 +270,12 @@ export const agentFromSkill = (
     candidate: KnowledgeCandidate,
     existing: CustomAgent[],
 ): { agent: CustomAgent; link: KnowledgeItem } => {
-    const folder = candidate.path.split("/").filter(Boolean).pop() ?? "";
-    const skillName = candidate.name ?? folder;
+    const skillName = candidate.name ?? skillFolderName(candidate.path);
     const agent = blankAgent({
         id: uniqueId(slugify(skillName), existing),
-        name: humanize(skillName) || "Imported agent",
-        color: TAG_COLORS[existing.length % TAG_COLORS.length],
-        instructions: [
-            candidate.description ?? "",
-            `Load the "${skillName}" skill and review the change against it.`,
-        ]
-            .filter(Boolean)
-            .join("\n"),
+        name: reviewerName(skillName),
+        color: nextTagColor(existing),
+        instructions: `Review the change against the team's "${skillName}" skill: load it, follow its rules and references, and report where the change departs from them. Cite the rule you apply.`,
     });
     return {
         agent,
@@ -220,6 +285,18 @@ export const agentFromSkill = (
             linkedTo: [{ agentId: agent.id }],
         },
     };
+};
+
+/** The native review categories a custom agent's name can be mistaken for. */
+const NATIVE_CATEGORIES = ["Bug", "Performance", "Security", "Business Logic"];
+
+/** A hint when the name repeats a native category; null when it doesn't. */
+export const nameCollisionHint = (name: string): string | null => {
+    const category = NATIVE_CATEGORIES.find(
+        (entry) => entry.toLowerCase() === name.trim().toLowerCase(),
+    );
+    if (!category) return null;
+    return `Kody already has a ${category} category; a distinct name (e.g. ${category} reviewer) tells their comments apart.`;
 };
 
 export const canAddAgent = (agents: Pick<CustomAgent, "id">[]) =>
@@ -291,6 +368,133 @@ export const setKnowledgeLink = (
 /** A path as the config stores it: trimmed, relative to the repository. */
 export const normalizeKnowledgePath = (path: string) =>
     path.trim().replace(/^\/+/, "");
+
+/** A skill's folder name, from its folder path or its SKILL.md path. */
+export const skillFolderName = (path: string) =>
+    path
+        .split("/")
+        .filter(Boolean)
+        .filter((segment) => segment !== "SKILL.md")
+        .pop() ?? path;
+
+/**
+ * A path typed by hand, as the item it names: a file with an extension is
+ * a doc; a folder, or a SKILL.md inside one, is a skill (stored as its
+ * folder).
+ */
+export const knowledgeItemFromPath = (
+    input: string,
+): Pick<KnowledgeItem, "path" | "kind"> | null => {
+    const path = normalizeKnowledgePath(input).replace(/\/+$/, "");
+    if (!path) return null;
+    if (/(^|\/)SKILL\.md$/.test(path)) {
+        const folder = path.replace(/\/?SKILL\.md$/, "");
+        return folder ? { path: folder, kind: "skill" } : null;
+    }
+    const last = path.split("/").pop() ?? "";
+    return /^[^.].*\.[a-z0-9]+$/i.test(last)
+        ? { path, kind: "doc" }
+        : { path, kind: "skill" };
+};
+
+type NamedKnowledge = Pick<KnowledgeItem, "path" | "kind"> & { name?: string };
+
+/** What one agent follows, skills first, each with the name it shows. */
+export const followedBy = (
+    knowledge: KnowledgeItem[],
+    agentId: string,
+    named: NamedKnowledge[] = [],
+) => {
+    const linked = knowledge.filter((item) => isLinked(item, { agentId }));
+    const nameOf = (item: KnowledgeItem) =>
+        named.find(
+            (entry) => entry.path === item.path && entry.kind === item.kind,
+        )?.name ??
+        (item.kind === "skill" ? skillFolderName(item.path) : item.path);
+    return {
+        skills: linked
+            .filter((item) => item.kind === "skill")
+            .map((item) => ({ ...item, name: nameOf(item) })),
+        docs: linked
+            .filter((item) => item.kind === "doc")
+            .map((item) => ({ ...item, name: nameOf(item) })),
+    };
+};
+
+const plural = (count: number, word: string) =>
+    `${count} ${count === 1 ? word : `${word}s`}`;
+
+/** "Follows: create-e2e-tests · 1 doc", or null when nothing is linked. */
+export const followsLine = (
+    knowledge: KnowledgeItem[],
+    agentId: string,
+    named: NamedKnowledge[] = [],
+): string | null => {
+    const { skills, docs } = followedBy(knowledge, agentId, named);
+    const parts = [
+        skills.map((skill) => skill.name).join(", "),
+        docs.length ? plural(docs.length, "doc") : "",
+    ].filter(Boolean);
+    return parts.length ? `Follows: ${parts.join(" · ")}` : null;
+};
+
+/** One sentence on what the agent does on a pull request, from its config. */
+export const pullRequestPlan = (
+    agent: Pick<CustomAgent, "id" | "name" | "scope" | "presentation">,
+    knowledge: KnowledgeItem[],
+    named: NamedKnowledge[] = [],
+): string => {
+    const include = agent.scope.include?.filter(Boolean) ?? [];
+    const exclude = agent.scope.exclude?.filter(Boolean) ?? [];
+    const when = [
+        include.length
+            ? `On a pull request that changes ${include.join(", ")}`
+            : "On every pull request",
+        exclude.length ? ` except ${exclude.join(", ")}` : "",
+    ].join("");
+    const { skills, docs } = followedBy(knowledge, agent.id, named);
+    const steps = [
+        skills.length
+            ? `loads ${skills.map((skill) => skill.name).join(", ")}`
+            : "",
+        docs.length ? `reads ${plural(docs.length, "doc")}` : "",
+    ].filter(Boolean);
+    if (!steps.length) steps.push("follows its instructions");
+    steps.push("checks each finding");
+    steps.push(
+        agent.presentation.mode === "shadow"
+            ? "keeps findings unposted"
+            : `posts as ${agent.name || "this agent"}`,
+    );
+    return `${when} — ${steps.join(", ")}.`;
+};
+
+/**
+ * The settings edited on the agent's own page, as short chips for its row:
+ * plugins, CLIs and models.
+ */
+export const settingsSummary = (
+    agent: Pick<CustomAgent, "tools" | "models">,
+    names: {
+        pluginName?: (integrationId: string) => string | undefined;
+        modelName?: (modelId: string) => string | undefined;
+    } = {},
+): string[] => {
+    const model = (id: string) => names.modelName?.(id) ?? id;
+    const chips = [
+        ...(agent.tools.mcp ?? []).map(
+            (plugin) =>
+                names.pluginName?.(plugin.integrationId) ??
+                plugin.integrationId,
+        ),
+        ...(agent.tools.cli ?? []).map((cli) => `${cli.name || "Unnamed"} CLI`),
+    ];
+    const { run, check } = agent.models ?? {};
+    if (!run && !check) chips.push("Model: routing default");
+    if (run) chips.push(`Model: ${model(run)}`);
+    if (check) chips.push(`Check: ${model(check)}`);
+    return chips;
+};
 
 /**
  * Turns one skill or doc on or off for an agent, from the agent itself:

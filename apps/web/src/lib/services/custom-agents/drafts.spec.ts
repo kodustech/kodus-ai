@@ -7,13 +7,21 @@ import {
     CUSTOM_AGENT_LIMITS,
     CUSTOM_AGENT_TEMPLATES,
     describeAgent,
+    followsLine,
     isLinked,
     knowledgeChoices,
+    knowledgeItemFromPath,
+    nameCollisionHint,
+    nextTagColor,
     normalizeKnowledgePath,
     prepareAgentsForSave,
     prepareKnowledgeForSave,
+    pullRequestPlan,
+    reviewerName,
     setAgentKnowledge,
     setKnowledgeLink,
+    settingsSummary,
+    TAG_COLORS,
     withoutSecretValues,
 } from "./drafts";
 import type { CliToolConfig, CustomAgent, KnowledgeItem } from "./types";
@@ -77,9 +85,9 @@ describe("custom agent drafts", () => {
             [],
         );
 
-        expect(agent.name).toBe("Ledger errors");
-        expect(agent.instructions).toContain(
-            "How ledger services report errors.",
+        expect(agent.name).toBe("Ledger errors reviewer");
+        expect(agent.instructions).toBe(
+            'Review the change against the team\'s "ledger-errors" skill: load it, follow its rules and references, and report where the change departs from them. Cite the rule you apply.',
         );
         expect(link).toEqual({
             path: ".claude/skills/ledger-errors",
@@ -391,5 +399,222 @@ describe("custom agent drafts", () => {
         expect(cliIssues(cli({ allowedPrefixes: ["ledgerctl"] }))).toContain(
             "A prefix names a subcommand or flag after the binary, e.g. ledgerctl check",
         );
+    });
+
+    describe("agent naming and colors", () => {
+        it.each([
+            ["create-e2e-tests", "E2E tests reviewer"],
+            ["ledger-errors", "Ledger errors reviewer"],
+            ["review-api-contracts", "API contracts reviewer"],
+            ["write_sql_migrations", "SQL migrations reviewer"],
+            ["check-ui", "UI reviewer"],
+            ["use-feature-flags", "Feature flags reviewer"],
+            ["create", "Create reviewer"],
+            ["security-reviewer", "Security reviewer"],
+        ])("names the skill %s as %s", (skill: string, name: string) => {
+            expect(reviewerName(skill)).toBe(name);
+        });
+
+        it("names an imported skill by its frontmatter name as a reviewer", () => {
+            const { agent } = agentFromSkill(
+                {
+                    path: ".claude/skills/e2e",
+                    kind: "skill",
+                    name: "create-e2e-tests",
+                    kodyRuleSource: false,
+                },
+                [],
+            );
+            expect(agent.name).toBe("E2E tests reviewer");
+            expect(agent.instructions).toContain('"create-e2e-tests" skill');
+        });
+
+        it("picks the first tag color no agent uses, then rotates", () => {
+            const withColor = (color: string, index: number) =>
+                ({
+                    id: `a${index}`,
+                    presentation: { tag: { color } },
+                }) as CustomAgent;
+            expect(nextTagColor([])).toBe(TAG_COLORS[0]);
+            expect(
+                nextTagColor([
+                    withColor(TAG_COLORS[0], 0),
+                    withColor(TAG_COLORS[2], 1),
+                ]),
+            ).toBe(TAG_COLORS[1]);
+            const all = TAG_COLORS.map(withColor);
+            expect(nextTagColor(all)).toBe(
+                TAG_COLORS[all.length % TAG_COLORS.length],
+            );
+        });
+
+        it("gives an imported agent a color no other agent has", () => {
+            const first = createAgentFromTemplate("architecture", []);
+            const { agent } = agentFromSkill(
+                {
+                    path: ".claude/skills/x",
+                    kind: "skill",
+                    kodyRuleSource: false,
+                },
+                [first],
+            );
+            expect(agent.presentation.tag.color).not.toBe(
+                first.presentation.tag.color,
+            );
+        });
+
+        it("keeps a template's color when free and moves off it when taken", () => {
+            const first = createAgentFromTemplate("security", []);
+            const second = createAgentFromTemplate("security", [first]);
+            expect(first.presentation.tag.color).toBe(
+                CUSTOM_AGENT_TEMPLATES.find((t) => t.id === "security")?.color,
+            );
+            expect(second.presentation.tag.color).not.toBe(
+                first.presentation.tag.color,
+            );
+        });
+
+        it("hints when a name repeats a native category, ignoring case", () => {
+            expect(nameCollisionHint("security")).toBe(
+                "Kody already has a Security category; a distinct name (e.g. Security reviewer) tells their comments apart.",
+            );
+            expect(nameCollisionHint(" Business logic ")).toContain(
+                "Business Logic category",
+            );
+            expect(nameCollisionHint("Security reviewer")).toBeNull();
+            const security = createAgentFromTemplate("security", []);
+            expect(nameCollisionHint(security.name)).toBeNull();
+        });
+    });
+
+    describe("what an agent follows", () => {
+        const knowledge: KnowledgeItem[] = [
+            {
+                path: ".claude/skills/e2e",
+                kind: "skill",
+                linkedTo: [{ agentId: "a1" }],
+            },
+            {
+                path: ".claude/skills/ledger",
+                kind: "skill",
+                linkedTo: [{ agentId: "a1" }, "main-review"],
+            },
+            {
+                path: "docs/billing.md",
+                kind: "doc",
+                linkedTo: [{ agentId: "a1" }],
+            },
+            {
+                path: "docs/other.md",
+                kind: "doc",
+                linkedTo: [{ agentId: "a2" }],
+            },
+        ];
+        const names = [
+            {
+                path: ".claude/skills/e2e",
+                kind: "skill" as const,
+                name: "create-e2e-tests",
+            },
+        ];
+
+        it("names skills by frontmatter, else folder, and counts docs", () => {
+            expect(followsLine(knowledge, "a1", names)).toBe(
+                "Follows: create-e2e-tests, ledger · 1 doc",
+            );
+            expect(followsLine(knowledge, "a2", names)).toBe("Follows: 1 doc");
+            expect(followsLine(knowledge, "a3", names)).toBeNull();
+        });
+
+        it.each([
+            ["docs/payments.md", { path: "docs/payments.md", kind: "doc" }],
+            ["/ARCHITECTURE.txt", { path: "ARCHITECTURE.txt", kind: "doc" }],
+            [
+                ".claude/skills/ledger",
+                { path: ".claude/skills/ledger", kind: "skill" },
+            ],
+            [
+                ".claude/skills/ledger/",
+                { path: ".claude/skills/ledger", kind: "skill" },
+            ],
+            [
+                " .claude/skills/ledger/SKILL.md ",
+                { path: ".claude/skills/ledger", kind: "skill" },
+            ],
+            ["", null],
+        ])("infers %s", (input: string, expected: unknown) => {
+            expect(knowledgeItemFromPath(input)).toEqual(expected);
+        });
+    });
+
+    describe("summaries", () => {
+        const base = (): CustomAgent => ({
+            ...createAgentFromTemplate("blank", []),
+            name: "E2E tests reviewer",
+        });
+        const knowledge: KnowledgeItem[] = [
+            {
+                path: ".claude/skills/e2e",
+                kind: "skill",
+                linkedTo: [{ agentId: "agent" }],
+            },
+            {
+                path: "docs/billing.md",
+                kind: "doc",
+                linkedTo: [{ agentId: "agent" }],
+            },
+        ];
+        const names = [
+            {
+                path: ".claude/skills/e2e",
+                kind: "skill" as const,
+                name: "create-e2e-tests",
+            },
+        ];
+
+        it("describes a pull request from the config", () => {
+            const agent = {
+                ...base(),
+                scope: { include: ["apps/billing/**"] },
+            };
+            expect(pullRequestPlan(agent, knowledge, names)).toBe(
+                "On a pull request that changes apps/billing/** — loads create-e2e-tests, reads 1 doc, checks each finding, posts as E2E tests reviewer.",
+            );
+        });
+
+        it("runs on every pull request, keeps shadow findings unposted", () => {
+            const agent: CustomAgent = {
+                ...base(),
+                scope: { exclude: ["**/*.test.ts"] },
+                presentation: { ...base().presentation, mode: "shadow" },
+            };
+            expect(pullRequestPlan(agent, [], [])).toBe(
+                "On every pull request except **/*.test.ts — follows its instructions, checks each finding, keeps findings unposted.",
+            );
+        });
+
+        it("lists plugins, CLIs and the model in one line", () => {
+            const agent: CustomAgent = {
+                ...base(),
+                tools: {
+                    mcp: [{ integrationId: "lin", tools: [] }],
+                    cli: [{ name: "semver" } as CliToolConfig],
+                },
+            };
+            expect(
+                settingsSummary(agent, {
+                    pluginName: (id) => (id === "lin" ? "Linear" : undefined),
+                }),
+            ).toEqual(["Linear", "semver CLI", "Model: routing default"]);
+            expect(
+                settingsSummary(
+                    { ...base(), models: { run: "m1", check: "m2" } },
+                    {
+                        modelName: (id) =>
+                            id === "m1" ? "Model One" : undefined,
+                    },
+                ),
+            ).toEqual(["Model: Model One", "Check: m2"]);
+        });
     });
 });
