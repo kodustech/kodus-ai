@@ -130,7 +130,19 @@ export function buildFindingsFromVerify(
         ],
     }));
 
-    return [...kept, ...dropped];
+    // A finding whose verify run failed never reached a verdict: it leaves the
+    // funnel at the verify gate as `cut`, not as a refutation (#2171).
+    const unverified: ReviewFinding[] = (result.unverified ?? []).map((u) => ({
+        id: makeFindingId(u.finding, provenance.agent),
+        payload: u.finding,
+        provenance: prov(u.finding),
+        gates: [
+            { gate: 'found', outcome: 'survived' },
+            { gate: 'verify', outcome: 'cut', reason: u.error },
+        ],
+    }));
+
+    return [...kept, ...dropped, ...unverified];
 }
 
 export interface FunnelSlice {

@@ -133,6 +133,7 @@ export interface MappableAgentResult {
     findings?: { suggestions?: RawFinding[] };
     discardedBySeverity?: RawFinding[];
     droppedByVerify?: RawFinding[];
+    unverifiedByVerify?: RawFinding[];
 }
 
 export interface FindingMapperContext {
@@ -152,6 +153,8 @@ export interface MappedFindings {
     suggestions: Partial<CodeSuggestion>[];
     discardedBySeverity: Partial<CodeSuggestion>[];
     discardedByVerify: Partial<CodeSuggestion>[];
+    /** Findings whose verify run failed (#2171). */
+    discardedByVerifyError: Partial<CodeSuggestion>[];
     /** Findings dropped because the file they named is not in the PR. */
     droppedForPath: number;
 }
@@ -345,6 +348,7 @@ export function mapAgentFindings(
         suggestions,
         discardedBySeverity: mapDiscarded(agentResult.discardedBySeverity),
         discardedByVerify: mapDiscarded(agentResult.droppedByVerify),
+        discardedByVerifyError: mapDiscarded(agentResult.unverifiedByVerify),
         droppedForPath,
     };
 }

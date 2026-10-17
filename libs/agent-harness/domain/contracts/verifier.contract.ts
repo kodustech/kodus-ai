@@ -17,9 +17,11 @@ import type { ToolContext } from './tool.contract';
 /** HOW the verdict was read off the run — the verify funnel's own provenance.
  *  `tool` = the model called the verdict tool; `text` = it answered in text and
  *  the deterministic parser recovered the verdict; `default-keep` = nothing was
- *  parseable and the fail-open default applied. Recorded because "kept" alone
- *  cannot distinguish a judged keep from a parse miss (issue #1937). */
-export type VerdictParseMode = 'tool' | 'text' | 'default-keep';
+ *  parseable and the fail-open default applied; `verify-error` = the verifier's
+ *  own run failed (provider error, abort), so nothing was judged. Recorded
+ *  because "kept" alone cannot distinguish a judged keep from a parse miss
+ *  (issue #1937) or from a check that never ran (issue #2171). */
+export type VerdictParseMode = 'tool' | 'text' | 'default-keep' | 'verify-error';
 
 export interface VerdictDimension {
     readonly name: string;

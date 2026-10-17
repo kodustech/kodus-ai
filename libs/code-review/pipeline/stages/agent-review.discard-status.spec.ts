@@ -58,7 +58,8 @@ describe('agent-review.stage — discarded suggestions carry a delivery status',
         // gate no longer discards — it strips `improvedCode` and keeps the
         // suggestion, so it has no `allDiscarded.push` site to guard here.
         // 8: #2097's repeat check discards what an earlier comment raised.
-        expect(discardBlocks()).toHaveLength(8);
+        // 9: #2171 keeps findings whose verify run failed apart.
+        expect(discardBlocks()).toHaveLength(9);
     });
 
     it.each(discardBlocks().map((b, i) => [i, b] as const))(

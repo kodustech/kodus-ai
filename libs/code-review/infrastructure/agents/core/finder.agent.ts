@@ -561,6 +561,10 @@ export interface FinderWithVerifyResult {
         verifierEvidence: ToolEvidenceSummary;
         parseMode: VerdictParseMode;
     }>;
+    /** Candidates whose verify run failed (`parseMode: 'verify-error'`), so
+     *  nobody judged them. Not in `kept`: a review never publishes a finding
+     *  as checked when the check did not run (#2171). */
+    unverified: Array<{ finding: FinderSuggestion; error: string }>;
     /** The finder's RunState (for usage/steps/trace mapping by callers). */
     finderState: RunState;
     /** Token usage of the verify sub-step (sum across verifier runs). The
@@ -663,6 +667,7 @@ export async function runFinderWithVerify(
             keptEvidence: [],
             keptParseMode: [],
             droppedByVerify: [],
+            unverified: [],
             finderState,
             verifyUsage: ZERO_VERIFY_USAGE,
             recallUsage,
@@ -753,6 +758,21 @@ export async function runFinderWithVerify(
     const parseModeOf = (f: FinderSuggestion): VerdictParseMode =>
         verdictByFinding.get(f)?.parseMode ?? 'default-keep';
 
+    // The Verifier port fails open, so a candidate whose verify run failed
+    // comes back as kept. Nobody judged it: take it out of the published set
+    // and report it on its own (#2171). The evidence gate's re-verify already
+    // superseded the first verdict above, so this reads the final one.
+    const unverified = kept
+        .filter((f) => parseModeOf(f) === 'verify-error')
+        .map((f) => ({
+            finding: f,
+            error: verdictByFinding.get(f)?.rationale ?? 'verification unavailable',
+        }));
+    if (unverified.length > 0) {
+        const unverifiedSet = new Set(unverified.map((u) => u.finding));
+        kept = kept.filter((f) => !unverifiedSet.has(f));
+    }
+
     return {
         reasoning,
         kept,
@@ -764,6 +784,7 @@ export async function runFinderWithVerify(
             verifierEvidence: evidenceOf(d.candidate),
             parseMode: d.verdict.parseMode ?? 'default-keep',
         })),
+        unverified,
         finderState,
         verifyUsage: sumVerifyUsage(verifier.usage, gateUsage),
         recallUsage,

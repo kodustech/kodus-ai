@@ -13,6 +13,7 @@
  * collaborator can depend on the narrow slice it needs (e.g.
  * `PrReviewContext & ReviewRuleConfig`) instead of the whole 34-field input.
  */
+import type { RunStatus } from '@libs/agent-harness/domain/contracts/run-state.contract';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
     CodeReviewConfig,
@@ -89,7 +90,7 @@ export interface AgentProgressEvent {
      *  errorMessage for anything a user reads. */
     errorFriendlyMessage?: string;
     /** How the agent finished — helps surface timeouts and max-steps in the UI */
-    finishReason?: 'stop' | 'timeout' | 'max-steps' | 'error';
+    finishReason?: 'stop' | 'timeout' | 'max-steps' | 'truncated' | 'error';
     /** How findings were obtained — 'json-parse' (normal), 'second-chance', 'generate-object' (fallback LLM), 'empty' */
     source?: string;
     suggestionsPreview?: Array<{
@@ -323,6 +324,9 @@ export interface ReviewAgentOutput {
     suggestions: Partial<CodeSuggestion>[];
     discardedBySeverity?: Partial<CodeSuggestion>[];
     discardedByVerify?: Partial<CodeSuggestion>[];
+    /** Findings whose verify run failed, so nobody judged them. Never
+     *  published as checked; stored apart from refutations (#2171). */
+    discardedByVerifyError?: Partial<CodeSuggestion>[];
     agentName: string;
     agentCategory?: string;
     agentReplicaIndex?: number;
@@ -344,10 +348,12 @@ export interface ReviewAgentOutput {
      * a review that never completed (#1568).
      */
     hitHardLimit?: boolean;
-    /** Why the agent loop stopped — 'timeout' (budget), 'max-steps', or 'stop'
-     *  (ran to completion). Carried alongside hitHardLimit for telemetry and
-     *  for the user-facing "review was cut short" notice. */
-    finishReason?: 'timeout' | 'max-steps' | 'stop';
+    /** Why the agent loop stopped — 'max-steps' (ran out of steps without
+     *  submitting), 'truncated' (the provider cut its turn, so the requested
+     *  tools never ran), or 'stop' (ran to completion). A per-agent timeout is
+     *  an abort, which fails the agent instead. Carried alongside hitHardLimit
+     *  for telemetry and for the "review was cut short" notice. */
+    finishReason?: 'max-steps' | 'truncated' | 'stop';
 }
 
 // ─── Agent-loop contracts (the low-level harness/agent boundary) ─────────────
@@ -499,7 +505,15 @@ export interface AgentLoopOutput {
         args: Record<string, unknown>;
         result?: string;
     }>;
-    finishReason: string;
+    /** The harness RunStatus of the finder run. Typed, not `string`: the
+     *  provider used to compare it against values the harness never emits, so
+     *  an unfinished run read as finished (#2171). */
+    finishReason: RunStatus;
+    /** Set when the finder ended without submitting a result: it ran out of
+     *  steps (`budget-exhausted`), or the provider cut its turn so the
+     *  requested tools never ran (`truncated`). Absent for a run that finished,
+     *  including one that answered in prose. */
+    incompleteReason?: 'budget-exhausted' | 'truncated';
     /** Present only when finishReason === 'error': the underlying provider/model
      *  error surfaced by the harness. Used to classify the failure and surface a
      *  friendly reason in the end-review comment. */
@@ -530,6 +544,8 @@ export interface AgentLoopOutput {
     discardedBySeverity?: FindingsOutput['suggestions'];
     /** Suggestions discarded by the verifier. */
     droppedByVerify?: FindingsOutput['suggestions'];
+    /** Suggestions whose verify run failed — not refuted, not confirmed. */
+    unverifiedByVerify?: FindingsOutput['suggestions'];
     /** Token usage for the verification sub-step only (included in total usage). */
     verificationUsage?: {
         inputTokens: number;
@@ -578,6 +594,8 @@ export interface VerificationTraceSummary {
     beforeCount: number;
     afterCount: number;
     droppedByVerifier: number;
+    /** Findings whose verify run failed (not judged, not published). */
+    unverified?: number;
     /** @deprecated Always 0 — evidence gate now forces verification instead of dropping. Kept for backwards compatibility. */
     droppedByEvidenceFilter: number;
     sentToEvidenceGate?: number;

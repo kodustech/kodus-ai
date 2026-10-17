@@ -129,7 +129,8 @@ export type ReviewWarningKind =
     | "SANDBOX_UNAVAILABLE"
     | "CALLGRAPH_FAILED"
     | "SUGGESTIONS_DROPPED_PATH_MISMATCH"
-    | "KODY_RULES_PARTIAL";
+    | "KODY_RULES_PARTIAL"
+    | "VERIFY_UNAVAILABLE";
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;
@@ -142,7 +143,8 @@ export interface ReviewWarning {
         | "callgraph_failed"
         | "path_mismatch"
         | "judge_shard_failed"
-        | "large_pr";
+        | "large_pr"
+        | "verify_failed";
     contextWindowTokens: number;
     modelName: string;
     detail?: string;
