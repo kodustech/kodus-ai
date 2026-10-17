@@ -194,12 +194,32 @@ export class UserDatabaseRepository implements IUserRepository {
             const queryBuilder =
                 this.userRepository.createQueryBuilder('users');
 
-            // Join with the 'organization' relation and select only the 'uuid'
-            queryBuilder
+            // Exact match first. This is the ONLY lookup on the hot path (the
+            // JWT strategy resolves the user by email on every authenticated
+            // request, and normal logins pass the stored casing), and it uses
+            // the btree index IDX_users_email — `LOWER(email)` would not, so a
+            // case-folding predicate here would force a seq scan on every call.
+            let userSelected = await queryBuilder
                 .leftJoinAndSelect('users.organization', 'organization')
-                .where('users.email = :email', { email });
+                .where('users.email = :email', { email })
+                .getOne();
 
-            const userSelected = await queryBuilder.getOne();
+            // Only when the exact lookup misses, fall back to a case-insensitive
+            // match: historical rows were stored with mixed case and there is no
+            // case-folding index, so a user typing a different case (or an OAuth
+            // provider returning one) would otherwise miss their account — and
+            // OAuth would then sign them up a second, empty one. This scans, but
+            // runs only on a genuine case drift, never on the hot path. Oldest
+            // row wins so the result is deterministic if variants coexist.
+            if (!userSelected) {
+                userSelected = await this.userRepository
+                    .createQueryBuilder('users')
+                    .leftJoin('users.organization', 'organization')
+                    .addSelect('organization.uuid')
+                    .where('LOWER(users.email) = LOWER(:email)', { email })
+                    .orderBy('users.createdAt', 'ASC')
+                    .getOne();
+            }
 
             if (userSelected) {
                 userSelected.organization = {

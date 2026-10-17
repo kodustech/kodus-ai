@@ -407,6 +407,187 @@ export class AuthService implements IAuthService {
         return await bcrypt.compare(enteredPassword, dbPassword);
     }
 
+    /**
+     * Resolve the identity an OAuth provider vouches for, by calling the
+     * provider's own API with the access token the browser obtained during
+     * the OAuth handshake. This is the authentication step the OAuth login
+     * path was missing: without it, `/auth/oauth` trusted a client-supplied
+     * email and issued a JWT for any account. The caller
+     * must use the returned email — not any email from the request body — as
+     * the account identity. Any failure is surfaced as Unauthorized without
+     * leaking provider detail.
+     */
+    async verifyOAuthProviderEmail(
+        authProvider: AuthProvider,
+        accessToken: string,
+    ): Promise<{ email: string; name?: string }> {
+        if (!accessToken || typeof accessToken !== 'string') {
+            throw new UnauthorizedException('Missing OAuth provider token');
+        }
+
+        try {
+            switch (authProvider) {
+                case AuthProvider.GITHUB:
+                    return await this.verifyGithubToken(accessToken);
+                case AuthProvider.GITLAB:
+                    return await this.verifyGitlabToken(accessToken);
+                case AuthProvider.GOOGLE:
+                    return await this.verifyGoogleToken(accessToken);
+                default:
+                    throw new UnauthorizedException(
+                        'Unsupported OAuth provider',
+                    );
+            }
+        } catch (error) {
+            if (error instanceof UnauthorizedException) {
+                throw error;
+            }
+            // Network error, non-2xx, malformed body — never trust the token.
+            throw new UnauthorizedException(
+                'Could not verify OAuth provider token',
+            );
+        }
+    }
+
+    private async verifyGithubToken(
+        accessToken: string,
+    ): Promise<{ email: string; name?: string }> {
+        const baseUrl = 'https://api.github.com';
+        const headers = {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+            'User-Agent': 'kodus-auth',
+        };
+
+        const profile = await axios.get(`${baseUrl}/user`, {
+            headers,
+            timeout: INTEGRATION_REQUEST_TIMEOUT_MS,
+        });
+
+        // GitHub's /user `email` is the PUBLIC, user-settable, UNVERIFIED
+        // profile email. Trusting it lets a token that cannot read verified
+        // emails (no `user:email` scope, or a failed /user/emails call) set the
+        // public email to a victim's address and impersonate that account.
+        // Only an address confirmed by /user/emails is
+        // acceptable — never seed the identity from the profile email alone.
+        const profileEmail: string | undefined = profile.data?.email ?? undefined;
+        let email: string | undefined;
+        try {
+            const emails = await axios.get(`${baseUrl}/user/emails`, {
+                headers,
+                timeout: INTEGRATION_REQUEST_TIMEOUT_MS,
+            });
+            const list: Array<{
+                email: string;
+                primary: boolean;
+                verified: boolean;
+            }> = Array.isArray(emails.data) ? emails.data : [];
+            const verified = list.filter((e) => e.verified);
+            // Keep the account's existing identity. The web historically keyed
+            // the account on GitHub's public profile email (NextAuth
+            // `user.email`), so when that address is itself verified, return it
+            // as-is — this is still correct because the profile email
+            // is only trusted once it appears in the verified list. Otherwise
+            // fall back to the primary verified address, then any verified one.
+            const profileVerified =
+                !!profileEmail &&
+                verified.some(
+                    (e) => e.email.toLowerCase() === profileEmail.toLowerCase(),
+                );
+            email = profileVerified
+                ? profileEmail
+                : (verified.find((e) => e.primary) ?? verified[0])?.email;
+        } catch (error) {
+            // A degradation, not a fatal error — but we must not fall back to
+            // the unverified profile email, so the login is rejected below.
+            // Log the sanitized reason only; never the token or the raw axios
+            // error, whose config.headers would leak the bearer token.
+            this.logger.warn({
+                message:
+                    'GitHub /user/emails lookup failed; rejecting OAuth login (no verified email)',
+                context: AuthService.name,
+                metadata: {
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                },
+            });
+        }
+
+        if (!email) {
+            throw new UnauthorizedException(
+                'GitHub token has no verified email',
+            );
+        }
+
+        // Return the address exactly as the provider stores it — do not
+        // lower-case it. `getLoginData` resolves the account case-insensitively
+        // but prefers an exact-case match, so preserving the casing keeps the
+        // user on their own row.
+        return {
+            email,
+            name: profile.data?.name || profile.data?.login,
+        };
+    }
+
+    private async verifyGitlabToken(
+        accessToken: string,
+    ): Promise<{ email: string; name?: string }> {
+        // A self-hosted install points the web at its own GitLab through
+        // WEB_GITLAB_OAUTH_URL (apps/web/src/core/config/auth.ts); honor the
+        // same variable here so the token is validated against that instance.
+        // API_GITLAB_TOKEN_URL is the legacy/back-compat fallback and ships
+        // empty, which would otherwise send every self-hosted login to
+        // gitlab.com and 401.
+        const origin = new URL(
+            process.env.WEB_GITLAB_OAUTH_URL ||
+                process.env.API_GITLAB_TOKEN_URL ||
+                'https://gitlab.com',
+        ).origin;
+
+        const profile = await axios.get(`${origin}/api/v4/user`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            timeout: INTEGRATION_REQUEST_TIMEOUT_MS,
+        });
+
+        const email: string | undefined = profile.data?.email ?? undefined;
+        if (!email) {
+            throw new UnauthorizedException(
+                'GitLab token has no verified email',
+            );
+        }
+
+        return {
+            email,
+            name: profile.data?.name || profile.data?.username,
+        };
+    }
+
+    private async verifyGoogleToken(
+        accessToken: string,
+    ): Promise<{ email: string; name?: string }> {
+        const profile = await axios.get(
+            'https://www.googleapis.com/oauth2/v3/userinfo',
+            {
+                headers: { Authorization: `Bearer ${accessToken}` },
+                timeout: INTEGRATION_REQUEST_TIMEOUT_MS,
+            },
+        );
+
+        const email: string | undefined = profile.data?.email ?? undefined;
+        // Google marks unverified addresses; never accept one.
+        const verified =
+            profile.data?.email_verified === true ||
+            profile.data?.email_verified === 'true';
+        if (!email || !verified) {
+            throw new UnauthorizedException(
+                'Google token has no verified email',
+            );
+        }
+
+        return { email, name: profile.data?.name };
+    }
+
     private async refreshThirdPartyToken(
         refreshToken: string,
         authProvider: AuthProvider,
@@ -431,9 +612,12 @@ export class AuthService implements IAuthService {
                 clientSecret = process.env.API_GITHUB_CLIENT_SECRET;
                 break;
             case AuthProvider.GITLAB:
-                url =
-                    process.env.API_GITLAB_TOKEN_URL ||
-                    'https://gitlab.com/oauth/token';
+                // Same instance the login flow validated against
+                // (WEB_GITLAB_OAUTH_URL); its token endpoint is <origin>/oauth/token.
+                url = process.env.WEB_GITLAB_OAUTH_URL
+                    ? `${new URL(process.env.WEB_GITLAB_OAUTH_URL).origin}/oauth/token`
+                    : process.env.API_GITLAB_TOKEN_URL ||
+                      'https://gitlab.com/oauth/token';
                 clientId = process.env.GLOBAL_GITLAB_CLIENT_ID;
                 clientSecret = process.env.GLOBAL_GITLAB_CLIENT_SECRET;
                 break;

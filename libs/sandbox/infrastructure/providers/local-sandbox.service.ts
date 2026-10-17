@@ -50,6 +50,43 @@ const CMD_TIMEOUT_MS = 30_000;
 const MAX_BUFFER = 5 * 1024 * 1024; // 5 MB — cap output to prevent memory issues
 
 /**
+ * Per-program argument blocklist for `exec`. The command whitelist admits
+ * `find` and `fd` as read-only finders, but both accept flags that run an
+ * arbitrary program (`-exec`/`-execdir`/`-ok` on find, `-x`/`-X`/`--exec` on
+ * fd) — host RCE on a self-hosted worker — or that write/delete files
+ * (`-delete`, `-fprint*`, `-fls`). Other readers accept flags that follow
+ * symlinks out of the clone (`find -L/-H/-follow`, `fd -L/--follow`, `grep
+ * -R/--dereference-recursive/--dereference`, ast-grep `-U/--update-all` which
+ * rewrites files). A flag matched here fails the command. Programs with no
+ * entry (cat/head/tail/wc/file) carry no such flag and pass through.
+ */
+const DANGEROUS_FLAGS: Record<string, RegExp> = {
+    find: /^-(exec|execdir|ok|okdir|delete|fprint|fprintf|fprint0|fls|L|H|follow)$/,
+    fd: /^(-x|-X|--exec|--exec-batch|-L|--follow)$/,
+    grep: /^(-R|--dereference-recursive|--dereference)$/,
+    sg: /^(-U|--update-all)$/,
+    'ast-grep': /^(-U|--update-all)$/,
+};
+
+/**
+ * Short-flag characters that carry the same danger as the long forms when they
+ * appear inside a `-abc` cluster. clap (fd, ast-grep) and getopt (grep) let a
+ * short flag's value glue on (`-xsh` == `-x sh`) and let booleans stack before
+ * it (`-Lx` == `-L -x`, `-Rn` == `-R -n`), so the anchored `^-x$`/`^-R$` tests
+ * above miss them. The cluster is rejected when it contains any of these chars
+ * — failing closed on a grep/fd argument that happens to glue a dangerous
+ * letter after a value flag is far cheaper than an exec/symlink-escape bypass,
+ * and the long form or a separate token is always available. `find` does not
+ * cluster short flags, so it has no entry and keeps its exact match above.
+ */
+const DANGEROUS_SHORT_FLAGS: Record<string, Set<string>> = {
+    fd: new Set(['x', 'X', 'L']),
+    grep: new Set(['R']),
+    sg: new Set(['U']),
+    'ast-grep': new Set(['U']),
+};
+
+/**
  * Variables that tell git which repository to work on. They outrank `-C` and
  * `cwd`: a process started from a git hook (the pre-push test suite) inherits
  * GIT_DIR, and `git init <tempDir>` then re-initialized the caller's
@@ -645,7 +682,92 @@ export class LocalSandboxService implements ISandboxProvider {
                         };
                     }
 
+                    // Two of the whitelisted programs are file *finders* that
+                    // also carry flags turning them into command runners or
+                    // writers (`find -exec sh -c ...`, `fd -x ...`, `find
+                    // -delete`), and several readers carry flags that follow
+                    // symlinks out of the clone (`find -L`, `grep -R`). The
+                    // whitelist alone does not make them read-only, so reject
+                    // those flags per program. Readers without such flags
+                    // (cat/head/tail/wc/file) have no entry and pass through.
+                    const dangerousFlag = DANGEROUS_FLAGS[program];
+                    if (dangerousFlag) {
+                        const shortFlags = DANGEROUS_SHORT_FLAGS[program];
+                        const bad = args.find((a) => {
+                            // Long/exact forms, incl. the joined `--exec=sh`
+                            // / `-x=sh`: strip any `=value` before testing.
+                            if (dangerousFlag.test(a.split('=', 1)[0])) {
+                                return true;
+                            }
+                            // Short-flag cluster (`-Rn`, `-xsh`, `-Lx`): a
+                            // dangerous short can hide anywhere in it, glued or
+                            // stacked. Reject the cluster if any dangerous char
+                            // appears before an `=value`.
+                            if (shortFlags && /^-[^-]/.test(a)) {
+                                for (const ch of a.slice(1)) {
+                                    if (ch === '=') break;
+                                    if (shortFlags.has(ch)) return true;
+                                }
+                            }
+                            return false;
+                        });
+                        if (bad) {
+                            return {
+                                stdout: `Flag "${bad}" is not allowed for "${program}" in local sandbox (it can execute, write, delete, or follow symlinks out of the repo).`,
+                                stderr: '',
+                                exitCode: 1,
+                            };
+                        }
+                    }
+
                     validated.push({ program, args });
+                }
+
+                // Defense in depth for the disclosure vector: a whitelisted
+                // reader still follows symlinks, so a symlink committed in the
+                // repo (or a path reached through a symlinked directory) would
+                // let `cat`/`head`/… escape the clone. Mirror `read`: for every
+                // argument that resolves to an existing path, refuse anything
+                // whose real path leaves the repo. Non-path args (grep
+                // patterns, flag values) don't exist on disk and are skipped.
+                const repoRealForArgs = await realpath(repoDir);
+                for (const { args } of validated) {
+                    for (const arg of args) {
+                        // Check EVERY argument, including `-`-prefixed ones: a
+                        // committed symlink can be named `-foo` and read with
+                        // `cat -- -foo`, and skipping dashes here let it escape
+                        // the clone. A genuine flag (`-n`, `--color`) simply does
+                        // not exist on disk, so realpath throws and it is skipped
+                        // by the catch below — only a real path is ever checked.
+                        let real: string;
+                        try {
+                            real = await realpath(join(repoDir, arg));
+                        } catch {
+                            continue; // not a real path → a pattern/flag value
+                        }
+                        if (!this.isPathInside(repoRealForArgs, real)) {
+                            return {
+                                stdout: `Argument "${arg}" resolves outside the repository (symlink escape) and is not allowed.`,
+                                stderr: '',
+                                exitCode: 1,
+                            };
+                        }
+                        // realpath resolves symlinks but not hard links: a hard
+                        // link inside the clone to an outside file has an
+                        // in-repo path yet shares the outside inode, so cat/grep
+                        // would still read it. A fresh git clone never creates
+                        // extra links, so a regular file with nlink > 1 is an
+                        // injected hard-link escape — refuse it. Directories
+                        // legitimately have nlink > 1, so this is files only.
+                        const st = await lstat(real);
+                        if (st.isFile() && st.nlink > 1) {
+                            return {
+                                stdout: `Argument "${arg}" is a hard link that escapes the repository and is not allowed.`,
+                                stderr: '',
+                                exitCode: 1,
+                            };
+                        }
+                    }
                 }
 
                 if (validated.length === 1) {
