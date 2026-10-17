@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { main, plan, report, finderVerdict, PARTS, FULL_MODEL } = require('./weekly');
+const { main, plan, report, finderVerdict, PARTS } = require('./weekly');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { WEEKLY_EVALS } = require('./nightly-evals');
 
@@ -16,15 +16,13 @@ describe('evals/weekly.js', () => {
         expect(parted.sort()).toEqual(WEEKLY_EVALS.map((e: { id: string }) => e.id).sort());
     });
 
-    // Every tier-0 model on the controlled set; the nightly's model on the full set too.
-    it('runs every part on every model, and the parts with a full set on DeepSeek again', () => {
-        const jobs: Job[] = plan(['m1', FULL_MODEL]);
+    // Every tier-0 model on the controlled set; the full sets run on demand only.
+    it('runs every part on every model, on the controlled set only', () => {
+        const jobs: Job[] = plan(['m1', 'm2']);
         expect(jobs.filter((j) => j.model === 'm1').map((j) => [j.set, j.part])).toEqual(PARTS.map((p: { part: string }) => ['controlled', p.part]));
-        const full = jobs.filter((j) => j.set === 'full');
-        expect(full.every((j) => j.model === FULL_MODEL)).toBe(true);
-        expect(full.map((j) => j.only)).toEqual(['finder-recall', 'funnel-verify,funnel-dedup,funnel-severity', 'reply-addressing']);
+        expect(jobs.every((j) => j.set === 'controlled')).toBe(true);
         // The PR summary's contract runs on every model, once.
-        expect(jobs.filter((j) => j.tests).map((j) => [j.model, j.set])).toEqual([['m1', 'controlled'], [FULL_MODEL, 'controlled']]);
+        expect(jobs.filter((j) => j.tests).map((j) => j.model)).toEqual(['m1', 'm2']);
     });
 
     it('reports red only for a confirmed drop, names what did not measure, and never calls an empty week green', () => {

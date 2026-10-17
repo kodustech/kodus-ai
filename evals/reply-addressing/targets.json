@@ -10,13 +10,14 @@
         "gpt-6-sol: calibrated 2026-10-17 from 2 local runs on a725253d6: 68/70 and 70/70, mean 0.986. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 70, rounded down: 0.95.",
         "claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 69/70 and 69/70, mean 0.986. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 70, rounded down: 0.95.",
         "kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3: 68/70 and 69/70, mean 0.979. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 70, rounded down: 0.94.",
+        "deepseek-v4-flash@fireworks: calibrated 2026-10-17 from 2 local runs on 641fb1999 (BYOK route): 69/70 and 69/70, mean 0.986. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 70, rounded down: 0.95.",
         "RATCHET: when a PR moves this on purpose, recalibrate here with two runs as evidence.",
         "2026-10-16: the eval now runs the use case's own path (reply-thread.ts: the thread rebuilt from GitHub-shaped comments, the gate, the conversation route through PermissionValidationService). The prompt is identical on 441 of the 443 cases of both datasets; the two that differ are bot replies, now named by their GitHub login. deepseek on it: 67 and 68 of 70 (rhetorical-comment and pr-template-text missed in both, push-notification once), inside the runs above; the floor stays."
     ],
     "models": {
         "deepseek-v4-flash@fireworks": {
-            "floor": 0.94,
-            "observed": 0.979
+            "floor": 0.95,
+            "observed": 0.986
         },
         "gpt-6-sol": {
             "floor": 0.95,

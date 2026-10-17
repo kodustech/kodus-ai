@@ -7,8 +7,7 @@ name: "Evals: nightly quality (DeepSeek, controlled set)"
 # Flash on Fireworks is the model the trial runs in production, and its runs are
 # steady. The finder's controlled set is 15 PRs (evals/investigation/recall-tests.js);
 # the drop its floor catches, and the noise behind it, are in targets.json
-# sets.controlled. Every model, and DeepSeek on the full set, run weekly
-# (code-review-evals-weekly.yml).
+# sets.controlled. Every tier-0 model runs weekly (code-review-evals-weekly.yml).
 #
 # Measures only when a file finder-recall actually loads changed since the last
 # successful night (or the lockfile, or the floors). The list is not written by

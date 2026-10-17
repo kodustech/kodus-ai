@@ -11,13 +11,13 @@
 //
 // When it runs (evals/README.md):
 //   nightly  one model (DeepSeek), the controlled set, when one of its files changed
-//   weekly   every tier-0 model on the controlled set, and DeepSeek on the full set
+//   weekly   every tier-0 model on the controlled set (the full sets: on demand)
 //
 //   id     — the eval, and its wiring smoke step
 //   stage  — the evals/stages.js stage it measures
 //   run    — the command, without --model, --output and --gate
 //   sets   — what selects each set: `controlled` (nightly and weekly), `full`
-//            (DeepSeek's weekly run), null when the controlled set is all there is
+//            (on demand), null when the controlled set is all there is
 //   files  — what changes its verdict without being loaded by the one-case run
 const NIGHTLY_EVALS = [
     {

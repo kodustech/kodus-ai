@@ -6,6 +6,7 @@
         "gpt-6-sol: calibrated 2026-10-17 from 2 local runs on a725253d6: 9/10 and 9/10, mean 0.9. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 10, rounded down: 0.71.",
         "claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 10/10 and 10/10, mean 1. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 10, rounded down: 0.9.",
         "kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3: 9/10 and 9/10, mean 0.9. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 10, rounded down: 0.71.",
+        "deepseek-v4-flash@fireworks: calibrated 2026-10-17 from 2 local runs on 641fb1999 (BYOK route): 8/10 and 10/10, mean 0.9. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 10, rounded down: 0.71.",
         "RATCHET: a PR that adds cases or moves the value on purpose recalibrates here in the same PR, with its runs as evidence."
     ],
     "models": {
@@ -14,7 +15,7 @@
             "observed": 0.5
         },
         "deepseek-v4-flash@fireworks": {
-            "floor": 0.7,
+            "floor": 0.71,
             "observed": 0.9
         },
         "gpt-6-sol": {

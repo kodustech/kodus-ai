@@ -26,7 +26,7 @@ This is the only page: the rules, how to create one, where to look. Numbers and 
 2. Point it at the step's production entry point (rules 1–6).
 3. Name its step in `evals/stages.js` (what the step does, its tests, its eval) and add a `model: true` step to `evals/wiring-smoke.js`.
 4. Run it twice on every tier-0 model, write each floor (rule 9), break it on purpose (rule 7).
-5. To measure it every night and every week, add it to `evals/nightly-evals.js` with its controlled and full sets.
+5. To measure it every night and every week, add it to `evals/nightly-evals.js` with its controlled set, and its full set for on-demand runs.
 
 ## When it runs
 
@@ -36,8 +36,8 @@ A test passes or fails the same on every run: unit tests, and contract tests tha
 |---|---|---|---|
 | Every PR | Do the step's tests pass? Unit tests, and every eval driving its step with a scripted model, no keys. | How good a step is: it measures nothing. | `.github/workflows/tests.yml`, `.github/workflows/code-review-evals-pr.yml` |
 | Every night | Did a step get worse? Its eval on the controlled set, one model, when one of its files changed, against its floor; a drop is confirmed by a second run before it alerts. Every step's tests run on main too. | Whether other models behave the same. | `.github/workflows/code-review-evals-nightly.yml` |
-| Every week | How good is each step on every model customers run? Every tier-0 model on the controlled set, DeepSeek on the full set too, each against its own floor. | A change on the day it merges: the nightly answers that. | `.github/workflows/code-review-evals-weekly.yml` |
-| On demand | Anything else: another model, a bigger set, an investigation. No floor. | Nothing alerts. | each eval's README |
+| Every week | How good is each step on every model customers run? Every tier-0 model on the controlled set, each against its own floor. | A change on the day it merges: the nightly answers that. | `.github/workflows/code-review-evals-weekly.yml` |
+| On demand | Anything else: another model, the full sets while their datasets change (`pnpm eval:weekly --model=<id> --set=full --out=<dir>`), an investigation. No floor. | Nothing alerts. | each eval's README |
 
 - **Each step's tests, its eval on every model and what it costs:** the quality panel's stages page, fed by `evals/stages.js` → `evals/stage-signals.js`.
 - **Results:** Discord, the Actions job summary and the run's artifacts.

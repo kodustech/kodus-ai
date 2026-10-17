@@ -9,7 +9,7 @@
  *   RECALL_SET=smoke                   → 5 high-signal cases / 25 goldens
  *   RECALL_SET=pr                      → 8 PR-gate cases / 38 goldens
  *   RECALL_SET=controlled              → the nightly and every model's weekly run: 15 PRs
- *   RECALL_SET=full                    → DeepSeek's weekly run: every per-PR case
+ *   RECALL_SET=full                    → on demand: every per-PR case
  *   RECALL_ALL=1                       → every per-PR case
  *   RECALL_CASES=caseId1,caseId2,...   → an explicit subset
  */
@@ -98,7 +98,7 @@ const CONTROLLED_CASES = [
     'github-oauth-security-enhancement-sentry',
 ];
 
-// Every per-PR dataset (`full`, DeepSeek's weekly run), listed by its file.
+// Every per-PR dataset (`full`, run on demand), listed by its file.
 const FULL_CASES = null;
 
 const CASE_SETS = {

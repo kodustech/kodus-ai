@@ -6,11 +6,14 @@
 // (evals/stages.js tests with `weekly`).
 //
 //   node evals/weekly.js --model=<id> --set=controlled|full [--only=<eval id,…>] [--tests] --out=<dir>
+//                                               (--set=full: on demand, never planned)
 //   node evals/weekly.js --plan                 the workflow's matrix (JSON)
 //   node evals/weekly.js --report=<dir> [--expected=<plan JSON>]
 //                                               the message, from every job's summary.json under <dir>
 //
-// Every tier-0 model runs the controlled set; DeepSeek also runs the full one.
+// Every tier-0 model runs the controlled set. The full sets run on demand
+// only: their datasets are still changing, so a floor on them would age before
+// it caught anything (evals/README.md, "When it runs").
 // Writes, under <dir>: <eval id>/{first,confirm,final}.json, rows.json (the
 // rows of evals/stage-signals.js weeklyRows and weeklyTestRows, for
 // .github/actions/report-signal) and summary.json.
@@ -27,9 +30,6 @@ const { weeklyRows, weeklyTestRows } = require('./stage-signals');
 const { tier0 } = require('./shared/tier0-models');
 
 const ROOT = path.join(__dirname, '..');
-// The model that also runs the full sets: the nightly's.
-const FULL_MODEL = 'deepseek-v4-flash@fireworks';
-
 // One job per model, set and part, so a slow model's agent reviews do not hold
 // the rest. Every WEEKLY_EVALS id is in one part (evals/weekly.spec.ts).
 const PARTS = [
@@ -40,20 +40,9 @@ const PARTS = [
     { part: 'review', evals: ['review-rounds', 'format', 'memories', 'business-logic'], tests: true },
 ];
 
-// The matrix: every tier-0 model on the controlled set, the nightly's model on
-// the full set too (only the parts with a full set).
+// The matrix: every tier-0 model on the controlled set.
 function plan(models = tier0()) {
-    const hasFull = (id) => Boolean(WEEKLY_EVALS.find((e) => e.id === id)?.sets.full);
-    const jobs = [];
-    for (const model of models) {
-        for (const p of PARTS) jobs.push({ model, set: 'controlled', part: p.part, only: p.evals.join(','), tests: Boolean(p.tests) });
-        if (model !== FULL_MODEL) continue;
-        for (const p of PARTS) {
-            const full = p.evals.filter(hasFull);
-            if (full.length) jobs.push({ model, set: 'full', part: p.part, only: full.join(','), tests: false });
-        }
-    }
-    return jobs;
+    return models.flatMap((model) => PARTS.map((p) => ({ model, set: 'controlled', part: p.part, only: p.evals.join(','), tests: Boolean(p.tests) })));
 }
 
 const SIGN = { pass: '🟢', oscillation: '🟡', ungated: '⚪', regression: '🔴', 'still-red': '🔴', infra: '⚠️' };
@@ -215,4 +204,4 @@ function main() {
 
 if (require.main === module) process.exit(main());
 
-module.exports = { main, plan, report, finderVerdict, PARTS, FULL_MODEL };
+module.exports = { main, plan, report, finderVerdict, PARTS };

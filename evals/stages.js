@@ -36,7 +36,7 @@
 //         metric    what the number counts, shown under it
 //         sets      what the model reviews. `controlled`: the nightly, on one
 //                   model, and every tier-0 model's weekly run. `full`:
-//                   DeepSeek's weekly run; null when the controlled set is all
+//                   on demand; null when the controlled set is all
 //                   there is. Each reads after "<model> reviews"
 //         nightly   how evals/stage-signals.js reads its result (READERS)
 //         caveat    what a green number does not prove

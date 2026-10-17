@@ -10,6 +10,8 @@
         "[memory] claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 7/7 and 7/7, mean 1. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 7, rounded down: 0.85.",
         "[rule] kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3: 11/12 and 11/12, mean 0.917. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 12, rounded down: 0.75.",
         "[memory] kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3: 7/7 and 7/7, mean 1. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 7, rounded down: 0.85.",
+        "[rule] deepseek-v4-flash@fireworks: calibrated 2026-10-17 from 2 local runs on 641fb1999 (BYOK route): 12/12 and 10/12, mean 0.917. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 12, rounded down: 0.75.",
+        "[memory] deepseek-v4-flash@fireworks: calibrated 2026-10-17 from 2 local runs on 641fb1999 (BYOK route): 7/7 and 7/7, mean 1. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 7, rounded down: 0.85.",
         "RATCHET: a PR that adds cases, changes the judge or moves the value on purpose recalibrates here in the same PR, with its runs as evidence."
     ],
     "models": {
@@ -25,8 +27,8 @@
         },
         "deepseek-v4-flash@fireworks": {
             "rule": {
-                "floor": 0.83,
-                "observed": 1
+                "floor": 0.75,
+                "observed": 0.917
             },
             "memory": {
                 "floor": 0.85,

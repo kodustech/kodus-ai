@@ -10,6 +10,7 @@
         "gpt-6-sol: calibrated 2026-10-17 from 2 local runs on a725253d6 (set nightly, judge gemini-3-flash-preview, --byok-reasoning=none): 36/36 and 36/36, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 36, rounded down: 0.94.",
         "claude-sonnet-5-5: 3 local runs on a725253d6 (set nightly, judge gemini-3-flash-preview, --byok-reasoning=none): every measured claim right, but 1, 4 and 2 of 26 cases did not measure, over the 5% a run may leave out: the repeat check (code-review-repeat-check) and a Kody Rules shard answered with no valid structured object on this model ([structured-output] reroute-json produced no valid object), each run on P40. No floor until that is fixed: the weekly run reports it as not measured.",
         "kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3 (set nightly, judge gemini-3-flash-preview, --byok-reasoning=none): 32/35 and 36/36, mean 0.958. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 36, rounded down: 0.89.",
+        "deepseek-v4-flash@fireworks: calibrated 2026-10-17 from 2 local runs on 641fb1999 (BYOK route) (set nightly, judge gemini-3-flash-preview, --byok-reasoning=none): 32/36 and 32/36, mean 0.889. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 36, rounded down: 0.78.",
         "RATCHET: when a PR moves this on purpose, recalibrate here with two runs as evidence."
     ],
     "sets": {
@@ -34,8 +35,8 @@
             "set": "nightly",
             "judge": "gemini-3-flash-preview",
             "byokReasoning": "none",
-            "floor": 0.79,
-            "observed": 0.903
+            "floor": 0.78,
+            "observed": 0.889
         },
         "gpt-6-sol": {
             "set": "nightly",

@@ -5,7 +5,9 @@ name: "Evals: weekly quality (every tier-0 model)"
 # release meeting (evals/README.md, "When it runs").
 #
 #   every tier-0 model  the controlled set of every eval, against that model's floor
-#   DeepSeek            the full set too, where an eval has one
+#
+# The full sets are not planned: their datasets are still changing, so they run
+# on demand (evals/weekly.js --set=full).
 #
 # A run below the floor is measured again before it counts (evals/weekly.js,
 # the nightly's verdicts). A model with no floor yet is measured and reported

@@ -34,8 +34,8 @@ describe('evals/nightly-evals.js', () => {
         expect(shared.sort()).toEqual(NIGHTLY_EVALS.map((e: { stage: string }) => e.stage).sort());
     });
 
-    // The nightly and every model's weekly run read the controlled set; DeepSeek's
-    // weekly run reads the full one, where the stage says it has one.
+    // The nightly and every model's weekly run read the controlled set; an on-demand
+    // run reads the full one, where the stage says it has one.
     it('selects each set an eval has, and only those', () => {
         for (const e of WEEKLY_EVALS) {
             const stage = STAGES.find((s: { id: string }) => s.id === e.stage);

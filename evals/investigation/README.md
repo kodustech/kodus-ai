@@ -48,7 +48,7 @@ PR, which trip when the engine breaks rather than when recall wobbles.
 ## Sets and options
 
 - `--set=controlled` (15 PRs: the nightly, and every model's weekly run) ·
-  `full` (all 50: DeepSeek's weekly run) · `light` (30) · `pr` (8) · `smoke` (5) ·
+  `full` (all 50, on demand) · `light` (30) · `pr` (8) · `smoke` (5) ·
   `--cases=<id,id>`. The sets are in `recall-tests.js`; `catalog.js` names the
   controlled set's PRs. Each set has its own floors in `targets.json`.
 - `RECALL_CATEGORIES=bug,security`: the team's category toggles.

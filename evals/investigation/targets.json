@@ -149,8 +149,9 @@
                 "deepseek-v4-flash@fireworks, calibrated 2026-10-17 from 2 local runs on a725253d6 (the managed route, judge gpt-5.6-luna low): recall 0.460 and 0.437 (one PR of the second run not measured, rate limit; 14 PRs paired), mean 0.448, sdPerPrRunDiff 0.246, sigma 0.057. recallFloor = mean - 2.2 sigma = 0.32. Collapse floors at about half the observed means: 3.61 findings and 40.5 tool calls per PR.",
                 "gpt-6-sol, calibrated 2026-10-17 from 2 local runs on a725253d6 (judge gpt-5.6-luna low): recall 0.494 and 0.484 (15 PRs paired), mean 0.489, sdPerPrRunDiff 0.266, sigma 0.059. recallFloor = mean - 2.2 sigma = 0.35. Collapse floors at about half the observed means: 5.37 findings and 69.7 tool calls per PR.",
                 "claude-sonnet-5-5, calibrated 2026-10-17 from 2 local runs on a725253d6 (judge gpt-5.6-luna low): recall 0.348 and 0.428 (15 PRs paired), mean 0.388, sdPerPrRunDiff 0.197, sigma 0.044. recallFloor = mean - 2.2 sigma = 0.29. Collapse floors at about half the observed means: 2.87 findings and 25 tool calls per PR.",
-                "Deliberate break, 2026-10-17 (local, deepseek): the severity filter dropping medium findings: 0.389, above the floor (a drop of 0.06; the floor sits 2.2 sigma, 0.13, under the mean). The controlled set is 15 PRs on purpose (cost, decided 2026-10-17): a drop this size shows on the full set, DeepSeek's weekly run, not the nightly. The same break on the 30-PR light set gave 0.275, below its floor.",
+                "Deliberate break, 2026-10-17 (local, deepseek, on the managed route, before the evals moved to BYOK): the severity filter dropping medium findings: 0.389, above the floor (a drop of 0.06; the floor sits 2.2 sigma, 0.13, under the mean). The controlled set is 15 PRs on purpose (cost, decided 2026-10-17): a drop this size shows on the full set, run on demand, not the nightly. The same break on the 30-PR light set gave 0.275, below its floor.",
                 "kimi-k2.7-code@openrouter, calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3 (judge gpt-5.6-luna low): recall 0.456 and 0.511 (15 PRs paired), mean 0.483, sdPerPrRunDiff 0.189, sigma 0.042. recallFloor = mean - 2.2 sigma = 0.39. Collapse floors at about half the observed means: 4.07 findings and 35.9 tool calls per PR.",
+                "deepseek-v4-flash@fireworks, calibrated 2026-10-17 from 2 local runs on 641fb1999 (BYOK route) (judge gpt-5.6-luna low): recall 0.331 and 0.45 (15 PRs paired), mean 0.391, sdPerPrRunDiff 0.181, sigma 0.04. recallFloor = mean - 2.2 sigma = 0.3. Collapse floors at about half the observed means: 3.03 findings and 37.4 tool calls per PR.",
                 "RATCHET: a PR that moves recall on purpose recalibrates here, with two runs as evidence."
             ],
             "cases": 15,
@@ -158,19 +159,19 @@
             "judgeReasoningEffort": "low",
             "models": {
                 "deepseek-v4-flash@fireworks": {
-                    "recallFloor": 0.32,
-                    "minMeanFindings": 1.8,
-                    "minMeanToolCalls": 20,
+                    "recallFloor": 0.3,
+                    "minMeanFindings": 1.5,
+                    "minMeanToolCalls": 18,
                     "observed": {
-                        "recall_mean": 0.448,
+                        "recall_mean": 0.391,
                         "runs": [
-                            0.46,
-                            0.437
+                            0.331,
+                            0.45
                         ],
-                        "sdPerPrRunDiff": 0.246,
-                        "precision_mean": 0.528,
-                        "meanFindings": 3.61,
-                        "meanToolCalls": 40.5
+                        "sdPerPrRunDiff": 0.181,
+                        "precision_mean": 0.518,
+                        "meanFindings": 3.03,
+                        "meanToolCalls": 37.4
                     }
                 },
                 "gpt-6-sol": {
