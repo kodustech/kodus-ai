@@ -21,8 +21,8 @@ import * as path from 'path';
 import {
     collectRepoInstructions,
     type RepoInstructionsContext,
-} from '../../libs/code-review/infrastructure/agents/collaborators/repo-instructions';
-import { isAgentInstructionProseFile } from '../../libs/common/utils/kody-rules/file-patterns';
+} from '@libs/code-review/infrastructure/agents/collaborators/repo-instructions';
+import { isAgentInstructionProseFile } from '@libs/common/utils/kody-rules/file-patterns';
 
 const ROOT = path.resolve(__dirname, '../..');
 const DATASETS = path.join(__dirname, 'datasets');
