@@ -53,7 +53,7 @@ const READ_VERBS =
  *  (`get_or_create_ticket`). Defense in depth, not the gate — so only words
  *  that are verbs, never nouns a read tool lists (`list_labels`, `get_runs`). */
 const WRITE_VERBS =
-    /^(create|update|delete|write|send|add|remove|set|edit|close|merge|archive|assign|transition|execute|exec|trigger|invoke|publish|upload|insert|upsert|patch|modify|rename|reset|revoke|grant|cancel|submit|approve|reject|reopen|apply|enable|disable|install|uninstall|purge|destroy|kill|restart|notify|invite|upgrade|restore|subscribe|unsubscribe)(s|es|d|ed|ing)?$/;
+    /^(create|update|delete|write|send|add|remove|set|edit|close|merge|archive|assign|transition|execute|exec|trigger|invoke|publish|upload|insert|upsert|patch|modify|rename|reset|revoke|grant|cancel|submit|approve|reject|reopen|apply|enable|disable|install|uninstall|purge|destroy|kill|restart|notify|invite|upgrade|restore|subscribe|unsubscribe|mark|replace|dismiss|mute|unmute|unlink|unlock|unpin|unstar|unwatch|unfollow|unassign|rerun|retry)(s|es|d|ed|ing)?$/;
 
 export type CustomAgentMcpSelection = NonNullable<
     CustomAgentConfig['tools']['mcp']

@@ -100,6 +100,12 @@ describe('isReadOnlyMcpTool', () => {
         // A read verb next to a write verb is still a write.
         'get_or_create_ticket',
         'list_and_delete_pages',
+        // `read` here is the state the tool writes, not what it does.
+        'mark_all_notifications_read',
+        'markThreadAsRead',
+        'find_and_replace_text',
+        'read_and_dismiss_alert',
+        'get_and_unlock_record',
     ])(
         'falls back to the name when the server marks nothing: %s is a write',
         (name) => {
@@ -127,6 +133,8 @@ describe('isReadOnlyMcpTool', () => {
         'list_runs',
         'search_posts',
         'list_commits',
+        'list_bookmarks',
+        'get_notifications',
     ])(
         'falls back to the name when the server marks nothing: %s is a read',
         (name) => {
