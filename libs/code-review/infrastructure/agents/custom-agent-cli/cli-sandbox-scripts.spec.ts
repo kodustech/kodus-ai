@@ -19,7 +19,7 @@ import {
 
 /**
  * Runs the generated sandbox scripts under bash with the system tools they
- * call (sudo, getent, iptables, id, pkill) replaced by stubs that log their
+ * call (sudo, getent, nft, id, pkill) replaced by stubs that log their
  * arguments, so what the script does is checked, not only what it says.
  */
 const withStubs = (
@@ -51,8 +51,7 @@ const withStubs = (
             'if [ -x "$stub" ]; then "$stub" "$@"; else "$cmd" "$@"; fi',
         ].join('\n'),
     );
-    write('iptables', 'exit 0');
-    write('ip6tables', 'exit 0');
+    write('nft', 'exit 0');
     write('sed', 'exit 0');
     write('tee', 'cat >/dev/null');
     write('id', 'echo 4242');
@@ -98,7 +97,9 @@ describe('network fence script', () => {
                 const result = runBash(dir, fence);
                 expect(result.status).not.toBe(0);
                 expect(result.stderr).toContain('non-public');
-                expect(log().join('\n')).not.toContain(`--ctorigdst ${ip} `);
+                expect(log().join('\n')).not.toContain(
+                    `ct original ip daddr ${ip} accept`,
+                );
             },
         );
     });
@@ -113,12 +114,29 @@ describe('network fence script', () => {
                     expect(result.stderr).toBe('');
                     expect(result.status).toBe(0);
                     expect(log().join('\n')).toContain(
-                        `--ctorigdst ${ip} -j ACCEPT`,
+                        `ct original ip daddr ${ip} accept`,
                     );
                 },
             );
         },
     );
+
+    it('fences the CLI user with nft, which E2B supports, not the iptables owner match it lacks', () => {
+        withStubs(
+            { getent: 'echo "93.184.216.34  STREAM api.lintkit.example"' },
+            (dir, log) => {
+                expect(runBash(dir, fence).status).toBe(0);
+                const calls = log().join('\n');
+                expect(calls).not.toContain('iptables');
+                expect(calls).toContain(
+                    `nft add rule inet kodus_cli out meta skuid 4242 jump ${identity.chain}`,
+                );
+                expect(calls).toContain(
+                    `nft add rule inet kodus_cli ${identity.chain} meta nfproto ipv6 reject`,
+                );
+            },
+        );
+    });
 
     it('rejects non-public ranges in the chain before any accept', () => {
         withStubs(
@@ -126,14 +144,16 @@ describe('network fence script', () => {
             (dir, log) => {
                 expect(runBash(dir, fence).status).toBe(0);
                 const rules = log().filter((line) =>
-                    line.startsWith(`iptables -w -A ${identity.chain}`),
+                    line.startsWith(
+                        `nft add rule inet kodus_cli ${identity.chain} `,
+                    ),
                 );
                 const firstAccept = rules.findIndex((r) =>
-                    r.endsWith('-j ACCEPT'),
+                    r.endsWith(' accept'),
                 );
                 const privateRejects = rules
                     .slice(0, firstAccept)
-                    .filter((r) => r.endsWith('-j REJECT'));
+                    .filter((r) => r.endsWith(' reject'));
                 for (const cidr of [
                     '10.0.0.0/8',
                     '127.0.0.0/8',

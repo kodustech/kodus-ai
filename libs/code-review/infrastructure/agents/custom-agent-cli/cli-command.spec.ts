@@ -273,14 +273,16 @@ describe('scripts', () => {
         expect(script).not.toMatch(/\/usr\/(local\/)?bin'?\s*;/);
     });
 
-    it('fences egress by owner with the original destination and pins hosts', () => {
+    it('fences egress by user with the original destination and pins hosts', () => {
         const script = buildNetworkScript({
             identity,
             domains: ['api.lintkit.example'],
         });
-        expect(script).toContain('--ctorigdst');
-        expect(script).toContain('--uid-owner');
-        expect(script).toContain(`-A '${identity.chain}' -j REJECT`);
+        expect(script).toContain('ct original ip daddr');
+        expect(script).toContain('meta skuid');
+        expect(script).toContain(
+            `add rule inet kodus_cli ${identity.chain} reject`,
+        );
         expect(script).toContain("getent ahostsv4 'api.lintkit.example'");
         expect(script).toContain(`# ${identity.tag}`);
     });
@@ -288,7 +290,9 @@ describe('scripts', () => {
     it('with no allowed domain, rejects every destination', () => {
         const script = buildNetworkScript({ identity, domains: [] });
         expect(script).not.toContain('getent');
-        expect(script).toContain('-j REJECT');
+        expect(script).toContain(
+            `add rule inet kodus_cli ${identity.chain} reject`,
+        );
     });
 });
 

@@ -292,7 +292,7 @@ const PUBLIC_IPV4_AWK = [
 /**
  * Fence the CLI user's egress to its allowlist. Domains are resolved now and
  * pinned in /etc/hosts; the user's DNS, loopback and every other address are
- * rejected. Matching on the ORIGINAL destination (`--ctorigdst`) keeps the
+ * rejected. Matching on the ORIGINAL destination (`ct original ip daddr`) keeps the
  * rule right behind the transparent egress proxy, which rewrites the
  * destination to loopback before the filter table sees the packet.
  */
@@ -302,11 +302,13 @@ export function buildNetworkScript(params: {
 }): string {
     const { identity, domains } = params;
     const user = shSingleQuote(identity.user);
-    const chain = shSingleQuote(identity.chain);
+    // `KCLI_` and hex (cliSandboxIdentity): safe unquoted in nft syntax.
+    const chain = identity.chain;
     const tag = identity.tag;
+    const table = 'inet kodus_cli';
     const lines = [
         'set -eu',
-        'IPT="sudo -n iptables -w"',
+        'NFT="sudo -n nft"',
         'IPS=""',
         `sudo -n sed -i '/# ${tag}$/d' /etc/hosts`,
     ];
@@ -322,20 +324,19 @@ export function buildNetworkScript(params: {
         );
     }
     lines.push(
-        `$IPT -N ${chain} 2>/dev/null || $IPT -F ${chain}`,
+        // nft, not iptables: the E2B kernel has no iptables owner match, but
+        // nftables matches the socket's user natively (`meta skuid`).
+        `$NFT add table ${table}`,
+        `$NFT add chain ${table} out '{ type filter hook output priority 0 ; policy accept ; }'`,
+        `$NFT add chain ${table} ${chain}`,
+        `$NFT flush chain ${table} ${chain}`,
+        `$NFT add rule ${table} ${chain} meta nfproto ipv6 reject`,
         // Non-public ranges are rejected before any accept, whatever DNS says.
-        ...NON_PUBLIC_IPV4_CIDRS.map(
-            (cidr) =>
-                `$IPT -A ${chain} -m conntrack --ctorigdst ${cidr} -j REJECT`,
-        ),
-        `for ip in $IPS; do $IPT -A ${chain} -m conntrack --ctorigdst "$ip" -j ACCEPT; done`,
-        `$IPT -A ${chain} -j REJECT`,
+        `$NFT add rule ${table} ${chain} ct original ip daddr '{ ${NON_PUBLIC_IPV4_CIDRS.join(', ')} }' reject`,
+        `for ip in $IPS; do $NFT add rule ${table} ${chain} ct original ip daddr "$ip" accept; done`,
+        `$NFT add rule ${table} ${chain} reject`,
         `UID_=$(id -u ${user})`,
-        `$IPT -C OUTPUT -m owner --uid-owner "$UID_" -j ${chain} 2>/dev/null || $IPT -I OUTPUT 1 -m owner --uid-owner "$UID_" -j ${chain}`,
-        'if [ -e /proc/net/if_inet6 ]; then',
-        '  sudo -n ip6tables -w -C OUTPUT -m owner --uid-owner "$UID_" -j REJECT 2>/dev/null || sudo -n ip6tables -w -I OUTPUT 1 -m owner --uid-owner "$UID_" -j REJECT',
-        'fi',
-        `$IPT -C OUTPUT -m owner --uid-owner "$UID_" -j ${chain}`,
+        `$NFT list chain ${table} out | grep -q "meta skuid $UID_ jump ${identity.chain}" || $NFT add rule ${table} out meta skuid "$UID_" jump ${chain}`,
     );
     return inSubshell(lines);
 }

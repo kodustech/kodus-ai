@@ -69,7 +69,7 @@ const sandbox = (
 };
 
 const isInstall = (s: string) => s.includes('useradd');
-const isFence = (s: string) => s.includes('iptables');
+const isFence = (s: string) => s.includes('inet kodus_cli');
 
 describe('customAgentMatchesFiles', () => {
     it('runs only enabled agents with a changed file in scope', () => {
@@ -224,7 +224,7 @@ describe('provisionCustomAgentClis', () => {
     it('fails closed when the network fence cannot be applied', async () => {
         const sb = sandbox('e2b', (s) => {
             if (isFence(s))
-                return { exitCode: 1, stderr: 'iptables: not found' };
+                return { exitCode: 1, stderr: 'nft: not found' };
             const match = /useradd .* '(kcli[a-f0-9]+)'/.exec(s);
             return {
                 exitCode: 0,
