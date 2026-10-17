@@ -1,12 +1,12 @@
 {
     "__doc": [
         "No floor yet: this stage is measured against the known bugs of today's dataset, which is being relabeled (#2114). Until it lands the nightly reports the value as ungated (measured, no alert); then the floor is set from two runs on the new dataset.",
-        "Observed, not a floor: deepseek-v4-flash@fireworks on the snapshot built 2026-10-16 (44ad36d25), 31 of 33 and 30 of 33 known bugs kept in two runs."
+        "Observed, not a floor: deepseek-v4-flash@fireworks on the managed route, snapshot built 2026-10-17 (57ef595ce), 43 of 43 and 43 of 43 known bugs kept in two runs."
     ],
     "models": {
         "deepseek-v4-flash@fireworks": {
             "floor": null,
-            "observed": 0.924
+            "observed": 1.0
         }
     }
 }
