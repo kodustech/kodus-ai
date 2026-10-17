@@ -28,3 +28,7 @@ not carry over: measure with the snapshot of that finder (`evals/funnel/dedup`).
 
 The run records whether the platform embedder answered (`environment.embedder`): the
 dedup's semantic tier needs it, and without it the guard vetoes more merges (#2170).
+
+Deliberate break, 2026-10-17 (local, DeepSeek, the first 6 PRs of the controlled set): the
+dedup returning every suggestion unmerged (`deduplicateSuggestions`) joins 0 of the 92 gold
+pairs, against 80 of 92 on main, and reports the embedder as not called.
