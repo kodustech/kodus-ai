@@ -7,7 +7,10 @@
 // the difference of the pooled metric with a bootstrap interval over the
 // cases, and the cases that got worse or better.
 //
-//   node evals/experiment.js --step=dedup [--base=origin/main] [--runs=2] [--model=<id>] [--name=<label>] [--out=<dir>]
+//   node evals/experiment.js --step=dedup [--base=origin/main] [--runs=2] [--set=controlled|full] [--model=<id>] [--name=<label>] [--out=<dir>]
+//
+// --set  the set of the main eval: controlled catches a regression; full, the
+//        extended set, is where an improvement is decided (evals/README.md).
 //
 // What each side ran is recorded, never assumed:
 //   step version     a hash of the production files the evals loaded on that
@@ -221,6 +224,11 @@ function main() {
     }
     const model = args.model || 'deepseek-v4-flash@fireworks';
     const runs = Math.max(1, Number(args.runs) || 2);
+    const set = args.set ? String(args.set) : null;
+    if (set && !['controlled', 'full'].includes(set)) {
+        console.error(`unknown --set=${set}: controlled or full`);
+        return 2;
+    }
     const baseRef = args.base || 'origin/main';
     // What ran must be a commit: uncommitted changes would make the result point at code that does not exist.
     const dirty = git(['status', '--porcelain', '--untracked-files=no']);
@@ -245,7 +253,7 @@ function main() {
     const trace = path.join(out, 'trace');
     const baseDir = path.join(out, 'base-tree');
     fs.mkdirSync(out, { recursive: true });
-    console.log(`experiment ${step} · ${name}: base ${baseSha.slice(0, 9)} (${baseRef}) vs candidate ${head.slice(0, 9)} (${branch}) · ${model} · ${runs} runs each · ${out}`);
+    console.log(`experiment ${step} · ${name}: base ${baseSha.slice(0, 9)} (${baseRef}) vs candidate ${head.slice(0, 9)} (${branch}) · ${model} · ${set || 'controlled'} set · ${runs} runs each · ${out}`);
 
     git(['worktree', 'add', '--detach', baseDir, baseSha]);
     try {
@@ -254,7 +262,7 @@ function main() {
         const ee = 'libs/ee/configs/environment/environment.ts';
         if (fs.existsSync(path.join(ROOT, ee))) fs.copyFileSync(path.join(ROOT, ee), path.join(baseDir, ee));
 
-        const entries = [plan.primary, ...plan.guards];
+        const entries = [{ ...plan.primary, run: [...plan.primary.run, ...(set ? [`--set=${set}`] : [])] }, ...plan.guards];
         const results = Object.fromEntries(entries.map((e) => [e.id, { base: [], candidate: [] }]));
         const traces = { base: new Set(), candidate: new Set() };
         const exits = [];
@@ -294,6 +302,7 @@ function main() {
             baseRef,
             model,
             runs,
+            set: set || 'controlled',
             createdAt: new Date().toISOString(),
             base: { sha: baseSha, version: strip(versions.base) },
             candidate: { sha: head, version: strip(versions.candidate) },
@@ -319,6 +328,7 @@ function main() {
                 metric: e.metric,
                 model,
                 runs,
+                set: set || 'controlled',
                 base: { sha: baseSha, ref: baseRef, step_version: versions.base.step },
                 candidate: { sha: head, step_version: versions.candidate.step },
                 eval_version: versions.candidate.eval,
