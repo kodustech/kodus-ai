@@ -35,7 +35,10 @@ import {
     ApiTags,
 } from '@nestjs/swagger';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
-import { PullRequestMessagesOverrideCountsResponseDto } from '../dtos/pull-request-messages-override-counts-response.dto';
+import {
+    PullRequestMessagesAllOverrideCountsResponseDto,
+    PullRequestMessagesOverrideCountsResponseDto,
+} from '../dtos/pull-request-messages-override-counts-response.dto';
 import { PullRequestMessagesResponseDto } from '../dtos/pull-request-messages-response.dto';
 import { PullRequestMessagesUpsertDto } from '../dtos/pull-request-messages-upsert.dto';
 import { TenantScopeGuard } from '../guards/tenant-scope.guard';
@@ -119,6 +122,27 @@ export class PullRequestMessagesController {
             organizationId,
             repositoryId,
             directoryId,
+        );
+    }
+
+    @Get('/override-counts')
+    @ApiOperation({
+        summary:
+            'Get custom message override counts for all readable repositories',
+        description:
+            "Returns repository and directory counts in one request, filtered to the caller's repository read scope.",
+    })
+    @ApiOkResponse({ type: PullRequestMessagesAllOverrideCountsResponseDto })
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.CodeReviewSettings,
+        }),
+    )
+    public async findAllOverrideCounts() {
+        return this.findOverrideCountsByRepositoryPullRequestMessagesUseCase.executeAll(
+            this.request.user,
         );
     }
 

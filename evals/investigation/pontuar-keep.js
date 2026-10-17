@@ -10,7 +10,7 @@ require('tsconfig-paths/register');
  */
 const fs = require('fs');
 const path = require('path');
-const { loadJudgeKey, matchCommentDetailed } = require('./recall-judge');
+const { loadJudgeKey, matchCommentDetailed } = require('./recall-judge-1821');
 // Onde ficam os dumps. Ja foi um caminho absoluto de scratchpad cravado aqui,
 // o que fazia o script falhar em silencio fora daquela sessao.
 const S = process.env.POOL_ROOT || require('path').join(__dirname, 'pools');

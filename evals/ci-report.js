@@ -5,7 +5,6 @@
 //   node evals/ci-report.js nightly <result.json> [--last-green=<result.json>]
 //        [--commits=<tsv: sha, subject, author>] [--investigation=<json>]
 //        [--previous-state=<json>] [--state-out=<json>]
-//   node evals/ci-report.js tier0 <dir> [--previous=<dir>]
 //
 // Writes markdown to $GITHUB_STEP_SUMMARY and `status`, `verdict`, `mention`,
 // `title`, `description` to $GITHUB_OUTPUT when those are set; prints them
@@ -198,7 +197,7 @@ function nightlyReport(result, env = {}, extras = {}) {
     const compareUrl = base && head && base !== head ? `${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${base.slice(0, 12)}...${head.slice(0, 12)}` : null;
 
     const comparison = result && lastGreen && !result.error ? compareNights(result, lastGreen) : null;
-    const noise = targets && result ? nightNoise(targets, 'light', result.model) : null;
+    const noise = targets && result ? nightNoise(targets, 'controlled', result.model) : null;
     const { verdict, title: headline } = nightlyVerdict(result, comparison, noise, previousState);
     const title = `${ICON[verdict]} Nightly evals: ${headline}`;
     const status = ['pass', 'improved', 'oscillation'].includes(verdict) ? 'success' : 'failure';
@@ -283,10 +282,10 @@ function nightlyReport(result, env = {}, extras = {}) {
         }
 
         const next = {
-            regression: 'run `pnpm eval:nightly` on the parent commit and on the suspect. If the drop is intentional, recalibrate `sets.light` in `evals/investigation/targets.json` in the same PR.',
-            'still-red': 'the same drop is still unfixed. Whoever owns it: fix it, or recalibrate `sets.light` if it was intentional.',
+            regression: 'run `pnpm eval:nightly` on the parent commit and on the suspect. If the drop is intentional, recalibrate `sets.controlled` in `evals/investigation/targets.json` in the same PR.',
+            'still-red': 'the same drop is still unfixed. Whoever owns it: fix it, or recalibrate `sets.controlled` if it was intentional.',
             oscillation: 'nothing. One run below the floor is noise when the repeat passes.',
-            improved: 'if the gain repeats tomorrow night, raise the floor (the rule is in `__doc` of `sets.light`).',
+            improved: 'if the gain repeats tomorrow night, raise the floor (the rule is in `__doc` of `sets.controlled`).',
             infra: 'fix the key or quota named above. The next night measures again.',
             ungated: 'the run did not match the calibration (different model or judge). See `evals/investigation/targets.json`.',
         }[verdict];
@@ -428,118 +427,6 @@ function nightlyCompact({ result, verdict, comparison, commits, investigation, p
     return { title, description: lines.join('\n') };
 }
 
-// ── tier-0 ───────────────────────────────────────────────────────────────────
-
-const T0_ICON = { pass: '✅', broken: '❌', infra: '⚠️', skipped: '➖', missing: '❓' };
-
-// The parts after the review, in the order the check runs them: the PR summary,
-// then each stage the nightly measures, on a few cases (evals/tier0-smoke.js).
-const t0Parts = (r) => [{ label: 'summary', ...(r.prSummary || {}) }, ...(r.evals || []).map((e) => ({ label: e.stage, ...e }))];
-
-function sameFailure(now, before) {
-    if (!before) return false;
-    const key = (r) => [`${r.status}|${clip(r.reason, 120)}`, ...t0Parts(r).map((p) => `${p.status}|${clip(p.reason, 120)}`)].join('|');
-    const failed = [now.status, ...t0Parts(now).map((p) => p.status)].some((s) => s && s !== 'pass' && s !== 'skipped');
-    return failed && key(now) === key(before);
-}
-
-function tier0Line(r, previous) {
-    const review = {
-        pass: `review ok (${r.toolCalls} tool calls, ${r.findings} findings, ${r.seconds}s)`,
-        broken: `review broken: ${clip(r.reason, 160)}`,
-        infra: `not reached: ${clip(r.reason, 160)}`,
-        missing: 'no result (the job crashed or timed out)',
-    }[r.status] || r.status;
-    const part = (p) =>
-        p.status === 'pass'
-            ? `${p.label} ok`
-            : p.status && p.status !== 'skipped' && r.status !== 'missing'
-              ? `${p.label} ${p.status === 'infra' ? 'not reached' : p.status === 'missing' ? 'missing' : 'broken'}`
-              : null;
-    const repeat = sameFailure(r, previous) ? ' _(same as last week)_' : '';
-    // The model's icon is its worst part, not only the review's.
-    const all = [r.status, ...t0Parts(r).map((p) => p.status)];
-    const worst = r.status === 'missing' ? 'missing' : ['broken', 'infra'].find((s) => all.includes(s)) || r.status;
-    return `${T0_ICON[worst] || '❓'} **${r.model}**: ${[review, ...t0Parts(r).map(part)].filter(Boolean).join(' · ')}${repeat}`;
-}
-
-function tier0Report(models, readResult, env = {}, readPrevious = () => null) {
-    const url = runUrl(env);
-    const results = models.map(
-        (model) => readResult(model) || { model, status: 'missing', reason: 'no result', prSummary: { status: 'missing' } },
-    );
-
-    const outcomes = (r) => [r.status, ...t0Parts(r).map((p) => p.status)];
-    const missing = results.filter((r) => r.status === 'missing');
-    const broken = results.filter((r) => !missing.includes(r) && outcomes(r).includes('broken'));
-    const unreachable = results.filter((r) => !missing.includes(r) && !broken.includes(r) && outcomes(r).includes('infra'));
-    const ok = results.length - missing.length - broken.length - unreachable.length;
-    const names = (list) => list.map((r) => r.model).join(', ');
-
-    let status = 'success';
-    let verdict = 'pass';
-    const parts = [];
-    if (broken.length) parts.push(`${names(broken)} ${broken.length === 1 ? 'is' : 'are'} broken`);
-    if (missing.length) parts.push(`${names(missing)} left no result`);
-    if (unreachable.length) parts.push(`could not reach ${names(unreachable)}`);
-    if (broken.length || missing.length) {
-        status = 'failure';
-        verdict = 'regression';
-    } else if (unreachable.length) {
-        status = 'failure';
-        verdict = 'infra';
-    }
-    const headline = parts.length
-        ? `${ok}/${results.length} ok · ${parts.join(' · ')}`
-        : results.length === 1
-          ? `${results[0].model} runs every stage`
-          : `all ${results.length} models run every stage`;
-    const title = `${verdict === 'pass' ? '✅' : verdict === 'infra' ? '⚠️' : '❌'} Tier-0: ${headline}`;
-
-    const detailedLines = results.map((r) => tier0Line(r, readPrevious(r.model)));
-    const lines = detailedLines;
-    const next = [];
-    if (broken.length) next.push('• A broken model affects whoever runs on it today: decide per model (hold it, change the default, or tell those customers).');
-    if (missing.length) next.push('• No result: the job crashed or timed out; the log is in the run.');
-    if (unreachable.length) next.push('• Not reached: fix the provider key or quota (the reason is on the line).');
-    if (next.length) lines.push('', '**Next step:**', ...next);
-    if (url) lines.push(`Run: ${url}`);
-
-    const markdown = [`## ${title}`, '', ...lines.map((line) => (line ? `${line}  ` : line))].join('\n');
-
-    // Discord: the healthy models in one line, then each problem with its short
-    // cause, the raw error and what to do.
-    const okModels = results.filter((r) => !missing.includes(r) && !broken.includes(r) && !unreachable.includes(r));
-    const icon = verdict === 'pass' ? '✅' : verdict === 'infra' ? '⚠️' : '❌';
-    const secretFor = (model) =>
-        /@openrouter$/.test(model) ? 'BYOK_OPENROUTER_API_KEY' : /^claude/.test(model) ? 'BYOK_ANTHROPIC_API_KEY' : /^gpt/.test(model) ? 'BYOK_OPENAI_API_KEY' : /^gemini/.test(model) ? 'BYOK_GOOGLE_API_KEY' : /^kimi/.test(model) ? 'BYOK_MOONSHOT_API_KEY' : /^glm/.test(model) ? 'BYOK_ZHIPU_API_KEY' : null;
-    const compactLines = [];
-    if (okModels.length) compactLines.push(`✅ ${okModels.map((r) => r.model).join(' · ')}`);
-    for (const r of [...broken, ...missing, ...unreachable]) {
-        // The part to name: the first broken one, else the first not reached.
-        const failing = [{ label: 'review', status: r.status, reason: r.reason }, ...t0Parts(r)];
-        const first = failing.find((p) => p.status === 'broken') || failing.find((p) => p.status !== 'pass' && p.status !== 'skipped') || failing[0];
-        const raw = r.status === 'missing' ? null : first.reason;
-        const why = r.status === 'missing' ? 'no result, the job crashed' : `${first.label}: ${shortReason(raw)}`;
-        const repeat = sameFailure(r, readPrevious(r.model)) ? ' (same as last week)' : '';
-        compactLines.push(`${r.status === 'missing' ? '❓' : broken.includes(r) ? '❌' : '⚠️'} **${r.model}** · ${why}${repeat}`);
-        const detail = [];
-        // The raw error only when the short reason above did not already say it.
-        if (raw && shortReason(raw) !== clip(raw, 60)) detail.push(`\`${clip(raw, 90)}\``);
-        if (unreachable.includes(r) && secretFor(r.model)) detail.push(`fix \`${secretFor(r.model)}\``);
-        if (broken.includes(r)) detail.push('customers on this model are affected');
-        if (detail.length) compactLines.push(`   ${detail.join(' → ')}`);
-    }
-    if (url) compactLines.push('', md('run', url));
-    return {
-        status,
-        verdict,
-        title: `${icon} Tier-0 · ${ok}/${results.length} ${results.length === 1 ? 'model ok' : 'models ok'}`,
-        description: compactLines.join('\n'),
-        markdown,
-    };
-}
-
 // ── CLI ──────────────────────────────────────────────────────────────────────
 
 function flag(name) {
@@ -563,7 +450,7 @@ function readCommits(file) {
     }
 }
 
-module.exports = { nightlyReport, tier0Report };
+module.exports = { nightlyReport };
 
 if (require.main === module) {
     const [mode, target] = process.argv.slice(2);
@@ -578,21 +465,8 @@ if (require.main === module) {
             }),
             flag('state-out'),
         );
-    } else if (mode === 'tier0' && target) {
-        // EVAL_MODELS: the models this run was asked for (a dispatch can pin one).
-        const models = process.env.EVAL_MODELS ? JSON.parse(process.env.EVAL_MODELS) : require('./shared/tier0-models').tier0();
-        const fileFor = (dir, model) => path.join(dir, `tier0-smoke-${model.replace(/[^\w.-]+/g, '-')}.json`);
-        const previous = flag('previous');
-        emit(
-            tier0Report(
-                models,
-                (model) => readJson(fileFor(target, model)),
-                process.env,
-                (model) => (previous ? readJson(fileFor(previous, model)) : null),
-            ),
-        );
     } else {
-        console.error('usage: node evals/ci-report.js nightly <result.json> [--last-green=… --commits=… --investigation=…] | tier0 <dir> [--previous=<dir>]');
+        console.error('usage: node evals/ci-report.js nightly <result.json> [--last-green=… --commits=… --investigation=…]');
         process.exit(2);
     }
 }

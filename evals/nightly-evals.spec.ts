@@ -5,7 +5,7 @@ const os = require('os');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const path = require('path');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { NIGHTLY_EVALS } = require('./nightly-evals');
+const { NIGHTLY_EVALS, WEEKLY_EVALS, nightlyCommand } = require('./nightly-evals');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { STAGES } = require('./stages');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -25,18 +25,29 @@ describe('evals/nightly-evals.js', () => {
             for (const f of e.files) expect([e.id, f, fs.existsSync(path.join(__dirname, '..', f))]).toEqual([e.id, f, true]);
             expect(wiringSteps).toContain(e.id);
             const stage = STAGES.find((s: { id: string }) => s.id === e.stage);
-            expect([e.id, stage?.nightly, stage?.model]).toEqual([e.id, 'shared', 'real']);
+            expect([e.id, stage?.eval?.nightly]).toEqual([e.id, 'shared']);
         }
     });
 
-    // Friday runs each entry on every tier-0 model, on a few cases.
-    it('cuts every entry to a few cases for Friday', () => {
-        for (const e of NIGHTLY_EVALS) expect([e.id, e.friday.some((a: string) => /^--limit=\d+$/.test(a))]).toEqual([e.id, true]);
+    it('lists every stage the shared job measures', () => {
+        const shared = STAGES.filter((s: { eval: { nightly: string } | null }) => s.eval?.nightly === 'shared').map((s: { id: string }) => s.id);
+        expect(shared.sort()).toEqual(NIGHTLY_EVALS.map((e: { stage: string }) => e.stage).sort());
     });
 
-    it('lists every stage the shared job measures', () => {
-        const shared = STAGES.filter((s: { nightly?: string }) => s.nightly === 'shared').map((s: { id: string }) => s.id);
-        expect(shared.sort()).toEqual(NIGHTLY_EVALS.map((e: { stage: string }) => e.stage).sort());
+    // The nightly and every model's weekly run read the controlled set; an on-demand
+    // run reads the full one, where the stage says it has one.
+    it('selects each set an eval has, and only those', () => {
+        for (const e of WEEKLY_EVALS) {
+            const stage = STAGES.find((s: { id: string }) => s.id === e.stage);
+            expect([e.id, Array.isArray(e.sets.controlled)]).toEqual([e.id, true]);
+            expect([e.id, e.sets.full === null]).toEqual([e.id, stage.eval.sets.full === null]);
+        }
+        expect(nightlyCommand(NIGHTLY_EVALS.find((e: { id: string }) => e.id === 'funnel-verify'))).toEqual(['evals/funnel/verify/run.js', '--set=controlled']);
+    });
+
+    it('measures every stage that has an eval in the weekly run, once', () => {
+        const withEval = STAGES.filter((s: { eval: unknown }) => s.eval).map((s: { id: string }) => s.id);
+        expect(WEEKLY_EVALS.map((e: { stage: string }) => e.stage).sort()).toEqual(withEval.sort());
     });
 });
 
@@ -80,12 +91,20 @@ describe('evals/shared/nightly-verdict.js', () => {
         expect(pooled.metric.value).toBeCloseTo(6 / 8);
         expect(pooled.cases.map((c: { hits: number; total: number }) => `${c.hits}/${c.total}`)).toEqual(['4/4', '2/4']);
     });
+
+    it('pools what the model calls cost: counts add up, per-call times join', () => {
+        const spent = (calls: number[]) => ({ tokens: { in: 10, out: 2, cacheRead: 4, cacheWrite: 0, calls: calls.length, ms: calls.reduce((a, b) => a + b, 0), callMs: calls } });
+        const pooled = pool(result([2], spent([100, 300])), result([2], spent([200])));
+        expect(pooled.tokens).toEqual({ in: 20, out: 4, cacheRead: 8, cacheWrite: 0, calls: 3, ms: 600, callMs: [100, 300, 200] });
+    });
 });
 
 describe('evals/shared/nightly-plan.js', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nightly-plan-'));
     const e = NIGHTLY_EVALS[0];
-    fs.writeFileSync(path.join(dir, `${e.id}.txt`), `${e.run[0]}\nlibs/x/engine.ts\n`);
+    const all = NIGHTLY_EVALS.map((x: { id: string }) => x.id);
+    // Each entry's trace: its runner and an engine file of its own.
+    for (const x of NIGHTLY_EVALS) fs.writeFileSync(path.join(dir, `${x.id}.txt`), `${x.run[0]}\nlibs/${x.id}/engine.ts\n`);
     const changed = (files: string[]) => {
         const f = path.join(dir, 'changed.txt');
         fs.writeFileSync(f, `${files.join('\n')}\n`);
@@ -93,12 +112,12 @@ describe('evals/shared/nightly-plan.js', () => {
     };
 
     it('measures an eval whose files changed, a forced night, no baseline or an unknown diff, and skips the rest', () => {
-        expect(plan({ filesDir: dir, changedFile: changed(['libs/x/engine.ts']), base: 'abc' })).toEqual([e.id]);
+        expect(plan({ filesDir: dir, changedFile: changed([`libs/${e.id}/engine.ts`]), base: 'abc' })).toEqual([e.id]);
         expect(plan({ filesDir: dir, changedFile: changed(['README.md']), base: 'abc' })).toEqual([]);
         expect(plan({ filesDir: dir, changedFile: changed([e.files[0]]), base: 'abc' })).toEqual([e.id]);
-        expect(plan({ filesDir: dir, changedFile: changed(['README.md']), base: 'abc', force: true })).toEqual([e.id]);
-        expect(plan({ filesDir: dir, changedFile: changed(['README.md']), base: '' })).toEqual([e.id]);
-        expect(plan({ filesDir: dir, changedFile: path.join(dir, 'missing.txt'), base: 'abc' })).toEqual([e.id]);
+        expect(plan({ filesDir: dir, changedFile: changed(['README.md']), base: 'abc', force: true })).toEqual(all);
+        expect(plan({ filesDir: dir, changedFile: changed(['README.md']), base: '' })).toEqual(all);
+        expect(plan({ filesDir: dir, changedFile: path.join(dir, 'missing.txt'), base: 'abc' })).toEqual(all);
     });
 
     it('refuses to decide on a list without its runner', () => {

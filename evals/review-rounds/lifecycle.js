@@ -3,10 +3,22 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execFileSync } = require('child_process');
-const { once, instrumentVerifier, engineSnapshot } = require('./run');
+const { once, instrumentVerifier, engineSnapshot, orgRoute } = require('./run');
 const { cases } = require('./cases');
-const { applyModelEnv } = require('../shared/tier0-models');
 const { loadJudgeKey, JUDGE_MODEL } = require('../investigation/recall-judge');
+const { countTokens, tokensUsed } = require('../shared/eval-kit');
+require('ts-node/register/transpile-only');
+require('tsconfig-paths/register');
+const { toRecord, toRecordFromPrLevel } = require('../../libs/code-review/infrastructure/adapters/services/pr-decision-store.service.ts');
+const { ImplementationStatus } = require('../../libs/platformData/domain/pullRequests/enums/implementationStatus.enum.ts');
+// The outcome a sequence gives its posted suggestions, as the implementation
+// check stores it (`pending` is a suggestion it has not checked yet).
+const IMPLEMENTATION = {
+    implemented: ImplementationStatus.IMPLEMENTED,
+    partially_implemented: ImplementationStatus.PARTIALLY_IMPLEMENTED,
+    not_implemented: ImplementationStatus.NOT_IMPLEMENTED,
+    pending: undefined,
+};
 const arg = (name, fallback) =>
     process.argv
         .find((a) => a.startsWith(`--${name}=`))
@@ -47,7 +59,7 @@ function harmless(c, round, file) {
 }
 
 function ruleSequences() {
-    // Synthetic reproduction of Trinio's report, not a replay of private PR #2933.
+    // Synthetic reproduction of a customer report, not a replay of the customer's PR.
     const file = 'src/jobs/handler.ts';
     const template = byId('K1');
     const first = clone(template);
@@ -101,13 +113,13 @@ function ruleSequences() {
     return [
         {
             id: 'rules-rejected-four-rounds',
-            action: 'Trinio-shaped synthetic: rejected rule finding, four nearby commits with line shifts, then a new violation of the same rule in another function.',
+            action: 'Customer-report-shaped synthetic: rejected rule finding, four nearby commits with line shifts, then a new violation of the same rule in another function.',
             historyOutcome: 'not_implemented',
             rounds: rejected,
         },
         {
             id: 'rules-fixed-three-rounds',
-            action: 'Trinio-shaped synthetic: corrected rule violation, three nearby commits while status remains pending, then a new violation of the same rule in another function.',
+            action: 'Customer-report-shaped synthetic: corrected rule violation, three nearby commits while status remains pending, then a new violation of the same rule in another function.',
             historyOutcome: 'pending',
             rounds: fixed,
         },
@@ -225,8 +237,11 @@ async function main() {
     const only = arg('sequence');
     const judgeKey = loadJudgeKey();
     if (!judgeKey || !model) throw new Error('Missing model or judge key');
-    applyModelEnv(model);
+    // The org's route (shared with run.js): stops here on an unknown model or
+    // a missing key, and leaves the platform's embedder key alone.
+    orgRoute();
     instrumentVerifier();
+    countTokens();
     const engine = engineSnapshot();
     const selected = sequences().filter((s) => !only || s.id === only);
     if (!selected.length) throw new Error('Unknown sequence');
@@ -236,7 +251,7 @@ async function main() {
         fs.writeFileSync(
             output,
             JSON.stringify(
-                { model, judge: JUDGE_MODEL, engine, complete, reps, runs },
+                { model, judge: JUDGE_MODEL, engine, complete, reps, runs, tokens: tokensUsed() },
                 null,
                 2,
             ),
@@ -262,18 +277,22 @@ async function main() {
                     row.historyBefore = clone(history);
                     row.changedFiles = c.changedFiles;
                     run.rounds.push(row);
-                    for (const [i, d] of row.delivered.entries())
-                        history.push({
-                            suggestionId: `${sequence.id}:${rep}:${index}:${i}`,
-                            relevantFile: d.file,
-                            relevantLinesStart: Number(d.line),
-                            suggestionContent: d.text,
-                            label: d.label || 'bug',
-                            brokenKodyRulesIds: d.brokenKodyRulesIds,
-                            outcome:
-                                sequence.historyOutcome || 'not_implemented',
-                            decidedAt: new Date().toISOString(),
-                        });
+                    // What this round posted becomes the PR's decision store,
+                    // read the way production reads it (toRecord /
+                    // toRecordFromPrLevel): the sequence says what the
+                    // implementation check concluded.
+                    const decidedAt = new Date(Date.UTC(2026, 9, 1, index)).toISOString();
+                    const implementationStatus = IMPLEMENTATION[sequence.historyOutcome || 'not_implemented'];
+                    row.posted.onFiles.forEach((s, i) =>
+                        history.push(
+                            toRecord({ ...s, id: `${sequence.id}:${rep}:${index}:${i}`, implementationStatus, createdAt: decidedAt }),
+                        ),
+                    );
+                    row.posted.onPR.forEach((s, i) =>
+                        history.push(
+                            toRecordFromPrLevel({ ...s, id: `${sequence.id}:${rep}:${index}:pr-${i}`, createdAt: decidedAt, comment: { id: `${sequence.id}-${rep}-${index}-${i}` } }),
+                        ),
+                    );
                     console.log(
                         `${c.id} #${rep}: ${row.claims.map((cl) => `${cl.id}=${cl.pass ? 'PASS' : 'FAIL'}`).join(' ')} delivered=${row.delivered.length} history=${history.length}`,
                     );

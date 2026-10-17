@@ -25,7 +25,7 @@ const J = (v) => (typeof v === 'string' ? JSON.parse(v) : v || []);
 const RESERVADOS = new Set(['_baselines', '_comparacao']);
 
 function casos() {
-    const src = fs.readFileSync(path.join(__dirname, 'recall-tests.js'), 'utf8');
+    const src = fs.readFileSync(path.join(__dirname, 'recall-tests-1821.js'), 'utf8');
     const b = src.match(/LIGHT_CASES\s*=\s*\[([\s\S]*?)\]/);
     return new Set([...b[1].matchAll(/'([^']+)'/g)].map((m) => m[1]));
 }

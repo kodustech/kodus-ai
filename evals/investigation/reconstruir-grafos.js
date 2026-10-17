@@ -24,7 +24,7 @@ const arg = (n, d) => {
 };
 
 function casos(set) {
-    const src = fs.readFileSync(path.join(__dirname, 'recall-tests.js'), 'utf8');
+    const src = fs.readFileSync(path.join(__dirname, 'recall-tests-1821.js'), 'utf8');
     const bloco = src.match(new RegExp(`${set.toUpperCase()}_CASES\\s*=\\s*\\[([\\s\\S]*?)\\]`));
     return [...bloco[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
 }

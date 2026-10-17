@@ -15,6 +15,7 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { contextToGenerateIssues } from '@libs/issues/domain/interfaces/kodyIssuesManagement.interface';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
+import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 
 describe('KodyIssuesManagementService', () => {
     let service: KodyIssuesManagementService;
@@ -176,6 +177,28 @@ describe('KodyIssuesManagementService', () => {
                 }),
             );
         });
+    });
+
+    // #2097: a finding the repeat check kept off the PR is stored not sent,
+    // with the schema's default implementationStatus; the earlier comment
+    // already tracks it, so it never becomes an issue.
+    it('leaves a suggestion discarded as a repeat out of the issues', async () => {
+        const valid = await (service as any).filterValidSuggestionsFromPrByStatus([
+            {
+                path: 'src/main.ts',
+                suggestions: [
+                    mockSuggestion,
+                    {
+                        ...mockSuggestion,
+                        id: 'suggestion-repeat',
+                        deliveryStatus: DeliveryStatus.NOT_SENT,
+                        priorityStatus: PriorityStatus.DISCARDED_BY_REPEAT,
+                    },
+                ],
+            },
+        ]);
+
+        expect(valid.map((s: { id: string }) => s.id)).toEqual(['suggestion-1']);
     });
 
     it('should be defined', () => {

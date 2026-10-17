@@ -24,48 +24,26 @@
 const fs = require('fs');
 const path = require('path');
 
-/** Hand-written hunk → the engine's patchWithLinesStr. */
+// A changed file is what the platform returns for it: `patch`, the file's
+// unified diff without its header lines. The line-numbered diff the agents
+// read is production's rendering of it (FetchChangedFilesStage).
+
+/** Hand-written hunk (lines marked '+', '-' or ' ') → the file's patch. */
 function patch(filename, start, lines) {
-    const newHunk = [];
-    const oldHunk = [];
-    let n = start;
-    for (const l of lines) {
-        const mark = l[0];
-        const text = l.slice(1);
-        if (mark !== '-') newHunk.push(`${n++} ${mark === '+' ? '+' : ' '}${text}`);
-        if (mark !== '+') oldHunk.push(`${mark === '-' ? '-' : ' '}${text}`);
-    }
+    const mark = (l) => (l[0] === '+' || l[0] === '-' ? l[0] : ' ');
+    const oldCount = lines.filter((l) => mark(l) !== '+').length;
+    const newCount = lines.filter((l) => mark(l) !== '-').length;
     return {
         filename,
-        patchWithLinesStr: `## file: '${filename}'\n\n@@ -${start},${oldHunk.length} +${start},${newHunk.length} @@\n__new hunk__\n${newHunk.join('\n')}\n__old hunk__\n${oldHunk.join('\n')}`,
+        patch: `@@ -${start},${oldCount} +${start},${newCount} @@\n${lines.map((l) => `${mark(l)}${l.slice(1)}`).join('\n')}`,
     };
 }
 
-/** `git diff -U3` text for one file → the engine's patchWithLinesStr. */
+/** `git diff -U3` text for one file → the file's patch: its hunks, without the header lines. */
 function patchFromUnified(filename, diffText) {
-    const hunks = [];
-    let cur = null;
-    for (const line of diffText.split('\n')) {
-        const h = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
-        if (h) {
-            cur = { header: line.replace(/ @@.*$/, ' @@'), n: +h[2], newHunk: [], oldHunk: [] };
-            hunks.push(cur);
-            continue;
-        }
-        if (!cur || line.startsWith('\\')) continue;
-        const mark = line[0];
-        const text = line.slice(1);
-        if (mark === '+') cur.newHunk.push(`${cur.n++} +${text}`);
-        else if (mark === '-') cur.oldHunk.push(`-${text}`);
-        else if (mark === ' ') {
-            cur.newHunk.push(`${cur.n++}  ${text}`);
-            cur.oldHunk.push(` ${text}`);
-        }
-    }
-    const body = hunks
-        .map((h) => `${h.header}\n__new hunk__\n${h.newHunk.join('\n')}\n__old hunk__\n${h.oldHunk.join('\n')}`)
-        .join('\n\n');
-    return { filename, patchWithLinesStr: `## file: '${filename}'\n\n${body}` };
+    const lines = diffText.split('\n');
+    const first = lines.findIndex((l) => l.startsWith('@@ '));
+    return { filename, patch: lines.slice(first).join('\n').replace(/\n+$/, '') };
 }
 
 const lines = (...l) => l.join('\n') + '\n';
@@ -610,14 +588,15 @@ const movedRepo = {
     'src/billing/tick.ts': movedPoller,
     'src/billing/poller.ts': lines("export { pollCharge } from './tick';"),
 };
+const movedLines = movedPoller.trimEnd().split('\n');
 const movedDiff = [
     {
         filename: 'src/billing/tick.ts',
-        patchWithLinesStr: `## file: 'src/billing/tick.ts'\n\n@@ -0,0 +1,${movedPoller.trimEnd().split('\n').length} @@\n__new hunk__\n${movedPoller.trimEnd().split('\n').map((l, i) => `${i + 1} +${l}`).join('\n')}\n__old hunk__\n`,
+        patch: `@@ -0,0 +1,${movedLines.length} @@\n${movedLines.map((l) => `+${l}`).join('\n')}`,
     },
     {
         filename: 'src/billing/poller.ts',
-        patchWithLinesStr: `## file: 'src/billing/poller.ts'\n\n@@ -1,${movedPoller.trimEnd().split('\n').length} +1,1 @@\n__new hunk__\n1 +export { pollCharge } from './tick';\n__old hunk__\n${movedPoller.trimEnd().split('\n').map((l) => `-${l}`).join('\n')}`,
+        patch: `@@ -1,${movedLines.length} +1,1 @@\n${movedLines.map((l) => `-${l}`).join('\n')}\n+export { pollCharge } from './tick';`,
     },
 ];
 const resubmitOpenDecision = (over = {}) => ({
@@ -845,11 +824,11 @@ const cartDecision = {
     decidedAt: '2026-10-06T10:15:00Z',
 };
 const cartClaim = {
-    id: 'qty-default-reintroduced',
+    id: 'qty-default-reintroduced-repeat',
     golden: 'The refactored total multiplies by item.qty without the ?? 1 default again, so an item without qty makes the total NaN: the earlier fix was undone.',
     truth: 'true',
     premise: 'diff',
-    expect: 'deliver_linked',
+    expect: 'not_deliver',
 };
 
 
@@ -871,7 +850,7 @@ const conventionRepo = { ...rangeRepo, ...conventions.files };
 // the developer had attempted a partial fix and the entry read not_implemented.
 const newFileDiff = (filename, text) => {
     const l = text.trimEnd().split('\n');
-    return [{ filename, patchWithLinesStr: `## file: '${filename}'\n\n@@ -0,0 +1,${l.length} @@\n__new hunk__\n${l.map((x, i) => `${i + 1} +${x}`).join('\n')}\n__old hunk__\n` }];
+    return [{ filename, patch: `@@ -0,0 +1,${l.length} @@\n${l.map((x) => `+${x}`).join('\n')}` }];
 };
 const rangeNewFileDiff = newFileDiff('src/reports/range.ts', rangeRepo['src/reports/range.ts']);
 
@@ -1017,7 +996,7 @@ const cases = [
         }],
         claims: [{ id: 'unclaimed-path-unfenced', golden: 'For a run that never claimed the lease, handleFailure takes the !ownedBy branch and updates the job with no condition, so the "do not stamp over a live worker" fence added for the BYOK-exhausted branch is missing on the rate-limit-gate / payload-validation path; a redelivery can overwrite a row another worker holds.', truth: 'contested', premise: 'diff', expect: 'if_delivered_linked', proposed: true }],
     },
-    // --- Kody Rules across rounds (#2933) ---
+    // --- Kody Rules across rounds ---
     {
         id: 'K1-rule-already-posted', family: 'rounds', agent: 'kody-rules', repo: jobsRepo, changedFiles: jobsDiff, sandbox: 'alive',
         kodyRules: [progressFirstRule],
@@ -1093,7 +1072,9 @@ const cases = [
         claims: [retryClaim('await-sleep-repeat', 'not_deliver')],
     },
     { id: 'R15-control', family: 'control', repo: retryRepo, changedFiles: retryDiff, sandbox: 'alive', claims: [retryClaim('await-sleep-control', 'deliver')] },
-    // Fixed, then undone by this diff: must ship, linked to the earlier fix.
+    // Fixed, then undone by this diff. Not posted again (#2097): the earlier
+    // comment is the thread for that problem, and nothing tells a fix that
+    // came back from one that was never complete.
     {
         id: 'R16-fixed-then-reintroduced', family: 'rounds', repo: cartRepo, changedFiles: cartDiff, sandbox: 'alive',
         previousDecisions: [cartDecision],

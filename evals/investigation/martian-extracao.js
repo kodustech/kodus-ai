@@ -27,7 +27,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { generateText } = require('ai');
 const { createAnthropic } = require('@ai-sdk/anthropic');
-const { loadJudgeKey, matchCommentDetailed, JUDGE_MODEL } = require('./recall-judge');
+const { loadJudgeKey, matchCommentDetailed, JUDGE_MODEL } = require('./recall-judge-1821');
 
 const arg = (n, d) => {
     const h = process.argv.slice(2).find((a) => a.startsWith(`--${n}=`));

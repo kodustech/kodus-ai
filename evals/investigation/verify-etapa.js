@@ -29,7 +29,7 @@ const { generateText, tool, jsonSchema } = require('ai');
 const { buildModel, descreveModelo } = require('./eval-model');
 const { prepareRepo } = require('./prepare-repo');
 const { LocalRepoCommands } = require('./local-repo-commands');
-const { loadJudgeKey, matchCommentDetailed } = require('./recall-judge');
+const { loadJudgeKey, matchCommentDetailed } = require('./recall-judge-1821');
 const { buildVerifierPrompt, buildVeracityScorePrompt } = require('../../libs/code-review/infrastructure/agents/prompts/verifier-prompt.ts');
 const { bundleFor } = require('../../libs/code-review/infrastructure/agents/core/verifier.agent.ts');
 

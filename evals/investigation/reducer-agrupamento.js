@@ -45,7 +45,7 @@ const SEM_DROP = arg('sem-drop', '0') === '1';
 // --descricao-fundida=1: o representante de um grupo passa a ser julgado pela
 // mergedDescription que o reducer escreveu (o texto que seria postado).
 const DESCRICAO = arg('descricao-fundida', '0') === '1';
-const { loadJudgeKey, matchCommentDetailed } = require('./recall-judge');
+const { loadJudgeKey, matchCommentDetailed } = require('./recall-judge-1821');
 const { attachExistingCode } = require('../../libs/code-review/infrastructure/agents/engine/attach-existing-code.ts');
 const MODELO = process.env.RECALL_MODEL;
 if (!POOL || !OUT || !MODELO) throw new Error('uso: RECALL_MODEL=... --pool= --modo= --fonte= --out=');

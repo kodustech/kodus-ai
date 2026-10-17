@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // Direct finder-recall runner.
 //
-// This intentionally bypasses promptfoo so local and CI use the same Node
-// entrypoint without npx/network dependency. It runs the live generalist finder
-// through deterministic tool replay, then scores findings against golden bugs
-// with the same recall-assertion judge.
+// Runs production's review on each case (agent-provider.js → shared/review-stage.js:
+// the PR's platform data, the repository at its head, production's sandbox and
+// model route), then scores what the review ships against the PR's known bugs
+// with recall-assertion.js. One Node entry point for local runs and CI.
 const fs = require('fs');
 const path = require('path');
 
@@ -112,42 +112,9 @@ function avg(values) {
     return nums.reduce((sum, value) => sum + value, 0) / nums.length;
 }
 
-function sum(values) {
-    return values
-        .filter((value) => typeof value === 'number' && Number.isFinite(value))
-        .reduce((acc, value) => acc + value, 0);
-}
-
-// withmartian/code-review-benchmark's OWN reported aggregate (step3_judge_
-// comments.py's final summary table) pools tp/fp/fn across every PR FIRST,
-// then divides ONCE — not the mean of each PR's own precision/recall. The
-// two are mathematically different (a PR-count-weighted mean vs an
-// implicit candidate/golden-count-weighted one) and can diverge. This is
-// the number to compare against their published results; recall_mean/
-// precision_mean/f1_mean above answer a different question (treat every PR
-// equally) and are kept for their own established use (regression gate,
-// etc).
-function poolMetrics(rows) {
-    const tp = sum(rows.map((row) => row.metadata?.tp));
-    const fp = sum(rows.map((row) => row.metadata?.fp));
-    const fn = sum(rows.map((row) => row.metadata?.fn));
-    const recall = tp + fn > 0 ? tp / (tp + fn) : null;
-    const precision = tp + fp > 0 ? tp / (tp + fp) : null;
-    const f1 =
-        recall !== null && precision !== null && recall + precision > 0
-            ? (2 * recall * precision) / (recall + precision)
-            : null;
-    return { tp, fp, fn, recall_pooled: recall, precision_pooled: precision, f1_pooled: f1 };
-}
-
 function fmtPct(value) {
     if (value === null || value === undefined) return 'n/a';
     return `${Math.round(value * 100)}%`;
-}
-
-function fmtDuration(ms) {
-    if (ms === null || ms === undefined || !Number.isFinite(ms)) return 'n/a';
-    return `${(ms / 1000).toFixed(1)}s`;
 }
 
 function writeJson(file, payload) {
@@ -212,13 +179,6 @@ function submissionResultFromOutput(caseId, output, tokenUsage) {
         trace: {
             finishReason: trace.finishReason ?? null,
             steps: typeof trace.steps === 'number' ? trace.steps : null,
-            replayCalls:
-                typeof trace.replayCalls === 'number'
-                    ? trace.replayCalls
-                    : null,
-            unexpectedToolCalls: Array.isArray(trace.unexpectedToolCalls)
-                ? trace.unexpectedToolCalls.length
-                : 0,
         },
     };
 }
@@ -235,18 +195,19 @@ function runMetaOf(args) {
                 args.model,
             provider:
                 (TIER0[args.model] && TIER0[args.model].provider) || 'unknown',
-            accessPath:
-                TIER0[args.model]?.provider === 'codex_subscription'
-                    ? 'subscription'
-                    : 'api',
+            // How the finder reached it (model-route.js resolveRoute): a BYOK
+            // config, or none for `kodus-managed`.
+            // A subscription model never runs (main exits 2 before it).
+            accessPath: TIER0[args.model] && TIER0[args.model].managed ? 'managed' : 'byok',
         },
-        executionMode: 'replay',
+        // Production's tools over the repository at the PR's head.
+        executionMode: 'live',
         // heavy = passadas de resample ativadas. Eixo de regime: não comparar
         // entrada heavy com entrada normal sem rotular.
         heavy: process.env.RECALL_HEAVY === '1',
-        // RECALL_REASONING_EFFORT ja injeta o effort de verdade na chamada
-        // (ver withReasoningEffort em agent-provider.js); sem isto o artefato
-        // registrava 'vendor-default' mesmo quando o run era em thinking high.
+        // RECALL_REASONING_EFFORT reaches the finder as the BYOK model's
+        // reasoningEffort (agent-provider.js resolveRoute), which production
+        // maps per provider; without it the BYOK slot sets none.
         reasoning: process.env.RECALL_REASONING_EFFORT
             ? {
                   config: 'explicit',
@@ -275,15 +236,6 @@ function traceSummaryFromOutput(output) {
         coverage: trace.coverage ?? null,
         anomalies: trace.anomalies ?? null,
         verification: trace.verification ?? null,
-        // RECALL_REAL_REPO=1: true when the tools searched the PR's real
-        // repository, false when the case fell back to the replay.
-        repoPrepared: trace.repoPrepared ?? null,
-        // false: no exec, so checkTypes, findNearestProjectFile and findFile's
-        // fd/find path were not registered (replay; runs before 17/10/26 with
-        // RECALL_REAL_REPO=1, when the local sandbox ran without exec).
-        sandboxExec: trace.sandboxExec ?? null,
-        // RECALL_SANDBOX=e2b: create+clone time and tool-call latency in the sandbox.
-        sandbox: trace.sandbox ?? null,
     };
 }
 
@@ -307,6 +259,16 @@ async function main() {
     if (args.listModels) {
         for (const model of defaultMatrix()) console.log(model);
         return;
+    }
+
+    // A subscription model has no production route: the finder would run
+    // another model under its name (agent-provider.js resolveRoute).
+    if (TIER0[args.model]?.provider === 'codex_subscription') {
+        console.error(
+            `not measured: ${args.model} runs on a ChatGPT subscription, which production has no route for ` +
+                '(libs/llm/codex-subscription-model.ts is used only by evals). Run its API model instead.',
+        );
+        process.exit(2);
     }
 
     // --no-judge: run the finder and SAVE its findings, score nothing. The finder
@@ -362,8 +324,7 @@ async function main() {
     process.env.RECALL_MODEL = args.model;
 
     // The presence check above passed once while holding the FINDER's Fireworks
-    // key — applyModelEnv writes it over API_OPEN_AI_API_KEY — and the 401 only
-    // surfaced after 30 paid finder runs. Presence is not validity: spend one
+    // key, and the 401 only surfaced after 30 paid finder runs. Presence is not validity: spend one
     // judge call before spending the finder.
     if (!NO_JUDGE) {
         try {
@@ -395,6 +356,11 @@ async function main() {
 
     const InvestigationAgentProvider = require('./agent-provider');
     const recallAssertion = require('./recall-assertion');
+    // Tokens and time of every model call (finder loop, verify, recovery),
+    // read like billing: summary.usage (evals/shared/eval-kit.js tokensUsed).
+    // After agent-provider, so its TypeScript hook is the one loaded.
+    const { countTokens, tokensUsed } = require('../shared/eval-kit');
+    countTokens();
     const provider = new InvestigationAgentProvider({
         config: providerConfigFor(args.model),
     });
@@ -425,10 +391,6 @@ async function main() {
     const runOneCase = async (test) => {
         const caseId = test.vars?.caseId || test.description || 'unknown-case';
         const prompt = JSON.stringify(test.vars || {});
-        // Wall-clock time for the whole case (agent loop + all recall passes),
-        // not just token cost — the two don't always track together (a pass
-        // that waits on rate limits burns time without burning tokens).
-        const startedAt = Date.now();
         let apiResult;
 
         try {
@@ -440,7 +402,6 @@ async function main() {
                 caseId,
                 status: 'infra',
                 reason: error instanceof Error ? error.message : String(error),
-                durationMs: Date.now() - startedAt,
             };
             rows.push(row);
             console.log(`INFRA ${caseId} ${row.reason.slice(0, 180)}`);
@@ -454,51 +415,10 @@ async function main() {
                 status: 'infra',
                 reason: apiResult?.error || 'provider returned no output',
                 metadata: apiResult?.metadata,
-                durationMs: Date.now() - startedAt,
             };
             rows.push(row);
             console.log(`INFRA ${caseId} ${row.reason.slice(0, 180)}`);
             return;
-        }
-
-        // RECALL_DUMP=<dir>: grava a saida crua do agente por caso, ANTES do
-        // judge rodar (e antes do desvio --no-judge, que saia sem gravar nada). A revisao em si (a parte cara: minutos de agent loop
-        // real) ja terminou aqui — se o judge quebrar (rate limit, credito,
-        // parse), essa saida nao pode se perder junto, senao a unica forma de
-        // reavaliar e pagar a revisao inteira de novo. Sem isso a submission
-        // so guarda findings + trace, entao um modelo que devolve ZERO
-        // findings e indistinguivel de um parsing que falhou.
-        if (process.env.RECALL_DUMP) {
-            try {
-                fs.mkdirSync(process.env.RECALL_DUMP, { recursive: true });
-                // Relogio de parede da REVISAO, medido aqui e nao no fim da
-                // linha: o judge roda depois e `durationMs` da row soma os dois.
-                // A soma de `recallPasses[].ms` tambem nao serve — as passadas
-                // rodam em paralelo, entao aquilo e tempo de agente, nao de
-                // parede. Para comparar duas configuracoes em VELOCIDADE (a
-                // poda de contexto por idade, por exemplo) e este numero que
-                // vale, e ele precisa estar no dump, junto do resto.
-                const reviewWallMs = Date.now() - startedAt;
-                let saida = apiResult.output;
-                try {
-                    const obj =
-                        typeof saida === 'string' ? JSON.parse(saida) : saida;
-                    if (obj && typeof obj === 'object') {
-                        obj.trace = { ...(obj.trace || {}), reviewWallMs };
-                        saida = obj;
-                    }
-                } catch {
-                    /* saida nao-JSON: grava crua, sem o relogio */
-                }
-                fs.writeFileSync(
-                    path.join(process.env.RECALL_DUMP, `${caseId}.raw.txt`),
-                    typeof saida === 'string'
-                        ? saida
-                        : JSON.stringify(saida, null, 2),
-                );
-            } catch (e) {
-                console.warn(`[dump] ${caseId}: ${e.message}`);
-            }
         }
 
         if (NO_JUDGE) {
@@ -534,29 +454,14 @@ async function main() {
             return;
         }
 
-        let assertion;
-        try {
-            // eslint-disable-next-line no-await-in-loop
-            assertion = await recallAssertion(apiResult.output, {
-                vars: test.vars,
-            });
-        } catch (error) {
-            infraFailures += 1;
-            const row = {
-                caseId,
-                status: 'infra',
-                reason: `judge failed (review output was saved${process.env.RECALL_DUMP ? ' to RECALL_DUMP' : ''}, only scoring is lost): ${error instanceof Error ? error.message : String(error)}`,
-                durationMs: Date.now() - startedAt,
-            };
-            rows.push(row);
-            console.log(`INFRA ${caseId} ${row.reason.slice(0, 180)}`);
-            return;
-        }
+        // eslint-disable-next-line no-await-in-loop
+        const assertion = await recallAssertion(apiResult.output, {
+            vars: test.vars,
+        });
         const metadata = assertion.metadata || {};
         const status = assertion.pass ? 'pass' : 'fail';
         if (!assertion.pass) qualityFailures += 1;
 
-        const durationMs = Date.now() - startedAt;
         rows.push({
             caseId,
             status,
@@ -565,9 +470,24 @@ async function main() {
             metadata,
             tokenUsage: apiResult.tokenUsage,
             traceSummary: traceSummaryFromOutput(apiResult.output),
-            durationMs,
         });
 
+        // RECALL_DUMP=<dir>: grava a saida crua do agente por caso. Sem isso a
+        // submission so guarda findings + trace, entao um modelo que devolve
+        // ZERO findings e indistinguivel de um parsing que falhou.
+        if (process.env.RECALL_DUMP) {
+            try {
+                fs.mkdirSync(process.env.RECALL_DUMP, { recursive: true });
+                fs.writeFileSync(
+                    path.join(process.env.RECALL_DUMP, `${caseId}.raw.txt`),
+                    typeof apiResult.output === 'string'
+                        ? apiResult.output
+                        : JSON.stringify(apiResult.output, null, 2),
+                );
+            } catch (e) {
+                console.warn(`[dump] ${caseId}: ${e.message}`);
+            }
+        }
         submissionResults.push(
             submissionResultFromOutput(
                 caseId,
@@ -585,12 +505,11 @@ async function main() {
         });
 
         console.log(
-            `${status.toUpperCase().padEnd(6)} ${caseId} recall=${fmtPct(metadata.recall ?? assertion.score)} precision=${fmtPct(metadata.precision)} fidelity=${fmtPct(metadata.hitRate)} findings=${metadata.findings ?? 'n/a'} duration=${fmtDuration(durationMs)}`,
+            `${status.toUpperCase().padEnd(6)} ${caseId} recall=${fmtPct(metadata.recall ?? assertion.score)} precision=${fmtPct(metadata.precision)} loop-recall=${fmtPct(metadata.loopRecall)} findings=${metadata.findings ?? 'n/a'}`,
         );
     };
 
-    // Pool: casos são independentes (replay determinístico próprio), então
-    // sequencial era só desperdício de relógio.
+    // Cases share nothing (each review has its own sandbox), so they run in a pool.
     const concurrency = Math.max(
         1,
         Math.min(Number(args.concurrency) || 4, selectedTests.length),
@@ -599,16 +518,7 @@ async function main() {
         `(concorrência: ${concurrency}${process.env.RECALL_HEAVY === '1' ? ' · HEAVY' : ''})\n`,
     );
     let cursor = 0;
-    // RECALL_START_STAGGER_MS: o worker k so comeca depois de k x esse tempo.
-    // Na largada todos os PRs soltam as ~16 passadas ao mesmo tempo; com 4 PRs
-    // sao ~64 chamadas no mesmo segundo, e o Fireworks devolveu limite de taxa
-    // exatamente ai — chamadas desistiram e as passadas morreram no meio. Depois
-    // da primeira leva os PRs terminam em tempos diferentes e se espalham sozinhos.
-    const stagger = Number(process.env.RECALL_START_STAGGER_MS) || 0;
-    let proximoWorker = 0;
     const worker = async () => {
-        const k = proximoWorker++;
-        if (stagger && k) await new Promise((r) => setTimeout(r, k * stagger));
         for (;;) {
             const idx = cursor++;
             if (idx >= selectedTests.length) return;
@@ -664,6 +574,7 @@ async function main() {
         startedAt,
         finishedAt: new Date().toISOString(),
         tokens,
+        usage: tokensUsed(),
         cases: rows.length,
         passed: rows.filter((row) => row.status === 'pass').length,
         failed: qualityFailures,
@@ -674,13 +585,9 @@ async function main() {
             recall_mean: avg(rows.map((row) => row.metadata?.recall)),
             precision_mean: avg(rows.map((row) => row.metadata?.precision)),
             f1_mean: avg(rows.map((row) => row.metadata?.f1)),
-            fair_recall_mean: avg(rows.map((row) => row.metadata?.fairRecall)),
-            fidelity_mean: avg(rows.map((row) => row.metadata?.hitRate)),
-            // Wall-clock, not token cost — includes every case (pass AND infra
-            // failure both spent real time before erroring out).
-            duration_mean_ms: avg(rows.map((row) => row.durationMs)),
-            // Martian-parity pooled aggregate — see poolMetrics's doc.
-            ...poolMetrics(rows),
+            // What the finder's loops returned, before the steps that follow
+            // them: reported next to the gated (shipped) recall, never gated.
+            loop_recall_mean: avg(rows.map((row) => row.metadata?.loopRecall)),
         },
         rows,
     };
@@ -714,14 +621,7 @@ async function main() {
     console.log(`cases: ${summary.cases}`);
     console.log(`recall_mean: ${fmtPct(summary.metrics.recall_mean)}`);
     console.log(`precision_mean: ${fmtPct(summary.metrics.precision_mean)}`);
-    console.log(`f1_mean: ${fmtPct(summary.metrics.f1_mean)}`);
-    console.log(`fidelity_mean: ${fmtPct(summary.metrics.fidelity_mean)}`);
-    // Martian-parity — pools tp/fp/fn across every PR before dividing once;
-    // this is the number comparable to their published benchmark results.
-    console.log(`recall_pooled (martian-parity): ${fmtPct(summary.metrics.recall_pooled)}`);
-    console.log(`precision_pooled (martian-parity): ${fmtPct(summary.metrics.precision_pooled)}`);
-    console.log(`f1_pooled (martian-parity): ${fmtPct(summary.metrics.f1_pooled)}`);
-    console.log(`duration_mean: ${fmtDuration(summary.metrics.duration_mean_ms)}`);
+    console.log(`loop_recall_mean: ${fmtPct(summary.metrics.loop_recall_mean)}`);
     console.log(`artifact: ${path.relative(process.cwd(), outputPath)}`);
     if (NO_JUDGE) {
         // The percentages above are empty by construction, not a result. Say so
@@ -732,59 +632,6 @@ async function main() {
                 `\nfindings saved: ${path.relative(process.cwd(), outputPath).replace(/\.json$/, '.submission.json')}` +
                 `\nthe percentages above are empty by construction — score them with evals/investigation/rejudge.js or an external judge.`,
         );
-    }
-
-    // Langfuse ships spans in batches; the SDK's own flush rides on Node's
-    // `beforeExit`, which never fires on the process.exit paths below (infra
-    // failure, gate failure) and is not worth trusting on the normal one
-    // either. Flushing here, explicitly, is what makes a finished run's trace
-    // actually reach the project.
-    try {
-        const lf = require(
-            path.join(__dirname, '../../libs/core/log/langfuse.ts'),
-        );
-        await lf.flushLangfuse();
-    } catch (err) {
-        console.warn(`langfuse flush: ${String(err).slice(0, 120)}`);
-    }
-
-    // O trace debugger, construido a partir do dump que esta rodada acabou de
-    // escrever. Gerado aqui e nao a mao porque diagnostico que alguem precisa
-    // lembrar de rodar e diagnostico que ninguem le — e os tres bugs de medicao
-    // que este harness escondeu foram cada um achado lendo dump depois do fato.
-    //
-    // Nesta altura o judge ainda nao rodou, entao a pagina sai sem metrica de
-    // qualidade. O protocolo a regera no fim, ja com a matriz; e ela pode ser
-    // regerada quantas vezes quiser, porque so le arquivo gravado.
-    if (process.env.RECALL_DUMP) {
-        const debuggerPath = outputPath.replace(/\.json$/, '') + '.debug.html';
-        try {
-            const { execFileSync } = require('child_process');
-            execFileSync(
-                process.execPath,
-                [
-                    path.join(__dirname, 'build-trace-debugger.js'),
-                    `--run=${path.basename(process.env.RECALL_DUMP)}`,
-                    `--out=${debuggerPath}`,
-                ],
-                {
-                    stdio: 'pipe',
-                    timeout: 300_000,
-                    env: {
-                        ...process.env,
-                        POOL_ROOT: path.dirname(process.env.RECALL_DUMP),
-                    },
-                },
-            );
-            console.log(
-                `debugger: ${path.relative(process.cwd(), debuggerPath)}`,
-            );
-        } catch (err) {
-            // Never fail a finished run over its own report.
-            console.warn(
-                `debugger: falhou (${String(err.message || err).slice(0, 140)})`,
-            );
-        }
     }
 
     if (gate.status === 'pass' || gate.status === 'fail') {

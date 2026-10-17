@@ -17,7 +17,7 @@ const path = require('path');
 const { tool, jsonSchema } = require('ai');
 const { buildModel, descreveModelo } = require('./eval-model');
 const { chamadaEstruturada } = require('./eval-structured');
-const { loadJudgeKey, matchCommentDetailed } = require('./recall-judge');
+const { loadJudgeKey, matchCommentDetailed } = require('./recall-judge-1821');
 
 const arg = (n, d) => { const h = process.argv.slice(2).find((a) => a.startsWith(`--${n}=`)); return h ? h.split('=').slice(1).join('=') : d; };
 const ARQ = arg('dedup'), POOL = arg('pool'), OUT = arg('out'), PAR = Number(arg('par', '4')), VERSAO = arg('prompt', 'v1');

@@ -1,0 +1,74 @@
+{
+  "model": "claude-sonnet-5-5",
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "capturedAt": "2026-10-16",
+  "ends": [
+    {
+      "submitResult": {
+        "reasoning": "Bug lens: I read all six changed files. Hypotheses tested:\n(1) Post#cook short-circuits on cook_method. I grepped the repo for cook_method and for embed settings and found no column, migration or site setting. lib/post_creator.rb and post_revisor.rb are not in the checkout, so I could not confirm that PostCreator accepts cook_method. If the column is missing, every Post#cook call raises NoMethodError.\n(2) TopicEmbed.import treats an unpersisted post as success. PostCreator#create can return a Post with errors, and `post.present?` is true for it. That would create an embed with nil topic_id/post_id, and the next import would call PostRevisor.new(nil). Not confirmed, because PostCreator is not in the checkout.\n(3) PollFeed calls i.content.scrub with no nil guard. A single feed item without content aborts the whole poll with NoMethodError.\n(4) Raw HTML is stored and returned as cooked, unsanitized. Feed content goes through CGI.unescapeHTML and then into raw_html posts. The url is interpolated into a single-quoted href without escaping. This is a stored-XSS path from the remote feed or page; I labelled it bug because only that label is allowed.\nSecurity and performance lenses:\n- Referer check: URI('').host is nil, and the blank embeddable_host check runs first, so there is no bypass of that kind. The referer header is spoofable, but that is by design for an embed.\n- Kernel#open on a URL: TopicRetriever#invalid_host? restricts embed_url to the embeddable host, so I did not report SSRF or command injection.\n- Race: concurrent imports of the same URL can create duplicate topics because there is no unique index in the diff. Low severity; not reported.\n- Performance: the poll refetches and re-imports the whole feed on every retrieve_topic job. Throttled per URL for 60s only, and staff bypass the throttle. Not reported separately.",
+        "suggestions": [
+          {
+            "label": "bug",
+            "relevantFile": "app/models/post.rb",
+            "language": "ruby",
+            "suggestionContent": "WHAT: Post#cook now reads `cook_method`, but I found no migration adding a posts.cook_method column, and PostCreator (not in the checkout) may not accept a cook_method option. A grep of the repo found `cook_method` only in post.rb and topic_embed.rb. WHY: if the column is missing, every Post#cook call raises NoMethodError (all post creation and editing breaks), and TopicEmbed.import passes an option PostCreator may ignore, so imported posts would be markdown-cooked. HOW: add a migration adding `cook_method` (integer, default Post.cook_methods[:regular]) to posts, and make PostCreator/PostRevisor persist and preserve it.",
+            "existingCode": "return raw if cook_method == Post.cook_methods[:raw_html]",
+            "improvedCode": "# add migration: add_column :posts, :cook_method, :integer, default: 1, null: false\nreturn raw if cook_method == Post.cook_methods[:raw_html]",
+            "oneSentenceSummary": "Post#cook depends on cook_method column/option with no migration or creator support found",
+            "relevantLinesStart": 131,
+            "relevantLinesEnd": 133,
+            "severity": "high",
+            "confidence": 5
+          },
+          {
+            "label": "bug",
+            "relevantFile": "app/models/topic_embed.rb",
+            "language": "ruby",
+            "suggestionContent": "WHAT: `post.present?` is true for any Post object, including an unsaved one with validation errors, and `TopicEmbed.create!` then runs with nil post_id/topic_id (it validates only embed_url and content_sha1). WHY: a failed creation leaves an orphan embed with no topic. EmbedController then sees nil topic_id and re-enqueues forever, and the next import takes the else branch with `embed.post` nil and calls PostRevisor.new(nil), which crashes. HOW: check `post.present? && post.persisted?` (or post.errors.blank?) before creating the embed, and guard against `embed.post` being nil in the update branch.",
+            "existingCode": "post = creator.create\nif post.present?\n  TopicEmbed.create!(topic_id: post.topic_id,",
+            "improvedCode": "post = creator.create\nif post.present? && post.persisted?\n  TopicEmbed.create!(topic_id: post.topic_id,",
+            "oneSentenceSummary": "Embed record created even when post creation failed, leaving orphan embed",
+            "relevantLinesStart": 23,
+            "relevantLinesEnd": 29,
+            "severity": "medium",
+            "confidence": 5
+          },
+          {
+            "label": "bug",
+            "relevantFile": "app/jobs/scheduled/poll_feed.rb",
+            "language": "ruby",
+            "suggestionContent": "WHAT: `i.content.scrub` is called without a nil guard and with no per-item error handling. WHY: a feed item with no content (SimpleRSS returns nil) raises NoMethodError, aborting the whole poll so later items are never imported. The remote HTML is also unescaped and stored unsanitized as raw_html, so scripts in the feed are rendered to forum readers (stored XSS). HOW: use `(i.content || i.description).to_s.scrub`, rescue per item, and sanitize the HTML to a whitelist before import.",
+            "existingCode": "content = CGI.unescapeHTML(i.content.scrub)\nTopicEmbed.import(user, url, i.title, content)",
+            "improvedCode": "raw_content = (i.content || i.description).to_s\nnext if raw_content.blank?\ncontent = CGI.unescapeHTML(raw_content.scrub)\nTopicEmbed.import(user, url, i.title, content)",
+            "oneSentenceSummary": "Feed item without content crashes whole poll; remote HTML stored unsanitized",
+            "relevantLinesStart": 31,
+            "relevantLinesEnd": 37,
+            "severity": "medium",
+            "confidence": 6
+          },
+          {
+            "label": "bug",
+            "relevantFile": "app/models/topic_embed.rb",
+            "language": "ruby",
+            "suggestionContent": "WHAT: The url is interpolated unescaped into a single-quoted href in the footer HTML, and the post is stored as raw_html, which Post#cook returns without sanitization. WHY: a URL containing `'` (e.g. an RSS id/link) injects attributes or markup into every embedded post. HOW: use ERB::Util.html_escape(url) for both the href and the link text.",
+            "existingCode": "contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\"",
+            "improvedCode": "escaped = ERB::Util.html_escape(url)\ncontents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{escaped}'>#{escaped}</a>\")}</small>\\n\"",
+            "oneSentenceSummary": "Unescaped URL injected into raw HTML footer of raw_html posts",
+            "relevantLinesStart": 13,
+            "relevantLinesEnd": 13,
+            "severity": "medium",
+            "confidence": 5
+          }
+        ]
+      },
+      "text": ""
+    },
+    {
+      "submitResult": {
+        "reasoning": "I found no further concrete bugs beyond the four findings already recorded.\n\nBug lens, hypotheses tested:\n- `import` mutates its `contents` argument with `<<`. Both callers pass freshly built strings (`CGI.unescapeHTML` output and `doc.content`), so this is safe.\n- `absolutize_urls` picks the port prefix by comparing the port to 80 and 443, so an `https` URL on port 80 would get a wrong prefix. That is a minor edge case, not a reportable defect.\n- `TopicRetriever#retrieved_recently?` runs `setnx` and `expire` as two separate Redis calls. This is a minor race that only affects the throttle.\n- `import_remote` calls `open(url)` but `topic_embed.rb` does not require `open-uri`. Only `poll_feed.rb` requires it, and `grep` found no other `open-uri` require in the repo. Production eager loading probably covers it, and I could not prove a failure, so I did not report it.\n- In `EmbedController`, the referer check compares hosts and the `rescue` handles `URI::InvalidURIError`. A nil `current_user` is handled by `TopicView`.\n\nSecurity lens, hypotheses tested:\n- The URL passed to `open` in `TopicRetriever` is checked against `embeddable_host`, which limits SSRF. The footer URL injection is already in the existing findings.\n- The `X-Frame-Options: ALLOWALL` header is only set after the referer check passes.\n\nPerformance lens, hypothesis tested:\n- `PollFeed.new.execute` runs inside `perform_retrieve`, so a retrieve job refetches the whole feed. The 60-second throttle bounds this, and staff users bypass the throttle but are few, so I did not report it.",
+        "suggestions": []
+      },
+      "text": ""
+    }
+  ]
+}

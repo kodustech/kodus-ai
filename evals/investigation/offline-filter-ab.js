@@ -22,8 +22,8 @@ require('tsconfig-paths/register');
 const fs = require('fs');
 const path = require('path');
 
-const { matchCommentDetailed, loadJudgeKey } = require('./recall-judge');
-const { createModel } = require('./agent-provider');
+const { matchCommentDetailed, loadJudgeKey } = require('./recall-judge-1821');
+const { createModel } = require('./agent-provider-1821');
 
 const DATASETS = path.join(__dirname, 'datasets');
 

@@ -63,7 +63,7 @@ if (FINDER === 'rodar') {
             RECALL_MICRO_AGENTS: '1', RECALL_MICRO_EXP: 'p3', RECALL_MICRO_SO_EXTRAS: '1', RECALL_MICRO_TETO: '4',
             RECALL_MICRO_IDS: 'says-one-thing-does-another,text-that-ships,invalid-state-and-concurrency,value-boundary-and-position,secret-and-identity,contract-not-followed,test-does-not-verify,data-exposure,changed-files-disagree',
         } : {};
-        parede.finder = roda('finder', 'node', [rel(path.join(INV, 'run-recall.js'))], {
+        parede.finder = roda('finder', 'node', [rel(path.join(INV, 'run-recall-1821.js'))], {
             RECALL_SKIP_VERIFY: '1', RECALL_SKIP_DEDUP: '1', RECALL_SKIP_SYNTHESIS: '1', RECALL_REDUCER: '0', RECALL_HEAVY: '0', RECALL_NO_JUDGE: '1',
             RECALL_SET: 'light', RECALL_CASES: CASOS.join(','), RECALL_CATEGORIES: 'bug,security,performance', RECALL_REAL_REPO: '1', RECALL_GATE: '0',
             RECALL_FINDING_REASON: '0', RECALL_GRAFO_EXP: '1', RECALL_PARALELO: '1', RECALL_CONCURRENCY: '3', RECALL_DUMP: dump, ...lentes,

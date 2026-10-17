@@ -1357,10 +1357,89 @@ export async function runFinderWithVerify(
         };
     }
 
+    // EVIDENCE GATE input: the base pass's reads AND every recall pass's
+    // (lenses, synthesis): a lens finding on a file the lens read itself is
+    // evidenced.
+    const investigated = new Set([
+        ...strongFilesFromRun(finderState),
+        ...(recall.investigatedFiles ?? []),
+    ]);
+    const verifyT0 = Date.now();
+    const { kept, dropped, verdictByFinding, verifyUsage } =
+        await verifyFindings(params, suggestions, investigated, ctx);
+    const verifyMs = Date.now() - verifyT0;
+
+    // Map the generic verdict.toolCalls (name/args/result) into the review
+    // ToolEvidenceSummary (strong=readFile/checkTypes files, weak=grep hits).
+    const evidenceOf = (f: FinderSuggestion): ToolEvidenceSummary =>
+        buildToolEvidenceSummary(
+            (verdictByFinding.get(f)?.toolCalls ?? []).map((tc) => ({
+                tool: tc.name,
+                toolName: tc.name,
+                args: tc.args ?? {},
+                result: tc.result,
+            })),
+        );
+
+    // The harness speaks neutral "candidate"; code-review's own term is "finding".
+    const parseModeOf = (f: FinderSuggestion): VerdictParseMode =>
+        verdictByFinding.get(f)?.parseMode ?? 'default-keep';
+
+    return {
+        reasoning,
+        kept,
+        keptEvidence: kept.map(evidenceOf),
+        keptParseMode: kept.map(parseModeOf),
+        droppedByVerify: dropped.map((d) => ({
+            finding: d.candidate,
+            evidence: d.verdict.rationale,
+            verifierEvidence: evidenceOf(d.candidate),
+            parseMode: d.verdict.parseMode ?? 'default-keep',
+        })),
+        finderState,
+        verifyUsage,
+        verifyMs,
+        recallUsage,
+        passStats,
+        shardPlan,
+        scoutFlags,
+    };
+}
+
+/**
+ * The verify step: each candidate judged by the verifier (refute-to-drop), then
+ * the evidence gate, which re-verifies in full a finding kept on a file the
+ * finder never investigated (`investigated`: strongFilesFromRun of its run).
+ * Called by runFinderWithVerify; the funnel's verify eval calls it too.
+ */
+export async function verifyFindings(
+    params: Pick<
+        RunFinderWithVerifyParams,
+        | 'runner'
+        | 'modelId'
+        | 'fallbackModelId'
+        | 'tools'
+        | 'concurrency'
+        | 'providerOptions'
+        | 'telemetryMetadata'
+        | 'agentName'
+        | 'usageRunName'
+        | 'previousDecisions'
+        | 'recordVerifyCost'
+        | 'feasibilityVerify'
+    >,
+    suggestions: FinderSuggestion[],
+    investigated: Set<string>,
+    ctx: ToolContext,
+): Promise<{
+    kept: FinderSuggestion[];
+    dropped: { candidate: FinderSuggestion; verdict: Verdict }[];
+    verdictByFinding: Map<FinderSuggestion, Verdict>;
+    verifyUsage: VerifyUsage;
+}> {
     // Verify each finding (HV2 refute-to-drop, or path-feasibility when the
     // knob is on) with the confidence SPLIT inside LlmVerifier:
     // high-confidence → light depth, low-confidence → full depth.
-    const verifyT0 = Date.now();
     const verifier = new LlmVerifier(params.runner, {
         recordCost: params.recordVerifyCost,
         modelId: params.modelId,
@@ -1391,12 +1470,6 @@ export async function runFinderWithVerify(
     // EVIDENCE GATE (ported from legacy): a finding kept WITHOUT the finder
     // having investigated its file is not trusted blindly — it gets a thorough
     // FULL re-verify, which may then drop it.
-    // The base pass's reads AND every recall pass's (lenses, synthesis): a lens
-    // finding on a file the lens read itself is evidenced.
-    const investigated = new Set([
-        ...strongFilesFromRun(finderState),
-        ...(recall.investigatedFiles ?? []),
-    ]);
     const unevidenced = kept.filter(
         (f) => !fileWasInvestigated(investigated, f.relevantFile),
     );
@@ -1436,47 +1509,18 @@ export async function runFinderWithVerify(
         gateUsage = { ...fullVerifier.usage };
     }
 
-    // Map the generic verdict.toolCalls (name/args/result) into the review
-    // ToolEvidenceSummary (strong=readFile/checkTypes files, weak=grep hits).
-    const evidenceOf = (f: FinderSuggestion): ToolEvidenceSummary =>
-        buildToolEvidenceSummary(
-            (verdictByFinding.get(f)?.toolCalls ?? []).map((tc) => ({
-                tool: tc.name,
-                toolName: tc.name,
-                args: tc.args ?? {},
-                result: tc.result,
-            })),
-        );
-
-    // The harness speaks neutral "candidate"; code-review's own term is "finding".
-    const parseModeOf = (f: FinderSuggestion): VerdictParseMode =>
-        verdictByFinding.get(f)?.parseMode ?? 'default-keep';
-
     return {
-        reasoning,
         kept,
-        keptEvidence: kept.map(evidenceOf),
-        keptParseMode: kept.map(parseModeOf),
-        droppedByVerify: dropped.map((d) => ({
-            finding: d.candidate,
-            evidence: d.verdict.rationale,
-            verifierEvidence: evidenceOf(d.candidate),
-            parseMode: d.verdict.parseMode ?? 'default-keep',
-        })),
-        finderState,
+        dropped,
+        verdictByFinding,
         verifyUsage: sumVerifyUsage(verifier.usage, gateUsage),
-        verifyMs: Date.now() - verifyT0,
-        recallUsage,
-        passStats,
-        shardPlan,
-        scoutFlags,
     };
 }
 
 /** Files the finder actually investigated via readFile/checkTypes — the "strong
  *  evidence" the evidence gate checks. (grep is excluded: a search doesn't prove
  *  the agent read the matched code, matching the legacy strongFiles notion.) */
-function strongFilesFromRun(state: RunState): Set<string> {
+export function strongFilesFromRun(state: RunState): Set<string> {
     const out = new Set<string>();
     for (const step of state.steps) {
         for (const tc of step.message.toolCalls ?? []) {

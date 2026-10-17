@@ -7,7 +7,7 @@ require('tsconfig-paths/register');
  *  judge da metrica. O que sobrar sem par e discordancia real de anotacao. */
 const fs = require('fs');
 const path = require('path');
-const { loadJudgeKey, matchCommentDetailed } = require('./recall-judge');
+const { loadJudgeKey, matchCommentDetailed } = require('./recall-judge-1821');
 const norm = (s) => String(s || '').split(/\s+/).join(' ').toLowerCase();
 (async () => {
     const v1 = JSON.parse(fs.readFileSync(path.join(__dirname, '../benchmark-sets/v001/goldens.json'), 'utf8'));

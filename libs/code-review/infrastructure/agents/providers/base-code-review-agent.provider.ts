@@ -40,7 +40,11 @@ import {
     type AgentProgressEvent,
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { CoverageTier } from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
-import { mapAgentFindings } from '@libs/code-review/infrastructure/agents/collaborators/finding-mapper';
+import {
+    mapAgentFindings,
+    type MappableAgentResult,
+    type MappedFindings,
+} from '@libs/code-review/infrastructure/agents/collaborators/finding-mapper';
 import {
     resolveReviewAgentModel,
     type AgentModelParams,
@@ -708,21 +712,7 @@ export abstract class BaseCodeReviewAgentProvider {
             // re-recorded the same tokens the leaf spans already record, which
             // double-counted the review's cost on the Token Usage screen.
 
-            // Map raw agent findings → CodeSuggestion (path validation,
-            // kody-rule UUID recovery, label/severity). Extracted to FindingMapper.
-            const mapped = mapAgentFindings(agentResult, {
-                changedFiles: input.changedFiles,
-                kodyRules: input.kodyRules,
-                prNumber: input.prNumber,
-                isKodyRules: this.getCategoryLabel() === 'kody_rules',
-                identityName: this.getIdentity().name,
-                labelPolicy: {
-                    categoryLabel: this.getCategoryLabel(),
-                    allowedLabels: this.getAllowedSuggestionLabels(input),
-                    supportsMixed: this.supportsMixedLabels(),
-                },
-                logger: this.agentLogger,
-            });
+            const mapped = this.mapFindings(agentResult, input);
             const suggestions = mapped.suggestions;
             if (mapped.droppedForPath > 0) {
                 agentWarnings.push(
@@ -887,6 +877,31 @@ export abstract class BaseCodeReviewAgentProvider {
             // silently masking real crashes as legitimate "0 suggestions".
             throw error;
         }
+    }
+
+    /**
+     * Map raw agent findings → CodeSuggestion (path validation, kody-rule UUID
+     * recovery, label/severity) under this agent's label policy. Extracted to
+     * FindingMapper; public so the parse eval (evals/parse) maps recorded run
+     * ends the way a review does.
+     */
+    mapFindings(
+        agentResult: MappableAgentResult,
+        input: ReviewAgentInput,
+    ): MappedFindings {
+        return mapAgentFindings(agentResult, {
+            changedFiles: input.changedFiles,
+            kodyRules: input.kodyRules,
+            prNumber: input.prNumber,
+            isKodyRules: this.getCategoryLabel() === 'kody_rules',
+            identityName: this.getIdentity().name,
+            labelPolicy: {
+                categoryLabel: this.getCategoryLabel(),
+                allowedLabels: this.getAllowedSuggestionLabels(input),
+                supportsMixed: this.supportsMixedLabels(),
+            },
+            logger: this.agentLogger,
+        });
     }
 
     /** Subclass-specific bits the (pure) prompt builders need. */

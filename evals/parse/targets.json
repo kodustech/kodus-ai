@@ -1,0 +1,21 @@
+{
+    "__doc": [
+        "Floors per model for the share of written findings the parse handles right on cases.json (run.js --gate), as ratios.",
+        "eval-fake (the wiring smoke, every PR): deterministic, since prose recovery returns a finding on no changed file and the rest replays recorded output. Two runs of main 4b5c881cd gave the same count on every case. floor = observed rounded down to 3 decimals, so a PR that loses one more finding fails.",
+        "Under it, main loses every finding in 10 of the 12 #2112 shapes that need no model call (shapes.js), which is why the value is low; the fix for #2112 raises it.",
+        "deepseek-v4-flash@fireworks (the nightly model; prose recovery is the only part that varies): calibrated 2026-10-15 from 2 local runs on 4b5c881cd, 377 and 369 of 830 (mean 44.9%). floor = mean - 2 binomial SE over the 830 findings, rounded down, like evals/reply-addressing/targets.json.",
+        "2026-10-16: a run end with no call and no text (3 of them) now counts as a check that nothing comes out. Recovery skips an empty end without a model call (looksLikeFindings, libs/code-review/infrastructure/agents/core/finder.agent.ts:442), so each passes on every model. eval-fake: two runs, 334 of 833 each. deepseek: the runs above become 380 and 372 of 833 (mean 45.1%); the floor stays.",
+        "2026-10-16, production's parse path (run state through the runner's eventToMessage/materializeArtifacts, recovery on the recorded run's slot, the generalist's mapFindings over the PR's files as the platform lists them): a model now replays only the runs recorded on it, since production recovers a run's prose on the slot it ended on. eval-fake replays all 168 cases and gave 334 of 833 on two runs, every item as before (old against new, item by item): the floor stands. deepseek-v4-flash@fireworks replays its own 19 cases (71 findings): two runs on 8b8eec46f plus this change, 33 and 33 of 71, every case equal in both (paired per-case difference 0). floor = mean - 2 binomial SE over the 71 findings, rounded down: 0.465 - 0.118 = 0.34. Deliberate break (extractFindings ignoring the submitResult artifact, local only): eval-fake 72 of 833, --gate exit 1.",
+        "RATCHET: a PR that moves the value on purpose (a parse fix, payloads recorded again, new labels) recalibrates here in the same PR, with its runs as evidence."
+    ],
+    "models": {
+        "eval-fake": {
+            "floor": 0.4,
+            "observed": 0.401
+        },
+        "deepseek-v4-flash@fireworks": {
+            "floor": 0.34,
+            "observed": 0.465
+        }
+    }
+}

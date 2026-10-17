@@ -8,6 +8,7 @@ import { kodyRulesRecommendationSchema } from '@libs/common/utils/prompts/kodyRu
 import { compilerOutputSchema } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
 import { decomposeOutputSchema } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
 import { shardViolationsWireSchema } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
+import { REPEAT_CHECK_SCHEMA } from '@libs/code-review/infrastructure/agents/engine/repeat-check';
 
 // Phase 3 consumer-migration call sites — schemas defined INLINE in the
 // consumer files (now exported so this governance suite can prove them
@@ -290,6 +291,10 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
             'shardViolationsWireSchema (sharded kody-rules judge)',
             shardViolationsWireSchema,
         ],
+        [
+            'REPEAT_CHECK_SCHEMA (repeat check, via jsonSchema())',
+            { jsonSchema: REPEAT_CHECK_SCHEMA },
+        ],
     ];
 
     it.each(passThroughWireSchemas)(
@@ -324,6 +329,7 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         // Phase 3b: withStructuredOutputFallback → LLM.run migrations.
         'libs/code-review/infrastructure/agents/core/finder.agent.ts', // RECOVERY_SCHEMA (zod)
         'libs/code-review/pipeline/stages/agent-review.stage.ts', // DEDUP_SCHEMA, DEDUP_TIEBREAK_SCHEMA via jsonSchema() — AI-SDK Schema, passes through untouched (exempt from strict-wire conversion)
+        'libs/code-review/infrastructure/agents/engine/repeat-check.ts', // REPEAT_CHECK_SCHEMA via jsonSchema(), pass-through, born strict (#2097)
         // Second-doors → LLM.run migration.
         'libs/cli-review/infrastructure/services/public-pr-grouping.service.ts', // GroupingSchema — all-required zod (no `.optional()`), so strict-wire conversion is a no-op; public-demo path on a fixed Gemini default, never OpenAI-strict.
         // Finder side passes (#1821), inline zod schemas.

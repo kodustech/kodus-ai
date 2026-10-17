@@ -58,7 +58,7 @@ function evaluateGate(summary, rows, model, setName) {
             return tp + fp;
         }),
     );
-    const meanToolCalls = avg(rows.map((row) => row.metadata?.totalCalls));
+    const meanToolCalls = avg(rows.map((row) => row.metadata?.toolCalls));
 
     const checks = [
         {

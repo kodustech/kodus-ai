@@ -51,7 +51,7 @@ const setIds = setName
     ? new Set(
           [
               ...require('fs')
-                  .readFileSync(path.join(__dirname, 'recall-tests.js'), 'utf8')
+                  .readFileSync(path.join(__dirname, 'recall-tests-1821.js'), 'utf8')
                   .match(
                       new RegExp(`${setName.toUpperCase()}_CASES\\s*=\\s*\\[([\\s\\S]*?)\\]`),
                   )[1]

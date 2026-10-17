@@ -123,7 +123,7 @@ Answer every index exactly once.`;
     }
     let alvo = v2.prs.filter((p) => (p.comments || []).length);
     if (SET) {
-        const src = fs.readFileSync(path.join(__dirname, 'recall-tests.js'), 'utf8');
+        const src = fs.readFileSync(path.join(__dirname, 'recall-tests-1821.js'), 'utf8');
         const b = src.match(new RegExp(`${SET.toUpperCase()}_CASES\\s*=\\s*\\[([\\s\\S]*?)\\]`));
         const ids = new Set([...b[1].matchAll(/'([^']+)'/g)].map((m) => m[1]));
         alvo = alvo.filter((p) => ids.has(p.caseId));

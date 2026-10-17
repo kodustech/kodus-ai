@@ -517,8 +517,10 @@ function sanitizeNoSystem(messages: ModelMessage[]): ModelMessage[] {
  *  becomes an Artifact, in step order, so the LAST one is the run's final
  *  structured output. The domain reads RunState.artifacts instead of re-scanning
  *  steps by hand — this is the gap the Artifact type promised but never filled.
- *  No resultToolName (or no matching call) -> [] (honest: nothing to capture). */
-function materializeArtifacts(
+ *  No resultToolName (or no matching call) -> [] (honest: nothing to capture).
+ *  Exported, with eventToMessage, for the parse eval (evals/parse), which
+ *  rebuilds a run's state from recorded model responses. */
+export function materializeArtifacts(
     steps: readonly RunStep[],
     resultToolName: string | undefined,
     stage: string,
@@ -602,7 +604,7 @@ function toAgentMessage(m: ModelMessage): AgentMessage {
 function toModelMessage(m: AgentMessage): ModelMessage {
     return { role: m.role, content: m.content } as ModelMessage;
 }
-function eventToMessage(event: any): AgentMessage {
+export function eventToMessage(event: any): AgentMessage {
     return {
         role: 'assistant',
         content: typeof event?.text === 'string' ? event.text : '',

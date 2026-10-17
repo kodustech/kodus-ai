@@ -19,7 +19,7 @@ const setName = (args.find((a) => a.startsWith('--set=')) || '--set=light').spli
 const only = (args.find((a) => a.startsWith('--case=')) || '').split('=')[1];
 
 function caseIdsFor(name) {
-    const src = fs.readFileSync(path.join(__dirname, 'recall-tests.js'), 'utf8');
+    const src = fs.readFileSync(path.join(__dirname, 'recall-tests-1821.js'), 'utf8');
     const key = `${name.toUpperCase()}_CASES`;
     const block = src.match(new RegExp(`${key}\\s*=\\s*\\[([\\s\\S]*?)\\]`));
     if (!block) throw new Error(`no ${key} in recall-tests.js`);

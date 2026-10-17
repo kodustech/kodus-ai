@@ -55,7 +55,7 @@ echo "grafo     ${RECALL_MICRO_GRAPH:+LIGADO no prompt dos agentes}${RECALL_MICR
 echo
 
 mkdir -p "$POOL"
-node "$AQUI/run-recall.js" --model "$MODELO" \
+node "$AQUI/run-recall-1821.js" --model "$MODELO" \
     --output "$AQUI/results/run-$NOME.json" 2>&1 | tee "$AQUI/results/run-$NOME.log"
 
 echo

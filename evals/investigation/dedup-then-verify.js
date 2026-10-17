@@ -33,7 +33,7 @@ const path = require('path');
 const { generateText, tool, jsonSchema } = require('ai');
 const { runDedup } = require('../dedup/dedup-runner');
 const { buildModel, descreveModelo } = require('./eval-model');
-const { loadJudgeKey, matchCommentDetailed } = require('./recall-judge');
+const { loadJudgeKey, matchCommentDetailed } = require('./recall-judge-1821');
 const { prepareRepo } = require('./prepare-repo');
 const {
     buildFeasibilityVerifierPrompt,

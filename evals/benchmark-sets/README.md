@@ -1,5 +1,11 @@
 # Benchmark sets (versioned)
 
+> - **Answers:** Nothing on its own: it holds the frozen golden-comment versions results were scored against.
+> - **Runs:** never; scripts read a version from here.
+> - **Run it:** not runnable; pick a version folder and pass it to the scorer.
+> - **Gate:** none.
+> - **Cost:** none.
+
 This folder holds the **golden comments**: the list of bugs a review is expected to find in each PR. It is the answer key every result is measured against.
 
 Each version is a frozen folder (`v001`, `v002`, ...). Once created, **it is never edited**. If the answer key changes, create the next version.

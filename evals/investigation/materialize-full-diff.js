@@ -49,7 +49,7 @@ const SET = arg('set', 'light');
 const ONLY = arg('case');
 
 function caseIds(name) {
-    const src = fs.readFileSync(path.join(__dirname, 'recall-tests.js'), 'utf8');
+    const src = fs.readFileSync(path.join(__dirname, 'recall-tests-1821.js'), 'utf8');
     const block = src.match(
         new RegExp(`${name.toUpperCase()}_CASES\\s*=\\s*\\[([\\s\\S]*?)\\]`),
     );

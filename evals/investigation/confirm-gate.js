@@ -1,24 +1,25 @@
 #!/usr/bin/env node
 // Confirms a nightly that went below its floor before anyone is alerted.
 //
-// One 30-PR run can land under the floor by noise alone. When the first run
+// One run can land under the floor by noise alone. When the first run
 // fails the gate, the nightly measures the same commit again and this script
 // decides on the MEAN of the two runs: false alarms nearly vanish, and a real
 // drop still shows. It writes one combined result in run-recall's shape, so
 // the report and the investigation read it like any other night.
 //
-//   node evals/investigation/confirm-gate.js <first.json> <second.json> --out=<combined.json> [--set=light]
+//   node evals/investigation/confirm-gate.js <first.json> <second.json> --out=<combined.json> [--set=controlled]
 //
 // Exit: 0 the drop did not hold (oscillation) / 1 confirmed below the floor /
 // 2 the confirmation could not measure (infra), so nothing is confirmed.
 const fs = require('fs');
 const { evaluateGate, avg } = require('./gate');
+const { poolTokens } = require('../shared/eval-result');
 
-const MEANS = ['recall', 'precision', 'f1', 'fairRecall', 'hitRate', 'totalCalls', 'tpFindings', 'fpFindings'];
+const MEANS = ['recall', 'loopRecall', 'precision', 'f1', 'toolCalls', 'tpFindings', 'fpFindings'];
 
 // The summary field each per-case metric feeds (run-recall.js builds the same
 // means from the same rows).
-const SUMMARY_OF = { recall: 'recall_mean', precision: 'precision_mean', f1: 'f1_mean', fairRecall: 'fair_recall_mean', hitRate: 'fidelity_mean' };
+const SUMMARY_OF = { recall: 'recall_mean', loopRecall: 'loop_recall_mean', precision: 'precision_mean', f1: 'f1_mean' };
 
 function combineRow(a, b) {
     if (!b || b.status === 'infra' || !b.metadata) return a;
@@ -67,6 +68,7 @@ function combineRuns(first, second, gateFor) {
             prompt: (first.tokens?.prompt || 0) + (second.tokens?.prompt || 0),
             completion: (first.tokens?.completion || 0) + (second.tokens?.completion || 0),
         },
+        ...(first.usage || second.usage ? { usage: poolTokens(first.usage, second.usage) } : {}),
         cases: rows.length,
         passed: rows.filter((row) => row.status === 'pass').length,
         failed: rows.filter((row) => row.status === 'fail').length,
@@ -113,7 +115,7 @@ function main() {
         console.error(`confirmation did not measure: ${reason}`);
         return 2;
     }
-    const setName = (process.argv.find((a) => a.startsWith('--set=')) || '--set=light').slice(6);
+    const setName = (process.argv.find((a) => a.startsWith('--set=')) || '--set=controlled').slice(6);
     const combined = combineRuns(first, second, (summary, rows) => evaluateGate(summary, rows, first.model, setName));
     // The confirmation scored none of the PRs the first run scored (every case
     // failed to parse, say). There is nothing to confirm WITH, and deciding on
