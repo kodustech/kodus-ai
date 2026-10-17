@@ -54,9 +54,26 @@ async function ensureBare(dir) {
     await git(dir, ['config', 'uploadpack.allowAnySHA1InWant', 'true']);
 }
 
+const FETCH_TRIES = 3;
+const FETCH_BACKOFF_MS = 15_000;
+
 async function fetchInto(dir, upstream, source, ref, sha) {
     if (await hasRef(dir, ref, sha)) return;
-    await git(dir, ['fetch', '-q', '--depth=1', upstream, `+${source}:${ref}`]);
+    // GitHub drops some fetches when a night's jobs clone the same repositories
+    // at once (seen on CI runners, never locally): two more tries, further apart,
+    // before the case counts as not measured.
+    for (let attempt = 1; ; attempt++) {
+        try {
+            await git(dir, ['fetch', '-q', '--depth=1', upstream, `+${source}:${ref}`]);
+            break;
+        } catch (error) {
+            // What git said, first: the caller keeps only the start of the message.
+            const said = String(error.stderr || '').trim().split('\n').slice(-3).join(' | ');
+            if (attempt >= FETCH_TRIES) throw new Error(`git fetch ${source} failed ${attempt} times: ${said || error.message} (${upstream})`);
+            console.error(`git fetch ${source} from ${upstream}, try ${attempt}: ${said || error.message}`);
+            await new Promise((resolve) => setTimeout(resolve, attempt * FETCH_BACKOFF_MS));
+        }
+    }
     if (sha && !(await hasRef(dir, ref, sha))) {
         const { stdout } = await git(dir, ['rev-parse', ref]);
         throw new Error(`${upstream} ${source} is ${stdout.trim()}, the case reviews ${sha}`);
