@@ -20,6 +20,7 @@ import { toast } from "@components/ui/toaster/use-toast";
 import {
     CUSTOM_AGENT_LIMITS,
     isLinked,
+    normalizeKnowledgePath,
     setKnowledgeLink,
 } from "@services/custom-agents/drafts";
 import { useResolveCustomAgent } from "@services/custom-agents/hooks";
@@ -67,8 +68,16 @@ function SkillsContent() {
         discover: true,
         enabled,
     });
+    const isGlobal = repositoryId === "global";
     const knowledgeReport =
         report.data?.knowledge.status === "ok" ? report.data.knowledge : null;
+    const branchLine = knowledgeReport
+        ? `On ${report.data?.repository.branch}.`
+        : report.isLoading
+          ? "Reading the default branch…"
+          : report.isError
+            ? "Couldn't read the repository right now."
+            : "";
     const registered = new Set(knowledge.map((item) => item.path));
     const candidates = (knowledgeReport?.candidates ?? []).filter(
         (candidate) => !registered.has(candidate.path),
@@ -161,9 +170,10 @@ function SkillsContent() {
                         Skills &amp; docs <Badge>Beta</Badge>
                     </Page.Title>
                     <Page.Description>
-                        Guides that live in the repository, registered once and
-                        linked to the main review or to agents. Read from each
-                        pull request&apos;s target branch; skills open on
+                        Guides that live in the repository, linked here to the
+                        main review, with who follows what. Each custom agent
+                        picks its own on its row in What to review. Read from
+                        each pull request&apos;s target branch; skills open on
                         demand, docs load whole, scripts never run.
                     </Page.Description>
                 </Page.TitleContainer>
@@ -179,27 +189,30 @@ function SkillsContent() {
             <Page.Content className="gap-6">
                 <CentralizedConfigReadOnlyAlert />
 
-                {report.data?.knowledge.status === "unavailable" && (
-                    <p className="text-warning text-sm">
-                        {report.data.knowledge.reason}
-                    </p>
-                )}
-                {repositoryId === "global" && (
+                {isGlobal ? (
                     <p className="text-text-secondary text-sm">
-                        Paths are checked against a repository: open a
-                        repository&apos;s settings to see whether each one
-                        exists and validates.
+                        Skills and docs are files of each repository, so they
+                        are read per repository. Paths added here apply to every
+                        repository; open a repository&apos;s settings to see
+                        whether each one exists there.
                     </p>
+                ) : (
+                    report.data?.knowledge.status === "unavailable" && (
+                        <p className="text-warning text-sm">
+                            {report.data.knowledge.reason}
+                        </p>
+                    )
                 )}
 
                 <Card color="lv1" className="flex flex-col gap-3 px-5 py-4">
                     <span className="text-text-primary text-sm font-medium">
-                        Registered
+                        Added, and who follows each
                     </span>
                     {knowledge.length === 0 && (
                         <p className="text-text-secondary text-xs">
-                            Nothing registered. Pick from what was found below,
-                            or add a path.
+                            {isGlobal
+                                ? "Nothing yet. Add a path below."
+                                : "Nothing yet. Pick from what was found below, or add a path."}
                         </p>
                     )}
                     {knowledge.map((item) => {
@@ -320,22 +333,25 @@ function SkillsContent() {
                 <Card color="lv1" className="flex flex-col gap-3 px-5 py-4">
                     <span className="flex flex-col">
                         <span className="text-text-primary text-sm font-medium">
-                            Found in the repository
+                            {isGlobal
+                                ? "Add by path"
+                                : "Found in the repository"}
                         </span>
                         <span className="text-text-secondary text-xs">
-                            {report.data
-                                ? `On ${report.data.repository.branch}.`
-                                : "Reading the default branch…"}{" "}
-                            Skills are folders with a SKILL.md; docs are
-                            Markdown guides.
+                            {isGlobal ? "" : `${branchLine} `}Skills are folders
+                            with a SKILL.md; docs are Markdown guides.
                         </span>
                     </span>
-                    {report.isLoading && <Spinner className="size-4" />}
-                    {knowledgeReport && candidates.length === 0 && (
-                        <p className="text-text-secondary text-xs">
-                            Nothing new found.
-                        </p>
+                    {!isGlobal && report.isLoading && (
+                        <Spinner className="size-4" />
                     )}
+                    {!isGlobal &&
+                        knowledgeReport &&
+                        candidates.length === 0 && (
+                            <p className="text-text-secondary text-xs">
+                                Nothing new found.
+                            </p>
+                        )}
                     {candidates.map((candidate) => (
                         <div
                             key={candidate.path}
@@ -366,15 +382,21 @@ function SkillsContent() {
                                 leftIcon={<PlusIcon />}
                                 disabled={!canEdit}
                                 onClick={() => register(candidate)}>
-                                Register
+                                Add
                             </Button>
                         </div>
                     ))}
 
-                    <div className="border-card-lv3/60 flex items-center gap-2 border-t pt-3">
+                    <div
+                        className={
+                            isGlobal
+                                ? "flex items-center gap-2"
+                                : "border-card-lv3/60 flex items-center gap-2 border-t pt-3"
+                        }>
                         <div className="min-w-0 flex-1">
                             <Input
                                 size="md"
+                                aria-label="Path of a doc or skill"
                                 placeholder="Path, e.g. docs/payments.md or .claude/skills/ledger"
                                 value={path}
                                 disabled={!canEdit}
@@ -399,7 +421,7 @@ function SkillsContent() {
                             disabled={!canEdit || !path.trim()}
                             onClick={() => {
                                 register({
-                                    path: path.trim().replace(/^\/+/, ""),
+                                    path: normalizeKnowledgePath(path),
                                     kind,
                                 });
                                 setPath("");

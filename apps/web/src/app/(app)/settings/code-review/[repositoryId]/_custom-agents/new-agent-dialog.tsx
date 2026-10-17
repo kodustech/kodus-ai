@@ -36,9 +36,12 @@ import { agentPageHref, useCustomAgentsForm } from "./use-custom-agents-form";
 export const NewAgentDialog = ({
     open,
     onOpenChange,
+    onCreated,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    /** Where the new agent opens; its full page when not given. */
+    onCreated?: (agentId: string) => void;
 }) => {
     const router = useRouter();
     const {
@@ -79,7 +82,9 @@ export const NewAgentDialog = ({
                 knowledge: nextKnowledge,
             });
             onOpenChange(false);
-            router.push(agentPageHref(repositoryId, agent.id, directoryId));
+            if (onCreated) onCreated(agent.id);
+            else
+                router.push(agentPageHref(repositoryId, agent.id, directoryId));
         } catch (error) {
             console.error("Error creating custom agent:", error);
             toast({
@@ -106,8 +111,8 @@ export const NewAgentDialog = ({
                     <DialogTitle>New agent</DialogTitle>
                     <DialogDescription>
                         It comments on the next pull request its files match.
-                        Switch it to Shadow to keep its findings unposted
-                        while you try it.
+                        Switch it to Shadow to keep its findings unposted while
+                        you try it.
                     </DialogDescription>
                 </DialogHeader>
 
