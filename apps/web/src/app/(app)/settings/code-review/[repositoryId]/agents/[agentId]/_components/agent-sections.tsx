@@ -1,0 +1,414 @@
+"use client";
+
+import { Input } from "@components/ui/input";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@components/ui/select";
+import TagInput from "@components/ui/tag-input";
+import { Textarea } from "@components/ui/textarea";
+import {
+    CUSTOM_AGENT_LIMITS,
+    TAG_COLORS,
+} from "@services/custom-agents/drafts";
+import type {
+    CustomAgent,
+    CustomAgentPresentation,
+    CustomAgentResolveReport,
+    CustomAgentSeverity,
+    KnowledgeItem,
+} from "@services/custom-agents/types";
+import { getBYOK } from "@services/organizationParameters/fetch";
+import { useQuery } from "@tanstack/react-query";
+import { cn } from "src/core/utils/components";
+import type { BYOKConfig } from "src/features/ee/byok/_types";
+
+import { Chip, Choice, Field, Section } from "./field";
+
+type Patch = (patch: (agent: CustomAgent) => CustomAgent) => void;
+
+export const WhatItDoes = ({
+    agent,
+    knowledge,
+    report,
+    canEdit,
+    onChange,
+}: {
+    agent: CustomAgent;
+    knowledge: KnowledgeItem[];
+    report?: CustomAgentResolveReport;
+    canEdit: boolean;
+    onChange: Patch;
+}) => {
+    const linked = knowledge.filter((item) =>
+        item.linkedTo.some(
+            (target) =>
+                typeof target === "object" && target.agentId === agent.id,
+        ),
+    );
+    const skills = linked.filter((item) => item.kind === "skill").length;
+    const docs = linked.filter((item) => item.kind === "doc").length;
+    const mcpTools = (agent.tools.mcp ?? []).reduce(
+        (total, entry) => total + entry.tools.length,
+        0,
+    );
+    const clis = agent.tools.cli?.length ?? 0;
+    const rules = report?.astGrep.ruleCount ?? 0;
+
+    return (
+        <Section
+            title="What this agent does"
+            description="Write it like a brief to a reviewer who knows the codebase: what to look for, what to ignore, and what proof a finding needs.">
+            <Field label="Name" htmlFor="agent-name">
+                <Input
+                    id="agent-name"
+                    size="md"
+                    value={agent.name}
+                    disabled={!canEdit}
+                    maxLength={60}
+                    onChange={(e) =>
+                        onChange((current) => ({
+                            ...current,
+                            name: e.target.value,
+                        }))
+                    }
+                />
+            </Field>
+            <Field
+                label="Instructions"
+                htmlFor="agent-instructions"
+                hint={`${agent.instructions.length} / ${CUSTOM_AGENT_LIMITS.maxInstructionsLength}`}>
+                <Textarea
+                    id="agent-instructions"
+                    className="min-h-40 font-mono text-xs"
+                    value={agent.instructions}
+                    disabled={!canEdit}
+                    maxLength={CUSTOM_AGENT_LIMITS.maxInstructionsLength}
+                    onChange={(e) =>
+                        onChange((current) => ({
+                            ...current,
+                            instructions: e.target.value,
+                        }))
+                    }
+                />
+            </Field>
+            <div className="flex flex-wrap gap-1.5">
+                <Chip>
+                    {skills} {skills === 1 ? "skill" : "skills"}
+                </Chip>
+                <Chip>
+                    {docs} {docs === 1 ? "doc" : "docs"}
+                </Chip>
+                {agent.tools.astGrepConfig?.trim() && (
+                    <Chip>
+                        ast-grep · {rules} {rules === 1 ? "rule" : "rules"}
+                    </Chip>
+                )}
+                {mcpTools > 0 && <Chip>{mcpTools} MCP tools</Chip>}
+                {clis > 0 && (
+                    <Chip>
+                        {clis} {clis === 1 ? "CLI" : "CLIs"}
+                    </Chip>
+                )}
+                <Chip>
+                    {agent.presentation.mode === "shadow" ? "Shadow" : "Posts"}
+                </Chip>
+            </div>
+        </Section>
+    );
+};
+
+export const RunsOn = ({
+    agent,
+    canEdit,
+    onChange,
+}: {
+    agent: CustomAgent;
+    canEdit: boolean;
+    onChange: Patch;
+}) => (
+    <Section
+        title="Runs on"
+        description="Globs over the files a pull request changes. The agent runs only when one matches; with no include it runs on every pull request.">
+        <Field label="Include" hint="e.g. src/payments/**, **/*.sql">
+            <TagInput
+                tags={agent.scope.include ?? []}
+                disabled={!canEdit}
+                placeholder="Add a glob and press Enter"
+                onTagsChange={(include) =>
+                    onChange((current) => ({
+                        ...current,
+                        scope: { ...current.scope, include },
+                    }))
+                }
+            />
+        </Field>
+        <Field label="Exclude" hint="e.g. **/*.test.ts, **/generated/**">
+            <TagInput
+                tags={agent.scope.exclude ?? []}
+                disabled={!canEdit}
+                placeholder="Add a glob and press Enter"
+                onTagsChange={(exclude) =>
+                    onChange((current) => ({
+                        ...current,
+                        scope: { ...current.scope, exclude },
+                    }))
+                }
+            />
+        </Field>
+    </Section>
+);
+
+const SEVERITIES: Array<{ value: CustomAgentSeverity | "any"; label: string }> =
+    [
+        { value: "any", label: "Any" },
+        { value: "low", label: "Low" },
+        { value: "medium", label: "Medium" },
+        { value: "high", label: "High" },
+        { value: "critical", label: "Critical" },
+    ];
+
+export const HowItComments = ({
+    agent,
+    canEdit,
+    onChange,
+}: {
+    agent: CustomAgent;
+    canEdit: boolean;
+    onChange: Patch;
+}) => {
+    const set = (patch: Partial<CustomAgentPresentation>) =>
+        onChange((current) => ({
+            ...current,
+            presentation: { ...current.presentation, ...patch },
+        }));
+    const presentation = agent.presentation;
+
+    return (
+        <Section
+            title="How it comments"
+            description="Comments carry the agent's tag, so the team knows who is speaking.">
+            <Field label="Tag">
+                <div className="flex items-center gap-3">
+                    <span
+                        className="inline-flex h-6 items-center rounded px-2 text-xs font-medium text-white"
+                        style={{ backgroundColor: presentation.tag.color }}>
+                        {agent.name || "Agent"}
+                    </span>
+                    <div className="flex gap-1.5">
+                        {TAG_COLORS.map((color) => (
+                            <button
+                                key={color}
+                                type="button"
+                                aria-label={`Tag color ${color}`}
+                                disabled={!canEdit}
+                                onClick={() => set({ tag: { color } })}
+                                className={cn(
+                                    "size-5 rounded-full ring-offset-2 transition",
+                                    presentation.tag.color === color &&
+                                        "ring-text-primary ring-2",
+                                )}
+                                style={{ backgroundColor: color }}
+                            />
+                        ))}
+                    </div>
+                </div>
+            </Field>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Field label="Mode">
+                    <Choice
+                        value={presentation.mode}
+                        disabled={!canEdit}
+                        onChange={(mode) => set({ mode })}
+                        options={[
+                            { value: "shadow", label: "Shadow" },
+                            { value: "post", label: "Post" },
+                        ]}
+                    />
+                </Field>
+                <Field label="Format">
+                    <Choice
+                        value={presentation.format}
+                        disabled={!canEdit}
+                        onChange={(format) => set({ format })}
+                        options={[
+                            { value: "inline", label: "Inline comments" },
+                            {
+                                value: "single-comment",
+                                label: "One PR comment",
+                            },
+                        ]}
+                    />
+                </Field>
+                <Field label="Minimum severity">
+                    <Select
+                        value={presentation.minSeverity ?? "any"}
+                        disabled={!canEdit}
+                        onValueChange={(value) =>
+                            set({
+                                minSeverity:
+                                    value === "any"
+                                        ? undefined
+                                        : (value as CustomAgentSeverity),
+                            })
+                        }>
+                        <SelectTrigger size="md">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {SEVERITIES.map((severity) => (
+                                <SelectItem
+                                    key={severity.value}
+                                    value={severity.value}>
+                                    {severity.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </Field>
+                <Field
+                    label="Max comments per pull request"
+                    htmlFor="agent-max-comments"
+                    hint="Empty for no limit">
+                    <Input
+                        id="agent-max-comments"
+                        size="md"
+                        type="number"
+                        min={1}
+                        disabled={!canEdit}
+                        value={presentation.maxComments ?? ""}
+                        onChange={(e) => {
+                            const value = Number.parseInt(e.target.value, 10);
+                            set({
+                                maxComments:
+                                    Number.isFinite(value) && value > 0
+                                        ? value
+                                        : undefined,
+                            });
+                        }}
+                    />
+                </Field>
+                <Field label="Suggested fix">
+                    <Choice
+                        value={presentation.suggestedFix}
+                        disabled={!canEdit}
+                        onChange={(suggestedFix) => set({ suggestedFix })}
+                        options={[
+                            {
+                                value: "when-confident",
+                                label: "When confident",
+                            },
+                            { value: "never", label: "Never" },
+                        ]}
+                    />
+                </Field>
+            </div>
+
+            <Field
+                label="Writing"
+                htmlFor="agent-writing"
+                hint="Tone, length, language, what every comment must say. Optional.">
+                <Textarea
+                    id="agent-writing"
+                    className="min-h-20 text-sm"
+                    value={presentation.writing ?? ""}
+                    disabled={!canEdit}
+                    maxLength={CUSTOM_AGENT_LIMITS.maxWritingLength}
+                    onChange={(e) =>
+                        set({ writing: e.target.value || undefined })
+                    }
+                />
+            </Field>
+        </Section>
+    );
+};
+
+const ROUTING_DEFAULT = "__routing";
+
+export const Models = ({
+    agent,
+    canEdit,
+    onChange,
+}: {
+    agent: CustomAgent;
+    canEdit: boolean;
+    onChange: Patch;
+}) => {
+    const byok = useQuery({
+        queryKey: ["custom-agents-byok-models"],
+        queryFn: async () => ((await getBYOK()) ?? null) as BYOKConfig | null,
+        staleTime: 5 * 60 * 1000,
+        retry: false,
+    });
+    const models = byok.data?.models ?? [];
+    const routing = byok.data?.routing;
+    const labelOf = (id?: string) =>
+        models.find((model) => model.id === id)?.model;
+    const routed = (task: "customAgent" | "customAgentCheck") =>
+        labelOf(routing?.taskOverrides?.[task] ?? routing?.defaultModelId);
+
+    const pick = (key: "run" | "check") => (value: string) =>
+        onChange((current) => {
+            const next = { ...(current.models ?? {}) };
+            if (value === ROUTING_DEFAULT) delete next[key];
+            else next[key] = value;
+            return {
+                ...current,
+                models: Object.keys(next).length ? next : undefined,
+            };
+        });
+
+    const selector = (
+        key: "run" | "check",
+        task: "customAgent" | "customAgentCheck",
+    ) => (
+        <Select
+            value={agent.models?.[key] ?? ROUTING_DEFAULT}
+            disabled={!canEdit || !models.length}
+            onValueChange={pick(key)}>
+            <SelectTrigger size="md">
+                <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value={ROUTING_DEFAULT}>
+                    Routing default
+                    {routed(task) ? ` (${routed(task)})` : ""}
+                </SelectItem>
+                {models.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                        {model.model}
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    );
+
+    return (
+        <Section
+            title="Models"
+            description="By default the routing table decides, under Custom Agents and Custom Agents (check). Pin a model here to override it for this agent only.">
+            {!byok.isLoading && !models.length && (
+                <p className="text-text-secondary text-xs">
+                    No BYOK models configured: the agent uses Kodus&apos;s
+                    models.
+                </p>
+            )}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Field
+                    label="Run"
+                    hint="Reads the change, calls tools and writes findings.">
+                    {selector("run", "customAgent")}
+                </Field>
+                <Field
+                    label="Check"
+                    hint="Judges each finding before it is kept.">
+                    {selector("check", "customAgentCheck")}
+                </Field>
+            </div>
+        </Section>
+    );
+};
