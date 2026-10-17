@@ -55,7 +55,10 @@ export type ReviewWarningKind =
     /** A skill body or the linked docs were cut to fit their budget. */
     | 'KNOWLEDGE_TRUNCATED'
     /** A skill declares requirements the reviewer may not meet. */
-    | 'SKILL_COMPATIBILITY';
+    | 'SKILL_COMPATIBILITY'
+    /** A custom agent's CLI could not be installed or fenced in the sandbox,
+     *  so the agent ran without that tool. */
+    | 'CLI_INSTALL_FAILED';
 
 export type ReviewWarningReason =
     | 'small_context_window'
@@ -79,7 +82,9 @@ export type ReviewWarningReason =
     /** The verifier's model call failed (provider error, 429, abort). */
     | 'verify_failed'
     /** A linked skill or doc could not be used as configured. */
-    | 'knowledge';
+    | 'knowledge'
+    /** A custom agent CLI failed its install or network fence. */
+    | 'cli_install_failed';
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;
@@ -198,6 +203,21 @@ export function buildVerifyUnavailableWarning(params: {
         contextWindowTokens: 0,
         modelName: params.modelName,
         detail: `${params.agentName}: ${params.count} finding(s) not posted because their verification failed to run`,
+        agentName: params.agentName,
+    };
+}
+
+export function buildCliInstallFailedWarning(params: {
+    agentName: string;
+    cliName: string;
+    reason: string;
+}): ReviewWarning {
+    return {
+        kind: 'CLI_INSTALL_FAILED',
+        reason: 'cli_install_failed',
+        contextWindowTokens: 0,
+        modelName: '',
+        detail: `${params.agentName}: CLI "${params.cliName}" unavailable (${params.reason}); the agent ran without it`,
         agentName: params.agentName,
     };
 }

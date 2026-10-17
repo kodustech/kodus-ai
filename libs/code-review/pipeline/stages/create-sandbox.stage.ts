@@ -1,6 +1,16 @@
 import { CloneParamsResolverService } from '../services/clone-params-resolver.service';
 import { createLogger } from '@libs/core/log/logger';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { FeatureGateService, FEATURE_KEYS } from '@libs/feature-gate';
+import {
+    IOrganizationService,
+    ORGANIZATION_SERVICE_TOKEN,
+} from '@libs/organization/domain/organization/contracts/organization.service.contract';
+import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import {
+    CustomAgentCliProvisioning,
+    provisionCustomAgentClis,
+} from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
 
 import {
     ISandboxLeaseManager,
@@ -45,6 +55,13 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
         @Inject(SANDBOX_LEASE_MANAGER_TOKEN)
         private readonly leaseManager: ISandboxLeaseManager,
         private readonly cloneParamsResolver: CloneParamsResolverService,
+        // Optional so specs that build the stage by hand keep compiling;
+        // without them no team CLI is installed.
+        @Optional()
+        private readonly featureGate?: FeatureGateService,
+        @Optional()
+        @Inject(ORGANIZATION_SERVICE_TOKEN)
+        private readonly organizationService?: IOrganizationService,
     ) {
         super();
     }
@@ -167,8 +184,13 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                 },
             });
 
+            const customAgentClis = isCliMode
+                ? undefined
+                : await this.provisionCustomAgentClis(context, sandbox);
+
             return this.updateContext(context, (draft) => {
                 draft.sandboxHandle = sandbox;
+                if (customAgentClis) draft.customAgentClis = customAgentClis;
                 draft.getFreshCloneParams = async () => {
                     const freshCloneInfo =
                         await this.cloneParamsResolver.resolve(
@@ -224,6 +246,69 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                 },
             });
             return context;
+        }
+    }
+
+    /**
+     * Install the team CLIs of the custom agents that will run (#2172), before
+     * any agent or secret touches the sandbox. Only on E2B and only for orgs
+     * with the feature on; a failure here never fails the review.
+     */
+    private async provisionCustomAgentClis(
+        context: CodeReviewPipelineContext,
+        sandbox: SandboxInstance,
+    ): Promise<CustomAgentCliProvisioning | undefined> {
+        const agents = context.codeReviewConfig?.customAgents ?? [];
+        if (
+            sandbox.type !== 'e2b' ||
+            !this.featureGate ||
+            !agents.some((agent) => agent?.enabled && agent.tools?.cli?.length)
+        ) {
+            return undefined;
+        }
+
+        const org = context.organizationAndTeamData;
+        try {
+            const releaseTrack =
+                await this.organizationService?.getReleaseTrack(
+                    org.organizationId,
+                );
+            const enabled = await this.featureGate.isEnabled(
+                FEATURE_KEYS.customAgents,
+                {
+                    identifier: org.organizationId,
+                    organizationAndTeamData: org,
+                    releaseTrack,
+                },
+            );
+            if (!enabled) return undefined;
+
+            const provisioning = await provisionCustomAgentClis({
+                sandbox,
+                agents,
+                changedFiles: (context.changedFiles ?? [])
+                    .map((file) => file?.filename)
+                    .filter(Boolean),
+            });
+            this.logger.log({
+                message: `Custom agent CLIs ready: ${Object.values(
+                    provisioning.byAgentId,
+                ).reduce(
+                    (n, list) => n + list.length,
+                    0,
+                )} installed, ${provisioning.warnings.length} failed`,
+                context: this.stageName,
+                metadata: { organizationId: org.organizationId },
+            });
+            return provisioning;
+        } catch (error) {
+            this.logger.error({
+                message: 'Custom agent CLI provisioning failed',
+                context: this.stageName,
+                error,
+                metadata: { organizationId: org?.organizationId },
+            });
+            return undefined;
         }
     }
 }
