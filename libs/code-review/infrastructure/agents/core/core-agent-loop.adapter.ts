@@ -81,6 +81,7 @@ export async function runAgentLoopViaCore(
         callGraph: input.callGraph,
         outlineFirst: input.outlineFirst,
         linkedRepoAccess: secrets.linkedRepoAccess,
+        extraTools: secrets.extraTools,
     });
 
     const coverageLedger = new DiffCoverageLedger({
@@ -331,8 +332,7 @@ export async function runAgentLoopViaCore(
                           verifierEvidence: d.verifierEvidence,
                       })),
                       ...r.unverified.map((u, i) => ({
-                          index:
-                              r.kept.length + r.droppedByVerify.length + i,
+                          index: r.kept.length + r.droppedByVerify.length + i,
                           relevantFile: u.finding.relevantFile,
                           action: 'drop' as const,
                           parseMode: 'verify-error' as const,

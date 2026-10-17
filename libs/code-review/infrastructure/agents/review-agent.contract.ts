@@ -14,6 +14,7 @@
  * `PrReviewContext & ReviewRuleConfig`) instead of the whole 34-field input.
  */
 import type { RunStatus } from '@libs/agent-harness/domain/contracts/run-state.contract';
+import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contract';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
     CodeReviewConfig,
@@ -31,7 +32,10 @@ import type { NormalizedModel } from '@libs/llm/byok-config';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 import type { ReasoningEffort } from '@libs/llm/reasoning-options';
 
-import { CoverageSummary, CoverageTier } from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
+import {
+    CoverageSummary,
+    CoverageTier,
+} from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
 import { type AdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import type { DocumentationSearchAdapter } from '@libs/code-review/infrastructure/agents/engine/agent-tools.factory';
@@ -283,7 +287,8 @@ export interface RuntimeMeta {
  * cohesive slices above so a consumer can depend on just what it needs.
  */
 export interface ReviewAgentInput
-    extends PrReviewContext,
+    extends
+        PrReviewContext,
         ToolingContext,
         ReviewRuleConfig,
         ModelConfig,
@@ -493,6 +498,12 @@ export interface AgentLoopSecrets {
         provider: string;
         errorMessage: string;
     }) => void;
+    /**
+     * Extra finder tools for this run (a custom agent's astGrep and read-only
+     * MCP tools, from `buildCustomAgentTools`). Appended to the repository
+     * tools; the caller owns their lifecycle (closes MCP connections).
+     */
+    extraTools?: readonly AgentTool[];
 }
 
 export interface AgentLoopOutput {

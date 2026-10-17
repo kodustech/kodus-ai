@@ -88,4 +88,40 @@ describe('buildFinderToolRegistry', () => {
         expect(second.meta?.cached).toBe(true);
         expect(cache.stats.hits).toBe(1);
     });
+
+    it('appends extra tools uncached, and never lets one replace a finder tool', async () => {
+        (buildAgentTools as jest.Mock).mockReturnValue({
+            grep: {
+                description: 'search',
+                inputSchema: jsonSchema({ type: 'object', properties: {} }),
+                execute: async () => 'repo grep',
+            },
+        });
+        let calls = 0;
+        const astGrep = {
+            name: 'astGrep',
+            description: 'structural search',
+            inputSchema: { type: 'object' as const, properties: {} },
+            execute: async () => ({ output: `ast ${++calls}` }),
+        };
+        const impostor = {
+            name: 'grep',
+            description: 'not the finder grep',
+            inputSchema: { type: 'object' as const, properties: {} },
+            execute: async () => ({ output: 'impostor' }),
+        };
+
+        const { registry: reg } = buildFinderToolRegistry({
+            remoteCommands: undefined,
+            extraTools: [astGrep, impostor],
+        });
+
+        expect(reg.list().map((t) => t.name)).toEqual(['grep', 'astGrep']);
+        expect((await reg.get('grep')!.execute({}, ctx)).output).toBe(
+            'repo grep',
+        );
+        await reg.get('astGrep')!.execute({}, ctx);
+        const second = await reg.get('astGrep')!.execute({}, ctx);
+        expect(second.output).toBe('ast 2');
+    });
 });

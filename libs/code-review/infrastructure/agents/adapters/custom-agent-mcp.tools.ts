@@ -1,0 +1,304 @@
+/**
+ * code-review (domain) — read-only MCP tools for a custom review agent.
+ *
+ * An agent selects plugin connections (`tools.mcp[].integrationId`) and the
+ * tool names it wants from each. What it is OFFERED is narrower: the selected
+ * names that are also read-only. A server that annotates its tools is taken at
+ * its word — only `readOnlyHint === true` passes, and an unannotated tool on
+ * such a server stays out. A server that annotates nothing is judged by the
+ * tool name against an allowlist: the name must carry a read verb (get, list,
+ * search, ...) and no write verb. A blocklist of write verbs alone is not
+ * enough — `archive_page` or `run_pipeline` would pass it. Either way the tool
+ * must also be one the user selected. A review must never create a ticket or
+ * post a message on the team's behalf, so over-excluding a read tool is the
+ * cheap side of the trade.
+ *
+ * Execution goes through `call`, which refuses any name outside the allowed
+ * set, whatever the model asks for. Failures and timeouts come back as tool
+ * output (`isError`), never thrown — the loop recovers and the review goes on.
+ *
+ * One adapter per server, so a tool is always executed on the server it was
+ * listed from (two servers may share a tool name). The model sees
+ * `Server__tool`: provider tool names only allow `[A-Za-z0-9_-]`, so the
+ * `Server:tool` form is kept for the description.
+ */
+import type {
+    AgentTool,
+    ToolContext,
+    ToolResult,
+} from '@libs/agent-harness/domain/contracts/tool.contract';
+import type { JSONSchema } from '@libs/agent-harness/domain/contracts/json-schema.contract';
+import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { createLogger } from '@libs/core/log/logger';
+import {
+    createMCPAdapter,
+    type MCPAdapter,
+    type MCPAdapterConfig,
+    type MCPServerConfig,
+    type MCPToolRaw,
+} from '@libs/mcp-server/mcp-adapter';
+
+const logger = createLogger('custom-agent-mcp-tools');
+
+export const DEFAULT_MCP_CALL_TIMEOUT_MS = 20_000;
+export const DEFAULT_MCP_CONNECT_TIMEOUT_MS = 10_000;
+const MAX_MCP_OUTPUT = 10_000;
+const MAX_TOOL_NAME = 64;
+
+/** Verbs that let an unannotated tool through: its name must carry one. */
+const READ_VERBS =
+    /^(get|list|search|read|find|fetch|query|describe|view|show|lookup)(s|es|ing)?$/;
+
+/** Verbs that keep an unannotated tool out even next to a read verb
+ *  (`get_or_create_ticket`). Defense in depth, not the gate — so only words
+ *  that are verbs, never nouns a read tool lists (`list_labels`, `get_runs`). */
+const WRITE_VERBS =
+    /^(create|update|delete|write|send|add|remove|set|edit|close|merge|archive|assign|transition|execute|exec|trigger|invoke|publish|upload|insert|upsert|patch|modify|rename|reset|revoke|grant|cancel|submit|approve|reject|reopen|apply|enable|disable|install|uninstall|purge|destroy|kill|restart|notify|invite|upgrade|restore|subscribe|unsubscribe)(s|es|d|ed|ing)?$/;
+
+export type CustomAgentMcpSelection = NonNullable<
+    CustomAgentConfig['tools']['mcp']
+>[number];
+
+/** A formatted connection, tagged with the integration it came from. */
+export interface CustomAgentMcpServer extends MCPServerConfig {
+    integrationId: string;
+}
+
+export interface CustomAgentMcpToolset {
+    tools: AgentTool[];
+    /** Runs a tool by its exposed name; refuses anything outside `tools`. */
+    call(name: string, args: unknown, ctx?: ToolContext): Promise<ToolResult>;
+    /** Servers that were selected but could not be listed. */
+    unavailable: string[];
+    close(): Promise<void>;
+}
+
+function nameWords(name: string): string[] {
+    return name
+        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+        .split(/[^A-Za-z0-9]+/)
+        .filter(Boolean)
+        .map((w) => w.toLowerCase());
+}
+
+export function isReadOnlyMcpTool(
+    tool: Pick<MCPToolRaw, 'name' | 'annotations'>,
+    serverMarksReadOnly: boolean,
+): boolean {
+    if (serverMarksReadOnly) {
+        return tool.annotations?.readOnlyHint === true;
+    }
+    const words = nameWords(tool.name);
+    if (words.some((w) => WRITE_VERBS.test(w))) return false;
+    return words.some((w) => READ_VERBS.test(w));
+}
+
+function serverMarksReadOnly(tools: Array<Pick<MCPToolRaw, 'annotations'>>) {
+    return tools.some((t) => typeof t.annotations?.readOnlyHint === 'boolean');
+}
+
+function sanitize(value: string): string {
+    return value
+        .replace(/[^A-Za-z0-9_-]+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '');
+}
+
+export function mcpToolExposedName(server: string, tool: string): string {
+    const s = sanitize(server) || 'mcp';
+    const t = sanitize(tool) || 'tool';
+    const full = `${s}__${t}`;
+    if (full.length <= MAX_TOOL_NAME) return full;
+    // Keep the tool part whole when possible: it is what the model reads.
+    const room = Math.max(8, MAX_TOOL_NAME - t.length - 2);
+    return `${s.slice(0, room)}__${t}`.slice(0, MAX_TOOL_NAME);
+}
+
+function stringify(result: unknown): string {
+    if (typeof result === 'string') return result;
+    // MCP `CallToolResult`: keep the text parts, which is what the model reads.
+    const content = (result as { content?: unknown })?.content;
+    if (Array.isArray(content)) {
+        const text = content
+            .map((part: any) =>
+                part?.type === 'text' && typeof part.text === 'string'
+                    ? part.text
+                    : JSON.stringify(part),
+            )
+            .join('\n');
+        if (text) return text;
+    }
+    return JSON.stringify(result ?? null);
+}
+
+function cap(output: string): string {
+    return output.length > MAX_MCP_OUTPUT
+        ? `${output.slice(0, MAX_MCP_OUTPUT)}\n... (truncated)`
+        : output;
+}
+
+function withTimeout<T>(
+    promise: Promise<T>,
+    ms: number,
+    label: string,
+    signal?: AbortSignal,
+): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(
+            () => reject(new Error(`${label} timed out after ${ms}ms`)),
+            ms,
+        );
+        const onAbort = () => {
+            clearTimeout(timer);
+            reject(new Error(`${label} was cancelled`));
+        };
+        signal?.addEventListener('abort', onAbort, { once: true });
+        promise.then(
+            (value) => {
+                clearTimeout(timer);
+                signal?.removeEventListener('abort', onAbort);
+                resolve(value);
+            },
+            (error) => {
+                clearTimeout(timer);
+                signal?.removeEventListener('abort', onAbort);
+                reject(error);
+            },
+        );
+    });
+}
+
+export async function buildCustomAgentMcpTools(params: {
+    selections: readonly CustomAgentMcpSelection[];
+    servers: readonly CustomAgentMcpServer[];
+    createAdapter?: (config: MCPAdapterConfig) => MCPAdapter;
+    callTimeoutMs?: number;
+    connectTimeoutMs?: number;
+}): Promise<CustomAgentMcpToolset> {
+    const createAdapter = params.createAdapter ?? createMCPAdapter;
+    const callTimeoutMs = params.callTimeoutMs ?? DEFAULT_MCP_CALL_TIMEOUT_MS;
+    const connectTimeoutMs =
+        params.connectTimeoutMs ?? DEFAULT_MCP_CONNECT_TIMEOUT_MS;
+
+    const allowed = new Map<
+        string,
+        { adapter: MCPAdapter; server: string; tool: string }
+    >();
+    const tools: AgentTool[] = [];
+    const adapters: MCPAdapter[] = [];
+    const unavailable: string[] = [];
+
+    for (const selection of params.selections ?? []) {
+        const wanted = new Set(selection.tools ?? []);
+        if (wanted.size === 0) continue;
+        const server = params.servers.find(
+            (s) => s.integrationId === selection.integrationId,
+        );
+        if (!server) continue;
+
+        // The connection's own allow-list narrows further when it has one.
+        const connectionAllows = server.allowedTools?.length
+            ? new Set(server.allowedTools)
+            : null;
+
+        let adapter: MCPAdapter;
+        let listed: MCPToolRaw[];
+        try {
+            adapter = createAdapter({
+                servers: [server],
+                defaultTimeout: callTimeoutMs,
+                maxRetries: 0,
+            });
+            adapters.push(adapter);
+            await withTimeout(
+                adapter.connect(),
+                connectTimeoutMs,
+                `MCP ${server.name} connect`,
+            );
+            listed = await withTimeout(
+                adapter.getTools(),
+                connectTimeoutMs,
+                `MCP ${server.name} list`,
+            );
+        } catch (error) {
+            unavailable.push(server.name);
+            logger.warn({
+                message:
+                    'Custom agent MCP server unavailable; continuing without it',
+                context: 'buildCustomAgentMcpTools',
+                error,
+                metadata: {
+                    server: server.name,
+                    integrationId: selection.integrationId,
+                },
+            });
+            continue;
+        }
+
+        const marks = serverMarksReadOnly(listed);
+        for (const raw of listed) {
+            if (!wanted.has(raw.name)) continue;
+            if (connectionAllows && !connectionAllows.has(raw.name)) continue;
+            if (!isReadOnlyMcpTool(raw, marks)) continue;
+
+            const exposed = mcpToolExposedName(server.name, raw.name);
+            if (allowed.has(exposed)) continue;
+            allowed.set(exposed, {
+                adapter,
+                server: server.name,
+                tool: raw.name,
+            });
+            tools.push({
+                name: exposed,
+                description:
+                    `[${server.name}:${raw.name}] read-only. ${raw.description ?? ''}`.trim(),
+                inputSchema: ((raw.inputSchema as JSONSchema) ?? {
+                    type: 'object',
+                    properties: {},
+                }) as JSONSchema,
+                execute: (input, ctx) => call(exposed, input, ctx),
+            });
+        }
+    }
+
+    async function call(
+        name: string,
+        args: unknown,
+        ctx?: ToolContext,
+    ): Promise<ToolResult> {
+        const entry = allowed.get(name);
+        if (!entry) {
+            return {
+                output: `MCP tool "${name}" is not allowed for this agent. Only read-only tools it selected can run.`,
+                isError: true,
+            };
+        }
+        try {
+            const result = await withTimeout(
+                entry.adapter.executeTool(
+                    entry.tool,
+                    (args ?? {}) as Record<string, unknown>,
+                ),
+                callTimeoutMs,
+                `MCP ${entry.server}:${entry.tool}`,
+                ctx?.signal,
+            );
+            const isError = (result as { isError?: unknown })?.isError === true;
+            return { output: cap(stringify(result)), isError };
+        } catch (error) {
+            return {
+                output: `MCP ${entry.server}:${entry.tool} failed: ${error instanceof Error ? error.message : String(error)}`,
+                isError: true,
+            };
+        }
+    }
+
+    return {
+        tools,
+        call,
+        unavailable,
+        async close() {
+            await Promise.allSettled(adapters.map((a) => a.disconnect()));
+        },
+    };
+}
