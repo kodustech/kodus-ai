@@ -1,0 +1,225 @@
+import 'reflect-metadata';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+
+import { CUSTOM_AGENT_LIMITS } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+
+import { CreateOrUpdateCodeReviewParameterDto } from './create-or-update-code-review-parameter.dto';
+
+const cli = (overrides: Record<string, unknown> = {}) => ({
+    name: 'ledger-lint',
+    install: 'npm install -g @acme-ledger/lint@2.4.1',
+    binary: 'ledger-lint',
+    allowedPrefixes: ['ledger-lint check'],
+    usage: 'Run `ledger-lint check <path>`.',
+    runsProjectCode: false,
+    allowedDomains: ['registry.npmjs.org'],
+    ...overrides,
+});
+
+const agent = (overrides: Record<string, unknown> = {}) => ({
+    id: 'agent-ledger',
+    name: 'Ledger reviewer',
+    enabled: true,
+    instructions: 'Every posting must balance debits and credits.',
+    scope: { include: ['src/ledger/**'] },
+    tools: {},
+    presentation: {
+        tag: { color: '#304FFE' },
+        format: 'inline',
+        suggestedFix: 'when-confident',
+        mode: 'shadow',
+    },
+    ...overrides,
+});
+
+const validateConfig = async (configValue: Record<string, unknown>) => {
+    const dto = plainToInstance(CreateOrUpdateCodeReviewParameterDto, {
+        organizationAndTeamData: { teamId: 'team-1' },
+        configValue,
+    });
+    const errors = await validate(dto, {
+        whitelist: true,
+        forbidNonWhitelisted: true,
+    });
+    return JSON.stringify(errors);
+};
+
+describe('CreateOrUpdateCodeReviewParameterDto — custom agents', () => {
+    it('accepts a valid agent with a pinned CLI and linked knowledge', async () => {
+        const flat = await validateConfig({
+            customAgents: [agent({ tools: { cli: [cli()] } })],
+            knowledge: [
+                {
+                    path: 'docs/ledger.md',
+                    kind: 'doc',
+                    linkedTo: ['main-review', { agentId: 'agent-ledger' }],
+                },
+            ],
+        });
+        expect(flat).toBe('[]');
+    });
+
+    it(`rejects more than ${CUSTOM_AGENT_LIMITS.maxAgents} agents`, async () => {
+        const agents = Array.from(
+            { length: CUSTOM_AGENT_LIMITS.maxAgents + 1 },
+            (_, i) => agent({ id: `agent-${i}` }),
+        );
+        expect(await validateConfig({ customAgents: agents })).toContain(
+            'arrayMaxSize',
+        );
+        expect(await validateConfig({ customAgents: agents.slice(0, 5) })).toBe(
+            '[]',
+        );
+    });
+
+    it(`rejects more than ${CUSTOM_AGENT_LIMITS.maxCliTools} CLIs on one agent`, async () => {
+        const clis = Array.from(
+            { length: CUSTOM_AGENT_LIMITS.maxCliTools + 1 },
+            (_, i) => cli({ name: `cli-${i}` }),
+        );
+        expect(
+            await validateConfig({
+                customAgents: [agent({ tools: { cli: clis } })],
+            }),
+        ).toContain('"property":"cli"');
+    });
+
+    it('rejects instructions over the length limit', async () => {
+        const flat = await validateConfig({
+            customAgents: [
+                agent({
+                    instructions: 'x'.repeat(
+                        CUSTOM_AGENT_LIMITS.maxInstructionsLength + 1,
+                    ),
+                }),
+            ],
+        });
+        expect(flat).toContain('"property":"instructions"');
+    });
+
+    it('rejects writing instructions over the length limit', async () => {
+        const flat = await validateConfig({
+            customAgents: [
+                agent({
+                    presentation: {
+                        ...agent().presentation,
+                        writing: 'x'.repeat(
+                            CUSTOM_AGENT_LIMITS.maxWritingLength + 1,
+                        ),
+                    },
+                }),
+            ],
+        });
+        expect(flat).toContain('"property":"writing"');
+    });
+
+    it.each([
+        'npm install -g @acme-ledger/lint@2.4.1',
+        'pip install ledger-lint==0.9.3',
+        'go install example.test/ledger-lint@v1.2.0',
+        `curl -fsSL https://example.test/ledger-lint -o l && echo "${'a'.repeat(64)}  l" | sha256sum -c`,
+    ])('accepts a pinned install: %s', async (install) => {
+        const flat = await validateConfig({
+            customAgents: [agent({ tools: { cli: [cli({ install })] } })],
+        });
+        expect(flat).toBe('[]');
+    });
+
+    it.each([
+        'npm install -g @acme-ledger/lint',
+        'npm install -g @acme-ledger/lint@latest',
+        'pip install ledger-lint',
+        'pip install ledger-lint>=0.9',
+        'go install example.test/ledger-lint@main',
+    ])('rejects an unpinned install: %s', async (install) => {
+        const flat = await validateConfig({
+            customAgents: [agent({ tools: { cli: [cli({ install })] } })],
+        });
+        expect(flat).toContain('"property":"install"');
+    });
+
+    it('rejects a secret env name that is not an env variable', async () => {
+        const flat = await validateConfig({
+            customAgents: [
+                agent({
+                    tools: {
+                        cli: [
+                            cli({
+                                secrets: [
+                                    { env: 'ledger token', ciphertext: 'c' },
+                                ],
+                            }),
+                        ],
+                    },
+                }),
+            ],
+        });
+        expect(flat).toContain('"property":"env"');
+    });
+
+    it('rejects an unknown presentation mode and format', async () => {
+        const flat = await validateConfig({
+            customAgents: [
+                agent({
+                    presentation: {
+                        ...agent().presentation,
+                        mode: 'loud',
+                        format: 'thread',
+                    },
+                }),
+            ],
+        });
+        expect(flat).toContain('"property":"mode"');
+        expect(flat).toContain('"property":"format"');
+    });
+
+    it(`rejects more than ${CUSTOM_AGENT_LIMITS.maxSkills} skills linked to one target`, async () => {
+        const skills = Array.from(
+            { length: CUSTOM_AGENT_LIMITS.maxSkills + 1 },
+            (_, i) => ({
+                path: `.skills/ledger-${i}/SKILL.md`,
+                kind: 'skill',
+                linkedTo: ['main-review'],
+            }),
+        );
+        expect(await validateConfig({ knowledge: skills })).toContain(
+            'knowledgeWithinTargetLimits',
+        );
+        expect(await validateConfig({ knowledge: skills.slice(0, 20) })).toBe(
+            '[]',
+        );
+    });
+
+    it(`rejects more than ${CUSTOM_AGENT_LIMITS.maxDocs} docs linked to one agent`, async () => {
+        const docs = Array.from(
+            { length: CUSTOM_AGENT_LIMITS.maxDocs + 1 },
+            (_, i) => ({
+                path: `docs/ledger-${i}.md`,
+                kind: 'doc',
+                linkedTo: [{ agentId: 'agent-ledger' }],
+            }),
+        );
+        expect(await validateConfig({ knowledge: docs })).toContain(
+            'knowledgeWithinTargetLimits',
+        );
+    });
+
+    it('counts docs per target, not across targets', async () => {
+        const docs = Array.from({ length: 12 }, (_, i) => ({
+            path: `docs/ledger-${i}.md`,
+            kind: 'doc',
+            linkedTo: [i % 2 ? { agentId: 'agent-a' } : 'main-review'],
+        }));
+        expect(await validateConfig({ knowledge: docs })).toBe('[]');
+    });
+
+    it('rejects a knowledge link that is neither main-review nor an agent', async () => {
+        const flat = await validateConfig({
+            knowledge: [
+                { path: 'docs/ledger.md', kind: 'doc', linkedTo: ['everyone'] },
+            ],
+        });
+        expect(flat).toContain('isKnowledgeLinkTarget');
+    });
+});

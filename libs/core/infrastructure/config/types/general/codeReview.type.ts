@@ -215,6 +215,20 @@ export type CodeSuggestion = {
     kodyRuleOtherLocations?: string[];
     /** Merged finding locations, rendered after the content formatter. */
     alsoFoundIn?: string[];
+    /** The custom agent that produced the finding (#2172); drives its tag. */
+    customAgent?: {
+        id: string;
+        name: string;
+        color?: string;
+    };
+    /** `convention` findings apply a guide and go through the convention check. */
+    kind?: 'bug' | 'convention';
+    /** The guide passage a convention finding applies, checked on the base branch. */
+    source?: {
+        file: string;
+        section?: string;
+        quote: string;
+    };
 
     isCommittable?: boolean;
     validatedData?: {
@@ -305,6 +319,128 @@ export const reviewOptionsSchema = z.object({
     cross_file: z.boolean().optional(), // Legacy — no longer shown in UI but kept for backward compat
     business_logic: z.boolean().optional(),
 });
+
+/**
+ * Custom review agents (#2172): team-defined reviewers that run next to the
+ * generalist with their own instructions, scope, tools and presentation.
+ * Limits are enforced on save (DTO) and again when the config is resolved.
+ */
+export const CUSTOM_AGENT_LIMITS = {
+    /** Agents per resolved config (repository or directory). */
+    maxAgents: 5,
+    /** CLI tools per agent. */
+    maxCliTools: 3,
+    /** Skills linked per target (main review or one agent). */
+    maxSkills: 20,
+    /** Docs linked per target (main review or one agent). */
+    maxDocs: 10,
+    /** Token budget for the docs a target loads whole. */
+    maxDocTokens: 20000,
+    maxInstructionsLength: 8000,
+    maxWritingLength: 2000,
+} as const;
+
+/**
+ * A CLI install command must pin what it installs: `pkg@1.2.3`,
+ * `pkg==1.2.3`, or a sha256 digest. An unpinned install would let a moving
+ * registry tag decide what runs next to the team's secrets.
+ */
+export const PINNED_INSTALL_PATTERN =
+    /@v?\d+\.\d+\.\d+|==\d+\.\d+\.\d+|sha256[:=]?[a-f0-9]{64}|\b[a-f0-9]{64}\b/i;
+
+/** Environment variable name a CLI secret is exposed under. */
+export const CLI_SECRET_ENV_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
+
+/** `KnowledgeItem.linkedTo` entry that links a skill or doc to the generalist. */
+export const KNOWLEDGE_MAIN_REVIEW_TARGET = 'main-review' as const;
+
+export const cliToolSecretSchema = z.object({
+    env: z.string().regex(CLI_SECRET_ENV_PATTERN),
+    /** Encrypted at rest; decrypted only into the CLI process env. */
+    ciphertext: z.string().min(1),
+});
+
+export const cliToolConfigSchema = z.object({
+    name: z.string().min(1),
+    install: z.string().min(1).regex(PINNED_INSTALL_PATTERN),
+    binary: z.string().min(1),
+    /** argv must start with one of these (no shell is involved). */
+    allowedPrefixes: z.array(z.string().min(1)).min(1),
+    /** Markdown the agent reads to learn how to call the CLI. */
+    usage: z.string(),
+    /** True when the CLI executes project code (tests, builds): no secrets then. */
+    runsProjectCode: z.boolean(),
+    secrets: z.array(cliToolSecretSchema).optional(),
+    /** Hosts the CLI may reach; everything else is blocked. */
+    allowedDomains: z.array(z.string().min(1)),
+    timeoutSec: z.number().int().positive().optional(),
+});
+
+export const customAgentMcpToolsSchema = z.object({
+    integrationId: z.string().min(1),
+    tools: z.array(z.string().min(1)),
+});
+
+export const customAgentPresentationSchema = z.object({
+    tag: z.object({ color: z.string().min(1) }),
+    format: z.enum(['inline', 'single-comment']),
+    minSeverity: z.enum(SeverityLevel).optional(),
+    maxComments: z.number().int().positive().optional(),
+    suggestedFix: z.enum(['when-confident', 'never']),
+    writing: z.string().max(CUSTOM_AGENT_LIMITS.maxWritingLength).optional(),
+    /** `shadow` stores findings as NOT_SENT; `post` publishes them. */
+    mode: z.enum(['shadow', 'post']),
+});
+
+export const customAgentConfigSchema = z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    enabled: z.boolean(),
+    instructions: z.string().max(CUSTOM_AGENT_LIMITS.maxInstructionsLength),
+    /** Globs over the changed files; the agent runs only when one matches. */
+    scope: z.object({
+        include: z.array(z.string()).optional(),
+        exclude: z.array(z.string()).optional(),
+    }),
+    tools: z.object({
+        /** ast-grep rule YAML the agent may run. */
+        astGrepConfig: z.string().optional(),
+        mcp: z.array(customAgentMcpToolsSchema).optional(),
+        cli: z
+            .array(cliToolConfigSchema)
+            .max(CUSTOM_AGENT_LIMITS.maxCliTools)
+            .optional(),
+    }),
+    /** BYOK model ids overriding the `customAgent` / `customAgentCheck` tasks. */
+    models: z
+        .object({
+            run: z.string().optional(),
+            check: z.string().optional(),
+        })
+        .optional(),
+    presentation: customAgentPresentationSchema,
+});
+
+export const knowledgeItemSchema = z.object({
+    /** Path in the repository, read from the PR's target branch. */
+    path: z.string().min(1),
+    kind: z.enum(['skill', 'doc']),
+    linkedTo: z.array(
+        z.union([
+            z.literal(KNOWLEDGE_MAIN_REVIEW_TARGET),
+            z.object({ agentId: z.string().min(1) }),
+        ]),
+    ),
+});
+
+export type CliToolSecret = z.infer<typeof cliToolSecretSchema>;
+export type CliToolConfig = z.infer<typeof cliToolConfigSchema>;
+export type CustomAgentPresentation = z.infer<
+    typeof customAgentPresentationSchema
+>;
+export type CustomAgentConfig = z.infer<typeof customAgentConfigSchema>;
+export type KnowledgeItem = z.infer<typeof knowledgeItemSchema>;
+export type KnowledgeLinkTarget = KnowledgeItem['linkedTo'][number];
 
 export interface ReviewOptions {
     bug?: boolean;
@@ -485,6 +621,13 @@ export type CodeReviewConfig = {
      * ```
      */
     linkedRepositories?: LinkedRepositoryConfig[];
+    /**
+     * Team-defined review agents (#2172), same cascade as `reviewOptions`.
+     * `level` records where an entry was declared once the cascade merged it.
+     */
+    customAgents?: Array<CustomAgentConfig & { level?: ConfigLevel }>;
+    /** Skills and docs in the repository, linked to the main review or to agents. */
+    knowledge?: KnowledgeItem[];
     // This is the default branch of the repository, used only during the review process
     // This field is populated dynamically from the API (GitHub/GitLab) and should NOT be saved to the database
     // It represents the repository's default branch (e.g., 'main', 'develop') that comes from the code management platform

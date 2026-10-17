@@ -103,6 +103,8 @@ const TASK_LABEL: Record<LlmTask, string> = {
     businessValidation: 'the Business Rules validation model',
     prSummary: 'the PR Summary model',
     conversation: 'the Chat model',
+    customAgent: 'the Custom Agents model',
+    customAgentCheck: 'the Custom Agents check model',
 };
 
 /**

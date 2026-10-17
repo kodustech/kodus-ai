@@ -50,6 +50,8 @@ export const BACKFILL_ROUTING_TASKS = [
     'businessValidation',
     'prSummary',
     'conversation',
+    'customAgent',
+    'customAgentCheck',
 ];
 
 const gf = (f: string) => ({ $getField: { field: f, input: '$attributes' } });

@@ -1,14 +1,22 @@
 import { Type } from 'class-transformer';
 import {
+    ArrayMaxSize,
+    ArrayMinSize,
     IsArray,
     IsBoolean,
     IsEnum,
     IsIn,
+    IsInt,
     IsNumber,
     IsObject,
     IsOptional,
+    IsPositive,
     IsString,
+    Matches,
+    MaxLength,
+    ValidateBy,
     ValidateNested,
+    ValidationOptions,
 } from 'class-validator';
 
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
@@ -16,12 +24,20 @@ import { OrganizationAndTeamDataDto } from '@libs/core/domain/dtos/organizationA
 import {
     BehaviourForExistingDescription,
     BehaviourForNewCommits,
+    CLI_SECRET_ENV_PATTERN,
     CodeReviewVersion,
+    CUSTOM_AGENT_LIMITS,
     GroupingModeSuggestions,
+    KNOWLEDGE_MAIN_REVIEW_TARGET,
+    KnowledgeItem,
     LimitationType,
+    PINNED_INSTALL_PATTERN,
     ReviewCadenceType,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
-import { PullRequestMessageStatus } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
+import {
+    ConfigLevel,
+    PullRequestMessageStatus,
+} from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 class ReviewOptionsDto {
@@ -400,6 +416,246 @@ class DeterministicEvidenceDto {
     tools?: DeterministicEvidenceToolsDto;
 }
 
+class CliToolSecretDto {
+    @Matches(CLI_SECRET_ENV_PATTERN)
+    env: string;
+
+    @IsString()
+    ciphertext: string;
+}
+
+class CliToolConfigDto {
+    @IsString()
+    name: string;
+
+    /** Must pin a version (`@1.2.3`, `==1.2.3`) or a sha256 digest. */
+    @IsString()
+    @Matches(PINNED_INSTALL_PATTERN, {
+        message:
+            'install must pin a version (@x.y.z or ==x.y.z) or a sha256 digest',
+    })
+    install: string;
+
+    @IsString()
+    binary: string;
+
+    @IsArray()
+    @ArrayMinSize(1)
+    @IsString({ each: true })
+    allowedPrefixes: string[];
+
+    @IsString()
+    usage: string;
+
+    @IsBoolean()
+    runsProjectCode: boolean;
+
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => CliToolSecretDto)
+    secrets?: CliToolSecretDto[];
+
+    @IsArray()
+    @IsString({ each: true })
+    allowedDomains: string[];
+
+    @IsOptional()
+    @IsInt()
+    @IsPositive()
+    timeoutSec?: number;
+}
+
+class CustomAgentMcpToolsDto {
+    @IsString()
+    integrationId: string;
+
+    @IsArray()
+    @IsString({ each: true })
+    tools: string[];
+}
+
+class CustomAgentToolsDto {
+    @IsOptional()
+    @IsString()
+    astGrepConfig?: string;
+
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => CustomAgentMcpToolsDto)
+    mcp?: CustomAgentMcpToolsDto[];
+
+    @IsOptional()
+    @IsArray()
+    @ArrayMaxSize(CUSTOM_AGENT_LIMITS.maxCliTools)
+    @ValidateNested({ each: true })
+    @Type(() => CliToolConfigDto)
+    cli?: CliToolConfigDto[];
+}
+
+class CustomAgentScopeDto {
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    include?: string[];
+
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    exclude?: string[];
+}
+
+class CustomAgentModelsDto {
+    @IsOptional()
+    @IsString()
+    run?: string;
+
+    @IsOptional()
+    @IsString()
+    check?: string;
+}
+
+class CustomAgentTagDto {
+    @IsString()
+    color: string;
+}
+
+class CustomAgentPresentationDto {
+    @ValidateNested()
+    @Type(() => CustomAgentTagDto)
+    tag: CustomAgentTagDto;
+
+    @IsIn(['inline', 'single-comment'])
+    format: 'inline' | 'single-comment';
+
+    @IsOptional()
+    @IsEnum(SeverityLevel)
+    minSeverity?: SeverityLevel;
+
+    @IsOptional()
+    @IsInt()
+    @IsPositive()
+    maxComments?: number;
+
+    @IsIn(['when-confident', 'never'])
+    suggestedFix: 'when-confident' | 'never';
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(CUSTOM_AGENT_LIMITS.maxWritingLength)
+    writing?: string;
+
+    @IsIn(['shadow', 'post'])
+    mode: 'shadow' | 'post';
+}
+
+class CustomAgentConfigDto {
+    @IsString()
+    id: string;
+
+    @IsString()
+    name: string;
+
+    @IsBoolean()
+    enabled: boolean;
+
+    @IsString()
+    @MaxLength(CUSTOM_AGENT_LIMITS.maxInstructionsLength)
+    instructions: string;
+
+    @ValidateNested()
+    @Type(() => CustomAgentScopeDto)
+    scope: CustomAgentScopeDto;
+
+    @ValidateNested()
+    @Type(() => CustomAgentToolsDto)
+    tools: CustomAgentToolsDto;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => CustomAgentModelsDto)
+    models?: CustomAgentModelsDto;
+
+    @ValidateNested()
+    @Type(() => CustomAgentPresentationDto)
+    presentation: CustomAgentPresentationDto;
+    /** Where the entry was declared; set by the cascade, echoed back on save. */
+    @IsOptional()
+    @IsEnum(ConfigLevel)
+    level?: ConfigLevel;
+}
+
+const isKnowledgeLinkTarget = (value: unknown): boolean =>
+    value === KNOWLEDGE_MAIN_REVIEW_TARGET ||
+    (typeof value === 'object' &&
+        value !== null &&
+        Object.keys(value).length === 1 &&
+        typeof (value as { agentId?: unknown }).agentId === 'string' &&
+        (value as { agentId: string }).agentId.length > 0);
+
+const knowledgeTargetKey = (target: KnowledgeItem['linkedTo'][number]) =>
+    typeof target === 'string' ? target : `agent:${target.agentId}`;
+
+/**
+ * Skills and docs are capped per target (the main review or one agent),
+ * not per config: twelve docs split across two agents is fine, eleven on
+ * one agent is not.
+ */
+function KnowledgeWithinTargetLimits(validationOptions?: ValidationOptions) {
+    return ValidateBy(
+        {
+            name: 'knowledgeWithinTargetLimits',
+            validator: {
+                validate: (items: unknown) => {
+                    if (!Array.isArray(items)) return true;
+                    const counts = new Map<string, number>();
+                    for (const item of items as KnowledgeItem[]) {
+                        if (!Array.isArray(item?.linkedTo)) continue;
+                        for (const target of item.linkedTo) {
+                            if (!isKnowledgeLinkTarget(target)) continue;
+                            const key = `${item.kind}|${knowledgeTargetKey(target)}`;
+                            counts.set(key, (counts.get(key) ?? 0) + 1);
+                        }
+                    }
+                    for (const [key, count] of counts) {
+                        const limit = key.startsWith('skill|')
+                            ? CUSTOM_AGENT_LIMITS.maxSkills
+                            : CUSTOM_AGENT_LIMITS.maxDocs;
+                        if (count > limit) return false;
+                    }
+                    return true;
+                },
+                defaultMessage: () =>
+                    `knowledge allows at most ${CUSTOM_AGENT_LIMITS.maxSkills} skills and ${CUSTOM_AGENT_LIMITS.maxDocs} docs per target`,
+            },
+        },
+        validationOptions,
+    );
+}
+
+class KnowledgeItemDto {
+    @IsString()
+    path: string;
+
+    @IsIn(['skill', 'doc'])
+    kind: 'skill' | 'doc';
+
+    @IsArray()
+    @ValidateBy(
+        {
+            name: 'isKnowledgeLinkTarget',
+            validator: {
+                validate: isKnowledgeLinkTarget,
+                defaultMessage: () =>
+                    `each linkedTo entry must be '${KNOWLEDGE_MAIN_REVIEW_TARGET}' or { agentId }`,
+            },
+        },
+        { each: true },
+    )
+    linkedTo: KnowledgeItem['linkedTo'];
+}
+
 class CodeReviewConfigWithoutLLMProviderDto {
     @IsOptional()
     @IsString()
@@ -568,6 +824,29 @@ class CodeReviewConfigWithoutLLMProviderDto {
             'Sibling repositories Kody may grep/read during review for cross-boundary checks.',
     })
     linkedRepositories?: LinkedRepositoryDto[];
+
+    @IsOptional()
+    @IsArray()
+    @ArrayMaxSize(CUSTOM_AGENT_LIMITS.maxAgents)
+    @ValidateNested({ each: true })
+    @Type(() => CustomAgentConfigDto)
+    @ApiPropertyOptional({
+        type: [CustomAgentConfigDto],
+        description: 'Team-defined review agents that run next to Kody.',
+    })
+    customAgents?: CustomAgentConfigDto[];
+
+    @IsOptional()
+    @IsArray()
+    @KnowledgeWithinTargetLimits()
+    @ValidateNested({ each: true })
+    @Type(() => KnowledgeItemDto)
+    @ApiPropertyOptional({
+        type: [KnowledgeItemDto],
+        description:
+            'Skills and docs in the repository, linked to the main review or to agents.',
+    })
+    knowledge?: KnowledgeItemDto[];
 }
 
 export class CreateOrUpdateCodeReviewParameterDto {
