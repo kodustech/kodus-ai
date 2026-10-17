@@ -349,11 +349,12 @@ function measuredAlready(recorded, { phaseIds, model, runs, evalsTree }, blobsOf
     }) || null;
 }
 
-// One run, one name: the branch (or --name) and the candidate commit. A later
-// run on the same branch writes rows of its own instead of overwriting some of
-// this run's and leaving the rest (a regression-only check after a full run
-// would otherwise mix two runs in one experiment).
-const runName = (branchOrName, head) => `${slug(branchOrName)}-${String(head).slice(0, 9)}`;
+// One run, one name: the branch (or --name), the candidate commit and when the
+// run started (UTC, to the second), taken once for all its rows. A later run
+// writes rows of its own instead of overwriting some of this run's and leaving
+// the rest, even at the same commit (a regression-only check on another model
+// after a full run would otherwise mix two runs in one experiment).
+const runName = (branchOrName, head, startedAt) => `${slug(branchOrName)}-${String(head).slice(0, 9)}-${startedAt.toISOString().replace(/\D/g, '').slice(0, 14)}`;
 
 async function main() {
     const args = parseArgs(process.argv.slice(2));
@@ -418,7 +419,7 @@ async function main() {
         console.error(`not comparable: the evals differ between the two sides; land the eval change on ${baseRef} first:\n${evalDiff}`);
         return 2;
     }
-    const name = runName(args.name || branch, head);
+    const name = runName(args.name || branch, head, new Date());
     if (args['if-new']) {
         const recorded = await recordedExperiments(step, branch);
         const identity = { phaseIds, model, runs, evalsTree: git(['rev-parse', `${head}:evals`]) };
