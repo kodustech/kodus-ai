@@ -215,4 +215,4 @@ async function onTheStage(env, frozen, step) {
     }
 }
 
-module.exports = { runStage, main, onTheStage };
+module.exports = { runStage, main, onTheStage, refusal };
