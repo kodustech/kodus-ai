@@ -21,7 +21,7 @@ export class CliDeviceModel extends CoreModel {
     @JoinColumn({ name: 'organization_id', referencedColumnName: 'uuid' })
     organization: OrganizationModel;
 
-    @ManyToOne(() => UserModel, { nullable: true })
+    @ManyToOne(() => UserModel, { nullable: true, onDelete: 'CASCADE' })
     @JoinColumn({ name: 'user_id', referencedColumnName: 'uuid' })
     user?: UserModel;
 

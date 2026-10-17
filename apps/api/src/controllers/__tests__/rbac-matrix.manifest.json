@@ -1507,6 +1507,17 @@
     }
   },
   {
+    "key": "pullRequestMessages.controller.ts#findAllOverrideCounts",
+    "httpMethod": "GET",
+    "urlPath": "/pull-request-messages/override-counts",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "pullRequestMessages.controller.ts#findByRepoOrDirectoryId",
     "httpMethod": "GET",
     "urlPath": "/pull-request-messages/find-by-repository-or-directory",

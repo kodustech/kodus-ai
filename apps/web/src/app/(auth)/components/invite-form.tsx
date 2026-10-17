@@ -110,21 +110,28 @@ export const AcceptInviteForm = (props: {
             name,
             password,
             uuid: props.inviteId,
+        }).catch(() => undefined);
+
+        if (register?.data?.statusCode !== 201) {
+            toast({
+                description:
+                    "We couldn't accept this invitation. Please try again or ask your organization administrator for a new invite.",
+                variant: "danger",
+            });
+            return;
+        }
+
+        toast({
+            description: "Registration completed!",
+            variant: "success",
         });
 
-        if (register?.data?.statusCode === 201) {
-            toast({
-                description: "Registration completed!",
-                variant: "success",
-            });
-
-            await signIn("credentials", {
-                email: props.email,
-                password,
-                redirect: true,
-                redirectTo: callbackUrl ?? "/",
-            });
-        }
+        await signIn("credentials", {
+            email: props.email,
+            password,
+            redirect: true,
+            redirectTo: callbackUrl ?? "/",
+        });
     });
 
     return (

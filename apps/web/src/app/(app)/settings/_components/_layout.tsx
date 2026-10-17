@@ -18,7 +18,7 @@ import { Action, ResourceType } from "@services/permissions/types";
 import type { CustomMessageConfig } from "@services/pull-request-messages/types";
 import {
     ScopeToolsPortal,
-    useLendAddRepository,
+    useLendAddDirectory,
     useLendOverrideCount,
     useScopeTools,
     type RenderOverrideCount,
@@ -43,7 +43,7 @@ import {
     ScopedCodeReviewConfigProvider,
     type CodeReviewModelData,
 } from "./context";
-import { AddRepoModal } from "./copy-settings-modal";
+import { DirectoryScopeModal } from "./directory-scope-modal";
 import { KodusConfigFileStatusBadge } from "./kodus-config-file-status";
 import { OverrideCount } from "./override-count";
 import { SidebarRepositoryOrDirectoryDropdown } from "./per-repository/options-dropdown";
@@ -191,7 +191,7 @@ function SettingsLayoutShell({
             redirect(`/settings/code-review/global/${pageName}`);
         }
 
-        if (!repository?.isSelected) {
+        if (directoryId) {
             const directory = safeArray(repository?.directories).find(
                 (directoryItem) => directoryItem.id === directoryId,
             );
@@ -230,8 +230,8 @@ function SettingsLayoutShell({
 /**
  * The scope tools that need the full configuration this layout loads, lent
  * to the sidebar's scope picker (see scope-tools.tsx): the scope's options
- * menu and kodus-config.yml badge render under the picker, "Add repository
- * configuration" joins the picker's footer, and each scope and page gets its
+ * menu and kodus-config.yml badge render under the picker, "Add directory
+ * scope" joins the picker's footer, and each scope and page gets its
  * override count.
  */
 function CodeReviewScopeTools({
@@ -257,23 +257,22 @@ function CodeReviewScopeTools({
         ? repository?.directories?.find((item) => item.id === directoryId)
         : undefined;
 
-    const canAddRepository =
+    const canAddDirectory =
+        !!repository &&
         canCreate &&
         platformConfigValue.kodyLearningStatus !==
             KodyLearningStatus.GENERATING_CONFIG;
-    const openAddRepository = useMemo(
+    const openAddDirectory = useMemo(
         () =>
-            canAddRepository
+            canAddDirectory && repository
                 ? () =>
                       magicModal.show(() => (
-                          <AddRepoModal
-                              repositories={configValue.repositories}
-                          />
+                          <DirectoryScopeModal repository={repository} />
                       ))
                 : undefined,
-        [canAddRepository, configValue.repositories],
+        [canAddDirectory, repository],
     );
-    useLendAddRepository(openAddRepository);
+    useLendAddDirectory(openAddDirectory);
     const renderOverrideCount = useMemo<RenderOverrideCount>(
         () =>
             function renderOverrideCount({ scope, pages }) {
@@ -295,7 +294,7 @@ function CodeReviewScopeTools({
             <ScopeToolsPortal slot="status">
                 <KodusConfigFileStatusBadge compact={compact} />
             </ScopeToolsPortal>
-            {repository && (
+            {repository && (repository.isSelected || directory) && (
                 <ScopeToolsPortal slot="actions">
                     <SidebarRepositoryOrDirectoryDropdown
                         repository={repository}

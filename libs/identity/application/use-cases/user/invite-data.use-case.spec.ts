@@ -46,4 +46,23 @@ describe('InviteDataUserUseCase', () => {
     it('returns nothing for an unknown id', async () => {
         await expect(useCase.execute('missing')).resolves.toEqual({});
     });
+
+    it('returns nothing without an id, without querying', async () => {
+        usersService.findOne.mockClear();
+
+        await expect(useCase.execute('')).resolves.toEqual({});
+        expect(usersService.findOne).not.toHaveBeenCalled();
+    });
+
+    it('shows an invitation whose user has no organization loaded', async () => {
+        usersService.findOne.mockResolvedValueOnce({
+            toObject: () => ({ uuid: 'invited', email: 'invited@acme.dev' }),
+        } as any);
+
+        await expect(useCase.execute('invited')).resolves.toEqual({
+            uuid: 'invited',
+            email: 'invited@acme.dev',
+            organization: { name: undefined },
+        });
+    });
 });
