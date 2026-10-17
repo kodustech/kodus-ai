@@ -56,6 +56,16 @@ describe('filesInAgentScope', () => {
         expect(scoped.map((f) => f.filename)).toEqual(['src/ledger/post.ts']);
     });
 
+    it('matches a glob saved with surrounding spaces', () => {
+        const scoped = filesInAgentScope(
+            agent({
+                scope: { include: [' src/** '], exclude: [' **/*.spec.ts'] },
+            }),
+            files,
+        );
+        expect(scoped.map((f) => f.filename)).toEqual(['src/ledger/post.ts']);
+    });
+
     it('ignores blank globs instead of matching nothing', () => {
         expect(
             filesInAgentScope(agent({ scope: { include: [' '] } }), files),

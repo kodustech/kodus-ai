@@ -28,8 +28,10 @@ export function filesInAgentScope<T extends { filename: string }>(
     agent: Pick<CustomAgentConfig, 'scope'>,
     changedFiles: readonly T[],
 ): T[] {
-    const include = (agent.scope?.include ?? []).filter((g) => g?.trim());
-    const exclude = (agent.scope?.exclude ?? []).filter((g) => g?.trim());
+    const globs = (list?: string[]) =>
+        (list ?? []).map((g) => (g ?? '').trim()).filter(Boolean);
+    const include = globs(agent.scope?.include);
+    const exclude = globs(agent.scope?.exclude);
     return changedFiles.filter(
         (file) =>
             (include.length === 0 ||
