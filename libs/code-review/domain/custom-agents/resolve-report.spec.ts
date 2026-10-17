@@ -1,0 +1,93 @@
+import {
+    countAstGrepRules,
+    isKodyRuleSource,
+    knowledgeBudgets,
+} from './resolve-report';
+
+describe('custom agent resolve report', () => {
+    it('counts one ast-grep rule per YAML document', () => {
+        const report = countAstGrepRules(
+            [
+                'id: no-float-money',
+                'language: typescript',
+                'rule: { pattern: "parseFloat($AMOUNT)" }',
+                '---',
+                'id: ledger-balance',
+                'language: typescript',
+                'rule: { pattern: "post($ENTRY)" }',
+            ].join('\n'),
+        );
+
+        expect(report).toEqual({
+            ruleCount: 2,
+            ruleIds: ['no-float-money', 'ledger-balance'],
+            errors: [],
+        });
+    });
+
+    it('reports documents without an id or a rule instead of counting them', () => {
+        const report = countAstGrepRules(
+            'language: typescript\n---\nid: half-rule\nlanguage: go',
+        );
+
+        expect(report.ruleCount).toBe(0);
+        expect(report.errors).toEqual([
+            'Rule 1 has no id.',
+            'Rule "half-rule" has no rule pattern.',
+        ]);
+    });
+
+    it('reports YAML that does not parse', () => {
+        expect(countAstGrepRules('id: [unclosed').errors[0]).toMatch(
+            /^Not valid YAML/,
+        );
+    });
+
+    it('sums skills, docs and doc tokens per target and flags each limit', () => {
+        const docs = Array.from({ length: 11 }, (_, index) => ({
+            path: `docs/ledger-${index}.md`,
+            kind: 'doc' as const,
+            linkedTo: [{ agentId: 'ledger-agent' }],
+        }));
+        const budgets = knowledgeBudgets(
+            [
+                ...docs,
+                {
+                    path: 'skills/posting/SKILL.md',
+                    kind: 'skill',
+                    linkedTo: ['main-review', { agentId: 'ledger-agent' }],
+                },
+            ],
+            docs.map((doc) => ({
+                path: doc.path,
+                kind: 'doc',
+                found: true,
+                issues: [],
+                tokens: 2000,
+            })),
+        );
+
+        expect(budgets).toEqual([
+            {
+                target: 'agent:ledger-agent',
+                skills: 1,
+                docs: 11,
+                docTokens: 22000,
+                over: ['docs', 'docTokens'],
+            },
+            {
+                target: 'main-review',
+                skills: 1,
+                docs: 0,
+                docTokens: 0,
+                over: [],
+            },
+        ]);
+    });
+
+    it('recognises files that are already Kody Rules sources', () => {
+        expect(isKodyRuleSource('AGENTS.md')).toBe(true);
+        expect(isKodyRuleSource('services/ledger/CLAUDE.md')).toBe(true);
+        expect(isKodyRuleSource('docs/ledger-guide.md')).toBe(false);
+    });
+});

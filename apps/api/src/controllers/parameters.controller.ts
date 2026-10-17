@@ -61,6 +61,7 @@ import { UpdateCodeReviewParameterRepositoriesUseCase } from '@libs/code-review/
 import { UpdateOrCreateCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/update-or-create-code-review-parameter-use-case';
 import { PreviewPrSummaryUseCase } from '@libs/code-review/application/use-cases/summary/preview-pr-summary.use-case';
 import { ParametersKey } from '@libs/core/domain/enums';
+import { maskCodeReviewConfigSecrets } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import {
     checkPermissions,
     checkRepoPermissions,
@@ -214,10 +215,26 @@ export class ParametersController {
     ) {
         const organizationId = this.request?.user?.organization?.uuid;
 
-        return await this.findByKeyParametersUseCase.execute(key, {
+        const parameter = await this.findByKeyParametersUseCase.execute(key, {
             teamId,
             organizationId,
         });
+
+        // Custom agent CLI secrets are write-only; the raw config never
+        // leaves the server with their ciphertext.
+        if (
+            key === ParametersKey.CODE_REVIEW_CONFIG &&
+            parameter?.configValue
+        ) {
+            return {
+                ...parameter,
+                configValue: maskCodeReviewConfigSecrets(
+                    parameter.configValue as any,
+                ),
+            };
+        }
+
+        return parameter;
     }
 
     //endregion

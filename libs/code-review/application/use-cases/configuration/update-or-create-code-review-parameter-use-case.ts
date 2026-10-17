@@ -31,6 +31,11 @@ import {
     ContextReferenceDetectionService,
 } from '@libs/ai-engine/infrastructure/adapters/services/context/context-reference-detection.service';
 import { deepDifference, deepMerge } from '@libs/common/utils/deep';
+import { encrypt } from '@libs/common/utils/crypto';
+import {
+    collectStoredCustomAgents,
+    sealCustomAgentSecrets,
+} from '@libs/code-review/domain/custom-agents/cli-secrets';
 import { convertTiptapJSONToText } from '@libs/common/utils/tiptap-json';
 import { alignPromptOverridesWithParent } from './align-prompt-overrides';
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
@@ -216,6 +221,16 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             const codeRepositories = await this.getFormattedRepositories(
                 organizationAndTeamData,
             );
+
+            // CLI secrets are write-only: encrypt what was typed and keep
+            // what the screen echoed back masked, before anything is stored.
+            if (Array.isArray(configValue?.customAgents)) {
+                configValue.customAgents = sealCustomAgentSecrets(
+                    configValue.customAgents,
+                    collectStoredCustomAgents(codeReviewConfigs),
+                    encrypt,
+                );
+            }
 
             const filteredRepositoryInfo =
                 this.filterRepositoryInfo(codeRepositories);
@@ -562,7 +577,8 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
      */
     private async stripLinkedRepositoriesIfPlanNotAllowed(
         organizationAndTeamData: OrganizationAndTeamData,
-        configValue: CreateOrUpdateCodeReviewParameterDto['configValue'] | undefined,
+        configValue:
+            CreateOrUpdateCodeReviewParameterDto['configValue'] | undefined,
     ): Promise<void> {
         if (!configValue) return;
         const links = (configValue as { linkedRepositories?: unknown })
