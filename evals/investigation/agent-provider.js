@@ -77,8 +77,10 @@ function reviewOptionsFromEnv() {
 // member writes them (stored by production's write, shared/review-stage.js
 // teamStore), the review options and prompt overrides it saved, and "Use
 // coding-agent instructions in reviews" when the case gives the target branch
-// instruction files (prOf).
-function teamOf(caseData) {
+// instruction files (prOf). A run's `--team-config` (run-recall.js,
+// shared/team-config.js) is saved over the case's own keys, as a team saving
+// those keys would.
+function teamOf(caseData, teamConfig = null) {
     if (process.env.RECALL_HEAVY === '1') {
         throw new NotAProductionRoute('RECALL_HEAVY asks for a mode the review enables behind a release gate the eval has no org for');
     }
@@ -90,6 +92,7 @@ function teamOf(caseData) {
         ...(v2PromptOverrides ? { v2PromptOverrides } : {}),
         ...(caseData.reviewMode ? { reviewMode: caseData.reviewMode } : {}),
         ...(Object.keys(instructionFilesOf(caseData)).length ? { repoInstructionsEnabled: true } : {}),
+        ...(teamConfig || {}),
     };
     return {
         language: caseData.languageResultPrompt || undefined,
@@ -201,6 +204,7 @@ function writeResultArtifact(filename, payload) {
 class InvestigationAgentProvider {
     constructor(options) {
         this.config = options.config || {};
+        this.teamConfig = options.teamConfig || null;
         this.providerId = this.config.label || `${this.config.provider || 'google'}:${this.config.model || 'unknown'}`;
     }
 
@@ -222,7 +226,7 @@ class InvestigationAgentProvider {
             const permissionService = evalPermissionService(route.storedConfig);
 
             stage = 'run-review';
-            const review = await reviewPullRequest({ pr: prOf(caseData), team: teamOf(caseData), route, permissionService });
+            const review = await reviewPullRequest({ pr: prOf(caseData), team: teamOf(caseData, this.teamConfig), route, permissionService });
             if (review.skipped) throw new Error(`production skipped the review: ${review.skipped}`);
             // The stage records a failed agent or step and goes on with what it has:
             // a review that failed measured the failure, not the finder.
