@@ -1,4 +1,7 @@
-import { formatCustomAgentsSummary } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
+import {
+    formatCustomAgentsSummary,
+    withDeliveredCounts,
+} from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
 import { Injectable, Inject } from '@nestjs/common';
 import {
     COMMENT_MANAGER_SERVICE_TOKEN,
@@ -357,7 +360,13 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewErrorCustomMessage,
                 context.linkedRepositoriesMetadata,
                 context.reviewWarnings,
-                formatCustomAgentsSummary(context.customAgentRuns),
+                formatCustomAgentsSummary(
+                    withDeliveredCounts(
+                        context.customAgentRuns,
+                        context.lineComments,
+                        context.prLevelCommentResults,
+                    ),
+                ),
                 !!context.onlyCustomAgent,
             );
             return context;
@@ -430,7 +439,13 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewErrorCustomMessage,
                 context.linkedRepositoriesMetadata,
                 context.reviewWarnings,
-                formatCustomAgentsSummary(context.customAgentRuns),
+                formatCustomAgentsSummary(
+                    withDeliveredCounts(
+                        context.customAgentRuns,
+                        context.lineComments,
+                        context.prLevelCommentResults,
+                    ),
+                ),
                 !!context.onlyCustomAgent,
             );
             return context;
@@ -451,7 +466,13 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     PullRequestMessageStatus.ONLY_WHEN_OPENED &&
                     context.lastExecution))
         ) {
-            const finalCommentBody = `${endReviewMessage.content ?? ''}${formatCustomAgentsSummary(context.customAgentRuns)}`;
+            const finalCommentBody = `${endReviewMessage.content ?? ''}${formatCustomAgentsSummary(
+                withDeliveredCounts(
+                    context.customAgentRuns,
+                    context.lineComments,
+                    context.prLevelCommentResults,
+                ),
+            )}`;
 
             await this.commentManagerService.createComment(
                 organizationAndTeamData,

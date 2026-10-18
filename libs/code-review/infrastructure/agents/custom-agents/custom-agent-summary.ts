@@ -1,7 +1,9 @@
 import type {
     CodeSuggestion,
+    CommentResult,
     CustomAgentConfig,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 
 import { filesInAgentScope } from './custom-agent-scope';
 
@@ -40,6 +42,41 @@ export function summarizeCustomAgentRuns(
         status: lostToIgnoredPaths(run, ignored) ? 'ignored-paths' : run.status,
         posted: posted.filter((s) => s.customAgent?.id === run.id).length,
     }));
+}
+
+/**
+ * "Posted" as the pull request got it: the summary is built before anything
+ * is posted, so a provider that refused every comment still read "8 posted"
+ * next to "no issues found". An inline agent counts its sent comments; a
+ * single-comment agent counts its findings only when that comment was sent.
+ * Without delivery results the counts stay as they were.
+ */
+export function withDeliveredCounts(
+    runs: readonly CustomAgentRunSummary[] | undefined,
+    lineComments: readonly CommentResult[] | undefined,
+    prLevelComments: readonly CommentResult[] | undefined,
+): CustomAgentRunSummary[] {
+    if (!lineComments && !prLevelComments) return [...(runs ?? [])];
+    const agentOf = (r: CommentResult) =>
+        (r?.comment as { suggestion?: Partial<CodeSuggestion> } | undefined)
+            ?.suggestion?.customAgent?.id;
+    const sent = (r: CommentResult) =>
+        r?.deliveryStatus === DeliveryStatus.SENT;
+    return (runs ?? []).map((run) => {
+        const inline = (lineComments ?? []).filter(
+            (r) => agentOf(r) === run.id,
+        );
+        if (inline.length) {
+            return { ...run, posted: inline.filter(sent).length };
+        }
+        const single = (prLevelComments ?? []).filter(
+            (r) => agentOf(r) === run.id,
+        );
+        if (single.length) {
+            return { ...run, posted: single.some(sent) ? run.posted : 0 };
+        }
+        return { ...run, posted: run.posted > 0 ? 0 : run.posted };
+    });
 }
 
 function lostToIgnoredPaths(
