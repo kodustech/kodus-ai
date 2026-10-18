@@ -22,6 +22,15 @@ services:
     worker:
         environment:
             - API_MCP_SERVER_ENABLED=true
+            # A preview is used for parallel test reviews: at the dev 1.5G heap
+            # a handful of large reviews exhausted it, the review process died
+            # and, with the watcher still alive, nothing restarted it (every
+            # in-flight review froze in the same second). The VM has 16 GiB.
+            - NODE_OPTIONS=--max-old-space-size=3584 --max-semi-space-size=64
+        deploy:
+            resources:
+                limits:
+                    memory: 4G
 
     mcp-manager:
         environment:
