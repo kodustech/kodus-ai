@@ -4,6 +4,10 @@
         "controlled: the nightly and every tier-0 model's weekly run. full: on demand, no floor.",
         "Calibrate from two full runs of one commit (evals/README.md, rules); never copy these numbers elsewhere.",
         "deepseek-v4-flash@fireworks, controlled: calibrated 2026-10-18 from 2 local runs on ef00e53ec (production's review stage, default settings): 0/25 and 0/25 sites posted; the finder reported 9/25 and 15/25 (10 and 8 instruction findings, none posted: rated low, below the default medium severity filter). floor = observed = 0, so the gate holds only the leak check (no repo_instruction finding with the setting off) and a run that does not measure; the finder's recall beside it is the signal to read until something ships.",
+        "gpt-6-sol, controlled: calibrated 2026-10-18 from 2 local runs on fa51040a1: 6/25 and 2/25 sites posted, mean 0.16 (2 and 1 of 13 and 12 instruction findings shipped); the finder reported 16/25 and 12/25. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 25 sites, rounded down to a whole site: 0.",
+        "claude-sonnet-5-5, controlled: calibrated 2026-10-18 from 2 local runs on fa51040a1: 0/25 and 0/25 sites posted; the finder reported 20/25 and 21/25 (10 and 9 instruction findings, none shipped). floor = observed = 0.",
+        "kimi-k2.7-code@openrouter, controlled: calibrated 2026-10-18 from 2 local runs on fa51040a1: 4/25 and 4/25 sites posted, mean 0.16 (1 of 5 and 1 of 10 instruction findings shipped); the finder reported 15/25 and 12/25. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 25 sites, rounded down to a whole site: 0.",
+        "No leaked repo_instruction label with the setting off and no decoy finding in any of the 6 runs; every floor is 0, so on these models too the gate holds the leak check and a run that does not measure.",
         "Superseded: the floor calibrated 2026-10-17 on the replay setup scored the finder's own findings, before the review's filters."
     ],
     "sets": {
@@ -13,6 +17,21 @@
                     "floor": 0,
                     "observed": 0,
                     "reportedObserved": 0.48
+                },
+                "gpt-6-sol": {
+                    "floor": 0,
+                    "observed": 0.16,
+                    "reportedObserved": 0.56
+                },
+                "claude-sonnet-5-5": {
+                    "floor": 0,
+                    "observed": 0,
+                    "reportedObserved": 0.82
+                },
+                "kimi-k2.7-code@openrouter": {
+                    "floor": 0,
+                    "observed": 0.16,
+                    "reportedObserved": 0.54
                 }
             }
         },
