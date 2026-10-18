@@ -14,6 +14,7 @@ import {
     customAgentSeverityVerdict,
     customAgentWriting,
     indexCustomAgents,
+    keepOwnFindingsApart,
     preferCustomAgentKeep,
     stripCustomAgentFixes,
 } from './custom-agent-presentation';
@@ -168,6 +169,54 @@ describe('preferCustomAgentKeep', () => {
         expect(
             preferCustomAgentKeep([{ keep: 0, duplicates: [1] }], suggestions),
         ).toEqual([{ keep: 0, duplicates: [1] }]);
+    });
+});
+
+describe('keepOwnFindingsApart', () => {
+    const at = (file: string, start: number, end: number, agentId = 'dup') =>
+        finding(agentId, {
+            relevantFile: file,
+            relevantLinesStart: start,
+            relevantLinesEnd: end,
+        });
+
+    it("splits one agent's findings on different code out of a group", () => {
+        // Five different clone pairs one duplicate-code agent reported,
+        // grouped by the dedup model as "the same pattern".
+        const suggestions = [
+            at('api/update.ts', 1, 37),
+            at('reporting/manager.ts', 1, 26),
+            at('reporting/team.ts', 1, 42),
+            at('reporting/weekly.ts', 1, 28),
+            at('reporting/monthly.ts', 3, 9),
+        ];
+        expect(
+            keepOwnFindingsApart(
+                [{ keep: 3, duplicates: [0, 1, 2, 4] }],
+                suggestions,
+            ),
+        ).toEqual([]);
+    });
+
+    it("still merges one agent's findings on overlapping lines", () => {
+        const suggestions = [at('a.ts', 1, 10), at('a.ts', 5, 12)];
+        expect(
+            keepOwnFindingsApart([{ keep: 0, duplicates: [1] }], suggestions),
+        ).toEqual([{ keep: 0, duplicates: [1] }]);
+    });
+
+    it('still merges findings of different agents, or a native one', () => {
+        const suggestions = [
+            at('a.ts', 1, 10, 'one'),
+            at('b.ts', 1, 10, 'two'),
+            finding(undefined, { relevantFile: 'c.ts', label: 'bug' }),
+        ];
+        expect(
+            keepOwnFindingsApart(
+                [{ keep: 0, duplicates: [1, 2] }],
+                suggestions,
+            ),
+        ).toEqual([{ keep: 0, duplicates: [1, 2] }]);
     });
 });
 

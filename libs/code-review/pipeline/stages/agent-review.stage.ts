@@ -85,6 +85,7 @@ import {
     customAgentWriting,
     indexCustomAgents,
     isCustomAgentFinding,
+    keepOwnFindingsApart,
     preferCustomAgentKeep,
     stripCustomAgentFixes,
     type CustomAgentsById,
@@ -2701,8 +2702,14 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const groups: Array<{
                 keep: number;
                 duplicates: number[];
-            }> = preferCustomAgentKeep(
-                preferAnalyzerKeep(normalizedDedup?.groups || [], suggestions),
+            }> = keepOwnFindingsApart(
+                preferCustomAgentKeep(
+                    preferAnalyzerKeep(
+                        normalizedDedup?.groups || [],
+                        suggestions,
+                    ),
+                    suggestions,
+                ),
                 suggestions,
             );
             const unique: number[] = normalizedDedup?.unique || [];

@@ -185,6 +185,52 @@ export function preferCustomAgentKeep(
 }
 
 /**
+ * Takes a custom agent's own findings back out of a dedup group when they sit
+ * on code that does not overlap. The agent already merged what it saw as one
+ * problem; two findings it kept apart on different code are two problems (a
+ * duplicate-code agent reports each clone pair once), however alike their
+ * wording reads to the dedup model. Findings on overlapping lines, and
+ * findings of different agents or native ones, still merge. A taken-out index
+ * is left unclassified, which the dedup keeps as unique.
+ */
+export function keepOwnFindingsApart(
+    groups: DedupGroup[],
+    suggestions: Finding[],
+): DedupGroup[] {
+    const at = (index: number): Finding | undefined =>
+        Number.isInteger(index) && index >= 0 && index < suggestions.length
+            ? suggestions[index]
+            : undefined;
+    const overlaps = (a: Finding, b: Finding): boolean => {
+        if (a.relevantFile !== b.relevantFile) return false;
+        const aStart = Number(a.relevantLinesStart) || 0;
+        const bStart = Number(b.relevantLinesStart) || 0;
+        const aEnd = Math.max(aStart, Number(a.relevantLinesEnd) || aStart);
+        const bEnd = Math.max(bStart, Number(b.relevantLinesEnd) || bStart);
+        return aStart <= bEnd && bStart <= aEnd;
+    };
+
+    return groups.flatMap((group) => {
+        const keep = at(group.keep);
+        if (!keep || !isCustomAgentFinding(keep) || !group.duplicates?.length) {
+            return [group];
+        }
+        const duplicates = group.duplicates.filter((index) => {
+            const s = at(index);
+            return !(
+                s &&
+                isCustomAgentFinding(s) &&
+                s.customAgent.id === keep.customAgent.id &&
+                !overlaps(s, keep)
+            );
+        });
+        if (duplicates.length === group.duplicates.length) return [group];
+        // Emptied by this split: nothing left to merge into the keep.
+        return duplicates.length ? [{ ...group, duplicates }] : [];
+    });
+}
+
+/**
  * Agents with `format: 'single-comment'` publish their findings as one
  * PR-level comment instead of inline. Returns the inline rest and one
  * PR-level entry per such agent.
