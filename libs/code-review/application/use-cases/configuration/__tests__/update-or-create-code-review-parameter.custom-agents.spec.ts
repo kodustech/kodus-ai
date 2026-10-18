@@ -1,5 +1,8 @@
 import { decrypt } from '@libs/common/utils/crypto';
+import { ConflictException } from '@nestjs/common';
+
 import { CLI_SECRET_MASK } from '@libs/code-review/domain/custom-agents/cli-secrets';
+import { customAgentsRevisionsAtLevel } from '@libs/code-review/domain/custom-agents/revision';
 
 import { UpdateOrCreateCodeReviewParameterUseCase } from '../update-or-create-code-review-parameter-use-case';
 
@@ -101,8 +104,12 @@ const buildUseCase = (
         { codeReviewSettingsUpdated: jest.fn() } as any,
     );
 
-    const save = async (configValue: Record<string, unknown>) => {
+    const save = async (
+        configValue: Record<string, unknown>,
+        extra: Record<string, unknown> = {},
+    ) => {
         await useCase.execute({
+            ...extra,
             actor: {
                 source: 'sync',
                 organizationId: 'org-1',
@@ -262,5 +269,71 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
         expect(logged).not.toContain('Every posting must balance');
         expect(logged).not.toContain('Internal ledger notes');
         expect(logged).toContain('customAgents');
+    });
+
+    describe('a save made from a stale copy of the lists', () => {
+        const loadedFrom = (repositoryConfigs: Record<string, unknown>) =>
+            customAgentsRevisionsAtLevel(
+                {
+                    configs: {},
+                    repositories: [
+                        { id: 'repo-1', configs: repositoryConfigs },
+                    ],
+                },
+                { repositoryId: 'repo-1' },
+            );
+        const auditAgent = {
+            ...ledgerAgent([]),
+            id: 'audit-agent',
+            name: 'Audit reviewer',
+        };
+
+        it('is rejected with a conflict and writes nothing', async () => {
+            // This tab loaded one agent; another tab saved a second since.
+            const loaded = loadedFrom({ customAgents: [ledgerAgent([])] });
+            const { save, createOrUpdateParametersUseCase } = buildUseCase({
+                customAgents: [ledgerAgent([]), auditAgent],
+            });
+
+            const attempt = save(
+                {
+                    customAgents: [
+                        { ...ledgerAgent([]), instructions: 'Edited here.' },
+                    ],
+                },
+                { expectedRevisions: loaded },
+            );
+
+            await expect(attempt).rejects.toBeInstanceOf(ConflictException);
+            await expect(attempt).rejects.toThrow(/Reload/);
+            expect(
+                createOrUpdateParametersUseCase.execute,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('is saved when the lists did not change since they were loaded', async () => {
+            const stored = { customAgents: [ledgerAgent([])], knowledge: [] };
+            const configs = await buildUseCase(stored).save(
+                { customAgents: [ledgerAgent([]), auditAgent] },
+                { expectedRevisions: loadedFrom(stored) },
+            );
+
+            expect(configs.customAgents.map((a: any) => a.id)).toEqual([
+                'ledger-agent',
+                'audit-agent',
+            ]);
+        });
+
+        it('does not block other settings saved with a stale revision', async () => {
+            const loaded = loadedFrom({ customAgents: [ledgerAgent([])] });
+            const configs = await buildUseCase({
+                customAgents: [ledgerAgent([]), auditAgent],
+            }).save(
+                { automatedReviewActive: false },
+                { expectedRevisions: loaded },
+            );
+
+            expect(configs.automatedReviewActive).toBe(false);
+        });
     });
 });

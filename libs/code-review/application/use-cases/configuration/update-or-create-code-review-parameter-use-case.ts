@@ -1,6 +1,7 @@
 import { CreateOrUpdateParametersUseCase } from '@libs/organization/application/use-cases/parameters/create-or-update-use-case';
 import {
     BadRequestException,
+    ConflictException,
     ForbiddenException,
     Inject,
     Injectable,
@@ -38,6 +39,10 @@ import {
     sealCustomAgentSecrets,
     storedCustomAgentsAtLevel,
 } from '@libs/code-review/domain/custom-agents/cli-secrets';
+import {
+    assertCustomAgentsRevisions,
+    StaleCustomAgentsError,
+} from '@libs/code-review/domain/custom-agents/revision';
 import { convertTiptapJSONToText } from '@libs/common/utils/tiptap-json';
 import { alignPromptOverridesWithParent } from './align-prompt-overrides';
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
@@ -224,6 +229,27 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             const codeRepositories = await this.getFormattedRepositories(
                 organizationAndTeamData,
             );
+
+            // The custom agents and knowledge are written as whole lists: a
+            // save made from a copy someone else replaced since would drop
+            // their changes, so it is refused and the screen asks to reload.
+            try {
+                assertCustomAgentsRevisions(
+                    codeReviewConfigs,
+                    {
+                        repositoryId,
+                        directoryId,
+                        directoryPaths: resolvedPaths,
+                    },
+                    configValue as Record<string, unknown>,
+                    body.expectedRevisions,
+                );
+            } catch (error) {
+                if (error instanceof StaleCustomAgentsError) {
+                    throw new ConflictException(error.message);
+                }
+                throw error;
+            }
 
             // CLI secrets are write-only: encrypt what was typed and keep
             // what the screen echoed back masked, before anything is stored.
@@ -546,7 +572,8 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         } catch (error) {
             if (
                 error instanceof ForbiddenException ||
-                error instanceof BadRequestException
+                error instanceof BadRequestException ||
+                error instanceof ConflictException
             ) {
                 throw error;
             }

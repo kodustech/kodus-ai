@@ -951,6 +951,23 @@ class CodeReviewConfigWithoutLLMProviderDto {
     knowledge?: KnowledgeItemDto[];
 }
 
+/**
+ * The custom agents and knowledge revisions the screen loaded (from the
+ * code review config it read). A save of either list is refused with 409
+ * when the stored list changed since.
+ */
+export class ExpectedCustomAgentsRevisionsDto {
+    @IsString()
+    @IsOptional()
+    @MaxLength(64)
+    customAgents?: string;
+
+    @IsString()
+    @IsOptional()
+    @MaxLength(64)
+    knowledge?: string;
+}
+
 export class CreateOrUpdateCodeReviewParameterDto {
     @IsObject()
     @ApiProperty({
@@ -992,4 +1009,14 @@ export class CreateOrUpdateCodeReviewParameterDto {
     @IsOptional()
     @ApiPropertyOptional({ example: ['/src/services', '/src/controllers'] })
     directoryPaths?: string[];
+
+    @ValidateNested()
+    @Type(() => ExpectedCustomAgentsRevisionsDto)
+    @IsOptional()
+    @ApiPropertyOptional({
+        type: ExpectedCustomAgentsRevisionsDto,
+        description:
+            'Revisions of the custom agents and knowledge the caller loaded. A save of either list made from an older revision is refused with 409.',
+    })
+    expectedRevisions?: ExpectedCustomAgentsRevisionsDto;
 }

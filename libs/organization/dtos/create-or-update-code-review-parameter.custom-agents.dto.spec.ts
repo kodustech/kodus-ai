@@ -369,4 +369,28 @@ describe('CreateOrUpdateCodeReviewParameterDto — custom agents', () => {
         });
         expect(flat).toContain('knowledgeLinksKnownAgents');
     });
+
+    it('accepts the revisions the screen loaded, and nothing else beside them', async () => {
+        const validateBody = async (expectedRevisions: unknown) => {
+            const dto = plainToInstance(CreateOrUpdateCodeReviewParameterDto, {
+                organizationAndTeamData: { teamId: 'team-1' },
+                configValue: { customAgents: [agent()] },
+                expectedRevisions,
+            });
+            return JSON.stringify(
+                await validate(dto, {
+                    whitelist: true,
+                    forbidNonWhitelisted: true,
+                }),
+            );
+        };
+
+        expect(
+            await validateBody({ customAgents: 'a1b2', knowledge: 'c3d4' }),
+        ).toBe('[]');
+        expect(await validateBody({ customAgents: 42 })).toContain(
+            'customAgents',
+        );
+        expect(await validateBody({ agents: 'a1b2' })).toContain('agents');
+    });
 });
