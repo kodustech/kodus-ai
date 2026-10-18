@@ -80,6 +80,7 @@ import {
     indexCustomAgents,
     isCustomAgentFinding,
     keepOwnFindingsApart,
+    ruleCitation,
     preferCustomAgentKeep,
     stripCustomAgentFixes,
     type CustomAgentsById,
@@ -1777,6 +1778,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         ]);
                     });
                 }
+            }
+
+            // The team rule a convention finding applies, after formatting so
+            // the rewrite cannot paraphrase or drop it (#2172).
+            for (const s of deduped) {
+                const citation = ruleCitation(s);
+                if (!citation) continue;
+                s.suggestionContent = `${s.suggestionContent || ''}${citation}`;
+                s.fullExplanation = `${s.fullExplanation || ''}${citation}`;
             }
 
             // Render merged locations after formatting so rewrites cannot drop them.

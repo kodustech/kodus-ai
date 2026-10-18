@@ -15,6 +15,7 @@ import {
     customAgentWriting,
     indexCustomAgents,
     keepOwnFindingsApart,
+    ruleCitation,
     preferCustomAgentKeep,
     stripCustomAgentFixes,
 } from './custom-agent-presentation';
@@ -315,6 +316,55 @@ describe('keepOwnFindingsApart', () => {
                 suggestions,
             ),
         ).toEqual([{ keep: 0, duplicates: [1, 2] }]);
+    });
+});
+
+describe('ruleCitation', () => {
+    it('names the guide and quotes the rule a convention finding applies', () => {
+        expect(
+            ruleCitation({
+                kind: 'convention',
+                source: {
+                    file: '.claude/skills/ledger/references/errors.md',
+                    section: 'Errors',
+                    quote: 'Raise LedgerError with a code.',
+                },
+            } as any),
+        ).toBe(
+            '\n\n**Rule** (`.claude/skills/ledger/references/errors.md`):\n> Raise LedgerError with a code.',
+        );
+    });
+
+    it("names the agent's instructions for a rule written there", () => {
+        expect(
+            ruleCitation({
+                kind: 'convention',
+                source: {
+                    file: 'TeamInstructions',
+                    section: '',
+                    quote: 'Log the zone id.',
+                },
+            } as any),
+        ).toContain("**Rule** (agent's instructions)");
+    });
+
+    it('quotes every line of a multi-line rule', () => {
+        expect(
+            ruleCitation({
+                kind: 'convention',
+                source: { file: 'docs/a.md', section: '', quote: 'one\ntwo' },
+            } as any),
+        ).toContain('> one\n> two');
+    });
+
+    it('adds nothing to a finding without a quoted rule', () => {
+        expect(ruleCitation({ kind: 'bug' } as any)).toBe('');
+        expect(
+            ruleCitation({
+                kind: 'convention',
+                source: { file: 'a.md', quote: ' ' },
+            } as any),
+        ).toBe('');
     });
 });
 

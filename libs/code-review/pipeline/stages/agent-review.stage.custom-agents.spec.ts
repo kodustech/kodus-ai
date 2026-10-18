@@ -532,10 +532,11 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
 
             const result = await run(stage, makeContext([agent()]));
 
+            // The convention finding also cites the rule it applies.
             expect(contents(result.validSuggestions).sort()).toEqual(
                 [
                     'Native: the entry is one-sided.',
-                    'Rule: debit needs a credit.',
+                    'Rule: debit needs a credit.\n\n**Rule** (`docs/ledger.md`):\n> Debits equal credits.',
                 ].sort(),
             );
         });

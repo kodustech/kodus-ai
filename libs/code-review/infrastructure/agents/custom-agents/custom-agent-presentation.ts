@@ -271,6 +271,26 @@ export function keepOwnFindingsApart(
 }
 
 /**
+ * The team rule a convention finding applies, for the comment: the guide it
+ * was quoted from and the rule's own words. Appended after the formatter,
+ * which rewrites the body and would paraphrase or drop it. Empty for any
+ * other finding.
+ */
+export function ruleCitation(s: Finding): string {
+    const quote = s.kind === 'convention' ? s.source?.quote?.trim() : '';
+    if (!quote) return '';
+    const file = s.source?.file?.trim() ?? '';
+    const where = /^(team)?instructions$/i.test(file.replace(/[^A-Za-z]/g, ''))
+        ? "agent's instructions"
+        : `\`${file}\``;
+    const quoted = quote
+        .split(/\r?\n/)
+        .map((line) => `> ${line}`)
+        .join('\n');
+    return `\n\n**Rule** (${where}):\n${quoted}`;
+}
+
+/**
  * Agents with `format: 'single-comment'` publish their findings as one
  * PR-level comment instead of inline. Returns the inline rest and one
  * PR-level entry per such agent.
