@@ -67,6 +67,12 @@ compose="docker compose -f docker-compose.dev.yml $BILLING_OVERLAY -f docker-com
     # environment already exists and the new commit travels with push
     # (compose watch reloads it)
     runo push --restart --recipe "$RECIPE"
+    # The web hot-reloads, but api, worker and webhooks run `nest build
+    # --watch` with autoRestart off (webpack.config.js): the bundle rebuilds
+    # and the running process keeps serving the previous commit. Restart them
+    # so they start on the synced code.
+    runo exec -- "$compose restart kodus-api worker webhooks" ||
+        echo "::warning::[$PROFILE] restarting api/worker/webhooks failed — they may still run the previous commit"
     # Runo's data step retries automatically. Keep optional service readiness
     # outside it so one failed MCP/billing probe does not hide the real
     # container logs for 15min. A cold MCP manager runs its seeds under
