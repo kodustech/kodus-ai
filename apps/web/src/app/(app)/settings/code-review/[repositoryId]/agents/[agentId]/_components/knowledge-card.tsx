@@ -33,7 +33,11 @@ export const KnowledgeStatusChips = ({
     );
     return (
         <>
-            {!report.found && <Chip tone="danger">Not on the branch</Chip>}
+            {/* The editor reads the default branch; a review reads each pull
+                request's target branch, which may have the file. */}
+            {!report.found && (
+                <Chip tone="warning">Not on the default branch</Chip>
+            )}
             {errors.length > 0 && (
                 <Chip tone="danger">
                     {errors.length} {errors.length === 1 ? "error" : "errors"}

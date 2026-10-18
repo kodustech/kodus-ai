@@ -24,7 +24,11 @@ export const draftProblems = (report?: CustomAgentResolveReport) => {
     );
     if (report.knowledge.status === "ok") {
         for (const item of report.knowledge.items) {
-            if (!item.found) problems.push(`${item.path} not found`);
+            if (!item.found) {
+                problems.push(
+                    `${item.path} is not on ${report.repository.branch}; a pull request into another branch may still have it`,
+                );
+            }
             for (const issue of item.issues) {
                 if (issue.severity === "error") {
                     problems.push(`${item.path}: ${issue.message}`);
