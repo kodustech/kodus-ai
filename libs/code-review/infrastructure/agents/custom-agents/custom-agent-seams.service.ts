@@ -141,6 +141,7 @@ export class CustomAgentKnowledgeReaderService implements ICustomAgentKnowledgeR
                 kind: 'skill' as const,
                 name: skill.name,
                 description: skill.description,
+                ...(skill.valid ? {} : { errors: skill.errors ?? [] }),
             })),
             ...docs,
         ];

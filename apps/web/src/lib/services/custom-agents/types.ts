@@ -107,6 +107,8 @@ export type KnowledgeCandidate = {
     kind: KnowledgeItem["kind"];
     name?: string;
     description?: string;
+    /** Set when the skill cannot be read as one (e.g. no frontmatter). */
+    errors?: string[];
     kodyRuleSource: boolean;
 };
 

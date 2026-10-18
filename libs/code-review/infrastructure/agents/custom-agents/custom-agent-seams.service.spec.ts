@@ -307,6 +307,33 @@ describe('CustomAgentKnowledgeReaderService', () => {
             { path: 'docs/ledger.md', kind: 'doc' },
         ]);
     });
+
+    it('carries why a detected skill is not valid', async () => {
+        const detect = jest.fn(async () => [
+            {
+                path: '.claude/skills/notes',
+                file: '.claude/skills/notes/SKILL.md',
+                source: '.claude/skills',
+                valid: false,
+                errors: [
+                    'SKILL.md must start with a YAML frontmatter block (---)',
+                ],
+            },
+        ]);
+        const reader = new CustomAgentKnowledgeReaderService(
+            codeManagement({}) as any,
+            { detect } as any,
+        );
+
+        const [skill] = await reader.discover({
+            organizationAndTeamData: org,
+            repository,
+        });
+
+        expect(skill.errors).toEqual([
+            'SKILL.md must start with a YAML frontmatter block (---)',
+        ]);
+    });
 });
 
 describe('CustomAgentToolCatalogService', () => {

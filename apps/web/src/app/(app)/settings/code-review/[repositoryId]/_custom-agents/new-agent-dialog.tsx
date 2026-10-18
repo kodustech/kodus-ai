@@ -215,7 +215,11 @@ export const NewAgentDialog = ({
                             <button
                                 key={candidate.path}
                                 type="button"
-                                disabled={saving || otherFieldsDirty}
+                                disabled={
+                                    saving ||
+                                    otherFieldsDirty ||
+                                    !!candidate.errors
+                                }
                                 onClick={() => fromSkill(candidate)}
                                 className="border-card-lv3/60 bg-card-lv1 hover:bg-card-lv2 flex items-start gap-3 rounded-xl border px-4 py-3 text-left disabled:opacity-60">
                                 <FolderGit2Icon className="text-text-secondary mt-0.5 size-4 shrink-0" />
@@ -229,6 +233,13 @@ export const NewAgentDialog = ({
                                     {candidate.description && (
                                         <span className="text-text-secondary text-xs">
                                             {candidate.description}
+                                        </span>
+                                    )}
+                                    {candidate.errors && (
+                                        <span className="text-warning text-xs">
+                                            Not a valid skill:{" "}
+                                            {candidate.errors.join("; ") ||
+                                                "it could not be read"}
                                         </span>
                                     )}
                                 </span>
