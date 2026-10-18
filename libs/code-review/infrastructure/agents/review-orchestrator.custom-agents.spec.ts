@@ -166,6 +166,68 @@ describe('ReviewOrchestratorService — custom agents', () => {
         ).toEqual(['src/ledger/post-entry.ts']);
     });
 
+    it('keeps the call graph and analyzer findings of other files out of a scoped agent', async () => {
+        const { service, generalist, customCalls } = setup();
+        const callGraph = [
+            '<CallGraph>',
+            '  <Summary changedFunctions="2" />',
+            '',
+            '  <ChangedFunction name="postEntry" file="src/ledger/post-entry.ts" lines="1-4" status="new">',
+            '    <WhatChanged>New function added</WhatChanged>',
+            '  </ChangedFunction>',
+            '',
+            '  <ChangedFunction name="invoice" file="src/billing/invoice.ts" lines="1-2" status="new">',
+            '    <WhatChanged>New function added</WhatChanged>',
+            '  </ChangedFunction>',
+            '',
+            '  <Imports>',
+            '    <Import source="src/billing/invoice.ts" target="src/lib/money.ts" new="true" />',
+            '  </Imports>',
+            '</CallGraph>',
+        ].join('\n');
+        const analyzerFindings = [
+            { ruleId: 'r', path: 'src/ledger/post-entry.ts', startLine: 1 },
+            { ruleId: 'r', path: 'src/billing/invoice.ts', startLine: 1 },
+        ];
+
+        await service.execute(
+            inputFor({
+                callGraph,
+                analyzerFindings,
+                customAgents: [
+                    agentConfig({ scope: { include: ['src/ledger/**'] } }),
+                ],
+            }),
+        );
+
+        const scoped = customCalls.get('agent-1') as any;
+        expect(scoped.callGraph).toContain('src/ledger/post-entry.ts');
+        expect(scoped.callGraph).not.toContain('src/billing/invoice.ts');
+        expect(scoped.analyzerFindings.map((f: any) => f.path)).toEqual([
+            'src/ledger/post-entry.ts',
+        ]);
+        // The built-in agents still see the whole PR.
+        const main = (generalist.execute.mock.calls[0] as any[])[0];
+        expect(main.callGraph).toBe(callGraph);
+        expect(main.analyzerFindings).toBe(analyzerFindings);
+    });
+
+    it('drops the call graph for a scoped agent when none of its files is in it', async () => {
+        const { service, customCalls } = setup();
+
+        await service.execute(
+            inputFor({
+                callGraph:
+                    '<CallGraph>\n  <ChangedFunction name="invoice" file="src/billing/invoice.ts">\n  </ChangedFunction>\n</CallGraph>',
+                customAgents: [
+                    agentConfig({ scope: { include: ['src/ledger/**'] } }),
+                ],
+            }),
+        );
+
+        expect((customCalls.get('agent-1') as any).callGraph).toBe('');
+    });
+
     it('skips an agent whose globs match no changed file and records it', async () => {
         const { service, factory } = setup();
 

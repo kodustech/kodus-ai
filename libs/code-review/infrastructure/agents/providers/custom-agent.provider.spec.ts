@@ -385,9 +385,9 @@ describe('CustomAgentProvider — knowledge and tools', () => {
         );
 
         const [, secrets] = runLoopMock.mock.calls[0];
-        expect((secrets.extraTools ?? []).map((t: any) => t.name)).not.toContain(
-            'astGrep',
-        );
+        expect(
+            (secrets.extraTools ?? []).map((t: any) => t.name),
+        ).not.toContain('astGrep');
         expect(output.warnings).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({
@@ -429,7 +429,9 @@ describe('CustomAgentProvider — knowledge and tools', () => {
         );
 
         const [, secrets] = runLoopMock.mock.calls[0];
-        const astGrep = secrets.extraTools.find((t: any) => t.name === 'astGrep');
+        const astGrep = secrets.extraTools.find(
+            (t: any) => t.name === 'astGrep',
+        );
         await astGrep.execute({ useRules: true }, { runId: 'r' });
 
         expect(exec).toHaveBeenCalledWith(
@@ -626,6 +628,30 @@ describe('buildCustomAgentPrompt', () => {
                 config({ tools: { mcp: [{ integrationId: 'x', tools: [] }] } }),
             ),
         ).not.toContain('<TeamSystems>');
+    });
+});
+
+describe('buildCustomAgentPrompt — scope', () => {
+    it('names the files the agent reviews and limits findings to them', () => {
+        const prompt = buildCustomAgentPrompt(config(), [
+            {
+                filename: 'src/lib/fmt/format.ts',
+                status: 'renamed',
+                previous_filename: 'src/lib/format.ts',
+            },
+            { filename: 'src/ledger/post.ts', status: 'modified' },
+        ] as any);
+
+        expect(prompt).toContain('<Scope>');
+        expect(prompt).toContain(
+            '- src/lib/fmt/format.ts (renamed from src/lib/format.ts)',
+        );
+        expect(prompt).toContain('- src/ledger/post.ts');
+        expect(prompt).toMatch(/report findings only on these files/i);
+    });
+
+    it('renders no scope block without files', () => {
+        expect(buildCustomAgentPrompt(config())).not.toContain('<Scope>');
     });
 });
 

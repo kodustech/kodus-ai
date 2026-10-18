@@ -17,6 +17,7 @@ import { CustomAgentProviderFactory } from '@libs/code-review/infrastructure/age
 import {
     customAgentSlug,
     filesInAgentScope,
+    scopeCallGraph,
     selectCustomAgents,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import type { CustomAgentRun } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
@@ -332,9 +333,25 @@ export class ReviewOrchestratorService {
                             ...rest
                         }) => rest as any,
                     ) ?? agentInputWithoutContent.changedFiles;
+                // A scoped agent sees only its files: the PR-wide call graph
+                // and analyzer findings would send it after the rest.
+                const scopedPaths = task.changedFiles?.map((f) => f.filename);
+                const scopedContext = scopedPaths
+                    ? {
+                          callGraph: scopeCallGraph(
+                              agentInputWithoutContent.callGraph,
+                              scopedPaths,
+                          ),
+                          analyzerFindings:
+                              agentInputWithoutContent.analyzerFindings?.filter(
+                                  (f) => scopedPaths.includes(f.path),
+                              ),
+                      }
+                    : {};
                 return await task.provider.execute({
                     ...agentInputWithoutContent,
                     changedFiles,
+                    ...scopedContext,
                     knowledge: task.knowledge,
                     maxSteps: this.getMaxStepsForAgent(
                         task.budgetKey ?? task.name,

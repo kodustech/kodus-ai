@@ -49,7 +49,15 @@ import type {
  * The category prompt of a custom agent: the team's instructions are the
  * whole mission. A closing tag inside the instructions cannot end the block.
  */
-export function buildCustomAgentPrompt(agent: CustomAgentConfig): string {
+export function buildCustomAgentPrompt(
+    agent: CustomAgentConfig,
+    files?: ReadonlyArray<
+        Pick<ReviewAgentInput['changedFiles'][number], 'filename'> & {
+            status?: string;
+            previous_filename?: string;
+        }
+    >,
+): string {
     const instructions = (agent.instructions || '')
         .replace(/<\/?TeamInstructions>/gi, '')
         .trim();
@@ -68,6 +76,25 @@ export function buildCustomAgentPrompt(agent: CustomAgentConfig): string {
     Do not search them speculatively when nothing in the change points there.
   </TeamSystems>`
         : '';
+    // Its globs decide which files it reviews; without naming them the agent
+    // reads the PR title, the commits and the repository and reviews it all.
+    const scope = files?.length
+        ? `
+
+  <Scope>
+    You review only these files of the pull request:
+${files
+    .map((f) => {
+        const renamed =
+            f.previous_filename && f.previous_filename !== f.filename
+                ? ` (renamed from ${f.previous_filename})`
+                : '';
+        return `    - ${f.filename}${renamed}`;
+    })
+    .join('\n')}
+    Read any other file for context, but report findings only on these files. A renamed file with no diff still counts: check what the move breaks, such as its relative imports.
+  </Scope>`
+        : '';
     return `  <Mission>
     You are the team's "${agent.name}" reviewer. Find the problems the team's instructions below ask you to look for, in the code this pull request changes. Investigate the codebase before reporting, and back each finding with evidence from the code.
   </Mission>
@@ -81,7 +108,7 @@ ${instructions}
     - issues outside what the team's instructions ask for (other reviewers cover them)
     - style or cosmetic issues, unless the instructions ask for them
     - speculative concerns without evidence in the code
-  </DoNotReport>${teamSystems}`;
+  </DoNotReport>${scope}${teamSystems}`;
 }
 
 const logger = createLogger('CustomAgentProvider');
@@ -294,8 +321,8 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
         return ['bug'];
     }
 
-    protected getCategoryPrompt(): string {
-        return buildCustomAgentPrompt(this.agent);
+    protected getCategoryPrompt(input?: ReviewAgentInput): string {
+        return buildCustomAgentPrompt(this.agent, input?.changedFiles);
     }
 
     protected getUsageRunName(): string {

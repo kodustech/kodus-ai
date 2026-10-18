@@ -41,6 +41,46 @@ export function filesInAgentScope<T extends { filename: string }>(
 }
 
 /**
+ * The PR's call graph cut down to an agent's files: the changed functions and
+ * imports of other files are removed, so a scoped agent is not pointed at code
+ * outside its scope. The PR-wide summary goes with them, its counts no longer
+ * holding. Empty when none of the agent's files is in the graph.
+ */
+export function scopeCallGraph(
+    callGraph: string | undefined,
+    paths: readonly string[],
+): string | undefined {
+    if (!callGraph) {
+        return callGraph;
+    }
+    const inScope = new Set(paths);
+    const fileOf = (tag: string, attr: string) =>
+        tag.match(new RegExp(`\\b${attr}="([^"]*)"`))?.[1];
+    let kept = 0;
+    const scoped = callGraph
+        .replace(
+            /[ \t]*<ChangedFunction\b[^>]*>[\s\S]*?<\/ChangedFunction>[ \t]*\n?/g,
+            (block) => {
+                if (inScope.has(fileOf(block, 'file') ?? '')) {
+                    kept++;
+                    return block;
+                }
+                return '';
+            },
+        )
+        .replace(/[ \t]*<Import\b[^>]*\/>[ \t]*\n?/g, (tag) =>
+            inScope.has(fileOf(tag, 'source') ?? '') ||
+            inScope.has(fileOf(tag, 'target') ?? '')
+                ? tag
+                : '',
+        )
+        .replace(/[ \t]*<Imports>\s*<\/Imports>[ \t]*\n?/g, '')
+        .replace(/[ \t]*<Summary\b[^>]*\/>[ \t]*\n?/g, '')
+        .replace(/\n{3,}/g, '\n\n');
+    return kept > 0 ? scoped : '';
+}
+
+/**
  * The agents a review dispatches. A normal review runs every enabled one.
  * `@kody -v <slug>` asks for one agent by its slug; it runs
  * even while disabled, so a team can try an agent before turning it on.
