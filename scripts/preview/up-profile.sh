@@ -70,8 +70,9 @@ compose="docker compose -f docker-compose.dev.yml $BILLING_OVERLAY -f docker-com
     # The web hot-reloads, but api, worker and webhooks run `nest build
     # --watch` with autoRestart off (webpack.config.js): the bundle rebuilds
     # and the running process keeps serving the previous commit. Restart them
-    # so they start on the synced code.
-    runo exec -- "$compose restart kodus-api worker webhooks" ||
+    # so they start on the synced code. By container name: `runo exec` has no
+    # RUNO_* values, so compose cannot interpolate the files there.
+    runo exec -- "docker restart kodus_api kodus_worker kodus_webhooks" ||
         echo "::warning::[$PROFILE] restarting api/worker/webhooks failed — they may still run the previous commit"
     # Runo's data step retries automatically. Keep optional service readiness
     # outside it so one failed MCP/billing probe does not hide the real
