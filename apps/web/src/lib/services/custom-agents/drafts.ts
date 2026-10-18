@@ -156,7 +156,9 @@ const blankAgent = (params: {
 }): CustomAgent => ({
     id: params.id,
     name: params.name,
-    enabled: true,
+    // Starts off: the team sees what it would comment (Try it, `@kody -v`)
+    // before it posts on every pull request (#2172).
+    enabled: false,
     instructions: params.instructions,
     scope: params.include ? { include: params.include } : {},
     tools: {},

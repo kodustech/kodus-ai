@@ -30,8 +30,8 @@ import { agentPageHref, useCustomAgentsForm } from "./use-custom-agents-form";
 
 /**
  * Starts an agent from a template, or from a skill already in the
- * repository. The agent is saved right away and posts on the next pull
- * request its files match.
+ * repository. The agent is saved right away, turned off, so the team can
+ * try it before it comments on pull requests.
  */
 export const NewAgentDialog = ({
     open,
@@ -111,7 +111,8 @@ export const NewAgentDialog = ({
                 <DialogHeader>
                     <DialogTitle>New agent</DialogTitle>
                     <DialogDescription>
-                        It comments on the next pull request its files match.
+                        It starts off. Try it on a pull request, then turn
+                        it on to comment on the ones its files match.
                     </DialogDescription>
                 </DialogHeader>
 

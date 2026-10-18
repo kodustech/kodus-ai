@@ -48,14 +48,14 @@ describe("custom agent drafts", () => {
         ]);
     });
 
-    it("creates a template agent that posts, with a unique id", () => {
+    it("creates a template agent that starts off, with a unique id", () => {
         const first = createAgentFromTemplate("architecture", []);
         const second = createAgentFromTemplate("architecture", [first]);
 
         expect(first).toMatchObject({
             id: "architecture",
             name: "Architecture",
-            enabled: true,
+            enabled: false,
             presentation: {
                 format: "inline",
                 suggestedFix: "when-confident",
