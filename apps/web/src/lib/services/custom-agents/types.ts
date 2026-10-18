@@ -167,6 +167,9 @@ export type CustomAgentTryTrace = {
         error?: string;
     }>;
     findings: CustomAgentTryFinding[];
+    /** What the run lost, as a review reports it: no checkout, a CLI not
+     *  installed, a skill or doc that could not be used. */
+    warnings?: Array<{ kind: string; detail?: string }>;
     durationMs?: number;
 };
 

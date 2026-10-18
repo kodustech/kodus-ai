@@ -70,7 +70,8 @@ export const TryIt = ({
                 </span>
                 <span className="text-text-secondary text-xs">
                     Runs this agent as it is on screen, saved or not, on a pull
-                    request of this repository. Nothing is posted.
+                    request of this repository, the way a review runs it: same
+                    sandbox, CLIs and checks. Nothing is posted.
                 </span>
             </span>
             <div className="flex items-center gap-2">
@@ -117,6 +118,14 @@ export const TryIt = ({
             {run.data && !run.isPending && <TryResult trace={run.data} />}
         </Card>
     );
+};
+
+/** Said when a warning carries no detail of its own. */
+const WARNING_LABEL: Record<string, string> = {
+    SANDBOX_UNAVAILABLE:
+        "The repository could not be checked out, so the agent read only the diff",
+    CLI_INSTALL_FAILED:
+        "A CLI could not be installed; the agent ran without it",
 };
 
 const VERDICT_ICON = {
@@ -205,6 +214,24 @@ export const TryResult = ({ trace }: { trace: CustomAgentTryTrace }) => {
                     <span>{Math.round(trace.durationMs / 1000)} s</span>
                 )}
             </span>
+
+            {!!trace.warnings?.length && (
+                <div className="flex flex-col gap-1">
+                    <span className="text-text-primary text-xs font-medium">
+                        Warnings
+                    </span>
+                    {trace.warnings.map((warning, index) => (
+                        <span
+                            key={index}
+                            className="text-text-secondary flex items-start gap-1.5 text-xs">
+                            <CircleAlertIcon className="text-warning mt-px size-3.5 shrink-0" />
+                            {warning.detail ??
+                                WARNING_LABEL[warning.kind] ??
+                                warning.kind}
+                        </span>
+                    ))}
+                </div>
+            )}
 
             {trace.skillsOpened.length > 0 && (
                 <div className="flex flex-col gap-1">
