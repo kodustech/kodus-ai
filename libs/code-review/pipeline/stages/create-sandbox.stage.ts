@@ -251,8 +251,9 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
 
     /**
      * Install the team CLIs of the custom agents that will run (#2172), before
-     * any agent or secret touches the sandbox. Only on E2B and only for orgs
-     * with the feature on; a failure here never fails the review.
+     * any agent or secret touches the sandbox. Only E2B installs them; on the
+     * local sandbox the review gets a warning per CLI instead. A failure here
+     * never fails the review.
      */
     private async provisionCustomAgentClis(
         context: CodeReviewPipelineContext,
@@ -260,7 +261,6 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
     ): Promise<CustomAgentCliProvisioning | undefined> {
         const agents = context.codeReviewConfig?.customAgents ?? [];
         if (
-            sandbox.type !== 'e2b' ||
             !agents.some(
                 (agent) =>
                     (agent?.enabled || context.onlyCustomAgent) &&

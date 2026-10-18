@@ -105,8 +105,32 @@ describe('provisionCustomAgentClis', () => {
             agents: [agent()],
             changedFiles: ['src/ledger/post.ts'],
         });
-        expect(result).toEqual({ byAgentId: {}, warnings: [] });
+        expect(result.byAgentId).toEqual({});
         expect(sb.run).not.toHaveBeenCalled();
+    });
+
+    it('says why the CLI is missing when the review has no isolated sandbox', async () => {
+        for (const sb of [sandbox('local'), undefined]) {
+            const result = await provisionCustomAgentClis({
+                sandbox: sb,
+                agents: [agent()],
+                changedFiles: ['src/ledger/post.ts'],
+            });
+            expect(result.warnings).toHaveLength(1);
+            expect(result.warnings[0].kind).toBe('CLI_INSTALL_FAILED');
+            expect(result.warnings[0].detail).toContain(
+                'needs the isolated (E2B) sandbox',
+            );
+        }
+    });
+
+    it('stays silent without an isolated sandbox when no running agent has a CLI', async () => {
+        const result = await provisionCustomAgentClis({
+            sandbox: sandbox('local'),
+            agents: [agent()],
+            changedFiles: ['docs/readme.md'],
+        });
+        expect(result.warnings).toEqual([]);
     });
 
     it('skips agents whose scope the change does not touch', async () => {
@@ -222,8 +246,7 @@ describe('provisionCustomAgentClis', () => {
 
     it('fails closed when the network fence cannot be applied', async () => {
         const sb = sandbox('e2b', (s) => {
-            if (isFence(s))
-                return { exitCode: 1, stderr: 'nft: not found' };
+            if (isFence(s)) return { exitCode: 1, stderr: 'nft: not found' };
             const match = /useradd .* '(kcli[a-f0-9]+)'/.exec(s);
             return {
                 exitCode: 0,

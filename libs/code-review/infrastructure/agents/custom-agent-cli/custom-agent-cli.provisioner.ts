@@ -137,7 +137,6 @@ export async function provisionCustomAgentClis(params: {
 }): Promise<CustomAgentCliProvisioning> {
     const result: CustomAgentCliProvisioning = { byAgentId: {}, warnings: [] };
     const { sandbox } = params;
-    if (!sandbox || sandbox.type !== 'e2b') return result;
 
     // The agents the orchestrator will dispatch: the same selection, so a
     // CLI is installed exactly for an agent that runs.
@@ -150,6 +149,23 @@ export async function provisionCustomAgentClis(params: {
             touchesAgentScope(agent, params.changedFiles),
     );
     if (!candidates.length) return result;
+
+    // Without the isolated sandbox the CLIs are not offered; say so instead
+    // of letting the agent run without them silently.
+    if (!sandbox || sandbox.type !== 'e2b') {
+        for (const agent of candidates) {
+            for (const cli of agent.tools.cli ?? []) {
+                result.warnings.push(
+                    buildCliInstallFailedWarning({
+                        agentName: agent.name,
+                        cliName: cli.name,
+                        reason: 'needs the isolated (E2B) sandbox; this review ran without it',
+                    }),
+                );
+            }
+        }
+        return result;
+    }
 
     const fail = (
         agent: CustomAgentConfig,

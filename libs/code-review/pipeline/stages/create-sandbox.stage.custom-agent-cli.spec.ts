@@ -94,14 +94,20 @@ describe('CreateSandboxStage custom agent CLIs', () => {
         );
     });
 
-    it('never installs on the local sandbox', async () => {
+    it('carries the missing-sandbox warning on the local sandbox', async () => {
+        // The provisioner installs nothing there (its own spec) and returns
+        // one warning per CLI so the review says why the agent ran without it.
+        const warning = { kind: 'CLI_INSTALL_FAILED', detail: 'needs E2B' };
+        provision.mockResolvedValue({ byAgentId: {}, warnings: [warning] });
         const { stage, context, featureGate } = build({
             sandboxType: 'local',
         });
         const result: any = await (stage as any).executeStage(context);
-        expect(provision).not.toHaveBeenCalled();
         expect(featureGate.isEnabled).not.toHaveBeenCalled();
-        expect(result.customAgentClis).toBeUndefined();
+        expect(result.customAgentClis).toEqual({
+            byAgentId: {},
+            warnings: [warning],
+        });
     });
 
     it('keeps the sandbox when provisioning throws', async () => {

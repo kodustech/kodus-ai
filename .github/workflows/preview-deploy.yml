@@ -206,6 +206,9 @@ jobs:
                   PREVIEW_LANGFUSE_PUBLIC_KEY: ${{ secrets.PREVIEW_LANGFUSE_PUBLIC_KEY }}
                   PREVIEW_LANGFUSE_SECRET_KEY: ${{ secrets.PREVIEW_LANGFUSE_SECRET_KEY }}
                   PREVIEW_LANGFUSE_BASE_URL: ${{ vars.PREVIEW_LANGFUSE_BASE_URL }}
+                  # An E2B key for previews only: without it reviews fall back
+                  # to the local sandbox, which never runs custom agent CLIs.
+                  PREVIEW_E2B_KEY: ${{ secrets.PREVIEW_E2B_KEY }}
                   HEAD_REF: ${{ steps.target.outputs.branch }}
                   PROFILES: ${{ steps.decide.outputs.profiles }}
               run: |
@@ -258,6 +261,18 @@ jobs:
                     echo "Langfuse: tracing to the preview environment"
                   else
                     echo "::notice::PREVIEW_LANGFUSE_PUBLIC_KEY/SECRET_KEY are not set — this preview sends no traces"
+                  fi
+                  if [ -n "$PREVIEW_E2B_KEY" ]; then
+                    grep -v -E '^(API_E2B_KEY|SANDBOX_PROVIDER)=' .env > "$RUNNER_TEMP/env.no-e2b"
+                    {
+                      cat "$RUNNER_TEMP/env.no-e2b"
+                      echo "SANDBOX_PROVIDER=e2b"
+                      echo "API_E2B_KEY=$PREVIEW_E2B_KEY"
+                    } > .env
+                    rm -f "$RUNNER_TEMP/env.no-e2b"
+                    echo "E2B: reviews use the isolated sandbox"
+                  else
+                    echo "::notice::PREVIEW_E2B_KEY is not set — reviews use the local sandbox and custom agent CLIs are skipped"
                   fi
                   # billing exists in the cloud shape only
                   case " $PROFILES " in *" cloud "*)
