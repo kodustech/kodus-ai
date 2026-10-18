@@ -232,7 +232,12 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
                 error,
                 metadata: logContext,
             });
-            return { tools: [], teamSystemTools: [], close: async () => {} };
+            return {
+                tools: [],
+                teamSystemTools: [],
+                warnings: [],
+                close: async () => {},
+            };
         });
 
         const runCli = buildRunCliAgentTool({
@@ -244,6 +249,7 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
         return {
             tools: runCli ? [...toolset.tools, runCli] : toolset.tools,
             teamSystemTools: toolset.teamSystemTools,
+            warnings: toolset.warnings,
             close: () => toolset.close(),
         };
     }

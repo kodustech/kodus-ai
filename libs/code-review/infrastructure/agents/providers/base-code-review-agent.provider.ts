@@ -69,6 +69,8 @@ export interface AgentRunToolset {
     tools: AgentTool[];
     /** Which of `tools` read the team's own systems (MCP). */
     teamSystemTools?: string[];
+    /** Tools the agent runs without, reported with the review's warnings. */
+    warnings?: ReviewWarning[];
     close(): Promise<void>;
 }
 
@@ -596,6 +598,7 @@ export abstract class BaseCodeReviewAgentProvider {
         let agentTools: AgentRunToolset = NO_TOOLS;
         try {
             agentTools = await this.buildAgentTools(input);
+            agentWarnings.push(...(agentTools.warnings ?? []));
             const knowledgeTools =
                 input.knowledge && input.knowledgeReader
                     ? buildKnowledgeTools(

@@ -61,7 +61,10 @@ export type ReviewWarningKind =
     | 'CLI_INSTALL_FAILED'
     /** Linked repositories were armed for this PR but there was no checkout
      *  to read them from, so the review stayed single-repo. */
-    | 'CROSS_REPO_UNAVAILABLE';
+    | 'CROSS_REPO_UNAVAILABLE'
+    /** A custom agent would have had astGrep, but the sandbox has no ast-grep
+     *  binary, so the agent ran without structural search. */
+    | 'AST_GREP_UNAVAILABLE';
 
 export type ReviewWarningReason =
     | 'small_context_window'
@@ -87,7 +90,9 @@ export type ReviewWarningReason =
     /** A linked skill or doc could not be used as configured. */
     | 'knowledge'
     /** A custom agent CLI failed its install or network fence. */
-    | 'cli_install_failed';
+    | 'cli_install_failed'
+    /** A review tool the agent is configured for is missing from the sandbox. */
+    | 'tool_unavailable';
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;
@@ -247,6 +252,19 @@ export function buildCliInstallFailedWarning(params: {
         contextWindowTokens: 0,
         modelName: '',
         detail: `${params.agentName}: CLI "${params.cliName}" unavailable (${params.reason}); the agent ran without it`,
+        agentName: params.agentName,
+    };
+}
+
+export function buildAstGrepUnavailableWarning(params: {
+    agentName: string;
+}): ReviewWarning {
+    return {
+        kind: 'AST_GREP_UNAVAILABLE',
+        reason: 'tool_unavailable',
+        contextWindowTokens: 0,
+        modelName: '',
+        detail: `${params.agentName}: ast-grep is not installed in the sandbox; the agent ran without astGrep (structural search and its rules)`,
         agentName: params.agentName,
     };
 }

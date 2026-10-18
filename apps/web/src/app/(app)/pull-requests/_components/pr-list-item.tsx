@@ -1244,6 +1244,7 @@ const WARNING_KIND_LABEL: Record<ReviewWarningKind, string> = {
     CLI_INSTALL_FAILED: "Custom agent ran without a CLI",
     CROSS_REPO_UNAVAILABLE:
         "Linked repositories not read (repository not checked out)",
+    AST_GREP_UNAVAILABLE: "Custom agent ran without ast-grep",
 };
 
 /**

@@ -11,6 +11,10 @@ import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/s
 import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { createLogger } from '@libs/core/log/logger';
+import {
+    buildAstGrepUnavailableWarning,
+    type ReviewWarning,
+} from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import type {
     MCPAdapter,
     MCPAdapterConfig,
@@ -52,6 +56,8 @@ export interface CustomAgentToolset {
     tools: AgentTool[];
     /** Names of the read-only MCP tools among `tools`. */
     teamSystemTools: string[];
+    /** Tools the agent should have had but runs without, for the review. */
+    warnings: ReviewWarning[];
     close(): Promise<void>;
 }
 
@@ -75,25 +81,36 @@ async function hasAstGrep(
 }
 
 export async function buildCustomAgentTools(
-    agent: Pick<CustomAgentConfig, 'tools'>,
+    agent: Pick<CustomAgentConfig, 'tools'> &
+        Partial<Pick<CustomAgentConfig, 'name'>>,
     deps: CustomAgentToolDeps,
 ): Promise<CustomAgentToolset> {
     const tools: AgentTool[] = [];
     const teamSystemTools: string[] = [];
+    const warnings: ReviewWarning[] = [];
     const closers: Array<() => Promise<void>> = [];
 
     // ast-grep needs the neutral config written before any run (see the tool),
     // so without a file writer it is not offered at all; nor on a sandbox
-    // image that predates the binary, where every call would fail.
-    if (
-        deps.remoteCommands?.exec &&
-        deps.writeFile &&
-        (await hasAstGrep(deps.remoteCommands.exec, deps.logContext))
-    ) {
+    // image that predates the binary, where every call would fail. The latter
+    // is reported: every custom agent gets astGrep, so its absence is a loss.
+    const canRunAstGrep =
+        !!deps.remoteCommands?.exec && !!deps.writeFile;
+    const astGrepInstalled =
+        canRunAstGrep &&
+        (await hasAstGrep(deps.remoteCommands!.exec!, deps.logContext));
+    if (canRunAstGrep && !astGrepInstalled) {
+        warnings.push(
+            buildAstGrepUnavailableWarning({
+                agentName: agent.name || 'Custom agent',
+            }),
+        );
+    }
+    if (astGrepInstalled) {
         tools.push(
             buildAstGrepTool({
-                exec: deps.remoteCommands.exec,
-                writeFile: deps.writeFile,
+                exec: deps.remoteCommands!.exec!,
+                writeFile: deps.writeFile!,
                 changedFiles: deps.changedFiles,
                 rules: agent.tools?.astGrepConfig?.trim() || undefined,
                 logContext: deps.logContext,
@@ -134,6 +151,7 @@ export async function buildCustomAgentTools(
     return {
         tools,
         teamSystemTools,
+        warnings,
         async close() {
             await Promise.allSettled(closers.map((c) => c()));
         },

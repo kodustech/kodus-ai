@@ -105,6 +105,45 @@ describe('buildCustomAgentTools', () => {
         expect(remoteCommands.exec).toHaveBeenCalledWith('ast-grep --version');
     });
 
+    it('warns that the agent ran without astGrep when the sandbox has no ast-grep binary', async () => {
+        const set = await buildCustomAgentTools(
+            { name: 'Ledger Rules', tools: {} },
+            {
+                remoteCommands,
+                writeFile: jest.fn(async () => {}),
+                changedFiles: ['src/a.ts'],
+            },
+        );
+        expect(set.warnings).toEqual([
+            expect.objectContaining({
+                kind: 'AST_GREP_UNAVAILABLE',
+                agentName: 'Ledger Rules',
+                detail: expect.stringContaining(
+                    'Ledger Rules: ast-grep is not installed in the sandbox',
+                ),
+            }),
+        ]);
+    });
+
+    it('raises no ast-grep warning when the binary is there or there is no checkout', async () => {
+        const installed = await buildCustomAgentTools(
+            { name: 'Ledger Rules', tools: {} },
+            {
+                remoteCommands: astGrepInstalled,
+                writeFile: jest.fn(async () => {}),
+                changedFiles: ['src/a.ts'],
+            },
+        );
+        expect(installed.warnings).toEqual([]);
+
+        // No sandbox: SANDBOX_UNAVAILABLE already says the review had no tools.
+        const noCheckout = await buildCustomAgentTools(
+            { name: 'Ledger Rules', tools: {} },
+            { changedFiles: ['src/a.ts'] },
+        );
+        expect(noCheckout.warnings).toEqual([]);
+    });
+
     it('leaves astGrep out when the sandbox cannot write its neutral config', async () => {
         const set = await buildCustomAgentTools(
             { tools: {} },

@@ -126,6 +126,8 @@ const WARNING_LABEL: Record<string, string> = {
         "The repository could not be checked out, so the agent read only the diff",
     CLI_INSTALL_FAILED:
         "A CLI could not be installed; the agent ran without it",
+    AST_GREP_UNAVAILABLE:
+        "ast-grep is not installed in the sandbox; the agent ran without it",
 };
 
 const VERDICT_ICON = {

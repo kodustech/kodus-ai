@@ -361,6 +361,43 @@ describe('CustomAgentProvider — knowledge and tools', () => {
         expect(close).toHaveBeenCalled();
     });
 
+    it('reports that it ran without astGrep when the sandbox has no ast-grep', async () => {
+        const sandbox = {
+            type: 'e2b',
+            run: jest.fn(),
+            repoDir: '/home/user/repo',
+            writeFile: jest.fn(),
+            remoteCommands: {
+                // A sandbox image that predates the binary.
+                exec: jest.fn(async () => ({
+                    stdout: '',
+                    stderr: 'ast-grep: command not found',
+                    exitCode: 127,
+                })),
+            },
+        };
+
+        const output = await provider().execute(
+            input({
+                remoteCommands: sandbox.remoteCommands,
+                customAgentTooling: { sandbox },
+            }),
+        );
+
+        const [, secrets] = runLoopMock.mock.calls[0];
+        expect((secrets.extraTools ?? []).map((t: any) => t.name)).not.toContain(
+            'astGrep',
+        );
+        expect(output.warnings).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    kind: 'AST_GREP_UNAVAILABLE',
+                    detail: expect.stringContaining('Ledger Rules'),
+                }),
+            ]),
+        );
+    });
+
     it('runs an MCP call once per review and agent, and again in another review', async () => {
         const mcpManager = {
             getConnections: jest.fn(async (_org: any, format?: boolean) =>
