@@ -1,0 +1,11 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "newGroup": null,
+   "reason": "Both describe getClientsWithPermission finding only the shared Clients resource, omitting per-client grants and returning \"Clients\" instead of client IDs, causing callers to resolve a null client."
+  }
+ ]
+}

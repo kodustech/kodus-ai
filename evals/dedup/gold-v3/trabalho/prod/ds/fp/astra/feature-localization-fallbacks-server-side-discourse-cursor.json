@@ -1,0 +1,11 @@
+{
+ "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims the controller call can raise NoMethodError when I18n.fallbacks is not a FallbackLocaleList providing ensure_loaded!. None of the rejected issues describe this receiver-type or initializer dependency."
+  }
+ ]
+}

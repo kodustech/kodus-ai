@@ -1,0 +1,11 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment identifies missing sequence-length enforcement in ASN1Decoder.readSequence, allowing INTEGER encodings to exceed the declared DER sequence length. None of the golden issues describes this decoder validation bug."
+  }
+ ]
+}

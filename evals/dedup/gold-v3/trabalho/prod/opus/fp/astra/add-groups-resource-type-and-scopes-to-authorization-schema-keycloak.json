@@ -1,0 +1,11 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims redundant per-group permission evaluations in group listings despite an all-groups VIEW grant. This differs from #08\u2019s user-search/count scans and #oph-01\u2019s incorrect denial of access."
+  }
+ ]
+}

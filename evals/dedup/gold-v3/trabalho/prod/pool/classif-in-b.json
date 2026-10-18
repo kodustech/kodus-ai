@@ -1,0 +1,311 @@
+{
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "c9a47dd0cebd121ff73f24e1f8c1829579daf8e3",
+  "head": "da09bc0808e7c6df1bc10e00d5acf764d94c7cc7",
+  "prTitle": "feat: convert InsightsBookingService to use Prisma.sql raw queries",
+  "issues": [
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-01",
+    "comentarios": [
+     {
+      "gid": "prod-ds:S1",
+      "file": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts",
+      "lines": [
+       426,
+       429
+      ],
+      "texto": "The caching sentinel logic in the service is now completely untested, so a regression that rebuilds conditions on every call or returns stale conditions can ship without any test failing. Re-add the caching tests using the new `Prisma.sql` expectations (first call builds the condition, second call returns an equal value), mirroring the routing service suite."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-02",
+    "comentarios": [
+     {
+      "gid": "prod-sonnet:S1",
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       72,
+       80
+      ],
+      "texto": "When a caller embeds the result as `WHERE ${base} AND <extra>`, SQL operator precedence turns it into `A OR (B AND extra)`, which can leak rows outside the authorization scope or ignore the extra predicate. Always wrap the fragment `getBaseConditions` returns in parentheses, using `Prisma.sql` for `authConditions` and `filterConditions`, and wrap the eventTypeId OR-fragment in its own parentheses."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "bb5a6837cb5b3d8d3b174e17d42ec14486ef8738",
+  "head": "9501091c52ae94e8d916f79b35d21975b3f9cadb",
+  "prTitle": "feat(ecosystem): Implement cross-system issue synchronization",
+  "issues": [
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#prod-01",
+    "comentarios": [
+     {
+      "gid": "prod-ds:S1",
+      "file": "src/sentry/integrations/mixins/issues.py",
+      "lines": [
+       410,
+       421
+      ],
+      "texto": "The signature advertises that status sync participates in source-based cycle prevention, but the guard is never applied, so an inbound status webhook from integration A can still produce outbound status updates that loop exactly as the assignee case did. Either remove the unused parameter or thread `assignment_source` through the `sync_status_outbound` task into `should_sync(\"outbound_status\", assignment_source)`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+  "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+  "prTitle": "feat(uptime): Add ability to use queues to manage parallelism",
+  "issues": [
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#prod-01",
+    "comentarios": [
+     {
+      "gid": "prod-ds:S3",
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       86,
+       93
+      ],
+      "texto": "Because the tracker supports sparse offsets, this loop costs CPU proportional to the numeric span `max_offset - start` rather than the number of tracked offsets, so a single large gap burns CPU on every ~1s commit cycle. Iterate the sorted set of tracked offsets instead, walking `sorted(o for o in all_offsets if o >= start)` and stopping at the first offset that is missing contiguously or still outstanding."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+  "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "prTitle": "FEATURE: Can edit category/host relationships for embedding",
+  "issues": [
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#prod-01",
+    "comentarios": [
+     {
+      "gid": "prod-gpt:S3",
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       2,
+       2
+      ],
+      "texto": "Administrators cannot add or edit embedding relationships for legitimate hosts such as `example.technology` because the new validation rejects suffixes longer than five letters, even though the previous hostname comparison supported them. Remove the five-letter suffix restriction or use a hostname validator that supports current domain suffixes."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-localization-fallbacks-server-side-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "728845d008f06828630a632e5c7d67e11bf15deb",
+  "head": "ecfa17b5a79dfdc91e7a4d50b42ae78a35d0a293",
+  "prTitle": "FEATURE: Localization fallbacks (server-side)",
+  "issues": [
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#prod-01",
+    "comentarios": [
+     {
+      "gid": "prod-ds:S1",
+      "file": "app/controllers/application_controller.rb",
+      "lines": [
+       159,
+       159
+      ],
+      "texto": "`ensure_loaded!` is only defined on the `FallbackLocaleList` instance that config/initializers/i18n.rb assigns to `I18n.fallbacks`, so any environment where that initializer has not populated `I18n.fallbacks` with a `FallbackLocaleList` (the initializer file failing to load before `set_locale` runs, a reload in dev/test/console, or Rails reassigning `I18n.fallbacks`) raises `NoMethodError` on every request. Guard the call with `I18n.fallbacks.ensure_loaded! if I18n.fallbacks.respond_to?(:ensure_loaded!)`, or move the preload into the backend itself so it does not depend on a specific `I18n.fallbacks` type."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "prTitle": "fix: handle collective multiple host on destinationCalendar",
+  "issues": [
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+    "comentarios": [
+     {
+      "gid": "prod-sonnet:S7",
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       147,
+       157
+      ],
+      "texto": "When no destination calendar matches the credentialId, the follow-up `calendar.events.patch` receives an undefined calendarId and fails, so the Meet link never reaches the description. Compute `calendarId` once as `selectedCalendar || \"primary\"` and use it in both the insert and the patch call."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "github-oauth-security-enhancement-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "344aa102e7818606e29426ebe69d5a680d8727c6",
+  "head": "bb75657fc8f13923c1d7983f422290908a1e7310",
+  "prTitle": "GitHub OAuth Security Enhancement",
+  "issues": [
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#prod-01",
+    "comentarios": [
+     {
+      "gid": "prod-ds:S1",
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       415,
+       420
+      ],
+      "texto": "OAuth2 and GitHub require the exchange `redirect_uri` to be identical to the authorize value, so omitting it makes GitHub return `redirect_uri_mismatch` with no `access_token` and the pipeline shows the generic failure page for every installation. Add `\"redirect_uri\": redirect_uri` to `data`, matching `OAuth2CallbackView.get_token_params` (oauth2.py:273-280)."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#prod-02",
+    "comentarios": [
+     {
+      "gid": "prod-ds:S3",
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       448,
+       452
+      ],
+      "texto": "When the frontend sends `installation_id=null` (as GitHub's user-account install flow does), the literal string `\"null\"` passes the `is None` check, is bound as state, and is later passed to `Integration.objects.get(external_id=\"null\")`, which always misses and routes the user to the generic \"Invalid installation request.\" page instead of redirecting to the app installer. Treat falsy and `\"null\"` values as absent, e.g. `if not installation_id or installation_id == \"null\": return self.redirect(self.get_app_url())`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "85737f52b59aa2e3403c9b8e48acf71ccc5bfae3",
+  "head": "ce2dcc537b4b1f98a335e88cfe8e0b804483252a",
+  "prTitle": "Implement recovery key support for user storage providers",
+  "issues": [
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#prod-01",
+    "comentarios": [
+     {
+      "gid": "prod-opus:S2",
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       231,
+       235
+      ],
+      "texto": "Because `getMyUser` returns null when the username is missing from the `users` map, accessing `myUser.recoveryCodes` throws a `NullPointerException` on every `getFederatedCredentialsStream()` call, including the new `RecoveryAuthnCodesUtils.getCredential` used during login. Return `Stream.empty()` when `myUser` is null, matching the existing guard in methods like `getDisableableCredentialTypesStream`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "28e3db2520d4ea28c57b08da57b83917ba7b2e15",
+  "head": "eb9623b4e787303a3bd15e10bbbdb78d59875ac6",
+  "prTitle": "Optimize spans buffer insertion with eviction during insert",
+  "issues": [
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#prod-01",
+    "comentarios": [
+     {
+      "gid": "prod-ds:S2",
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       43,
+       64
+      ],
+      "texto": "`span_count` receives the cardinality of the destination key `set_key` after the union, not the size of `span_key`/`parent_key` being merged, so when `set_key` already holds spans from an earlier insert (the common case for an in-progress segment) it counts those pre-existing spans and `zpopmin(set_key, span_count - 1000)` evicts far more than the intended overflow, silently discarding valid recent and root spans. Derive the count from the merged key itself, e.g. `span_count = redis.call(\"zcard\", set_key)` after the unions (or subtract the prior `zcard(set_key)` from the `zunionstore` result) before deciding how many to pop."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "replays-self-serve-bulk-delete-system-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "49a275847631e231672d01b5dcd66558c069d25b",
+  "head": "ea188e2d736fd6ed27c1dba8aae63b7268e2a7a9",
+  "prTitle": "Replays Self-Serve Bulk Delete System",
+  "issues": [
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#prod-01",
+    "comentarios": [
+     {
+      "gid": "prod-ds:S1",
+      "file": "src/sentry/integrations/source_code_management/commit_context.py",
+      "lines": [
+       599,
+       601
+      ],
+      "texto": "`_truncate_title` is defined on `CommitContextIntegration` (line 578), not on `PRCommentWorkflow`, so this static reference raises `AttributeError` whenever the helper runs and breaks the title-truncation feature entirely. Reference `CommitContextIntegration._truncate_title(title)`, or move `_truncate_title` next to the workflow helpers."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "unified-storage-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "871af07203177ce59a24e742107119409274f48a",
+  "head": "26fed312840cd76b766cbd2158e17a7e6c0ec548",
+  "prTitle": "Unified Storage Performance Optimizations",
+  "issues": [
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#prod-01",
+    "comentarios": [
+     {
+      "gid": "prod-ds:S1",
+      "file": "pkg/storage/unified/resource/server.go",
+      "lines": [
+       303,
+       311
+      ],
+      "texto": "Any write events arriving between the search watcher starting and `initWatcher` subscribing are consumed by the search reader but never reach the broadcaster, so Watch subscribers silently miss those changes. Subscribe the broadcaster by calling `initWatcher` before starting the search event-draining goroutine, or have both consume from a single shared event source."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ }
+}

@@ -1,0 +1,330 @@
+{
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "c9a47dd0cebd121ff73f24e1f8c1829579daf8e3",
+  "head": "da09bc0808e7c6df1bc10e00d5acf764d94c7cc7",
+  "issues": {
+   "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-01": {
+    "comentarios": [
+     {
+      "gid": "prod-ds:S1",
+      "file": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts",
+      "lines": [
+       426,
+       429
+      ],
+      "texto": "The caching sentinel logic in the service is now completely untested, so a regression that rebuilds conditions on every call or returns stale conditions can ship without any test failing. Re-add the caching tests using the new `Prisma.sql` expectations (first call builds the condition, second call returns an equal value), mirroring the routing service suite."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "The PR deletes the 'Caching' describe block (should cache authorization/filter conditions) from insightsBooking.integration-test.ts, while the memoization in insightsBooking.ts:83-95 is kept essentially unchanged. Real coverage loss, but for trivial memoization logic the PR did not alter."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The diff deletes both caching tests; packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:435-437 now transitions directly from filter tests to getBaseConditions tests. Remaining tests call each getter only once per instance, leaving the cached-return branches at packages/lib/server/service/insightsBooking.ts:84-94 untested after the SQL representation change."
+     }
+    ]
+   },
+   "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-02": {
+    "comentarios": [
+     {
+      "gid": "prod-sonnet:S1",
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       72,
+       80
+      ],
+      "texto": "When a caller embeds the result as `WHERE ${base} AND <extra>`, SQL operator precedence turns it into `A OR (B AND extra)`, which can leak rows outside the authorization scope or ignore the extra predicate. Always wrap the fragment `getBaseConditions` returns in parentheses, using `Prisma.sql` for `authConditions` and `filterConditions`, and wrap the eventTypeId OR-fragment in its own parentheses."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "getBaseConditions (insightsBooking.ts:68-80) does return authConditions/filterConditions unwrapped, and these can be top-level OR fragments (lines 106, 173, 206). But the only consumer at head (integration test :480-484) uses it alone as `WHERE ${baseConditions}`; no code path appends another predicate, so the precedence leak cannot occur."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "critical",
+      "text": "packages/lib/server/service/insightsBooking.ts:74-75 returns authorization conditions without enclosing parentheses when filters are absent, while lines 173 and 206 produce top-level OR expressions. Appending AND therefore constrains only the second authorization branch, allowing the first branch to bypass the extra predicate; the event-type fragment is already safely grouped when combined at lines 73 and 121."
+     }
+    ]
+   }
+  }
+ },
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "bb5a6837cb5b3d8d3b174e17d42ec14486ef8738",
+  "head": "9501091c52ae94e8d916f79b35d21975b3f9cadb",
+  "issues": {
+   "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#prod-01": {
+    "comentarios": [
+     {
+      "gid": "prod-ds:S1",
+      "file": "src/sentry/integrations/mixins/issues.py",
+      "lines": [
+       410,
+       421
+      ],
+      "texto": "The signature advertises that status sync participates in source-based cycle prevention, but the guard is never applied, so an inbound status webhook from integration A can still produce outbound status updates that loop exactly as the assignee case did. Either remove the unused parameter or thread `assignment_source` through the `sync_status_outbound` task into `should_sync(\"outbound_status\", assignment_source)`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "text": "The PR adds `assignment_source` to the abstract sync_status_outbound signature (mixins/issues.py:411-418), but tasks/sync_status_outbound.py:41-44 never passes it and no should_sync('outbound_status', ...) uses it, so it is a dead parameter. The status sync path itself is untouched by the PR, so any status loop is pre-existing; the real issue is the misleading unused parameter."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "text": "The claimed webhook feedback loop is absent: inbound status sync calls update_group_status (src/sentry/integrations/tasks/sync_status_inbound.py:220,247), which bulk-updates groups and records activity without scheduling outbound synchronization (src/sentry/models/group.py:461-470). The added parameter is unused on an abstract method (src/sentry/integrations/mixins/issues.py:410-422), while the existing outbound status task remains unchanged; this does not introduce the alleged looping behavior."
+     }
+    ]
+   }
+  }
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "85737f52b59aa2e3403c9b8e48acf71ccc5bfae3",
+  "head": "ce2dcc537b4b1f98a335e88cfe8e0b804483252a",
+  "issues": {
+   "implement-recovery-key-support-for-user-storage-providers-keycloak#prod-01": {
+    "comentarios": [
+     {
+      "gid": "prod-opus:S2",
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       231,
+       235
+      ],
+      "texto": "Because `getMyUser` returns null when the username is missing from the `users` map, accessing `myUser.recoveryCodes` throws a `NullPointerException` on every `getFederatedCredentialsStream()` call, including the new `RecoveryAuthnCodesUtils.getCredential` used during login. Return `Stream.empty()` when `myUser` is null, matching the existing guard in methods like `getDisableableCredentialTypesStream`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "text": "The new getCredentials in BackwardsCompatibilityUserStorage.java:231-235 dereferences myUser from getMyUser (:226-228, a plain map lookup) without the null check that isConfiguredFor (:271) and isValid (:286) have. It only fails for a user missing from the map in this testsuite provider (not on every call), so it is a defensive inconsistency in test code."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "Although BackwardsCompatibilityUserStorage.java:235 dereferences myUser without checking null, its lookup methods reject missing usernames (lines 89 and 349), and addUser inserts the map entry before returning the adapter (lines 361\u2013362). UserCredentialManager.java:130\u2013141 dispatches to the user's own federation provider, so the cited login flow does not establish a missing-map-entry case; the suggested guard is defensive rather than a demonstrated defect."
+     }
+    ]
+   }
+  }
+ },
+ "unified-storage-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "871af07203177ce59a24e742107119409274f48a",
+  "head": "26fed312840cd76b766cbd2158e17a7e6c0ec548",
+  "issues": {
+   "unified-storage-performance-optimizations-grafana-codex#prod-01": {
+    "comentarios": [
+     {
+      "gid": "prod-ds:S1",
+      "file": "pkg/storage/unified/resource/server.go",
+      "lines": [
+       303,
+       311
+      ],
+      "texto": "Any write events arriving between the search watcher starting and `initWatcher` subscribing are consumed by the search reader but never reach the broadcaster, so Watch subscribers silently miss those changes. Subscribe the broadcaster by calling `initWatcher` before starting the search event-draining goroutine, or have both consume from a single shared event source."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "text": "backend.WatchWriteEvents (sql/backend.go:558-567) starts a separate poller and channel for each caller, so search.init's stream (search.go:203) and initWatcher's stream (server.go:755) are independent; the search reader cannot consume the broadcaster's events. Init now also runs inside NewResourceServer (server.go:258) before any Watch subscriber can exist."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "The PR starts search watching before initializing the broadcaster (pkg/storage/unified/resource/server.go:303-310; search.go:203-213). Each SQL WatchWriteEvents call starts from the latest database versions, so writes between those subscriptions are excluded from the broadcaster\u2019s stream (pkg/storage/unified/sql/backend.go:558-567). A subsequent Watch requesting an earlier Since cannot recover those events: it only filters the broadcaster stream without fetching historical changes (pkg/storage/unified/resource/server.go:847-867)."
+     }
+    ]
+   }
+  }
+ },
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "e25638dab0d4b98f99c8fe8976ccaae8f4fb9db3",
+  "head": "5f8a130277dbddc95d133cd2832be639baf89213",
+  "issues": {
+   "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01": {
+    "comentarios": [
+     {
+      "gid": "prod-ds:S2",
+      "file": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+      "lines": [
+       69,
+       74
+      ],
+      "texto": "After the server stops blocking the address (e.g. an admin removes the `BlockedEmail` rule), the user still cannot submit because `emailValidation` returns failed from the stale `rejectedEmails` entry, and this persists for the lifetime of the controller. Clear or remove entries from `rejectedEmails` when the email input changes, or reset it when the modal is reopened."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "text": "create_account_controller.js:17 adds a controller-level rejectedEmails array, filled on server email errors (:274-276) and checked first in emailValidation (:69-74) with no reset anywhere. The stale entry only matters if the server-side block is lifted while the singleton controller stays alive, a rare case solved by reloading the page."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The PR adds rejected addresses to an array that is never cleared (app/assets/javascripts/discourse/controllers/create_account_controller.js:275), and cached matches fail validation at line 69, disabling submission at line 22. Removing the server rule would allow validation again (app/models/blocked_email.rb:12\u201318), but editing the input or reopening the modal does not invalidate the client cache. This prevents retrying the now-valid address until the page is reloaded."
+     }
+    ]
+   }
+  }
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+  "head": "7355f05e6aafe2a7acc6434fb40c686665416606",
+  "issues": {
+   "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#prod-01": {
+    "comentarios": [
+     {
+      "gid": "prod-ds:S1",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       156,
+       162
+      ],
+      "texto": "When a resource-scoped check falls back to the all-groups type resource, permissions from other group resources in the same resource server can match the expected scope and grant access to a group the caller was never granted. Mirror `UserPermissionsV2` and only accept permissions whose `getResourceId()` equals `resource.getId()` before matching scopes."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "GroupPermissionsV2.hasPermission falls back to the all-groups type resource (GroupPermissionsV2.java:143-150) and then accepts any returned permission with a matching scope (:156-162) without checking permission.getResourceId(). UserPermissionsV2.hasPermission filters on permission.getResourceId().equals(resource.getId()) (UserPermissionsV2.java:123), a check added upstream precisely because type-resource evaluation also returns single-resource permissions and over-granted access."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "critical",
+      "text": "GroupPermissionsV2.java:152 passes one concrete resource to evaluation; MgmtPermissions.java:335 wraps it in a singleton list. DecisionPermissionCollector.java:189-190 and :209-211 construct the returned permission using that same resource ID, so permissions for other group resources cannot appear as claimed."
+     }
+    ]
+   },
+   "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#prod-02": {
+    "comentarios": [
+     {
+      "gid": "prod-opus:S3",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/GroupsResource.java",
+      "lines": [
+       112,
+       114
+      ],
+      "texto": "In V2, `canView(group)` runs a resource lookup, a policy-store query and a policy evaluation for each group, so listing N groups costs N evaluations even when a single all-groups VIEW grant would answer for all of them. Restore the hoisted `canView()` check before the per-group filter."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "text": "The PR replaced the hoisted canViewGlobal with stream.filter(groupsEvaluator::canView) (GroupsResource.java:113), and in V2 canView(group) does a findByName, policyStore.findByResource and a policy evaluation per group (GroupPermissionsV2.java:56-62, 141-152). This only affects the non-default populateHierarchy=false path over a paginated page, so it is redundant work rather than a meaningful regression."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "GroupsResource.java:113 does perform per-group checks, but GroupPermissionsV2.java:141-152 deliberately uses all-groups permissions only when no group-specific resource exists. A global grant therefore cannot answer for every group: restoring the proposed shortcut would bypass group-specific restrictions, so these checks preserve authorization semantics."
+     }
+    ]
+   }
+  }
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "b004587262e8221083bafbe9a0c515e7becaa7b3",
+  "head": "92f44dcea7ff19e9123a30c63c167a2938df5a55",
+  "issues": {
+   "add-guest-management-functionality-to-existing-bookings-cal-com#prod-02": {
+    "comentarios": [
+     {
+      "gid": "prod-ds:S4",
+      "file": "packages/emails/templates/organizer-add-guests-email.ts",
+      "lines": [
+       28,
+       28
+      ],
+      "texto": "When the booking has no attendees or the attendees array is empty in the formatted event, this throws a TypeError inside `getNodeMailerPayload` and aborts the organizer's email. Fall back to `this.calEvent.organizer.name` when `attendees[0]` is undefined."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "text": "The only caller, addGuests.handler.ts, throws when uniqueGuests is empty (:80-81) and then builds attendees from the updated booking including the newly created guests (:92-120), so calEvent.attendees always has at least one element when organizer-add-guests-email.ts:28 reads attendees[0].name. The empty-attendees state cannot occur."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The unchecked access exists at packages/emails/templates/organizer-add-guests-email.ts:28, but its caller rejects an empty uniqueGuests list at packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:80-81. It then inserts those guests and constructs the event from the updated attendees at lines 92-136, ensuring at least one attendee before sending the email at line 168."
+     }
+    ]
+   }
+  }
+ }
+}

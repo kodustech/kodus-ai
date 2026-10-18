@@ -1,0 +1,11 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "The duplicate downsize definition overrides the existing signature, causing ResizeEmoji's five-argument call to raise ArgumentError. This is exactly the golden issue's problem."
+  }
+ ]
+}

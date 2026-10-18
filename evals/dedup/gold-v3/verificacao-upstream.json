@@ -329,6 +329,27 @@
      "diasNoAr": 1633,
      "reason": "The unanchored Regexp.new(\"@(#{domains})\", true) stayed (later \"@(.+\\\\.)?(#{domains})\" in PR #3463 and 69ad0358c2, 2015) with no end anchor, so gmail.com.evil.com matched. Commit 'SECURITY: email domain whitelist could be bypassed' (2a22b90538, 2018-01-17) appended $ to the regex, with a spec for email.computers.are.evil.com; today's EmailValidator.email_in_restriction_setting? still uses \"@(.+\\\\.)?(#{domains})$\". Subdomain matching (evil.example.com for example.com) is intended behaviour upstream since 2015; the suffix bypass is what was fixed.",
      "astra": []
+    },
+    "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01": {
+     "bug": "Emails rejected by the server are cached in rejectedEmails for the controller's lifetime and never cleared, so an address that later becomes valid keeps failing client-side validation until reload.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2025-08-06",
+      "pr": 33072,
+      "commit": "ced043be3ca2a094aac7d107bc01325fafb46e4f",
+      "url": "https://github.com/discourse/discourse/pull/33072"
+     },
+     "removidoEm": null,
+     "diasNoAr": 4391,
+     "reason": "The signup logic moved from create_account_controller.js to controllers/signup.js, and kept the 2013 pattern until mid-2025: rejectedEmails.pushObject(result.values.email) on a server email error, and emailValidation failing on rejectedEmails.includes(email). PR #33072 (merged 2025-08-06, ced043be3c) deleted that pushObject block. The PR is mainly about destination_url cookies and does not explain the deletion. On main today, signup.js still declares rejectedEmails and still checks includes(), but nothing adds to the array, so a server rejection can no longer leave a stale client-side block. The separate invite-acceptance controller (invites/show.js, added later) has its own copy of the pattern; that is a different flow and is not counted here.",
+     "astra": [
+      {
+       "pergunta": "PR #33072 (cookie handling) deleted the rejectedEmails.pushObject block in signup.js. The array and check remain, but nothing populates them. Is this confirmado or descontinuado, and does the same pattern in invites/show.js make it pendente?",
+       "resposta": "Confirmado. #33072 removed the population of rejectedEmails, which eliminates the reported behaviour in signup. Under the given definition the fix counts even though it is incidental and the PR does not mention the bug. The cache in invites/show.js belongs to another flow and may deserve a separate investigation, but it does not make this case pendente.",
+       "veredito": "confirmado"
+      }
+     ]
     }
    }
   },
@@ -1122,6 +1143,16 @@
      "diasNoAr": 1040,
      "reason": "On main, TagDevice still begins with 'if deviceID == \"\" { return nil }', and Anonymous.Authenticate in client.go only fails on ErrDeviceLimitReached, otherwise returning an anonymous identity. A request without the X-Grafana-Device-Id header is therefore still authenticated anonymously regardless of device_limit; none of the later impl.go/client.go commits changed this.",
      "astra": []
+    },
+    "anonymous-add-configurable-device-limit-grafana-codex#prod-02": {
+     "bug": "updateDevice prepends the query to the captured args inside the retried DB callback, so a SQLite lock retry runs Exec with the query duplicated in the arguments and the update fails.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 1040,
+     "reason": "On grafana main today, pkg/services/anonymous/anonimpl/anonstore/database.go updateDevice still does `args = append([]interface{}{query}, args...)` inside the WithDbSession callback and Exec(args...), and is still called from CreateOrUpdateDevice. sqlstore/session.go withDbSession still wraps the callback in retryer.Retry(ss.retryOnLocks(...)), which re-invokes the same callback on retryable lock errors. The file's later commits (#80028, Spanner/lint/test changes) did not touch this.",
+     "astra": []
     }
    }
   },
@@ -1277,6 +1308,21 @@
      },
      "diasNoAr": 1150,
      "reason": "deleteScheduledSMSReminder kept twilio.cancelSMS and prisma.workflowReminder.delete in the same try with no separate DB cleanup through the last version before removal (smsReminderManager.ts at 353f71bdc69, 2026-03-16). Callers still delegate deletion to it (deleteAllWorkflowReminders). The file was removed with all of packages/features/ee by #28903 on 2026-04-15, without any change targeting this bug.",
+     "astra": []
+    },
+    "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#prod-01": {
+     "bug": "The cron route sets the API key only on @sendgrid/mail, so the new @sendgrid/client cancellation requests are unauthenticated and reminders for cancelled bookings stay scheduled.",
+     "severity": "high",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2023-10-27",
+      "pr": 12108,
+      "commit": "08d65c85de809093ee91a542adb5e344c55e5441",
+      "url": "https://github.com/calcom/cal.diy/pull/12108"
+     },
+     "removidoEm": null,
+     "diasNoAr": 249,
+     "reason": "Versions of packages/features/ee/workflows/api/scheduleEmailReminders.ts from the merge through 0c92fbe11d (2023-10-18) only call sgMail.setApiKey while using client.request for cancellations. PR #12108 'fix: cron scheduleEmailRemider time out' (2023-10-27) added `client.setApiKey(sendgridAPIKey)` next to sgMail.setApiKey, authenticating the @sendgrid/client requests; from #13123 (2024-01-10) cancellation moved to sendgridProvider helpers. The whole workflows code was later removed by #28903 (2026-04-15), after the fix.",
      "astra": []
     }
    }
@@ -2008,6 +2054,21 @@
      "diasNoAr": 274,
      "reason": "The test 'should combine authorization and filter conditions' kept the same shape after the merge: it moved to InsightsBookingService.integration-test.ts (#22790) and then packages/features/insights/services/ (#24399), and its last version (after #24668, 2025-10-28) still creates one user booking that satisfies both the auth and the eventTypeId filter, asserting that single row. The file and the whole insights feature were then deleted by #28903 'refactor: Cal.diy' (EE removal), which does not target the gap.",
      "astra": []
+    },
+    "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-02": {
+     "bug": "Claims getBaseConditions returns OR fragments without parentheses, so a caller appending `AND <extra>` would leak rows outside the authorization scope.",
+     "severity": "high",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2025-07-21",
+      "pr": 22619,
+      "commit": "e7535b9db3",
+      "url": "https://github.com/calcom/cal.diy/pull/22619"
+     },
+     "removidoEm": null,
+     "diasNoAr": 6,
+     "reason": "At merge commit 967442892a, getBaseConditions in packages/lib/server/service/insightsBooking.ts returns `authConditions` bare, and the combined case is `(auth) AND (filter)` without outer parentheses. PR #22619 (feat: add hourly booking charts, commit e7535b9db3, 2025-07-21) changed it to `((auth) AND (filter))`, `(auth)` and `(filter)`, so a caller appending AND no longer changes precedence. Every later version kept the parentheses (checked through the rename to InsightsBookingBaseService.ts and the move to packages/features/insights/services/). The Cal.diy refactor (#28903, 2026-04-15) later deleted the insights service entirely, but the fix came first.",
+     "astra": []
     }
    }
   },
@@ -2642,6 +2703,21 @@
      "diasNoAr": 557,
      "reason": "Commit bf9626d0 'FIX: Embedding was broken with non-english URLs and ports' added 'host << \":#{uri.port}\" if uri.port.present? && uri.port != 80 && uri.port != 443' in record_for_url before the lookup, so a stored host:port now matches. The line is still on main and spec/models/embeddable_host_spec.rb has an 'it works with ports' case.",
      "astra": []
+    },
+    "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#prod-01": {
+     "bug": "EmbeddableHost's host format validation only accepts TLDs of 2-5 letters, so admins cannot add embeddable hosts on longer TLDs like example.technology.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2017-04-15",
+      "pr": 4816,
+      "commit": "5f47603b0766ef8c32d475ab5a9e99082fad25a0",
+      "url": "https://github.com/discourse/discourse/pull/4816"
+     },
+     "removidoEm": null,
+     "diasNoAr": 604,
+     "reason": "The 2-5 letter TLD limit in EmbeddableHost's host regex was widened in steps: 436da215ae (2015-12-15, 'allow .network') to {2,7}, then PR #4816 (2017-04-15, 'increase host_must_be_valid regex for .technology TLD') to {2,10}, which is the first change that accepts the bug's example example.technology; PR #7948 (2019-07-26) raised it to {2,24}. Today's main still has `\\.[a-z]{2,24}` in host_must_be_valid. Fix date taken as #4816 because it makes the cited case pass; the partial widening started 2015-12-15.",
+     "astra": []
     }
    }
   },
@@ -3074,6 +3150,21 @@
      "removidoEm": null,
      "diasNoAr": 1143,
      "reason": "computeTeamData in RegularBookingService still pushes `{...user.destinationCalendar, externalId}` for COLLECTIVE members into the event's destinationCalendar, webhookData still starts with `...evt`, and handleWebhookTrigger/sendPayload still serialize the data unfiltered (`payload: data`).",
+     "astra": []
+    },
+    "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01": {
+     "bug": "In Google createEvent, when no destination calendar matches the credentialId, the hangout-link events.patch is called with an undefined calendarId and fails, so the Meet link is not added to the event description.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2023-09-04",
+      "pr": 11139,
+      "commit": "889164195358a46e70229b913acb3576bd47fcfc",
+      "url": "https://github.com/calcom/cal.diy/pull/11139"
+     },
+     "removidoEm": null,
+     "diasNoAr": 4,
+     "reason": "PR #11139 'hotfix: missing gCal calendarId' (2023-09-04) moved the \"primary\" fallback into selectedCalendar itself (`...find(cal => cal.credentialId === credentialId)?.externalId || \"primary\"`), so the hangout-link events.patch no longer receives an undefined calendarId. Today's main (packages/app-store/googlecalendar/lib/CalendarService.ts createEvent) keeps `externalCalendarId ?? (find(...)?.externalId || \"primary\")` and passes selectedCalendar to both insert and patch.",
      "astra": []
     }
    }

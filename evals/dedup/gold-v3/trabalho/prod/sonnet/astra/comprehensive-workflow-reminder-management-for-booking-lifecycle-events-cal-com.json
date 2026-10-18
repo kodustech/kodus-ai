@@ -1,0 +1,17 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "newGroup": null,
+   "reason": "The shared try/catch lets one SendGrid cancellation failure abort remaining cancellations and skip database deletions, leaving records that block later runs."
+  },
+  {
+   "id": "S2",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Reminder cancellation helpers are invoked without awaiting their promises, allowing the handler to return before cancellation flags or deletions are persisted."
+  }
+ ]
+}

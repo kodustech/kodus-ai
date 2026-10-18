@@ -1,0 +1,23 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes a missing resource-id check when inspecting evaluation results, allowing another resource's scope to grant access. No golden issue describes this problem."
+  },
+  {
+   "id": "S2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "Describes the same V1-only cleanup guard that leaves permission data orphaned in V2-only deployments, with additional cleanup-path detail."
+  },
+  {
+   "id": "S3",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+   "newGroup": null,
+   "reason": "Describes the same omission of global MANAGE from canView(). Its claimed listing failure differs from the golden issue's consequence, but the underlying defect and proposed correction match."
+  }
+ ]
+}

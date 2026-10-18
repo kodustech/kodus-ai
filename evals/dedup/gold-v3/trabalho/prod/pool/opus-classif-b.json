@@ -1,0 +1,106 @@
+{
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "The PR deletes the 'Caching' describe block (should cache authorization/filter conditions) from insightsBooking.integration-test.ts, while the memoization in insightsBooking.ts:83-95 is kept essentially unchanged. Real coverage loss, but for trivial memoization logic the PR did not alter.",
+    "category": "test_gap",
+    "comment": "The caching tests for getAuthorizationConditions/getFilterConditions were removed in the Prisma.sql conversion, leaving the cached-condition logic untested.",
+    "severity": "low"
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "getBaseConditions (insightsBooking.ts:68-80) does return authConditions/filterConditions unwrapped, and these can be top-level OR fragments (lines 106, 173, 206). But the only consumer at head (integration test :480-484) uses it alone as `WHERE ${baseConditions}`; no code path appends another predicate, so the precedence leak cannot occur.",
+    "category": null,
+    "comment": "Claims getBaseConditions returns OR fragments without parentheses, so a caller appending `AND <extra>` would leak rows outside the authorization scope.",
+    "severity": "high"
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#prod-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "The PR adds `assignment_source` to the abstract sync_status_outbound signature (mixins/issues.py:411-418), but tasks/sync_status_outbound.py:41-44 never passes it and no should_sync('outbound_status', ...) uses it, so it is a dead parameter. The status sync path itself is untouched by the PR, so any status loop is pre-existing; the real issue is the misleading unused parameter.",
+    "category": "api",
+    "comment": "sync_status_outbound gains an assignment_source parameter that is never threaded through the status task or checked in should_sync, so status sync gets no cycle prevention despite the signature suggesting it.",
+    "severity": "medium"
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#prod-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "In get_committable_offsets (queue_consumer.py:89-93) the loop breaks at the first offset that is not in all_offsets or still outstanding, so it never walks a gap; work is bounded by the contiguous run of tracked offsets, not by max_offset - start.",
+    "category": null,
+    "comment": "Claims the committable-offset loop iterates the whole numeric span max_offset - start, burning CPU on large offset gaps every commit cycle.",
+    "severity": "medium"
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#prod-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "The new EmbeddableHost model (app/models/embeddable_host.rb:2) validates hosts with `\\.[a-z]{2,5}(:[0-9]{1,5})?`, rejecting TLDs longer than five letters such as .technology or .photography. The previous SiteSetting.allows_embeddable_host? did plain string comparison with no format restriction.",
+    "category": "bug",
+    "comment": "EmbeddableHost's host format validation only accepts TLDs of 2-5 letters, so admins cannot add embeddable hosts on longer TLDs like example.technology.",
+    "severity": "medium"
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor#prod-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "config/initializers/i18n.rb:24 unconditionally assigns `I18n.fallbacks = FallbackLocaleList.new`, which defines ensure_loaded! (:20-22), and nothing else in app/lib/config reassigns I18n.fallbacks. The guard requested covers a state no code path reaches.",
+    "category": null,
+    "comment": "Claims set_locale's `I18n.fallbacks.ensure_loaded!` (application_controller.rb:159) raises NoMethodError on every request if I18n.fallbacks is not the custom FallbackLocaleList.",
+    "severity": "critical"
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "selectedCalendar is now `destinationCalendar?.find(cal => cal.credentialId === credentialId)?.externalId` (CalendarService.ts:147-149), which can be undefined; the insert falls back to \"primary\" (:154) but the follow-up events.patch passes `calendarId: selectedCalendar` (:168) raw. Before the PR selectedCalendar already defaulted to \"primary\", so the PR introduces the undefined calendarId.",
+    "category": "bug",
+    "comment": "In Google createEvent, when no destination calendar matches the credentialId, the hangout-link events.patch is called with an undefined calendarId and fails, so the Meet link is not added to the event description.",
+    "severity": "medium"
+  },
+  "github-oauth-security-enhancement-sentry#prod-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "OAuthLoginView posts code/client_id/client_secret without redirect_uri (github/integration.py:416-420), but GitHub's token endpoint treats redirect_uri as optional and only rejects a mismatching value when one is sent. The claimed redirect_uri_mismatch on every installation does not occur.",
+    "category": null,
+    "comment": "Claims the GitHub OAuth token exchange omits redirect_uri, so GitHub returns redirect_uri_mismatch and every installation fails.",
+    "severity": "critical"
+  },
+  "github-oauth-security-enhancement-sentry#prod-02": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "Nothing at head sends installation_id='null', and even if it did, Integration.objects.get(external_id='null') raising DoesNotExist goes to `return pipeline.next_step()` (github/integration.py:476-477), not to the 'Invalid installation request.' error page the comment describes.",
+    "category": null,
+    "comment": "Claims a literal 'null' installation_id passes the None check and routes users to the 'Invalid installation request.' page instead of the app installer.",
+    "severity": "medium"
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak#prod-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "The new getCredentials in BackwardsCompatibilityUserStorage.java:231-235 dereferences myUser from getMyUser (:226-228, a plain map lookup) without the null check that isConfiguredFor (:271) and isValid (:286) have. It only fails for a user missing from the map in this testsuite provider (not on every call), so it is a defensive inconsistency in test code.",
+    "category": "bug",
+    "comment": "BackwardsCompatibilityUserStorage.getCredentials dereferences getMyUser(user) without a null check, so it throws NullPointerException for a user missing from the provider's map.",
+    "severity": "medium"
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#prod-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "ZUNIONSTORE returns the cardinality of the resulting destination set, which is exactly the total size of set_key after the merge (add-buffer.lua:47,53). zpopmin(set_key, span_count - 1000) (:62-63) therefore trims to exactly 1000, and the proposed zcard(set_key) gives the same number.",
+    "category": null,
+    "comment": "Claims span_count counts pre-existing spans in set_key, so zpopmin evicts far more than the overflow above 1000 and discards valid spans.",
+    "severity": "critical"
+  },
+  "replays-self-serve-bulk-delete-system-sentry#prod-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "_truncate_title is a @staticmethod defined inside PRCommentWorkflow (commit_context.py:494 class, :577-582 method), not on CommitContextIntegration, so PRCommentWorkflow._truncate_title(title) at :601 resolves correctly.",
+    "category": null,
+    "comment": "Claims _truncate_title is defined on CommitContextIntegration, so PRCommentWorkflow._truncate_title raises AttributeError.",
+    "severity": "high"
+  },
+  "unified-storage-performance-optimizations-grafana-codex#prod-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "backend.WatchWriteEvents (sql/backend.go:558-567) starts a separate poller and channel for each caller, so search.init's stream (search.go:203) and initWatcher's stream (server.go:755) are independent; the search reader cannot consume the broadcaster's events. Init now also runs inside NewResourceServer (server.go:258) before any Watch subscriber can exist.",
+    "category": null,
+    "comment": "Claims write events arriving between search watcher start and initWatcher are consumed by the search reader and never reach Watch subscribers.",
+    "severity": "medium"
+  }
+}

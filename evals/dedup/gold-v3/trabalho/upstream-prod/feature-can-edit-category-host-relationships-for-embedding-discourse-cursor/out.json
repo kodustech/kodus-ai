@@ -1,0 +1,24 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "prOriginal": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "mergedAt": "2015-08-20",
+  "nota": "No upstream PR: the benchmark head d1c69189 is itself a direct commit by Robin Ward on discourse/discourse main (committer date 2015-08-20, no associated pull request; gh pr search by title finds nothing), and it is an ancestor of main. The reference date is that commit's date."
+ },
+ "tps": {
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#prod-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2017-04-15",
+    "pr": 4816,
+    "commit": "5f47603b0766ef8c32d475ab5a9e99082fad25a0",
+    "url": "https://github.com/discourse/discourse/pull/4816"
+   },
+   "removidoEm": null,
+   "diasNoAr": 604,
+   "reason": "The 2-5 letter TLD limit in EmbeddableHost's host regex was widened in steps: 436da215ae (2015-12-15, 'allow .network') to {2,7}, then PR #4816 (2017-04-15, 'increase host_must_be_valid regex for .technology TLD') to {2,10}, which is the first change that accepts the bug's example example.technology; PR #7948 (2019-07-26) raised it to {2,24}. Today's main still has `\\.[a-z]{2,24}` in host_must_be_valid. Fix date taken as #4816 because it makes the cited case pass; the partial widening started 2015-12-15.",
+   "astra": []
+  }
+ }
+}

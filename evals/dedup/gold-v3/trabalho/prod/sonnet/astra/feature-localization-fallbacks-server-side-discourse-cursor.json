@@ -1,0 +1,11 @@
+{
+ "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Both describe fallback catalogs being loaded only in the controller filter, leaving jobs, mailers, and other non-controller translation paths unable to use the site default or English fallback."
+  }
+ ]
+}

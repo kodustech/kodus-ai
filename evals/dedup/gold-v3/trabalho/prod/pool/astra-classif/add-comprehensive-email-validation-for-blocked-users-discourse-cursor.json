@@ -1,0 +1,12 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "items": [
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The PR adds rejected addresses to an array that is never cleared (app/assets/javascripts/discourse/controllers/create_account_controller.js:275), and cached matches fail validation at line 69, disabling submission at line 22. Removing the server rule would allow validation again (app/models/blocked_email.rb:12\u201318), but editing the input or reopening the modal does not invalidate the client cache. This prevents retrying the now-valid address until the page is reloaded.",
+   "severity": "medium"
+  }
+ ]
+}

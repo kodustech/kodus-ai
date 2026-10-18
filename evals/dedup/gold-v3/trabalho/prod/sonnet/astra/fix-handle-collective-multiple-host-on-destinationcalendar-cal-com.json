@@ -1,0 +1,59 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same unguarded integration access when destinationCalendar is null or empty, crashing the Google Meet fallback."
+  },
+  {
+   "id": "S2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+   "newGroup": null,
+   "reason": "Explicitly describes dropping credentialId from video references, preventing meeting deletion on cancellation. This broader comment also includes the updateLocation routing-data loss described by #12."
+  },
+  {
+   "id": "S3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "newGroup": null,
+   "reason": "Describes providers selecting the first host's destination for every credential, including the Office365 and Lark problem in #05. Passing a destination-specific event fixes that same targeting error."
+  },
+  {
+   "id": "S4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Initializing the null destinationCalendar before appending fixes the same loss of other collective hosts' destination calendars."
+  },
+  {
+   "id": "S5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#14",
+   "newGroup": null,
+   "reason": "Describes the same credentialId-only selection ignoring legacy destinations and inserting into primary instead of the configured calendar."
+  },
+  {
+   "id": "S6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "newGroup": null,
+   "reason": "Describes the same first-destination selection in Lark and Office365, causing secondary hosts' credentials to target the first host's calendar."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes inconsistent calendarId fallback between Google's insert and subsequent description patch. Fixing the patch to use primary does not fix #14's incorrect destination selection."
+  },
+  {
+   "id": "S8",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Describes the recurring deletion sweep executing once per calendar reference, producing duplicate provider delete calls."
+  },
+  {
+   "id": "S9",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Describes the same update/delete fallback comparing destination externalId against an already-falsy externalCalendarId, losing the configured destination."
+  }
+ ]
+}

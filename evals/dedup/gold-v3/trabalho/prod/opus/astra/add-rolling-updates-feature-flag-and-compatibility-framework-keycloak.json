@@ -1,0 +1,11 @@
+{
+ "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "S1 concerns remapping exit codes and its effect on existing automation. The golden issues concern missing test coverage or assertions, so fixing them would not fix the exit-code compatibility concern."
+  }
+ ]
+}

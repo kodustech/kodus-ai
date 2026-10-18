@@ -1,0 +1,17 @@
+{
+ "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+   "newGroup": null,
+   "reason": "The comment includes the dashboard-split dataset mismatch: eligibility uses the outer dataset instead of scoped_dataset. Its broader request to also pass the executed query does not change that shared problem."
+  },
+  {
+   "id": "S2",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Both describe substring matching incorrectly treating negated or mixed event.type:error queries as error-only, causing inappropriate upsampling."
+  }
+ ]
+}

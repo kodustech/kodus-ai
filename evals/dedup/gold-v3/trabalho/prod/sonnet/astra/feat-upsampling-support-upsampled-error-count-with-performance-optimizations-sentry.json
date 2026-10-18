@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+   "newGroup": null,
+   "reason": "Describes the same dashboard-split bug: eligibility uses the outer dataset instead of scoped_dataset, causing error queries against discover to skip upsampling. The additional substring-check concern also overlaps issue #04."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "advanced-query-processing-architecture-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "S1 describes the same double interpolation in querySplitting.ts: backend request preparation re-expands dollar references inside already-substituted variable values, changing literal query content."
+  }
+ ]
+}

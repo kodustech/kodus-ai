@@ -1,0 +1,17 @@
+{
+ "caseId": "github-oauth-security-enhancement-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "github-oauth-security-enhancement-sentry#03",
+   "newGroup": null,
+   "reason": "Both describe the static pipeline.signature used as OAuth state, allowing login CSRF instead of binding authorization to an unpredictable per-attempt nonce."
+  },
+  {
+   "id": "S2",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Both describe the unguarded sender/login metadata lookup raising KeyError for integrations without sender metadata."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment claims the hostname validation in EmbeddableHost rejects domain suffixes longer than five letters. None of the rejected issues describes this validation defect."
+  }
+ ]
+}

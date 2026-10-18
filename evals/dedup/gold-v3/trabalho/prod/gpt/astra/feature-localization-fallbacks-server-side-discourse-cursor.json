@@ -1,0 +1,17 @@
+{
+ "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Both describe cross-site reuse of cached fallback translations because the cache key omits the site default locale that determines fallback results."
+  },
+  {
+   "id": "S2",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Both describe missing fallback catalogs in background jobs because translate loads only the current locale and fallback loading occurs only in the controller."
+  }
+ ]
+}

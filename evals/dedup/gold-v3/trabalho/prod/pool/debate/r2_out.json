@@ -1,0 +1,16 @@
+{
+ "unified-storage-performance-optimizations-grafana-codex#prod-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "medium",
+  "concede": false,
+  "text": "I concede the cache point: broadcaster.go:211 replays b.cache (100 items, :169) to new subscribers, so my 'never replayable' was wrong. The label still holds. The comment says events are 'consumed by the search reader but never reach the broadcaster' and proposes a 'single shared event source'. You agree that mechanism is false: each WatchWriteEvents call gets its own channel and poller (sql/backend.go:558-567). Also, no write through this server can land in the window, because NewResourceServer returns only after Init (server.go:258-262) and the per-request Init calls are gone. A client's Since that comes from this server is therefore later than the broadcaster's start. The only remaining case is a write from another replica during search init, replayed later only through a 100-item cache. That is not the defect the comment describes and not one its fix addresses."
+ },
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "medium",
+  "concede": false,
+  "text": "Keeping nit. rejectedEmails (create_account_controller.js:17) only stores addresses the server just rejected (:274-276), and :69-74 fails them on the client so the user does not resubmit a known-bad address. That is the intended design. The cache only goes stale if an admin removes the BlockedEmail rule for that exact address while the anonymous visitor keeps the same page open. Even then a reload fixes it, and switching to another email still works. Nothing is wrong for any realistic signup; it is a corner-case staleness a reviewer would not raise. Severity stays medium, as the comment states it."
+ }
+}

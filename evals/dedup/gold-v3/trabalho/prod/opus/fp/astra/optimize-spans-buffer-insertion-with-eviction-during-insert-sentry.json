@@ -1,0 +1,11 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "id": "S2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#07",
+   "newGroup": null,
+   "reason": "It asserts the same problem: directly accessing a missing end_timestamp_precise field in process_batch raises KeyError and fails the entire batch. The suggested fallback does not change the claim."
+  }
+ ]
+}

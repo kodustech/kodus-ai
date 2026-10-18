@@ -1,0 +1,30 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "prOriginal": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/5f8a130277dbddc95d133cd2832be639baf89213",
+  "mergedAt": "2013-07-29",
+  "nota": "Given in in.json; confirmed: compare 5f8a130277...main is 'ahead', behind_by=0, so the benchmark head commit itself is on main (direct push, no PR). Merged code identical to the benchmark head."
+ },
+ "tps": {
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-08-06",
+    "pr": 33072,
+    "commit": "ced043be3ca2a094aac7d107bc01325fafb46e4f",
+    "url": "https://github.com/discourse/discourse/pull/33072"
+   },
+   "removidoEm": null,
+   "diasNoAr": 4391,
+   "reason": "The signup logic moved from create_account_controller.js to controllers/signup.js, and kept the 2013 pattern until mid-2025: rejectedEmails.pushObject(result.values.email) on a server email error, and emailValidation failing on rejectedEmails.includes(email). PR #33072 (merged 2025-08-06, ced043be3c) deleted that pushObject block. The PR is mainly about destination_url cookies and does not explain the deletion. On main today, signup.js still declares rejectedEmails and still checks includes(), but nothing adds to the array, so a server rejection can no longer leave a stale client-side block. The separate invite-acceptance controller (invites/show.js, added later) has its own copy of the pattern; that is a different flow and is not counted here.",
+   "astra": [
+    {
+     "pergunta": "PR #33072 (cookie handling) deleted the rejectedEmails.pushObject block in signup.js. The array and check remain, but nothing populates them. Is this confirmado or descontinuado, and does the same pattern in invites/show.js make it pendente?",
+     "resposta": "Confirmado. #33072 removed the population of rejectedEmails, which eliminates the reported behaviour in signup. Under the given definition the fix counts even though it is incidental and the PR does not mention the bug. The cache in invites/show.js belongs to another flow and may deserve a separate investigation, but it does not make this case pendente.",
+     "veredito": "confirmado"
+    }
+   ]
+  }
+ }
+}

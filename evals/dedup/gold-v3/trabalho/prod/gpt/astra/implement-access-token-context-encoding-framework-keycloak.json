@@ -1,0 +1,17 @@
+{
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#03",
+   "newGroup": null,
+   "reason": "Describes the same shortcut-length contract mismatch: the Javadoc permits three characters while the encoder/decoder requires exactly two."
+  },
+  {
+   "id": "S2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the same incorrect substring offset and inverted equality check that prevent event assertions from verifying the expected grant type."
+  }
+ ]
+}

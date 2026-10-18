@@ -1,0 +1,24 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "prTitle": "Add comprehensive email validation for blocked users",
+ "upstream": "discourse/discourse",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/discourse",
+ "base": "e25638dab0d4b98f99c8fe8976ccaae8f4fb9db3",
+ "head": "5f8a130277dbddc95d133cd2832be639baf89213",
+ "prOriginalConhecido": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/5f8a130277dbddc95d133cd2832be639baf89213",
+  "mergedAt": "2013-07-29",
+  "nota": "No upstream PR: the benchmark head commit 5f8a130277 itself is on discourse/discourse main (compare status 'ahead', behind_by=0), pushed directly on 2013-07-29 (committer date) with no associated pull request (commits/{sha}/pulls empty; PR searches by title and BlockedEmail found nothing). Merged code is identical to the benchmark head."
+ },
+ "tps": [
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "After the server stops blocking the address (e.g. an admin removes the `BlockedEmail` rule), the user still cannot submit because `emailValidation` returns failed from the stale `rejectedEmails` entry, and this persists for the lifetime of the controller. Clear or remove entries from `rejectedEmails` when the email input changes, or reset it when the modal is reopened.",
+   "evidenciaOpus": "Keeping nit. rejectedEmails (create_account_controller.js:17) only stores addresses the server just rejected (:274-276), and :69-74 fails them on the client so the user does not resubmit a known-bad address. That is the intended design. The cache only goes stale if an admin removes the BlockedEmail rule for that exact address while the anonymous visitor keeps the same page open. Even then a reload fixes it, and switching to another email still works. Nothing is wrong for any realistic signup; it is a corner-case staleness a reviewer would not raise. Severity stays medium, as the comment states it.",
+   "evidenciaAstra": "The PR adds rejectedEmails, appends server-rejected addresses at line 275, and fails validation for cached matches at lines 69\u201374 without any invalidation. That failure disables submission even after the server-side block is removed. Intentional caching does not make stale rejection correct; blocking a now-valid signup is observable wrong behavior, not a nit. The uncommon trigger and reload workaround support medium severity."
+  }
+ ]
+}

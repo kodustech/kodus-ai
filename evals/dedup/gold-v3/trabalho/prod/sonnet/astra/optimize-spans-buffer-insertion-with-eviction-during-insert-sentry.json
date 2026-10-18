@@ -1,0 +1,17 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "Both describe the removed Python limit check and hardcoded Lua cap of 1000 causing max_segment_spans to be ignored."
+  },
+  {
+   "id": "S2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "newGroup": null,
+   "reason": "Both describe ZUNIONSTORE's default SUM doubling timestamp scores for duplicate payloads, breaking oldest-first eviction."
+  }
+ ]
+}

@@ -1,0 +1,489 @@
+{
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-01": {
+  "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+  "issue": {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-01",
+   "comentarios": [
+    {
+     "gid": "prod-ds:S1",
+     "file": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts",
+     "lines": [
+      426,
+      429
+     ],
+     "texto": "The caching sentinel logic in the service is now completely untested, so a regression that rebuilds conditions on every call or returns stale conditions can ship without any test failing. Re-add the caching tests using the new `Prisma.sql` expectations (first call builds the condition, second call returns an equal value), mirroring the routing service suite."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "The PR deletes the 'Caching' describe block (should cache authorization/filter conditions) from insightsBooking.integration-test.ts, while the memoization in insightsBooking.ts:83-95 is kept essentially unchanged. Real coverage loss, but for trivial memoization logic the PR did not alter."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The diff deletes both caching tests; packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:435-437 now transitions directly from filter tests to getBaseConditions tests. Remaining tests call each getter only once per instance, leaving the cached-return branches at packages/lib/server/service/insightsBooking.ts:84-94 untested after the SQL representation change."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "Keeping nit. The memoization the deleted tests covered is unchanged by the PR apart from the type: insightsBooking.ts:84-86 `if (this.cachedAuthConditions === undefined) { this.cachedAuthConditions = await this.buildAuthorizationConditions(); }` is the same sentinel the base had; only the annotation went from WhereInput to Prisma.Sql. The PR deleted a test block for trivial, untouched memoization while rewriting the file's expectations; no behaviour the PR introduces goes unverified, and the getBaseConditions/filter tests still exercise both getters. That is test tidying with lost coverage, not a test that fails to verify the change.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "Changed to TP/nit, low. The PR removes both caching tests, losing explicit coverage of the cached-return branches, but the getters\u2019 sentinel and assignment logic remain unchanged. The deleted tests only checked deep equality, so they would also pass if conditions were rebuilt on every call. This is minor coverage loss for existing logic, not an unverified behavioral change warranting medium severity."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-02": {
+  "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+  "issue": {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-02",
+   "comentarios": [
+    {
+     "gid": "prod-sonnet:S1",
+     "file": "packages/lib/server/service/insightsBooking.ts",
+     "lines": [
+      72,
+      80
+     ],
+     "texto": "When a caller embeds the result as `WHERE ${base} AND <extra>`, SQL operator precedence turns it into `A OR (B AND extra)`, which can leak rows outside the authorization scope or ignore the extra predicate. Always wrap the fragment `getBaseConditions` returns in parentheses, using `Prisma.sql` for `authConditions` and `filterConditions`, and wrap the eventTypeId OR-fragment in its own parentheses."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "getBaseConditions (insightsBooking.ts:68-80) does return authConditions/filterConditions unwrapped, and these can be top-level OR fragments (lines 106, 173, 206). But the only consumer at head (integration test :480-484) uses it alone as `WHERE ${baseConditions}`; no code path appends another predicate, so the precedence leak cannot occur."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "critical",
+    "text": "packages/lib/server/service/insightsBooking.ts:74-75 returns authorization conditions without enclosing parentheses when filters are absent, while lines 173 and 206 produce top-level OR expressions. Appending AND therefore constrains only the second authorization branch, allowing the first branch to bypass the extra predicate; the event-type fragment is already safely grouped when combined at lines 73 and 121."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "Conceding the class. The PR removed findMany (the encapsulated consumer) and made getBaseConditions the public fragment API, but it parenthesizes only the combined case: insightsBooking.ts:73 `(${authConditions}) AND (${filterConditions})` vs :75 `return authConditions;`, and org/team auth is a top-level OR (:173, :206 `(${acc}) OR (${condition})`). Any caller composing `WHERE ${base} AND ...` leaks the first OR branch, so the returned contract is unsafe even if no caller composes it yet. Severity high rather than critical: it needs a caller to append a predicate, a security weakness under specific conditions.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#prod-01": {
+  "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+  "issue": {
+   "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#prod-01",
+   "comentarios": [
+    {
+     "gid": "prod-ds:S1",
+     "file": "src/sentry/integrations/mixins/issues.py",
+     "lines": [
+      410,
+      421
+     ],
+     "texto": "The signature advertises that status sync participates in source-based cycle prevention, but the guard is never applied, so an inbound status webhook from integration A can still produce outbound status updates that loop exactly as the assignee case did. Either remove the unused parameter or thread `assignment_source` through the `sync_status_outbound` task into `should_sync(\"outbound_status\", assignment_source)`."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "The PR adds `assignment_source` to the abstract sync_status_outbound signature (mixins/issues.py:411-418), but tasks/sync_status_outbound.py:41-44 never passes it and no should_sync('outbound_status', ...) uses it, so it is a dead parameter. The status sync path itself is untouched by the PR, so any status loop is pre-existing; the real issue is the misleading unused parameter."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "The claimed webhook feedback loop is absent: inbound status sync calls update_group_status (src/sentry/integrations/tasks/sync_status_inbound.py:220,247), which bulk-updates groups and records activity without scheduling outbound synchronization (src/sentry/models/group.py:461-470). The added parameter is unused on an abstract method (src/sentry/integrations/mixins/issues.py:410-422), while the existing outbound status task remains unchanged; this does not introduce the alleged looping behavior."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "Conceding. The loop the comment relies on cannot happen: sync_status_inbound.py:220/:247 call Group.objects.update_group_status, which only bulk_updates and creates activity (group.py ~461-470); outbound status syncs are kicked off only from api/helpers/group_index/update.py:577 and event_manager.py:1807 (kick_off_status_syncs), never from the inbound webhook path. The unused assignment_source parameter on the abstract method is real but the issue's stated problem is false.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak#prod-01": {
+  "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+  "issue": {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#prod-01",
+   "comentarios": [
+    {
+     "gid": "prod-opus:S2",
+     "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+     "lines": [
+      231,
+      235
+     ],
+     "texto": "Because `getMyUser` returns null when the username is missing from the `users` map, accessing `myUser.recoveryCodes` throws a `NullPointerException` on every `getFederatedCredentialsStream()` call, including the new `RecoveryAuthnCodesUtils.getCredential` used during login. Return `Stream.empty()` when `myUser` is null, matching the existing guard in methods like `getDisableableCredentialTypesStream`."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "The new getCredentials in BackwardsCompatibilityUserStorage.java:231-235 dereferences myUser from getMyUser (:226-228, a plain map lookup) without the null check that isConfiguredFor (:271) and isValid (:286) have. It only fails for a user missing from the map in this testsuite provider (not on every call), so it is a defensive inconsistency in test code."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "Although BackwardsCompatibilityUserStorage.java:235 dereferences myUser without checking null, its lookup methods reject missing usernames (lines 89 and 349), and addUser inserts the map entry before returning the adapter (lines 361\u2013362). UserCredentialManager.java:130\u2013141 dispatches to the user's own federation provider, so the cited login flow does not establish a missing-map-entry case; the suggested guard is defensive rather than a demonstrated defect."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "Conceding. The null myUser state is not reachable in this test provider: users are only produced by getUserById/getUserByUsername after `if (!users.containsKey(translateUserName(username))) return null;` (BackwardsCompatibilityUserStorage.java:89, :349), and addUser puts the entry first (:361). Other pre-existing methods dereference the same lookup unguarded (:162, :190, :200). The suggested null check is a guard for an unreachable state.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "unified-storage-performance-optimizations-grafana-codex#prod-01": {
+  "caseId": "unified-storage-performance-optimizations-grafana-codex",
+  "issue": {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#prod-01",
+   "comentarios": [
+    {
+     "gid": "prod-ds:S1",
+     "file": "pkg/storage/unified/resource/server.go",
+     "lines": [
+      303,
+      311
+     ],
+     "texto": "Any write events arriving between the search watcher starting and `initWatcher` subscribing are consumed by the search reader but never reach the broadcaster, so Watch subscribers silently miss those changes. Subscribe the broadcaster by calling `initWatcher` before starting the search event-draining goroutine, or have both consume from a single shared event source."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "backend.WatchWriteEvents (sql/backend.go:558-567) starts a separate poller and channel for each caller, so search.init's stream (search.go:203) and initWatcher's stream (server.go:755) are independent; the search reader cannot consume the broadcaster's events. Init now also runs inside NewResourceServer (server.go:258) before any Watch subscriber can exist."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "The PR starts search watching before initializing the broadcaster (pkg/storage/unified/resource/server.go:303-310; search.go:203-213). Each SQL WatchWriteEvents call starts from the latest database versions, so writes between those subscriptions are excluded from the broadcaster\u2019s stream (pkg/storage/unified/sql/backend.go:558-567). A subsequent Watch requesting an earlier Since cannot recover those events: it only filters the broadcaster stream without fetching historical changes (pkg/storage/unified/resource/server.go:847-867)."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "Keeping FP hallucination. The comment's mechanism is false: the search reader does not consume the broadcaster's events; each caller gets its own poller and channel (sql/backend.go:558-567 `stream := make(chan *resource.WrittenEvent); go b.poller(ctx, since, stream)`), so search.go:203 and server.go:755 are independent streams. And no Watch subscriber can exist in the window: Init now runs inside NewResourceServer (server.go:258 `err := s.Init(ctx)`) before the server is returned. Events before the broadcaster starts were never replayable to Watch even with the old order (Watch only filters the live broadcaster stream, server.go:847-867), so the reorder creates no new loss for any subscriber.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "I retain TP: the streams are independent, but the reorder introduces a gap in replayable events. In both base and head, broadcaster.go caches incoming events with cache.Add and replays them to new subscribers with cache.ReadInto, contradicting the claim that earlier events were never replayable. Previously, initWatcher started before search initialization, allowing intervening writes to reach that cache even without subscribers. Now SQL WatchWriteEvents initializes its cursor from the latest database versions after search initialization, excluding intervening writes from subsequent Watch requests with an earlier Since. Constructor-time initialization therefore does not eliminate the loss; the defect is the later subscription cursor, not competing channel consumers."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "I concede the cache point: broadcaster.go:211 replays b.cache (100 items, :169) to new subscribers, so my 'never replayable' was wrong. The label still holds. The comment says events are 'consumed by the search reader but never reach the broadcaster' and proposes a 'single shared event source'. You agree that mechanism is false: each WatchWriteEvents call gets its own channel and poller (sql/backend.go:558-567). Also, no write through this server can land in the window, because NewResourceServer returns only after Init (server.go:258-262) and the per-request Init calls are gone. A client's Since that comes from this server is therefore later than the broadcaster's start. The only remaining case is a write from another replica during search init, replayed later only through a 100-item cache. That is not the defect the comment describes and not one its fix addresses.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "I retain TP: independent channels do not prevent the subscription gap, because each SQL WatchWriteEvents call initializes its cursor from the latest database versions. A write from another replica between subscriptions reaches search but is excluded from the broadcaster\u2019s stream and replay cache. Previously, initWatcher ran first, allowing those events to be cached and replayed to subsequent Watch requests with an earlier Since. Constructor-time initialization does not prohibit such requests, and restoring the earlier broadcaster subscription addresses this exact loss without requiring competing channel consumers."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "Final: FP hallucination. (1) The comment's stated mechanism is false and both sides agree: events are not 'consumed by the search reader'; each WatchWriteEvents call creates its own cursor, channel and poller (sql/backend.go:558-567 `since, err := b.listLatestRVs(ctx)` ... `go b.poller(ctx, since, stream)`), so the proposed 'single shared event source' fixes nothing. (2) Astra's replacement defect (writes landing between the two subscriptions are absent from the broadcaster cache) is not a regression this PR introduces. In base, Init was lazy: it ran on the first Create/Read/List/Watch request (the removed `if err := s.Init(ctx)` blocks in the server.go diff), so the broadcaster's cursor started at first-request time and every write before that was absent from the cache too. In head, NewResourceServer blocks on Init (server.go:258-262) and initWatcher runs at server.go:308-311 before the server is returned, so the broadcaster starts no later than the first request could ever arrive. Writes from another replica before broadcaster start were outside the cache in base and remain so in head; the window is not new. Rule: a human should decide whether 'events written before the broadcaster subscribes are not replayable' counts as introduced by the reorder; I hold it does not, given base started the broadcaster even later.",
+    "concede": false
+   }
+  ],
+  "fechado": "humano",
+  "decisaoHumana": {
+   "quem": "Junior",
+   "em": "2026-10-18",
+   "escolha": "opus",
+   "nota": "FP hallucination: the mechanism the comment describes is false and the remaining gap was not introduced by the PR"
+  }
+ },
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01": {
+  "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+  "issue": {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01",
+   "comentarios": [
+    {
+     "gid": "prod-ds:S2",
+     "file": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+     "lines": [
+      69,
+      74
+     ],
+     "texto": "After the server stops blocking the address (e.g. an admin removes the `BlockedEmail` rule), the user still cannot submit because `emailValidation` returns failed from the stale `rejectedEmails` entry, and this persists for the lifetime of the controller. Clear or remove entries from `rejectedEmails` when the email input changes, or reset it when the modal is reopened."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "create_account_controller.js:17 adds a controller-level rejectedEmails array, filled on server email errors (:274-276) and checked first in emailValidation (:69-74) with no reset anywhere. The stale entry only matters if the server-side block is lifted while the singleton controller stays alive, a rare case solved by reloading the page."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The PR adds rejected addresses to an array that is never cleared (app/assets/javascripts/discourse/controllers/create_account_controller.js:275), and cached matches fail validation at line 69, disabling submission at line 22. Removing the server rule would allow validation again (app/models/blocked_email.rb:12\u201318), but editing the input or reopening the modal does not invalidate the client cache. This prevents retrying the now-valid address until the page is reloaded."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "Keeping nit. The client cache is intentional: create_account_controller.js:275 pushes only server-rejected emails (`if (result.errors && result.errors.email && result.values)`), and :69 short-circuits them so the user is not sent to resubmit a known-bad address. It only goes stale if an admin lifts the BlockedEmail rule during the same page session, and a reload clears it. Real but a corner-case UX staleness, not a defect a reviewer would block on.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The PR adds rejectedEmails, appends server-rejected addresses at line 275, and unconditionally fails their subsequent validation at lines 69\u201374, disabling submission. No cache invalidation allows retrying an address after its server-side block is removed. This is user-visible incorrect behavior, so it remains a reportable defect rather than a nit; the uncommon trigger and reload workaround support medium severity."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "Keeping nit. rejectedEmails (create_account_controller.js:17) only stores addresses the server just rejected (:274-276), and :69-74 fails them on the client so the user does not resubmit a known-bad address. That is the intended design. The cache only goes stale if an admin removes the BlockedEmail rule for that exact address while the anonymous visitor keeps the same page open. Even then a reload fixes it, and switching to another email still works. Nothing is wrong for any realistic signup; it is a corner-case staleness a reviewer would not raise. Severity stays medium, as the comment states it.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The PR adds rejectedEmails, appends server-rejected addresses at line 275, and fails validation for cached matches at lines 69\u201374 without any invalidation. That failure disables submission even after the server-side block is removed. Intentional caching does not make stale rejection correct; blocking a now-valid signup is observable wrong behavior, not a nit. The uncommon trigger and reload workaround support medium severity."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "Concede to TP none, medium. The rubric reserves nit for non-behavioural concerns (naming, style, docs, dead code); this is observable wrong behaviour in an edge case, which the severity rubric rates medium rather than making it a nit. The PR adds rejectedEmails (create_account_controller.js:17), pushes any address the server rejected with an email error (:274-276), and fails it unconditionally at :69-74, which disables submit (:22), with no invalidation, so a now-valid address cannot be retried until reload.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#prod-01": {
+  "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "issue": {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#prod-01",
+   "comentarios": [
+    {
+     "gid": "prod-ds:S1",
+     "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+     "lines": [
+      156,
+      162
+     ],
+     "texto": "When a resource-scoped check falls back to the all-groups type resource, permissions from other group resources in the same resource server can match the expected scope and grant access to a group the caller was never granted. Mirror `UserPermissionsV2` and only accept permissions whose `getResourceId()` equals `resource.getId()` before matching scopes."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "GroupPermissionsV2.hasPermission falls back to the all-groups type resource (GroupPermissionsV2.java:143-150) and then accepts any returned permission with a matching scope (:156-162) without checking permission.getResourceId(). UserPermissionsV2.hasPermission filters on permission.getResourceId().equals(resource.getId()) (UserPermissionsV2.java:123), a check added upstream precisely because type-resource evaluation also returns single-resource permissions and over-granted access."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "critical",
+    "text": "GroupPermissionsV2.java:152 passes one concrete resource to evaluation; MgmtPermissions.java:335 wraps it in a singleton list. DecisionPermissionCollector.java:189-190 and :209-211 construct the returned permission using that same resource ID, so permissions for other group resources cannot appear as claimed."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "critical",
+    "text": "Conceding. Rechecked the evaluator: for the all-groups type resource (owner = resource server) DefaultPolicyEvaluator.java:76 skips the typed-resource loop, and the scope lookup is findByScopes(server, null, ...) which uses findPolicyIdByNullResourceScope (`pe.resources is empty`), so other group resources' permissions are never pulled in. DecisionPermissionCollector.grantPermission builds every Permission from permission.getResource(), so returned permissions always carry the evaluated resource's id; the UserPermissionsV2 filter is a no-op there, and the claimed cross-resource grant cannot occur. Severity as stated (permission bypass) is critical.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#prod-02": {
+  "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "issue": {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#prod-02",
+   "comentarios": [
+    {
+     "gid": "prod-opus:S3",
+     "file": "services/src/main/java/org/keycloak/services/resources/admin/GroupsResource.java",
+     "lines": [
+      112,
+      114
+     ],
+     "texto": "In V2, `canView(group)` runs a resource lookup, a policy-store query and a policy evaluation for each group, so listing N groups costs N evaluations even when a single all-groups VIEW grant would answer for all of them. Restore the hoisted `canView()` check before the per-group filter."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "The PR replaced the hoisted canViewGlobal with stream.filter(groupsEvaluator::canView) (GroupsResource.java:113), and in V2 canView(group) does a findByName, policyStore.findByResource and a policy evaluation per group (GroupPermissionsV2.java:56-62, 141-152). This only affects the non-default populateHierarchy=false path over a paginated page, so it is redundant work rather than a meaningful regression."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "GroupsResource.java:113 does perform per-group checks, but GroupPermissionsV2.java:141-152 deliberately uses all-groups permissions only when no group-specific resource exists. A global grant therefore cannot answer for every group: restoring the proposed shortcut would bypass group-specific restrictions, so these checks preserve authorization semantics."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "Conceding. The per-group check is deliberate: GroupPermissionsV2.java:141-150 evaluates the group's own resource when one exists and falls back to all-groups only otherwise, so a global VIEW grant cannot answer for every group, and hoisting canView() would bypass group-specific permissions. Admins with VIEW/MANAGE_USERS short-circuit at :56-58. Correct, intended behaviour; the proposed fix would be wrong.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com#prod-02": {
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "issue": {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#prod-02",
+   "comentarios": [
+    {
+     "gid": "prod-ds:S4",
+     "file": "packages/emails/templates/organizer-add-guests-email.ts",
+     "lines": [
+      28,
+      28
+     ],
+     "texto": "When the booking has no attendees or the attendees array is empty in the formatted event, this throws a TypeError inside `getNodeMailerPayload` and aborts the organizer's email. Fall back to `this.calEvent.organizer.name` when `attendees[0]` is undefined."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "The only caller, addGuests.handler.ts, throws when uniqueGuests is empty (:80-81) and then builds attendees from the updated booking including the newly created guests (:92-120), so calEvent.attendees always has at least one element when organizer-add-guests-email.ts:28 reads attendees[0].name. The empty-attendees state cannot occur."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The unchecked access exists at packages/emails/templates/organizer-add-guests-email.ts:28, but its caller rejects an empty uniqueGuests list at packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:80-81. It then inserts those guests and constructs the event from the updated attendees at lines 92-136, ensuring at least one attendee before sending the email at line 168."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "Conceding the subclass. The facts in the comment are true (organizer-add-guests-email.ts:28 reads attendees[0] unchecked), but the empty state is unreachable: addGuests.handler.ts:80-81 throws on empty uniqueGuests and the event is built from the updated attendees (:92-136). Per the rubric, a guard for a state no code path can reach is FP with no subclass, not a hallucination.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ }
+}

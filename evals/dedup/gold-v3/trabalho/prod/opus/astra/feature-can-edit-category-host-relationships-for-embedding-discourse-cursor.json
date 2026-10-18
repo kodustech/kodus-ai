@@ -1,0 +1,29 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "The migration indexes an empty category-query result, raising NoMethodError before reaching the fallback. This is the same missing-result guard issue."
+  },
+  {
+   "id": "S2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "The comment includes the same failure to normalize migrated host values before bare-host lookup. It additionally describes the SQL quoting problem in issue #06."
+  },
+  {
+   "id": "S3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "The comment includes the same comparison of lower(host) against an unlowercased URI hostname. It additionally describes the port mismatch in issue #14."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Null *_ids values cause map to fail during store hydration. No golden-set issue describes this null-handling problem."
+  }
+ ]
+}

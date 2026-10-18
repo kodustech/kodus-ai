@@ -1,0 +1,12 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#prod-01",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "high",
+   "reply": "I retain TP: the streams are independent, but the reorder introduces a gap in replayable events. In both base and head, broadcaster.go caches incoming events with cache.Add and replays them to new subscribers with cache.ReadInto, contradicting the claim that earlier events were never replayable. Previously, initWatcher started before search initialization, allowing intervening writes to reach that cache even without subscribers. Now SQL WatchWriteEvents initializes its cursor from the latest database versions after search initialization, excluding intervening writes from subsequent Watch requests with an earlier Since. Constructor-time initialization therefore does not eliminate the loss; the defect is the later subscription cursor, not competing channel consumers."
+  }
+ ]
+}

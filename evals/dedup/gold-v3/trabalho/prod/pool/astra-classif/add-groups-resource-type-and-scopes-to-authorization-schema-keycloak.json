@@ -1,0 +1,19 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#prod-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "GroupPermissionsV2.java:152 passes one concrete resource to evaluation; MgmtPermissions.java:335 wraps it in a singleton list. DecisionPermissionCollector.java:189-190 and :209-211 construct the returned permission using that same resource ID, so permissions for other group resources cannot appear as claimed.",
+   "severity": "critical"
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#prod-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "GroupsResource.java:113 does perform per-group checks, but GroupPermissionsV2.java:141-152 deliberately uses all-groups permissions only when no group-specific resource exists. A global grant therefore cannot answer for every group: restoring the proposed shortcut would bypass group-specific restrictions, so these checks preserve authorization semantics.",
+   "severity": "medium"
+  }
+ ]
+}

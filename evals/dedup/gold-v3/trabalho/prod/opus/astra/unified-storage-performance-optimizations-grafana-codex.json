@@ -1,0 +1,11 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Both describe concurrent builds for the same uncached key after BuildIndex locking was narrowed to cache publication. The resulting cache overwrite can discard event updates and cause file-backed index creation collisions."
+  }
+ ]
+}

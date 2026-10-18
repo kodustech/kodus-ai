@@ -1,0 +1,29 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "Both describe the && permission check incorrectly rejecting team admins who are not owners. Using isTeamAdmin alone fixes the same authorization problem."
+  },
+  {
+   "id": "S2",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
+   "newGroup": null,
+   "reason": "Both describe EventManager using the requesting user's credentials instead of the organizer's when calendar references lack credentialId."
+  },
+  {
+   "id": "S3",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Both describe bypassing the lowercased guest blacklist through mixed-case input because guest emails are not normalized before comparison."
+  },
+  {
+   "id": "S4",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+   "newGroup": null,
+   "reason": "Both describe duplicate attendee insertion when a single request repeats a new email because the server never deduplicates the input guests array."
+  }
+ ]
+}

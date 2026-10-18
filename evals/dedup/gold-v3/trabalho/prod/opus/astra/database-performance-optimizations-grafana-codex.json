@@ -1,0 +1,23 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Describes the same ticker change from 10 minutes to 1 minute, making all cleanup jobs run ten times as often and increasing database load."
+  },
+  {
+   "id": "S2",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Describes the same normal-path Error-level cleanup logging that dumps full ID lists on every batch and floods logs and alerting."
+  },
+  {
+   "id": "S3",
+   "match": "database-performance-optimizations-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Describes the same quadratic string construction in the SQLite inline ID list, caused by repeatedly copying the accumulated string with fmt.Sprintf."
+  }
+ ]
+}

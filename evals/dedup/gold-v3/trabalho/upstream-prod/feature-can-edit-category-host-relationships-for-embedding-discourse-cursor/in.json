@@ -1,0 +1,24 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "prTitle": "FEATURE: Can edit category/host relationships for embedding",
+ "upstream": "discourse/discourse",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/discourse",
+ "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+ "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+ "prOriginalConhecido": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "mergedAt": "2015-08-20",
+  "nota": "No upstream PR: the benchmark head d1c69189 is itself a direct commit by Robin Ward on discourse/discourse main (committer date 2015-08-20, no associated pull request; gh pr search by title finds nothing), and it is an ancestor of main. The reference date is that commit's date."
+ },
+ "tps": [
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#prod-01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "EmbeddableHost's host format validation only accepts TLDs of 2-5 letters, so admins cannot add embeddable hosts on longer TLDs like example.technology.",
+   "evidenciaOpus": "The new EmbeddableHost model (app/models/embeddable_host.rb:2) validates hosts with `\\.[a-z]{2,5}(:[0-9]{1,5})?`, rejecting TLDs longer than five letters such as .technology or .photography. The previous SiteSetting.allows_embeddable_host? did plain string comparison with no format restriction.",
+   "evidenciaAstra": "The newly added validation in app/models/embeddable_host.rb:2 restricts the final suffix to 2–5 letters, rejecting example.technology. Both create and update invoke save_host, whose validated host.save rejects these relationships (app/controllers/admin/embeddable_hosts_controller.rb:5–11,27–30); the previous hostname comparison imposed no suffix-length restriction."
+  }
+ ]
+}

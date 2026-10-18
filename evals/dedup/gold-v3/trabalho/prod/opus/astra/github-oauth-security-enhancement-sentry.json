@@ -1,0 +1,17 @@
+{
+ "caseId": "github-oauth-security-enhancement-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "github-oauth-security-enhancement-sentry#03",
+   "newGroup": null,
+   "reason": "Describes the same static pipeline.signature OAuth state that permits forged callbacks, requiring a random per-attempt nonce."
+  },
+  {
+   "id": "S2",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Addresses the same unchecked sender metadata lookup that raises KeyError when sender is absent."
+  }
+ ]
+}

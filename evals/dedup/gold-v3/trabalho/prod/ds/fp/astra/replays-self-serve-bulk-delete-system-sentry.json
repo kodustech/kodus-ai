@@ -1,0 +1,11 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment claims an incorrect class reference to _truncate_title causes AttributeError. None of the rejected issues describes this defect; #21 concerns repeated event lookups while building PR comments."
+  }
+ ]
+}

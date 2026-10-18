@@ -9,7 +9,11 @@
   "gpt-6.1-sol@e2b",
   "sonnet-5.5@cc",
   "opus-5.5@api",
-  "opus-5.5@api"
+  "opus-5.5@api",
+  "deepseek-v4.1-flash@prod",
+  "gpt-6.1-sol@prod",
+  "opus-5.5@prod",
+  "sonnet-5.5@prod"
  ],
  "classificadores": [
   "claude-opus-5.5",

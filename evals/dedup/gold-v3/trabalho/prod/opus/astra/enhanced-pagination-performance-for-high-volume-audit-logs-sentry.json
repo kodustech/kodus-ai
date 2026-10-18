@@ -1,0 +1,23 @@
+{
+ "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "Describes the same datetime incompatibility: numeric key conversion crashes during cursor construction, and cursor decoding returns an integer for a datetime field."
+  },
+  {
+   "id": "S2",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+   "newGroup": null,
+   "reason": "Describes the same unconditional dereference of an optional organization_context.member, causing AttributeError even without optimized pagination."
+  },
+  {
+   "id": "S3",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Describes the same negative cursor offsets reaching Django queryset slicing in OptimizedCursorPaginator and causing request failures."
+  }
+ ]
+}

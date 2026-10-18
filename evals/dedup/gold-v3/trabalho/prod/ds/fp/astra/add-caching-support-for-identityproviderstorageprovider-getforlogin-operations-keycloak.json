@@ -1,0 +1,11 @@
+{
+ "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#03",
+   "newGroup": null,
+   "reason": "The comment repeats the rejected claim that the getForLogin cache-hit path returns models without organization-aware wrapping. getById already wraps those models."
+  }
+ ]
+}

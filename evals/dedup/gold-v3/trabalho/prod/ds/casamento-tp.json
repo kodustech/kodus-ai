@@ -1,0 +1,157 @@
+{
+ "tp": {
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "S2": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05"
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "S2": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "S3": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09"
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "S1": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05"
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "S2": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02"
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "S1": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "S2": "add-guest-management-functionality-to-existing-bookings-cal-com#02"
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "S1": "add-html-sanitizer-for-translated-message-resources-keycloak#06"
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "S1": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "S2": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "S3": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04"
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "S2": "advanced-query-processing-architecture-grafana-codex#01"
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "S2": "advanced-sql-analytics-framework-grafana-codex#oph-01"
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "S1": "anonymous-add-configurable-device-limit-grafana-codex#01"
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "S1": "async-import-of-the-appstore-packages-cal-com#02",
+   "S2": "async-import-of-the-appstore-packages-cal-com#02"
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "S2": "authzservice-improve-authz-caching-grafana-codex#01"
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "S1": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04"
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "S1": "database-performance-optimizations-grafana-codex#08"
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "S1": "dual-storage-architecture-grafana-codex#sncc-01"
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "S1": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+   "S2": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "S3": "enhance-embed-url-handling-and-validation-system-discourse-cursor#16"
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "S1": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+   "S2": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "S3": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01"
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "S1": "feat-2fa-backup-codes-cal-com#07",
+   "S2": "feat-2fa-backup-codes-cal-com#15"
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "S2": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01"
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "S1": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14",
+   "S2": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "S3": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03"
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "S1": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "S2": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10"
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "S1": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02"
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "S1": "feature-automatically-downsize-large-images-discourse-cursor#01"
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "S1": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "S2": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+   "S3": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "S4": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01"
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "S1": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "S2": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01"
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "S1": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "S2": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "S3": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+   "S4": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#06",
+   "S5": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08"
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "S1": "fix-proper-handling-of-group-memberships-discourse-cursor#07",
+   "S2": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "S3": "fix-proper-handling-of-group-memberships-discourse-cursor#01"
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "S2": "github-oauth-security-enhancement-sentry#09"
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "S1": "implement-access-token-context-encoding-framework-keycloak#01"
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "S2": "implement-recovery-key-support-for-user-storage-providers-keycloak#02"
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "S1": "notification-rule-processing-engine-grafana-codex#07",
+   "S2": "notification-rule-processing-engine-grafana-codex#04",
+   "S3": "notification-rule-processing-engine-grafana-codex#11"
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "S1": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "S2": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "S3": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "S4": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01"
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "S3": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+   "S4": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06"
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "S2": "replays-self-serve-bulk-delete-system-sentry#12"
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "S1": "sms-workflow-reminder-retry-count-tracking-cal-com#02"
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "S1": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "S3": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08"
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "S2": "unified-storage-performance-optimizations-grafana-codex#01"
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "S1": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "S2": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07"
+  }
+ },
+ "divergencias": [
+  [
+   "implement-recovery-key-support-for-user-storage-providers-keycloak",
+   "S2",
+   "implement-recovery-key-support-for-user-storage-providers-keycloak#02",
+   "new"
+  ]
+ ]
+}

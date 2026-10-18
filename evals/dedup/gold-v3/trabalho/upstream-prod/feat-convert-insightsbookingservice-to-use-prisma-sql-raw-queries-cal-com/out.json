@@ -1,0 +1,24 @@
+{
+ "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+ "prOriginal": {
+  "numero": 22345,
+  "url": "https://github.com/calcom/cal.diy/pull/22345",
+  "mergedAt": "2025-07-15",
+  "nota": "Taken from prOriginalConhecido and confirmed: gh pr view 22345 shows headRefOid da09bc0808 (the benchmark head), merged 2025-07-15 as squash 967442892a, whose getBaseConditions still returns authConditions without parentheses. calcom/cal.com resolves to calcom/cal.diy."
+ },
+ "tps": {
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-02": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-07-21",
+    "pr": 22619,
+    "commit": "e7535b9db3",
+    "url": "https://github.com/calcom/cal.diy/pull/22619"
+   },
+   "removidoEm": null,
+   "diasNoAr": 6,
+   "reason": "At merge commit 967442892a, getBaseConditions in packages/lib/server/service/insightsBooking.ts returns `authConditions` bare, and the combined case is `(auth) AND (filter)` without outer parentheses. PR #22619 (feat: add hourly booking charts, commit e7535b9db3, 2025-07-21) changed it to `((auth) AND (filter))`, `(auth)` and `(filter)`, so a caller appending AND no longer changes precedence. Every later version kept the parentheses (checked through the rename to InsightsBookingBaseService.ts and the move to packages/features/insights/services/). The Cal.diy refactor (#28903, 2026-04-15) later deleted the insights service entirely, but the fix came first.",
+   "astra": []
+  }
+ }
+}

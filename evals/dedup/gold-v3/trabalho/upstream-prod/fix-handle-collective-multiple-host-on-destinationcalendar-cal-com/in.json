@@ -1,0 +1,24 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "prTitle": "fix: handle collective multiple host on destinationCalendar",
+ "upstream": "calcom/cal.com",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/cal.com",
+ "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+ "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+ "prOriginalConhecido": {
+  "numero": 10967,
+  "url": "https://github.com/calcom/cal.diy/pull/10967",
+  "mergedAt": "2023-08-31",
+  "nota": "Upstream calcom/cal.com now redirects to calcom/cal.diy. Found by head branch fix-collective-events-have-only-one-team-attendee-on-the-google-event-7754-cal-1267; benchmark head de62829 is the PR's last commit and squash c4e5d168 has the same 22-file diff (only unrelated main-merge drift in imports). Files later moved: EventManager -> packages/features/bookings/lib, CalendarManager -> packages/features/calendars/lib, handleNewBooking -> service/RegularBookingService + handleNewBooking/loadUsers."
+ },
+ "tps": [
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "In Google createEvent, when no destination calendar matches the credentialId, the hangout-link events.patch is called with an undefined calendarId and fails, so the Meet link is not added to the event description.",
+   "evidenciaOpus": "selectedCalendar is now `destinationCalendar?.find(cal => cal.credentialId === credentialId)?.externalId` (CalendarService.ts:147-149), which can be undefined; the insert falls back to \"primary\" (:154) but the follow-up events.patch passes `calendarId: selectedCalendar` (:168) raw. Before the PR selectedCalendar already defaulted to \"primary\", so the PR introduces the undefined calendarId.",
+   "evidenciaAstra": "CalendarService.ts:147-154 now allows selectedCalendar to be undefined and applies the \"primary\" fallback only to insertion; the subsequent Meet-description patch still passes selectedCalendar directly at lines 165-175. This case is reachable for destinations without credentialId (packages/core/EventManager.ts:375-380), causing the patch to fail and omit the Meet link from the description; previously selectedCalendar itself included the fallback."
+  }
+ ]
+}

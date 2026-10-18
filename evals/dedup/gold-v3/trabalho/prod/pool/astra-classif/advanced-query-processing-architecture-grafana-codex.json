@@ -1,0 +1,12 @@
+{
+ "caseId": "advanced-query-processing-architecture-grafana-codex",
+ "items": [
+  {
+   "issueId": "advanced-query-processing-architecture-grafana-codex#prod-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The literal tokens are intentionally preserved for backend interpolation (public/app/plugins/datasource/loki/datasource.ts:1111). Shard subrequests reach datasource.runQuery through querySplitting.ts:180, and pkg/tsdb/loki/parse_query.go:157 invokes interpolation before execution. That interpolation resolves $__auto and $__range* at parse_query.go:46\u201354, so the claimed invalid LogQL failure does not occur.",
+   "severity": "high"
+  }
+ ]
+}

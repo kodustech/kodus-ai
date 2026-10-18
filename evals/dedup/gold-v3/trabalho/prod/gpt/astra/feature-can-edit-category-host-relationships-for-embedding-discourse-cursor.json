@@ -1,0 +1,23 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "The migration dereferences an absent first query row before reaching the uncategorized fallback, causing migration failure."
+  },
+  {
+   "id": "S2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Legacy hosts are migrated without stripping schemes and paths, so they fail the new bare-host lookup."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment identifies a validation restriction rejecting domain suffixes longer than five letters. No golden-set issue describes this restriction."
+  }
+ ]
+}

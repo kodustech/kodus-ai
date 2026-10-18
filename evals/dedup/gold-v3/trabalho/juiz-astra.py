@@ -7,7 +7,7 @@ T = os.path.dirname(os.path.abspath(__file__))
 arg = lambda n, d: next((a.split('=', 1)[1] for a in sys.argv[1:] if a.startswith(f'--{n}=')), d)
 W = os.path.join(T, arg('dir', 'loc'))
 PAR = int(arg('par', '2'))
-REGRA = open(f'{T}/loc/REGRA-juiz.md').read()
+REGRA = open(os.path.join(T, arg('regra', 'loc/REGRA-juiz.md'))).read()
 SCHEMA = {"type": "object", "additionalProperties": False, "required": ["items"], "properties": {"items": {"type": "array", "items": {"type": "object", "additionalProperties": False,
           "required": ["id", "match", "newGroup", "reason"], "properties": {"id": {"type": "string"}, "match": {"type": "string"}, "newGroup": {"type": ["string", "null"]}, "reason": {"type": "string"}}}}}}
 IN = json.load(open(f'{W}/juiz-in.json'))
@@ -36,7 +36,7 @@ def um(cid):
 
 You are in a checkout of the repository at the head commit of the pull request. The base commit is {p['base']}; use read-only commands (git diff {p['base']}...HEAD, git show, git grep, reading files).
 
-Real problems (golden-set issues) of this pull request:
+{arg('rotulo', 'Real problems (golden-set issues) of this pull request')}:
 {iss}
 
 New comments:

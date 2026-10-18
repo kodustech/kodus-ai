@@ -1,0 +1,11 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Both describe bypassing the blocked-email list by changing capitalization because the lookup uses exact equality without normalization. Normalizing stored emails and lookup values fixes the same problem."
+  }
+ ]
+}

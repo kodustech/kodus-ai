@@ -1,0 +1,17 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "items": [
+  {
+   "id": "S3",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#03",
+   "newGroup": null,
+   "reason": "It makes the same claim that ProvideAnonDBStore's new int64 parameter cannot be supplied by Wire while the provider remains registered in wire.go."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "It alleges that retries repeatedly prepend the query to captured arguments, causing mismatched bind parameters. None of the rejected issues describes this retry-related argument mutation."
+  }
+ ]
+}

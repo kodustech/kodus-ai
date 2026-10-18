@@ -1,0 +1,11 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#13",
+   "newGroup": null,
+   "reason": "Both assert that the missing resource-id filter lets permissions on another resource with the same scope grant access to this client."
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "caseId": "async-import-of-the-appstore-packages-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the same unawaited async forEach callbacks in handleCancelBooking, which populate apiDeletes too late and allow rejections to escape handling."
+  },
+  {
+   "id": "S2",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the same unawaited async forEach callbacks in reschedule, causing deletions to run fire-and-forget and errors to escape the surrounding try/catch."
+  }
+ ]
+}

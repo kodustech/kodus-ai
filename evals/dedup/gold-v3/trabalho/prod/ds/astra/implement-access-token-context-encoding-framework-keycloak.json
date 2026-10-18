@@ -1,0 +1,11 @@
+{
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "The comment identifies the same duplicated grantType null check that leaves rawTokenId unvalidated, and proposes fixing that check to validate rawTokenId."
+  }
+ ]
+}

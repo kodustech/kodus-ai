@@ -1,0 +1,12 @@
+{
+ "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#prod-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "config/initializers/i18n.rb:20-24 defines ensure_loaded! and unconditionally installs its FallbackLocaleList instance. config.ru:2 loads config/environment.rb:5, which initializes the application before serving requests; no repository code replaces the fallback object afterward. The proposed guard addresses a hypothetical unsupported state, not a demonstrated defect.",
+   "severity": "critical"
+  }
+ ]
+}

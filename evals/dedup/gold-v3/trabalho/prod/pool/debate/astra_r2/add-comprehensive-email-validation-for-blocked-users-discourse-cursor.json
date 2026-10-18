@@ -1,0 +1,12 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "items": [
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "The PR adds rejectedEmails, appends server-rejected addresses at line 275, and fails validation for cached matches at lines 69\u201374 without any invalidation. That failure disables submission even after the server-side block is removed. Intentional caching does not make stale rejection correct; blocking a now-valid signup is observable wrong behavior, not a nit. The uncommon trigger and reload workaround support medium severity."
+  }
+ ]
+}

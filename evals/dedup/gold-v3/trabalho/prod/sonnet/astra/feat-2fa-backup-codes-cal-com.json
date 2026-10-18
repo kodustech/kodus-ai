@@ -1,0 +1,23 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Describes the same password bypass when a valid backup code is submitted alongside a dummy totpCode."
+  },
+  {
+   "id": "S2",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same non-atomic backup-code consumption that permits concurrent reuse or overwrites another code's removal."
+  },
+  {
+   "id": "S3",
+   "match": "feat-2fa-backup-codes-cal-com#02",
+   "newGroup": null,
+   "reason": "Addresses the same dismissal path on the backup-code screen that skips onEnable and leaves the parent showing 2FA as disabled."
+  }
+ ]
+}

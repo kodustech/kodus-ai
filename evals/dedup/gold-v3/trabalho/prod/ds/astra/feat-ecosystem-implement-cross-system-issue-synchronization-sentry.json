@@ -1,0 +1,17 @@
+{
+ "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes missing source-based cycle prevention in status synchronization, which is distinct from the timestamp default and test-naming issues in the golden set."
+  },
+  {
+   "id": "S2",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "Describes the same queued default being evaluated at module import, causing all AssignmentSource instances to share a stale timestamp."
+  }
+ ]
+}

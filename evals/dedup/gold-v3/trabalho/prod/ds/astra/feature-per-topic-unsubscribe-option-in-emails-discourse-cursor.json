@@ -1,0 +1,17 @@
+{
+ "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Describes the same unchecked TopicUser.find_by result causing a nil dereference and 500. The additional login-filter claim does not change that match."
+  },
+  {
+   "id": "S2",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same CSRF vulnerability: the GET unsubscribe endpoint changes notification preferences using session cookies without CSRF verification."
+  }
+ ]
+}

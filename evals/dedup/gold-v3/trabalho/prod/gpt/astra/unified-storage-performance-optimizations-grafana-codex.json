@@ -1,0 +1,11 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#02",
+   "newGroup": null,
+   "reason": "The comment describes the same unlocked TotalDocs cache iteration racing with index publication by the already-started event goroutine, potentially causing a fatal concurrent map iteration/write during startup."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This describes a possible NoMethodError when I18n.fallbacks is not a FallbackLocaleList. Guarding that controller call would fix neither missing fallback catalogs outside requests (#01) nor fallback-dependent cache contamination (#06)."
+  }
+ ]
+}

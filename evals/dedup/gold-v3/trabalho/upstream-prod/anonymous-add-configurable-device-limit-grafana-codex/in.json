@@ -1,0 +1,24 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "prTitle": "Anonymous: Add configurable device limit",
+ "upstream": "grafana/grafana",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/grafana",
+ "base": "50f4e78a39914711d0d231a501ba215becf17ebc",
+ "head": "bbd8c507cdf56f6b884373809e0b24abd4a2353d",
+ "prOriginalConhecido": {
+  "numero": 79265,
+  "url": "https://github.com/grafana/grafana/pull/79265",
+  "mergedAt": "2023-12-12",
+  "nota": "Found by title with gh pr list (branch jguer/add-anon-device-limit). Its last commit is the benchmark head bbd8c507; squash-merged as 3647ba73 on 2023-12-12, and database.go, impl.go and client.go at the merge commit are byte-identical to the benchmark head. The benchmark base/head diff also contains unrelated social-login and ssosettings changes that are not part of #79265."
+ },
+ "tps": [
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#prod-02",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "updateDevice prepends the query to the captured args inside the retried DB callback, so a SQLite lock retry runs Exec with the query duplicated in the arguments and the update fails.",
+   "evidenciaOpus": "In updateDevice the WithDbSession callback reassigns the captured args with args = append([]interface{}{query}, args...) (database.go:84). withDbSession wraps the callback in retryer.Retry(retryOnLocks(...)) (sqlstore/session.go:127, 86-96), which reruns it on SQLite ErrLocked/ErrBusy, so the retry executes Exec(query, query, ip, ...) with mismatched bind parameters.",
+   "evidenciaAstra": "The new updateDevice callback mutates captured args by prepending query on every invocation at pkg/services/anonymous/anonimpl/anonstore/database.go:84. WithDbSession enables callback retries at pkg/services/sqlstore/session.go:127, and retryOnLocks invokes that same callback again after SQLite lock errors at session.go:90–102; when retries are configured, subsequent attempts receive an extra SQL string as a bound argument and fail."
+  }
+ ]
+}

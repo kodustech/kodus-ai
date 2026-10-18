@@ -1,0 +1,24 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "prTitle": "Comprehensive workflow reminder management for booking lifecycle events",
+ "upstream": "calcom/cal.com",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/cal.com",
+ "base": "d1440bb5d2f2190ad7ae1d26c165f970055b5370",
+ "head": "6048e2a86b50e81e1e3b1b467dfea5a895add3dc",
+ "prOriginalConhecido": {
+  "numero": 7232,
+  "url": "https://github.com/calcom/cal.diy/pull/7232",
+  "mergedAt": "2023-02-20",
+  "nota": "calcom/cal.com now redirects to calcom/cal.diy. Found via head branch fix/cancelled-rescheduled-workflow-emails; PR head 6048e2a8 equals the benchmark head (same 8 commits), merged as 2ebfcf448. On 2026-04-15 PR #28903 'refactor: Cal.diy' removed packages/features/ee (all workflow code) from the default branch."
+ },
+ "tps": [
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#prod-01",
+   "severity": "high",
+   "category": "bug",
+   "bug": "The cron route sets the API key only on @sendgrid/mail, so the new @sendgrid/client cancellation requests are unauthenticated and reminders for cancelled bookings stay scheduled.",
+   "evidenciaOpus": "scheduleEmailReminders.ts only calls sgMail.setApiKey (:19) and never client.setApiKey, yet the new cancellation loop calls client.request on the @sendgrid/client singleton (:57-64); @sendgrid/mail uses its own Client instance, while emailReminderManager.ts:26 is where client.setApiKey lives. The unauthenticated request throws, the catch at :75-77 swallows it, and the cancelled reminders are neither cancelled at SendGrid nor deleted.",
+   "evidenciaAstra": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:19 initializes only sgMail, while the new cancellation request at line 57 uses the separately imported client. The locked SendGrid 7.7.0 [MailService implementation](https://github.com/sendgrid/sendgrid-nodejs/blob/7.7.0/packages/mail/src/classes/mail-service.js#L16-L38) creates its own Client, so setting its API key does not authenticate the separate client. Consequently, cancellation requests fail and leave reminders scheduled; emailReminderManager.ts:25-26 correctly initializes both clients."
+  }
+ ]
+}

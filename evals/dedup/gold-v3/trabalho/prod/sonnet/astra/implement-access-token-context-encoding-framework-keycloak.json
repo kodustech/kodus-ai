@@ -1,0 +1,11 @@
+{
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#05",
+   "newGroup": null,
+   "reason": "The comment identifies the missing GRANT_TYPE attribute in client-credentials and UMA issuance, causing token IDs to use 'na' instead of the grant shortcut. Its additional mention of legacy token exchange does not change the match."
+  }
+ ]
+}

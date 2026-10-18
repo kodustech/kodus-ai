@@ -1,0 +1,41 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Describes the same premature cache insertion that lets rejected devices bypass the limit on subsequent requests."
+  },
+  {
+   "id": "S2",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the same non-atomic count-and-insert race that allows concurrent new devices to exceed the limit."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes stale Wire provider registrations and an unresolved int64 dependency, which no golden-set issue covers."
+  },
+  {
+   "id": "S4",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#opa-02",
+   "newGroup": null,
+   "reason": "Describes the same anonymous authentication bypass caused by TagDevice accepting requests without the client-controlled device ID header."
+  },
+  {
+   "id": "S5",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "newGroup": null,
+   "reason": "Describes the same change from asynchronous tagging to synchronous database work in Authenticate, adding latency and database load."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Describes mutation of captured SQL arguments across lock retries, causing duplicate query arguments and bind failures. No golden-set issue covers this retry bug."
+  }
+ ]
+}

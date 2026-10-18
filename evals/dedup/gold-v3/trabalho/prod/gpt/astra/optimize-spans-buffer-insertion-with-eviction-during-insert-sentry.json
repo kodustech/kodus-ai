@@ -1,0 +1,17 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "newGroup": null,
+   "reason": "Describes the same Redis key-type migration problem: existing SET keys cause WRONGTYPE failures when the new ZADD and ZSCAN operations access them."
+  },
+  {
+   "id": "S2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "newGroup": null,
+   "reason": "Describes the same default SUM aggregation in ZUNIONSTORE that doubles duplicate payload timestamp scores and incorrectly protects older spans from eviction."
+  }
+ ]
+}

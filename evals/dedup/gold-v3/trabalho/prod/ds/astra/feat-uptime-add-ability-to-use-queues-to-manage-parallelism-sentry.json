@@ -1,0 +1,23 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "The comment includes the shared pool lifecycle bug: closing one strategy shuts down the factory-owned pool used by other strategies. Giving each strategy its own pool addresses the golden issue as well."
+  },
+  {
+   "id": "S2",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "newGroup": null,
+   "reason": "The shutdown flag makes workers exit before draining queued items. This is the same graceful-shutdown defect described in the golden issue."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This alleges CPU usage proportional to the numeric offset gap, rather than either golden offset-correctness problem. The claim is false: the loop breaks at the first missing offset instead of traversing the gap."
+  }
+ ]
+}

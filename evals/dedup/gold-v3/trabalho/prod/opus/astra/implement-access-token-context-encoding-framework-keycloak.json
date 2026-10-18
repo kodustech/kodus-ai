@@ -1,0 +1,23 @@
+{
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Identifies the duplicate grantType null check that leaves rawTokenId unvalidated and allows ':null' encoding."
+  },
+  {
+   "id": "S2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Identifies the incorrect grant substring offset and inverted comparison that prevent event assertions from verifying the encoded grant."
+  },
+  {
+   "id": "S3",
+   "match": "implement-access-token-context-encoding-framework-keycloak#opa-01",
+   "newGroup": null,
+   "reason": "Explicitly identifies the abstract getShortcut() method breaking existing custom grant factories and requests a default implementation. Its additional shortcut-length concern also overlaps issue #03."
+  }
+ ]
+}

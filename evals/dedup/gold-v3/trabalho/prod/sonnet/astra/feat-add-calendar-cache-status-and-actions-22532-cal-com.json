@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+   "newGroup": null,
+   "reason": "Both describe missing connectedCalendars query invalidation after cache deletion, leaving the timestamp and delete action stale when no parent refetch callback is provided."
+  }
+ ]
+}

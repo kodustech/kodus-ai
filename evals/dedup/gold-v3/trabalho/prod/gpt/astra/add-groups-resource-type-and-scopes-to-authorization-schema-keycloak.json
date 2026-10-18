@@ -1,0 +1,17 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "Both describe the no-argument canManage() accepting VIEW and thereby allowing view-only principals to pass manage checks. Requiring only MANAGE fixes both."
+  },
+  {
+   "id": "S2",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Both describe using the authorization resource ID instead of its name for permission lookup and returned group IDs. Using getName() in both places fixes the shared problem."
+  }
+ ]
+}

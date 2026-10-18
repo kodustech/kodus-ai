@@ -1,0 +1,23 @@
+{
+ "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "Describes the shared shutdown deadline skipping cleanup of remaining flusher processes, leaving them running."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes an alleged multiplication of the aggregate flush budget because each worker budgets against its own shards. No golden-set issue covers this budget calculation."
+  },
+  {
+   "id": "S3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "newGroup": null,
+   "reason": "Describes submit() repeating identical cluster-wide Redis memory queries for every flusher buffer instead of querying once."
+  }
+ ]
+}

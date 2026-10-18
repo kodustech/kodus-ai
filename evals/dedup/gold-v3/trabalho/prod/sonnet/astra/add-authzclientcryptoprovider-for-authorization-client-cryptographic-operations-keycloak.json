@@ -1,0 +1,17 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+   "newGroup": null,
+   "reason": "Describes the same silent selection among equal-priority crypto providers, allowing discovery order to select a non-FIPS provider instead of rejecting the conflict."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes malformed DER length and INTEGER handling in ASN1Decoder. Issue #07 concerns wrong-length JOSE input in concatenatedRSToASN1DER; fixing that would not fix these decoder failures."
+  }
+ ]
+}

@@ -1,0 +1,35 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Both describe the second downsize definition overriding the width/height version and breaking ResizeEmoji calls with ArgumentError."
+  },
+  {
+   "id": "S2",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Both describe repeated synchronous image conversions during uploads exhausting web workers."
+  },
+  {
+   "id": "S3",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Both describe stale tempfile.size readings after image processing causing incorrect loop behavior and subsequent file handling. S3 gives a specific mechanism and acknowledges the five-pass bound."
+  },
+  {
+   "id": "S4",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Both describe passing 80% to gifsicle's --resize-fit, which requires WxH geometry and therefore fails to downsize animated GIFs."
+  },
+  {
+   "id": "S5",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Both describe the hardcoded 10 MB client limit rejecting attachments permitted by max_attachment_size_kb."
+  }
+ ]
+}

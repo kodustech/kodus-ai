@@ -1,0 +1,17 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Describes the same password bypass: a valid backup code plus any nonempty totpCode skips password verification without validating TOTP."
+  },
+  {
+   "id": "S2",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same non-atomic backup-code consumption, allowing concurrent logins to reuse a code or overwrite another code's removal."
+  }
+ ]
+}

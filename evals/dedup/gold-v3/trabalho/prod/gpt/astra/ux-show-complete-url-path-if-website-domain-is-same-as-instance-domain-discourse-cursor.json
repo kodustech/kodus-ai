@@ -1,0 +1,11 @@
+{
+ "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "The comment identifies the same visibility leak: website_name exposes a TL0 user's website host/path to anonymous viewers because it is missing from untrusted_attributes."
+  }
+ ]
+}

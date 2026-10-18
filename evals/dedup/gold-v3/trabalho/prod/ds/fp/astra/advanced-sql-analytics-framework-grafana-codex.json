@@ -1,0 +1,11 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This claims the TypeSQL path in nodes.go bypasses enableSqlExpressions and reaches SQL parsing. The rejected claims concern the guard always returning false, stubbed database behavior, or unrelated interface changes, not a call path bypassing the guard."
+  }
+ ]
+}

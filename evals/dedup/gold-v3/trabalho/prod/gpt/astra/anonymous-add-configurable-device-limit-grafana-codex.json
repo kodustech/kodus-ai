@@ -1,0 +1,17 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Describes the same cache-before-admission bug: rejected devices remain cached and bypass the limit on retry."
+  },
+  {
+   "id": "S2",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the same non-atomic count-and-insert race that allows concurrent new-device requests to exceed the configured limit."
+  }
+ ]
+}

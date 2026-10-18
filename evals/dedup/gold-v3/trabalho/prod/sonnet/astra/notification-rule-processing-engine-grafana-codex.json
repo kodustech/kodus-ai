@@ -1,0 +1,17 @@
+{
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "notification-rule-processing-engine-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Describes the same lost federation immutability check caused by hardcoding isFederated=false in useAllRulerRuleAbilities."
+  },
+  {
+   "id": "S2",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Describes the same Duplicate permission leak: an undefined Grafana rule still grants Duplicate based on Grafana create permission, overriding the datasource ruler ability through OR logic."
+  }
+ ]
+}

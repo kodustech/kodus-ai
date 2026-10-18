@@ -1,0 +1,17 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "items": [
+  {
+   "id": "S2",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#08",
+   "newGroup": null,
+   "reason": "Both claim the unscheduled-reminders query re-schedules cancelled reminders because it lacks a cancelled filter."
+  },
+  {
+   "id": "S3",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+   "newGroup": null,
+   "reason": "Both claim the immediateDelete branch cancels the SendGrid send without deleting or flagging the WorkflowReminder row, leaving stale database rows. The caller and SMS comparison add detail to the same defect."
+  }
+ ]
+}

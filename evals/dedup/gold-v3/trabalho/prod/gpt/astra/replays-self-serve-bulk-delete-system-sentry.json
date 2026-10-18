@@ -1,0 +1,17 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#12",
+   "newGroup": null,
+   "reason": "Both describe the feature-flagged table visualization receiving empty placeholder data, metadata, and columns instead of actual query results."
+  },
+  {
+   "id": "S2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#19",
+   "newGroup": null,
+   "reason": "Both describe the attribute-key query cache omitting organization identity, causing organizations with identical filters to share cached attributes."
+  }
+ ]
+}

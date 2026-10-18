@@ -1,0 +1,17 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This describes missing authentication setup for the SendGrid client, which no golden issue covers. Initializing the client would not fix the loop-wide error handling described in issue #04."
+  },
+  {
+   "id": "S2",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "newGroup": null,
+   "reason": "This describes the same loop-wide failure handling: one rejected cancellation skips remaining cancellations and all queued database deletions, leaving records to block subsequent retries."
+  }
+ ]
+}

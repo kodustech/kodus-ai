@@ -1,0 +1,11 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "id": "S4",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#opa-01",
+   "newGroup": null,
+   "reason": "It asserts the same hydration defect: calling `.map` on a null `*_ids` value without a guard throws. The observation about the ineffective fallback adds detail to the same claim."
+  }
+ ]
+}

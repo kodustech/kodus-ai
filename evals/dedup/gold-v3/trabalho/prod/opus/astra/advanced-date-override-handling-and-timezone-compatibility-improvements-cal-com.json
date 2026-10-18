@@ -1,0 +1,35 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "newGroup": null,
+   "reason": "The early return for a matching date override bypasses busy-period checks, allowing slots that overlap existing bookings or calendar events."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "Comparing separately constructed Dayjs objects with === prevents zero-length, day-off overrides from being detected."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "The working-hours end bound uses slotStartTime instead of slotEndTime, allowing events to extend beyond working hours."
+  },
+  {
+   "id": "S4",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#06",
+   "newGroup": null,
+   "reason": "Timezone conversion discards the shifted date, causing midnight-crossing overrides to become invalid ranges or apply to the wrong invitee day."
+  },
+  {
+   "id": "S5",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05",
+   "newGroup": null,
+   "reason": "The override upper bound checks the slot start instead of its end, accepting events that extend past the override window. The additional lower-bound correction does not change this match."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "S1 claims status synchronization lacks a source-based guard and can loop. Rejected issue #05 instead claims the parameter was added to the wrong abstract method; the shared location and possible fix do not make these the same defect."
+  }
+ ]
+}

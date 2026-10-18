@@ -1,0 +1,23 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "The same canManage() fallback accepts VIEW, allowing view-only administrators to perform operations requiring MANAGE."
+  },
+  {
+   "id": "S2",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "The same method uses authorization resource IDs instead of resource names for permission lookup and returned group IDs."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This concerns repeated permission evaluations in the group-listing filter in GroupsResource. The golden performance issue concerns a different loop in getGroupIdsWithViewPermission during user searches and counts; fixing either would not fix the other."
+  }
+ ]
+}

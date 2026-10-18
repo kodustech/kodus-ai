@@ -1,0 +1,11 @@
+{
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "The comment asserts the same denial-cache ordering and lack of invalidation, causing checks made before resource creation or a grant to remain denied for shortCacheTTL."
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "caseId": "advanced-query-processing-architecture-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes unresolved $__auto/$__range* tokens caused by removing scoped variables during interpolation. This is distinct from repeated interpolation (#01) and retaining expressions that interpolate to empty strings (#05)."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes repeated interpolation across shard splitting and runSplitQuery, causing ad hoc filters to be applied twice\u2014the same problem as #01."
+  }
+ ]
+}

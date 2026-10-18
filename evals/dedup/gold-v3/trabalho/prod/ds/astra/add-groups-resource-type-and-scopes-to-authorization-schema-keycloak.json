@@ -1,0 +1,17 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes missing resource-ID filtering when accepting evaluated permissions, allowing grants from other resources. This is distinct from the golden issues concerning accepted scopes, group identifiers, resource types, and search filtering."
+  },
+  {
+   "id": "S2",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+   "newGroup": null,
+   "reason": "Describes the same O(groups) permission evaluations in getGroupIdsWithViewPermission on user search and count requests."
+  }
+ ]
+}

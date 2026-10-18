@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment claims missing parentheses cause SQL operator precedence to weaken authorization or filtering. None of the rejected issues describes this cause; #02 concerns fetching member user IDs only when child teams exist."
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes missed Watch events caused by starting the search event consumer before subscribing the broadcaster. This is distinct from the golden issues, including the missing context cancellation on initialization failure."
+  },
+  {
+   "id": "S2",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes concurrent builds for the same uncached key after narrowing the BuildIndex lock, causing directory collisions and cache overwrites. This is the same problem as issue #01."
+  }
+ ]
+}

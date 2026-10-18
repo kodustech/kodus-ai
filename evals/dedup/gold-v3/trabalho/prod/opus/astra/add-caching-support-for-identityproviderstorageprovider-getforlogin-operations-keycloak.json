@@ -1,0 +1,11 @@
+{
+ "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08",
+   "newGroup": null,
+   "reason": "Both describe skipped login-cache invalidation because the original model's enabled state includes the disabled organization, leaving a now-private IDP cached. Both propose evaluating the predicate against the raw stored model."
+  }
+ ]
+}

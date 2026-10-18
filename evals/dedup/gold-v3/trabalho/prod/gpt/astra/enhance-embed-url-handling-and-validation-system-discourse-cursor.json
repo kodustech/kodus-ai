@@ -1,0 +1,41 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Both describe imported HTML bypassing sanitization through raw_html cooking, allowing stored XSS on the forum origin."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The reported incomplete Ruby conditional in the embed template is distinct from every golden-set issue."
+  },
+  {
+   "id": "S3",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Both describe i.content.scrub failing on description-only RSS entries and aborting the polling run."
+  },
+  {
+   "id": "S4",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "newGroup": null,
+   "reason": "Both describe incorrect resolution of protocol-relative and document-relative URLs in absolutize_urls, breaking imported links and images."
+  },
+  {
+   "id": "S5",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+   "newGroup": null,
+   "reason": "Both describe distinct missing article requests repeatedly downloading and importing the entire feed because retrieval throttling is per article URL."
+  },
+  {
+   "id": "S6",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#29",
+   "newGroup": null,
+   "reason": "The comment identifies the historical created_at loss caused by switching Disqus imports to TopicEmbed.import_remote, which is part of this issue."
+  }
+ ]
+}

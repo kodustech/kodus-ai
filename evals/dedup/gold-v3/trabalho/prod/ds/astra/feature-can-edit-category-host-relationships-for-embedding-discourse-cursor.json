@@ -1,0 +1,29 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Both describe the migration dereferencing a missing embed_category query result, aborting before the uncategorized fallback."
+  },
+  {
+   "id": "S2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Both describe interpolating legacy host values into the migration's INSERT without quoting or binding, so a single quote breaks the SQL."
+  },
+  {
+   "id": "S3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Both describe update and destroy dereferencing a nil host after a nonexistent-ID lookup, producing a 500 instead of a not-found response."
+  },
+  {
+   "id": "S4",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Both describe the normalization callback calling sub! on a nil host, raising before validation can return an error."
+  }
+ ]
+}

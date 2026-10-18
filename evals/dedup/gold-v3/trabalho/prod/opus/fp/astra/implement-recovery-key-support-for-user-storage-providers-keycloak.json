@@ -1,0 +1,11 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This claims a null user returned by getMyUser is dereferenced in getFederatedCredentialsStream. It is distinct from the rejected Optional.get() claim and the recovery-code storage and validation claims."
+  }
+ ]
+}

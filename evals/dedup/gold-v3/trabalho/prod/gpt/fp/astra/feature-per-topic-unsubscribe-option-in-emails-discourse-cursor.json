@@ -1,0 +1,11 @@
+{
+ "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+ "items": [
+  {
+   "id": "S2",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "It asserts the same template-resolution problem: the topicUnsubscribe route cannot find the template stored at topic/unsubscribe.hbs."
+  }
+ ]
+}

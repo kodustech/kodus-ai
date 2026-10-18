@@ -1,0 +1,29 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "Identifies the same AND-based permission check that wrongly rejects plain team admins."
+  },
+  {
+   "id": "S2",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Includes the same blacklist bypass caused by comparing incoming emails without normalizing casing. Its additional duplicate-attendee and notification concerns do not prevent this match under the broader-comment rule."
+  },
+  {
+   "id": "S3",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
+   "newGroup": null,
+   "reason": "Identifies the same use of the caller's credentials instead of the organizer's credentials when constructing EventManager, causing calendar updates to fail for non-organizer callers."
+  },
+  {
+   "id": "S4",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#11",
+   "newGroup": null,
+   "reason": "Identifies the same missing server-side guest-array limit that allows unbounded attendee insertion and email fanout."
+  }
+ ]
+}

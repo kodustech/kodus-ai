@@ -1,0 +1,11 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This alleges cross-resource permission leakage because scope matching does not verify the permission's resource ID. The rejected claims concern different causes, including missing all-groups VIEW fallback, rather than unrelated group resources granting access."
+  }
+ ]
+}

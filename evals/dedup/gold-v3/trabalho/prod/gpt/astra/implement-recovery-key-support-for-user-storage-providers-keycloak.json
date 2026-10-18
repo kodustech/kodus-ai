@@ -1,0 +1,11 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
+   "newGroup": null,
+   "reason": "Both describe successful external recovery-code creation leaving the previous local credential active, allowing replaced codes to authenticate through local validation fallback. Both require removing the old local credential after external creation."
+  }
+ ]
+}

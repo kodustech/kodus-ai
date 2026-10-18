@@ -1,0 +1,23 @@
+{
+ "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "The process type check fails to recognize SpawnProcess workers, so hung workers survive while replacements start on the same shards."
+  },
+  {
+   "id": "S2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "The deadline-triggered break skips cleanup of remaining workers, leaving flusher processes alive after shutdown or rebalance."
+  },
+  {
+   "id": "S3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "newGroup": null,
+   "reason": "Each buffer queries the same Redis cluster's memory, so reading from a single buffer eliminates redundant cluster-wide queries."
+  }
+ ]
+}

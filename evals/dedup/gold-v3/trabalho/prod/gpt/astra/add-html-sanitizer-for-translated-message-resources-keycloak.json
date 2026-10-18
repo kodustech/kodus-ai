@@ -1,0 +1,23 @@
+{
+ "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#07",
+   "newGroup": null,
+   "reason": "Normalization deletes entire choice expressions before validation, allowing prohibited HTML or altered links inside choice branches to bypass the verifier."
+  },
+  {
+   "id": "S2",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "Independent common-prefix and common-suffix scans can overlap, causing substring to throw and crash verification instead of reporting validation errors."
+  },
+  {
+   "id": "S3",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "The Lithuanian login and account OTP setup instructions were replaced with Italian text and need Lithuanian translations."
+  }
+ ]
+}

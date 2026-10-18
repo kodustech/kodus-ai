@@ -1,0 +1,47 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "The Google Meet fallback dereferences an undefined mainHostDestinationCalendar when the destination array is null or empty, crashing event creation."
+  },
+  {
+   "id": "S2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "The update/delete fallback searches for the already-falsy externalCalendarId, losing the configured destination calendar."
+  },
+  {
+   "id": "S3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+   "newGroup": null,
+   "reason": "Non-calendar references lose result.credentialId, preventing later meeting lifecycle operations from finding the credential."
+  },
+  {
+   "id": "S4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "The optional push drops collective hosts' destination calendars when the organizer's destinationCalendar is null."
+  },
+  {
+   "id": "S5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "newGroup": null,
+   "reason": "The inverted billing condition assigns the organization slug when billing is enabled and omits it when billing is disabled."
+  },
+  {
+   "id": "S6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+   "newGroup": null,
+   "reason": "Location editing rebuilds references from update results that lack externalId, losing externalCalendarId and breaking later calendar routing."
+  },
+  {
+   "id": "S7",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "The recurring bulk deletion runs once per calendar reference, duplicating deletion calls for remaining occurrences and causing API errors."
+  }
+ ]
+}

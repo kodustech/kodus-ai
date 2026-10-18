@@ -1,0 +1,11 @@
+{
+ "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+ "items": [
+  {
+   "id": "S2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#09",
+   "newGroup": null,
+   "reason": "Both assert that budgeting against each process\u2019s assigned shards turns max-flush-segments into a per-process cap, multiplying the aggregate per-cycle flush ceiling by the process count."
+  }
+ ]
+}

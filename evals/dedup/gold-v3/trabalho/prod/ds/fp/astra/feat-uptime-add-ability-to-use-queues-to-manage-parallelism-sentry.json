@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment claims the offset-tracker loop wastes CPU by scanning the numeric span of sparse offsets. None of the rejected issues describes this performance problem or its cause."
+  }
+ ]
+}

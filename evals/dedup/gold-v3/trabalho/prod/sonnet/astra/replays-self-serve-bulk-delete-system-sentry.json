@@ -1,0 +1,29 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "Both describe positional pairing of error IDs with unordered or incomplete nodestore results, attaching event data to the wrong IDs."
+  },
+  {
+   "id": "S2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Both describe comparing error timestamps in seconds with replay timestamps in milliseconds, preventing chronological interleaving."
+  },
+  {
+   "id": "S3",
+   "match": "replays-self-serve-bulk-delete-system-sentry#12",
+   "newGroup": null,
+   "reason": "Both describe the feature-flagged table visualization rendering empty because actual query results and columns are not passed through."
+  },
+  {
+   "id": "S4",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "The comment includes the same truthiness-based mutual-exclusion bug for zero-valued age/timestamp fields. Its additional requirement to reject reports with neither field does not change that match."
+  }
+ ]
+}

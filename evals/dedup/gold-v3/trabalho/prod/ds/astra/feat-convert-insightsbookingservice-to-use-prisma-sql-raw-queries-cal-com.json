@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment concerns missing tests for condition caching. Neither the unreachable authorization branches nor the ineffective auth/filter combination test would be fixed by adding caching tests."
+  }
+ ]
+}

@@ -1,0 +1,23 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the same non-atomic count-and-insert race that allows concurrent requests to exceed the device limit."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Targets the cost of the full COUNT query, whereas #09 targets synchronous device tagging during authentication. Making the count cheaper would leave synchronous database operations in the authentication path; the every-request claim also overlooks the device cache."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Describes mutation of the captured argument slice across callback retries, causing repeated SQL prepending and invalid UPDATE arguments. No golden issue describes this retry problem."
+  }
+ ]
+}

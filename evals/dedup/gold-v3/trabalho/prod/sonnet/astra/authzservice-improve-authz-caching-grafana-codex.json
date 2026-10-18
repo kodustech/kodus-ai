@@ -1,0 +1,17 @@
+{
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the same ambiguous underscore-separated denial-cache key, allowing different resource/parent pairs to collide and incorrectly share a denial."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes stale denial entries preventing newly granted access until TTL expiry. None of the golden issues covers denial-cache invalidation or grant visibility."
+  }
+ ]
+}

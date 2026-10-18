@@ -1,0 +1,11 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment identifies a missing \"primary\" fallback in the follow-up events.patch call when selectedCalendar is undefined. This differs from the rejected claim about dereferencing mainHostDestinationCalendar and from the other rejected claims."
+  }
+ ]
+}

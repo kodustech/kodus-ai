@@ -1,0 +1,23 @@
+{
+ "caseId": "github-oauth-security-enhancement-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "github-oauth-security-enhancement-sentry#06",
+   "newGroup": null,
+   "reason": "Both describe the missing-Integration path advancing without verifying the OAuth user's ownership of the installation."
+  },
+  {
+   "id": "S2",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Both describe an unguarded sender metadata lookup raising KeyError for existing integrations without sender metadata."
+  },
+  {
+   "id": "S3",
+   "match": "github-oauth-security-enhancement-sentry#05",
+   "newGroup": null,
+   "reason": "The unhandled failures from get_user_info are part of the issue's missing error handling around the OAuth token exchange and user lookup."
+  }
+ ]
+}

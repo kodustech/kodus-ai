@@ -1,0 +1,17 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes an alternate SQL parsing path through nodes.go that bypasses enableSqlExpressions. This is distinct from the helper always returning false or its misleading variable name."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Describes enableSqlExpressions always returning false, preventing SQL expressions from being enabled even when the feature flag is on."
+  }
+ ]
+}

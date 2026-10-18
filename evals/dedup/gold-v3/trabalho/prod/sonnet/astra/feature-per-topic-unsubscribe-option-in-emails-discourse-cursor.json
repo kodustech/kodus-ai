@@ -1,0 +1,23 @@
+{
+ "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Both describe direct saving without explicit-user-change metadata, allowing auto-tracking to undo the unsubscribe when notifications_reason_id is nil."
+  },
+  {
+   "id": "S2",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Both describe dereferencing a missing TopicUser row, causing a NoMethodError and HTTP 500."
+  },
+  {
+   "id": "S3",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Both describe changing notification preferences through a session-authenticated GET without CSRF protection, allowing cross-site requests to unsubscribe users."
+  }
+ ]
+}

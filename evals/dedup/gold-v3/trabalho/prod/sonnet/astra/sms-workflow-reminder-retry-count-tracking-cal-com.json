@@ -1,0 +1,23 @@
+{
+ "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "Identifies the missing SMS method filter on the retryCount deletion branch, which allows deletion of non-SMS reminders. The additional scheduled-state filter suggestion does not change the shared problem."
+  },
+  {
+   "id": "S2",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "newGroup": null,
+   "reason": "Identifies the unguarded retry-count update inside catch, whose failure aborts the cron and skips remaining reminders. The atomic-increment suggestion is additional advice."
+  },
+  {
+   "id": "S3",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Identifies that reminders missing a message or sendTo never increment retryCount and are repeatedly processed until their scheduled date passes."
+  }
+ ]
+}

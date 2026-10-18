@@ -176,7 +176,58 @@ for pasta, chave in RODADAS_JUIZ.items():
             (golden if cls == 'TP' else fps).setdefault(cid, []).append(reg)
             cont[(f'{pasta}:{status}', cls, sc)] += 1
 
-meta = {'versao': 'v3', 'prs': len(A), 'modelos': list(ABR.values()) + list(RODADAS.values()) + list(RODADAS_JUIZ.values()), 'classificadores': ['claude-opus-5.5', 'gpt-6-astra'],
+# Baseline de producao (main 1a7041085, light), 4 modelos, juiz Opus conferido pelo Astra
+# (trabalho/prod/<modelo>): o que casou com TP herda o TP; o resto passou contra os FPs
+# conhecidos do PR (prod/<modelo>/fp); o que seguiu novo foi agrupado entre os modelos e
+# classificado por Opus e Astra as cegas, com debate (trabalho/prod/pool). Em divergencia
+# de casamento vale o Opus.
+RODADAS_PROD = {'ds': 'deepseek-v4.1-flash@prod', 'gpt': 'gpt-6.1-sol@prod', 'opus': 'opus-5.5@prod', 'sonnet': 'sonnet-5.5@prod'}
+if os.path.exists(f'{W}/prod/pool/debate/estado.json'):
+    import glob
+    porId = {r['issueId']: r for d in (golden, fps, revisao) for l in d.values() for r in l}
+    for k, chave in RODADAS_PROD.items():
+        for cid, m in json.load(open(f'{W}/prod/{k}/casamento-tp.json'))['tp'].items():
+            for sid, iss in m.items():
+                sugestoes[f'{chave}|{cid}|{sid}'] = iss
+                porId[iss].setdefault('foundBy', {}).setdefault(chave, []).append(sid)
+        for cid, L in json.load(open(f'{W}/prod/{k}/fp/opus-out0.json')).items():
+            for x in L:
+                if x['match'] != 'new':
+                    sugestoes[f'{chave}|{cid}|{x["id"]}'] = x['match']
+                    porId[x['match']].setdefault('foundBy', {}).setdefault(chave, []).append(x['id'])
+    R = f'{W}/prod/pool'
+    oc = {}
+    for f in glob.glob(f'{R}/opus-classif*.json'): oc.update(json.load(open(f)))
+    ac = {x['issueId']: x for f in glob.glob(f'{R}/astra-classif/*.json') for x in json.load(open(f))['items']}
+    D2 = json.load(open(f'{R}/debate/estado.json'))
+    for cid, p in json.load(open(f'{R}/classif-in.json')).items():
+        for it in p['issues']:
+            k = it['issueId']; o = oc[k]; a = ac[k]
+            fb = collections.defaultdict(list)
+            for c in it['comentarios']:
+                mk, sid = c['gid'].split('-', 1)[1].split(':')
+                fb[RODADAS_PROD[mk]].append(sid)
+                sugestoes[f'{RODADAS_PROD[mk]}|{cid}|{sid}'] = k
+            reg = {'issueId': k, 'caseId': cid, 'comment': o['comment'], 'commentOpus': o['comment'], 'source': 'kodus', 'martianRef': [],
+                   'foundBy': dict(fb), 'reason_opus': o['reason'], 'reason_astra': a['reason'],
+                   'class_opus_inicial': o['class'], 'subclass_opus_inicial': o['subclass'],
+                   'class_astra_inicial': a['class'], 'subclass_astra_inicial': sub(a['subclass']), 'rodada': 'prod'}
+            if k in D2:
+                d = D2[k]
+                assert d.get('fechado'), f'{k}: debate em aberto'
+                fo = next(h for h in reversed(d['hist']) if h['who'] == 'opus')
+                cls, sc, sev = fo['class'], sub(fo['subclass']), fo['severity']
+                status = 'human_decision' if d['fechado'] == 'humano' else 'agreed_after_debate'
+                if d.get('decisaoHumana'): reg['decisaoHumana'] = d['decisaoHumana']
+                reg['debate'] = [{'quem': h['who'], 'class': h['class'], 'subclass': sub(h['subclass']), 'severity': sub(h['severity']), 'texto': h['text']} for h in d['hist']]
+            else:
+                assert (o['class'], o['subclass']) == (a['class'], sub(a['subclass'])), f'{k}: classe sem consenso'
+                cls, sc, sev, status = o['class'], o['subclass'], o['severity'], 'agreed'
+            reg.update({'class': cls, 'subclass': sc, 'status': status, 'severity': sev, 'category': (o['category'] or 'bug') if cls == 'TP' else None})
+            (golden if cls == 'TP' else fps).setdefault(cid, []).append(reg)
+            cont[(f'prod:{status}', cls, sc)] += 1
+
+meta = {'versao': 'v3', 'prs': len(A), 'modelos': list(ABR.values()) + list(RODADAS.values()) + list(RODADAS_JUIZ.values()) + list(RODADAS_PROD.values()), 'classificadores': ['claude-opus-5.5', 'gpt-6-astra'],
         'regua': 'TP = o problema existe no codigo do head e o PR o introduz ou mexe no codigo envolvido; FP = nao ha problema a reportar no PR'}
 for nome, dados in [('golden', golden), ('fps-conhecidos', fps), ('revisao-humana', revisao)]:
     json.dump({**meta, 'prs': dados}, open(f'{AQUI}/{nome}.json', 'w'), indent=1, ensure_ascii=False)

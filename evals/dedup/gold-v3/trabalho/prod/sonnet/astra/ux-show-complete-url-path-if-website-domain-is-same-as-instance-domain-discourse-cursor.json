@@ -1,0 +1,11 @@
+{
+ "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "The comment reports website host/path disclosure to anonymous viewers of TL0 profiles through website_name. Adding website_name to untrusted_attributes fixes the same missing visibility restriction described by issue #06."
+  }
+ ]
+}

@@ -1,0 +1,23 @@
+{
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Both describe the missing key prop on GrafanaRuleListItem in the filtered list, causing React reconciliation problems and warnings."
+  },
+  {
+   "id": "S2",
+   "match": "notification-rule-processing-engine-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Both describe losing the federated-group immutability check when delegating to useAllRulerRuleAbilities, which hardcodes isFederated to false."
+  },
+  {
+   "id": "S3",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Both describe Silence doing nothing for prom-only list rules because the silence drawer still requires a ruler rule."
+  }
+ ]
+}

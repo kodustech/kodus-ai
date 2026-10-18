@@ -1,0 +1,64 @@
+{
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+    {
+      "id": "S3",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Performance claim about per-group canView evaluations when listing groups in GroupsResource; #08 concerns user search scanning, oph-01 is an access-denial correctness claim, not cost."
+    }
+  ],
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+    {
+      "id": "S1",
+      "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#02",
+      "newGroup": null,
+      "reason": "Same claim: recreate exit code moved 4->3 and 4 now means feature disabled, breaking automation."
+    }
+  ],
+  "anonymous-add-configurable-device-limit-grafana-codex": [
+    {
+      "id": "S3",
+      "match": "anonymous-add-configurable-device-limit-grafana-codex#03",
+      "newGroup": null,
+      "reason": "Same claim: ProvideAnonDBStore int64 parameter breaks wire since wire.go still registers it."
+    },
+    {
+      "id": "S6",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Retry in retryOnLocks re-prepends query to captured args; no rejected issue covers argument duplication on retry."
+    }
+  ],
+  "authzservice-improve-authz-caching-grafana-codex": [
+    {
+      "id": "S1",
+      "match": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+      "newGroup": null,
+      "reason": "Same claim: denial cache checked first and never invalidated, so newly created resources/grants stay denied for shortCacheTTL."
+    }
+  ],
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+    {
+      "id": "S4",
+      "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#opa-01",
+      "newGroup": null,
+      "reason": "Same claim: _hydrateEmbedded calls .map on *_ids without null check, TypeError on null."
+    }
+  ],
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+    {
+      "id": "S2",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "NPE in test BackwardsCompatibilityUserStorage when getMyUser returns null; no rejected issue covers this."
+    }
+  ],
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+    {
+      "id": "S2",
+      "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#07",
+      "newGroup": null,
+      "reason": "Same claim: missing end_timestamp_precise raises KeyError and fails the whole batch."
+    }
+  ]
+}

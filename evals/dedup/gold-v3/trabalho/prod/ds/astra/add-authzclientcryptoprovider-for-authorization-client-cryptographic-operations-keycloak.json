@@ -1,0 +1,17 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes eager crypto initialization breaking client creation when repackaging drops ServiceLoader metadata. No golden issue covers missing-provider initialization failures."
+  },
+  {
+   "id": "S2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+   "newGroup": null,
+   "reason": "Describes the same silent selection among equal highest-priority providers, allowing classpath discovery order to decide between FIPS and non-FIPS providers."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fixing-re-authentication-with-passkeys-keycloak#03",
+   "newGroup": null,
+   "reason": "Both describe passkey-only users reaching a password-only form because the base login-password.ftl lacks the passkeys conditional UI. Adding that UI to the base template fixes the shared problem."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "id": "S2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#23",
+   "newGroup": null,
+   "reason": "It asserts the same template syntax defect: `end if` in embed/best.html.erb is invalid Ruby and prevents rendering."
+  }
+ ]
+}

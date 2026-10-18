@@ -1,0 +1,12 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#prod-01",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "high",
+   "reply": "I retain TP: independent channels do not prevent the subscription gap, because each SQL WatchWriteEvents call initializes its cursor from the latest database versions. A write from another replica between subscriptions reaches search but is excluded from the broadcaster\u2019s stream and replay cache. Previously, initWatcher ran first, allowing those events to be cached and replayed to subsequent Watch requests with an earlier Since. Constructor-time initialization does not prohibit such requests, and restoring the earlier broadcaster subscription addresses this exact loss without requiring competing channel consumers."
+  }
+ ]
+}

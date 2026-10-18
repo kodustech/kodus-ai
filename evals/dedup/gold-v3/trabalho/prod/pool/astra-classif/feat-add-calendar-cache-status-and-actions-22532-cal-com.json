@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "items": [
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#prod-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The proposed guard covers an unreachable state: delegated connections use credential ID -1 (packages/lib/delegationCredential/server.ts:86), and database-backed delegation credentials are filtered out (packages/lib/delegationCredential/clientAndServer.ts:45). Cache status is queried by database credential ID (packages/features/calendar-cache/calendar-cache.repository.ts:173), so delegated connections receive cacheUpdatedAt=null (packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts:35) and never display the delete-cache action.",
+   "severity": "medium"
+  }
+ ]
+}

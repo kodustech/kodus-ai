@@ -1,0 +1,11 @@
+{
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "items": [
+  {
+   "id": "S2",
+   "match": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "It asserts the same cause: the denial cache is checked before permission sources and is not invalidated, so a denial persists until shortCacheTTL expires after resource creation or a new grant."
+  }
+ ]
+}

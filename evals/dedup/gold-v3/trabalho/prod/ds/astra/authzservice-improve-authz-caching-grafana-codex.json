@@ -1,0 +1,17 @@
+{
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes stale denial-cache entries blocking newly granted access until TTL expiry. This differs from key collisions and from repeated permission reloads for distinct denied resources."
+  },
+  {
+   "id": "S2",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes ambiguous denial-cache keys allowing a denial for one resource to incorrectly deny another resource, matching the golden issue's key-collision problem."
+  }
+ ]
+}

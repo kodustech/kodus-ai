@@ -1,0 +1,12 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#prod-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The newly added validation in app/models/embeddable_host.rb:2 restricts the final suffix to 2\u20135 letters, rejecting example.technology. Both create and update invoke save_host, whose validated host.save rejects these relationships (app/controllers/admin/embeddable_hosts_controller.rb:5\u201311,27\u201330); the previous hostname comparison imposed no suffix-length restriction.",
+   "severity": "medium"
+  }
+ ]
+}

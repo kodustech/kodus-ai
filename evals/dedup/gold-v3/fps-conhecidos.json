@@ -152,6 +152,9 @@
       "S3",
       "S4",
       "S7"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
      ]
     },
     "reason_opus": "readSequence leniency (ASN1Decoder.java:49-63) only affects asn1derToConcatenatedRS, used on locally produced JDK signatures in the signer context; the verify path uses concatenatedRSToASN1DER (ECDSASignatureVerifierContext.java:30), so no attacker-controlled DER reaches this parser.",
@@ -282,6 +285,9 @@
     "foundBy": {
      "sonnet-5.5@cc": [
       "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "ASN1Decoder.readLength returns -1 for 0x80 (ASN1Decoder.java:133-135) and readInteger passes it straight to read(length) (ASN1Decoder.java:71-72), which does new byte[length] (line 170). A DER signature with indefinite length therefore throws NegativeArraySizeException instead of IOException.",
@@ -374,6 +380,31 @@
     "status": "agreed_after_debate",
     "severity": "high",
     "category": null
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#prod-01",
+    "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+    "comment": "AuthzClient.create eagerly initializes CryptoIntegration, so a shaded/repackaged client that lost its ServiceLoader file fails at construction instead of only when ECDSA is used.",
+    "commentOpus": "AuthzClient.create eagerly initializes CryptoIntegration, so a shaded/repackaged client that lost its ServiceLoader file fails at construction instead of only when ECDSA is used.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ]
+    },
+    "reason_opus": "AuthzClient.create now calls CryptoIntegration.init (AuthzClient.java:95), which throws when no CryptoProvider is found (CryptoIntegration.java:60-61), but the PR ships the authz-client's own provider and META-INF/services/org.keycloak.common.crypto.CryptoProvider registration in the same jar. Failure only occurs if a consumer's repackaging drops service files, which is a packaging error outside the code, not a defect in the PR.",
+    "reason_astra": "AuthzClient.java:95 does initialize crypto before construction, and common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:60-61 throws when no provider is found. However, authz/client/src/main/resources/META-INF/services/org.keycloak.common.crypto.CryptoProvider:20 explicitly registers the provider shipped by this PR. The alleged failure depends on downstream repackaging deleting required resources; the code does not establish a defective packaging path or a need to suppress initialization failures.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "prod",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "high",
+    "category": null
    }
   ],
   "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
@@ -445,6 +476,9 @@
      ],
      "deepseek-v4.1-flash": [
       "S5"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
      ]
     },
     "reason_opus": "The cache-hit loop calls session.identityProviders().getById(id), and getById (InfinispanIdentityProviderStorageProvider.java:136-142) already returns createOrganizationAwareIdentityProviderModel(...) on every path, so hit-path results are wrapped like the miss path.",
@@ -496,6 +530,9 @@
     "foundBy": {
      "muse-spark-1.3": [
       "S4"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
      ]
     },
     "reason_opus": "The loop resolves each cached ID via the cached getById (InfinispanIdentityProviderStorageProvider.java:122-143), identical to getByOrganization's design; these are cache lookups, not per-ID DB queries on a hit.",
@@ -834,6 +871,9 @@
     "foundBy": {
      "muse-spark-1.3": [
       "S2"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
      ]
     },
     "reason_opus": "ClientPermissionsV2.java:224-232 evaluates a ResourcePermission for a single resource (the client's or the all-clients one), so the returned permissions concern that resource; there is no path where a grant for a different client authorizes this one. Missing the resourceId filter used in UserPermissionsV2 is a consistency point, not a demonstrated escalation.",
@@ -1366,6 +1406,102 @@
     "status": "agreed",
     "severity": "high",
     "category": null
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#prod-01",
+    "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+    "comment": "GroupPermissionsV2.hasPermission does not restrict evaluated permissions to the evaluated resource, so when falling back to the all-groups resource a permission granted on one specific group can satisfy the check for any group.",
+    "commentOpus": "GroupPermissionsV2.hasPermission does not restrict evaluated permissions to the evaluated resource, so when falling back to the all-groups resource a permission granted on one specific group can satisfy the check for any group.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ]
+    },
+    "reason_opus": "GroupPermissionsV2.hasPermission falls back to the all-groups type resource (GroupPermissionsV2.java:143-150) and then accepts any returned permission with a matching scope (:156-162) without checking permission.getResourceId(). UserPermissionsV2.hasPermission filters on permission.getResourceId().equals(resource.getId()) (UserPermissionsV2.java:123), a check added upstream precisely because type-resource evaluation also returns single-resource permissions and over-granted access.",
+    "reason_astra": "GroupPermissionsV2.java:152 passes one concrete resource to evaluation; MgmtPermissions.java:335 wraps it in a singleton list. DecisionPermissionCollector.java:189-190 and :209-211 construct the returned permission using that same resource ID, so permissions for other group resources cannot appear as claimed.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "prod",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "GroupPermissionsV2.hasPermission falls back to the all-groups type resource (GroupPermissionsV2.java:143-150) and then accepts any returned permission with a matching scope (:156-162) without checking permission.getResourceId(). UserPermissionsV2.hasPermission filters on permission.getResourceId().equals(resource.getId()) (UserPermissionsV2.java:123), a check added upstream precisely because type-resource evaluation also returns single-resource permissions and over-granted access."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "critical",
+      "texto": "GroupPermissionsV2.java:152 passes one concrete resource to evaluation; MgmtPermissions.java:335 wraps it in a singleton list. DecisionPermissionCollector.java:189-190 and :209-211 construct the returned permission using that same resource ID, so permissions for other group resources cannot appear as claimed."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "critical",
+      "texto": "Conceding. Rechecked the evaluator: for the all-groups type resource (owner = resource server) DefaultPolicyEvaluator.java:76 skips the typed-resource loop, and the scope lookup is findByScopes(server, null, ...) which uses findPolicyIdByNullResourceScope (`pe.resources is empty`), so other group resources' permissions are never pulled in. DecisionPermissionCollector.grantPermission builds every Permission from permission.getResource(), so returned permissions always carry the evaluated resource's id; the UserPermissionsV2 filter is a no-op there, and the claimed cross-resource grant cannot occur. Severity as stated (permission bypass) is critical."
+     }
+    ],
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed_after_debate",
+    "severity": "critical",
+    "category": null
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#prod-02",
+    "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+    "comment": "GroupsResource.getGroups no longer hoists the global canView() check, so in FGAP V2 each listed group triggers its own resource lookup and policy evaluation even when an all-groups grant would cover them all.",
+    "commentOpus": "GroupsResource.getGroups no longer hoists the global canView() check, so in FGAP V2 each listed group triggers its own resource lookup and policy evaluation even when an all-groups grant would cover them all.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@prod": [
+      "S3"
+     ]
+    },
+    "reason_opus": "The PR replaced the hoisted canViewGlobal with stream.filter(groupsEvaluator::canView) (GroupsResource.java:113), and in V2 canView(group) does a findByName, policyStore.findByResource and a policy evaluation per group (GroupPermissionsV2.java:56-62, 141-152). This only affects the non-default populateHierarchy=false path over a paginated page, so it is redundant work rather than a meaningful regression.",
+    "reason_astra": "GroupsResource.java:113 does perform per-group checks, but GroupPermissionsV2.java:141-152 deliberately uses all-groups permissions only when no group-specific resource exists. A global grant therefore cannot answer for every group: restoring the proposed shortcut would bypass group-specific restrictions, so these checks preserve authorization semantics.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "prod",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "texto": "The PR replaced the hoisted canViewGlobal with stream.filter(groupsEvaluator::canView) (GroupsResource.java:113), and in V2 canView(group) does a findByName, policyStore.findByResource and a policy evaluation per group (GroupPermissionsV2.java:56-62, 141-152). This only affects the non-default populateHierarchy=false path over a paginated page, so it is redundant work rather than a meaningful regression."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "GroupsResource.java:113 does perform per-group checks, but GroupPermissionsV2.java:141-152 deliberately uses all-groups permissions only when no group-specific resource exists. A global grant therefore cannot answer for every group: restoring the proposed shortcut would bypass group-specific restrictions, so these checks preserve authorization semantics."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Conceding. The per-group check is deliberate: GroupPermissionsV2.java:141-150 evaluates the group's own resource when one exists and falls back to all-groups only otherwise, so a global VIEW grant cannot answer for every group, and hoisting canView() would bypass group-specific permissions. Admins with VIEW/MANAGE_USERS short-circuit at :56-58. Correct, intended behaviour; the proposed fix would be wrong."
+     }
+    ],
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "medium",
+    "category": null
    }
   ],
   "add-guest-management-functionality-to-existing-bookings-cal-com": [
@@ -1419,6 +1555,79 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#prod-01",
+    "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+    "comment": "sendAddGuestsEmails never notifies the newly added guests because the formatted event does not contain them, so the newGuests branch is unreachable.",
+    "commentOpus": "sendAddGuestsEmails never notifies the newly added guests because the formatted event does not contain them, so the newGuests branch is unreachable.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S3"
+     ]
+    },
+    "reason_opus": "addGuests.handler.ts:92-120 builds evt.attendees from booking.update(...include attendees) after createMany of the new guests, so the CalendarEvent passed to sendAddGuestsEmails already contains them; formatCalEvent only clones it (formatCalendarEvent.ts:19-27). The newGuests.includes(attendee.email) branch at email-manager.ts:541 is therefore reachable and new guests get AttendeeScheduledEmail.",
+    "reason_astra": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:92-120 creates the new attendees and builds attendeesList from the updated booking, then assigns it to evt.attendees at line 136. Consequently, the fan-out in packages/emails/email-manager.ts:540-542 includes the new guests and sends them AttendeeScheduledEmail; cloning does not omit them.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "prod",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "high",
+    "category": null
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#prod-02",
+    "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+    "comment": "OrganizerAddGuestsEmail reads calEvent.attendees[0].name without a guard and throws when the attendee list is empty.",
+    "commentOpus": "OrganizerAddGuestsEmail reads calEvent.attendees[0].name without a guard and throws when the attendee list is empty.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S4"
+     ]
+    },
+    "reason_opus": "The only caller, addGuests.handler.ts, throws when uniqueGuests is empty (:80-81) and then builds attendees from the updated booking including the newly created guests (:92-120), so calEvent.attendees always has at least one element when organizer-add-guests-email.ts:28 reads attendees[0].name. The empty-attendees state cannot occur.",
+    "reason_astra": "The unchecked access exists at packages/emails/templates/organizer-add-guests-email.ts:28, but its caller rejects an empty uniqueGuests list at packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:80-81. It then inserts those guests and constructs the event from the updated attendees at lines 92-136, ensuring at least one attendee before sending the email at line 168.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "prod",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "texto": "The only caller, addGuests.handler.ts, throws when uniqueGuests is empty (:80-81) and then builds attendees from the updated booking including the newly created guests (:92-120), so calEvent.attendees always has at least one element when organizer-add-guests-email.ts:28 reads attendees[0].name. The empty-attendees state cannot occur."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "The unchecked access exists at packages/emails/templates/organizer-add-guests-email.ts:28, but its caller rejects an empty uniqueGuests list at packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:80-81. It then inserts those guests and constructs the event from the updated attendees at lines 92-136, ensuring at least one attendee before sending the email at line 168."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Conceding the subclass. The facts in the comment are true (organizer-add-guests-email.ts:28 reads attendees[0] unchecked), but the empty state is unreachable: addGuests.handler.ts:80-81 throws on empty uniqueGuests and the event is built from the updated attendees (:92-136). Per the rubric, a guard for a state no code path can reach is FP with no subclass, not a hallucination."
+     }
+    ],
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "medium",
+    "category": null
    }
   ],
   "add-html-sanitizer-for-translated-message-resources-keycloak": [
@@ -1555,6 +1764,31 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#prod-01",
+    "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+    "comment": "VerifyMessageProperties loads message bundles with PropertyResourceBundle(InputStream), claimed to decode as ISO-8859-1 and produce mojibake and spurious Illegal HTML failures for non-English files.",
+    "commentOpus": "VerifyMessageProperties loads message bundles with PropertyResourceBundle(InputStream), claimed to decode as ISO-8859-1 and produce mojibake and spurious Illegal HTML failures for non-English files.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ]
+    },
+    "reason_opus": "The module compiles for Java 17 (misc/theme-verifier/pom.xml:32-33), and since Java 9 new PropertyResourceBundle(InputStream) reads UTF-8 by default (falling back to ISO-8859-1 only for malformed input), so VerifyMessageProperties.java:68/77 does decode the UTF-8 files correctly. Even mis-decoded text would be compared against its own sanitized form, so it could not create spurious HTML failures.",
+    "reason_astra": "misc/theme-verifier/pom.xml:32-33 targets Java 17, where PropertyResourceBundle(InputStream) defaults to UTF-8 and falls back to ISO-8859-1 only for invalid UTF-8. Therefore the constructors in misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:68 and :77 correctly decode valid UTF-8 translations; the claimed ISO-8859-1 default and resulting mojibake are false.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "prod",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
    }
   ],
   "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
@@ -1665,6 +1899,9 @@
      "deepseek-v4.1-flash": [
       "S1",
       "S3"
+     ],
+     "opus-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "Before this PR docs/guides/server/update-compatibility.adoc already documented exit code 3 for 'Rolling Upgrade is not possible' while CompatibilityResult returned 4; the PR aligns code with the documented contract of a preview command and documents the new code 4, so no undocumented breaking change.",
@@ -1948,6 +2185,31 @@
     "subclass_opus_inicial": "nit",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "advanced-query-processing-architecture-grafana-codex#prod-01",
+    "caseId": "advanced-query-processing-architecture-grafana-codex",
+    "comment": "runShardSplitQuery now uses applyTemplateVariables, which strips __auto/__range scoped vars, so queries with [$__auto] reach shard sub-requests uninterpolated and fail.",
+    "commentOpus": "runShardSplitQuery now uses applyTemplateVariables, which strips __auto/__range scoped vars, so queries with [$__auto] reach shard sub-requests uninterpolated and fail.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ]
+    },
+    "reason_opus": "applyTemplateVariables deliberately leaves $__auto/$__range* uninterpolated for backend interpolation (datasource.ts:1111-1113), and the Loki backend replaces them (pkg/tsdb/loki/parse_query.go:19-22). The shard sub-requests go through the backend query path, so a literal [$__auto] does not reach Loki as invalid LogQL.",
+    "reason_astra": "The literal tokens are intentionally preserved for backend interpolation (public/app/plugins/datasource/loki/datasource.ts:1111). Shard subrequests reach datasource.runQuery through querySplitting.ts:180, and pkg/tsdb/loki/parse_query.go:157 invokes interpolation before execution. That interpolation resolves $__auto and $__range* at parse_query.go:46–54, so the claimed invalid LogQL failure does not occur.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "prod",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "high",
+    "category": null
    }
   ],
   "advanced-sql-analytics-framework-grafana-codex": [
@@ -2271,6 +2533,31 @@
     "status": "agreed",
     "severity": "medium",
     "category": null
+   },
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#prod-01",
+    "caseId": "advanced-sql-analytics-framework-grafana-codex",
+    "comment": "The TypeSQL branch in nodes.go reaches UnmarshalSQLCommand → NewSQLCommand → DuckDB parsing without the enableSqlExpressions check, leaving the SQL expression RCE/LFI path reachable.",
+    "commentOpus": "The TypeSQL branch in nodes.go reaches UnmarshalSQLCommand → NewSQLCommand → DuckDB parsing without the enableSqlExpressions check, leaving the SQL expression RCE/LFI path reachable.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ]
+    },
+    "reason_opus": "The PR removes go-duck entirely: sql.TablesList now uses the stub NewInMemoryDB whose RunCommands returns \"not implemented\" (pkg/expr/sql/db.go:16-18, parser.go:23-26). The nodes.go:159-160 path therefore cannot reach any DuckDB parsing, so the claimed RCE/LFI path does not exist.",
+    "reason_astra": "The unguarded branch at pkg/expr/nodes.go:159-160 does reach sql.TablesList, but pkg/expr/sql/parser.go:23-29 now uses the PR's local database stub. Its RunCommands unconditionally returns \"not implemented\" (pkg/expr/sql/db.go:16-17), so no DuckDB parsing or execution occurs and the claimed RCE/LFI path is unreachable.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "prod",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "critical",
+    "category": null
    }
   ],
   "anonymous-add-configurable-device-limit-grafana-codex": [
@@ -2290,6 +2577,9 @@
      "sonnet-5.5": [
       "S1",
       "S6"
+     ],
+     "opus-5.5@prod": [
+      "S3"
      ]
     },
     "reason_opus": "pkg/server/wire.go:374-375 keep ProvideAnonDBStore inside a wire.NewSet, but after the PR nothing in the graph requests anonstore.AnonStore (ProvideAnonymousDeviceService now takes db.DB and builds the store itself); wire only resolves needed providers, so the missing int64 provider is never required and injection does not break.",
@@ -2642,6 +2932,31 @@
     "status": "agreed",
     "severity": "medium",
     "category": null
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#prod-01",
+    "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+    "comment": "CreateOrUpdateDevice runs a full COUNT over the 30-day anon_device table on every anonymous request when a device limit is set.",
+    "commentOpus": "CreateOrUpdateDevice runs a full COUNT over the 30-day anon_device table on every anonymous request when a device limit is set.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ]
+    },
+    "reason_opus": "CreateOrUpdateDevice is reached only through tagDeviceUI, which returns early when the device key is already in localCache (impl.go:80-86), so the CountDevices call (database.go:109-118) runs once per device per cache window, not on every anonymous request. It also only runs when a device limit is configured.",
+    "reason_astra": "The claimed count on every anonymous request is prevented by the device cache: pkg/services/anonymous/anonimpl/impl.go:83 returns before calling CreateOrUpdateDevice on cache hits, with a 29-minute expiration configured at impl.go:42. The new count at pkg/services/anonymous/anonimpl/anonstore/database.go:110 therefore runs only for uncached devices when a positive limit is configured.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "prod",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
    }
   ],
   "async-import-of-the-appstore-packages-cal-com": [
@@ -2978,6 +3293,15 @@
     "foundBy": {
      "opus-5.5@api": [
       "S1"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "service.go:116-121 does short-circuit on permDenialCache and line 153-155 sets it on deny with shortCacheTTL (30s, service.go:32), never invalidated. This is the PR's deliberate denial cache bounded by the same 30s TTL the permission cache already had before the PR, when a stale cached permission map also denied for up to 30s; it is an intended trade-off, not a regression.",
@@ -3163,6 +3487,9 @@
     "foundBy": {
      "muse-spark-1.3": [
       "S2"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
      ]
     },
     "reason_opus": "Rows with scheduled:false have referenceId null (emailReminderManager.ts:182-191), and deleteScheduledEmailReminder deletes those rows outright (lines 203-211) instead of marking them cancelled; only scheduled rows with a referenceId get cancelled:true, so the unscheduled query cannot pick up a cancelled reminder.",
@@ -3341,6 +3668,9 @@
      ],
      "gpt-6.1-sol@e2b": [
       "S4"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S3"
      ]
     },
     "reason_opus": "emailReminderManager.ts:213-222: when immediateDelete is true the function posts the SendGrid cancel and returns without deleting the WorkflowReminder or setting cancelled; the previous DELETE scheduled_sends call was also removed. Callers like handleNewBooking.ts:968 and workflows.tsx:214 leave scheduled:true rows behind.",
@@ -4201,6 +4531,9 @@
      "gpt-6.1-sol@e2b": [
       "S1",
       "S13"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
      ]
     },
     "reason_opus": "best.html.erb:6 `<%- end if %>` sits on its own line, so Erubis (Rails 3.2.12 per Gemfile.lock) emits the statement with its trailing newline and no ';', and Ruby parses `end if\\n<next buffer append>` as a modifier whose condition is the following truthy append; `ruby -c` confirms the newline form is valid. The template compiles and renders.",
@@ -4902,6 +5235,31 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#prod-01",
+    "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+    "comment": "The Delete cached data action is offered for delegation credentials that the component otherwise treats as non-modifiable, because hasCache does not check delegationCredentialId.",
+    "commentOpus": "The Delete cached data action is offered for delegation credentials that the component otherwise treats as non-modifiable, because hasCache does not check delegationCredentialId.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ]
+    },
+    "reason_opus": "hasCache ignores delegationCredentialId (CredentialActionsDropdown.tsx:69) while canDisconnect gates on it (:68), but deleting cached availability is a non-destructive refresh distinct from disconnecting, and the server scopes it to the caller's own credential (deleteCache.handler.ts:17-26). Offering cache actions for delegation credentials is intended behaviour, not a permission gap.",
+    "reason_astra": "The proposed guard covers an unreachable state: delegated connections use credential ID -1 (packages/lib/delegationCredential/server.ts:86), and database-backed delegation credentials are filtered out (packages/lib/delegationCredential/clientAndServer.ts:45). Cache status is queried by database credential ID (packages/features/calendar-cache/calendar-cache.repository.ts:173), so delegated connections receive cacheUpdatedAt=null (packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts:35) and never display the delete-cache action.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "prod",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "low",
+    "category": null
    }
   ],
   "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
@@ -5206,6 +5564,54 @@
     "class": "FP",
     "subclass": "hallucination",
     "status": "agreed",
+    "severity": "medium",
+    "category": null
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#prod-01",
+    "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+    "comment": "sync_status_outbound gains an assignment_source parameter that is never threaded through the status task or checked in should_sync, so status sync gets no cycle prevention despite the signature suggesting it.",
+    "commentOpus": "sync_status_outbound gains an assignment_source parameter that is never threaded through the status task or checked in should_sync, so status sync gets no cycle prevention despite the signature suggesting it.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ]
+    },
+    "reason_opus": "The PR adds `assignment_source` to the abstract sync_status_outbound signature (mixins/issues.py:411-418), but tasks/sync_status_outbound.py:41-44 never passes it and no should_sync('outbound_status', ...) uses it, so it is a dead parameter. The status sync path itself is untouched by the PR, so any status loop is pre-existing; the real issue is the misleading unused parameter.",
+    "reason_astra": "The claimed webhook feedback loop is absent: inbound status sync calls update_group_status (src/sentry/integrations/tasks/sync_status_inbound.py:220,247), which bulk-updates groups and records activity without scheduling outbound synchronization (src/sentry/models/group.py:461-470). The added parameter is unused on an abstract method (src/sentry/integrations/mixins/issues.py:410-422), while the existing outbound status task remains unchanged; this does not introduce the alleged looping behavior.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "prod",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "texto": "The PR adds `assignment_source` to the abstract sync_status_outbound signature (mixins/issues.py:411-418), but tasks/sync_status_outbound.py:41-44 never passes it and no should_sync('outbound_status', ...) uses it, so it is a dead parameter. The status sync path itself is untouched by the PR, so any status loop is pre-existing; the real issue is the misleading unused parameter."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "texto": "The claimed webhook feedback loop is absent: inbound status sync calls update_group_status (src/sentry/integrations/tasks/sync_status_inbound.py:220,247), which bulk-updates groups and records activity without scheduling outbound synchronization (src/sentry/models/group.py:461-470). The added parameter is unused on an abstract method (src/sentry/integrations/mixins/issues.py:410-422), while the existing outbound status task remains unchanged; this does not introduce the alleged looping behavior."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "texto": "Conceding. The loop the comment relies on cannot happen: sync_status_inbound.py:220/:247 call Group.objects.update_group_status, which only bulk_updates and creates activity (group.py ~461-470); outbound status syncs are kicked off only from api/helpers/group_index/update.py:577 and event_manager.py:1807 (kick_off_status_syncs), never from the inbound webhook path. The unused assignment_source parameter on the abstract method is real but the issue's stated problem is false."
+     }
+    ],
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed_after_debate",
     "severity": "medium",
     "category": null
    }
@@ -5683,6 +6089,31 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#prod-01",
+    "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+    "comment": "Claims the committable-offset loop iterates the whole numeric span max_offset - start, burning CPU on large offset gaps every commit cycle.",
+    "commentOpus": "Claims the committable-offset loop iterates the whole numeric span max_offset - start, burning CPU on large offset gaps every commit cycle.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S3"
+     ]
+    },
+    "reason_opus": "In get_committable_offsets (queue_consumer.py:89-93) the loop breaks at the first offset that is not in all_offsets or still outstanding, so it never walks a gap; work is bounded by the contiguous run of tracked offsets, not by max_offset - start.",
+    "reason_astra": "In src/sentry/remote_subscriptions/consumers/queue_consumer.py:89-93, the loop breaks at the first missing or outstanding offset, so it never traverses a large gap. Its iterations are bounded by the number of tracked offsets plus one; the min/max scans at lines 83-84 likewise depend on tracked-set size, not the numeric span.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "prod",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
    }
   ],
   "feature-automatically-downsize-large-images-discourse-cursor": [
@@ -5827,6 +6258,9 @@
      "opus-5.5@api": [
       "S8",
       "S22"
+     ],
+     "opus-5.5@prod": [
+      "S4"
      ]
     },
     "reason_opus": "store.js.es6:192-201 changes the regex to /(.+)_id(s?)$/ and, for any `_ids` key, unconditionally calls obj[k].map(...) and deletes the original key. A null value throws a TypeError and a plain id array whose collection is not in root is replaced by an array of undefined under the pluralized key, losing the ids.",
@@ -6045,6 +6479,31 @@
     "status": "agreed",
     "severity": "medium",
     "category": null
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#prod-01",
+    "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+    "comment": "Claims set_locale's `I18n.fallbacks.ensure_loaded!` (application_controller.rb:159) raises NoMethodError on every request if I18n.fallbacks is not the custom FallbackLocaleList.",
+    "commentOpus": "Claims set_locale's `I18n.fallbacks.ensure_loaded!` (application_controller.rb:159) raises NoMethodError on every request if I18n.fallbacks is not the custom FallbackLocaleList.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ]
+    },
+    "reason_opus": "config/initializers/i18n.rb:24 unconditionally assigns `I18n.fallbacks = FallbackLocaleList.new`, which defines ensure_loaded! (:20-22), and nothing else in app/lib/config reassigns I18n.fallbacks. The guard requested covers a state no code path reaches.",
+    "reason_astra": "config/initializers/i18n.rb:20-24 defines ensure_loaded! and unconditionally installs its FallbackLocaleList instance. config.ru:2 loads config/environment.rb:5, which initializes the application before serving requests; no repository code replaces the fallback object afterward. The proposed guard addresses a hypothetical unsupported state, not a demonstrated defect.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "prod",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "critical",
+    "category": null
    }
   ],
   "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
@@ -6158,6 +6617,9 @@
      ],
      "gpt-6.1-sol@e2b": [
       "S5"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
      ]
     },
     "reason_opus": "Discourse's resolver findTemplate tries decamelized name with '_' replaced by '/' (ember/resolver.js.es6:151-158): 'topicUnsubscribe' -> 'topic_unsubscribe' -> 'topic/unsubscribe', which matches templates/topic/unsubscribe.hbs.",
@@ -7696,6 +8158,56 @@
     "status": "agreed_after_debate",
     "severity": "high",
     "category": null
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#prod-01",
+    "caseId": "github-oauth-security-enhancement-sentry",
+    "comment": "Claims the GitHub OAuth token exchange omits redirect_uri, so GitHub returns redirect_uri_mismatch and every installation fails.",
+    "commentOpus": "Claims the GitHub OAuth token exchange omits redirect_uri, so GitHub returns redirect_uri_mismatch and every installation fails.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ]
+    },
+    "reason_opus": "OAuthLoginView posts code/client_id/client_secret without redirect_uri (github/integration.py:416-420), but GitHub's token endpoint treats redirect_uri as optional and only rejects a mismatching value when one is sent. The claimed redirect_uri_mismatch on every installation does not occur.",
+    "reason_astra": "src/sentry/integrations/github/integration.py:416-423 does omit redirect_uri, but GitHub permits omission and does not invariably return redirect_uri_mismatch ([GitHub documentation](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app#redirect-uri-mismatch)). The generic helper including it at src/sentry/identity/oauth2.py:273-280 does not establish the claimed GitHub requirement.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "prod",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "critical",
+    "category": null
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#prod-02",
+    "caseId": "github-oauth-security-enhancement-sentry",
+    "comment": "Claims a literal 'null' installation_id passes the None check and routes users to the 'Invalid installation request.' page instead of the app installer.",
+    "commentOpus": "Claims a literal 'null' installation_id passes the None check and routes users to the 'Invalid installation request.' page instead of the app installer.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S3"
+     ]
+    },
+    "reason_opus": "Nothing at head sends installation_id='null', and even if it did, Integration.objects.get(external_id='null') raising DoesNotExist goes to `return pipeline.next_step()` (github/integration.py:476-477), not to the 'Invalid installation request.' error page the comment describes.",
+    "reason_astra": "src/sentry/integrations/github/integration.py:481-482 catches the missing integration and advances the pipeline, rather than returning the claimed generic error. The frontend at static/app/views/integrationOrganizationLink/index.tsx:247-251 only passes installation_id when truthy, and the base version of integration.py:361-362 already accepted a supplied literal \"null\", so this is not an introduced null-handling regression.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "prod",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
    }
   ],
   "implement-access-token-context-encoding-framework-keycloak": [
@@ -7875,6 +8387,9 @@
     "foundBy": {
      "muse-spark-1.3": [
       "S3"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
      ]
     },
     "reason_opus": "RecoveryAuthnCodeInputLoginBean (lines 16-21) keeps the same unchecked Optional.get() the code had before (findFirst().get()); the bean is only built when the recovery-codes authenticator is configured for the user, so a credential exists. Pre-existing pattern guarded by the flow.",
@@ -7988,6 +8503,54 @@
     "subclass": null,
     "status": "agreed_after_debate",
     "severity": "low",
+    "category": null
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#prod-01",
+    "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+    "comment": "BackwardsCompatibilityUserStorage.getCredentials dereferences getMyUser(user) without a null check, so it throws NullPointerException for a user missing from the provider's map.",
+    "commentOpus": "BackwardsCompatibilityUserStorage.getCredentials dereferences getMyUser(user) without a null check, so it throws NullPointerException for a user missing from the provider's map.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "opus-5.5@prod": [
+      "S2"
+     ]
+    },
+    "reason_opus": "The new getCredentials in BackwardsCompatibilityUserStorage.java:231-235 dereferences myUser from getMyUser (:226-228, a plain map lookup) without the null check that isConfiguredFor (:271) and isValid (:286) have. It only fails for a user missing from the map in this testsuite provider (not on every call), so it is a defensive inconsistency in test code.",
+    "reason_astra": "Although BackwardsCompatibilityUserStorage.java:235 dereferences myUser without checking null, its lookup methods reject missing usernames (lines 89 and 349), and addUser inserts the map entry before returning the adapter (lines 361–362). UserCredentialManager.java:130–141 dispatches to the user's own federation provider, so the cited login flow does not establish a missing-map-entry case; the suggested guard is defensive rather than a demonstrated defect.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "prod",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "texto": "The new getCredentials in BackwardsCompatibilityUserStorage.java:231-235 dereferences myUser from getMyUser (:226-228, a plain map lookup) without the null check that isConfiguredFor (:271) and isValid (:286) have. It only fails for a user missing from the map in this testsuite provider (not on every call), so it is a defensive inconsistency in test code."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Although BackwardsCompatibilityUserStorage.java:235 dereferences myUser without checking null, its lookup methods reject missing usernames (lines 89 and 349), and addUser inserts the map entry before returning the adapter (lines 361–362). UserCredentialManager.java:130–141 dispatches to the user's own federation provider, so the cited login flow does not establish a missing-map-entry case; the suggested guard is defensive rather than a demonstrated defect."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Conceding. The null myUser state is not reachable in this test provider: users are only produced by getUserById/getUserByUsername after `if (!users.containsKey(translateUserName(username))) return null;` (BackwardsCompatibilityUserStorage.java:89, :349), and addUser puts the entry first (:361). Other pre-existing methods dereference the same lookup unguarded (:162, :190, :200). The suggested null check is a guard for an unreachable state."
+     }
+    ],
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "medium",
     "category": null
    }
   ],
@@ -8404,6 +8967,9 @@
      ],
      "muse-spark-1.3": [
       "S3"
+     ],
+     "opus-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "factory.py:141 indexes val['end_timestamp_precise'] directly, but the payload is the ingest-spans SpanEvent schema where the field is required, and the downstream segment consumer already indexes it directly (process_segments/message.py:121,227, enrichment.py:162). A message without it is outside the contract.",
@@ -8558,6 +9124,9 @@
     "foundBy": {
      "sonnet-5.5@cc": [
       "S5"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
      ]
     },
     "reason_opus": "factory.py:141 indexes val[\"end_timestamp_precise\"], but that field is required in the ingest-spans SpanEvent schema the payload is cast to. Downstream span consumers also index it directly (process_segments/enrichment.py:89,117,162; message.py:121). Only genuinely optional fields such as parent_span_id use .get().",
@@ -8571,6 +9140,31 @@
     "subclass": null,
     "status": "agreed",
     "severity": "high",
+    "category": null
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#prod-01",
+    "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+    "comment": "Claims span_count counts pre-existing spans in set_key, so zpopmin evicts far more than the overflow above 1000 and discards valid spans.",
+    "commentOpus": "Claims span_count counts pre-existing spans in set_key, so zpopmin evicts far more than the overflow above 1000 and discards valid spans.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ]
+    },
+    "reason_opus": "ZUNIONSTORE returns the cardinality of the resulting destination set, which is exactly the total size of set_key after the merge (add-buffer.lua:47,53). zpopmin(set_key, span_count - 1000) (:62-63) therefore trims to exactly 1000, and the proposed zcard(set_key) gives the same number.",
+    "reason_astra": "src/sentry/scripts/spans/add-buffer.lua:47 and :53 assign, rather than accumulate, the destination cardinality returned by ZUNIONSTORE, so span_count already equals the final merged set size. Lines 58–63 obtain that same cardinality when no union occurs and evict exactly the excess above 1000; pre-existing spans are not double-counted, and the proposed ZCARD would yield the same count.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "prod",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "critical",
     "category": null
    }
   ],
@@ -9518,6 +10112,31 @@
     "status": "agreed_after_debate",
     "severity": "medium",
     "category": null
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#prod-01",
+    "caseId": "replays-self-serve-bulk-delete-system-sentry",
+    "comment": "Claims _truncate_title is defined on CommitContextIntegration, so PRCommentWorkflow._truncate_title raises AttributeError.",
+    "commentOpus": "Claims _truncate_title is defined on CommitContextIntegration, so PRCommentWorkflow._truncate_title raises AttributeError.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ]
+    },
+    "reason_opus": "_truncate_title is a @staticmethod defined inside PRCommentWorkflow (commit_context.py:494 class, :577-582 method), not on CommitContextIntegration, so PRCommentWorkflow._truncate_title(title) at :601 resolves correctly.",
+    "reason_astra": "In src/sentry/integrations/source_code_management/commit_context.py:494, PRCommentWorkflow begins, and _truncate_title is defined within that class as a static method at lines 577–582. The call at line 601 therefore references the correct class and does not cause the claimed AttributeError.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "prod",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "high",
+    "category": null
    }
   ],
   "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
@@ -9691,6 +10310,9 @@
     "foundBy": {
      "deepseek-v4.1-flash": [
       "S1"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
      ]
     },
     "reason_opus": "Each process gets SpansBuffer(shards) (flusher.py:93), and flush_segments computes max_segments_per_shard = ceil(max_flush_segments / len(assigned_shards)) (buffer.py:382-384) from that subset, so each process can flush up to max-flush-segments per cycle and the aggregate cap becomes processes x max-flush-segments.",
@@ -9917,6 +10539,88 @@
     "status": "agreed",
     "severity": "medium",
     "category": null
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#prod-01",
+    "caseId": "unified-storage-performance-optimizations-grafana-codex",
+    "comment": "Claims write events arriving between search watcher start and initWatcher are consumed by the search reader and never reach Watch subscribers.",
+    "commentOpus": "Claims write events arriving between search watcher start and initWatcher are consumed by the search reader and never reach Watch subscribers.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ]
+    },
+    "reason_opus": "backend.WatchWriteEvents (sql/backend.go:558-567) starts a separate poller and channel for each caller, so search.init's stream (search.go:203) and initWatcher's stream (server.go:755) are independent; the search reader cannot consume the broadcaster's events. Init now also runs inside NewResourceServer (server.go:258) before any Watch subscriber can exist.",
+    "reason_astra": "The PR starts search watching before initializing the broadcaster (pkg/storage/unified/resource/server.go:303-310; search.go:203-213). Each SQL WatchWriteEvents call starts from the latest database versions, so writes between those subscriptions are excluded from the broadcaster’s stream (pkg/storage/unified/sql/backend.go:558-567). A subsequent Watch requesting an earlier Since cannot recover those events: it only filters the broadcaster stream without fetching historical changes (pkg/storage/unified/resource/server.go:847-867).",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "prod",
+    "decisaoHumana": {
+     "quem": "Junior",
+     "em": "2026-10-18",
+     "escolha": "opus",
+     "nota": "FP hallucination: the mechanism the comment describes is false and the remaining gap was not introduced by the PR"
+    },
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "texto": "backend.WatchWriteEvents (sql/backend.go:558-567) starts a separate poller and channel for each caller, so search.init's stream (search.go:203) and initWatcher's stream (server.go:755) are independent; the search reader cannot consume the broadcaster's events. Init now also runs inside NewResourceServer (server.go:258) before any Watch subscriber can exist."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "The PR starts search watching before initializing the broadcaster (pkg/storage/unified/resource/server.go:303-310; search.go:203-213). Each SQL WatchWriteEvents call starts from the latest database versions, so writes between those subscriptions are excluded from the broadcaster’s stream (pkg/storage/unified/sql/backend.go:558-567). A subsequent Watch requesting an earlier Since cannot recover those events: it only filters the broadcaster stream without fetching historical changes (pkg/storage/unified/resource/server.go:847-867)."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "texto": "Keeping FP hallucination. The comment's mechanism is false: the search reader does not consume the broadcaster's events; each caller gets its own poller and channel (sql/backend.go:558-567 `stream := make(chan *resource.WrittenEvent); go b.poller(ctx, since, stream)`), so search.go:203 and server.go:755 are independent streams. And no Watch subscriber can exist in the window: Init now runs inside NewResourceServer (server.go:258 `err := s.Init(ctx)`) before the server is returned. Events before the broadcaster starts were never replayable to Watch even with the old order (Watch only filters the live broadcaster stream, server.go:847-867), so the reorder creates no new loss for any subscriber."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "I retain TP: the streams are independent, but the reorder introduces a gap in replayable events. In both base and head, broadcaster.go caches incoming events with cache.Add and replays them to new subscribers with cache.ReadInto, contradicting the claim that earlier events were never replayable. Previously, initWatcher started before search initialization, allowing intervening writes to reach that cache even without subscribers. Now SQL WatchWriteEvents initializes its cursor from the latest database versions after search initialization, excluding intervening writes from subsequent Watch requests with an earlier Since. Constructor-time initialization therefore does not eliminate the loss; the defect is the later subscription cursor, not competing channel consumers."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "texto": "I concede the cache point: broadcaster.go:211 replays b.cache (100 items, :169) to new subscribers, so my 'never replayable' was wrong. The label still holds. The comment says events are 'consumed by the search reader but never reach the broadcaster' and proposes a 'single shared event source'. You agree that mechanism is false: each WatchWriteEvents call gets its own channel and poller (sql/backend.go:558-567). Also, no write through this server can land in the window, because NewResourceServer returns only after Init (server.go:258-262) and the per-request Init calls are gone. A client's Since that comes from this server is therefore later than the broadcaster's start. The only remaining case is a write from another replica during search init, replayed later only through a 100-item cache. That is not the defect the comment describes and not one its fix addresses."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "I retain TP: independent channels do not prevent the subscription gap, because each SQL WatchWriteEvents call initializes its cursor from the latest database versions. A write from another replica between subscriptions reaches search but is excluded from the broadcaster’s stream and replay cache. Previously, initWatcher ran first, allowing those events to be cached and replayed to subsequent Watch requests with an earlier Since. Constructor-time initialization does not prohibit such requests, and restoring the earlier broadcaster subscription addresses this exact loss without requiring competing channel consumers."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "texto": "Final: FP hallucination. (1) The comment's stated mechanism is false and both sides agree: events are not 'consumed by the search reader'; each WatchWriteEvents call creates its own cursor, channel and poller (sql/backend.go:558-567 `since, err := b.listLatestRVs(ctx)` ... `go b.poller(ctx, since, stream)`), so the proposed 'single shared event source' fixes nothing. (2) Astra's replacement defect (writes landing between the two subscriptions are absent from the broadcaster cache) is not a regression this PR introduces. In base, Init was lazy: it ran on the first Create/Read/List/Watch request (the removed `if err := s.Init(ctx)` blocks in the server.go diff), so the broadcaster's cursor started at first-request time and every write before that was absent from the cache too. In head, NewResourceServer blocks on Init (server.go:258-262) and initWatcher runs at server.go:308-311 before the server is returned, so the broadcaster starts no later than the first request could ever arrive. Writes from another replica before broadcaster start were outside the cache in base and remain so in head; the window is not new. Rule: a human should decide whether 'events written before the broadcaster subscribes are not replayable' counts as introduced by the reorder; I hold it does not, given base started the broadcaster even later."
+     }
+    ],
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "human_decision",
+    "severity": "medium",
+    "category": null
    }
   ],
   "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
@@ -10101,7 +10805,11 @@
   "gpt-6.1-sol@e2b",
   "sonnet-5.5@cc",
   "opus-5.5@api",
-  "opus-5.5@api"
+  "opus-5.5@api",
+  "deepseek-v4.1-flash@prod",
+  "gpt-6.1-sol@prod",
+  "opus-5.5@prod",
+  "sonnet-5.5@prod"
  ],
  "classificadores": [
   "claude-opus-5.5",

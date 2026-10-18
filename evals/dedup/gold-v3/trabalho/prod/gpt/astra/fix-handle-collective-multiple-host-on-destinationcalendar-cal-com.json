@@ -1,0 +1,47 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "The Google Meet fallback dereferences an undefined mainHostDestinationCalendar when the destination array is null or empty."
+  },
+  {
+   "id": "S2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "newGroup": null,
+   "reason": "Calendar providers select the first destination for every host, causing other hosts' credentials to target the organizer's calendar. Passing a per-destination event fixes the same routing problem."
+  },
+  {
+   "id": "S3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "The update and delete fallbacks search for an absent externalCalendarId instead of using the configured destination calendar."
+  },
+  {
+   "id": "S4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+   "newGroup": null,
+   "reason": "updateLocation rebuilds references from update results that lack externalId and credentialId, losing calendar and credential routing information."
+  },
+  {
+   "id": "S5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
+   "newGroup": null,
+   "reason": "Recurring collective cancellation repeatedly selects the first occurrence reference and organizer credentials, leaving co-host events undeleted."
+  },
+  {
+   "id": "S6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "The optional push discards co-host destinations when the organizer's destinationCalendar is null."
+  },
+  {
+   "id": "S7",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+   "newGroup": null,
+   "reason": "Video references lose their credentialId, preventing cancellation from finding the credential and deleting the external meeting."
+  }
+ ]
+}

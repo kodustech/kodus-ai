@@ -1,0 +1,23 @@
+{
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This describes stale denial entries continuing to reject access after permissions are granted. None of the golden issues describes denial-cache invalidation or its TTL after a grant."
+  },
+  {
+   "id": "S2",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Both describe ambiguous underscore-separated name and parent components causing key collisions and incorrect cached denials for another resource."
+  },
+  {
+   "id": "S3",
+   "match": "authzservice-improve-authz-caching-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Both describe each distinct inaccessible resource triggering a full permission reload despite cached permissions, producing O(N) database fetches during resource checks."
+  }
+ ]
+}

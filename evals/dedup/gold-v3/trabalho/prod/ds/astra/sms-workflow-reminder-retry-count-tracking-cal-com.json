@@ -1,0 +1,11 @@
+{
+ "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "The comment identifies the missing SMS method filter on the retryCount > 1 deletion branch, which allows the SMS cron to delete non-SMS reminders."
+  }
+ ]
+}

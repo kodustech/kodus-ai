@@ -1,0 +1,11 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "id": "S2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "The comment repeats the claim that malformed DER lengths reach readInteger and cause an unchecked NegativeArraySizeException instead of IOException. The additional malformed-input cases and suggested checks elaborate that same claim."
+  }
+ ]
+}

@@ -14,6 +14,7 @@ Tambem: o dedup contra o gabarito de dedup (09.10.26_<model>.final.json, light-3
 
   python3 evals/dedup/gold-v2/placar-v3.py <model> --prefixo=<p> [--saida=<json>]
       [--dedup=<p>-dedup] [--aluc=aluc-<p>-h1t10] [--nit=<p>-nit-v3d-so1]
+      [--fp-status=pendente,nao_entrou_no_original]
 """
 import json, os, sys, collections, math
 AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -44,7 +45,12 @@ for f in ('golden.json', 'fps-conhecidos.json'):
         for i in l:
             classe[i['issueId']] = (i['class'], i['subclass'])
             sevDe[i['issueId']] = i.get('severity')
-tps = collections.Counter(i['caseId'] for l in ler(f'{V3}/golden.json')['prs'].values() for i in l if i['class'] == 'TP' and not i['subclass'])
+# --fp-status: simulacao; os TPs com esses status na verificacao upstream contam como FP.
+for c in (ler(f'{V3}/verificacao-upstream.json')['prs'].values() if o.get('fp-status') else []):
+    for iss, t in c['tps'].items():
+        if t['status'] in o['fp-status'].split(','):
+            classe[iss] = ('FP', None)
+tps = collections.Counter(i['caseId'] for l in ler(f'{V3}/golden.json')['prs'].values() for i in l if classe[i['issueId']] == ('TP', None))
 PRS = list(sug['prs'])
 TOTAL_TP = sum(tps[c] for c in PRS)
 
@@ -151,10 +157,10 @@ def resumo(porPr):
     out = {}
     for k in CAMPOS:
         v = [porPr.get(c, {}).get(k, 0) or 0 for c in PRS]
-        out[k] = {'media': round(sum(v) / len(v)), 'p75': round(pct(v, .75)), 'p90': round(pct(v, .90))}
+        out[k] = {'media': round(sum(v) / len(v)), 'p50': round(pct(v, .50)), 'p75': round(pct(v, .75)), 'p90': round(pct(v, .90))}
     # input sem cache
     v = [(porPr.get(c, {}).get('input', 0) or 0) - (porPr.get(c, {}).get('cacheRead', 0) or 0) for c in PRS]
-    out['inputSemCache'] = {'media': round(sum(v) / len(v)), 'p75': round(pct(v, .75)), 'p90': round(pct(v, .90))}
+    out['inputSemCache'] = {'media': round(sum(v) / len(v)), 'p50': round(pct(v, .50)), 'p75': round(pct(v, .75)), 'p90': round(pct(v, .90))}
     out['prsComChamada'] = sum(1 for c in PRS if (porPr.get(c, {}).get('chamadas') or 0) > 0)
     return out
 tec = lambda pb: 'G' if pb == 'generalist-base' else 'M3' if str(pb).startswith('micro-exp-p3-') else None

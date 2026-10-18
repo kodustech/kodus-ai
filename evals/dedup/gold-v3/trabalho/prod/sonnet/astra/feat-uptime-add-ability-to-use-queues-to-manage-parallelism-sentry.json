@@ -1,0 +1,17 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Describes the same shared-pool lifecycle bug: closing a strategy kills the factory-owned pool, so subsequent assignments fail to enqueue and mark unprocessed messages complete."
+  },
+  {
+   "id": "S2",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Describes the same unbounded queues and missing backpressure, which allow queued work to grow without limit when workers fall behind."
+  }
+ ]
+}

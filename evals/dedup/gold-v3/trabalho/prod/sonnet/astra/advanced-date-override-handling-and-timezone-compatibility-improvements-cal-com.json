@@ -1,0 +1,23 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "Identifies the same reference-equality comparison between Dayjs objects that makes zero-length override detection unreachable. It additionally describes the override-end problem in #05."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Identifies the same calculation of end from slotStartTime, allowing events to overrun working hours. It additionally describes the split-hours rejection problem in #04."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#06",
+   "newGroup": null,
+   "reason": "Describes the same loss of date rollover during override timezone conversion, producing inverted ranges across midnight and missing or misplaced availability."
+  }
+ ]
+}

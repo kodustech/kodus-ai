@@ -1,0 +1,17 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#07",
+   "newGroup": null,
+   "reason": "The same claim: directly accessing a missing end_timestamp_precise field raises KeyError and aborts the consumer batch. This also duplicates rejected issue #sncc-02."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims incorrect span counting during unions causes excessive eviction. This differs from #02's self-union followed by unlinking; no rejected issue describes this counting problem."
+  }
+ ]
+}

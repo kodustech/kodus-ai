@@ -1,0 +1,106 @@
+{
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#prod-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "AuthzClient.create now calls CryptoIntegration.init (AuthzClient.java:95), which throws when no CryptoProvider is found (CryptoIntegration.java:60-61), but the PR ships the authz-client's own provider and META-INF/services/org.keycloak.common.crypto.CryptoProvider registration in the same jar. Failure only occurs if a consumer's repackaging drops service files, which is a packaging error outside the code, not a defect in the PR.",
+    "category": null,
+    "comment": "AuthzClient.create eagerly initializes CryptoIntegration, so a shaded/repackaged client that lost its ServiceLoader file fails at construction instead of only when ECDSA is used.",
+    "severity": "high"
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "create_account_controller.js:17 adds a controller-level rejectedEmails array, filled on server email errors (:274-276) and checked first in emailValidation (:69-74) with no reset anywhere. The stale entry only matters if the server-side block is lifted while the singleton controller stays alive, a rare case solved by reloading the page.",
+    "category": "bug",
+    "comment": "Emails rejected by the server are cached in rejectedEmails for the controller's lifetime and never cleared, so an address that later becomes valid keeps failing client-side validation until reload.",
+    "severity": "medium"
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#prod-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "GroupPermissionsV2.hasPermission falls back to the all-groups type resource (GroupPermissionsV2.java:143-150) and then accepts any returned permission with a matching scope (:156-162) without checking permission.getResourceId(). UserPermissionsV2.hasPermission filters on permission.getResourceId().equals(resource.getId()) (UserPermissionsV2.java:123), a check added upstream precisely because type-resource evaluation also returns single-resource permissions and over-granted access.",
+    "category": "security",
+    "comment": "GroupPermissionsV2.hasPermission does not restrict evaluated permissions to the evaluated resource, so when falling back to the all-groups resource a permission granted on one specific group can satisfy the check for any group.",
+    "severity": "high"
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#prod-02": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "The PR replaced the hoisted canViewGlobal with stream.filter(groupsEvaluator::canView) (GroupsResource.java:113), and in V2 canView(group) does a findByName, policyStore.findByResource and a policy evaluation per group (GroupPermissionsV2.java:56-62, 141-152). This only affects the non-default populateHierarchy=false path over a paginated page, so it is redundant work rather than a meaningful regression.",
+    "category": "perf",
+    "comment": "GroupsResource.getGroups no longer hoists the global canView() check, so in FGAP V2 each listed group triggers its own resource lookup and policy evaluation even when an all-groups grant would cover them all.",
+    "severity": "medium"
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com#prod-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "addGuests.handler.ts:92-120 builds evt.attendees from booking.update(...include attendees) after createMany of the new guests, so the CalendarEvent passed to sendAddGuestsEmails already contains them; formatCalEvent only clones it (formatCalendarEvent.ts:19-27). The newGuests.includes(attendee.email) branch at email-manager.ts:541 is therefore reachable and new guests get AttendeeScheduledEmail.",
+    "category": null,
+    "comment": "sendAddGuestsEmails never notifies the newly added guests because the formatted event does not contain them, so the newGuests branch is unreachable.",
+    "severity": "high"
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com#prod-02": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "The only caller, addGuests.handler.ts, throws when uniqueGuests is empty (:80-81) and then builds attendees from the updated booking including the newly created guests (:92-120), so calEvent.attendees always has at least one element when organizer-add-guests-email.ts:28 reads attendees[0].name. The empty-attendees state cannot occur.",
+    "category": null,
+    "comment": "OrganizerAddGuestsEmail reads calEvent.attendees[0].name without a guard and throws when the attendee list is empty.",
+    "severity": "medium"
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak#prod-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "The module compiles for Java 17 (misc/theme-verifier/pom.xml:32-33), and since Java 9 new PropertyResourceBundle(InputStream) reads UTF-8 by default (falling back to ISO-8859-1 only for malformed input), so VerifyMessageProperties.java:68/77 does decode the UTF-8 files correctly. Even mis-decoded text would be compared against its own sanitized form, so it could not create spurious HTML failures.",
+    "category": null,
+    "comment": "VerifyMessageProperties loads message bundles with PropertyResourceBundle(InputStream), claimed to decode as ISO-8859-1 and produce mojibake and spurious Illegal HTML failures for non-English files.",
+    "severity": "medium"
+  },
+  "advanced-query-processing-architecture-grafana-codex#prod-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "applyTemplateVariables deliberately leaves $__auto/$__range* uninterpolated for backend interpolation (datasource.ts:1111-1113), and the Loki backend replaces them (pkg/tsdb/loki/parse_query.go:19-22). The shard sub-requests go through the backend query path, so a literal [$__auto] does not reach Loki as invalid LogQL.",
+    "category": null,
+    "comment": "runShardSplitQuery now uses applyTemplateVariables, which strips __auto/__range scoped vars, so queries with [$__auto] reach shard sub-requests uninterpolated and fail.",
+    "severity": "high"
+  },
+  "advanced-sql-analytics-framework-grafana-codex#prod-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "The PR removes go-duck entirely: sql.TablesList now uses the stub NewInMemoryDB whose RunCommands returns \"not implemented\" (pkg/expr/sql/db.go:16-18, parser.go:23-26). The nodes.go:159-160 path therefore cannot reach any DuckDB parsing, so the claimed RCE/LFI path does not exist.",
+    "category": null,
+    "comment": "The TypeSQL branch in nodes.go reaches UnmarshalSQLCommand → NewSQLCommand → DuckDB parsing without the enableSqlExpressions check, leaving the SQL expression RCE/LFI path reachable.",
+    "severity": "critical"
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex#prod-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "CreateOrUpdateDevice is reached only through tagDeviceUI, which returns early when the device key is already in localCache (impl.go:80-86), so the CountDevices call (database.go:109-118) runs once per device per cache window, not on every anonymous request. It also only runs when a device limit is configured.",
+    "category": null,
+    "comment": "CreateOrUpdateDevice runs a full COUNT over the 30-day anon_device table on every anonymous request when a device limit is set.",
+    "severity": "medium"
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex#prod-02": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "In updateDevice the WithDbSession callback reassigns the captured args with args = append([]interface{}{query}, args...) (database.go:84). withDbSession wraps the callback in retryer.Retry(retryOnLocks(...)) (sqlstore/session.go:127, 86-96), which reruns it on SQLite ErrLocked/ErrBusy, so the retry executes Exec(query, query, ip, ...) with mismatched bind parameters.",
+    "category": "bug",
+    "comment": "updateDevice prepends the query to the captured args inside the retried DB callback, so a SQLite lock retry runs Exec with the query duplicated in the arguments and the update fails.",
+    "severity": "medium"
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#prod-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "scheduleEmailReminders.ts only calls sgMail.setApiKey (:19) and never client.setApiKey, yet the new cancellation loop calls client.request on the @sendgrid/client singleton (:57-64); @sendgrid/mail uses its own Client instance, while emailReminderManager.ts:26 is where client.setApiKey lives. The unauthenticated request throws, the catch at :75-77 swallows it, and the cancelled reminders are neither cancelled at SendGrid nor deleted.",
+    "category": "bug",
+    "comment": "The cron route sets the API key only on @sendgrid/mail, so the new @sendgrid/client cancellation requests are unauthenticated and reminders for cancelled bookings stay scheduled.",
+    "severity": "high"
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com#prod-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "hasCache ignores delegationCredentialId (CredentialActionsDropdown.tsx:69) while canDisconnect gates on it (:68), but deleting cached availability is a non-destructive refresh distinct from disconnecting, and the server scopes it to the caller's own credential (deleteCache.handler.ts:17-26). Offering cache actions for delegation credentials is intended behaviour, not a permission gap.",
+    "category": null,
+    "comment": "The Delete cached data action is offered for delegation credentials that the component otherwise treats as non-modifiable, because hasCache does not check delegationCredentialId.",
+    "severity": "low"
+  }
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "The comment describes website_name exposing a TL0 user's hidden website host/path to anonymous viewers because it lacks the website field's trust restriction. Its proposed fix applies the same untrusted-attribute filtering, directly resolving issue #06."
+  }
+ ]
+}

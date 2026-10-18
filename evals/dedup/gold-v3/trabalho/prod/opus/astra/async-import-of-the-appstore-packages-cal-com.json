@@ -1,0 +1,17 @@
+{
+ "caseId": "async-import-of-the-appstore-packages-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "async-import-of-the-appstore-packages-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Both describe eager execution of every dynamic import in the appStore object, loading all integrations when the module is imported instead of on demand."
+  },
+  {
+   "id": "S2",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Both describe unawaited async forEach callbacks that let getCalendar failures escape the surrounding try/catch and allow execution to continue before deletions finish."
+  }
+ ]
+}

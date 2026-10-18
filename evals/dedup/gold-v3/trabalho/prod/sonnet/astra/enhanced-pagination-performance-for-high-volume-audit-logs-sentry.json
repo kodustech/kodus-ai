@@ -1,0 +1,23 @@
+{
+ "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+   "newGroup": null,
+   "reason": "Describes the same unconditional dereference of member.has_global_access when member is None, crashing authorized token requests even on the default pagination path."
+  },
+  {
+   "id": "S2",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "Describes the same datetime incompatibility in OptimizedCursorPaginator: numeric rounding of datetime keys crashes cursor construction, and raw integer cursor values lack datetime conversion."
+  },
+  {
+   "id": "S3",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Describes the same negative-offset branch passing unsupported negative slice bounds to Django querysets, causing an unhandled error."
+  }
+ ]
+}

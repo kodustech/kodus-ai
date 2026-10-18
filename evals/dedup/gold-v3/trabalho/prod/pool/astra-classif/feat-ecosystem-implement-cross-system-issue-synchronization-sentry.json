@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+ "items": [
+  {
+   "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#prod-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The claimed webhook feedback loop is absent: inbound status sync calls update_group_status (src/sentry/integrations/tasks/sync_status_inbound.py:220,247), which bulk-updates groups and records activity without scheduling outbound synchronization (src/sentry/models/group.py:461-470). The added parameter is unused on an abstract method (src/sentry/integrations/mixins/issues.py:410-422), while the existing outbound status task remains unchanged; this does not introduce the alleged looping behavior.",
+   "severity": "medium"
+  }
+ ]
+}

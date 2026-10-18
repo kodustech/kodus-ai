@@ -1,0 +1,23 @@
+{
+ "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14",
+   "newGroup": null,
+   "reason": "Describes the same limitation where only bare count() is rewritten, leaving other count-related or aliased aggregations un-upsampled."
+  },
+  {
+   "id": "S2",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Describes the same substring-based event.type:error check that ignores negation and Boolean structure when deciding whether to apply upsampling."
+  },
+  {
+   "id": "S3",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+   "newGroup": null,
+   "reason": "Describes the same use of the outer dataset instead of scoped_dataset for upsampling eligibility in dashboard split queries."
+  }
+ ]
+}

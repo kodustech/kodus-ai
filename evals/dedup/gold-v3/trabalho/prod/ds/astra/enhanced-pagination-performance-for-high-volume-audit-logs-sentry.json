@@ -1,0 +1,23 @@
+{
+ "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+   "newGroup": null,
+   "reason": "Describes the same unguarded access to organization_context.member.has_global_access, which raises AttributeError when membership is absent."
+  },
+  {
+   "id": "S2",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "Describes the same cursor-key computation calling math.ceil on the audit log's datetime attribute, causing TypeError on nonempty results."
+  },
+  {
+   "id": "S3",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Describes the same negative cursor offset reaching OptimizedCursorPaginator's Django queryset slice and causing a server error."
+  }
+ ]
+}

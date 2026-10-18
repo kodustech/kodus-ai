@@ -1,0 +1,23 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Both describe stored XSS from unsanitized feed HTML persisted with raw_html cooking and rendered in the Discourse origin."
+  },
+  {
+   "id": "S2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Both describe i.content.scrub raising when a feed entry lacks content, aborting the poll and preventing later items from being imported."
+  },
+  {
+   "id": "S3",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#16",
+   "newGroup": null,
+   "reason": "Both describe contents << appending the footer by mutating the caller's string, causing problems when that string is reused."
+  }
+ ]
+}

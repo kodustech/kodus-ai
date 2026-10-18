@@ -1,0 +1,12 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "items": [
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "The PR adds rejectedEmails, appends server-rejected addresses at line 275, and unconditionally fails their subsequent validation at lines 69\u201374, disabling submission. No cache invalidation allows retrying an address after its server-side block is removed. This is user-visible incorrect behavior, so it remains a reportable defect rather than a nit; the uncommon trigger and reload workaround support medium severity."
+  }
+ ]
+}

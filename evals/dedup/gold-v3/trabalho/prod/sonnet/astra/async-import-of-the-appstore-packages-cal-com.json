@@ -1,0 +1,17 @@
+{
+ "caseId": "async-import-of-the-appstore-packages-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes unawaited calendar/video cancellation callbacks causing unhandled rejections and allowing the handler to continue before cleanup finishes, including the same reschedule loops."
+  },
+  {
+   "id": "S2",
+   "match": "async-import-of-the-appstore-packages-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Describes appStore import expressions executing at module load and eagerly loading every integration instead of loading them lazily."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "The reader thread is not joined before asserting that no exceptions occurred, so an in-flight read can record a failure after the assertion and let the regression test pass incorrectly."
+  }
+ ]
+}

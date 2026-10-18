@@ -1,0 +1,19 @@
+{
+ "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+ "items": [
+  {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The diff deletes both caching tests; packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:435-437 now transitions directly from filter tests to getBaseConditions tests. Remaining tests call each getter only once per instance, leaving the cached-return branches at packages/lib/server/service/insightsBooking.ts:84-94 untested after the SQL representation change.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-02",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "packages/lib/server/service/insightsBooking.ts:74-75 returns authorization conditions without enclosing parentheses when filters are absent, while lines 173 and 206 produce top-level OR expressions. Appending AND therefore constrains only the second authorization branch, allowing the first branch to bypass the extra predicate; the event-type fragment is already safely grouped when combined at lines 73 and 121.",
+   "severity": "critical"
+  }
+ ]
+}

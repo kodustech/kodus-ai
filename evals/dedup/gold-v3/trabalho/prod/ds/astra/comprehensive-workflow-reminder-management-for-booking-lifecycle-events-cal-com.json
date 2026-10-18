@@ -1,0 +1,23 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "newGroup": null,
+   "reason": "Matches the batch-wide cancellation failure: one SendGrid error aborts remaining cancellations and skips the queued database deletions."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes a missing cancelled filter in the scheduling query, distinct from the golden issues. Its stated scenario is unsupported by the normal unscheduled-reminder path, because the helper deletes reminders without a referenceId before reaching the cancelled update."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Describes missing database cleanup after immediate email cancellation. Issue #11 concerns misleading naming; renaming the helper or flag would not fix the retained rows alleged here."
+  }
+ ]
+}

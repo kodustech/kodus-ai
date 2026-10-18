@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment concerns allowing cache deletion for delegated credentials without checking delegationCredentialId. This is distinct from the golden issue about failing to invalidate the connectedCalendars query after deletion."
+  }
+ ]
+}

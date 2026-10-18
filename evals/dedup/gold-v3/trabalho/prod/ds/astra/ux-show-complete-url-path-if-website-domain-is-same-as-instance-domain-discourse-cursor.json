@@ -1,0 +1,17 @@
+{
+ "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Describes the same website host/path disclosure caused by omitting website_name from the untrusted attribute restrictions."
+  },
+  {
+   "id": "S2",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Describes the same missing '?' suffix that prevents AMS from calling the inclusion guard and causes website_name to be emitted unconditionally."
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#prod-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:92-120 creates the new attendees and builds attendeesList from the updated booking, then assigns it to evt.attendees at line 136. Consequently, the fan-out in packages/emails/email-manager.ts:540-542 includes the new guests and sends them AttendeeScheduledEmail; cloning does not omit them.",
+   "severity": "high"
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#prod-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The unchecked access exists at packages/emails/templates/organizer-add-guests-email.ts:28, but its caller rejects an empty uniqueGuests list at packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:80-81. It then inserts those guests and constructs the event from the updated attendees at lines 92-136, ensuring at least one attendee before sending the email at line 168.",
+   "severity": "medium"
+  }
+ ]
+}

@@ -1,0 +1,23 @@
+{
+ "caseId": "github-oauth-security-enhancement-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment concerns an omitted redirect_uri in the token exchange. No golden issue describes this parameter omission; #05 concerns unhandled request failures."
+  },
+  {
+   "id": "S2",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "It addresses the same unguarded sender metadata lookup and treats missing sender information as verification failure instead of raising KeyError."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "The comment concerns treating the literal string \"null\" as an installation ID instead of redirecting to the installer. No golden issue describes this input-validation problem."
+  }
+ ]
+}

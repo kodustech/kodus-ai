@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "CalendarService.ts:147-154 now allows selectedCalendar to be undefined and applies the \"primary\" fallback only to insertion; the subsequent Meet-description patch still passes selectedCalendar directly at lines 165-175. This case is reachable for destinations without credentialId (packages/core/EventManager.ts:375-380), causing the patch to fail and omit the Meet link from the description; previously selectedCalendar itself included the fallback.",
+   "severity": "medium"
+  }
+ ]
+}

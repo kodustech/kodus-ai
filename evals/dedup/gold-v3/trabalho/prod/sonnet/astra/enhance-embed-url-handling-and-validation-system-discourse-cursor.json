@@ -1,0 +1,29 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "The comment explicitly identifies unescaped URL interpolation in the raw HTML footer, allowing a quote to escape the href attribute. This matches #09, alongside broader HTML-sanitization concerns."
+  },
+  {
+   "id": "S2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
+   "newGroup": null,
+   "reason": "Both describe the update path passing a nil embed.post to PostRevisor after deletion, causing repeated import crashes."
+  },
+  {
+   "id": "S3",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Both identify i.content.scrub failing on feed items without content and aborting processing of subsequent items."
+  },
+  {
+   "id": "S4",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-01",
+   "newGroup": null,
+   "reason": "Both identify query-string variations bypassing the retrieval throttle because its key uses the full embed URL. The comment emphasizes excessive retrieval work as the consequence of the same bypass."
+  }
+ ]
+}

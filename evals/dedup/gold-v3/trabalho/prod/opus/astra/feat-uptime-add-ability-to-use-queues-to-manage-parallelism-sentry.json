@@ -1,0 +1,29 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Both describe strategy shutdown closing the factory-owned shared pool, causing subsequent strategies to commit messages that failed to enqueue after rebalance."
+  },
+  {
+   "id": "S2",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#12",
+   "newGroup": null,
+   "reason": "Both identify the background thread invoking Arroyo's commit callback outside the consumer thread, risking races in non-thread-safe commit state."
+  },
+  {
+   "id": "S3",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+   "newGroup": null,
+   "reason": "Both claim that requiring every integer offset to exist blocks commits at legitimate Kafka offset gaps, and propose scanning tracked offsets instead."
+  },
+  {
+   "id": "S4",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Both describe unbounded worker queues and missing submission backpressure allowing queued messages to consume memory without limit."
+  }
+ ]
+}

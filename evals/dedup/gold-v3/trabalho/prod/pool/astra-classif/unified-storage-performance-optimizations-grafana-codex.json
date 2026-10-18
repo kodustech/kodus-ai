@@ -1,0 +1,12 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#prod-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The PR starts search watching before initializing the broadcaster (pkg/storage/unified/resource/server.go:303-310; search.go:203-213). Each SQL WatchWriteEvents call starts from the latest database versions, so writes between those subscriptions are excluded from the broadcaster\u2019s stream (pkg/storage/unified/sql/backend.go:558-567). A subsequent Watch requesting an earlier Since cannot recover those events: it only filters the broadcaster stream without fetching historical changes (pkg/storage/unified/resource/server.go:847-867).",
+   "severity": "high"
+  }
+ ]
+}

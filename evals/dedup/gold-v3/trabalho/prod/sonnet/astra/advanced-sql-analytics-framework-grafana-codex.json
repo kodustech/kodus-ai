@@ -1,0 +1,11 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "The comment identifies that enableSqlExpressions always returns false, so enabling FlagSqlExpressions has no effect. This is the same unconditional disabling described by oph-01."
+  }
+ ]
+}

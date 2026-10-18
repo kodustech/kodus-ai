@@ -1,0 +1,17 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Both describe the ticker change from ten minutes to one minute, which runs all cleanup jobs ten times as often and increases load."
+  },
+  {
+   "id": "S2",
+   "match": "database-performance-optimizations-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Both describe quadratic construction of the SQLite inline ID list caused by repeatedly copying the accumulated string, increasing allocations for large batches."
+  }
+ ]
+}

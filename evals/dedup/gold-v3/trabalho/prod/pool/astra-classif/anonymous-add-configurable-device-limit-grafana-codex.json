@@ -1,0 +1,19 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "items": [
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#prod-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The claimed count on every anonymous request is prevented by the device cache: pkg/services/anonymous/anonimpl/impl.go:83 returns before calling CreateOrUpdateDevice on cache hits, with a 29-minute expiration configured at impl.go:42. The new count at pkg/services/anonymous/anonimpl/anonstore/database.go:110 therefore runs only for uncached devices when a positive limit is configured.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#prod-02",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The new updateDevice callback mutates captured args by prepending query on every invocation at pkg/services/anonymous/anonimpl/anonstore/database.go:84. WithDbSession enables callback retries at pkg/services/sqlstore/session.go:127, and retryOnLocks invokes that same callback again after SQLite lock errors at session.go:90\u2013102; when retries are configured, subsequent attempts receive an extra SQL string as a bound argument and fail.",
+   "severity": "medium"
+  }
+ ]
+}

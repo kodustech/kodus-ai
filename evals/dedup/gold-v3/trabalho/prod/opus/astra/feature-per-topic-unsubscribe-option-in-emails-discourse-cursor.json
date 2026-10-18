@@ -1,0 +1,23 @@
+{
+ "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Describes the missing TopicUser row causing an unconditional nil dereference and a 500 from the unsubscribe link."
+  },
+  {
+   "id": "S2",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-01",
+   "newGroup": null,
+   "reason": "Describes repeated visits lowering the notification level again from regular to muted, making unsubscribe non-idempotent. It also includes the misleading confirmation described in #08."
+  },
+  {
+   "id": "S3",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the session-authenticated GET changing notification preferences without CSRF protection, allowing a third-party page to trigger the mutation."
+  }
+ ]
+}

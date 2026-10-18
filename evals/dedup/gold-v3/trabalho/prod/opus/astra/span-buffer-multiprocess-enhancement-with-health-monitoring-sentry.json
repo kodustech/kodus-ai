@@ -1,0 +1,23 @@
+{
+ "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "The restart guard does not recognize SpawnProcess workers, so a hung worker survives alongside its replacement."
+  },
+  {
+   "id": "S2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "The comment includes the same shutdown bug: deadline expiration breaks out of the cleanup loop and skips termination of remaining workers. Its additional observation about the SpawnProcess type check does not change that match."
+  },
+  {
+   "id": "S3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "newGroup": null,
+   "reason": "submit() repeats identical cluster-wide Redis memory queries for each flusher buffer instead of querying once."
+  }
+ ]
+}

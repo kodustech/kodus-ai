@@ -1,0 +1,11 @@
+{
+ "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "The comment identifies the same cache-key omission: fallback results depend on the site's default locale, allowing cross-site or stale cached translations. It also includes the fallback-loading problem described by issue #01."
+  }
+ ]
+}

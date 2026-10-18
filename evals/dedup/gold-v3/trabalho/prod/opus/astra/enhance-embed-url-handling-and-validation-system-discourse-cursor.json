@@ -1,0 +1,47 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Describes stored XSS from feed HTML saved with raw_html cooking, bypassing sanitization. It also includes the unescaped footer URL problem, but the primary shared issue is unsanitized imported content."
+  },
+  {
+   "id": "S2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "newGroup": null,
+   "reason": "Describes protocol-relative CDN URLs being incorrectly rewritten as paths on the article host."
+  },
+  {
+   "id": "S3",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#17",
+   "newGroup": null,
+   "reason": "Describes the same concurrent check-then-create race and unhandled RecordNotUnique exception for duplicate embed URLs."
+  },
+  {
+   "id": "S4",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Describes missing RSS content causing i.content.scrub to raise and abort the feed poll."
+  },
+  {
+   "id": "S5",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-01",
+   "newGroup": null,
+   "reason": "Describes anonymous clients varying embed URLs to evade the per-URL retrieval throttle and trigger unbounded retrieval work. The queue-flooding consequence and proposed controller throttle broaden the same abuse."
+  },
+  {
+   "id": "S6",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the substring origin check accepting a foreign origin and allowing forged iframe-resize messages."
+  },
+  {
+   "id": "S7",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#29",
+   "newGroup": null,
+   "reason": "Describes the Disqus import regression from switching to import_remote: dead links abort the import and original thread timestamps are lost."
+  }
+ ]
+}

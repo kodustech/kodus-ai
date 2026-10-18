@@ -1,0 +1,12 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#prod-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "In src/sentry/integrations/source_code_management/commit_context.py:494, PRCommentWorkflow begins, and _truncate_title is defined within that class as a static method at lines 577\u2013582. The call at line 601 therefore references the correct class and does not cause the claimed AttributeError.",
+   "severity": "high"
+  }
+ ]
+}

@@ -1,0 +1,23 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Both identify that the working-hours end is calculated from slotStartTime instead of slotEndTime, allowing events to extend past closing time."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "Both identify reference equality between distinct Dayjs objects, which prevents zero-length day-off overrides from being detected."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "newGroup": null,
+   "reason": "Both identify that any excluding working-hours interval rejects the slot, making valid slots unavailable on split schedules."
+  }
+ ]
+}

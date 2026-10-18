@@ -1,0 +1,11 @@
+{
+ "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The claim is false: getById already wraps returned models with createOrganizationAwareIdentityProviderModel, so getForLogin receives organization-aware providers. This does not describe any golden-set issue."
+  }
+ ]
+}

@@ -1,0 +1,179 @@
+{
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+    {
+      "id": "ds:S1",
+      "group": "N1",
+      "reason": "Single comment in this PR"
+    }
+  ],
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+    {
+      "id": "ds:S2",
+      "group": "N1",
+      "reason": "Single comment in this PR"
+    }
+  ],
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+    {
+      "id": "ds:S1",
+      "group": "N1",
+      "reason": "Authorization: fallback accepts permissions from other group resources"
+    },
+    {
+      "id": "opus:S3",
+      "group": "N2",
+      "reason": "Performance: per-group canView evaluation in listing, different code and concern"
+    }
+  ],
+  "add-guest-management-functionality-to-existing-bookings-cal-com": [
+    {
+      "id": "ds:S3",
+      "group": "N1",
+      "reason": "New guests never notified (email-manager branch unreachable)"
+    },
+    {
+      "id": "ds:S4",
+      "group": "N2",
+      "reason": "TypeError on empty attendees in organizer template, different code"
+    }
+  ],
+  "add-html-sanitizer-for-translated-message-resources-keycloak": [
+    {
+      "id": "ds:S2",
+      "group": "N1",
+      "reason": "Single comment in this PR"
+    }
+  ],
+  "advanced-query-processing-architecture-grafana-codex": [
+    {
+      "id": "ds:S1",
+      "group": "N1",
+      "reason": "Single comment in this PR"
+    }
+  ],
+  "advanced-sql-analytics-framework-grafana-codex": [
+    {
+      "id": "ds:S1",
+      "group": "N1",
+      "reason": "Single comment in this PR"
+    }
+  ],
+  "anonymous-add-configurable-device-limit-grafana-codex": [
+    {
+      "id": "ds:S2",
+      "group": "N1",
+      "reason": "Full COUNT(*) on hot path, distinct from args bug"
+    },
+    {
+      "id": "ds:S3",
+      "group": "N2",
+      "reason": "Retry closure re-prepends query to args"
+    },
+    {
+      "id": "opus:S6",
+      "group": "N2",
+      "reason": "Same bug: retry closure re-prepends query to captured args, mismatched bind params on SQLite lock retry"
+    }
+  ],
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+    {
+      "id": "ds:S1",
+      "group": "N1",
+      "reason": "Single comment in this PR"
+    }
+  ],
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+    {
+      "id": "ds:S1",
+      "group": "N1",
+      "reason": "Caching tests removed"
+    },
+    {
+      "id": "sonnet:S1",
+      "group": "N2",
+      "reason": "Base conditions not parenthesized, OR precedence"
+    }
+  ],
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+    {
+      "id": "ds:S1",
+      "group": "N1",
+      "reason": "Single comment in this PR"
+    }
+  ],
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+    {
+      "id": "ds:S3",
+      "group": "N1",
+      "reason": "Single comment in this PR"
+    }
+  ],
+  "feature-localization-fallbacks-server-side-discourse-cursor": [
+    {
+      "id": "ds:S1",
+      "group": "N1",
+      "reason": "Single comment in this PR"
+    }
+  ],
+  "github-oauth-security-enhancement-sentry": [
+    {
+      "id": "ds:S1",
+      "group": "N1",
+      "reason": "Token exchange omits redirect_uri"
+    },
+    {
+      "id": "ds:S3",
+      "group": "N2",
+      "reason": "installation_id \"null\" string not treated as absent"
+    }
+  ],
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+    {
+      "id": "ds:S2",
+      "group": "N1",
+      "reason": "Single comment in this PR"
+    }
+  ],
+  "replays-self-serve-bulk-delete-system-sentry": [
+    {
+      "id": "ds:S1",
+      "group": "N1",
+      "reason": "Single comment in this PR"
+    }
+  ],
+  "unified-storage-performance-optimizations-grafana-codex": [
+    {
+      "id": "ds:S1",
+      "group": "N1",
+      "reason": "Single comment in this PR"
+    }
+  ],
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+    {
+      "id": "gpt:S1",
+      "group": "N1",
+      "reason": "Single comment in this PR"
+    }
+  ],
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+    {
+      "id": "gpt:S3",
+      "group": "N1",
+      "reason": "Single comment in this PR"
+    }
+  ],
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+    {
+      "id": "opus:S2",
+      "group": "N1",
+      "reason": "Single comment in this PR"
+    }
+  ],
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+    {
+      "id": "sonnet:S7",
+      "group": "N1",
+      "reason": "Single comment in this PR"
+    }
+  ]
+}

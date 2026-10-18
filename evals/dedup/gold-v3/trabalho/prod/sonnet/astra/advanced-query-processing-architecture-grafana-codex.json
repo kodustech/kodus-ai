@@ -1,0 +1,11 @@
+{
+ "caseId": "advanced-query-processing-architecture-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "The comment describes repeated interpolation in Loki split/shard execution, which reapplies ad hoc filters. This is the same duplicate-interpolation problem identified by issue #01."
+  }
+ ]
+}

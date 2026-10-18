@@ -1,0 +1,11 @@
+{
+ "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This describes redundant per-provider JPA lookups after the cold-cache query has already loaded the providers. None of the golden issues describes this performance problem."
+  }
+ ]
+}

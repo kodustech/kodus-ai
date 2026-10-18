@@ -1,0 +1,19 @@
+{
+ "caseId": "github-oauth-security-enhancement-sentry",
+ "items": [
+  {
+   "issueId": "github-oauth-security-enhancement-sentry#prod-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "src/sentry/integrations/github/integration.py:416-423 does omit redirect_uri, but GitHub permits omission and does not invariably return redirect_uri_mismatch ([GitHub documentation](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app#redirect-uri-mismatch)). The generic helper including it at src/sentry/identity/oauth2.py:273-280 does not establish the claimed GitHub requirement.",
+   "severity": "high"
+  },
+  {
+   "issueId": "github-oauth-security-enhancement-sentry#prod-02",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "src/sentry/integrations/github/integration.py:481-482 catches the missing integration and advances the pipeline, rather than returning the claimed generic error. The frontend at static/app/views/integrationOrganizationLink/index.tsx:247-251 only passes installation_id when truthy, and the base version of integration.py:361-362 already accepted a supplied literal \"null\", so this is not an introduced null-handling regression.",
+   "severity": "high"
+  }
+ ]
+}

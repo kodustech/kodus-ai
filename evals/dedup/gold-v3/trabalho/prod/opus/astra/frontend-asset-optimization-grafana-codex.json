@@ -1,0 +1,11 @@
+{
+ "caseId": "frontend-asset-optimization-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "The comment describes the missing cache re-check after acquiring the write lock, causing concurrent non-Dev cache misses to reload and parse the manifest serially."
+  }
+ ]
+}

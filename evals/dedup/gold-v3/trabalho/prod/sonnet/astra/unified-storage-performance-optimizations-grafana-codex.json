@@ -1,0 +1,11 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#02",
+   "newGroup": null,
+   "reason": "The comment identifies the same unsynchronized b.cache iteration in TotalDocs racing with BuildIndex cache writes, including the new startup log call. Taking cacheMu.RLock inside TotalDocs fixes the golden issue."
+  }
+ ]
+}

@@ -1,0 +1,23 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "newGroup": null,
+   "reason": "The shared try/catch lets one SendGrid cancellation failure abort remaining cancellations and skip database deletions."
+  },
+  {
+   "id": "S2",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#05",
+   "newGroup": null,
+   "reason": "Deferring SendGrid cancellation to the cron allows reminders to be delivered before cancellation runs or after the provider's cancellation cutoff."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This reports missing database cleanup after immediate cancellation, distinct from #11's misleading naming. Its claim that rows are never cleaned up is overstated: the cron deletes email reminder rows once their scheduled date passes."
+  }
+ ]
+}

@@ -1,0 +1,65 @@
+{
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-01": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "low",
+  "concede": false,
+  "text": "Keeping nit. The memoization the deleted tests covered is unchanged by the PR apart from the type: insightsBooking.ts:84-86 `if (this.cachedAuthConditions === undefined) { this.cachedAuthConditions = await this.buildAuthorizationConditions(); }` is the same sentinel the base had; only the annotation went from WhereInput to Prisma.Sql. The PR deleted a test block for trivial, untouched memoization while rewriting the file's expectations; no behaviour the PR introduces goes unverified, and the getBaseConditions/filter tests still exercise both getters. That is test tidying with lost coverage, not a test that fails to verify the change."
+ },
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-02": {
+  "class": "TP",
+  "subclass": "none",
+  "severity": "high",
+  "concede": true,
+  "text": "Conceding the class. The PR removed findMany (the encapsulated consumer) and made getBaseConditions the public fragment API, but it parenthesizes only the combined case: insightsBooking.ts:73 `(${authConditions}) AND (${filterConditions})` vs :75 `return authConditions;`, and org/team auth is a top-level OR (:173, :206 `(${acc}) OR (${condition})`). Any caller composing `WHERE ${base} AND ...` leaks the first OR branch, so the returned contract is unsafe even if no caller composes it yet. Severity high rather than critical: it needs a caller to append a predicate, a security weakness under specific conditions."
+ },
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#prod-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "medium",
+  "concede": true,
+  "text": "Conceding. The loop the comment relies on cannot happen: sync_status_inbound.py:220/:247 call Group.objects.update_group_status, which only bulk_updates and creates activity (group.py ~461-470); outbound status syncs are kicked off only from api/helpers/group_index/update.py:577 and event_manager.py:1807 (kick_off_status_syncs), never from the inbound webhook path. The unused assignment_source parameter on the abstract method is real but the issue's stated problem is false."
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak#prod-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Conceding. The null myUser state is not reachable in this test provider: users are only produced by getUserById/getUserByUsername after `if (!users.containsKey(translateUserName(username))) return null;` (BackwardsCompatibilityUserStorage.java:89, :349), and addUser puts the entry first (:361). Other pre-existing methods dereference the same lookup unguarded (:162, :190, :200). The suggested null check is a guard for an unreachable state."
+ },
+ "unified-storage-performance-optimizations-grafana-codex#prod-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "medium",
+  "concede": false,
+  "text": "Keeping FP hallucination. The comment's mechanism is false: the search reader does not consume the broadcaster's events; each caller gets its own poller and channel (sql/backend.go:558-567 `stream := make(chan *resource.WrittenEvent); go b.poller(ctx, since, stream)`), so search.go:203 and server.go:755 are independent streams. And no Watch subscriber can exist in the window: Init now runs inside NewResourceServer (server.go:258 `err := s.Init(ctx)`) before the server is returned. Events before the broadcaster starts were never replayable to Watch even with the old order (Watch only filters the live broadcaster stream, server.go:847-867), so the reorder creates no new loss for any subscriber."
+ },
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "medium",
+  "concede": false,
+  "text": "Keeping nit. The client cache is intentional: create_account_controller.js:275 pushes only server-rejected emails (`if (result.errors && result.errors.email && result.values)`), and :69 short-circuits them so the user is not sent to resubmit a known-bad address. It only goes stale if an admin lifts the BlockedEmail rule during the same page session, and a reload clears it. Real but a corner-case UX staleness, not a defect a reviewer would block on."
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#prod-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "critical",
+  "concede": true,
+  "text": "Conceding. Rechecked the evaluator: for the all-groups type resource (owner = resource server) DefaultPolicyEvaluator.java:76 skips the typed-resource loop, and the scope lookup is findByScopes(server, null, ...) which uses findPolicyIdByNullResourceScope (`pe.resources is empty`), so other group resources' permissions are never pulled in. DecisionPermissionCollector.grantPermission builds every Permission from permission.getResource(), so returned permissions always carry the evaluated resource's id; the UserPermissionsV2 filter is a no-op there, and the claimed cross-resource grant cannot occur. Severity as stated (permission bypass) is critical."
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#prod-02": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Conceding. The per-group check is deliberate: GroupPermissionsV2.java:141-150 evaluates the group's own resource when one exists and falls back to all-groups only otherwise, so a global VIEW grant cannot answer for every group, and hoisting canView() would bypass group-specific permissions. Admins with VIEW/MANAGE_USERS short-circuit at :56-58. Correct, intended behaviour; the proposed fix would be wrong."
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com#prod-02": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Conceding the subclass. The facts in the comment are true (organizer-add-guests-email.ts:28 reads attendees[0] unchecked), but the empty state is unreachable: addGuests.handler.ts:80-81 throws on empty uniqueGuests and the event is built from the updated attendees (:92-136). Per the rubric, a guard for a state no code path can reach is FP with no subclass, not a hallucination."
+ }
+}

@@ -1,0 +1,17 @@
+{
+ "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+   "newGroup": null,
+   "reason": "Describes the same unconditional dereference of member.has_global_access when member is None, crashing authorized organization-token requests even without optimized pagination."
+  },
+  {
+   "id": "S2",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "Describes the same datetime incompatibility: get_item_key applies floor/ceil to datetime values, and value_from_cursor lacks datetime conversion. Inheriting DateTimePaginator's conversions would fix the issue at the same code."
+  }
+ ]
+}

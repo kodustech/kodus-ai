@@ -76,6 +76,9 @@
      ],
      "opus-5.5@api": [
       "S3"
+     ],
+     "opus-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "CryptoProvider.java:39-44 adds abstract int order() to the public interface and CryptoIntegration.detectProvider now calls CryptoProvider::order on every ServiceLoader provider; any implementation compiled against the old interface fails with AbstractMethodError.",
@@ -116,6 +119,15 @@
       "S8",
       "S9",
       "S10"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "CryptoIntegration.detectProvider (CryptoIntegration.java:54-72) drops the 'multiple crypto providers' IllegalStateException and picks the first after sorting by order(), while DefaultCryptoProvider, FIPS1402Provider and WildFlyElytronProvider all return 200, so a default+FIPS classpath silently picks by ServiceLoader order.",
@@ -452,6 +464,9 @@
      ],
      "opus-5.5@api": [
       "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "update() passes getById(...) (org-aware wrapper whose isEnabled includes org state, :455-466) as original to registerIDPLoginInvalidationOnUpdate (:403-411); with the org disabled, both predicates are false when BROKER_PUBLIC flips to false, so no invalidation, while the cache was filled from the raw delegate and still lists the IDP, which reappears once the org is re-enabled.",
@@ -658,6 +673,9 @@
      ],
      "sonnet-5.5@cc": [
       "S1"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
      ]
     },
     "reason_opus": "AdminPermissions.java:77 now gates the V1 cleanup on ADMIN_FINE_GRAINED_AUTHZ. V1 and V2 are versions of the same feature and cannot both be enabled (Profile.java:56-58, 285), so under V2 the old cleanup would call ClientPermissionsV2.setPermissionsEnabled which throws (ClientPermissionsV2.java:193); with V1 off no V1 permission resources exist to clean. The guard is the intended way to keep V1 cleanup V1-only.",
@@ -688,6 +706,12 @@
     ],
     "foundBy": {
      "opus-5.5@api": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
       "S1"
      ]
     },
@@ -877,6 +901,12 @@
      "gpt-6.1-sol@e2b": [
       "S2",
       "S3"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S3"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S3"
      ]
     },
     "reason_opus": "ClientPermissionsV2.java:86-88 canView() checks only VIEW, while canView(client) (line 78) also grants via canConfigure/canManage. An admin with only global MANAGE gets canView()=false, so ClientsResource.getClients (lines 122-133) loads the unpaginated client stream and filters per client; results are still correct, only slower.",
@@ -904,6 +934,9 @@
       "S5"
      ],
      "gpt-6.1-sol@e2b": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
       "S1"
      ]
     },
@@ -1072,6 +1105,15 @@
      "opus-5.5@api": [
       "S2",
       "S5"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "blocked_email.rb:12 looks up BlockedEmail.where(email: email).first with exact, case-sensitive matching and nothing downcases the stored or submitted email (User.new_from_params assigns params[:email] as-is), so Block@x.org bypasses an entry for block@x.org.",
@@ -1133,6 +1175,9 @@
       "S1",
       "S3",
       "S4"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
      ]
     },
     "reason_opus": "blocked_email.rb:12-17 increments match_count and saves inside should_block?, which EmailValidator calls during validation (email_validator.rb:13); UsersController#create calls user.valid? and then user.save, so one signup attempt is counted twice, and the read-modify-write is not atomic.",
@@ -1225,6 +1270,82 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01",
+    "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+    "comment": "Emails rejected by the server are cached in rejectedEmails for the controller's lifetime and never cleared, so an address that later becomes valid keeps failing client-side validation until reload.",
+    "commentOpus": "Emails rejected by the server are cached in rejectedEmails for the controller's lifetime and never cleared, so an address that later becomes valid keeps failing client-side validation until reload.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ]
+    },
+    "reason_opus": "create_account_controller.js:17 adds a controller-level rejectedEmails array, filled on server email errors (:274-276) and checked first in emailValidation (:69-74) with no reset anywhere. The stale entry only matters if the server-side block is lifted while the singleton controller stays alive, a rare case solved by reloading the page.",
+    "reason_astra": "The PR adds rejected addresses to an array that is never cleared (app/assets/javascripts/discourse/controllers/create_account_controller.js:275), and cached matches fail validation at line 69, disabling submission at line 22. Removing the server rule would allow validation again (app/models/blocked_email.rb:12–18), but editing the input or reopening the modal does not invalidate the client cache. This prevents retrying the now-valid address until the page is reloaded.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "prod",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "texto": "create_account_controller.js:17 adds a controller-level rejectedEmails array, filled on server email errors (:274-276) and checked first in emailValidation (:69-74) with no reset anywhere. The stale entry only matters if the server-side block is lifted while the singleton controller stays alive, a rare case solved by reloading the page."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "The PR adds rejected addresses to an array that is never cleared (app/assets/javascripts/discourse/controllers/create_account_controller.js:275), and cached matches fail validation at line 69, disabling submission at line 22. Removing the server rule would allow validation again (app/models/blocked_email.rb:12–18), but editing the input or reopening the modal does not invalidate the client cache. This prevents retrying the now-valid address until the page is reloaded."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "texto": "Keeping nit. The client cache is intentional: create_account_controller.js:275 pushes only server-rejected emails (`if (result.errors && result.errors.email && result.values)`), and :69 short-circuits them so the user is not sent to resubmit a known-bad address. It only goes stale if an admin lifts the BlockedEmail rule during the same page session, and a reload clears it. Real but a corner-case UX staleness, not a defect a reviewer would block on."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "The PR adds rejectedEmails, appends server-rejected addresses at line 275, and unconditionally fails their subsequent validation at lines 69–74, disabling submission. No cache invalidation allows retrying an address after its server-side block is removed. This is user-visible incorrect behavior, so it remains a reportable defect rather than a nit; the uncommon trigger and reload workaround support medium severity."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "texto": "Keeping nit. rejectedEmails (create_account_controller.js:17) only stores addresses the server just rejected (:274-276), and :69-74 fails them on the client so the user does not resubmit a known-bad address. That is the intended design. The cache only goes stale if an admin removes the BlockedEmail rule for that exact address while the anonymous visitor keeps the same page open. Even then a reload fixes it, and switching to another email still works. Nothing is wrong for any realistic signup; it is a corner-case staleness a reviewer would not raise. Severity stays medium, as the comment states it."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "The PR adds rejectedEmails, appends server-rejected addresses at line 275, and fails validation for cached matches at lines 69–74 without any invalidation. That failure disables submission even after the server-side block is removed. Intentional caching does not make stale rejection correct; blocking a now-valid signup is observable wrong behavior, not a nit. The uncommon trigger and reload workaround support medium severity."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "Concede to TP none, medium. The rubric reserves nit for non-behavioural concerns (naming, style, docs, dead code); this is observable wrong behaviour in an edge case, which the severity rubric rates medium rather than making it a nit. The PR adds rejectedEmails (create_account_controller.js:17), pushes any address the server rejected with an email error (:274-276), and fails it unconditionally at :69-74, which disables submit (:22), with no invalidation, so a now-valid address cannot be retried until reload."
+     }
+    ],
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "medium",
+    "category": "bug"
    }
   ],
   "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
@@ -1276,6 +1397,15 @@
      "opus-5.5@api": [
       "S1",
       "S9"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "GroupPermissionsV2.java:70 canManage() returns hasPermission(null, VIEW, MANAGE), whereas canManage(GroupModel) at :79 requires MANAGE; a view-only all-groups grant passes requireManage() and can create groups.",
@@ -1338,6 +1468,15 @@
       "S10",
       "S11",
       "S12"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S2"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "GroupPermissionsV2.java:121-124 passes groupResource.getId() to hasPermission, which does findByName (:141), while V2 resources are named by group id (AdminPermissionsSchema.resolveGroup); it also adds the resource id, not the group id, to the returned set used as UserModel.GROUPS.",
@@ -1489,6 +1628,9 @@
     "foundBy": {
      "sonnet-5.5@cc": [
       "S3"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
      ]
     },
     "reason_opus": "getGroupIdsWithViewPermission runs hasPermission per Groups-type resource (GroupPermissionsV2.java:121-125), but V2 resources exist only for groups referenced by permissions and V1 GroupPermissions.getGroupIdsWithViewPermission (GroupPermissions.java:313-317) has the same per-resource loop, so this is an optimisation, not a regression.",
@@ -1601,6 +1743,18 @@
       "S1",
       "S13",
       "S18"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "addGuests.handler.ts:46-48 computes isTeamAdminOrOwner as isTeamAdmin && isTeamOwner; isTeamAdmin (queries/teams/index.ts:264) already matches ADMIN or OWNER while isTeamOwner (:286) matches only OWNER, so the check is OWNER-only and team ADMINs get FORBIDDEN.",
@@ -1659,6 +1813,18 @@
       "S5",
       "S8",
       "S15"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S3"
+     ],
+     "opus-5.5@prod": [
+      "S2"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "addGuests.handler.ts:71 lowercases the BLACKLISTED_GUEST_EMAILS entries but line 77 checks blacklistedGuestEmails.includes(guest) with the raw input; the schema (addGuests.schema.ts:5) does not lowercase, so mixed-case addresses bypass the blacklist.",
@@ -1716,6 +1882,12 @@
      "opus-5.5@api": [
       "S6",
       "S10"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S4"
+     ],
+     "opus-5.5@prod": [
+      "S6"
      ]
     },
     "reason_opus": "uniqueGuests (addGuests.handler.ts:74-78) only filters against existing attendees and the blacklist; ZAddGuestsInputSchema has no uniqueness refine (only the client dialog dedupes) and the Attendee model has no unique (bookingId,email), so repeated emails become duplicate attendee rows via createMany (:100-104).",
@@ -1830,6 +2002,9 @@
       "S9",
       "S12",
       "S14"
+     ],
+     "opus-5.5@prod": [
+      "S4"
      ]
     },
     "reason_opus": "addGuests.handler.ts:168 calls sendAddGuestsEmails(evt, guests) with the raw input instead of uniqueGuests; email-manager.ts sendAddGuestsEmails sends AttendeeScheduledEmail to every attendee whose email is in newGuests, so a re-submitted existing attendee gets a new-booking email instead of the add-guests notice.",
@@ -1858,6 +2033,15 @@
      "opus-5.5@api": [
       "S3",
       "S16"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S3"
+     ],
+     "sonnet-5.5@prod": [
+      "S3"
      ]
     },
     "reason_opus": "addGuests.handler.ts:158-163 builds EventManager from getUsersCredentials(ctx.user), the caller; EventManager.updateAllCalendarEvents (EventManager.ts:871-878) falls back to this.calendarCredentials filtered by type when a reference lacks credentialId, so an admin/attendee caller updates their own calendar or none instead of the organizer's.",
@@ -2034,6 +2218,12 @@
      ],
      "opus-5.5@api": [
       "S7"
+     ],
+     "opus-5.5@prod": [
+      "S5"
+     ],
+     "sonnet-5.5@prod": [
+      "S4"
      ]
     },
     "reason_opus": "addGuests.schema.ts:5 accepts z.array(z.string().email()) with no max, the handler inserts all (handler:92-106) and sendAddGuestsEmails fans out one email per attendee via Promise.all; any attendee can submit an arbitrarily large list.",
@@ -2329,6 +2519,12 @@
       "S4",
       "S12",
       "S16"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S3"
+     ],
+     "opus-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "messages_lt.properties (account :101 and login :71) now set totpStep1/loginTotpStep1 to the Italian 'Installa una delle seguenti applicazioni sul tuo cellulare:', so Lithuanian users see Italian text.",
@@ -2505,6 +2701,15 @@
      "opus-5.5@api": [
       "S6",
       "S8"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "VerifyMessageProperties.java:102-111 computes the common prefix and suffix independently, so start + end can exceed a string's length (e.g. '<b>x</b></b>' sanitized to '<b>x</b>' gives start=8, end=4) and substring throws StringIndexOutOfBoundsException, which verify() does not catch.",
@@ -2535,6 +2740,9 @@
      ],
      "gpt-6.1-sol@e2b": [
       "S3"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
      ]
     },
     "reason_opus": "VerifyMessageProperties.java:124-126 replaces the whole {n,choice,...} block with '...' before sanitizing for linkExpirationFormatter.timePeriodUnit* and error-invalid-multivalued-size, so HTML or links inside choice branches of those keys are never checked.",
@@ -2577,6 +2785,12 @@
       "S14",
       "S15",
       "S17"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "account-ui messages_en.properties:188 and admin-ui messages_en.properties:3138 changed {{0}}/{{1}}/{{2}} to {0}/{1}/{2} plus a Java choice; both UIs use i18next with default {{ }} interpolation (account-ui src/i18n.ts, admin-ui i18n.ts) and the server returns raw values (ThemeResource.getLocalizationTexts), so users see literal placeholders.",
@@ -2848,6 +3062,18 @@
       "S10",
       "S12",
       "S17"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S4"
+     ],
+     "opus-5.5@prod": [
+      "S3"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "viewer/slots.ts:141-142 computes end from slotStartTime, identical to start, so the `end > workingHour.endTime` check ignores the event length.",
@@ -2905,6 +3131,15 @@
       "S2",
       "S13",
       "S16"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S2"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "viewer/slots.ts:114 compares two newly created dayjs objects with ===, which is always false, so the start==end (unavailable-day) override branch never fires.",
@@ -2945,6 +3180,12 @@
      ],
      "opus-5.5@api": [
       "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "viewer/slots.ts:133-135 returns true when a date override matches the day, before the busy.every check at :153, so existing bookings within the override window are ignored.",
@@ -2984,6 +3225,12 @@
      "opus-5.5@api": [
       "S6",
       "S18"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S3"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S3"
      ]
     },
     "reason_opus": "viewer/slots.ts:138-147 rejects a slot if any workingHours entry for that weekday does not contain it (find), so with split schedules on the same day every slot is rejected by the other interval.",
@@ -3019,6 +3266,9 @@
      "opus-5.5@api": [
       "S3",
       "S11"
+     ],
+     "opus-5.5@prod": [
+      "S5"
      ]
     },
     "reason_opus": "viewer/slots.ts:123 checks slotStartTime.isAfter(override end), so a slot that starts before the override end but finishes after it is accepted.",
@@ -3052,6 +3302,15 @@
      ],
      "opus-5.5@api": [
       "S8"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S5"
+     ],
+     "opus-5.5@prod": [
+      "S4"
+     ],
+     "sonnet-5.5@prod": [
+      "S3"
      ]
     },
     "reason_opus": "lib/slots.ts:212-224 converts override start/end to minutes using only hour()/minute() after the offset, dropping day rollover, and activeOverrides are bucketed by UTC day (:206-207) before shifting; overrides crossing invitee midnight become reversed ranges or land on the wrong day.",
@@ -3095,6 +3354,9 @@
     "foundBy": {
      "opus-5.5@api": [
       "S4"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
      ]
     },
     "reason_opus": "slots.ts:117-125 rejects the slot only when slotEndTime is at or before the override start or slotStartTime is after the override end; a slot starting before the override start and ending inside it passes, and the function then returns true at line 135 (dateOverrideExist). Fixed hosts can be offered slots partly outside their override window.",
@@ -3198,6 +3460,18 @@
      "opus-5.5@api": [
       "S1",
       "S2"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "querySplitting.ts:299 now runs datasource.applyTemplateVariables on each target, and the split requests still go through runQuery -> super.query, which applies applyTemplateVariables again; runShardSplitQuery (shardQuerySplitting.ts:52) interpolates first and then delegates to runSplitQuery (the test now expects 5 calls for one target). Ad hoc filters get re-added (duplicated label filters after parsers) and interpolated values containing '$' are re-expanded.",
@@ -3297,6 +3571,15 @@
       "S4",
       "S5",
       "S7"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "reader.go:194-200 enableSqlExpressions returns false on both branches, and ReadQuery (reader.go:129-132) returns 'sqlExpressions is not implemented' when it is false. Every SQL expression query is rejected even when FlagSqlExpressions is enabled; the flag lookup is dead.",
@@ -3410,6 +3693,18 @@
      "opus-5.5@api": [
       "S5",
       "S9"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S2"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "anonstore/database.go:108-118: CreateOrUpdateDevice calls CountDevices and then, in a separate statement with no transaction or lock, inserts; concurrent new devices can all observe count < deviceLimit and all insert.",
@@ -3522,6 +3817,15 @@
       "S10",
       "S11",
       "S13"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "impl.go:83-93: tagDeviceUI calls localCache.SetDefault(key) before CreateOrUpdateDevice and never evicts on error; a retry hits the cache at impl.go:83-84 and returns nil, so client.go:44-47 authenticates a device that was rejected with ErrDeviceLimitReached.",
@@ -3582,6 +3886,9 @@
      ],
      "opus-5.5@api": [
       "S6"
+     ],
+     "opus-5.5@prod": [
+      "S5"
      ]
     },
     "reason_opus": "client.go:44 now calls TagDevice synchronously, but tagDeviceUI is guarded by a 29-minute per-device local cache (impl.go:83-87), so the extra DB work (COUNT only when deviceLimit > 0, plus upsert) happens once per device per cache window; the latency impact is minor.",
@@ -3625,6 +3932,9 @@
     "foundBy": {
      "opus-5.5@api": [
       "S3"
+     ],
+     "opus-5.5@prod": [
+      "S4"
      ]
     },
     "reason_opus": "client.go:44-50 enforces the limit only via TagDevice returning ErrDeviceLimitReached, and impl.go:119-122 returns nil when the X-Grafana-Device-Id header is empty. A client that omits the header always gets an anonymous identity regardless of device_limit.",
@@ -3664,6 +3974,34 @@
     "status": "agreed",
     "severity": "low",
     "category": "doc_defect"
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#prod-02",
+    "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+    "comment": "updateDevice prepends the query to the captured args inside the retried DB callback, so a SQLite lock retry runs Exec with the query duplicated in the arguments and the update fails.",
+    "commentOpus": "updateDevice prepends the query to the captured args inside the retried DB callback, so a SQLite lock retry runs Exec with the query duplicated in the arguments and the update fails.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S3"
+     ],
+     "opus-5.5@prod": [
+      "S6"
+     ]
+    },
+    "reason_opus": "In updateDevice the WithDbSession callback reassigns the captured args with args = append([]interface{}{query}, args...) (database.go:84). withDbSession wraps the callback in retryer.Retry(retryOnLocks(...)) (sqlstore/session.go:127, 86-96), which reruns it on SQLite ErrLocked/ErrBusy, so the retry executes Exec(query, query, ip, ...) with mismatched bind parameters.",
+    "reason_astra": "The new updateDevice callback mutates captured args by prepending query on every invocation at pkg/services/anonymous/anonimpl/anonstore/database.go:84. WithDbSession enables callback retries at pkg/services/sqlstore/session.go:127, and retryOnLocks invokes that same callback again after SQLite lock errors at session.go:90–102; when retries are configured, subsequent attempts receive an extra SQL string as a bound argument and fail.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "prod",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug"
    }
   ],
   "async-import-of-the-appstore-packages-cal-com": [
@@ -3741,6 +4079,19 @@
       "S4",
       "S5",
       "S6"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1",
+      "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S2"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "The PR turns the callbacks into async in bookings.tsx:553 and vital/lib/reschedule.ts:125 (and wipemycalother) with await getCalendar inside forEach; forEach discards the promises, so calendar/video deletions are fire-and-forget, getCalendar/import failures become unhandled rejections outside the surrounding try/catch, and the handler continues before cleanup.",
@@ -3763,6 +4114,12 @@
      ],
      "opus-5.5@api": [
       "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "packages/app-store/index.ts:1-31 builds the appStore object with eager `import(\"./x\")` calls, so every app module starts loading as soon as the file is imported; only the result type changes to promises. The lazy-loading goal of the PR is not achieved.",
@@ -3827,6 +4184,18 @@
       "S8",
       "S9",
       "S10"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S2"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "cache.go:30-32 builds userPermDenialCacheKey as namespace+\".perm_\"+uid+\"_\"+action+\"_\"+name+\"_\"+parent; dashboard/folder UIDs may contain '_', so (name=a_b,parent=c) and (name=a,parent=b_c) share a key and Check (service.go:116-121) returns a cached denial for the wrong resource.",
@@ -3905,6 +4274,9 @@
      ],
      "opus-5.5@api": [
       "S2"
+     ],
+     "opus-5.5@prod": [
+      "S3"
      ]
     },
     "reason_opus": "When cached permissions deny, Check falls through to getIdentityPermissions (service.go:123-139), whose permCache lookup was removed (diff in getUserPermissions), so each distinct denied resource triggers a full permission query; previously cached denials were answered from permCache.",
@@ -3980,6 +4352,9 @@
      "opus-5.5@api": [
       "S1",
       "S2"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "handleCancelBooking.ts:487-492, bookings.tsx:488-494 and workflows.tsx call the async deleteScheduledEmailReminder/deleteScheduledSMSReminder inside forEach without awaiting; the PR removed the awaited prisma deleteMany, so the DB cancellation/deletion now runs in floating promises.",
@@ -4023,6 +4398,18 @@
      "opus-5.5@api": [
       "S3",
       "S6"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "scheduleEmailReminders.ts:53-77 wraps the whole sequential cancel loop in one try; any client.request rejection jumps to the catch, skipping the remaining cancels and the Promise.all of queued deletes.",
@@ -4047,6 +4434,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S1"
+     ],
+     "opus-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "Cancellation is deferred: deleteScheduledEmailReminder only sets cancelled:true (emailReminderManager.ts:224-231) and the actual SendGrid cancel happens only when the cron runs (scheduleEmailReminders.ts:43-77); a booking cancelled shortly before the send time may not be cancelled before SendGrid's cutoff, so the email is delivered.",
@@ -4175,6 +4565,9 @@
      ],
      "opus-5.5@api": [
       "S5"
+     ],
+     "opus-5.5@prod": [
+      "S3"
      ]
     },
     "reason_opus": "emailReminderManager.ts:197-232: default path only sets cancelled:true and the immediateDelete path only posts a SendGrid cancel; neither deletes, so the names are misleading. Naming only.",
@@ -4231,6 +4624,31 @@
     "subclass_opus_inicial": "nit",
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": "nit"
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#prod-01",
+    "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+    "comment": "The cron route sets the API key only on @sendgrid/mail, so the new @sendgrid/client cancellation requests are unauthenticated and reminders for cancelled bookings stay scheduled.",
+    "commentOpus": "The cron route sets the API key only on @sendgrid/mail, so the new @sendgrid/client cancellation requests are unauthenticated and reminders for cancelled bookings stay scheduled.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ]
+    },
+    "reason_opus": "scheduleEmailReminders.ts only calls sgMail.setApiKey (:19) and never client.setApiKey, yet the new cancellation loop calls client.request on the @sendgrid/client singleton (:57-64); @sendgrid/mail uses its own Client instance, while emailReminderManager.ts:26 is where client.setApiKey lives. The unauthenticated request throws, the catch at :75-77 swallows it, and the cancelled reminders are neither cancelled at SendGrid nor deleted.",
+    "reason_astra": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:19 initializes only sgMail, while the new cancellation request at line 57 uses the separately imported client. The locked SendGrid 7.7.0 [MailService implementation](https://github.com/sendgrid/sendgrid-nodejs/blob/7.7.0/packages/mail/src/classes/mail-service.js#L16-L38) creates its own Client, so setting its API key does not authenticate the separate client. Consequently, cancellation requests fail and leave reminders scheduled; emailReminderManager.ts:25-26 correctly initializes both clients.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "prod",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "high",
+    "category": "bug"
    }
   ],
   "database-performance-optimizations-grafana-codex": [
@@ -4281,6 +4699,9 @@
       "S7",
       "S9",
       "S12"
+     ],
+     "opus-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "xorm_store.go:534-537, :554-557 and :576-579 call r.log.Error on every cleanup batch for normal progress, including the full ids slice (up to the batch size) and a nil err.",
@@ -4395,6 +4816,15 @@
      ],
      "opus-5.5@api": [
       "S4"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S3"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "xorm_store.go:608-613 builds the SQLite IN list with repeated fmt.Sprintf(\"%s, %d\", values, v), quadratic in batch size; only hit on SQLite with batch size > 999 in a background job.",
@@ -4449,6 +4879,18 @@
      "opus-5.5@api": [
       "S2",
       "S11"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "cleanup.go:77 changes the ticker from time.Minute * 10 to time.Minute * 1, running the whole cleanup service (temp files, annotations, snapshots, versions, etc.) ten times as often with no stated reason.",
@@ -4639,6 +5081,15 @@
       "S14",
       "S21",
       "S26"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S3"
+     ],
+     "opus-5.5@prod": [
+      "S3"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "dualwriter_mode3.go:106 calls recordStorageDuration(false, mode3Str, name, ...) where every other call (e.g. :103) passes options.Kind, so successful deletes are labelled with the object name, splitting series and creating unbounded label cardinality.",
@@ -4762,6 +5213,15 @@
       "S15",
       "S24",
       "S27"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "dualwriter_mode3.go:50-57 (and :108, :134, :161) run the legacy write in a goroutine whose context comes from context.WithTimeoutCause(ctx, ...) on the request ctx; the PR made these writes async (previously synchronous), and the request context is cancelled when the handler returns, so legacy writes can be aborted and the legacy store silently diverges.",
@@ -4809,6 +5269,12 @@
       "S2",
       "S16",
       "S19"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "Base code passed Legacy.Update an updateWrapper{upstream: objInfo, updated: obj} pinned to the Storage result; head :139 passes the raw objInfo, so Legacy recomputes the update against its own old object and can diverge from (or reject) what unified storage persisted.",
@@ -5016,6 +5482,9 @@
      ],
      "opus-5.5@api": [
       "S20"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
      ]
     },
     "reason_opus": "At base, Delete tolerated apierrors.IsNotFound from Storage and still deleted from Legacy. At head (dualwriter_mode3.go:100-105), any Storage error, NotFound included, returns before the legacy delete goroutine runs (lines 108-114). Objects present only in legacy are never removed there.",
@@ -5073,6 +5542,9 @@
      "opus-5.5@api": [
       "S9",
       "S15"
+     ],
+     "opus-5.5@prod": [
+      "S6"
      ]
     },
     "reason_opus": "embed.js:17 accepts a message when discourseUrl.indexOf(e.origin) !== -1, a substring test, so any origin that is a prefix/substring of discourseUrl (e.g. https://forum.example for https://forum.example.com/) passes. Impact is limited to the discourse-resize handler setting iframe.height (embed.js:20-21).",
@@ -5179,6 +5651,18 @@
      "opus-5.5@api": [
       "S6",
       "S12"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S3"
+     ],
+     "opus-5.5@prod": [
+      "S4"
+     ],
+     "sonnet-5.5@prod": [
+      "S3"
      ]
     },
     "reason_opus": "poll_feed.rb:35 calls CGI.unescapeHTML(i.content.scrub) with no fallback; RSS 2.0 items that carry only <description> have no content, so .scrub raises NoMethodError and, with no per-item rescue, aborts the whole poll (poll_feed.rb:31-37).",
@@ -5222,6 +5706,18 @@
       "S6"
      ],
      "opus-5.5@api": [
+      "S1"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
       "S1"
      ]
     },
@@ -5322,6 +5818,9 @@
     "foundBy": {
      "sonnet-5.5": [
       "S4"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S3"
      ]
     },
     "reason_opus": "topic_embed.rb:13 does mutate the caller's string with <<, but both callers pass freshly built strings (poll_feed.rb:35, doc.content in import_remote) that are not frozen and are not reused, so there is no user-visible effect.",
@@ -5358,6 +5857,9 @@
      ],
      "opus-5.5@api": [
       "S13"
+     ],
+     "opus-5.5@prod": [
+      "S3"
      ]
     },
     "reason_opus": "topic_embed.rb:15-30 does a where(embed_url).first then PostCreator + TopicEmbed.create! with a unique index on embed_url (create_topic_embeds migration) and no rescue; the scheduled PollFeed and the retrieval-triggered PollFeed (topic_retriever.rb:40-42) can run concurrently for the same URL, so the loser raises RecordNotUnique and aborts its job.",
@@ -5389,6 +5891,9 @@
      ],
      "opus-5.5@api": [
       "S7"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "topic_embed.rb:32-36 takes post = embed.post and calls PostRevisor.new(post).revise! when the sha changes; Post includes Trashable with a default_scope excluding deleted posts, so after the post is deleted embed.post is nil and every later import of that URL raises NoMethodError.",
@@ -5475,6 +5980,12 @@
      "opus-5.5@api": [
       "S5",
       "S14"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S4"
+     ],
+     "opus-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "absolutize_urls (topic_embed.rb:62-73) only rewrites values starting with '/', and for '//cdn.example.com/x.png' it strips the slashes and prefixes the article host, producing http://host/cdn.example.com/x.png; path-relative links like 'images/a.jpg' are left relative and resolve against the forum.",
@@ -5544,6 +6055,12 @@
      ],
      "sonnet-5.5@cc": [
       "S10"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S6"
+     ],
+     "opus-5.5@prod": [
+      "S7"
      ]
     },
     "reason_opus": "disqus.thor:148 replaces the PostCreator call (which passed created_at and category) with TopicEmbed.import_remote(user, t[:link], title:), which never forwards a timestamp or category, and the --category option was removed; it also now fetches every thread link live with open(url), which raises and aborts the whole import on a dead link.",
@@ -5574,6 +6091,9 @@
      ],
      "opus-5.5@api": [
       "S4"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S5"
      ]
     },
     "reason_opus": "topic_retriever.rb:40-42 runs Jobs::PollFeed.new.execute synchronously on every uncached retrieval when feed polling is enabled; the throttle is per embed_url (topic_retriever.rb:26), so requests for different unknown articles each re-download and re-process the full feed.",
@@ -5719,6 +6239,12 @@
     "foundBy": {
      "opus-5.5@api": [
       "S3"
+     ],
+     "opus-5.5@prod": [
+      "S5"
+     ],
+     "sonnet-5.5@prod": [
+      "S4"
      ]
     },
     "reason_opus": "topic_retriever.rb:26 throttles on `retrieved:#{@embed_url}` and embed_controller.rb:15 enqueues retrieve_topic for any embed_url on the embeddable host (Referer check at :26 is forgeable). Varying the query string yields new keys and TopicEmbed.import (topic_embed.rb:15-28) creates a new topic per distinct URL as embed_by_username.",
@@ -5833,6 +6359,15 @@
       "S5",
       "S8",
       "S13"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S3"
+     ],
+     "opus-5.5@prod": [
+      "S3"
+     ],
+     "sonnet-5.5@prod": [
+      "S3"
      ]
     },
     "reason_opus": "When enable_advanced_features and cursor.offset < 0, OptimizedCursorPaginator.get_result slices queryset[cursor.offset:stop] directly (paginator.py:877-882) under a comment claiming the ORM 'properly handles negative slicing'; Django querysets reject negative indices, so such cursors raise instead of paginating.",
@@ -5956,6 +6491,18 @@
       "S10",
       "S11",
       "S14"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "OptimizedCursorPaginator.get_item_key applies math.floor/math.ceil to getattr(item, self.key) (paginator.py:838-840), and value_from_cursor returns the raw cursor value, but the only caller uses order_by='-datetime' (organization_auditlogs.py:76-82); math.floor on a datetime raises TypeError while building the cursor for any non-empty page.",
@@ -5996,6 +6543,18 @@
      ],
      "opus-5.5@api": [
       "S4"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S2"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "organization_auditlogs.py:71 evaluates organization_context.member.has_global_access unconditionally for non-superusers, but RpcUserOrganizationContext.member can be None for org auth token / API key requests, so the endpoint raises AttributeError even when optimized_pagination is not requested.",
@@ -6163,6 +6722,12 @@
      ],
      "opus-5.5@api": [
       "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "next-auth-options.ts:121 skips password verification whenever credentials.totpCode is truthy, and the new branch at :131 is taken whenever backupCode is truthy, never validating totpCode. Submitting a valid backup code plus any dummy totpCode therefore logs in without the password.",
@@ -6196,6 +6761,12 @@
       "S7"
      ],
      "opus-5.5@api": [
+      "S3"
+     ],
+     "opus-5.5@prod": [
+      "S2"
+     ],
+     "sonnet-5.5@prod": [
       "S3"
      ]
     },
@@ -6335,6 +6906,18 @@
      "opus-5.5@api": [
       "S2",
       "S7"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "next-auth-options.ts:139-156 decrypts backupCodes, finds the index, nulls it and writes back with an unconditional prisma.user.update by id. Concurrent logins with the same code both pass indexOf before either write, so a single-use code can be used twice and concurrent writes can restore consumed codes.",
@@ -6492,6 +7075,9 @@
       "S3"
      ],
      "sonnet-5.5@cc": [
+      "S2"
+     ],
+     "deepseek-v4.1-flash@prod": [
       "S2"
      ]
     },
@@ -6771,6 +7357,9 @@
       "S5",
       "S6",
       "S9"
+     ],
+     "opus-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "CalendarService.ts:1024 calls updateManyByCredentialId(this.credential.id, {}), which forwards data unchanged to prisma.selectedCalendar.updateMany (selectedCalendar.ts:400-405); with empty data no column is written, so the @updatedAt SelectedCalendar.updatedAt is not bumped as the comment intends.",
@@ -6807,6 +7396,12 @@
      ],
      "opus-5.5@api": [
       "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "CredentialActionsDropdown.tsx:42-50 deleteCacheMutation only calls onSuccess?.() and never invalidates viewer.calendars.connectedCalendars, unlike disconnectMutation (:61-64). The settings page passes an onChanged that invalidates, but EventAdvancedTab renders SelectedCalendarsSettingsWebWrapper without onChanged, so there the deleted cache status stays visible.",
@@ -7029,6 +7624,9 @@
      ],
      "opus-5.5@api": [
       "S4"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
      ]
     },
     "reason_opus": "scripts/test-gcal-webhooks.sh:68 uses sed -i '' -E ..., the BSD/macOS form; GNU sed treats '' as the script and fails, so on Linux GOOGLE_WEBHOOK_URL is not updated while the script still prints that it was.",
@@ -7144,6 +7742,109 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-01",
+    "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+    "comment": "The caching tests for getAuthorizationConditions/getFilterConditions were removed in the Prisma.sql conversion, leaving the cached-condition logic untested.",
+    "commentOpus": "The caching tests for getAuthorizationConditions/getFilterConditions were removed in the Prisma.sql conversion, leaving the cached-condition logic untested.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ]
+    },
+    "reason_opus": "The PR deletes the 'Caching' describe block (should cache authorization/filter conditions) from insightsBooking.integration-test.ts, while the memoization in insightsBooking.ts:83-95 is kept essentially unchanged. Real coverage loss, but for trivial memoization logic the PR did not alter.",
+    "reason_astra": "The diff deletes both caching tests; packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:435-437 now transitions directly from filter tests to getBaseConditions tests. Remaining tests call each getter only once per instance, leaving the cached-return branches at packages/lib/server/service/insightsBooking.ts:84-94 untested after the SQL representation change.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "prod",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "texto": "The PR deletes the 'Caching' describe block (should cache authorization/filter conditions) from insightsBooking.integration-test.ts, while the memoization in insightsBooking.ts:83-95 is kept essentially unchanged. Real coverage loss, but for trivial memoization logic the PR did not alter."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "The diff deletes both caching tests; packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:435-437 now transitions directly from filter tests to getBaseConditions tests. Remaining tests call each getter only once per instance, leaving the cached-return branches at packages/lib/server/service/insightsBooking.ts:84-94 untested after the SQL representation change."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "texto": "Keeping nit. The memoization the deleted tests covered is unchanged by the PR apart from the type: insightsBooking.ts:84-86 `if (this.cachedAuthConditions === undefined) { this.cachedAuthConditions = await this.buildAuthorizationConditions(); }` is the same sentinel the base had; only the annotation went from WhereInput to Prisma.Sql. The PR deleted a test block for trivial, untouched memoization while rewriting the file's expectations; no behaviour the PR introduces goes unverified, and the getBaseConditions/filter tests still exercise both getters. That is test tidying with lost coverage, not a test that fails to verify the change."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "texto": "Changed to TP/nit, low. The PR removes both caching tests, losing explicit coverage of the cached-return branches, but the getters’ sentinel and assignment logic remain unchanged. The deleted tests only checked deep equality, so they would also pass if conditions were rebuilt on every call. This is minor coverage loss for existing logic, not an unverified behavioral change warranting medium severity."
+     }
+    ],
+    "class": "TP",
+    "subclass": "nit",
+    "status": "agreed_after_debate",
+    "severity": "low",
+    "category": "test_gap"
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-02",
+    "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+    "comment": "Claims getBaseConditions returns OR fragments without parentheses, so a caller appending `AND <extra>` would leak rows outside the authorization scope.",
+    "commentOpus": "Claims getBaseConditions returns OR fragments without parentheses, so a caller appending `AND <extra>` would leak rows outside the authorization scope.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@prod": [
+      "S1"
+     ]
+    },
+    "reason_opus": "getBaseConditions (insightsBooking.ts:68-80) does return authConditions/filterConditions unwrapped, and these can be top-level OR fragments (lines 106, 173, 206). But the only consumer at head (integration test :480-484) uses it alone as `WHERE ${baseConditions}`; no code path appends another predicate, so the precedence leak cannot occur.",
+    "reason_astra": "packages/lib/server/service/insightsBooking.ts:74-75 returns authorization conditions without enclosing parentheses when filters are absent, while lines 173 and 206 produce top-level OR expressions. Appending AND therefore constrains only the second authorization branch, allowing the first branch to bypass the extra predicate; the event-type fragment is already safely grouped when combined at lines 73 and 121.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "prod",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "getBaseConditions (insightsBooking.ts:68-80) does return authConditions/filterConditions unwrapped, and these can be top-level OR fragments (lines 106, 173, 206). But the only consumer at head (integration test :480-484) uses it alone as `WHERE ${baseConditions}`; no code path appends another predicate, so the precedence leak cannot occur."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "critical",
+      "texto": "packages/lib/server/service/insightsBooking.ts:74-75 returns authorization conditions without enclosing parentheses when filters are absent, while lines 173 and 206 produce top-level OR expressions. Appending AND therefore constrains only the second authorization branch, allowing the first branch to bypass the extra predicate; the event-type fragment is already safely grouped when combined at lines 73 and 121."
+     },
+     {
+      "quem": "opus",
+      "class": "TP",
+      "subclass": null,
+      "severity": "high",
+      "texto": "Conceding the class. The PR removed findMany (the encapsulated consumer) and made getBaseConditions the public fragment API, but it parenthesizes only the combined case: insightsBooking.ts:73 `(${authConditions}) AND (${filterConditions})` vs :75 `return authConditions;`, and org/team auth is a top-level OR (:173, :206 `(${acc}) OR (${condition})`). Any caller composing `WHERE ${base} AND ...` leaks the first OR branch, so the returned contract is unsafe even if no caller composes it yet. Severity high rather than critical: it needs a caller to append a predicate, a security weakness under specific conditions."
+     }
+    ],
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "high",
+    "category": "bug"
    }
   ],
   "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
@@ -7201,6 +7902,15 @@
       "S1",
       "S2",
       "S3"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "assignment_source.py:18 `queued: datetime = timezone.now()` is evaluated once at import, and from_integration (:21-25) never passes queued, so every AssignmentSource carries the process import time instead of the queue time.",
@@ -7321,6 +8031,15 @@
      ],
      "sonnet-5.5@cc": [
       "S1"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S3"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "organization_events_stats.py:218-220 passes the closure `dataset` to is_errors_query_for_error_upsampled_projects, while the dashboard-split path calls _get_event_stats(discover, ...) (lines ~351, 365, 406, 423) when dataset is metrics_enhanced_performance; _should_apply_sample_weight_transform then returns False for metrics, so the errors split query is never upsampled.",
@@ -7366,6 +8085,15 @@
       "S1",
       "S4",
       "S6"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "error_upsampling.py:100-103 returns True when the raw request query contains the substring `event.type:error`, so `!event.type:error` or `event.type:error OR event.type:transaction` on the discover dataset gets count() rewritten to upsampled_count(); it also ignores the query actually passed to _get_event_stats.",
@@ -7479,6 +8207,9 @@
       "S2"
      ],
      "gpt-6.1-sol@e2b": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
       "S1"
      ]
     },
@@ -7595,6 +8326,9 @@
     "martianRef": [],
     "foundBy": {
      "muse-spark-1.3": [
+      "S1"
+     ],
+     "deepseek-v4.1-flash@prod": [
       "S1"
      ]
     },
@@ -7779,6 +8513,9 @@
      "opus-5.5@api": [
       "S4",
       "S14"
+     ],
+     "opus-5.5@prod": [
+      "S3"
      ]
     },
     "reason_opus": "queue_consumer.py:86-105: the scan stops at a missing offset only until the lower offset is committed; mark_committed (line 105) drops offsets <= committed, so the next cycle starts at max(last_committed+1, min_offset)=next received offset and commits past the gap. Gaps delay the commit by one cycle, they never block it permanently.",
@@ -7945,6 +8682,15 @@
      "opus-5.5@api": [
       "S3",
       "S7"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S3"
+     ],
+     "opus-5.5@prod": [
+      "S4"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "FixedQueuePool creates queue.Queue() with no maxsize (queue_consumer.py:185) and submit/poll never block or raise MessageRejected (lines 204-212, 327-333), despite the docstring promising 'Natural backpressure when queues fill up' (line 253). A slow worker lets the queue grow without bound.",
@@ -7981,6 +8727,12 @@
      ],
      "opus-5.5@api": [
       "S5"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
      ]
     },
     "reason_opus": "FixedQueuePool.shutdown sets worker.shutdown=True before q.shutdown(immediate=False) (queue_consumer.py:233-238), and the worker loop checks 'while not self.shutdown' (line 129), so workers exit after the current item and abandon queued work; close() also stops the commit thread before the pool (lines 335-338), so completed work is never committed.",
@@ -8037,6 +8789,18 @@
       "S8",
       "S13",
       "S16"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "ResultsStrategyFactory creates one FixedQueuePool in __init__ and passes self.queue_pool to every strategy (result_consumer.py:131-137, 254-259), while SimpleQueueProcessingStrategy.close/terminate/join shut that pool down (queue_consumer.py:335-345). After a rebalance the new strategy reuses a shut-down pool; put() raises and submit's except marks the offset complete, so messages are committed unprocessed.",
@@ -8065,6 +8829,9 @@
      "opus-5.5@api": [
       "S2",
       "S17"
+     ],
+     "opus-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "_commit_loop runs in a separate daemon thread (queue_consumer.py:270-289) and calls commit_function, which invokes Arroyo's commit callback (result_consumer.py:249-252) outside submit/poll on the consumer thread; Arroyo's consumer is not thread-safe, so commits can race with polling and rebalance.",
@@ -8490,6 +9257,18 @@
       "S6",
       "S7",
       "S9"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "grouptype.py:11-12 makes MetricAlertDetectorHandler a StatefulDetectorHandler with only `pass`; StatefulDetectorHandler declares abstract counter_names, get_dedupe_value, get_group_key_values and build_occurrence_and_event_data (processors/detector.py:142-170), so Detector.detector_handler (models/detector.py:86) raises TypeError when instantiating it for metric alert detectors.",
@@ -8664,6 +9443,18 @@
       "S7",
       "S8",
       "S10"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "optimized_image.rb defines self.downsize(from, to, max_width, max_height, opts={}) and then self.downsize(from, to, dimensions, opts={}); Ruby keeps the last one, so app/jobs/regular/resize_emoji.rb:14 OptimizedImage.downsize(path, path, 100, 100, opts) now raises ArgumentError (5 args for 3..4).",
@@ -8712,6 +9503,12 @@
       "S5",
       "S9",
       "S11"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S5"
      ]
     },
     "reason_opus": "utilities.js:182 replaces Discourse.SiteSettings['max_' + type + '_size_kb'] with a fixed 10 * 1024 for every upload type (and the 413 handler at :246), while the server-side downsizing only applies to images, so attachment limits no longer match the configured max_attachment_size_kb.",
@@ -8752,6 +9549,9 @@
      ],
      "opus-5.5@api": [
       "S2"
+     ],
+     "opus-5.5@prod": [
+      "S4"
      ]
     },
     "reason_opus": "uploads_controller.rb:67 passes \"80%\" as dimensions; when allow_animation is set and the path ends in .gif (e.g. URL downloads, whose Tempfile keeps the extension in FileHelper.download), optimize uses downsize_instructions_animated -> gifsicle --resize-fit 80%, which needs WxH, so the conversion fails and the image is not reduced.",
@@ -8968,6 +9768,9 @@
      ],
      "opus-5.5@api": [
       "S4"
+     ],
+     "opus-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "The inline downsize loop (uploads_controller.rb:64-70) is bounded to 5 attempts on files capped at 10 MB, and this controller already processes uploads synchronously; moving it to a background job is a design preference, not a defect.",
@@ -9019,7 +9822,11 @@
       "category": "bug"
      }
     ],
-    "foundBy": {},
+    "foundBy": {
+     "opus-5.5@prod": [
+      "S3"
+     ]
+    },
     "reason_opus": "The loop at uploads_controller.rb:65-69 is bounded by attempt = 5 decremented each iteration, so it cannot loop forever; Tempfile#size is not cached but re-read from the file each call.",
     "reason_astra": "app/controllers/uploads_controller.rb:65-68 guarantees termination after five attempts, but the stale-size/file-handling concern is real. app/models/optimized_image.rb:164 invokes ImageOptim, whose pinned version [replaces files by renaming](https://raw.githubusercontent.com/toy/image_optim/v0.20.2/lib/image_optim/image_path.rb), leaving the open tempfile handle attached to the previous inode. Consequently, the size checks at line 66 and filesize passed at line 72 can describe the old file, causing unnecessary resizing or incorrect rejection.",
     "class_opus_inicial": "FP",
@@ -9164,6 +9971,9 @@
      "opus-5.5@api": [
       "S6",
       "S20"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S4"
      ]
     },
     "reason_opus": "app/models/embeddable_host.rb:5-8 calls self.host.sub! with no nil guard; Admin::EmbeddableHostsController#save_host (embeddable_hosts_controller.rb:23) assigns params[:embeddable_host][:host] directly, so a missing host raises NoMethodError (500) instead of a validation error.",
@@ -9215,6 +10025,9 @@
      "opus-5.5@api": [
       "S7",
       "S21"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S3"
      ]
     },
     "reason_opus": "embeddable_hosts_controller.rb:10 and :15 use EmbeddableHost.where(id:).first and immediately call save_host(host)/host.destroy; an unknown id yields nil and NoMethodError (500) instead of a 404.",
@@ -9273,6 +10086,12 @@
       "S15",
       "S16",
       "S23"
+     ],
+     "opus-5.5@prod": [
+      "S3"
+     ],
+     "sonnet-5.5@prod": [
+      "S3"
      ]
     },
     "reason_opus": "embeddable_host.rb:14-17 lowercases the column (lower(host)) but binds uri.host unchanged; URI preserves host case, so a referer with uppercase letters never matches a stored lowercase host and the validation regex is /i so mixed-case hosts can also be stored.",
@@ -9324,6 +10143,15 @@
       "S14"
      ],
      "opus-5.5@api": [
+      "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S2"
+     ],
+     "sonnet-5.5@prod": [
       "S2"
      ]
     },
@@ -9444,6 +10272,9 @@
      ],
      "opus-5.5@api": [
       "S3"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
      ]
     },
     "reason_opus": "create_embeddable_hosts.rb:25 interpolates the host string into VALUES ('#{h}', ...); the source is the admin-only host_list site setting being migrated, so a quote would only break the migration on malformed data rather than be an exploitable injection.",
@@ -9508,6 +10339,18 @@
       "S13",
       "S17",
       "S19"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "create_embeddable_hosts.rb:9-11 indexes execute(...)[0]['id'] without checking for rows; embed_category is only stored when changed from its '' default, so on most installs the query returns no rows and the migration raises before the category_id == 0 fallback (line 15 has the same issue).",
@@ -9678,6 +10521,31 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": null
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#prod-01",
+    "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+    "comment": "EmbeddableHost's host format validation only accepts TLDs of 2-5 letters, so admins cannot add embeddable hosts on longer TLDs like example.technology.",
+    "commentOpus": "EmbeddableHost's host format validation only accepts TLDs of 2-5 letters, so admins cannot add embeddable hosts on longer TLDs like example.technology.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "gpt-6.1-sol@prod": [
+      "S3"
+     ]
+    },
+    "reason_opus": "The new EmbeddableHost model (app/models/embeddable_host.rb:2) validates hosts with `\\.[a-z]{2,5}(:[0-9]{1,5})?`, rejecting TLDs longer than five letters such as .technology or .photography. The previous SiteSetting.allows_embeddable_host? did plain string comparison with no format restriction.",
+    "reason_astra": "The newly added validation in app/models/embeddable_host.rb:2 restricts the final suffix to 2–5 letters, rejecting example.technology. Both create and update invoke save_host, whose validated host.save rejects these relationships (app/controllers/admin/embeddable_hosts_controller.rb:5–11,27–30); the previous hostname comparison imposed no suffix-length restriction.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "prod",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug"
    }
   ],
   "feature-localization-fallbacks-server-side-discourse-cursor": [
@@ -9715,6 +10583,12 @@
       "S4",
       "S5",
       "S6"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "Fallback locales are loaded only by I18n.fallbacks.ensure_loaded! in ApplicationController#set_locale (application_controller.rb:159); I18n.translate still loads only config.locale (translate_accelerator.rb:67-68), and Backend::Simple only returns loaded translations, so in jobs/mailers a missing key cannot fall back to the site default or :en and the missing result is cached.",
@@ -9742,6 +10616,12 @@
      ],
      "opus-5.5@api": [
       "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "The fallback chain now depends on SiteSetting.default_locale (config/initializers/i18n.rb:17), but the accelerator's cache key is key + config.locale + backend id (translate_accelerator.rb:72) with no site or default-locale component, so in multisite or after changing the default locale a cached fallback translation from another site/setting is served.",
@@ -9782,6 +10662,18 @@
       "S2"
      ],
      "opus-5.5@api": [
+      "S3"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S4"
+     ],
+     "opus-5.5@prod": [
+      "S3"
+     ],
+     "sonnet-5.5@prod": [
       "S3"
      ]
     },
@@ -9843,6 +10735,18 @@
       "S1",
       "S5",
       "S8"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S3"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "topics_controller.rb:105-107 does tu = TopicUser.find_by(user_id:, topic_id:) and then tu.notification_level without a nil check; TopicView.new does not create the topic_users row, so a user without a row (e.g. notified via category watching without visiting) gets NoMethodError and a 500.",
@@ -9946,6 +10850,9 @@
      ],
      "opus-5.5@api": [
       "S7"
+     ],
+     "opus-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "client.en.yml:985 says 'You will stop receiving notifications', but topics_controller.rb:107-111 drops watching/tracking users to regular, which still notifies on mentions/replies. Message wording only.",
@@ -9975,6 +10882,12 @@
      "gpt-6.1-sol@e2b": [
       "S3",
       "S8"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "topics_controller.rb:107-113 sets notification_level and calls save! without setting notifications_reason_id; TopicUser.update_last_read (topic_user.rb:~157-163) re-promotes rows with null notifications_reason_id to tracking once the read threshold passes, while TopicUser.change sets reason user_changed (lines 86-88).",
@@ -10182,6 +11095,12 @@
       "S3",
       "S4",
       "S5"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "GroupTest.java:139-157 starts the reader thread without keeping a reference or joining it; after deletedAll.set(true) the assertion on caughtExceptions runs immediately, so in-flight reads that fail later, or a reader that never read, still let the test pass.",
@@ -10409,6 +11328,18 @@
       "S11",
       "S16",
       "S20"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S3"
+     ],
+     "opus-5.5@prod": [
+      "S2"
+     ],
+     "sonnet-5.5@prod": [
+      "S9"
      ]
     },
     "reason_opus": "googlecalendar/lib/CalendarService.ts:254-256 (updateEvent) and :315-317 (deleteEvent) fall back to destinationCalendar.find(cal => cal.externalId === externalCalendarId) only when externalCalendarId is falsy, so the find can never match and the old destinationCalendar.externalId fallback is lost.",
@@ -10453,6 +11384,9 @@
      "opus-5.5@api": [
       "S8",
       "S19"
+     ],
+     "opus-5.5@prod": [
+      "S5"
      ]
     },
     "reason_opus": "organizations/create.handler.ts:151 changed ...(!IS_TEAM_BILLING_ENABLED && { slug }) to ...(IS_TEAM_BILLING_ENABLED ? { slug } : {}), inverting the condition while requestedSlug is still set only when billing is enabled; without billing the org gets neither slug nor requestedSlug.",
@@ -10508,6 +11442,13 @@
      ],
      "opus-5.5@api": [
       "S6"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "sonnet-5.5@prod": [
+      "S3",
+      "S6"
      ]
     },
     "reason_opus": "office365calendar/lib/CalendarService.ts:72-76 keeps createEvent(event) and always uses destinationCalendar[0], while CalendarManager.createEvent now passes credential.id and EventManager.createAllCalendarEvents (EventManager.ts:339-372) calls it per destination; a second Office365 host's token is used against the first host's calendar id.",
@@ -10559,7 +11500,11 @@
       "category": "bug"
      }
     ],
-    "foundBy": {},
+    "foundBy": {
+     "deepseek-v4.1-flash@prod": [
+      "S4"
+     ]
+    },
     "reason_opus": "EventManager.ts:511-547 can pass an undefined credential to updateEvent when the DB lookup fails, but the same undefined-credential path existed before (filter(...)[0]) and the PR only adds a DB fallback; the call runs inside updateAllCalendarEvents' try/catch that returns failure results.",
     "reason_astra": "packages/core/EventManager.ts:529 assigns a credential only when the database lookup returns a record with an app slug, but :542 calls updateEvent unconditionally. Although getCalendar tolerates missing credentials, packages/core/CalendarManager.ts:314 dereferences credential.appName, causing a rejected update when credential resolution fails.",
     "class_opus_inicial": "FP",
@@ -10630,6 +11575,18 @@
       "S13",
       "S14",
       "S15"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "EventManager.ts:118-119 destructures const [mainHostDestinationCalendar] = evt.destinationCalendar ?? [] then reads mainHostDestinationCalendar.integration without ?.; handleNewBooking sets destinationCalendar to null and other callers to [], so a Google Meet booking without a destination calendar throws a TypeError.",
@@ -10672,6 +11629,18 @@
       "S5",
       "S12",
       "S22"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S5"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S6"
+     ],
+     "opus-5.5@prod": [
+      "S4"
+     ],
+     "sonnet-5.5@prod": [
+      "S4"
      ]
     },
     "reason_opus": "handleNewBooking.ts:1063-1067 sets evt.destinationCalendar to null when neither event type nor organizer has one, and :1077-1078 then calls evt.destinationCalendar?.push(...teamDestinationCalendars), which silently does nothing.",
@@ -10708,6 +11677,15 @@
      "opus-5.5@api": [
       "S2",
       "S21"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S7"
+     ],
+     "opus-5.5@prod": [
+      "S3"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "EventManager.ts:170 now stores credentialId: isCalendarType ? result.credentialId : undefined, dropping the video credentialId previously stored; handleCancelBooking.ts:490-501 deletes the video meeting only when the video reference has a credentialId.",
@@ -10786,6 +11764,15 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S6"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S3"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S4"
+     ],
+     "opus-5.5@prod": [
+      "S6"
      ]
     },
     "reason_opus": "EventManager.ts:208-209 updateLocation now builds references from result.externalId and result.credentialId, but CalendarManager.updateEvent (CalendarManager.ts:315-324) returns neither; previously they fell back to evt.destinationCalendar, so location edits now persist calendar references without externalCalendarId/credentialId.",
@@ -10814,6 +11801,9 @@
      ],
      "gpt-6.1-sol@e2b": [
       "S5"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S5"
      ]
     },
     "reason_opus": "handleCancelBooking.ts:449-470: inside the new loop over all calendar references, the recurring cancel-all branch still iterates the organizer's credentials and deletes updBooking.references.find(first _calendar ref), so every outer iteration repeats the first host's deletion and other hosts' recurring events are never removed.",
@@ -10838,6 +11828,9 @@
     "foundBy": {
      "sonnet-5.5": [
       "S12"
+     ],
+     "sonnet-5.5@prod": [
+      "S5"
      ]
     },
     "reason_opus": "googlecalendar/lib/CalendarService.ts:148-154 selects the calendar only by destinationCalendar.find(cal.credentialId === credentialId), falling back to 'primary'; destinations without a credentialId (handled in EventManager.ts:372-378) previously used destinationCalendar.externalId and now go to primary.",
@@ -10885,6 +11878,12 @@
      ],
      "opus-5.5@api": [
       "S7"
+     ],
+     "opus-5.5@prod": [
+      "S7"
+     ],
+     "sonnet-5.5@prod": [
+      "S8"
      ]
     },
     "reason_opus": "handleCancelBooking.ts:423-461 now iterates over every _calendar reference (filter instead of find), and the recurring-event branch inside the loop deletes events for all updatedBookings across all user calendar credentials. With N calendar references (the collective multi-host case this PR adds), that deletion runs N times, issuing duplicate deleteEvent calls that fail for already-deleted events.",
@@ -10977,6 +11976,31 @@
     "status": "agreed",
     "severity": "medium",
     "category": "security"
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+    "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+    "comment": "In Google createEvent, when no destination calendar matches the credentialId, the hangout-link events.patch is called with an undefined calendarId and fails, so the Meet link is not added to the event description.",
+    "commentOpus": "In Google createEvent, when no destination calendar matches the credentialId, the hangout-link events.patch is called with an undefined calendarId and fails, so the Meet link is not added to the event description.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@prod": [
+      "S7"
+     ]
+    },
+    "reason_opus": "selectedCalendar is now `destinationCalendar?.find(cal => cal.credentialId === credentialId)?.externalId` (CalendarService.ts:147-149), which can be undefined; the insert falls back to \"primary\" (:154) but the follow-up events.patch passes `calendarId: selectedCalendar` (:168) raw. Before the PR selectedCalendar already defaulted to \"primary\", so the PR introduces the undefined calendarId.",
+    "reason_astra": "CalendarService.ts:147-154 now allows selectedCalendar to be undefined and applies the \"primary\" fallback only to insertion; the subsequent Meet-description patch still passes selectedCalendar directly at lines 165-175. This case is reachable for destinations without credentialId (packages/core/EventManager.ts:375-380), causing the patch to fail and omit the Meet link from the description; previously selectedCalendar itself included the fallback.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "prod",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug"
    }
   ],
   "fix-proper-handling-of-group-memberships-discourse-cursor": [
@@ -11044,6 +12068,9 @@
       "S5",
       "S6",
       "S7"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S3"
      ]
     },
     "reason_opus": "admin-group.js.es6:11-14 computes totalPages as Math.floor(user_count/limit)+1, which adds a phantom page when user_count is an exact multiple of limit; showingLast stays false on the real last page and next (lines 30-37) sets offset = min(offset+limit, user_count) = user_count, loading an empty page.",
@@ -11170,6 +12197,18 @@
      ],
      "opus-5.5@api": [
       "S9"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S2"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "GroupsController#members now applies limit (default 50) and offset to every group (groups_controller.rb:22-26), whereas non-automatic groups previously returned all members; the public group/members.hbs and group-members route load once with no paging controls, so members beyond the first 50 are unreachable.",
@@ -11194,6 +12233,9 @@
     "foundBy": {
      "gpt-6.1-sol": [
       "S8"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
      ]
     },
     "reason_opus": "Admin::GroupsController#create (admin/groups_controller.rb:22-33) sets only name and visible, while update sets alias_level and the client asJSON sends alias_level (group.js:61-67) with the alias combo shown on the new-group form; a new group's chosen alias level is dropped.",
@@ -11224,6 +12266,15 @@
      ],
      "opus-5.5@api": [
       "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S3"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "remove_member calls group.users.delete(user_id) (admin/groups_controller.rb:90), which deletes the GroupUser row without the primary_group_id cleanup that the previous usernames= path performed in destroy_deletions (group.rb:287-292), leaving the removed user's primary_group_id pointing at the group.",
@@ -11283,6 +12334,9 @@
     "foundBy": {
      "opus-5.5@api": [
       "S2"
+     ],
+     "opus-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "The new add_members action (admin/groups_controller.rb:65-81) calls group.add(user), which is users.push (group.rb:272-274), for every username with no membership check; group_users has a UNIQUE (group_id,user_id) index, so re-adding an existing member raises RecordNotUnique (500) after earlier usernames were already inserted.",
@@ -11385,6 +12439,12 @@
       "S1"
      ],
      "opus-5.5@api": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
       "S1"
      ]
     },
@@ -11521,6 +12581,12 @@
       "S2",
       "S3",
       "S4"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "After entryPointAssetsCacheMu.Lock() (webassets.go:48-49) the cache is not re-checked, so concurrent cold-start callers that saw nil each reload the manifest serially. The effect is a few redundant file reads at startup; results are identical.",
@@ -11748,6 +12814,12 @@
      ],
      "opus-5.5@api": [
       "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "integration.py:402 uses pipeline.signature as OAuth state; pipeline/base.py:132-133 computes it as md5 of the pipeline view class names, a constant identical for every user and attempt (tests hardcode 9cae5e88...). It provides no CSRF protection or binding of the OAuth callback to the user's attempt.",
@@ -11785,6 +12857,9 @@
      ],
      "opus-5.5@api": [
       "S4"
+     ],
+     "sonnet-5.5@prod": [
+      "S3"
      ]
     },
     "reason_opus": "integration.py:423 calls safe_urlopen outside the try at :425, and get_user_info at :434 calls resp.raise_for_status() (identity/github/provider.py:16) unguarded; network errors or non-2xx GitHub responses raise and produce a 500 instead of the error() page.",
@@ -11825,6 +12900,9 @@
      ],
      "opus-5.5@api": [
       "S3"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "integration.py:481-482 returns pipeline.next_step() when no Integration row exists for installation_id, skipping the new github_authenticated_user vs sender check at :500-505; a user supplying an installation_id before the webhook creates the row completes setup without the ownership verification this PR adds.",
@@ -11886,6 +12964,18 @@
       "S7",
       "S8",
       "S9"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S2"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "integration.py:503 indexes integration.metadata[\"sender\"][\"login\"], but build_integration only sets sender when state has it (:376-377) and installation.py:44 explicitly handles metadata without sender; such an active integration without an OrganizationIntegration raises KeyError (500) instead of the error page.",
@@ -11997,6 +13087,12 @@
       "S13",
       "S18",
       "S20"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "AccessTokenContext.java:73 (diff line 184) calls Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\"), validating grantType twice and never rawTokenId, so a null raw id is accepted and encodeTokenId emits '...:null'.",
@@ -12100,6 +13196,12 @@
       "S16",
       "S17",
       "S19"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "AssertEvents.java:480-484 reads items[0].substring(3,5) although the encoder puts the grant at [4,6) (DefaultTokenContextEncoderProvider substring(4,6)), and returns false on equality; for valid ids the slice never equals the shortcut, so the matcher only checks the UUID and never verifies the grant.",
@@ -12149,6 +13251,9 @@
      ],
      "opus-5.5@api": [
       "S11"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
      ]
     },
     "reason_opus": "OAuth2GrantTypeFactory.java:29-33 Javadoc says 'usually like 3-letters shortcut', but every implementation returns 2 chars and the decoder requires exactly 2 (6-char prefix). Documentation inaccuracy.",
@@ -12210,6 +13315,9 @@
      ],
      "gpt-6.1-sol@e2b": [
       "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "Only OAuth2GrantTypeBase.createTokenResponse, the password grant, refresh, pre-authorized code and token exchange set Constants.GRANT_TYPE; ClientCredentialsGrantType (lines 121-141) builds its own clientSessionCtx and calls responseBuilder.generateAccessToken() without it, so DefaultTokenContextEncoderProvider:57-60 falls back to 'na' for client-credentials tokens.",
@@ -12256,6 +13364,9 @@
     "foundBy": {
      "opus-5.5@api": [
       "S4"
+     ],
+     "opus-5.5@prod": [
+      "S3"
      ]
     },
     "reason_opus": "OAuth2GrantTypeFactory.java:29-33 adds `String getShortcut();` with no default to the provider factory interface, and DefaultTokenContextEncoderProviderFactory.java:74 calls gtf.getShortcut() for every deployed grant factory. Only built-in factories were updated, so third-party grant type factories fail to compile or hit AbstractMethodError at postInit.",
@@ -12335,6 +13446,9 @@
      ],
      "opus-5.5@api": [
       "S9"
+     ],
+     "opus-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "BackwardsCompatibilityUserStorage.isValid returns generatedKeys.stream().anyMatch(key.equals(input)) (BackwardsCompatibilityUserStorage.java:326-340) without removing the matched code, so a code can be reused. This is a testsuite provider; production consumption is the provider's responsibility.",
@@ -12378,6 +13492,9 @@
      ],
      "opus-5.5@api": [
       "S8"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
      ]
     },
     "reason_opus": "getCredentials builds the model with RecoveryAuthnCodesCredentialModel.createFromValues (BackwardsCompatibilityUserStorage.java:237-242), which never sets an id (RecoveryAuthnCodesCredentialModel.java:58-85), although updateCredential assigned one (KeycloakModelUtils.generateId()). Callers using the id, e.g. RecoveryAuthnCodesFormAuthenticator removeStoredCredentialById(model.getId()), receive null.",
@@ -12408,6 +13525,9 @@
      ],
      "opus-5.5@api": [
       "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
      ]
     },
     "reason_opus": "When updateCredential succeeds in external storage, createRecoveryCodesCredential skips the local provider's createCredential (CredentialHelper.java:125-129), so an existing local recovery-codes credential is not replaced; UserCredentialManager.isValid falls back to local validators for inputs the storage rejects (UserCredentialManager.java:66-79), so old local codes keep working.",
@@ -12442,6 +13562,9 @@
      "opus-5.5@api": [
       "S4",
       "S6"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "RecoveryAuthnCodesUtils.getCredential now prefers federated credentials, but exhausted codes are still removed with removeStoredCredentialById (RecoveryAuthnCodesFormAuthenticator.java:80-88), which only targets local storage. A federated exhausted credential is never removed and stays configured.",
@@ -12547,6 +13670,9 @@
      ],
      "opus-5.5@api": [
       "S5"
+     ],
+     "opus-5.5@prod": [
+      "S3"
      ]
     },
     "reason_opus": "AlertRuleMenu.tsx:123 still renders MenuItemPauseRule only when rulerRuleType.grafana.rule(rulerRule), but GrafanaRuleListItem.tsx:47 now passes only promRule to RuleActionsButtons (the ruler-loading GrafanaRuleLoader was deleted), so Pause/Resume never appears in the list view even when canPause is true.",
@@ -12573,6 +13699,9 @@
       "S2"
      ],
      "gpt-6.1-sol@e2b": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
       "S1"
      ]
     },
@@ -12619,6 +13748,9 @@
      ],
      "opus-5.5@api": [
       "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "useGrafanaPromRuleAbilities(skipToken) calls useAllGrafanaPromRuleAbilities(undefined); useIsGrafanaPromRuleEditable returns loading:false, so MaybeSupported is AlwaysSupported and Duplicate = toAbility(AlwaysSupported, grafana create). AlertRuleMenu.tsx:91 ORs this with the ruler ability, so Duplicate shows for datasource rules whenever the user has Grafana create permission.",
@@ -12662,6 +13794,18 @@
      ],
      "sonnet-5.5@cc": [
       "S5"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S3"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "useAllAlertRuleAbilities now delegates to useAllRulerRuleAbilities, which hardcodes isFederated = false (useAbilities.ts, TODO), replacing the removed isFederatedRuleGroup(rule.group) check, so federated Mimir groups are no longer immutable for Update/Delete/Pause.",
@@ -12757,6 +13901,12 @@
       "S1"
      ],
      "opus-5.5@api": [
+      "S4"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
       "S4"
      ]
     },
@@ -12860,6 +14010,15 @@
      "opus-5.5@api": [
       "S2",
       "S8"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S3"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "RuleActionsButtons.V2.tsx:104 mounts SilenceGrafanaRuleDrawer only when rulerRuleType.grafana.alertingRule(rule), but GrafanaRuleListItem.tsx:47 passes only promRule, while canSilence can be true via grafana prom abilities; clicking Silence sets showSilenceDrawer and nothing renders.",
@@ -12962,6 +14121,15 @@
      "opus-5.5@api": [
       "S12",
       "S15"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S4"
+     ],
+     "opus-5.5@prod": [
+      "S8"
+     ],
+     "sonnet-5.5@prod": [
+      "S7"
      ]
     },
     "reason_opus": "app-credential.ts:24-27 (new file) compares the request header to CALCOM_WEBHOOK_SECRET with !==, a non-constant-time comparison on an endpoint that writes user credentials.",
@@ -13060,6 +14228,9 @@
      ],
      "opus-5.5@api": [
       "S6"
+     ],
+     "sonnet-5.5@prod": [
+      "S6"
      ]
     },
     "reason_opus": "parseRefreshTokenResponse.ts:25-27 sets data.refresh_token = \"refresh_token\" whenever the response lacks one; office365 merges this into stored credentials, replacing the real refresh token with a literal placeholder.",
@@ -13120,6 +14291,18 @@
       "S20",
       "S30",
       "S34"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S4"
+     ],
+     "opus-5.5@prod": [
+      "S4"
+     ],
+     "sonnet-5.5@prod": [
+      "S3"
      ]
     },
     "reason_opus": "parseRefreshTokenResponse.ts:8,10 use computed keys [z.string().toString()] which both evaluate to the same literal object-string key, not wildcards; the schema ends up as {access_token, '<literal>': unknown optional} and z.object strips expiry/refresh fields in sync mode.",
@@ -13194,6 +14377,18 @@
       "S24",
       "S27",
       "S35"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S3"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S3"
+     ],
+     "sonnet-5.5@prod": [
+      "S5"
      ]
     },
     "reason_opus": "refreshOAuthTokens.ts:8-15 returns the raw fetch Response in sync mode, while googlecalendar reads res?.data, zoho-bigin reads tokenInfo.data.error and hubspot types the result as HubspotToken; those callers break when sharing is enabled.",
@@ -13270,6 +14465,15 @@
       "S25",
       "S29",
       "S32"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "googlecalendar/lib/CalendarService.ts:97-100 stores key = parseRefreshTokenResponse(...), which returns the safeParse wrapper {success,data}, as credential.key; googleCredentialSchema.parse(credential.key) then fails on the next load.",
@@ -13327,6 +14531,12 @@
      ],
      "opus-5.5@api": [
       "S10"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S6"
+     ],
+     "opus-5.5@prod": [
+      "S7"
      ]
     },
     "reason_opus": "salesforce CalendarService.ts:75-99 now runs a refresh_token exchange and a prisma update inside getClient, called from the constructor, on every service instantiation regardless of token validity.",
@@ -13357,6 +14567,15 @@
      ],
      "opus-5.5@api": [
       "S7"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S5"
+     ],
+     "opus-5.5@prod": [
+      "S2"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "salesforce CalendarService.ts:96 calls prisma.credential.update but the file has no prisma import (imports at lines 1-20), causing a compile error / ReferenceError.",
@@ -13436,6 +14655,18 @@
       "S26",
       "S28",
       "S33"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S3"
+     ],
+     "opus-5.5@prod": [
+      "S6"
+     ],
+     "sonnet-5.5@prod": [
+      "S4"
      ]
     },
     "reason_opus": "zoho-bigin CalendarService.ts:85-94 passes credentialId (credential.id, line 53) as the userId argument of refreshOAuthTokens, which sends it as calcomUserId to the sync endpoint.",
@@ -13504,6 +14735,9 @@
      ],
      "opus-5.5@api": [
       "S9"
+     ],
+     "opus-5.5@prod": [
+      "S5"
      ]
     },
     "reason_opus": "salesforce CalendarService.ts:96-99 persists accessTokenParsed.data but :101-107 creates jsforce.Connection with credentialKey.access_token and instance_url, the pre-refresh values.",
@@ -13755,6 +14989,12 @@
      ],
      "opus-5.5@api": [
       "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "zunionstore at add-buffer.lua:47 and :53 uses default AGGREGATE SUM, so a duplicate payload present in both set_key and the merged key gets its end-timestamp score doubled. The score is only used for zpopmin eviction (add-buffer.lua:62-64), so the effect is a duplicate span being biased against eviction in segments over 1000 spans; flushing ignores scores (buffer.py zscan values discarded).",
@@ -13800,6 +15040,12 @@
       "S1",
       "S7",
       "S9"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "Segment keys switch from SET to ZSET (buffer.py:197-199 zadd, flush zscan, Lua zcard/zunionstore) without renaming the span-buf:s: namespace. Keys written by the previous release live up to redis_ttl/set_timeout, so during deploy ZADD/ZCARD/ZSCAN on an existing SET key raise WRONGTYPE, failing the pipeline and the consumer batch.",
@@ -13875,6 +15121,9 @@
     "foundBy": {
      "muse-spark-1.3": [
       "S4"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S3"
      ]
     },
     "reason_opus": "Eviction uses zpopmin on end_timestamp_precise (add-buffer.lua:62-64); the root span encloses its children so it normally has the largest end timestamp and is the last candidate for eviction. Identical timestamps exist only in fixtures that never exceed 1000 spans. Speculative.",
@@ -13949,6 +15198,15 @@
       "S6",
       "S8",
       "S10"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S4"
+     ],
+     "opus-5.5@prod": [
+      "S3"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "The span-count guard on max_segment_spans was removed from flush (buffer.py:446-449) and the cap is now a hardcoded 1000 in add-buffer.lua:62; the max_segment_spans constructor parameter (buffer.py:150, default 1001) is still accepted but no longer used. Dead/misleading configuration; insert-time eviction bounds the set after every insert.",
@@ -14189,6 +15447,9 @@
      ],
      "opus-5.5@api": [
       "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "pkg/plugins/log/fake.go:46-48 TestLogger.FromContext returns NewTestLogger() rather than f, so logs made through FromContext are not recorded on the original fake; no current test asserts on those logs.",
@@ -14322,6 +15583,12 @@
      "opus-5.5@api": [
       "S1",
       "S2"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "incident_occurrence.py:160-168 copies config and replaces schedule_type with get_schedule_type_display(), but the returned dict uses monitor_environment.monitor.config, so the occurrence's monitor context shows the raw schedule_type; this code is re-added by the PR.",
@@ -14382,6 +15649,9 @@
      "opus-5.5@api": [
       "S4",
       "S8"
+     ],
+     "sonnet-5.5@prod": [
+      "S4"
      ]
     },
     "reason_opus": "browser_reporting_collector.py:52 and :58 test presence with self.initial_data.get(\"age\") / .get(\"timestamp\"); age (line 47) and timestamp (min_value=0, line 48) both accept 0, so a report carrying age=0 plus timestamp, or timestamp=0 plus age, passes the mutual-exclusion validators.",
@@ -14519,6 +15789,12 @@
       "S6",
       "S7",
       "S10"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "project_replay_summarize_breadcrumbs.py fetch_error_details zips error_ids with events.values(); nodestore base.py get_multi dedupes ids and returns uncached items then items.update(cache_items), and omits missing nodes, so value order/length can differ from error_ids and errors get the wrong id.",
@@ -14616,6 +15892,15 @@
      ],
      "sonnet-5.5@cc": [
       "S7"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S3"
      ]
     },
     "reason_opus": "widgetCard/chart.tsx: when organization has 'use-table-widget-visualization', TableWidgetVisualization is rendered with columns={[]} and tableData {data: [], meta: {fields: {}, units: {}}}, discarding result.data/result.meta, so the table is always empty.",
@@ -14703,6 +15988,9 @@
       "S6",
       "S7",
       "S13"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
      ]
     },
     "reason_opus": "useTraceItemAttributeKeys.tsx now uses queryKey ['use-trace-item-attribute-keys', queryOptions] where makeTraceItemAttributeKeysQueryOptions returns only itemType/attributeType/project/dates; the old useApiQuery key included the /organizations/{slug}/ path, so org identity was dropped from the cache key.",
@@ -14748,6 +16036,12 @@
       "S3"
      ],
      "opus-5.5@api": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S2"
+     ],
+     "sonnet-5.5@prod": [
       "S2"
      ]
     },
@@ -14929,6 +16223,9 @@
       "S12",
       "S16",
       "S17"
+     ],
+     "opus-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "desktop/topic-post.scss:291 changed `scale-color($primary, $lightness: 30%)` to `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))`, so the light-theme argument went from 30% to 70% (inverted), visibly lightening the reply author link in the existing light theme.",
@@ -15142,6 +16439,9 @@
       "S10",
       "S14",
       "S19"
+     ],
+     "opus-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "mobile/topic-post.scss:182 changed a.star h3 from `scale-color($primary, $lightness: 20%)` to `dark-light-choose(scale-color($primary, $lightness: 50%), ...50%)`, while desktop/topic-post.scss:321 kept 20%/80%; the mobile light-theme heading becomes lighter.",
@@ -15297,6 +16597,12 @@
       "S7",
       "S10",
       "S11"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "The method: SMS filter is only in the first OR arm (scheduleSMSReminders.ts:31-43); the retryCount > 1 arm matches WorkflowReminder rows of any method. Today only this SMS cron increments retryCount, so the latent effect is limited, but the deletion is no longer scoped to SMS as the comment states. (The claim that a successfully scheduled reminder with retryCount 2 is deleted is not reachable: such rows are deleted before findMany.)",
@@ -15375,6 +16681,15 @@
       "S3",
       "S8",
       "S9"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "The new prisma.workflowReminder.update inside catch (scheduleSMSReminders.ts:190-197) is unguarded; if it throws (row deleted by a concurrent cancellation -> P2025, or a DB error), the exception escapes the for loop, the remaining reminders are skipped and the handler fails. Previously the catch only logged.",
@@ -15591,6 +16906,9 @@
      ],
      "opus-5.5@api": [
       "S2"
+     ],
+     "sonnet-5.5@prod": [
+      "S3"
      ]
     },
     "reason_opus": "scheduleSMSReminders.ts:158-188 increments retryCount only when twilio.scheduleSMS returns falsy or throws. When message is empty or sendTo is missing, the reminder is skipped without incrementing. It is re-evaluated each cron run until its scheduledDate passes and the delete query removes it. No SMS or external call is made in that case, so the only effect is redundant cron work.",
@@ -15812,6 +17130,15 @@
       "S9",
       "S11",
       "S13"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "flusher.py:254 guards kill() with isinstance(process, multiprocessing.Process), but processes come from get_context('spawn').Process (line 53/105), i.e. SpawnProcess, which is not a subclass of multiprocessing.Process; the base code called kill() unconditionally, so hung workers are now never killed before a replacement is started (line 259).",
@@ -15860,6 +17187,18 @@
       "S3",
       "S10",
       "S14"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S2"
+     ],
+     "sonnet-5.5@prod": [
+      "S2"
      ]
     },
     "reason_opus": "flusher.py:337-347: once the shared deadline passes the loop breaks before reaching terminate() for the current and remaining processes, so later workers are never terminated on shutdown.",
@@ -16134,6 +17473,15 @@
      ],
      "opus-5.5@api": [
       "S2"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S3"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S3"
+     ],
+     "opus-5.5@prod": [
+      "S3"
      ]
     },
     "reason_opus": "flusher.py:299-301 calls get_memory_info() for every per-process buffer, and SpansBuffer.get_memory_info (buffer.py:375-376) is iter_cluster_memory_usage(self.client) for the whole cluster, so INFO is repeated once per process; submit is not a hot path and the ratio is unchanged.",
@@ -16269,6 +17617,12 @@
      ],
      "opus-5.5@api": [
       "S3"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
+     ],
+     "opus-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "bleve.go BuildIndex no longer holds cacheMu for the whole build, only around b.cache[key] = idx (bleve.go:137-139). getOrCreateIndex (search.go:287-307) does GetIndex then build without re-checking, so concurrent searches/events for the same uncached key now each build the index (previously GetIndex blocked on the build lock), wasting work and leaking the overwritten index.",
@@ -16314,6 +17668,12 @@
       "S1"
      ],
      "opus-5.5@api": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
       "S1"
      ]
     },
@@ -16608,6 +17968,18 @@
      ],
      "opus-5.5@api": [
       "S1"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S1"
+     ],
+     "gpt-6.1-sol@prod": [
+      "S1"
+     ],
+     "opus-5.5@prod": [
+      "S1"
+     ],
+     "sonnet-5.5@prod": [
+      "S1"
      ]
     },
     "reason_opus": "website is in untrusted_attributes (user_serializer.rb:105-111), whose include_website? returns false when scope.restrict_user_fields?(object) (:25-31), but the new :website_name attribute (:43) is not, so a TL0 user's hidden website host (and path) is still sent to anonymous viewers.",
@@ -16675,6 +18047,9 @@
       "S5",
       "S6",
       "S7"
+     ],
+     "deepseek-v4.1-flash@prod": [
+      "S2"
      ]
     },
     "reason_opus": "user_serializer.rb:153 defines include_website_name without '?', while AMS 0.8.3 calls include_<attr>? (cf. include_email? :117), so the guard is dead and website_name is always serialized; when website is blank it is just nil, so there is no visible effect (the TL0 leak is the separate untrusted-attribute issue).",
@@ -16694,7 +18069,11 @@
   "gpt-6.1-sol@e2b",
   "sonnet-5.5@cc",
   "opus-5.5@api",
-  "opus-5.5@api"
+  "opus-5.5@api",
+  "deepseek-v4.1-flash@prod",
+  "gpt-6.1-sol@prod",
+  "opus-5.5@prod",
+  "sonnet-5.5@prod"
  ],
  "classificadores": [
   "claude-opus-5.5",

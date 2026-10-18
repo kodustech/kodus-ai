@@ -1,0 +1,17 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Describes the same non-atomic match_count update that loses increments during concurrent signup attempts."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes stale rejectedEmails entries preventing resubmission after a block is removed. Issue #02 concerns the incorrect rejection message, which fixing this cache behavior would not resolve."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+   "newGroup": null,
+   "reason": "The comment asserts the same lenient sequence-parser defect: accepting malformed DER when INTEGER encodings exceed the declared sequence length. The concrete example and proposed bounds check add detail to the rejected claim."
+  }
+ ]
+}

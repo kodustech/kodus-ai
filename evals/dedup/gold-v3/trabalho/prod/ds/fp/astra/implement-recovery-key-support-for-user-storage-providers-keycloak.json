@@ -1,0 +1,17 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#07",
+   "newGroup": null,
+   "reason": "It asserts the same unchecked Optional.get() on RecoveryAuthnCodesUtils.getCredential(user), causing NoSuchElementException. The rendering consequences and suggested fallback add detail to that same claim."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "It claims getCredentials reconstructs a credential through createFromValues, producing data inconsistent with stored state. This differs from the rejected claims about plaintext storage and validating the wrong code number."
+  }
+ ]
+}

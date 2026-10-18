@@ -1,0 +1,17 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims new guests are missing from the formatted event's attendee list, making the notification branch unreachable. This differs from rejected issue #07, which claims email casing causes the membership check to fail."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims accessing an undefined first attendee crashes organizer email generation. Neither rejected issue describes this problem."
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "items": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims the per-request device count adds excessive database work to anonymous authentication. None of the rejected issues describes this performance problem."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims retrying the UPDATE callback repeatedly prepends the query to captured arguments, corrupting SQL parameter binding. This differs from the rejected updateDevice claims about zero-row handling and the time window."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "The comment identifies the same ticker change from 10 minutes to 1 minute, causing all cleanup jobs to run ten times as often and increasing load."
+  }
+ ]
+}

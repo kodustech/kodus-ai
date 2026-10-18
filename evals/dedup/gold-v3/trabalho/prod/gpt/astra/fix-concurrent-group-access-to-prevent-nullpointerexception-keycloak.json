@@ -1,0 +1,11 @@
+{
+ "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "The comment identifies the missing join before asserting caughtExceptions, allowing an in-flight reader failure to arrive after the test passes. It additionally describes the stop-flag cleanup problem in issue #03."
+  }
+ ]
+}

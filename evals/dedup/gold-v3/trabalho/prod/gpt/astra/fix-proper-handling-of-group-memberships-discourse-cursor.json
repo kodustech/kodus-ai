@@ -1,0 +1,17 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "The comment identifies the same public member-list truncation: the endpoint defaults to 50 members while the public view has no pagination."
+  },
+  {
+   "id": "S2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+   "newGroup": null,
+   "reason": "The comment identifies the same missing primary_group_id cleanup when direct association deletion removes a member."
+  }
+ ]
+}

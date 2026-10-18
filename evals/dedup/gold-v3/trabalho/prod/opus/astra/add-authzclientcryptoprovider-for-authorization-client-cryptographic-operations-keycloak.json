@@ -1,0 +1,17 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+   "newGroup": null,
+   "reason": "Describes the same silent selection among providers tied at order 200, allowing a FIPS deployment to select a non-FIPS provider based on ServiceLoader order."
+  },
+  {
+   "id": "S2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#04",
+   "newGroup": null,
+   "reason": "Describes the same source and binary compatibility break caused by adding abstract order() to CryptoProvider, with a default implementation as the fix."
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#prod-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "Although BackwardsCompatibilityUserStorage.java:235 dereferences myUser without checking null, its lookup methods reject missing usernames (lines 89 and 349), and addUser inserts the map entry before returning the adapter (lines 361\u2013362). UserCredentialManager.java:130\u2013141 dispatches to the user's own federation provider, so the cited login flow does not establish a missing-map-entry case; the suggested guard is defensive rather than a demonstrated defect.",
+   "severity": "medium"
+  }
+ ]
+}

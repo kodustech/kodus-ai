@@ -1,0 +1,23 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Describes the same unchecked empty migration query result causing a crash before the uncategorized fallback."
+  },
+  {
+   "id": "S2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Describes the same migration of unnormalized legacy hosts, causing bare-host lookups to fail. Its additional quote-breaking observation also describes issue #06."
+  },
+  {
+   "id": "S3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Describes the same comparison of lower(host) against an un-downcased URI hostname, rejecting mixed-case referers. Its additional port mismatch also describes issue #14."
+  }
+ ]
+}

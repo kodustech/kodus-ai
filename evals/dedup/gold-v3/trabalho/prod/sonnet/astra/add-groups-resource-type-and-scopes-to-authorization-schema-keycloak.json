@@ -1,0 +1,17 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "Describes the same canManage() scope error: all-groups VIEW permission grants manage access. Both require checking only MANAGE."
+  },
+  {
+   "id": "S2",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Explicitly identifies using authorization resource UUIDs instead of group IDs for permission lookup and returned filtering IDs, matching #02. The broader comment also includes the missing resource type problem described by #03."
+  }
+ ]
+}

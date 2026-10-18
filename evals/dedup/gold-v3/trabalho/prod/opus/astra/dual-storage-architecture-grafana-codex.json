@@ -1,0 +1,23 @@
+{
+ "caseId": "dual-storage-architecture-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Both describe asynchronous legacy writes inheriting request cancellation, causing writes to be canceled when the handler returns."
+  },
+  {
+   "id": "S2",
+   "match": "dual-storage-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Both describe passing the original objInfo to Legacy.Update instead of wrapping the committed result, which can recompute the update against stale legacy state."
+  },
+  {
+   "id": "S3",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Both describe Delete's success metric using the object name instead of options.Kind as the kind label, creating per-object metric series."
+  }
+ ]
+}

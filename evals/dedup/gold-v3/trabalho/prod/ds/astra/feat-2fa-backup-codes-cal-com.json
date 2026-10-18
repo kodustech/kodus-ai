@@ -1,0 +1,17 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same non-atomic backup-code consumption that allows concurrent login requests to reuse a single-use code."
+  },
+  {
+   "id": "S2",
+   "match": "feat-2fa-backup-codes-cal-com#15",
+   "newGroup": null,
+   "reason": "Describes the same missing resetState cleanup of plaintext backup codes and failure to revoke the backup-codes object URL."
+  }
+ ]
+}

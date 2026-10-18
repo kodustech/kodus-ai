@@ -1,0 +1,50 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+   "newGroup": null,
+   "reason": "Same claim: the lenient DER sequence parser accepts malformed signatures (elements exceeding the declared sequence length)."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#06",
+   "newGroup": null,
+   "reason": "Same claim: resolving cached IDs one by one via getById causes N extra lookups in getForLogin."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "@sendgrid/client is imported (not undefined, unlike #07) but never given the API key, so cancellation requests are unauthenticated; different cause from #07."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "S2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#23",
+   "newGroup": null,
+   "reason": "Same claim: `end if` in embed/best.html.erb is invalid Ruby and breaks rendering."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Hostname validation regex limiting TLDs to five letters is not among the rejected claims."
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "S2",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Same claim: topicUnsubscribe route cannot find its template because it lives at topic/unsubscribe."
+  }
+ ]
+}

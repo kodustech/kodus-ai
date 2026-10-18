@@ -1,0 +1,30 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "prOriginal": {
+  "numero": 97529,
+  "url": "https://github.com/grafana/grafana/pull/97529",
+  "mergedAt": "2024-12-10",
+  "nota": "Given in in.json (prOriginalConhecido); confirmed: squash commit d762a96436 'Unified Storage: Init at startup, fix traces, and speed up indexing (#97529)' is the first search.go commit on main on 2024-12-10."
+ },
+ "tps": {
+  "unified-storage-performance-optimizations-grafana-codex#prod-01": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-09-11",
+    "pr": 110861,
+    "commit": "6fa6a5708a2b7766171da99cbdc9c637086bec90",
+    "url": "https://github.com/grafana/grafana/pull/110861"
+   },
+   "diasNoAr": 275,
+   "reason": "The bug depends on searchSupport.init subscribing its own WatchWriteEvents reader and draining it in a handleEvent goroutine before server.initWatcher subscribes the broadcaster. PR #110861 'Cleanup of old search functionality' (2025-09-11) removed indexing on watch events, deleting that WatchWriteEvents subscription and goroutine from search.go (bisected: present at b3cc317, gone at 6fa6a57). It was a broad cleanup, not a fix for this ordering. Today server.Init still runs search.init before initWatcher, but search no longer reads write events, so the described search-reader-before-broadcaster mechanism is gone.",
+   "astra": [
+    {
+     "pergunta": "Search's WatchWriteEvents reader was removed by #110861 but search.init still runs before initWatcher today: confirmado, pendente or descontinuado?",
+     "resposta": "descontinuado. #110861 removed the search watch subscription and draining goroutine as part of a broader rewrite, eliminating the reported mechanism without specifically fixing this bug. The remaining order can still leave a pre-subscription gap, but it no longer involves a search reader receiving events before the broadcaster subscribes.",
+     "veredito": "descontinuado"
+    }
+   ]
+  }
+ }
+}

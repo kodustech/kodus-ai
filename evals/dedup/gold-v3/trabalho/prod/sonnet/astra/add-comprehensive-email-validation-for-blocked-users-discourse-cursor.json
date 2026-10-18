@@ -1,0 +1,11 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Both describe bypassing the blocked-email lookup by changing address capitalization because the exact-match query lacks normalization."
+  }
+ ]
+}

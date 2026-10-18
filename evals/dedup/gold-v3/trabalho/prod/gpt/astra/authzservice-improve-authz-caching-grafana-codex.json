@@ -1,0 +1,11 @@
+{
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Both describe underscore-delimited denial cache keys colliding for different name/parent pairs, causing a cached denial for one resource to incorrectly deny another."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "Both describe the queued default being evaluated once at class definition, giving AssignmentSource instances a stale shared timestamp instead of their queue time."
+  }
+ ]
+}

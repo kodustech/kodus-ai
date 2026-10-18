@@ -1,0 +1,17 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "The comment addresses the public members page being truncated by the endpoint's page limit without pagination."
+  },
+  {
+   "id": "S2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+   "newGroup": null,
+   "reason": "The comment identifies the same missing primary_group_id cleanup when removing a member. The additional callback and counter-cache concern does not change that match."
+  }
+ ]
+}

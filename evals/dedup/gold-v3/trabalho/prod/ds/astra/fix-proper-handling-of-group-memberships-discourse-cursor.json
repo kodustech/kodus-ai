@@ -1,0 +1,23 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Both describe create ignoring the submitted alias_level, causing new groups to retain the model default instead of the admin's selection."
+  },
+  {
+   "id": "S2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Both describe the public members page being truncated to 50 members because the endpoint now paginates but the public view provides no pagination controls."
+  },
+  {
+   "id": "S3",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Both describe totalPages overcounting when user_count is an exact multiple of limit, enabling navigation to an extra empty page."
+  }
+ ]
+}

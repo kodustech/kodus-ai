@@ -1,0 +1,17 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "Both describe positional pairing of error_ids with unordered or incomplete nodestore results, which attaches event data to the wrong error IDs."
+  },
+  {
+   "id": "S2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Both describe comparing error timestamps in seconds with replay timestamps in milliseconds, causing incorrect chronological interleaving."
+  }
+ ]
+}

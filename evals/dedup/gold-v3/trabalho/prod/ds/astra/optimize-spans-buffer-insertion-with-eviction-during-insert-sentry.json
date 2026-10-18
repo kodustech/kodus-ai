@@ -1,0 +1,29 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Raises a separate concern about missing end_timestamp_precise causing a KeyError in process_batch. None of the golden issues describes missing-field handling."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims incorrect cardinality accounting causes excessive eviction, a different problem from the golden issues. The claim is false: ZUNIONSTORE returns the destination cardinality, so subtracting 1000 gives the correct overflow."
+  },
+  {
+   "id": "S3",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+   "newGroup": null,
+   "reason": "Describes timestamp-based eviction removing the root span while has_root_span remains set, exactly the listed root-preservation issue."
+  },
+  {
+   "id": "S4",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "Describes the hardcoded Lua cap of 1000 ignoring max_segment_spans, exactly the listed configuration issue."
+  }
+ ]
+}

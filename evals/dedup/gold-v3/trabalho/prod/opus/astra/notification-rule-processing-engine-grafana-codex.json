@@ -1,0 +1,29 @@
+{
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "notification-rule-processing-engine-grafana-codex#04",
+   "newGroup": null,
+   "reason": "The shared hook hardcodes isFederated=false, dropping the CombinedRule federation check and enabling modifications to federated rules."
+  },
+  {
+   "id": "S2",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "The prom-only list view enables Silence, but the drawer still requires a ruler alerting rule, so clicking Silence does nothing."
+  },
+  {
+   "id": "S3",
+   "match": "notification-rule-processing-engine-grafana-codex#01",
+   "newGroup": null,
+   "reason": "The comment includes the same ruler-rule rendering guard that hides Pause/Resume in the prom-only list view. It additionally covers the Delete guard described by issue #02."
+  },
+  {
+   "id": "S4",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "GrafanaRuleListItem lacks key={key} in the filtered list, causing missing-key warnings and incorrect row reconciliation."
+  }
+ ]
+}

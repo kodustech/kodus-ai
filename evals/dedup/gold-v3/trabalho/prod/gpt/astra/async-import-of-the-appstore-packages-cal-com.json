@@ -1,0 +1,11 @@
+{
+ "caseId": "async-import-of-the-appstore-packages-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "The comment describes the same unawaited async forEach callbacks in the reschedule cleanup loops, which discard calendar-construction rejections and bypass the surrounding try/catch."
+  }
+ ]
+}

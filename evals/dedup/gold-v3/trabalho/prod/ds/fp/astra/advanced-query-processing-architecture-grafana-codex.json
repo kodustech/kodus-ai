@@ -1,0 +1,11 @@
+{
+ "caseId": "advanced-query-processing-architecture-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "S1 claims stripping scoped variables leaves range-vector tokens unresolved in shard sub-requests. Issue #02 instead claims premature substitution of $__range causes incorrect partitioning; these are different defects and causes."
+  }
+ ]
+}

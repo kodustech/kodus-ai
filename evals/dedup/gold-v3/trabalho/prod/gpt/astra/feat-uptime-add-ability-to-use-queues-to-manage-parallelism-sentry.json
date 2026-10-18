@@ -1,0 +1,23 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Describes the factory reusing a pool shut down by the previous strategy, causing submission failures that are marked complete without processing."
+  },
+  {
+   "id": "S2",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "newGroup": null,
+   "reason": "Describes workers abandoning queued work because shutdown flags are set before draining, and the commit loop stopping before in-flight work finishes."
+  },
+  {
+   "id": "S3",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Describes unbounded worker queues and absent backpressure allowing pending work and memory usage to grow indefinitely."
+  }
+ ]
+}

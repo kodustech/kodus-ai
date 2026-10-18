@@ -1,0 +1,11 @@
+{
+ "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "S1 identifies discarded models on the cold-cache path, followed by redundant delegate lookups when per-IDP entries are absent. Issue #06 concerns resolving cached IDs through the per-IDP cache, rather than reloading models already fetched during cache population."
+  }
+ ]
+}

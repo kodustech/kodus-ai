@@ -1,0 +1,29 @@
+{
+ "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Directly saving the notification level omits the explicit-choice metadata, allowing automatic tracking to undo the unsubscribe."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The route's default template name does not match the new template's location, preventing the confirmation UI from rendering. This differs from the known client route issue of failing to perform the unsubscribe operation."
+  },
+  {
+   "id": "S3",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "The unchecked TopicUser lookup can return nil, causing notification_level access to raise a server error."
+  },
+  {
+   "id": "S4",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "The comment identifies the same CSRF vulnerability caused by mutating notification preferences through an authenticated GET request. Its additional repeated-visit observation does not change that match."
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment describes an incorrect class reference to _truncate_title that would raise AttributeError. None of the golden-set issues describes this problem."
+  },
+  {
+   "id": "S2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#12",
+   "newGroup": null,
+   "reason": "Both describe the feature-flagged TableWidgetVisualization receiving hardcoded empty props instead of the actual query results, causing blank table widgets."
+  }
+ ]
+}

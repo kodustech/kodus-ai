@@ -1,0 +1,41 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "The && permission check allows only owners and wrongly rejects team admins."
+  },
+  {
+   "id": "S2",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "It identifies the same blacklist bypass caused by comparing raw guest emails against a lowercased blacklist, with additional detail about attendee deduplication."
+  },
+  {
+   "id": "S3",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
+   "newGroup": null,
+   "reason": "It requests using the booking organizer and their credentials for EventManager, correcting the same use of the requesting user's credentials."
+  },
+  {
+   "id": "S4",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Passing raw guests misclassifies existing attendees as new and sends them scheduled emails instead of add-guests updates."
+  },
+  {
+   "id": "S5",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#11",
+   "newGroup": null,
+   "reason": "The unbounded server-side guests array permits unlimited inserts and invitation emails; the comment requests the same missing size limit."
+  },
+  {
+   "id": "S6",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+   "newGroup": null,
+   "reason": "The server does not deduplicate repeated emails within a single request, allowing createMany to insert duplicate attendees."
+  }
+ ]
+}

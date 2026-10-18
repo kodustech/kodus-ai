@@ -1,0 +1,24 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "prOriginal": {
+  "numero": 10967,
+  "url": "https://github.com/calcom/cal.diy/pull/10967",
+  "mergedAt": "2023-08-31",
+  "nota": "Upstream calcom/cal.com now redirects to calcom/cal.diy. Found by head branch fix-collective-events-have-only-one-team-attendee-on-the-google-event-7754-cal-1267; benchmark head de62829 is the PR's last commit and squash c4e5d168 has the same 22-file diff (only unrelated main-merge drift in imports). Files later moved: EventManager -> packages/features/bookings/lib, CalendarManager -> packages/features/calendars/lib, handleNewBooking -> service/RegularBookingService + handleNewBooking/loadUsers."
+ },
+ "tps": {
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2023-09-04",
+    "pr": 11139,
+    "commit": "889164195358a46e70229b913acb3576bd47fcfc",
+    "url": "https://github.com/calcom/cal.diy/pull/11139"
+   },
+   "removidoEm": null,
+   "diasNoAr": 4,
+   "reason": "PR #11139 'hotfix: missing gCal calendarId' (2023-09-04) moved the \"primary\" fallback into selectedCalendar itself (`...find(cal => cal.credentialId === credentialId)?.externalId || \"primary\"`), so the hangout-link events.patch no longer receives an undefined calendarId. Today's main (packages/app-store/googlecalendar/lib/CalendarService.ts createEvent) keeps `externalCalendarId ?? (find(...)?.externalId || \"primary\")` and passes selectedCalendar to both insert and patch.",
+   "astra": []
+  }
+ }
+}

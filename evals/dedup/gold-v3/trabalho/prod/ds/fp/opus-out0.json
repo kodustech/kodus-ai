@@ -1,0 +1,222 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing ServiceLoader provider breaking AuthzClient.create when shaded; no rejected issue covers CryptoIntegration.init robustness."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#03",
+   "newGroup": null,
+   "reason": "Same claim as #03: cache-hit path of getForLogin returns non-organization-aware models."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#13",
+   "newGroup": null,
+   "reason": "Same claim as #13: hasPermission(client, scope) lacks a resource-id filter so permissions on other resources grant access."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Stale rejectedEmails entries never cleared after server unblocks; differs from #01 (normalised email) and #03 (dependent key)."
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing resource-id guard in GroupPermissionsV2 scope matching; no rejected issue claims this (oph-01 is about missing canView fallback)."
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims newly added guests are never injected into the event so they get no invite; #07 is about email casing, a different cause."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "attendees[0] undefined TypeError in organizer email template; not among rejected issues."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "PropertyResourceBundle ISO-8859-1 vs UTF-8 decoding mismatch; no rejected issue covers encoding."
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims $__auto/$__range tokens are left unresolved (stripped from scopedVars); #02 claims the opposite, that $__range gets substituted and splits wrongly."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims the nodes.go TypeSQL path bypasses enableSqlExpressions; rejected issues are about the flag always returning false or the stub DB."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Full COUNT(*) over device table on every anonymous request (performance); not among rejected issues."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Retry closure re-prepends query to args, misbinding parameters; not among rejected issues."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Same claim as oph-01 (and #02): cached denial keeps newly created/granted resources denied for the short cache TTL."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "S2",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#08",
+   "newGroup": null,
+   "reason": "Same claim as #08: unscheduledReminders query lacks a cancelled filter so cancelled reminders are re-scheduled."
+  },
+  {
+   "id": "S3",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+   "newGroup": null,
+   "reason": "Same claim as #12/sncc-01/oph-02: immediateDelete branch cancels SendGrid but leaves the WorkflowReminder row."
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Delete-cache action not gated on delegationCredentialId; #02 is about updatedAt source."
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Caching sentinel tests removed, leaving caching untested; not among rejected issues."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims status sync loops because assignment_source is never applied to the status guard; #05 claims the parameter is on the wrong method, a different problem."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Commit loop CPU proportional to offset span with sparse offsets; not among rejected issues."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "NoMethodError when I18n.fallbacks is not a FallbackLocaleList; #04 is about nil default_locale."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Token exchange omits redirect_uri; not among rejected issues."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "installation_id literal \"null\" passes the None check; not among rejected issues."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "S1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#07",
+   "newGroup": null,
+   "reason": "Same claim as #07: Optional.get() on the recovery-codes credential without presence check throws NoSuchElementException."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Test storage returns a round-tripped credential not reflecting stored state; oph-04 is about accepting any code, a different problem."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "S1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-02",
+   "newGroup": null,
+   "reason": "Same claim as sncc-02/#07: missing end_timestamp_precise raises KeyError and fails the batch."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "span_count from zunionstore counts pre-existing set_key spans causing over-eviction; #02 is about self-union unlinking, different."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "_truncate_title referenced on the wrong class raising AttributeError; not among rejected issues."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "S2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#09",
+   "newGroup": null,
+   "reason": "Same claim as #09: max-flush-segments becomes per-process, multiplying the flush ceiling by process count."
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Events between search watcher start and initWatcher miss the broadcaster/Watch subscribers; #06 claims they miss the search index, a different victim."
+  }
+ ]
+}

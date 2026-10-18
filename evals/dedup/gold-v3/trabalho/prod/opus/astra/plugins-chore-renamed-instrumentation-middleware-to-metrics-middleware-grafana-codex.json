@@ -1,0 +1,11 @@
+{
+ "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Both describe TestLogger.FromContext returning a fresh logger, causing contextual log calls to bypass the original fake and its assertions. Returning the receiver fixes the same problem."
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "The duplicate downsize definition overrides the width/height signature, causing ResizeEmoji's existing five-argument call to raise ArgumentError."
+  },
+  {
+   "id": "S2",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "The hardcoded 10 MB client limit rejects attachments that the configured max_attachment_size_kb permits."
+  }
+ ]
+}

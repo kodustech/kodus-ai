@@ -1,0 +1,34 @@
+{
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+    {
+      "id": "S2",
+      "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+      "newGroup": null,
+      "reason": "Same claim: negative length from readLength reaches array allocation in readInteger, throwing unchecked NegativeArraySizeException instead of IOException."
+    }
+  ],
+  "authzservice-improve-authz-caching-grafana-codex": [
+    {
+      "id": "S2",
+      "match": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+      "newGroup": null,
+      "reason": "Same claim: denial cache checked before permission lookups and never invalidated, keeping new grants/resources denied for shortCacheTTL."
+    }
+  ],
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+    {
+      "id": "S1",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "SQL operator precedence from unparenthesized OR fragment in getBaseConditions; no rejected issue covers this."
+    }
+  ],
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+    {
+      "id": "S7",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Undefined calendarId passed to events.patch when no destination calendar matches credentialId; #01 is about dereferencing undefined mainHostDestinationCalendar, a different cause."
+    }
+  ]
+}

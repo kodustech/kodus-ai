@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+ "items": [
+  {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-01",
+   "class": "TP",
+   "subclass": "nit",
+   "severity": "low",
+   "reply": "Changed to TP/nit, low. The PR removes both caching tests, losing explicit coverage of the cached-return branches, but the getters\u2019 sentinel and assignment logic remain unchanged. The deleted tests only checked deep equality, so they would also pass if conditions were rebuilt on every call. This is minor coverage loss for existing logic, not an unverified behavioral change warranting medium severity."
+  }
+ ]
+}

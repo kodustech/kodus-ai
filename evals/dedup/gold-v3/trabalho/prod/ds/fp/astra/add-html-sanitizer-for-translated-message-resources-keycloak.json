@@ -1,0 +1,11 @@
+{
+ "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+ "items": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This alleges inconsistent character decoding between PropertyResourceBundle and Files.readString, causing spurious HTML validation failures. None of the rejected issues concerns character encoding."
+  }
+ ]
+}

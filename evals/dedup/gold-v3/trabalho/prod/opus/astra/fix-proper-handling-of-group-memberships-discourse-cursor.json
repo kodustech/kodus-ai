@@ -1,0 +1,23 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+   "newGroup": null,
+   "reason": "Both describe adding existing members without a duplicate check, causing a unique-index violation and a 500 after earlier users may already have been added."
+  },
+  {
+   "id": "S2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Both describe the public members page being truncated to 50 members because it fetches once and has no pagination controls."
+  },
+  {
+   "id": "S3",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+   "newGroup": null,
+   "reason": "Both describe direct membership deletion skipping primary_group_id cleanup, leaving removed users with the group as their primary group."
+  }
+ ]
+}

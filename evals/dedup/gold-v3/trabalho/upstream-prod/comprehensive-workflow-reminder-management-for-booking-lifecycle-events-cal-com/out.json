@@ -1,0 +1,24 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "prOriginal": {
+  "numero": 7232,
+  "url": "https://github.com/calcom/cal.diy/pull/7232",
+  "mergedAt": "2023-02-20",
+  "nota": "calcom/cal.com now redirects to calcom/cal.diy. Found via head branch fix/cancelled-rescheduled-workflow-emails; PR head 6048e2a8 equals the benchmark head (same 8 commits), merged as 2ebfcf448. On 2026-04-15 PR #28903 'refactor: Cal.diy' removed packages/features/ee (all workflow code) from the default branch."
+ },
+ "tps": {
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#prod-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2023-10-27",
+    "pr": 12108,
+    "commit": "08d65c85de809093ee91a542adb5e344c55e5441",
+    "url": "https://github.com/calcom/cal.diy/pull/12108"
+   },
+   "removidoEm": null,
+   "diasNoAr": 249,
+   "reason": "Versions of packages/features/ee/workflows/api/scheduleEmailReminders.ts from the merge through 0c92fbe11d (2023-10-18) only call sgMail.setApiKey while using client.request for cancellations. PR #12108 'fix: cron scheduleEmailRemider time out' (2023-10-27) added `client.setApiKey(sendgridAPIKey)` next to sgMail.setApiKey, authenticating the @sendgrid/client requests; from #13123 (2024-01-10) cancellation moved to sendgridProvider helpers. The whole workflows code was later removed by #28903 (2026-04-15), after the fix.",
+   "astra": []
+  }
+ }
+}

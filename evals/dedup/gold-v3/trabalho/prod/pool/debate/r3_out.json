@@ -1,0 +1,16 @@
+{
+ "unified-storage-performance-optimizations-grafana-codex#prod-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "medium",
+  "concede": false,
+  "text": "Final: FP hallucination. (1) The comment's stated mechanism is false and both sides agree: events are not 'consumed by the search reader'; each WatchWriteEvents call creates its own cursor, channel and poller (sql/backend.go:558-567 `since, err := b.listLatestRVs(ctx)` ... `go b.poller(ctx, since, stream)`), so the proposed 'single shared event source' fixes nothing. (2) Astra's replacement defect (writes landing between the two subscriptions are absent from the broadcaster cache) is not a regression this PR introduces. In base, Init was lazy: it ran on the first Create/Read/List/Watch request (the removed `if err := s.Init(ctx)` blocks in the server.go diff), so the broadcaster's cursor started at first-request time and every write before that was absent from the cache too. In head, NewResourceServer blocks on Init (server.go:258-262) and initWatcher runs at server.go:308-311 before the server is returned, so the broadcaster starts no later than the first request could ever arrive. Writes from another replica before broadcaster start were outside the cache in base and remain so in head; the window is not new. Rule: a human should decide whether 'events written before the broadcaster subscribes are not replayable' counts as introduced by the reorder; I hold it does not, given base started the broadcaster even later."
+ },
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01": {
+  "class": "TP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede to TP none, medium. The rubric reserves nit for non-behavioural concerns (naming, style, docs, dead code); this is observable wrong behaviour in an edge case, which the severity rubric rates medium rather than making it a nit. The PR adds rejectedEmails (create_account_controller.js:17), pushes any address the server rejected with an email error (:274-276), and fails it unconditionally at :69-74, which disables submit (:22), with no invalidation, so a now-valid address cannot be retried until reload."
+ }
+}

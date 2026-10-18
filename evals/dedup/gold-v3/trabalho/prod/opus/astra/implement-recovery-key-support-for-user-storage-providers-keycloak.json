@@ -1,0 +1,17 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+   "newGroup": null,
+   "reason": "Describes the same failure to consume successfully validated federated recovery codes, allowing replay and preventing exhaustion."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes a missing null guard for getMyUser in getCredentials, causing a NullPointerException. None of the golden issues covers this missing-user handling problem."
+  }
+ ]
+}

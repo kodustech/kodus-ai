@@ -1,0 +1,11 @@
+{
+ "caseId": "dual-storage-architecture-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "dual-storage-architecture-grafana-codex#sncc-01",
+   "newGroup": null,
+   "reason": "Both describe Delete returning early on unified-storage NotFound, preventing deletion of objects that exist only in legacy storage. Tolerating NotFound and continuing to the legacy delete fixes the same problem."
+  }
+ ]
+}

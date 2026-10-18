@@ -1,0 +1,11 @@
+{
+ "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "newGroup": null,
+   "reason": "Both describe the unguarded retry-count update inside the catch block: if it throws, it aborts the cron run and skips the remaining reminders."
+  }
+ ]
+}

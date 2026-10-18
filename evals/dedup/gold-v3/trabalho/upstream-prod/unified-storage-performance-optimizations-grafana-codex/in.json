@@ -1,0 +1,24 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "prTitle": "Unified Storage Performance Optimizations",
+ "upstream": "grafana/grafana",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/grafana",
+ "base": "871af07203177ce59a24e742107119409274f48a",
+ "head": "26fed312840cd76b766cbd2158e17a7e6c0ec548",
+ "prOriginalConhecido": {
+  "numero": 97529,
+  "url": "https://github.com/grafana/grafana/pull/97529",
+  "mergedAt": "2024-12-10",
+  "nota": "Found by head branch 'unified-storage-dont-lazy-init' (benchmark head is a merge commit on that branch). Upstream title: 'Unified Storage: Init at startup, fix traces, and speed up indexing', squash-merged as d762a96436. The squash diff's +/- lines are identical to the benchmark base..head diff."
+ },
+ "tps": [
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#prod-01",
+   "severity": "high",
+   "category": "bug",
+   "bug": "Any write events arriving between the search watcher starting and `initWatcher` subscribing are consumed by the search reader but never reach the broadcaster, so Watch subscribers silently miss those changes. Subscribe the broadcaster by calling `initWatcher` before starting the search event-draining goroutine, or have both consume from a single shared event source.",
+   "evidenciaOpus": "I concede the cache point: broadcaster.go:211 replays b.cache (100 items, :169) to new subscribers, so my 'never replayable' was wrong. The label still holds. The comment says events are 'consumed by the search reader but never reach the broadcaster' and proposes a 'single shared event source'. You agree that mechanism is false: each WatchWriteEvents call gets its own channel and poller (sql/backend.go:558-567). Also, no write through this server can land in the window, because NewResourceServer returns only after Init (server.go:258-262) and the per-request Init calls are gone. A client's Since that comes from this server is therefore later than the broadcaster's start. The only remaining case is a write from another replica during search init, replayed later only through a 100-item cache",
+   "evidenciaAstra": "I retain TP: independent channels do not prevent the subscription gap, because each SQL WatchWriteEvents call initializes its cursor from the latest database versions. A write from another replica between subscriptions reaches search but is excluded from the broadcaster\u2019s stream and replay cache. Previously, initWatcher ran first, allowing those events to be cached and replayed to subsequent Watch requests with an earlier Since. Constructor-time initialization does not prohibit such requests, and restoring the earlier broadcaster subscription addresses this exact loss without requiring competing channel consumers."
+  }
+ ]
+}

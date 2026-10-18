@@ -1,0 +1,17 @@
+{
+ "caseId": "dual-storage-architecture-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "The asynchronous legacy writes inherit request cancellation and can be canceled when the handler returns. This is the same context-lifetime problem."
+  },
+  {
+   "id": "S2",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "The comment explicitly identifies Delete passing the object name into the kind label at line 106, matching #03. Its broader metrics critique also includes the problems described by #02 and #04."
+  }
+ ]
+}

@@ -1,0 +1,24 @@
+{
+ "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+ "prTitle": "feat: convert InsightsBookingService to use Prisma.sql raw queries",
+ "upstream": "calcom/cal.com",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/cal.com",
+ "base": "c9a47dd0cebd121ff73f24e1f8c1829579daf8e3",
+ "head": "da09bc0808e7c6df1bc10e00d5acf764d94c7cc7",
+ "prOriginalConhecido": {
+  "numero": 22345,
+  "url": "https://github.com/calcom/cal.diy/pull/22345",
+  "mergedAt": "2025-07-15",
+  "nota": "Found via gh api commits/<head>/pulls; PR headRefOid equals the benchmark head da09bc0808; squash commit 967442892a has no diff vs head in packages/lib/server/service/. calcom/cal.com now redirects to calcom/cal.diy."
+ },
+ "tps": [
+  {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-02",
+   "severity": "high",
+   "category": "bug",
+   "bug": "getBaseConditions returns top-level OR fragments without parentheses, so a caller that appends further AND conditions changes the SQL precedence and widens the org/team authorization filter.",
+   "evidenciaOpus": "Conceding the class. The PR removed findMany (the encapsulated consumer) and made getBaseConditions the public fragment API, but it parenthesizes only the combined case: insightsBooking.ts:73 `(${authConditions}) AND (${filterConditions})` vs :75 `return authConditions;`, and org/team auth is a top-level OR (:173, :206 `(${acc}) OR (${condition})`). Any caller composing `WHERE ${base} AND ...` leaks the first OR branch, so the returned contract is unsafe even if no caller composes it yet. Severity high rather than critical: it needs a caller to append a predicate, a security weakness under specific conditions.",
+   "evidenciaAstra": "packages/lib/server/service/insightsBooking.ts:74-75 returns authorization conditions without enclosing parentheses when filters are absent, while lines 173 and 206 produce top-level OR expressions. Appending AND therefore constrains only the second authorization branch, allowing the first branch to bypass the extra predicate; the event-type fragment is already safely grouped when combined at lines 73 and 121."
+  }
+ ]
+}

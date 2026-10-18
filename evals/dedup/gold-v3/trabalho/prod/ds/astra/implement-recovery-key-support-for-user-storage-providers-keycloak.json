@@ -1,0 +1,17 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes unchecked empty Optionals when rendering the recovery-code form. This differs from the golden issue concerning LDAP lookup exceptions and from exhausted-credential removal."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Alleges corrupted counts and hashes during reconstruction, rather than the golden issues of missing credential ID or failure to consume codes. The stored data is actually a raw-code list, so converting it directly with createFromCredentialModel would not support its format."
+  }
+ ]
+}

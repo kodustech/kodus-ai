@@ -1,0 +1,17 @@
+{
+ "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same topic metadata link regression: the light-theme lightness changed from 30% to 70%. Restoring the 30%/70% pair fixes the golden issue at the same location."
+  },
+  {
+   "id": "S2",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Describes the same mobile h3 light-theme regression from 20% to 50%. Restoring the 20%/80% pair fixes the golden issue at the same location."
+  }
+ ]
+}

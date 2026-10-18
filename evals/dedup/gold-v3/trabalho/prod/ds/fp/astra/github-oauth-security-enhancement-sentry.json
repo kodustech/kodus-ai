@@ -1,0 +1,17 @@
+{
+ "caseId": "github-oauth-security-enhancement-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims the token exchange fails because redirect_uri is omitted. None of the rejected issues concerns token exchange parameters."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims a literal \"null\" installation_id bypasses the absence check and causes a failed lookup. This differs from the rejected claim about missing github_authenticated_user state and matches no other rejected issue."
+  }
+ ]
+}

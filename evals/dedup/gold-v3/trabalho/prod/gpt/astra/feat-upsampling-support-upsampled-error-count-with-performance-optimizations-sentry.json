@@ -1,0 +1,17 @@
+{
+ "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#08",
+   "newGroup": null,
+   "reason": "Both describe top-N selection and ordering using raw count() while the displayed timeseries uses weighted counts, causing inconsistent group ranking."
+  },
+  {
+   "id": "S2",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Both describe the substring check incorrectly classifying mixed error/transaction queries as error-only and replacing count() with weighted aggregation."
+  }
+ ]
+}

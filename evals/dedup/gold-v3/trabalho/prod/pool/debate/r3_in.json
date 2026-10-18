@@ -1,0 +1,138 @@
+{
+ "unified-storage-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "871af07203177ce59a24e742107119409274f48a",
+  "head": "26fed312840cd76b766cbd2158e17a7e6c0ec548",
+  "issues": {
+   "unified-storage-performance-optimizations-grafana-codex#prod-01": {
+    "comentarios": [
+     {
+      "gid": "prod-ds:S1",
+      "file": "pkg/storage/unified/resource/server.go",
+      "lines": [
+       303,
+       311
+      ],
+      "texto": "Any write events arriving between the search watcher starting and `initWatcher` subscribing are consumed by the search reader but never reach the broadcaster, so Watch subscribers silently miss those changes. Subscribe the broadcaster by calling `initWatcher` before starting the search event-draining goroutine, or have both consume from a single shared event source."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "text": "backend.WatchWriteEvents (sql/backend.go:558-567) starts a separate poller and channel for each caller, so search.init's stream (search.go:203) and initWatcher's stream (server.go:755) are independent; the search reader cannot consume the broadcaster's events. Init now also runs inside NewResourceServer (server.go:258) before any Watch subscriber can exist."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "The PR starts search watching before initializing the broadcaster (pkg/storage/unified/resource/server.go:303-310; search.go:203-213). Each SQL WatchWriteEvents call starts from the latest database versions, so writes between those subscriptions are excluded from the broadcaster\u2019s stream (pkg/storage/unified/sql/backend.go:558-567). A subsequent Watch requesting an earlier Since cannot recover those events: it only filters the broadcaster stream without fetching historical changes (pkg/storage/unified/resource/server.go:847-867)."
+     },
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "text": "Keeping FP hallucination. The comment's mechanism is false: the search reader does not consume the broadcaster's events; each caller gets its own poller and channel (sql/backend.go:558-567 `stream := make(chan *resource.WrittenEvent); go b.poller(ctx, since, stream)`), so search.go:203 and server.go:755 are independent streams. And no Watch subscriber can exist in the window: Init now runs inside NewResourceServer (server.go:258 `err := s.Init(ctx)`) before the server is returned. Events before the broadcaster starts were never replayable to Watch even with the old order (Watch only filters the live broadcaster stream, server.go:847-867), so the reorder creates no new loss for any subscriber.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "I retain TP: the streams are independent, but the reorder introduces a gap in replayable events. In both base and head, broadcaster.go caches incoming events with cache.Add and replays them to new subscribers with cache.ReadInto, contradicting the claim that earlier events were never replayable. Previously, initWatcher started before search initialization, allowing intervening writes to reach that cache even without subscribers. Now SQL WatchWriteEvents initializes its cursor from the latest database versions after search initialization, excluding intervening writes from subsequent Watch requests with an earlier Since. Constructor-time initialization therefore does not eliminate the loss; the defect is the later subscription cursor, not competing channel consumers."
+     },
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "text": "I concede the cache point: broadcaster.go:211 replays b.cache (100 items, :169) to new subscribers, so my 'never replayable' was wrong. The label still holds. The comment says events are 'consumed by the search reader but never reach the broadcaster' and proposes a 'single shared event source'. You agree that mechanism is false: each WatchWriteEvents call gets its own channel and poller (sql/backend.go:558-567). Also, no write through this server can land in the window, because NewResourceServer returns only after Init (server.go:258-262) and the per-request Init calls are gone. A client's Since that comes from this server is therefore later than the broadcaster's start. The only remaining case is a write from another replica during search init, replayed later only through a 100-item cache. That is not the defect the comment describes and not one its fix addresses.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "I retain TP: independent channels do not prevent the subscription gap, because each SQL WatchWriteEvents call initializes its cursor from the latest database versions. A write from another replica between subscriptions reaches search but is excluded from the broadcaster\u2019s stream and replay cache. Previously, initWatcher ran first, allowing those events to be cached and replayed to subsequent Watch requests with an earlier Since. Constructor-time initialization does not prohibit such requests, and restoring the earlier broadcaster subscription addresses this exact loss without requiring competing channel consumers."
+     }
+    ]
+   }
+  }
+ },
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "e25638dab0d4b98f99c8fe8976ccaae8f4fb9db3",
+  "head": "5f8a130277dbddc95d133cd2832be639baf89213",
+  "issues": {
+   "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01": {
+    "comentarios": [
+     {
+      "gid": "prod-ds:S2",
+      "file": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+      "lines": [
+       69,
+       74
+      ],
+      "texto": "After the server stops blocking the address (e.g. an admin removes the `BlockedEmail` rule), the user still cannot submit because `emailValidation` returns failed from the stale `rejectedEmails` entry, and this persists for the lifetime of the controller. Clear or remove entries from `rejectedEmails` when the email input changes, or reset it when the modal is reopened."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "text": "create_account_controller.js:17 adds a controller-level rejectedEmails array, filled on server email errors (:274-276) and checked first in emailValidation (:69-74) with no reset anywhere. The stale entry only matters if the server-side block is lifted while the singleton controller stays alive, a rare case solved by reloading the page."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The PR adds rejected addresses to an array that is never cleared (app/assets/javascripts/discourse/controllers/create_account_controller.js:275), and cached matches fail validation at line 69, disabling submission at line 22. Removing the server rule would allow validation again (app/models/blocked_email.rb:12\u201318), but editing the input or reopening the modal does not invalidate the client cache. This prevents retrying the now-valid address until the page is reloaded."
+     },
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "text": "Keeping nit. The client cache is intentional: create_account_controller.js:275 pushes only server-rejected emails (`if (result.errors && result.errors.email && result.values)`), and :69 short-circuits them so the user is not sent to resubmit a known-bad address. It only goes stale if an admin lifts the BlockedEmail rule during the same page session, and a reload clears it. Real but a corner-case UX staleness, not a defect a reviewer would block on.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The PR adds rejectedEmails, appends server-rejected addresses at line 275, and unconditionally fails their subsequent validation at lines 69\u201374, disabling submission. No cache invalidation allows retrying an address after its server-side block is removed. This is user-visible incorrect behavior, so it remains a reportable defect rather than a nit; the uncommon trigger and reload workaround support medium severity."
+     },
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "text": "Keeping nit. rejectedEmails (create_account_controller.js:17) only stores addresses the server just rejected (:274-276), and :69-74 fails them on the client so the user does not resubmit a known-bad address. That is the intended design. The cache only goes stale if an admin removes the BlockedEmail rule for that exact address while the anonymous visitor keeps the same page open. Even then a reload fixes it, and switching to another email still works. Nothing is wrong for any realistic signup; it is a corner-case staleness a reviewer would not raise. Severity stays medium, as the comment states it.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The PR adds rejectedEmails, appends server-rejected addresses at line 275, and fails validation for cached matches at lines 69\u201374 without any invalidation. That failure disables submission even after the server-side block is removed. Intentional caching does not make stale rejection correct; blocking a now-valid signup is observable wrong behavior, not a nit. The uncommon trigger and reload workaround support medium severity."
+     }
+    ]
+   }
+  }
+ }
+}

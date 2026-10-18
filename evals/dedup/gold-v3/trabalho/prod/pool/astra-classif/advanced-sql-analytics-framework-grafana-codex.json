@@ -1,0 +1,12 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "items": [
+  {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#prod-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The unguarded branch at pkg/expr/nodes.go:159-160 does reach sql.TablesList, but pkg/expr/sql/parser.go:23-29 now uses the PR's local database stub. Its RunCommands unconditionally returns \"not implemented\" (pkg/expr/sql/db.go:16-17), so no DuckDB parsing or execution occurs and the claimed RCE/LFI path is unreachable.",
+   "severity": "critical"
+  }
+ ]
+}

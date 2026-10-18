@@ -1,0 +1,11 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "S1 claims the search reader consumes events before the broadcaster subscribes, causing Watch subscribers to miss changes. Rejected issue #06 instead claims changes never reach the search index; these are different event-delivery defects despite involving the same initialization order."
+  }
+ ]
+}

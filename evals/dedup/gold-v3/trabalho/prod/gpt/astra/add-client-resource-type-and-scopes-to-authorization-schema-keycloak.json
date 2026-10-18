@@ -1,0 +1,23 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+   "newGroup": null,
+   "reason": "Both describe global VIEW short-circuiting client-specific denials, allowing denied clients to be read and listed."
+  },
+  {
+   "id": "S2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "newGroup": null,
+   "reason": "Both describe getClientsWithPermission enumerating the type-level Clients resource instead of actual client IDs, causing incorrect results or null client dereferences."
+  },
+  {
+   "id": "S3",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+   "newGroup": null,
+   "reason": "Both identify the missing global MANAGE grant in ClientPermissionsV2.canView(). Including that grant fixes the shared predicate defect, although this comment describes a different consequence."
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+   "newGroup": null,
+   "reason": "Both describe missing connectedCalendars query invalidation after cache deletion, leaving the dropdown's cache status stale."
+  },
+  {
+   "id": "S2",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+   "newGroup": null,
+   "reason": "Both describe the macOS-only sed invocation failing on GNU sed, leaving GOOGLE_WEBHOOK_URL unchanged while the script reports success."
+  }
+ ]
+}

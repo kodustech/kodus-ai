@@ -1,0 +1,23 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "newGroup": null,
+   "reason": "Describes the same rollout incompatibility: sorted-set operations encounter legacy Redis SET keys under unchanged key names and fail with WRONGTYPE."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes a missing end_timestamp_precise field causing an entire ingestion batch to fail. None of the golden issues covers missing-field handling."
+  },
+  {
+   "id": "S3",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "Describes the same ignored max_segment_spans setting after removal of the flush-time guard and introduction of a hardcoded Lua cap of 1000."
+  }
+ ]
+}

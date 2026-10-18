@@ -1,0 +1,17 @@
+{
+ "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "Describes the same SpawnProcess type-check mismatch that prevents killing hung workers before starting replacements, leaving overlapping flushers."
+  },
+  {
+   "id": "S2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "Describes the same join() deadline break that skips cleanup of remaining workers. Its additional type-check observation and flawed continue suggestion do not change the underlying matching problem."
+  }
+ ]
+}

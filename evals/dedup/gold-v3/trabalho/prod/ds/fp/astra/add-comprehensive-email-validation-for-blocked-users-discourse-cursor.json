@@ -1,0 +1,11 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "items": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This claims cached rejections remain stale after the server unblocks an address. None of the rejected issues concerns cache invalidation; #01 concerns normalized versus raw email matching, and #03 concerns observing array updates."
+  }
+ ]
+}

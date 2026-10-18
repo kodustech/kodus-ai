@@ -1,0 +1,19 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "prOriginal": {
+  "numero": 79265,
+  "url": "https://github.com/grafana/grafana/pull/79265",
+  "mergedAt": "2023-12-12",
+  "nota": "Found by title with gh pr list (branch jguer/add-anon-device-limit). Its last commit is the benchmark head bbd8c507; squash-merged as 3647ba73 on 2023-12-12, and database.go, impl.go and client.go at the merge commit are byte-identical to the benchmark head. The benchmark base/head diff also contains unrelated social-login and ssosettings changes that are not part of #79265."
+ },
+ "tps": {
+  "anonymous-add-configurable-device-limit-grafana-codex#prod-02": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1040,
+   "reason": "On grafana main today, pkg/services/anonymous/anonimpl/anonstore/database.go updateDevice still does `args = append([]interface{}{query}, args...)` inside the WithDbSession callback and Exec(args...), and is still called from CreateOrUpdateDevice. sqlstore/session.go withDbSession still wraps the callback in retryer.Retry(ss.retryOnLocks(...)), which re-invokes the same callback on retryable lock errors. The file's later commits (#80028, Spanner/lint/test changes) did not touch this.",
+   "astra": []
+  }
+ }
+}

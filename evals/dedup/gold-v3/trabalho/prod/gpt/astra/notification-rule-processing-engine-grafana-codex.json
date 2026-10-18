@@ -1,0 +1,23 @@
+{
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "notification-rule-processing-engine-grafana-codex#02",
+   "newGroup": null,
+   "reason": "The comment includes the same missing Delete action caused by requiring a ruler rule after list rows switch to promRule-only. It also covers the Pause problem in issue #01."
+  },
+  {
+   "id": "S2",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "The Silence action updates state but cannot mount its drawer because the mounting condition still requires the absent ruler alerting rule."
+  },
+  {
+   "id": "S3",
+   "match": "notification-rule-processing-engine-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Delegation drops the group-aware federation check and hardcodes isFederated=false, incorrectly enabling Update/Delete for federated Mimir groups."
+  }
+ ]
+}

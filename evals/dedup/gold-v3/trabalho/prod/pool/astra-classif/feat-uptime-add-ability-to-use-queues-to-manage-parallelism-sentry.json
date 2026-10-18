@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#prod-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "In src/sentry/remote_subscriptions/consumers/queue_consumer.py:89-93, the loop breaks at the first missing or outstanding offset, so it never traverses a large gap. Its iterations are bounded by the number of tracked offsets plus one; the min/max scans at lines 83-84 likewise depend on tracked-set size, not the numeric span.",
+   "severity": "medium"
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same non-atomic backup-code consumption: concurrent sign-ins validate the same snapshot and unconditionally overwrite it, allowing a code to be reused."
+  },
+  {
+   "id": "S2",
+   "match": "feat-2fa-backup-codes-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the same missing onEnable callback when the backup-codes dialog is dismissed through Escape or the overlay, leaving the parent showing 2FA as disabled."
+  }
+ ]
+}

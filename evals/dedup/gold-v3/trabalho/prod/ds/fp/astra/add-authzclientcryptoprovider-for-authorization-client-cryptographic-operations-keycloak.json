@@ -1,0 +1,11 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment claims eager CryptoIntegration.init makes client creation fail when repackaging drops ServiceLoader provider files. None of the rejected issues concerns provider discovery or initialization failures in AuthzClient.create."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Both describe MetricAlertDetectorHandler becoming uninstantiable because it inherits StatefulDetectorHandler without implementing its four abstract members, causing Detector.detector_handler to raise TypeError."
+  }
+ ]
+}

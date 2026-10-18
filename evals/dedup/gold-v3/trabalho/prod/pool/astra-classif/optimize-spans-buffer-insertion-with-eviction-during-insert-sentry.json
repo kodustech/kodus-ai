@@ -1,0 +1,12 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#prod-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "src/sentry/scripts/spans/add-buffer.lua:47 and :53 assign, rather than accumulate, the destination cardinality returned by ZUNIONSTORE, so span_count already equals the final merged set size. Lines 58\u201363 obtain that same cardinality when no union occurs and evict exactly the excess above 1000; pre-existing spans are not double-counted, and the proposed ZCARD would yield the same count.",
+   "severity": "high"
+  }
+ ]
+}

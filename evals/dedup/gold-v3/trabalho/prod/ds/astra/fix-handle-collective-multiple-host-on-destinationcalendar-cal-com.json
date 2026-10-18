@@ -1,0 +1,35 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Describes the same fallback lookup comparing destination externalId to a falsy externalCalendarId, losing the configured calendar for updates and deletes."
+  },
+  {
+   "id": "S2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Restores the optional-chaining guard at the same Meet fallback dereference, preventing a crash when the main host destination calendar is absent."
+  },
+  {
+   "id": "S3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+   "newGroup": null,
+   "reason": "Describes the same location-edit reference mapping that reads credentialId and externalId from updateEvent results that omit both fields, losing routing information."
+  },
+  {
+   "id": "S4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#06",
+   "newGroup": null,
+   "reason": "Describes the same undefined credential passed to updateEvent when the reference's credentialId cannot be resolved."
+  },
+  {
+   "id": "S5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Describes the same optional push into a null destinationCalendar that silently drops co-host destinations when the organizer has none."
+  }
+ ]
+}

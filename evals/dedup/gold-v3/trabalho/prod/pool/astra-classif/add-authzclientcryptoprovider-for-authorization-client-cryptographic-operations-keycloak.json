@@ -1,0 +1,12 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#prod-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "AuthzClient.java:95 does initialize crypto before construction, and common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:60-61 throws when no provider is found. However, authz/client/src/main/resources/META-INF/services/org.keycloak.common.crypto.CryptoProvider:20 explicitly registers the provider shipped by this PR. The alleged failure depends on downstream repackaging deleting required resources; the code does not establish a defective packaging path or a need to suppress initialization failures.",
+   "severity": "high"
+  }
+ ]
+}

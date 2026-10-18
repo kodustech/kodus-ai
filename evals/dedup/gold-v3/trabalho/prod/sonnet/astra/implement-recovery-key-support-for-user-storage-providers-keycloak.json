@@ -1,0 +1,11 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+   "newGroup": null,
+   "reason": "The comment describes the same cleanup bug: removeStoredCredentialById only targets local storage, leaving an exhausted federated recovery-codes credential in user storage."
+  }
+ ]
+}

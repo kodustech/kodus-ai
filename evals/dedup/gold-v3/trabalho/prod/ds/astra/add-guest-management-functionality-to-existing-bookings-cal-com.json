@@ -1,0 +1,29 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "Identifies the same incorrect && permission check that rejects team admins; changing it to OR fixes the issue."
+  },
+  {
+   "id": "S2",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Explicitly identifies the case-sensitive blacklist bypass and fixes it by normalizing guest emails. It also covers the existing-attendee deduplication problem described in #05."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims new guests are absent from the email event, but the handler builds its attendees from the updated booking, including newly inserted guests. This differs from #06, which concerns existing attendees being misclassified through the raw guests argument."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Describes an unguarded attendees[0] access, which no golden issue covers. The normal add-guests flow supplies at least one newly inserted attendee, so the proposed empty-array scenario is not established by that flow."
+  }
+ ]
+}

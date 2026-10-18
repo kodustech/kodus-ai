@@ -1,0 +1,35 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "newGroup": null,
+   "reason": "The override's early return bypasses busy-time checks, allowing slots that conflict with existing bookings or calendar events."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-01",
+   "newGroup": null,
+   "reason": "The comment explicitly identifies slots starting before the override start being accepted because they partially overlap. Requiring full containment fixes that lower-bound problem, along with the additional upper-bound case mentioned."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "newGroup": null,
+   "reason": "The working-hours check rejects a slot when any interval excludes it, making valid slots unavailable on split schedules."
+  },
+  {
+   "id": "S4",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "The end boundary incorrectly uses slotStartTime, allowing events to extend beyond working hours."
+  },
+  {
+   "id": "S5",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#06",
+   "newGroup": null,
+   "reason": "Keeping only converted hours and minutes loses day rollover, producing reversed ranges for overrides that cross invitee midnight."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment claims caching behavior lost test coverage. This differs from the rejected claim about Prisma.Sql equality assertions failing and does not match any other rejected issue."
+  }
+ ]
+}
