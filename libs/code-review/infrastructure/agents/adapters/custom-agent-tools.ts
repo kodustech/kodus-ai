@@ -37,6 +37,8 @@ export interface CustomAgentToolDeps {
     remoteCommands?: RemoteCommands;
     /** Writes a repository-relative file inside the sandbox (see `sandboxFileWriter`). */
     writeFile?: (repoRelativePath: string, content: string) => Promise<void>;
+    /** Removes astGrep's temp directory from the checkout (see `sandboxDirRemover`). */
+    removeDir?: (repoRelativePath: string) => Promise<void>;
     changedFiles: readonly string[];
     /** Reads a file from the PR target branch; null when it is not there. */
     readTargetFile?: (path: string) => Promise<string | null>;
@@ -97,8 +99,7 @@ export async function buildCustomAgentTools(
     // so without a file writer it is not offered at all; nor on a sandbox
     // image that predates the binary, where every call would fail. The latter
     // is reported: every custom agent gets astGrep, so its absence is a loss.
-    const canRunAstGrep =
-        !!deps.remoteCommands?.exec && !!deps.writeFile;
+    const canRunAstGrep = !!deps.remoteCommands?.exec && !!deps.writeFile;
     const astGrepInstalled =
         canRunAstGrep &&
         (await hasAstGrep(deps.remoteCommands!.exec!, deps.logContext));
@@ -117,6 +118,7 @@ export async function buildCustomAgentTools(
             buildAstGrepTool({
                 exec: deps.remoteCommands!.exec!,
                 writeFile: deps.writeFile!,
+                removeDir: deps.removeDir,
                 changedFiles: deps.changedFiles,
                 ...(rulesPath
                     ? { rulesPath, readTargetFile: deps.readTargetFile }
@@ -238,4 +240,25 @@ export function sandboxFileWriter(sandbox: {
             `${root}/${repoRelativePath.replace(/^\/+/, '')}`,
             content,
         );
+}
+
+/** The only directories `sandboxDirRemover` deletes: astGrep's temp dirs. */
+const AST_GREP_WORK_DIR = /^\.kody-ast-grep-[A-Za-z0-9-]+$/;
+
+/** Removes astGrep's temp directory, a direct child of `repoDir`, through
+ *  the sandbox shell. Any other name is refused: this is `rm -rf`. */
+export function sandboxDirRemover(sandbox: {
+    repoDir: string;
+    run(command: string): Promise<{ exitCode: number }>;
+}): (repoRelativePath: string) => Promise<void> {
+    const root = sandbox.repoDir.replace(/\/+$/, '');
+    return async (repoRelativePath) => {
+        if (!AST_GREP_WORK_DIR.test(repoRelativePath)) {
+            throw new Error(
+                `refusing to remove ${JSON.stringify(repoRelativePath)}: not an astGrep temp directory`,
+            );
+        }
+        const target = `${root}/${repoRelativePath}`;
+        await sandbox.run(`rm -rf -- '${target.replace(/'/g, `'\\''`)}'`);
+    };
 }

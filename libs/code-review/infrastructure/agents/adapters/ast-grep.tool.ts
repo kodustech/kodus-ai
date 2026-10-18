@@ -54,6 +54,9 @@ export interface AstGrepToolDeps {
     readTargetFile?: (path: string) => Promise<string | null>;
     /** Temp directory name; random per run unless a test pins it. */
     workDirName?: string;
+    /** Removes a repository-relative directory inside the sandbox; without
+     *  it the temp directory stays in the checkout until the sandbox goes. */
+    removeDir?: (repoRelativePath: string) => Promise<void>;
     /** Review identifiers (organization, team, repository, PR, agent) for logs. */
     logContext?: Record<string, unknown>;
 }
@@ -176,7 +179,8 @@ export function buildAstGrepTool(
     const hasRules =
         !!deps.rules?.trim() || (!!deps.rulesPath && !!deps.readTargetFile);
 
-    // Written once per run; a failed write is retried on the next call.
+    // Written before a call that needs it; a failed write is retried on the
+    // next call, and a removal of the directory resets both.
     let configReady: Promise<void> | null = null;
     const ensureConfig = (): Promise<void> => {
         if (!configReady) {
@@ -190,10 +194,12 @@ export function buildAstGrepTool(
         return configReady;
     };
 
-    let rulesReady: Promise<void> | null = null;
-    const ensureRules = (): Promise<void> => {
-        if (!rulesReady) {
-            rulesReady = (async () => {
+    // The rule text is read from the target branch once per review; only the
+    // file written from it comes and goes with the directory.
+    let rulesText: Promise<string> | null = null;
+    const loadRules = (): Promise<string> => {
+        if (!rulesText) {
+            rulesText = (async () => {
                 const source = deps.rules?.trim()
                     ? 'The rules saved on the agent'
                     : `Rule file ${deps.rulesPath}`;
@@ -210,13 +216,60 @@ export function buildAstGrepTool(
                         `${source} are larger than ${MAX_AST_GREP_RULE_BYTES} bytes.`,
                     );
                 }
-                await deps.writeFile(rulesFile, text);
+                return text;
             })().catch((error) => {
-                rulesReady = null;
+                rulesText = null;
                 throw error;
             });
         }
+        return rulesText;
+    };
+
+    let rulesReady: Promise<void> | null = null;
+    const ensureRules = (): Promise<void> => {
+        if (!rulesReady) {
+            rulesReady = loadRules()
+                .then((text) => deps.writeFile(rulesFile, text))
+                .catch((error) => {
+                    rulesReady = null;
+                    throw error;
+                });
+        }
         return rulesReady;
+    };
+
+    // The directory sits in the checkout, where grep, listDir and readFile
+    // would see it, so it is removed as soon as no call is using it. Calls
+    // made in parallel share it; one that starts during a removal waits for it.
+    let active = 0;
+    let removing: Promise<void> | null = null;
+    const withWorkDir = async <T>(fn: () => Promise<T>): Promise<T> => {
+        while (removing) await removing;
+        active += 1;
+        try {
+            return await fn();
+        } finally {
+            active -= 1;
+            if (active === 0 && deps.removeDir) {
+                configReady = null;
+                rulesReady = null;
+                removing = deps
+                    .removeDir(workDir)
+                    .catch((error) => {
+                        logger.warn({
+                            message:
+                                'astGrep could not remove its temp directory',
+                            context: 'astGrepTool',
+                            error,
+                            metadata: deps.logContext,
+                        });
+                    })
+                    .finally(() => {
+                        removing = null;
+                    });
+                await removing;
+            }
+        }
     };
 
     const properties: Record<string, any> = {
@@ -305,23 +358,25 @@ export function buildAstGrepTool(
                     if (files.length === 0) {
                         return { output: 'No changed files to scan.' };
                     }
-                    await ensureConfig();
-                    await ensureRules();
-                    return await run(
-                        [
-                            'ast-grep',
-                            'scan',
-                            `--config=${configPath}`,
-                            `--rule=${rulesFile}`,
-                            '--json=stream',
-                            '--',
-                            ...files,
-                        ],
-                        'rules',
-                        deps.rules?.trim()
-                            ? "for the agent's rules over the changed files"
-                            : `for the rules in ${deps.rulesPath} (target branch) over the changed files`,
-                    );
+                    return await withWorkDir(async () => {
+                        await ensureConfig();
+                        await ensureRules();
+                        return await run(
+                            [
+                                'ast-grep',
+                                'scan',
+                                `--config=${configPath}`,
+                                `--rule=${rulesFile}`,
+                                '--json=stream',
+                                '--',
+                                ...files,
+                            ],
+                            'rules',
+                            deps.rules?.trim()
+                                ? "for the agent's rules over the changed files"
+                                : `for the rules in ${deps.rulesPath} (target branch) over the changed files`,
+                        );
+                    });
                 }
 
                 const pattern =
@@ -352,21 +407,23 @@ export function buildAstGrepTool(
                     };
                 }
 
-                await ensureConfig();
-                return await run(
-                    [
-                        'ast-grep',
-                        'run',
-                        `--config=${configPath}`,
-                        `--pattern=${pattern}`,
-                        `--lang=${language}`,
-                        '--json=stream',
-                        '--',
-                        ...paths,
-                    ],
-                    'pattern',
-                    `for the pattern`,
-                );
+                return await withWorkDir(async () => {
+                    await ensureConfig();
+                    return await run(
+                        [
+                            'ast-grep',
+                            'run',
+                            `--config=${configPath}`,
+                            `--pattern=${pattern}`,
+                            `--lang=${language}`,
+                            '--json=stream',
+                            '--',
+                            ...paths,
+                        ],
+                        'pattern',
+                        `for the pattern`,
+                    );
+                });
             } catch (error) {
                 // The rules and pattern stay out of the log: only the mode.
                 logger.warn({

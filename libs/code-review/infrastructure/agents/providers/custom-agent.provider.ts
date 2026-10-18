@@ -13,6 +13,7 @@ import {
 import {
     buildCustomAgentTools,
     loadCustomAgentMcpServers,
+    sandboxDirRemover,
     sandboxFileWriter,
 } from '@libs/code-review/infrastructure/agents/adapters/custom-agent-tools';
 import { RunToolCache } from '@libs/code-review/infrastructure/agents/adapters/run-tool-cache';
@@ -199,6 +200,10 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
             writeFile:
                 sandbox?.writeFile && sandbox.repoDir
                     ? sandboxFileWriter(sandbox)
+                    : undefined,
+            removeDir:
+                sandbox?.run && sandbox.repoDir
+                    ? sandboxDirRemover(sandbox)
                     : undefined,
             changedFiles: (input.changedFiles ?? [])
                 .map((f) => f.filename)

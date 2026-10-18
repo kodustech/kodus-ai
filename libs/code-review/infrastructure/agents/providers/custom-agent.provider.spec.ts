@@ -439,6 +439,12 @@ describe('CustomAgentProvider — knowledge and tools', () => {
             expect.stringMatching(/rules\.yml$/),
             expect.stringContaining('id: no-console'),
         );
+        // Its temp directory does not stay in the checkout.
+        expect(sandbox.run).toHaveBeenCalledWith(
+            expect.stringMatching(
+                /^rm -rf -- '\/home\/user\/repo\/\.kody-ast-grep-[a-z0-9-]+'$/,
+            ),
+        );
     });
 
     it('runs an MCP call once per review and agent, and again in another review', async () => {

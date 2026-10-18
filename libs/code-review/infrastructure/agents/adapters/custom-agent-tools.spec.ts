@@ -19,6 +19,7 @@ jest.mock('@libs/core/log/logger', () => ({
 import {
     buildCustomAgentTools,
     loadCustomAgentMcpServers,
+    sandboxDirRemover,
     sandboxFileWriter,
 } from '@libs/code-review/infrastructure/agents/adapters/custom-agent-tools';
 import { KODUS_MCP_INTEGRATION_ID } from '@libs/mcp-server/services/mcp-manager.service';
@@ -406,4 +407,27 @@ describe('sandboxFileWriter', () => {
             'ruleDirs: []\n',
         );
     });
+});
+
+describe('sandboxDirRemover', () => {
+    it('removes an astGrep temp directory under the repository root', async () => {
+        const run = jest.fn(async () => ({ stdout: '', exitCode: 0 }));
+        await sandboxDirRemover({ repoDir: '/home/user/repo/', run })(
+            '.kody-ast-grep-abc123-x9',
+        );
+        expect(run).toHaveBeenCalledWith(
+            "rm -rf -- '/home/user/repo/.kody-ast-grep-abc123-x9'",
+        );
+    });
+
+    it.each(['src', '.git', '.kody-ast-grep-a/../../etc', '../x', ''])(
+        'refuses to remove %j',
+        async (path) => {
+            const run = jest.fn();
+            await expect(
+                sandboxDirRemover({ repoDir: '/home/user/repo', run })(path),
+            ).rejects.toThrow();
+            expect(run).not.toHaveBeenCalled();
+        },
+    );
 });

@@ -148,6 +148,74 @@ describe('astGrep tool', () => {
         expect(writeFile).toHaveBeenCalledTimes(1);
     });
 
+    describe('temp directory', () => {
+        it('removes it from the checkout after each run, rewriting it for the next', async () => {
+            const removeDir = jest.fn(async (_path: string) => {});
+            const { tool, exec, writeFile } = setup({ removeDir });
+            await tool.execute({ pattern: 'a', language: 'ts' }, ctx);
+            expect(removeDir).toHaveBeenCalledWith(WORK_DIR);
+            expect(removeDir.mock.invocationCallOrder[0]).toBeGreaterThan(
+                exec.mock.invocationCallOrder[0],
+            );
+            await tool.execute({ pattern: 'b', language: 'ts' }, ctx);
+            expect(removeDir).toHaveBeenCalledTimes(2);
+            expect(writeFile).toHaveBeenCalledTimes(2);
+        });
+
+        it('removes it when the run throws', async () => {
+            const removeDir = jest.fn(async (_path: string) => {});
+            const { tool, exec } = setup({ removeDir });
+            exec.mockRejectedValueOnce(new Error('sandbox gone'));
+            const r = await tool.execute({ pattern: 'a', language: 'ts' }, ctx);
+            expect(r.isError).toBe(true);
+            expect(removeDir).toHaveBeenCalledWith(WORK_DIR);
+        });
+
+        it('keeps it while a parallel call still runs, then removes it once', async () => {
+            const removeDir = jest.fn(async (_path: string) => {});
+            let release!: () => void;
+            const gate = new Promise<void>((resolve) => (release = resolve));
+            const exec = jest.fn(async (_command: string) => {
+                await gate;
+                return { stdout: '', stderr: '', exitCode: 1 };
+            });
+            const { tool } = setup({ removeDir, exec });
+            const first = tool.execute({ pattern: 'a', language: 'ts' }, ctx);
+            const second = tool.execute({ pattern: 'b', language: 'ts' }, ctx);
+            await new Promise((resolve) => setImmediate(resolve));
+            expect(removeDir).not.toHaveBeenCalled();
+            release();
+            await Promise.all([first, second]);
+            expect(removeDir).toHaveBeenCalledTimes(1);
+        });
+
+        it('reads a rule file from the branch once, though it rewrites it per run', async () => {
+            const removeDir = jest.fn(async (_path: string) => {});
+            const readTargetFile = jest.fn(async () => 'id: r\nrule: {}');
+            const { tool, writeFile } = setup({
+                removeDir,
+                rulesPath: 'tools/review-rules.yml',
+                readTargetFile,
+            });
+            await tool.execute({ useRules: true }, ctx);
+            await tool.execute({ useRules: true }, ctx);
+            expect(readTargetFile).toHaveBeenCalledTimes(1);
+            expect(
+                writeFile.mock.calls.filter(([path]) =>
+                    path.endsWith('rules.yml'),
+                ),
+            ).toHaveLength(2);
+        });
+
+        it('touches nothing for input it refuses', async () => {
+            const removeDir = jest.fn(async (_path: string) => {});
+            const { tool, writeFile } = setup({ removeDir });
+            await tool.execute({ pattern: 'x', language: '-U' }, ctx);
+            expect(writeFile).not.toHaveBeenCalled();
+            expect(removeDir).not.toHaveBeenCalled();
+        });
+    });
+
     it.each([
         [{ pattern: 'x', language: 'ts', paths: ['../outside'] }, 'path'],
         [{ pattern: 'x', language: 'ts', paths: ['/etc/passwd'] }, 'path'],
