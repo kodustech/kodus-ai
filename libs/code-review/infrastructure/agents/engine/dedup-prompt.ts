@@ -344,8 +344,11 @@ export function applyDedupFollowup(
     let outUnique = [...(unique || [])];
     const pending = new Set(leftOut.filter(valid));
     const parent = Array.from({ length: n }, (_, i) => i);
+    // Bounded by the number of suggestions: a root is at most n - 1 links away.
     const find = (i: number): number => {
-        while (parent[i] !== i) i = parent[i] = parent[parent[i]];
+        for (let step = 0; step < n && parent[i] !== i; step++) {
+            i = parent[i] = parent[parent[i]];
+        }
         return i;
     };
     const unite = (a: number, b: number) => {
@@ -361,18 +364,26 @@ export function applyDedupFollowup(
         answered.add(a.index);
         if (valid(a.joinWith) && a.joinWith !== a.index) unite(a.index, a.joinWith);
     }
+    // A left-out suggestion the follow-up did not answer stays out (the stage
+    // keeps it), unless an answered one joined it: then it is in that group.
+    const answeredRoots = new Set([...answered].map(find));
     const byRoot = new Map<number, number[]>();
     for (const i of pending) {
-        if (!answered.has(i) && find(i) === i) continue;
-        byRoot.set(find(i), [...(byRoot.get(find(i)) || []), i]);
+        const root = find(i);
+        if (!answered.has(i) && !answeredRoots.has(root)) continue;
+        byRoot.set(root, [...(byRoot.get(root) || []), i]);
     }
+    const groupByRoot = new Map<number, DedupGroup>();
+    for (const g of outGroups) if (valid(g.keep)) groupByRoot.set(find(g.keep), g);
+    const uniqueByRoot = new Map<number, number>();
+    for (const x of outUnique) if (valid(x)) uniqueByRoot.set(find(x), x);
     for (const [r, members] of byRoot) {
-        const g = outGroups.find((x) => valid(x.keep) && find(x.keep) === r);
+        const g = groupByRoot.get(r);
         if (g) {
             for (const i of members) if (i !== g.keep && !g.duplicates.includes(i)) g.duplicates.push(i);
             continue;
         }
-        const u = outUnique.find((x) => valid(x) && find(x) === r);
+        const u = uniqueByRoot.get(r);
         if (u !== undefined) {
             outUnique = outUnique.filter((x) => x !== u);
             outGroups.push({ keep: u, duplicates: members.filter((i) => i !== u) });

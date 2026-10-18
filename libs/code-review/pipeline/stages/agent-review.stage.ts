@@ -2403,6 +2403,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 groups.length || unique.length
                     ? unclassifiedDedupIndices(suggestions.length, groups, unique)
                     : [];
+            // Kept in the dedup trace: a failed follow-up keeps those
+            // suggestions as they were (a duplicate may reach the PR), the same
+            // way a failed dedup keeps everything, without degrading the review.
+            let followupError: string | undefined;
             if (leftOut.length > 0) {
                 try {
                     const followup = (await LLM.run({
@@ -2442,9 +2446,18 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         context: this.stageName,
                     });
                 } catch (error) {
+                    followupError =
+                        error instanceof Error ? error.message : String(error);
                     this.logger.warn({
-                        message: `[DEDUP-FOLLOWUP] PR#${prNumber}: follow-up for ${leftOut.length} left-out suggestions failed, safety net keeps them: ${error instanceof Error ? error.message : String(error)}`,
+                        message: `[DEDUP-FOLLOWUP] PR#${prNumber}: follow-up for ${leftOut.length} left-out suggestions failed, safety net keeps them`,
                         context: this.stageName,
+                        error,
+                        metadata: {
+                            organizationId: telemetryMeta?.organizationId,
+                            teamId: telemetryMeta?.teamId,
+                            prNumber,
+                            leftOutCount: leftOut.length,
+                        },
                     });
                 }
             }
@@ -2722,6 +2735,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     uniqueCount: uniqueSuggestions.length,
                     groupsCount: groupSummaries.length,
                     removedCount: totalRemoved,
+                    ...(followupError ? { followupError } : {}),
                     groups: groupSummaries,
                     unique: uniqueSuggestions,
                 },

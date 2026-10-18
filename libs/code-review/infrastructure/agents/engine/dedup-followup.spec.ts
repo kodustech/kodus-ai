@@ -48,6 +48,15 @@ describe('dedup follow-up for left-out indices', () => {
         expect(unclassifiedDedupIndices(7, r.groups, r.unique)).toEqual([6]);
     });
 
+    it('groups an unanswered left-out suggestion that an answered one joined', () => {
+        // 3 is not answered but 2 joins it: one group, not 2 unique and 3 kept apart
+        for (const assignments of [[{ index: 2, joinWith: 3 }], [{ index: 3, joinWith: 2 }]]) {
+            const r = applyDedupFollowup(4, [], [0, 1], [2, 3], assignments);
+            expect(r.groups).toEqual([{ keep: 2, duplicates: [3] }]);
+            expect(r.unique).toEqual([0, 1]);
+        }
+    });
+
     it('shows what was decided and only asks for the left-out indices', () => {
         const s = (i: number) => ({
             relevantFile: 'a.ts',
