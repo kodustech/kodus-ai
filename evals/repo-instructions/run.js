@@ -205,9 +205,10 @@ async function main() {
     const tasks = cases.flatMap((testCase) => arms.map((arm) => ({ testCase, arm })));
     const rows = [];
     const runTask = async ({ testCase, arm }) => {
-        const { vars } = armOf(testCase, arm);
         let result;
         try {
+            // Inside the try: a setup failure is an infra row like a provider failure.
+            const { vars } = armOf(testCase, arm);
             result = await providers[arm].callApi(JSON.stringify(vars), { vars }, {});
         } catch (error) {
             result = { error: error instanceof Error ? error.message : String(error) };
