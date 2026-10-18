@@ -50,7 +50,7 @@ const MAX_TOOL_NAME = 64;
 
 /** Verbs that let an unannotated tool through: its name must carry one. */
 const READ_VERBS =
-    /^(get|list|search|read|find|fetch|query|describe|view|show|lookup)(s|es|ing)?$/;
+    /^(get|list|search|read|find|fetch|query|describe|view|show|lookup|ask|check|inspect|validate|verify|explain|compare|count)(s|es|ing)?$/;
 
 /** Verbs that keep an unannotated tool out even next to a read verb
  *  (`get_or_create_ticket`). Defense in depth, not the gate — so only words
@@ -93,6 +93,14 @@ export function isReadOnlyMcpTool(
     }
     const words = nameWords(tool.name);
     if (words.some((w) => WRITE_VERBS.test(w))) return false;
+    // `check in` / `check out` change state; `check` alone reads.
+    if (
+        words.some(
+            (w, i) => w === 'check' && ['in', 'out'].includes(words[i + 1]),
+        )
+    ) {
+        return false;
+    }
     return words.some((w) => READ_VERBS.test(w));
 }
 

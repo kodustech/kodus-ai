@@ -106,6 +106,9 @@ describe('isReadOnlyMcpTool', () => {
         'find_and_replace_text',
         'read_and_dismiss_alert',
         'get_and_unlock_record',
+        // `check in` / `check out` change state; `check` alone reads.
+        'check_in_ticket',
+        'checkOutBranch',
     ])(
         'falls back to the name when the server marks nothing: %s is a write',
         (name) => {
@@ -135,6 +138,16 @@ describe('isReadOnlyMcpTool', () => {
         'list_commits',
         'list_bookmarks',
         'get_notifications',
+        // Docs and policy servers name their reads this way.
+        'ask_question',
+        'check_policy',
+        'checkCompliance',
+        'inspect_schema',
+        'validate_config',
+        'verify_signature',
+        'explain_rule',
+        'compare_versions',
+        'count_open_incidents',
     ])(
         'falls back to the name when the server marks nothing: %s is a read',
         (name) => {
