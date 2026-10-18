@@ -49,17 +49,11 @@ import { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/c
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { ReviewOrchestratorService } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
 import { buildOrchestratorInput } from './build-orchestrator-input';
+import type { KnowledgeCodeManagementPort } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
 import {
-    type BaseBranchReader,
-    createBaseBranchReader,
-    type KnowledgeCodeManagementPort,
-} from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
-import {
-    KnowledgeResolver,
-    type ResolvedKnowledge,
-    toReviewWarnings,
-} from '@libs/code-review/infrastructure/agents/knowledge/knowledge-resolver';
-import { KNOWLEDGE_MAIN_REVIEW_TARGET } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+    resolveReviewKnowledge,
+    type ReviewKnowledge,
+} from '@libs/code-review/infrastructure/agents/knowledge/review-knowledge';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { FeatureGateService, FEATURE_KEYS } from '@libs/feature-gate';
 import {
@@ -450,72 +444,28 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
     /**
      * Skills and docs linked to the main review and to each custom agent,
-     * read from the PR's target branch (#2172). Nothing here fails the
-     * review: problems become warnings and the review runs with what could
-     * be read.
+     * read from the PR's target branch (#2172). See resolveReviewKnowledge.
      */
     private async resolveReviewKnowledge(
         context: CodeReviewPipelineContext,
         customAgents: CustomAgentConfig[],
         changedFiles: Array<{ filename?: string }>,
-    ): Promise<{
-        byTarget?: Map<string, ResolvedKnowledge>;
-        reader?: BaseBranchReader;
-        warnings: ReviewWarning[];
-    }> {
-        const items = context.codeReviewConfig?.knowledge ?? [];
-        if (!items.length) return { warnings: [] };
-        const baseBranch =
-            context.pullRequest?.base?.ref ||
-            context.sandboxHandle?.baseBranch ||
-            context.repository?.defaultBranch;
-        if (!baseBranch || !context.repository?.id) return { warnings: [] };
-
-        try {
-            const reader = createBaseBranchReader({
-                sandbox: context.sandboxHandle?.run
-                    ? context.sandboxHandle
-                    : null,
-                baseBranch,
-                codeManagement: this
-                    .codeManagementService as unknown as KnowledgeCodeManagementPort,
-                organizationAndTeamData: context.organizationAndTeamData,
-                repository: {
-                    id: String(context.repository.id),
-                    name: context.repository.name,
-                },
-            });
-            const byTarget = await new KnowledgeResolver(reader).resolveAll({
-                items,
-                agentIds: customAgents.map((agent) => agent.id),
-                changedFiles: changedFiles
-                    .map((file) => file.filename)
-                    .filter((name): name is string => !!name),
-            });
-            const names = new Map(customAgents.map((a) => [a.id, a.name]));
-            const warnings = [...byTarget.entries()].flatMap(
-                ([target, resolved]) =>
-                    toReviewWarnings(
-                        resolved.warnings,
-                        target === KNOWLEDGE_MAIN_REVIEW_TARGET
-                            ? undefined
-                            : names.get(target),
-                    ),
-            );
-            return { byTarget, reader, warnings };
-        } catch (err) {
-            this.logger.warn({
-                message: `[AGENT] Skills and docs could not be read; reviewing without them`,
-                context: this.stageName,
-                error: err,
-                metadata: {
-                    organizationId:
-                        context.organizationAndTeamData?.organizationId,
-                    repositoryId: context.repository?.id,
-                },
-            });
-            return { warnings: [] };
-        }
+    ): Promise<ReviewKnowledge> {
+        return resolveReviewKnowledge({
+            items: context.codeReviewConfig?.knowledge,
+            customAgents,
+            changedFiles,
+            baseBranch:
+                context.pullRequest?.base?.ref ||
+                context.sandboxHandle?.baseBranch ||
+                context.repository?.defaultBranch,
+            sandbox: context.sandboxHandle,
+            codeManagement: this
+                .codeManagementService as unknown as KnowledgeCodeManagementPort,
+            organizationAndTeamData: context.organizationAndTeamData,
+            repository: context.repository,
+            logContext: this.stageName,
+        });
     }
 
     /**
