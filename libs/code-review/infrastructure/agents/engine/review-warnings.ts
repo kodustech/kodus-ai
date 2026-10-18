@@ -58,7 +58,10 @@ export type ReviewWarningKind =
     | 'SKILL_COMPATIBILITY'
     /** A custom agent's CLI could not be installed or fenced in the sandbox,
      *  so the agent ran without that tool. */
-    | 'CLI_INSTALL_FAILED';
+    | 'CLI_INSTALL_FAILED'
+    /** Linked repositories were armed for this PR but there was no checkout
+     *  to read them from, so the review stayed single-repo. */
+    | 'CROSS_REPO_UNAVAILABLE';
 
 export type ReviewWarningReason =
     | 'small_context_window'
@@ -162,6 +165,32 @@ export function buildSandboxUnavailableWarning(params: {
         contextWindowTokens: 0,
         modelName: params.modelName,
         detail: 'the repository could not be checked out, so the review read only the diff (no tools, no call graph)',
+    };
+}
+
+/** Only when the boundary gate armed the linked repositories and the review
+ *  had no checkout to read them: a gate that did not arm is not a loss. */
+export function crossRepoUnavailableWarning(params: {
+    configured: number;
+    gateActive: boolean;
+    hasAccess: boolean;
+    hasCheckout: boolean;
+    modelName: string;
+}): ReviewWarning | undefined {
+    if (
+        params.configured === 0 ||
+        !params.gateActive ||
+        params.hasAccess ||
+        params.hasCheckout
+    ) {
+        return undefined;
+    }
+    return {
+        kind: 'CROSS_REPO_UNAVAILABLE',
+        reason: 'sandbox_unavailable',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: `${params.configured} linked repositories were not read: the review had no repository checkout`,
     };
 }
 

@@ -31,6 +31,7 @@ import {
     buildBadFixDowngradedWarning,
     buildCallGraphFailedWarning,
     buildSandboxUnavailableWarning,
+    crossRepoUnavailableWarning,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import {
@@ -831,6 +832,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     context,
                     changedFiles,
                 );
+            const crossRepoLost = crossRepoUnavailableWarning({
+                configured:
+                    context.codeReviewConfig?.linkedRepositories?.length ?? 0,
+                gateActive: !!gateMetadata?.activate,
+                hasAccess: !!linkedRepoAccess,
+                hasCheckout,
+                modelName: effectiveModelName || 'unknown',
+            });
+            if (crossRepoLost) stageWarnings.push(crossRepoLost);
 
             const customAgents = await this.resolveCustomAgents(context);
             const customAgentsById: CustomAgentsById =

@@ -137,7 +137,8 @@ export type ReviewWarningKind =
     | "DOC_NOT_FOUND"
     | "KNOWLEDGE_TRUNCATED"
     | "SKILL_COMPATIBILITY"
-    | "CLI_INSTALL_FAILED";
+    | "CLI_INSTALL_FAILED"
+    | "CROSS_REPO_UNAVAILABLE";
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;

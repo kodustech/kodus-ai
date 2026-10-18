@@ -1,4 +1,5 @@
 import {
+    crossRepoUnavailableWarning,
     dedupReviewWarnings,
     buildProviderFallbackWarning,
     buildRuleContextUnavailableWarning,
@@ -152,7 +153,7 @@ describe('buildRuleContextUnavailableWarning', () => {
         expect(out[0].ruleTitles).toEqual(['A', 'B', 'C']);
     });
 
-    it('does not alias the caller\'s array into the warning', () => {
+    it("does not alias the caller's array into the warning", () => {
         const titles = ['A'];
         const warning = buildRuleContextUnavailableWarning({
             skippedRuleTitles: titles,
@@ -264,5 +265,35 @@ describe('withFallbackWarnings', () => {
         expect(out?.[1].detail).toBe(
             'main provider claude-opus failed; review ran on fallback gpt-4.1',
         );
+    });
+});
+
+describe('crossRepoUnavailableWarning', () => {
+    const base = {
+        configured: 2,
+        gateActive: true,
+        hasAccess: false,
+        hasCheckout: false,
+        modelName: 'm',
+    };
+
+    it('warns when the boundary gate armed linked repos but there is no checkout', () => {
+        const warning = crossRepoUnavailableWarning(base);
+        expect(warning?.kind).toBe('CROSS_REPO_UNAVAILABLE');
+        expect(warning?.detail).toContain('2 linked repositories');
+    });
+
+    it.each([
+        ['nothing is linked', { configured: 0 }],
+        ['the gate did not arm', { gateActive: false }],
+        ['the linked repos were read', { hasAccess: true }],
+        [
+            'a checkout existed (another cause, logged elsewhere)',
+            { hasCheckout: true },
+        ],
+    ])('stays silent when %s', (_label, over) => {
+        expect(
+            crossRepoUnavailableWarning({ ...base, ...over }),
+        ).toBeUndefined();
     });
 });
